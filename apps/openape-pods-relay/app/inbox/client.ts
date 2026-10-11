@@ -1,8 +1,8 @@
 import { computed, reactive, toRaw } from 'vue'
 import type { CentralOperation } from '../../../openape-pods/src/contracts/central'
-import type { InboxDevice, InboxItem } from '../../shared/inbox-types'
+import type { InboxApprovalCount, InboxDevice, InboxItem } from '../../shared/inbox-types'
 
-export type { InboxDevice, InboxItem }
+export type { InboxApprovalCount, InboxDevice, InboxItem }
 export interface InboxSession { issuer: string, subject: string, device: string, vapidPublicKey: string }
 /** What this phone sent for a decision. `accepted`/`started` are never shown as applied; `unsent` may only be resent with the same request ID. */
 export interface Receipt { option: string, title: string, digest: string, requestId: string, input?: string, state: 'sending' | 'unsent' | 'refused' | CentralOperation['state'], error: string | null, at: number }
@@ -45,6 +45,7 @@ export function createInbox(environment: InboxEnvironment) {
     pending: {} as Record<string, PendingAnswer>,
     cursor: 0,
     syncedAt: null as number | null,
+    approvals: null as InboxApprovalCount | null,
     syncing: false,
     syncError: null as string | null,
     signedOutReason: null as 'revoked' | null,
@@ -91,7 +92,7 @@ export function createInbox(environment: InboxEnvironment) {
   function reset(): void {
     for (const cancel of timers.values()) cancel()
     timers.clear()
-    Object.assign(state, { session: null, account: null, items: {}, receipts: {}, checking: {}, pending: {}, cursor: 0, syncedAt: null, syncError: null })
+    Object.assign(state, { session: null, account: null, items: {}, receipts: {}, checking: {}, pending: {}, cursor: 0, syncedAt: null, approvals: null, syncError: null })
   }
 
   // Any 401 ends the local copy: an expired or revoked device must not keep showing account content.
@@ -145,10 +146,11 @@ export function createInbox(environment: InboxEnvironment) {
       try {
         let more = true
         while (more) {
-          const page = await api<{ items: InboxItem[], cursor: number, more: boolean, device: string }>(`changes?after=${state.cursor}`)
+          const page = await api<{ items: InboxItem[], cursor: number, more: boolean, device: string, approvals?: InboxApprovalCount | null }>(`changes?after=${state.cursor}`)
           // A sign-in in another tab replaced this browser's device session, possibly for another account: start over.
           if (page.device !== state.session?.device) { syncing = null; state.syncing = false; return await start() }
           apply(page.items)
+          state.approvals = page.approvals ?? null
           state.cursor = page.cursor; more = page.more
         }
         state.syncedAt = environment.now(); state.syncError = null
@@ -289,7 +291,8 @@ export function createInbox(environment: InboxEnvironment) {
   const messages = computed(() => list.value.filter(item => item.kind === 'message' && !item.archived).sort((a, b) => b.created - a.created))
   const archivedMessages = computed(() => list.value.filter(item => item.kind === 'message' && item.archived).sort((a, b) => b.created - a.created))
   const unread = computed(() => messages.value.filter(item => !item.read).length)
-  const badgeCount = computed(() => openDecisions.value.length + unread.value)
+  // Grants are decided at the IdP; only their count is shown, as on the server badge.
+  const badgeCount = computed(() => openDecisions.value.length + unread.value + (state.approvals?.pending ?? 0))
   // Only answers to decisions that are still open hold back an app update; resolved ones need no reconciliation.
   const deciding = computed(() => Object.keys(state.pending).length > 0 || Object.entries(state.receipts).some(([itemId, receipt]) => running(receipt) && state.items[itemId]?.state === 'open'))
 

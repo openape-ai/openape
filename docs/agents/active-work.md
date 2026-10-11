@@ -1,5 +1,12 @@
 # Active work
 
+## Approvals badge and growing approval batches — issue 1458
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1458. Plan revision 2 (owner "Go das passt"): https://report.openape.ai/d/01M4N5D05KHCMXY9DNMPTSSDET; source `.claude/plans/2026-10-11-pods-approvals-badge/plan.json`.
+- Cause: approval batches expired after 12 hours unanswered; the desktop blocked their inputs and the inbox kept an "Am IdP entscheiden" link to the expired grant (tasks `7552ebfa`, `2ae211d1`, October 11).
+- Change: gate manifests version 4 carry `batchId`; frozen tasks of one gate join one open IdP batch (no announced size, grants.md §3.4) for up to seven days and 100 grants; an unanswered expired batch reopens its untouched inputs; pre-1458 expiry blocks reopen once; waiting batches are read once a minute after the first ten minutes. The inbox lists no IdP items; the desktop reads the owner's pending grants with the apes login (read only) and the relay shows them as one Approvals entry and in the badge.
+- Next: relay deploy first (accepts the approvals field), then the signed desktop with a paired backup; verify on the iPhone; Test Run.
+
 ## Mail network learns newsletter senders — issue 1457
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1457. Plan (owner "Du hast mein Go!"): https://report.openape.ai/d/01M4KHHB6FEV9SCHFRXX44D3V9; source `.claude/plans/2026-10-10-mail-newsletter-learning/plan.json`.
@@ -89,7 +96,7 @@
 
 ## Pods gate batches collect before freezing — issue 1449
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1449. Owner observation October 7: every answered network choice produced its own one-item IdP approval batch. Owner decision: a quiet window (about 2 minutes without new input, at most 10 minutes) instead of growing sealed batches.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1449. Owner observation October 7: every answered network choice produced its own one-item IdP approval batch. Owner decision: a quiet window (about 2 minutes without new input, at most 10 minutes) instead of growing sealed batches. Superseded on October 11 by issue 1458: frozen tasks now also join one open IdP batch.
 - Checkout `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-gate-quiet-window-1449`, branch `bugfix/issue-1449-gate-quiet-window` (base `76ffae69`).
 - Change: `NetworkGates.prepare` freezes only after the quiet window, the maximum age or a full batch; synthetic fixtures (unit fixture, Electron fixture worker via `PODS_FIXTURE_GATE_COLLECT`) keep immediate freezing.
 - Checks: Pods 1,339 unit tests, lint, typecheck, build, Electron `e2e/network-gates.test.ts` (2/2).

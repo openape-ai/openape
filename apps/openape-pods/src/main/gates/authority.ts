@@ -9,7 +9,8 @@ import { connectionRequest, readJSON } from '../connections/http'
 export interface GrantBinding { grantId?: string, expiresAt: number, command: string[], summary: string }
 /** One item of a batch, identified by a key that is unique within the batch. */
 export interface BatchMember { key: string, command: string[], summary: string }
-export interface BatchRequest { id: string, title: string, expiresAt: number, reason: string, permissions: string[], members: BatchMember[] }
+/** `open`: announce no size, so later requests with the same batch id, title and expiry join it (grants.md §3.4). */
+export interface BatchRequest { id: string, title: string, expiresAt: number, reason: string, permissions: string[], members: BatchMember[], open?: boolean }
 export interface BatchGrant { key: string, id: string }
 export type MemberState = 'pending' | 'approved' | 'denied' | 'expired'
 /** How the owner may decide an item at the IdP: once is consumed on release, always stays valid while approved; both stay bound to the item's exact command. */
@@ -76,7 +77,7 @@ export function createGrantAuthority(connection: AgentConnection, signal: AbortS
   }
   return {
     async createBatch(request) {
-      const batch = { id: request.id, title: request.title.slice(0, 200), size: request.members.length }
+      const batch = { id: request.id, title: request.title.slice(0, 200), ...(request.open ? {} : { size: request.members.length }) }
       const grants: BatchGrant[] = []
       for (const member of request.members) {
         await check(); signal.throwIfAborted()

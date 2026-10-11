@@ -39,6 +39,7 @@ export class NetworkGates {
     if (!approvals.length) return
     this.store.assertStorage()
     this.refresh(definition.id, podId)
+    this.store.transaction(() => this.reopenExpiredBlocks(definition.id, podId))
     for (const gate of approvals) {
       this.store.transaction(() => {
         const count = Number(this.store.db.prepare(`SELECT count(*) AS count FROM network_gate_tasks task JOIN network_gate_controls control ON control.task_id=task.id
@@ -53,8 +54,10 @@ export class NetworkGates {
         const member = definition.members.find(member => member.podId === podId)!
         const pod = this.store.getPod(podId)
         const network = this.store.db.prepare('SELECT * FROM networks WHERE id=?').get(definition.id)!
-        const items = rows.map(row => ({ deliveryId: row.id as string, eventId: row.event_id as string, generation: Number(row.generation), key: row.item_key as string, hash: row.payload_hash as string, channel: row.channel as string, title: itemTitle(row.item_key as string, JSON.parse(row.payload as string)) }))
-        const base = { version: 3 as const, dataPin: networkDataPin(this.store, definition.id, podId), id: randomUUID(), networkId: definition.id, networkRevision: definition.revision, gate: gate.key, title: gate.title, podId, owner: { issuer: network.owner_issuer as string, subject: network.owner_subject as string }, restoreNonce: network.restore_nonce as string, activationEpoch: Number(network.activation_epoch), definitionId: member.definitionId, definitionVersion: member.definitionVersion, bindingRevision: member.bindingRevision, assignmentRevision: pod.bindingRevision, resourceEpoch: this.resources.epoch(podId), scriptHash: pod.activeScript!, expiresAt: Date.now() + gateLimits.expiryMs, items }
+        const open = this.openBatch(definition.id, podId, gate.key)
+        const items = rows.slice(0, open ? gateLimits.batchMembers - open.members : rows.length).map(row => ({ deliveryId: row.id as string, eventId: row.event_id as string, generation: Number(row.generation), key: row.item_key as string, hash: row.payload_hash as string, channel: row.channel as string, title: itemTitle(row.item_key as string, JSON.parse(row.payload as string)) }))
+        const id = randomUUID()
+        const base = { version: 4 as const, dataPin: networkDataPin(this.store, definition.id, podId), batchId: open?.batchId ?? id, id, networkId: definition.id, networkRevision: definition.revision, gate: gate.key, title: gate.title, podId, owner: { issuer: network.owner_issuer as string, subject: network.owner_subject as string }, restoreNonce: network.restore_nonce as string, activationEpoch: Number(network.activation_epoch), definitionId: member.definitionId, definitionVersion: member.definitionVersion, bindingRevision: member.bindingRevision, assignmentRevision: pod.bindingRevision, resourceEpoch: this.resources.epoch(podId), scriptHash: pod.activeScript!, expiresAt: open?.expiresAt ?? Date.now() + gateLimits.expiryMs, items }
         const action = { ...base, actionHash: networkGateActionHash(base) }
         const manifest = parseNetworkGateManifest({ ...action, digest: networkGateDigest(action) })
         this.assertPinned(manifest)
@@ -69,6 +72,16 @@ export class NetworkGates {
         this.trace(manifest, 'gate-batch-frozen', { taskId: manifest.id, digest: manifest.digest, actionHash: manifest.actionHash, itemCount: items.length })
       })
     }
+  }
+
+  /** The open IdP batch of a gate: the batch of its newest waiting task, while it has enough life left and room for more grants. */
+  private openBatch(networkId: string, podId: string, gate: string): { batchId: string, expiresAt: number, members: number } | null {
+    const row = this.store.db.prepare(`SELECT json_extract(task.manifest,'$.batchId') AS batch_id,task.expires_at FROM network_gate_tasks task JOIN network_gate_controls control ON control.task_id=task.id
+      WHERE task.network_id=? AND task.pod_id=? AND control.gate_key=? AND task.state IN ('preparing','pending') AND json_extract(task.manifest,'$.version')=4
+      ORDER BY task.created_at DESC,task.id LIMIT 1`).get(networkId, podId, gate)
+    if (!row || Number(row.expires_at) - Date.now() < gateLimits.joinMarginMs) return null
+    const members = Number(this.store.db.prepare(`SELECT coalesce(sum(json_array_length(manifest,'$.items')),0) AS count FROM network_gate_tasks WHERE network_id=? AND pod_id=? AND json_extract(manifest,'$.batchId')=?`).get(networkId, podId, row.batch_id)!.count)
+    return members < gateLimits.batchMembers ? { batchId: row.batch_id as string, expiresAt: Number(row.expires_at), members } : null
   }
 
   // A full batch freezes at once; otherwise it waits for a quiet moment, bounded by the age of its oldest input.
@@ -87,7 +100,7 @@ export class NetworkGates {
       const manifest = parseNetworkGateManifest(JSON.parse(task.manifest))
       try { this.assertPinned(manifest); this.assertItems(manifest) }
       catch (failure) { this.obsolete(task, failure); return null }
-      if (manifest.expiresAt <= Date.now()) { this.store.db.prepare('UPDATE network_gate_tasks SET state=\'expired\' WHERE id=?').run(task.id); this.dispose(task, 'expired', 'Approval expired before release'); return null }
+      if (manifest.expiresAt <= Date.now()) { this.expire(task, manifest); return null }
       const pod = this.store.getPod(podId)
       const network = this.store.db.prepare('SELECT state FROM networks WHERE id=?').get(definition.id)!
       if (network.state !== 'active' && reason !== 'manual') return null
@@ -147,7 +160,8 @@ export class NetworkGates {
         const approved = grants.filter(grant => states[grant.key] === 'approved')
         const refused = Object.fromEntries(grants.filter(grant => states[grant.key] === 'denied' || states[grant.key] === 'expired').map(grant => [grant.key, states[grant.key] as 'denied' | 'expired']))
         if (grants.some(grant => states[grant.key] === 'pending')) {
-          result = { state: 'pending', nextPollAt: Date.now() + 5000 }
+          const polls = Number(this.store.db.prepare('SELECT poll_count FROM network_gate_controls WHERE task_id=?').get(task.id)!.poll_count)
+          result = { state: 'pending', nextPollAt: Date.now() + (polls < gateLimits.fastPolls ? 5000 : gateLimits.slowPollMs) }
         }
         else if (!approved.length) {
           result = { state: Object.values(refused).includes('denied') ? 'denied' : 'expired', refused }
@@ -188,6 +202,11 @@ export class NetworkGates {
       }
       const manifest = parseNetworkGateManifest(JSON.parse(task.manifest))
       const refused = result.refused ?? {}
+      // Nobody answered before the batch expired: its inputs ask again instead of ending.
+      if (result.state === 'expired' && !Object.values(refused).includes('denied') && this.reopen(task, manifest)) {
+        this.store.db.prepare('UPDATE network_gate_task_attempts SET state=\'completed\',finished_at=? WHERE task_id=? AND attempt=?').run(Date.now(), step.taskId, step.attempt)
+        return
+      }
       if (result.state === 'approved') {
         const released = { ...manifest, items: manifest.items.filter(item => !refused[item.deliveryId]) }
         this.assertPinned(manifest); this.assertItems(released)
@@ -470,7 +489,7 @@ export class NetworkGates {
     const pod = this.store.getPod(manifest.podId)
     if (!network || network.state === 'archived' || network.baseline_state !== 'ready' || network.revision !== manifest.networkRevision || network.restore_nonce !== manifest.restoreNonce || network.activation_epoch !== manifest.activationEpoch || !sameOwner(manifest.owner, { issuer: network.owner_issuer as string, subject: network.owner_subject as string }) || !binding || binding.definition_id !== manifest.definitionId || binding.definition_version !== manifest.definitionVersion || binding.binding_revision !== manifest.bindingRevision || pod.activeScript !== manifest.scriptHash || pod.bindingRevision !== manifest.assignmentRevision || pod.lifecycle === 'archived' || this.resources.epoch(pod.id) !== manifest.resourceEpoch) throw new Error('Network gate consumer or definition authority changed')
     const dataPin = networkDataPin(this.store, manifest.networkId, manifest.podId)
-    if ((manifest.version === 3 && manifest.dataPin !== dataPin) || (manifest.version === 2 && dataPin !== emptyNetworkDataPin)) throw new Error('Network gate data authority changed; request a fresh approval')
+    if ((manifest.version >= 3 && manifest.dataPin !== dataPin) || (manifest.version === 2 && dataPin !== emptyNetworkDataPin)) throw new Error('Network gate data authority changed; request a fresh approval')
     const revision = this.store.db.prepare('SELECT contract FROM network_revisions WHERE network_id=? AND revision=?').get(manifest.networkId, manifest.networkRevision)!
     const definition = parseNetworkDefinition(JSON.parse(revision.contract as string))
     if (!networkApprovals(definition).some(approval => approval.key === manifest.gate && approval.podId === manifest.podId && manifest.items.every(item => item.channel === approval.takes))) throw new Error('Network approval gate definition changed')
@@ -500,6 +519,7 @@ export class NetworkGates {
           this.renewAfterAuthorityChange(task, manifest, failure)
           continue
         }
+        if (manifest.expiresAt <= Date.now() && task.state !== 'approved') { this.expire(task, manifest); continue }
         try {
           const pending = task.state === 'approved' ? { ...manifest, items: manifest.items.filter(item => this.store.db.prepare('SELECT state FROM network_deliveries WHERE id=?').get(item.deliveryId)?.state === 'pending') } : manifest
           this.assertItems(pending, task.state === 'approved')
@@ -508,6 +528,35 @@ export class NetworkGates {
         catch (failure) { this.obsolete(task, failure) }
       }
     })
+  }
+
+  /**
+   * Batches that expired unanswered before issue 1458 blocked their untouched inputs for owner review; they ask again once.
+   * Each one becomes superseded without blocked inputs, so it is not found again.
+   */
+  private reopenExpiredBlocks(networkId: string, podId: string): void {
+    const tasks = this.store.db.prepare(`SELECT task.* FROM network_gate_tasks task JOIN network_gate_controls control ON control.task_id=task.id
+      WHERE task.network_id=? AND task.pod_id=? AND task.state='superseded' AND control.error='Network approval expired before dispatch'
+      AND json_extract(control.resolution,'$.decision.priorTaskState') IN ('preparing','pending') AND ${supersededNeedsReview} ORDER BY task.created_at LIMIT 32`).all(networkId, podId)
+    for (const row of tasks) {
+      const task = row as unknown as Task
+      this.reopen({ ...task, state: 'pending' }, parseNetworkGateManifest(JSON.parse(task.manifest)))
+    }
+  }
+
+  /** An unanswered batch that expired with nothing released asks again; otherwise its inputs end as before. */
+  private expire(task: Task, manifest: NetworkGateManifest): void {
+    if (this.reopen(task, manifest)) return
+    this.store.db.prepare('UPDATE network_gate_tasks SET state=\'expired\' WHERE id=?').run(task.id)
+    this.dispose(task, 'expired', 'Approval expired before release')
+  }
+
+  private reopen(task: Task, manifest: NetworkGateManifest): number {
+    if (!['preparing', 'pending'].includes(task.state)) return 0
+    const reason = 'Approval expired unanswered; requested again automatically'
+    const resumed = this.renew(task, manifest, canonicalNetworkJson({ taskId: task.id, generation: task.generation, priorTaskState: task.state, priorGrantId: task.grant_id, reason, at: Date.now(), priorGrantCannotBeReused: true, automatic: true }), reason)
+    if (resumed) this.trace(manifest, 'gate-fresh-approval', { taskId: task.id, reason, resumed, noApprovalReleased: true })
+    return resumed
   }
 
   /** Returns the inputs of a batch for a fresh approval; the prior grant can never be reused. */

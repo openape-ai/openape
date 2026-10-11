@@ -12,7 +12,6 @@ export interface DecisionSources { map: MapView | null, networks: NetworkView, s
 /** The worker calls the projection needs; owner commands run inside the claimed workspace operation. */
 export interface DecisionWorker {
   inboxSources: () => Promise<DecisionSources>
-  approvalLink: (podId: string, runId: string, grantId: string) => Promise<string>
   networks: (command: NetworkCommand) => Promise<unknown>
   runs: (command: RunCommand) => Promise<unknown>
   secrets: (command: SecretsCommand) => Promise<unknown>
@@ -66,7 +65,7 @@ export class InboxDecisions {
 
   private async entries(): Promise<DecisionEntry[]> {
     const sources = await this.worker.inboxSources()
-    const entries = [...this.networkRoutes(sources), ...await this.approvals(sources), ...this.effects(sources), ...this.secrets(sources)]
+    const entries = [...this.networkRoutes(sources), ...this.effects(sources), ...this.secrets(sources)]
     // One malformed source (for example a non-HTTPS issuer) must not block every other decision.
     const valid = entries.filter((entry) => {
       try { parseInboxDecision(entry.decision); return true }
@@ -90,7 +89,7 @@ export class InboxDecisions {
   private members(sources: DecisionSources): Set<string> { return new Set((sources.map?.automations ?? []).filter(automation => automation.kind === 'network').flatMap(automation => automation.members)) }
   private podName(sources: DecisionSources, podId: string): string | null { return sources.map?.pods.find(pod => pod.id === podId)?.name ?? null }
 
-  /** Owner decisions of network routes: an open item of a choose route, or a batch of an approve route waiting at the IdP. */
+  /** Owner decisions of network routes: an open item of a choose route, or an approve-route batch that Pods must settle. */
   private networkRoutes(sources: DecisionSources): DecisionEntry[] {
     const network = (id: string) => sources.map?.automations.find(automation => automation.id === id)
     // Only the latest event of a case is open; an earlier event is superseded, as on the desktop.
@@ -110,28 +109,15 @@ export class InboxDecisions {
       async option => this.worker.networks({ type: 'choose', id: choice.networkId, revision: choice.revision, eventId: choice.eventId, gate: choice.gate, option }))
   }
 
+  // A pending batch is decided at the IdP and only counted in the inbox (issue 1458); Pods lists what it settles itself.
   private batch(sources: DecisionSources, batch: NetworkGateView, revision: number): DecisionEntry[] {
     const unknown = batch.state === 'unknown'
-    const link = batch.url ? { title: this.t('Decide at the IdP'), url: batch.url } : null
-    const lines = [this.t('{count} items', { count: batch.items.length }), ...batch.items.map(item => `- ${item.title} (${item.outcome})`), ...(unknown ? [] : [this.t('Select the items to approve at the IdP; unselected items are denied.')]), ...(batch.error ? [batch.error] : [])]
+    if (!unknown && batch.state !== 'superseded') return []
+    const lines = [this.t('{count} items', { count: batch.items.length }), ...batch.items.map(item => `- ${item.title} (${item.outcome})`), ...(batch.error ? [batch.error] : [])]
     // An uncertain or superseded batch can ask the IdP again with the owner's reason; the runtime checks that no item is in use.
-    const reviewable = unknown || batch.state === 'superseded'
-    const options: InboxDecisionOption[] = [...(unknown ? [{ key: 'discard', title: this.t('Discard batch'), input: 'evidence' as const }] : []), ...(reviewable ? [{ key: 'review', title: this.t('Request fresh approval'), input: 'evidence' as const }] : [])]
-    if (!options.length && !link) return []
-    return [this.entry('network-batch', [batch.id, String(batch.generation)], { podId: batch.podId, podName: this.podName(sources, batch.podId), title: `${this.t('Approval batch')} · ${batch.gate}`, body: lines.join('\n'), authority: 'idp', options, link },
+    const options: InboxDecisionOption[] = [...(unknown ? [{ key: 'discard', title: this.t('Discard batch'), input: 'evidence' as const }] : []), { key: 'review', title: this.t('Request fresh approval'), input: 'evidence' as const }]
+    return [this.entry('network-batch', [batch.id, String(batch.generation)], { podId: batch.podId, podName: this.podName(sources, batch.podId), title: `${this.t('Approval batch')} · ${batch.gate}`, body: lines.join('\n'), authority: 'pods', options, link: null },
       async (option, evidence) => this.worker.networks({ type: option === 'review' ? 'gateReview' : 'gateDiscard', id: batch.networkId, revision, taskId: batch.id, generation: batch.generation, evidence }))]
-  }
-
-  // The link is rebuilt from the Pod's own identity issuer; an approval that cannot be verified is not published.
-  private async approvals(sources: DecisionSources): Promise<DecisionEntry[]> {
-    const rows = (sources.map?.pods ?? []).flatMap(pod => pod.approvals.map(approval => ({ pod, approval })))
-    const linked = await Promise.allSettled(rows.map(row => this.worker.approvalLink(row.pod.id, row.approval.runId, row.approval.grantId)))
-    return rows.flatMap(({ pod, approval }, index) => {
-      const result = linked[index]!
-      if (result.status === 'rejected') return []
-      return [this.entry('approval', [pod.id, approval.runId, approval.grantId], { podId: pod.id, podName: pod.name, title: approval.title, body: this.t('Open approval'), authority: 'idp', options: [], link: { title: this.t('Decide at the IdP'), url: result.value } },
-        async () => { throw new Error('Approvals are decided at the IdP') })]
-    })
   }
 
   // Replaces the desktop confirmation dialog: the owner states what was observed outside, never an automatic resend.
