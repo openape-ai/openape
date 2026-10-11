@@ -5,6 +5,7 @@ import { diagnostic, t } from '../i18n'
 import { ago, cadence } from '../utils/cadence'
 import { buildModel, ungrouped, visibleNodes } from '../utils/automation-layout'
 import type { Layers } from '../utils/automation-layout'
+import { tagsOf } from '../utils/tags'
 
 /** The same Pods as a table: group, kind, cadence, what they read and write, channels and the last run. */
 const props = defineProps<{ view: MapView, group: string, layers: Layers, now: number }>()
@@ -22,7 +23,7 @@ const rows = computed(() => {
       channels: model.links.filter(link => link.type === 'channel' && (link.from === item.id || link.to === item.id)).map(link => ({ direction: link.from === item.id ? 'gives' : 'takes', channel: link.label })),
     }
     return {
-      id: item.id, name: item.name, description: pod?.description ?? '', group: item.group === ungrouped ? t('without group') : item.group ?? '',
+      id: item.id, name: item.name, description: pod?.description ?? '', tags: tagsOf(props.view, item.id), group: item.group === ungrouped ? t('without group') : item.group ?? '',
       kind: item.kind === 'collapsed' ? t('collapsed') : item.ai ? t('AI') : t('rules'),
       cadence: item.kind === 'collapsed' ? cadence(automation?.schedule ?? null) : cadence(pod?.schedule ?? null, pod?.channels.takes),
       reads: facts.reads.map(fact => fact.name).join(', ') || '–', writes: facts.writes.map(fact => fact.name).join(', ') || '–',
@@ -48,6 +49,8 @@ const rows = computed(() => {
           <td>
             <b>{{ row.name }}</b><div class="automations-list-purpose">
               {{ row.description }}
+            </div><div v-if="row.tags.own.length || row.tags.inherited.length" class="tag-chips">
+              <span v-for="tag in row.tags.own" :key="tag" class="tag">{{ tag }}</span><span v-for="tag in row.tags.inherited" :key="`inherited-${tag}`" class="tag inherited" :title="t('from network')">{{ tag }}</span>
             </div>
           </td><td>{{ row.group }}</td><td>{{ row.kind }}</td><td>{{ row.cadence }}</td><td>{{ row.reads }}</td><td>{{ row.writes }}</td>
           <td class="mono">

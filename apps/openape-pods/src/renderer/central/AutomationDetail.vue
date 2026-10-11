@@ -7,6 +7,8 @@ import type { PortableSourceSelection } from '../../contracts/sharing'
 import { diagnostic, language, t } from '../i18n'
 import { cadence, stamp } from '../utils/cadence'
 import { nodeFacts } from '../utils/automation-layout'
+import { allTags, tagsOf } from '../utils/tags'
+import TagEditor from './TagEditor.vue'
 
 /**
  * The detail page of one Pod, network or system: state and lifecycle, schedule, membership,
@@ -37,6 +39,8 @@ const gates = computed(() => (automation.value?.gates ?? []).map(gate => gate.ki
 const numbers = computed(() => automation.value ? [[t('Deliveries'), String(automation.value.counts.done ?? 0)], [t('Open'), String(automation.value.counts.pending ?? 0)], ...(Object.keys(automation.value.flows).length ? [[t('Flows in 24 h'), Object.entries(automation.value.flows).map(([channel, count]) => `${channel} ${count}`).join(', ')]] : [])] : [])
 const scriptPath = computed(() => pod.value ? `pods/${pod.value.id}/pod-script.mjs` : '')
 const canControlAutomation = computed(() => !!automation.value && props.desktop)
+const tags = computed(() => tagsOf(props.view, props.id))
+const suggestions = computed(() => allTags(props.view))
 function toggle() {
   if (pod.value) { emit('command', { channel: 'scheduling', body: { type: 'lifecycle', podId: pod.value.id, revision: pod.value.revision, lifecycle: paused.value ? 'active' : 'paused' } }); return }
   if (automation.value) emit('network', { type: paused.value ? 'activate' : 'pause', id: automation.value.id, revision: automation.value.revision })
@@ -65,6 +69,12 @@ function runNow() {
     </div>
     <div v-if="pod?.description" class="sec">
       <div>{{ pod.description }}</div>
+    </div>
+    <div v-if="pod || automation" class="sec" data-tags>
+      <div class="eyebrow">
+        {{ t('Tags') }}
+      </div>
+      <TagEditor :id="id" :key="`${id}:${tags.revision}:${tags.own.join(',')}`" :tags="tags" :suggestions="suggestions" @command="emit('command', $event)" />
     </div>
     <div v-if="pod?.scriptUpdate" class="sec" data-script-update>
       <div class="eyebrow">

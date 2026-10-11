@@ -1,8 +1,19 @@
 /**
- * The complete control database of schema 46 (issue 1455, M8). A fresh profile is created from it; a schema-45
- * profile or backup is rebuilt into it by upgrade.ts. Older profiles and backups are refused.
+ * The complete control database of schema 47. A fresh profile is created from it; a schema-46 profile gains the
+ * tables of `schema47Additions`, and a schema-45 profile or backup is rebuilt into it by upgrade.ts (issue 1455, M8).
+ * Older profiles and backups are refused.
  */
-export const schemaVersion = 46
+export const schemaVersion = 47
+
+/** Tables added after the schema-46 baseline; empty on upgrade (issue 1459: tags of Pods and networks). */
+export const schema47Additions = `
+CREATE TABLE item_tags(
+  id TEXT PRIMARY KEY,
+  tags TEXT NOT NULL CHECK(json_valid(tags) AND json_type(tags)='array'),
+  revision INTEGER NOT NULL CHECK(revision>0),
+  updated_at INTEGER NOT NULL
+);
+`
 
 export const baselineSchema = `
 -- Pods, scripts and knowledge

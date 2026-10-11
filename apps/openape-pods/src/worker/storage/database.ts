@@ -1,6 +1,6 @@
 import { assertIntegrity } from './integrity.ts'
-import { baselineRows, baselineSchema, schemaVersion } from './schema.ts'
-import { assertSupportedSchema, assertUpgradable, upgradeToBaseline } from './upgrade.ts'
+import { baselineRows, baselineSchema, schema47Additions, schemaVersion } from './schema.ts'
+import { assertSupportedSchema, assertUpgradable, upgradeToCurrent } from './upgrade.ts'
 import type { GraphContract } from '../../contracts/graphs.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statfsSync, writeFileSync } from 'node:fs'
@@ -109,11 +109,11 @@ export class PodDatabase {
     const version = this.db.prepare('PRAGMA user_version').get()?.user_version as number
     if (version === schemaVersion) return
     if (version === 0) {
-      this.transaction(() => this.db.exec(`${baselineSchema}${baselineRows}PRAGMA user_version=${schemaVersion};`))
+      this.transaction(() => this.db.exec(`${baselineSchema}${schema47Additions}${baselineRows}PRAGMA user_version=${schemaVersion};`))
       return
     }
     // Refuse an unsupported database before writing a full copy of it on every start.
-    assertUpgradable(this.db)
+    if (version !== 46) assertUpgradable(this.db)
     const backup = join(this.root, `before-v${version}-${randomUUID()}.sqlite`)
     this.db.prepare('VACUUM INTO ?').run(backup); chmodSync(backup, 0o600)
     const copy = openSync(backup, 'r')
@@ -125,11 +125,12 @@ export class PodDatabase {
       if (saved.prepare('PRAGMA quick_check').get()?.quick_check !== 'ok' || saved.prepare('PRAGMA user_version').get()?.user_version !== version) throw new Error('Pre-upgrade database backup failed verification')
     }
     finally { saved.close() }
-    // Foreign keys stay off while the tables are rebuilt; upgradeToBaseline checks every reference afterwards.
+    // Foreign keys stay off while the tables are rebuilt; upgradeToCurrent checks every reference afterwards.
     this.db.exec('PRAGMA foreign_keys=OFF')
-    try { this.transaction(() => { upgradeToBaseline(this.db); this.db.exec(`PRAGMA user_version=${schemaVersion}`) }) }
+    try { this.transaction(() => { upgradeToCurrent(this.db, version); this.db.exec(`PRAGMA user_version=${schemaVersion}`) }) }
     finally { this.db.exec('PRAGMA foreign_keys=ON') }
-    this.db.exec('VACUUM')
+    // Only the schema-45 rebuild leaves free pages; schema 46 gains empty tables.
+    if (version !== 46) this.db.exec('VACUUM')
   }
 
   transaction<T>(operation: () => T): T {

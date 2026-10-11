@@ -7,6 +7,7 @@ import { parseManifest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
 import type { PodResource } from '../../contracts/resources'
 import { privatePods } from '../central/projection-policy'
+import { ItemTagStore } from './item-tags'
 
 type Row = Record<string, unknown>
 export const mapWindowMs = 24 * 60 * 60 * 1000
@@ -28,6 +29,8 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
   const db = store.db
   const hidden = new Set(published ? db.prepare(privatePods).all().map(row => row.pod_id as string) : [])
   const groups = db.prepare('SELECT g.id,g.name,m.pod_id FROM pod_groups g JOIN pod_memberships m ON m.group_id=g.id').all()
+  const tagged = new Map(new ItemTagStore(store).view().map(item => [item.id, { own: item.tags, inherited: item.inherited, revision: item.revision }]))
+  const tagsOf = (id: string) => tagged.has(id) ? { tags: tagged.get(id)! } : {}
   const groupOf = (podId: string) => groups.find(row => row.pod_id === podId)
   const groupName = (id: unknown) => groups.find(row => row.id === id)?.name as string | undefined ?? null
   const descriptions = new Map(db.prepare('SELECT pod_id,body FROM pod_descriptions').all().map(row => [row.pod_id as string, descriptionSummary(row.body as string)]))
@@ -68,7 +71,7 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
       if (member.source?.schedule) sourceSchedules.set(member.podId, { spec: member.source.schedule, enabled: row.state === 'active' })
     }
     const latest = db.prepare('SELECT r.state,r.started_at,r.finished_at,r.summary FROM network_invocations i JOIN runs r ON r.id=i.run_id WHERE i.network_id=? ORDER BY r.started_at DESC LIMIT 1').get(row.id!)
-    automations.push({ id: row.id as string, revision: Number(row.revision), kind: 'network', name: row.name as string, group: groupName(row.group_id), groupId: row.group_id as string, state: row.state as MapAutomation['state'], members, schedule: source ? { spec: source.source!.schedule, enabled: row.state === 'active' } : null, counts: counter(db.prepare('SELECT state,count FROM network_queue_counts WHERE network_id=?').all(row.id!), 'state', 'count'), flows, gates, lastRun: latest && !published ? run(latest) : null })
+    automations.push({ id: row.id as string, revision: Number(row.revision), kind: 'network', name: row.name as string, group: groupName(row.group_id), groupId: row.group_id as string, state: row.state as MapAutomation['state'], members, schedule: source ? { spec: source.source!.schedule, enabled: row.state === 'active' } : null, counts: counter(db.prepare('SELECT state,count FROM network_queue_counts WHERE network_id=?').all(row.id!), 'state', 'count'), flows, gates, lastRun: latest && !published ? run(latest) : null, ...tagsOf(row.id as string) })
     for (const edge of deriveEdges(definition.members.map(member => ({ podId: member.podId, contract: member.contract })), definition.routes)) edges.push({ from: edge.from, to: edge.to, type: 'channel', channel: edge.channel, flow: flows[edge.channel] ?? 0 })
   }
 
@@ -140,6 +143,7 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
       ...(local && scriptUpdates.get(pod.id)?.script === pod.activeScript ? { scriptUpdate: scriptUpdates.get(pod.id) } : {}),
       unknown: unknownEffects.filter(row => local && row.pod_id === pod.id).map(row => ({ key: String(row.effect_key), runId: String(row.run_id) })),
       approvals: approvals.filter(row => local && row.pod_id === pod.id).map(row => parseRunApproval(JSON.parse(row.data as string))).map((approval, index) => ({ grantId: approval.grantId, title: approval.title, runId: String(approvals.filter(row => row.pod_id === pod.id)[index]!.run_id) })),
+      ...tagsOf(pod.id),
     })
   }
 

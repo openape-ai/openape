@@ -1,4 +1,5 @@
 import type { ScheduleSpec } from './scheduling'
+import { normalizeTags } from './tags'
 
 /**
  * The read model behind the Automatisierungen surface: every Pod and network of the owner
@@ -14,6 +15,8 @@ export interface MapResource { kind: MapResourceKind, name: string, how: string,
 export interface MapRun { at: number, state: string, summary: string }
 export interface MapSchedule { spec: ScheduleSpec | null, enabled: boolean }
 export interface MapApproval { grantId: string, title: string, runId: string }
+/** Owner tags of a Pod or network (issue 1459): its own with their revision, and those inherited from its network. */
+export interface MapTags { own: string[], inherited: string[], revision: number }
 export interface MapPod {
   id: string
   name: string
@@ -38,6 +41,7 @@ export interface MapPod {
   unknown: { key: string, runId: string }[]
   // Latest script update of a network member through the local assistant, while that version is active.
   scriptUpdate?: { at: number, previous: string, script: string }
+  tags?: MapTags
 }
 export interface MapGateOption { key: string, title: string, channel: string }
 export interface MapGate { key: string, kind: 'choose' | 'approve', title: string, takes: string, options: MapGateOption[], open: number, batches: Record<string, number> }
@@ -55,6 +59,7 @@ export interface MapAutomation {
   flows: Record<string, number>
   gates: MapGate[]
   lastRun: MapRun | null
+  tags?: MapTags
 }
 export interface MapEdge { from: string, to: string, type: 'read' | 'write' | 'channel', channel: string | null, flow: number }
 export interface MapKpis {
@@ -107,6 +112,15 @@ function networksOnly(view: Record<string, unknown>): Record<string, unknown> {
   }
 }
 
+function tags(value: unknown): void {
+  if (value === undefined) return
+  const item = object(value)
+  if (Object.keys(item).some(key => !['own', 'inherited', 'revision'].includes(key)) || !Number.isSafeInteger(item.revision) || Number(item.revision) < 0) throw new Error('Invalid map tags')
+  for (const field of [item.own, item.inherited]) {
+    if (JSON.stringify(normalizeTags(field)) !== JSON.stringify(field)) throw new Error('Invalid map tags')
+  }
+}
+
 /** Shape check for what crosses the relay and MCP; the content stays the worker's. */
 export function parseMapView(value: unknown): MapView {
   const view = networksOnly(currentNames(object(value)))
@@ -130,6 +144,7 @@ export function parseMapView(value: unknown): MapView {
       if (!['service', 'application', 'directory', 'ssh', 'secret', 'reference'].includes(String(row.kind)) || (row.system !== null && !systems.has(text(row.system, 4200)))) throw new Error('Invalid map resource')
     }
     for (const alias of list(pod.secrets, 64)) text(alias, 200)
+    tags(pod.tags)
     if (pod.scriptUpdate !== undefined) {
       const update = object(pod.scriptUpdate); integer(update.at)
       if ([update.previous, update.script].some(hash => typeof hash !== 'string' || !/^[a-f0-9]{64}$/.test(hash))) throw new Error('Invalid map script update')
@@ -137,7 +152,7 @@ export function parseMapView(value: unknown): MapView {
     nodes.add(id)
   }
   for (const item of list(view.automations, mapLimits.automations)) {
-    const automation = object(item); const id = text(automation.id, 36); text(automation.name, 200)
+    const automation = object(item); const id = text(automation.id, 36); text(automation.name, 200); tags(automation.tags)
     if (automation.kind !== 'network' || !['active', 'paused', 'archived'].includes(String(automation.state))) throw new Error('Invalid map automation')
     for (const member of list(automation.members, 64)) { if (!nodes.has(text(member, 36))) throw new Error('Invalid map automation member') }
     for (const gate of list(automation.gates, 32)) { const row = object(gate); text(row.key, 64); text(row.title, 120); integer(row.open); nodes.add(`gate:${text(row.key, 64)}`) }
