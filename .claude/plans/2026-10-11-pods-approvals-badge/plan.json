@@ -10,14 +10,14 @@
     "approach": "Keep one growing batch per gate, reopen it when it expires, count the owner's pending grants at the IdP from the desktop, and show that count as one Approvals entry linking to the IdP.",
     "outcome": "Decisions are made in Pods, grants at the IdP; the app shows one current count and never a dead link."
   },
-  "status": "active",
+  "status": "done",
   "revision": 2,
   "milestones": [
     {
       "id": "grow",
       "title": "One growing batch per gate",
       "goal": "Each Pod gate keeps one open IdP batch that new items join until the owner decides it.",
-      "status": "planned",
+      "status": "done",
       "acceptance": [
         "While a batch is pending, new gate items are appended to it as members without an announced size (grants.md §3.4), up to 100 items; the 2-minute quiet window and the 30-item limit go away.",
         "A batch waits up to seven days; when it expires with nothing released or consumed, its items reopen automatically as a new batch. A batch with a released, consumed or uncertain item is never renewed automatically.",
@@ -30,7 +30,7 @@
       "id": "count",
       "title": "Count pending grants at the IdP",
       "goal": "The desktop reads the owner's pending grants with the existing apes login and publishes only their number to the relay.",
-      "status": "planned",
+      "status": "done",
       "acceptance": [
         "The count equals apes grants inbox: pending grants of others for the owner; a batch counts once.",
         "Pods only reads the apes login, never writes, renews with a refresh token or logs out; without a login the count is marked unknown instead of zero.",
@@ -42,7 +42,7 @@
       "id": "pwa",
       "title": "Approvals entry in the inbox",
       "goal": "The PWA shows Approvals separately from decisions and opens the IdP grants page.",
-      "status": "planned",
+      "status": "done",
       "acceptance": [
         "IdP approvals and batch links no longer appear in the decision list; uncertain batches remain a Pods decision without an IdP link.",
         "An Approvals entry with the count opens https://id.openape.ai/grants; it is hidden at zero and shows a hint when the count is unknown.",
@@ -54,7 +54,7 @@
       "id": "rollout",
       "title": "Release and verify",
       "goal": "Roll out relay first, then the signed desktop, and verify on the owner's iPhone.",
-      "status": "planned",
+      "status": "done",
       "acceptance": [
         "Relay deployed and healthy; signed desktop installed with a paired backup.",
         "Both dead batch items are gone; the renewed batches wait at the IdP; the Approvals entry count matches apes grants inbox.",
@@ -321,6 +321,11 @@
         "path": "risks.2.mitigation",
         "source": "Approving the batch earlier releases what is there; for mail, the archive member must treat a message that is already gone as done, which the rollout verifies.",
         "text": "Gibst du den Batch früher frei, läuft, was drin ist; bei Mails muss das Archiv-Mitglied eine bereits verschwundene Nachricht als erledigt behandeln, was der Rollout prüft."
+      },
+      {
+        "path": "completion.summary",
+        "source": "Delivered on October 11, 2026: PRs 353 and 354 merged, relay prod-49b3b01a deployed, signed desktop b28a8080 installed with paired backups. The two expired batches reopened into one growing batch, the owner approved it at the IdP and all 8 mails were archived; stale IdP requests were withdrawn and the inbox shows 0 pending approvals. Open: owner check of the Approvals entry and badge on the iPhone. Evidence: https://report.openape.ai/d/01M4N92EK0RSJEJBR9FV1V7TMP",
+        "text": "Ausgeliefert am 11. Oktober 2026: PRs 353 und 354 gemergt, Relay prod-49b3b01a ausgerollt, signierter Desktop b28a8080 mit gepaarten Backups installiert. Die zwei abgelaufenen Batches wurden zu einem wachsenden Batch neu angefragt, du hast ihn am IdP freigegeben und alle 8 Mails wurden archiviert; tote IdP-Anfragen wurden zurückgezogen und der Posteingang zeigt 0 offene Freigaben. Offen: deine Prüfung von Freigaben-Eintrag und Zahl am iPhone. Nachweis: https://report.openape.ai/d/01M4N92EK0RSJEJBR9FV1V7TMP"
       }
     ]
   },
@@ -332,5 +337,9 @@
       "revision": 2
     },
     "scope": "Approvals badge, IdP items out of the decision list, one growing approval batch per gate with automatic reopening."
+  },
+  "completion": {
+    "result": "achieved",
+    "summary": "Delivered on October 11, 2026: PRs 353 and 354 merged, relay prod-49b3b01a deployed, signed desktop b28a8080 installed with paired backups. The two expired batches reopened into one growing batch, the owner approved it at the IdP and all 8 mails were archived; stale IdP requests were withdrawn and the inbox shows 0 pending approvals. Open: owner check of the Approvals entry and badge on the iPhone. Evidence: https://report.openape.ai/d/01M4N92EK0RSJEJBR9FV1V7TMP"
   }
 }
