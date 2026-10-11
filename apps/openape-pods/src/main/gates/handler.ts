@@ -2,6 +2,8 @@ import { gateAudience, networkGateBatchId, networkGateItemCommand, networkGateIt
 import type { NetworkGateManifest, NetworkGateRelease } from '../../contracts/network-gates'
 import type { ServiceScope } from '../../contracts/services'
 import type { ConnectionManager } from '../connections/manager'
+import { connectionRequest } from '../connections/http'
+import type { OwnerSession } from '../connections/owner-session'
 import { createGrantAuthority } from './authority'
 import type { BatchGrant, BatchMember } from './authority'
 
@@ -60,10 +62,22 @@ export async function handleGate(input: Request): Promise<unknown> {
  * Revokes, as the requesting Pod, the grants of a finished network batch that the owner approved as always or never
  * answered, so they neither stay active nor wait on the owner's IdP list. It only reduces authority.
  */
-export async function releaseNetworkGrants(release: NetworkGateRelease, connections: ConnectionManager, signal: AbortSignal): Promise<number> {
+export async function releaseNetworkGrants(release: NetworkGateRelease, connections: ConnectionManager, signal: AbortSignal, owner: () => Promise<OwnerSession | null> = async () => null): Promise<number> {
   const connection = await connections.podConnection(release.podId, release.owner, true)
   const authority = createGrantAuthority(connection, signal, async () => {}, gateAudience, ['once', 'always'])
   const members = gateMembers(release.manifest)
   const bindings = release.grants.map(grant => ({ ...members.find(member => member.key === grant.key)!, grantId: grant.id, expiresAt: release.manifest.expiresAt }))
-  return authority.release(networkGateBatchId(release.manifest), bindings)
+  return authority.release(networkGateBatchId(release.manifest), bindings, connection.brokered ? ownerRevoke(owner, signal) : undefined)
+}
+
+/**
+ * A brokered Pod grant exists only at the owner's decision IdP, where only the owner may revoke it; the agent
+ * provider does not forward a revoke (issue 1462).
+ */
+export function ownerRevoke(owner: () => Promise<OwnerSession | null>, signal: AbortSignal) {
+  return async (grantId: string): Promise<Record<string, unknown>> => {
+    const session = await owner()
+    if (!session) throw new Error('Revoking a brokered Pod grant needs an active owner session (the MCP sign-in); otherwise the owner revokes it at the IdP')
+    return connectionRequest(session.issuer, `/api/grants/${encodeURIComponent(grantId)}/revoke`, {}, signal, await session.bearer(signal))
+  }
 }

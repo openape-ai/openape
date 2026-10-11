@@ -4,6 +4,7 @@ import type { PodGrant } from '../../src/contracts/grants'
 import type { ResourceState } from '../../src/contracts/resources'
 import { releaseArchivedNetworkGrants } from '../../src/main/grants/administration'
 import type { PodGrants } from '../../src/main/grants/pod-grants'
+import type { OwnerSession } from '../../src/main/connections/owner-session'
 import { GrantLedger } from '../../src/worker/resources/grants'
 import { closeNetworks, networkFixture } from './network-fixture'
 
@@ -36,9 +37,11 @@ it('revokes the grants and removes the sandbox a network handed to its members w
   expect(ledger.released().grants.map(item => item.id).sort()).toEqual(['network-consumer', 'network-source'])
 
   const revoked: string[] = []
-  const grants = { revoke: async (_owner: unknown, podId: string, grantId: string) => { revoked.push(grantId); ledger.state(podId, grantId, 'revoked'); return {} } } as unknown as PodGrants
+  // The sweep hands the owner session to each revoke; a brokered Pod grant needs it (issue 1462).
+  const session = { issuer: 'https://owner.example' } as OwnerSession
+  const grants = { revoke: async (owner: unknown, podId: string, grantId: string) => { expect(owner).toBe(session); revoked.push(grantId); ledger.state(podId, grantId, 'revoked'); return {} } } as unknown as PodGrants
   const state = (podId: string) => ({ resources: f.resources.list(podId), epoch: f.resources.epoch(podId) }) as ResourceState
-  await releaseArchivedNetworkGrants({ grants, ledger: async command => ledger.execute(command), resources: async podId => state(podId), revokeResource: async (podId, resourceId, revision) => f.resources.revoke(podId, resourceId, revision) }, AbortSignal.timeout(5000))
+  await releaseArchivedNetworkGrants({ grants, owner: async () => session, ledger: async command => ledger.execute(command), resources: async podId => state(podId), revokeResource: async (podId, resourceId, revision) => f.resources.revoke(podId, resourceId, revision) }, AbortSignal.timeout(5000))
   expect(revoked.sort()).toEqual(['network-consumer', 'network-source'])
   expect(ledger.list(consumer).map(item => [item.id, item.state])).toEqual(expect.arrayContaining([['own-consumer', 'approved'], ['network-consumer', 'revoked']]))
   expect(f.resources.list(consumer).find(item => item.id === resource)?.state).toBe('revoked')
@@ -68,7 +71,7 @@ it('returns a member to its own sandbox when the network that raised it to owner
   expect(ledger.sandbox(consumer)).toEqual(ownOnly)
 
   const state = (podId: string) => ({ resources: f.resources.list(podId), epoch: f.resources.epoch(podId) }) as ResourceState
-  await releaseArchivedNetworkGrants({ grants: {} as PodGrants, ledger: async command => ledger.execute(command), resources: async podId => state(podId), revokeResource: async (podId, resourceId, revision) => f.resources.revoke(podId, resourceId, revision) }, AbortSignal.timeout(5000))
+  await releaseArchivedNetworkGrants({ grants: {} as PodGrants, owner: async () => null, ledger: async command => ledger.execute(command), resources: async podId => state(podId), revokeResource: async (podId, resourceId, revision) => f.resources.revoke(podId, resourceId, revision) }, AbortSignal.timeout(5000))
   expect(f.store.db.prepare('SELECT source FROM pod_sandbox WHERE pod_id=?').all(consumer).map(item => item.source)).toEqual(['pod'])
   expect(ledger.sandbox(consumer)).toEqual(ownOnly)
   expect(f.resources.list(consumer).find(item => item.id === networkOrigin)?.state).toBe('revoked')

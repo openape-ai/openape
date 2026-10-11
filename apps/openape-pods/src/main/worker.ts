@@ -398,16 +398,26 @@ export class FixtureWorker {
   /** Revokes always grants of finished network approval batches at the IdP; a failure is logged and retried later with backoff. */
   async releaseNetworkGrants(signal: AbortSignal): Promise<void> {
     if (!this.connections) return
+    // Brokered Pod grants are revoked by the owner (issue 1462); the sweep derives that session from the apes login
+    // only when a brokered grant needs it, and closing it never touches the login.
+    let session: Promise<OwnerSession | null> | undefined
+    const owner = () => session ??= this.mcpApesSession(Date.now() + 5 * 60000, signal)
+    try { await this.releaseSweep(this.connections, signal, owner) }
+    // A failed derivation was already reported by the revoke that needed it; only an open session is closed here.
+    finally { if (session) await (await session.catch(() => null))?.close() }
+  }
+
+  private async releaseSweep(connections: ConnectionManager, signal: AbortSignal, owner: () => Promise<OwnerSession | null>): Promise<void> {
     const grants = this.podGrants()
     if (grants) {
-      try { await releaseArchivedNetworkGrants({ grants, ledger: command => this.dispatch({ grants: command }), revokeResource: async (podId, id, revision) => { await this.resources({ type: 'revoke', podId, id, revision }) }, resources: podId => this.resources({ type: 'list', podId }) }, signal) }
+      try { await releaseArchivedNetworkGrants({ grants, owner, ledger: command => this.dispatch({ grants: command }), revokeResource: async (podId, id, revision) => { await this.resources({ type: 'revoke', podId, id, revision }) }, resources: podId => this.resources({ type: 'list', podId }) }, signal) }
       catch (error) { console.error('Could not release the grants and sandbox of an archived network', error) }
     }
     for (const release of parseNetworkGateReleases(await this.dispatch({ networkGateRelease: { type: 'list' } }))) {
       const retry = this.releaseRetry.get(release.taskId)
       if (retry && retry.at > Date.now()) continue
       try {
-        await releaseNetworkGrants(release, this.connections, signal)
+        await releaseNetworkGrants(release, connections, signal, owner)
         await this.dispatch({ networkGateRelease: { type: 'released', taskId: release.taskId } })
         this.releaseRetry.delete(release.taskId)
       }
