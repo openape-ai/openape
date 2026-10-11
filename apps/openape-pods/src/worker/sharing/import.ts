@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, open, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { parseOwner, canonicalPortableJson  } from '@openape/pods-protocol'
+import { parseOwner, canonicalPortableJson, portableTagsFeature } from '@openape/pods-protocol'
 import type { Owner, PortableInput, PortableManifest, PortablePod } from '@openape/pods-protocol'
 import { parsePackages } from '../../contracts/dependencies'
 import type { PackageManifest } from '../../contracts/dependencies'
@@ -15,13 +15,14 @@ import { PodVariables } from '../resources/variables'
 import type { ScriptRuntime } from '../runs/runner'
 import type { NetworkEngine } from '../scheduling/network-engine'
 import type { DefinitionCatalog } from '../workspace/definition-catalog'
+import { ItemTagStore } from '../workspace/item-tags'
 import { clip, finalizeNetwork, variableMatches } from './compositions'
 import type { CompositionContext, CompositionDocument } from './compositions'
 import type { CommitPoint, PodDatabase } from '../storage/database'
 import { readPortableArchive } from './archive'
 
 // Importer support only; the runtime does not advertise portable aliases as a script capability.
-export const importFormatFeatures = ['portable_aliases_v1'] as const
+export const importFormatFeatures = ['portable_aliases_v1', portableTagsFeature] as const
 // bundles holds, per alias, the executable hash of the application bundle whose identity the main process verified at binding.
 interface PodSetup { resources: PodResource[], aliases: Map<string, PodResource>, variables: Record<string, string>, dependencies: boolean, bundles: Record<string, string> }
 interface ImportSetup { values: PortableImportValues, drafts?: Record<string, string>, packages?: Record<string, PackageManifest>, bundles?: Record<string, Record<string, string>>, compositions?: Record<string, { networkId?: string }>, deferred?: string[] }
@@ -269,6 +270,7 @@ export class PortableImporter {
         if (this.store.listPods().length + manifest.pods.length > 100) throw new Error('Local pod limit reached')
         for (const pod of manifest.pods) {
           const created = this.store.createPod({ name: clip(pod.title) }, ids.get(pod.key)!)
+          if (pod.tags) new ItemTagStore(this.store).execute({ type: 'tag', id: created.id, revision: 0, tags: pod.tags })
           const draftId = drafts[pod.key] = randomUUID()
           // Tool capabilities name local resources and are added when the recipient binds them.
           const capabilities = pod.requestedCapabilities.filter(capability => !capability.startsWith('tool.'))

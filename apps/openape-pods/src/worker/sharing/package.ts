@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto'
 import { zip } from 'fflate'
 import type { Zippable } from 'fflate'
-import { canonicalPortableJson, parsePortableManifest, portableContentBytes, portableFileLimits, sharingLimits } from '@openape/pods-protocol'
+import { canonicalPortableJson, parsePortableManifest, portableContentBytes, portableFileLimits, portableTagsFeature, sharingLimits } from '@openape/pods-protocol'
 import type { PortableFile, PortableManifest } from '@openape/pods-protocol'
 import { parsePackages } from '../../contracts/dependencies'
 import { validatePortableAccessDefaults, validatePortableCollectionDocument, validatePortableCompositionDocument } from '../../contracts/portable-composition'
 import { parseImportedLock } from '../dependencies/imported-lock'
 
-export const exportFormatFeatures = ['portable_aliases_v1'] as const
+export const exportFormatFeatures = ['portable_aliases_v1', portableTagsFeature] as const
 export interface PortablePayload { path: string, kind: PortableFile['kind'], mediaType: string, content: Uint8Array }
 export interface PortablePackage { manifest: PortableManifest, archive: Uint8Array, transferSha256: string }
 export type PortableDescription = Omit<PortableManifest, 'files' | 'contentSha256'>
