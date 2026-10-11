@@ -1,6 +1,10 @@
+import { normalizeTag, tagLimits } from './tags'
+
 export const sharingLimits = { transferBytes: 25 * 1024 * 1024, expandedBytes: 100 * 1024 * 1024, manifestBytes: 1024 * 1024, files: 500, pods: 32, inputs: 32, valueCharacters: 16384 } as const
 export const portableFileLimits = { script: 800000, 'package-manifest': 16384, 'package-lock': 1024 * 1024, asset: 32 * 1024 * 1024, composition: 1024 * 1024, 'data-schema': 16384 } as const
 export type PortableKind = 'pod' | 'network'
+/** Optional package feature: own tags of Pods and compositions. Required only by packages that carry tags (issue 1460). */
+export const portableTagsFeature = 'portable_tags_v1'
 export type PortableFileKind = 'script' | 'package-manifest' | 'package-lock' | 'asset' | 'composition' | 'data-schema'
 export interface PortableFile { path: string, kind: PortableFileKind, bytes: number, sha256: string, mediaType: string }
 export type PortableInputKind = 'string' | 'number' | 'boolean' | 'enum' | 'directory' | 'account' | 'connection' | 'secret'
@@ -37,6 +41,8 @@ export interface PortablePod {
   applications: PortableApplicationBinding[]
   assets: string[]
   schedule?: PortableSchedule | null
+  /** The Pod's own tags, present only when it has any; inherited network tags are never copied. */
+  tags?: string[]
 }
 /** `after` and `handoff` stay in format version 1 but are always empty: networks connect members through channels. */
 export interface PortableNode { pod: string, after: [], handoff: false }
@@ -51,6 +57,8 @@ export interface PortableComposition {
   calls: []
   inputs: PortableInput[]
   dataSchemas: string[]
+  /** The composition's own tags, present only when it has any. */
+  tags?: string[]
 }
 export interface PortableManifest {
   format: 'openape-package'
@@ -181,6 +189,18 @@ function bindings(value: unknown, environment = false): PortableBinding[] {
   const result = list(value, environment ? 16 : 32, (value) => { const item = fields(value, ['alias', 'input']); const alias = environment ? lineText(item.alias, 64) : key(item.alias); if (environment && (!/^[A-Z][A-Z0-9_]{0,63}$/.test(alias) || /HOME|PATH|TMP|PROXY|TOKEN|SECRET|PASSWORD|CREDENTIAL|SESSION|_PAT|AUTH|KEY|ELECTRON|DYLD|LD_|NODE_OPTIONS|AZURE_CONFIG_DIR/.test(alias))) fail('unsupported environment variable name'); return { alias, input: key(item.input) } })
   unique(result.map(item => item.alias)); return result
 }
+function tags(value: unknown): string[] {
+  const result = list(value, tagLimits.perItem, (item) => {
+    let tag: string
+    try { tag = normalizeTag(item) }
+    catch { return fail('invalid tag') }
+    if (tag !== item) fail('tags must be normalized')
+    return tag
+  })
+  if (!result.length) fail('an empty tag list must be omitted')
+  unique(result)
+  return result
+}
 function channel(value: unknown): string { const name = text(value, 64); if (!/^[a-z][a-z0-9-]*(?:\.[a-z][a-z0-9-]*){0,4}$/.test(name)) fail('invalid channel name'); return name }
 function access(value: unknown): PortableAccess {
   const kind = fields(value, ['kind', 'alias'], ['input', 'access', 'origin', 'methods', 'authentication', 'connection', 'model', 'maxAttempts', 'folders', 'since', 'attachments']).kind
@@ -204,7 +224,7 @@ function access(value: unknown): PortableAccess {
   return item as unknown as PortableAccess
 }
 function pod(value: unknown): PortablePod {
-  const item = fields(value, ['key', 'title', 'description', 'script', 'packages', 'contract', 'requestedCapabilities', 'access', 'inputs', 'bindings', 'applications', 'assets'], ['schedule'])
+  const item = fields(value, ['key', 'title', 'description', 'script', 'packages', 'contract', 'requestedCapabilities', 'access', 'inputs', 'bindings', 'applications', 'assets'], ['schedule', 'tags'])
   key(item.key); lineText(item.title, 100); text(item.description, 4000, true); portablePath(item.script)
   if (item.packages !== null) { const packages = fields(item.packages, ['manifest', 'lock']); portablePath(packages.manifest); portablePath(packages.lock) }
   if (item.contract !== null) {
@@ -230,6 +250,7 @@ function pod(value: unknown): PortablePod {
   unique((item.applications as PortableApplicationBinding[]).map(binding => binding.alias))
   unique((item.applications as PortableApplicationBinding[]).map(binding => binding.account))
   unique(list(item.assets, sharingLimits.files, portablePath))
+  if (item.tags !== undefined) item.tags = tags(item.tags)
   if (item.schedule !== undefined && item.schedule !== null) {
     const schedule = fields(item.schedule, ['kind'], ['seconds', 'time', 'timezone'])
     if (schedule.kind === 'interval') { fields(schedule, ['kind', 'seconds']); integer(schedule.seconds, 60, 2592000) }
@@ -247,7 +268,7 @@ function pod(value: unknown): PortablePod {
   return item as unknown as PortablePod
 }
 function composition(value: unknown): PortableComposition {
-  const item = fields(value, ['key', 'kind', 'title', 'document', 'documentVersion', 'nodes', 'calls', 'inputs', 'dataSchemas'])
+  const item = fields(value, ['key', 'kind', 'title', 'document', 'documentVersion', 'nodes', 'calls', 'inputs', 'dataSchemas'], ['tags'])
   key(item.key); lineText(item.title, 100); portablePath(item.document)
   oneOf(item.kind, ['network'])
   if (item.documentVersion !== 1) fail('unsupported composition format')
@@ -262,6 +283,7 @@ function composition(value: unknown): PortableComposition {
   if (names(item.calls).length) fail('compositions do not call other compositions')
   item.calls = []; item.inputs = inputs(item.inputs, 1024); unique(list(item.dataSchemas, 32, portablePath))
   if ((item.inputs as PortableInput[]).some(input => !['string', 'number', 'boolean', 'enum'].includes(input.kind))) fail('composition inputs must be public values')
+  if (item.tags !== undefined) item.tags = tags(item.tags)
   return item as unknown as PortableComposition
 }
 function application(value: unknown): PortableApplication {
@@ -298,6 +320,7 @@ export function parsePortableManifest(value: unknown, supportedFeatures: readonl
   const entry = fields(item.entry, ['kind', 'key']); key(entry.key)
   const pods = list(item.pods, sharingLimits.pods, pod); const compositions = list(item.compositions, 32, composition); const applications = list(item.applications, 32, application)
   if (!pods.length) fail('package has no Pods')
+  if ([...pods, ...compositions].some(item => item.tags) !== features.includes(portableTagsFeature)) fail('the tag feature is required exactly when the package carries tags')
   unique([...pods.map(item => item.key), ...compositions.map(item => item.key)]); unique(applications.map(item => item.key))
   const files = list(item.files, sharingLimits.files - 1, (value): PortableFile => {
     const file = fields(value, ['path', 'kind', 'bytes', 'sha256', 'mediaType'])
