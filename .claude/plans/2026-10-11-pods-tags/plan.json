@@ -1,0 +1,363 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "title": "Free tags for Pods and networks",
+  "goal": "Label Pods and networks with free tags and give them short names without repeated context.",
+  "summary": "Every Pod and network gets up to eight free tags. Network tags also apply to its members on screen without being copied. The Automatisierungen view filters by tags, Codex can set and find them, and inbox items show them. Existing names lose their context prefixes; tags and the network carry that context.",
+  "problem": {
+    "statement": "15 of 20 active Pods repeat a context in their name, such as \"Delta Mind ·\" or \"Morgenbriefing ·\", because Pods has no way to label a company or topic.",
+    "impact": "Names are long and similar, lists are hard to scan, and Pods of one company cannot be shown together.",
+    "approach": "Store free tags like automation descriptions, inherit network tags in the view, filter by tag, add network renaming and shorten the existing names.",
+    "outcome": "Short names, one filter per company or topic, and the same tags in the desktop, browser, Codex and inbox."
+  },
+  "status": "active",
+  "revision": 2,
+  "milestones": [
+    {
+      "id": "model",
+      "title": "Tags in the workspace",
+      "goal": "Store and publish free tags for Pods and networks.",
+      "status": "planned",
+      "acceptance": [
+        "A Pod or network has 0–8 tags; a tag is trimmed, lowercased, 1–32 characters of letters, digits and hyphens, unique per item.",
+        "Tags are set with one revisioned workspace command, like descriptions, locally and through the central workspace; a stale revision is refused.",
+        "The workspace view lists each item's own tags and, for network members, the inherited network tags separately; nothing is copied."
+      ],
+      "rollback": "Restore the paired profile backup; tags are an additive table."
+    },
+    {
+      "id": "surfaces",
+      "title": "Show, edit and filter",
+      "goal": "Tags appear wherever Pods and networks are listed.",
+      "status": "planned",
+      "acceptance": [
+        "Automatisierungen (desktop and browser) shows tags as chips and has a tag filter with suggestions from existing tags; a network filter includes its members.",
+        "Tags are edited in the settings of a Pod or network with suggestions; the filter choice is remembered per device.",
+        "Codex sets tags and lists Pods and networks by tag through the MCP workspace tool."
+      ],
+      "rollback": "Hide the chips and filter; stored tags stay."
+    },
+    {
+      "id": "rename",
+      "title": "Rename networks and shorten names",
+      "goal": "Remove repeated context from the existing names.",
+      "status": "planned",
+      "acceptance": [
+        "A network can be renamed without a new network revision; members, history and decisions keep their identity.",
+        "Where two items share a short name, lists show the network beside it.",
+        "The renaming table in this plan is applied live after the release, with tags set before names change."
+      ],
+      "rollback": "Rename back from the table; nothing depends on the display names."
+    },
+    {
+      "id": "rollout",
+      "title": "Release and verify",
+      "goal": "Roll out relay first, then the signed desktop, then apply the renaming.",
+      "status": "planned",
+      "acceptance": [
+        "Relay and signed desktop installed with a paired backup; all Pods keep running.",
+        "Screenshots of Automatisierungen with chips and an active filter are inspected; the owner checks names and tags.",
+        "Evidence is published as a Test Run."
+      ],
+      "rollback": "Restore the paired backup and the previous relay image; rename back."
+    }
+  ],
+  "decisions": [
+    {
+      "title": "Free tags",
+      "description": "Any tag may be used; the editor suggests existing ones so spellings converge.",
+      "status": "accepted",
+      "reference": "Owner on October 11, 2026: \"Freie Tags.\""
+    },
+    {
+      "title": "Rename in the same change",
+      "description": "The existing Pods and networks get short names as listed below.",
+      "status": "accepted",
+      "reference": "Owner on October 11, 2026: \"Ja umbenennen auch\"."
+    },
+    {
+      "title": "Groups stay structure, tags are labels",
+      "description": "Groups keep holding network members on the map; tags never move Pods. Network tags are inherited in the view, never copied (no divergent copies).",
+      "status": "accepted"
+    }
+  ],
+  "risks": [
+    {
+      "title": "Short names collide",
+      "mitigation": "Lists show the network beside a shared name; Pods are always addressed by id."
+    },
+    {
+      "title": "Tag spellings drift",
+      "mitigation": "Normalization plus suggestions; a tag can be renamed for all items in one step later if needed."
+    }
+  ],
+  "sections": [
+    {
+      "id": "issue",
+      "title": "Issue",
+      "body": "[Issue 1459](https://repos.openape.ai/patrick/monorepo/issues/1459)",
+      "placement": "before-details"
+    },
+    {
+      "id": "renaming",
+      "title": "Proposed renaming",
+      "body": "| Today | New name | Tags |\n|---|---|---|\n| Delta Mind · Mail network | Mail | delta-mind, mail |\n| Delta Mind · Intake / Triage / List filter / Review / Categorisation | Intake / Triage / List filter / Review / Categorisation | inherited: delta-mind, mail |\n| Delta Mind · Archive preview / Invoice preview / Newsletter batch / Reply drafts / Sent mail / Memory | Archive preview / Invoice preview / Newsletter batch / Reply drafts / Sent mail / Memory | inherited: delta-mind, mail |\n| Morgenbriefing (network) | Morgenbriefing | persönlich, briefing |\n| Morgenbriefing · Calendar-Bot / Kalender und Issues / Mail-Prüfung / Redaktion | Calendar-Bot / Kalender und Issues / Mail-Prüfung / Redaktion | inherited: persönlich, briefing |\n| IURIO PR monitor / IURIO Task monitor | PR monitor / Task monitor | iurio, entwicklung |\n| Daily action website | Daily action website | persönlich |\n| zaz Service-Agent | Service-Agent | zaz |\n| Inbox-Testmitteilung | Inbox-Testmitteilung | test |",
+      "placement": "before-details"
+    },
+    {
+      "id": "deferred",
+      "title": "Deferred",
+      "body": "Deferred during implementation on October 11, 2026, and reported to the owner: tags in portable export and import (the package format in pods-protocol needs its own versioned feature) and tags on inbox items in the phone app. The desktop and browser show tags everywhere Pods and networks are listed.",
+      "placement": "before-details"
+    }
+  ],
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "Free tags for Pods and networks",
+        "text": "Freie Tags für Pods und Netzwerke"
+      },
+      {
+        "path": "goal",
+        "source": "Label Pods and networks with free tags and give them short names without repeated context.",
+        "text": "Pods und Netzwerke mit freien Tags versehen und ihnen kurze Namen ohne wiederholten Kontext geben."
+      },
+      {
+        "path": "summary",
+        "source": "Every Pod and network gets up to eight free tags. Network tags also apply to its members on screen without being copied. The Automatisierungen view filters by tags, Codex can set and find them, and inbox items show them. Existing names lose their context prefixes; tags and the network carry that context.",
+        "text": "Jeder Pod und jedes Netzwerk bekommt bis zu acht freie Tags. Netzwerk-Tags gelten in der Anzeige auch für die Mitglieder, ohne kopiert zu werden. „Automatisierungen“ filtert nach Tags, Codex kann sie setzen und finden, und Einträge im Posteingang zeigen sie. Bestehende Namen verlieren ihre Kontext-Präfixe; diesen Kontext tragen Tags und Netzwerk."
+      },
+      {
+        "path": "problem.statement",
+        "source": "15 of 20 active Pods repeat a context in their name, such as \"Delta Mind ·\" or \"Morgenbriefing ·\", because Pods has no way to label a company or topic.",
+        "text": "15 von 20 aktiven Pods wiederholen einen Kontext im Namen, etwa „Delta Mind ·“ oder „Morgenbriefing ·“, weil Pods keine Möglichkeit hat, eine Firma oder ein Thema zu kennzeichnen."
+      },
+      {
+        "path": "problem.impact",
+        "source": "Names are long and similar, lists are hard to scan, and Pods of one company cannot be shown together.",
+        "text": "Namen sind lang und ähnlich, Listen schwer zu überblicken, und Pods einer Firma lassen sich nicht zusammen anzeigen."
+      },
+      {
+        "path": "problem.approach",
+        "source": "Store free tags like automation descriptions, inherit network tags in the view, filter by tag, add network renaming and shorten the existing names.",
+        "text": "Freie Tags wie Beschreibungen speichern, Netzwerk-Tags in der Anzeige vererben, nach Tags filtern, Netzwerke umbenennbar machen und die bestehenden Namen kürzen."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "Short names, one filter per company or topic, and the same tags in the desktop, browser, Codex and inbox.",
+        "text": "Kurze Namen, ein Filter pro Firma oder Thema und dieselben Tags in Desktop, Browser, Codex und Posteingang."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Tags in the workspace",
+        "text": "Tags im Workspace"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Store and publish free tags for Pods and networks.",
+        "text": "Freie Tags für Pods und Netzwerke speichern und veröffentlichen."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "A Pod or network has 0–8 tags; a tag is trimmed, lowercased, 1–32 characters of letters, digits and hyphens, unique per item.",
+        "text": "Ein Pod oder Netzwerk hat 0–8 Tags; ein Tag wird getrimmt und kleingeschrieben, 1–32 Zeichen aus Buchstaben, Ziffern und Bindestrich, eindeutig pro Eintrag."
+      },
+      {
+        "path": "milestones.0.acceptance.1",
+        "source": "Tags are set with one revisioned workspace command, like descriptions, locally and through the central workspace; a stale revision is refused.",
+        "text": "Tags werden mit einem revisionierten Workspace-Befehl gesetzt, wie Beschreibungen, lokal und über den zentralen Workspace; eine veraltete Revision wird abgelehnt."
+      },
+      {
+        "path": "milestones.0.acceptance.2",
+        "source": "The workspace view lists each item's own tags and, for network members, the inherited network tags separately; nothing is copied.",
+        "text": "Die Workspace-Ansicht nennt die eigenen Tags jedes Eintrags und bei Netzwerkmitgliedern die geerbten Netzwerk-Tags getrennt; nichts wird kopiert."
+      },
+      {
+        "path": "milestones.0.rollback",
+        "source": "Restore the paired profile backup; tags are an additive table.",
+        "text": "Das gepaarte Profil-Backup wiederherstellen; Tags sind eine zusätzliche Tabelle."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "Show, edit and filter",
+        "text": "Anzeigen, bearbeiten und filtern"
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "Tags appear wherever Pods and networks are listed.",
+        "text": "Tags erscheinen überall, wo Pods und Netzwerke gelistet sind."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "Automatisierungen (desktop and browser) shows tags as chips and has a tag filter with suggestions from existing tags; a network filter includes its members.",
+        "text": "„Automatisierungen“ (Desktop und Browser) zeigt Tags als Chips und hat einen Tag-Filter mit Vorschlägen aus vorhandenen Tags; ein Netzwerk-Filter umfasst seine Mitglieder."
+      },
+      {
+        "path": "milestones.1.acceptance.1",
+        "source": "Tags are edited in the settings of a Pod or network with suggestions; the filter choice is remembered per device.",
+        "text": "Tags werden in den Einstellungen eines Pods oder Netzwerks mit Vorschlägen bearbeitet; die Filterwahl merkt sich jedes Gerät."
+      },
+      {
+        "path": "milestones.1.acceptance.2",
+        "source": "Codex sets tags and lists Pods and networks by tag through the MCP workspace tool.",
+        "text": "Codex setzt Tags und listet Pods und Netzwerke nach Tag über das MCP-Workspace-Werkzeug."
+      },
+      {
+        "path": "milestones.1.rollback",
+        "source": "Hide the chips and filter; stored tags stay.",
+        "text": "Chips und Filter ausblenden; gespeicherte Tags bleiben."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "Rename networks and shorten names",
+        "text": "Netzwerke umbenennen und Namen kürzen"
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "Remove repeated context from the existing names.",
+        "text": "Wiederholten Kontext aus den bestehenden Namen entfernen."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "A network can be renamed without a new network revision; members, history and decisions keep their identity.",
+        "text": "Ein Netzwerk lässt sich ohne neue Netzwerk-Revision umbenennen; Mitglieder, Verlauf und Entscheidungen behalten ihre Identität."
+      },
+      {
+        "path": "milestones.2.acceptance.1",
+        "source": "Where two items share a short name, lists show the network beside it.",
+        "text": "Wo zwei Einträge denselben kurzen Namen haben, zeigen Listen das Netzwerk daneben."
+      },
+      {
+        "path": "milestones.2.acceptance.2",
+        "source": "The renaming table in this plan is applied live after the release, with tags set before names change.",
+        "text": "Die Umbenennungstabelle in diesem Plan wird nach dem Release live angewendet; Tags werden vor den Namensänderungen gesetzt."
+      },
+      {
+        "path": "milestones.2.rollback",
+        "source": "Rename back from the table; nothing depends on the display names.",
+        "text": "Mit der Tabelle zurück umbenennen; nichts hängt an den Anzeigenamen."
+      },
+      {
+        "path": "milestones.3.title",
+        "source": "Release and verify",
+        "text": "Ausliefern und prüfen"
+      },
+      {
+        "path": "milestones.3.goal",
+        "source": "Roll out relay first, then the signed desktop, then apply the renaming.",
+        "text": "Zuerst das Relay, dann den signierten Desktop ausrollen, danach die Umbenennung anwenden."
+      },
+      {
+        "path": "milestones.3.acceptance.0",
+        "source": "Relay and signed desktop installed with a paired backup; all Pods keep running.",
+        "text": "Relay und signierter Desktop mit gepaartem Backup installiert; alle Pods laufen weiter."
+      },
+      {
+        "path": "milestones.3.acceptance.1",
+        "source": "Screenshots of Automatisierungen with chips and an active filter are inspected; the owner checks names and tags.",
+        "text": "Screenshots von „Automatisierungen“ mit Chips und aktivem Filter sind geprüft; du prüfst Namen und Tags."
+      },
+      {
+        "path": "milestones.3.acceptance.2",
+        "source": "Evidence is published as a Test Run.",
+        "text": "Der Nachweis ist als Test Run veröffentlicht."
+      },
+      {
+        "path": "milestones.3.rollback",
+        "source": "Restore the paired backup and the previous relay image; rename back.",
+        "text": "Gepaartes Backup und vorheriges Relay-Image wiederherstellen; zurück umbenennen."
+      },
+      {
+        "path": "decisions.0.title",
+        "source": "Free tags",
+        "text": "Freie Tags"
+      },
+      {
+        "path": "decisions.0.description",
+        "source": "Any tag may be used; the editor suggests existing ones so spellings converge.",
+        "text": "Jeder Tag ist erlaubt; der Editor schlägt vorhandene vor, damit sich Schreibweisen angleichen."
+      },
+      {
+        "path": "decisions.1.title",
+        "source": "Rename in the same change",
+        "text": "Im selben Zug umbenennen"
+      },
+      {
+        "path": "decisions.1.description",
+        "source": "The existing Pods and networks get short names as listed below.",
+        "text": "Die bestehenden Pods und Netzwerke bekommen kurze Namen laut Tabelle unten."
+      },
+      {
+        "path": "decisions.2.title",
+        "source": "Groups stay structure, tags are labels",
+        "text": "Gruppen bleiben Struktur, Tags sind Etiketten"
+      },
+      {
+        "path": "decisions.2.description",
+        "source": "Groups keep holding network members on the map; tags never move Pods. Network tags are inherited in the view, never copied (no divergent copies).",
+        "text": "Gruppen halten weiter die Netzwerkmitglieder auf der Karte; Tags verschieben nie Pods. Netzwerk-Tags werden in der Anzeige geerbt, nie kopiert (keine abweichenden Kopien)."
+      },
+      {
+        "path": "risks.0.title",
+        "source": "Short names collide",
+        "text": "Kurze Namen kollidieren"
+      },
+      {
+        "path": "risks.0.mitigation",
+        "source": "Lists show the network beside a shared name; Pods are always addressed by id.",
+        "text": "Listen zeigen bei gleichem Namen das Netzwerk daneben; Pods werden immer per ID angesprochen."
+      },
+      {
+        "path": "risks.1.title",
+        "source": "Tag spellings drift",
+        "text": "Schreibweisen der Tags laufen auseinander"
+      },
+      {
+        "path": "risks.1.mitigation",
+        "source": "Normalization plus suggestions; a tag can be renamed for all items in one step later if needed.",
+        "text": "Normalisierung und Vorschläge; einen Tag für alle Einträge auf einmal umzubenennen, kann später folgen."
+      },
+      {
+        "path": "sections.0.title",
+        "source": "Issue",
+        "text": "Issue"
+      },
+      {
+        "path": "sections.0.body",
+        "source": "[Issue 1459](https://repos.openape.ai/patrick/monorepo/issues/1459)",
+        "text": "[Issue 1459](https://repos.openape.ai/patrick/monorepo/issues/1459)"
+      },
+      {
+        "path": "sections.1.title",
+        "source": "Proposed renaming",
+        "text": "Vorgeschlagene Umbenennung"
+      },
+      {
+        "path": "sections.1.body",
+        "source": "| Today | New name | Tags |\n|---|---|---|\n| Delta Mind · Mail network | Mail | delta-mind, mail |\n| Delta Mind · Intake / Triage / List filter / Review / Categorisation | Intake / Triage / List filter / Review / Categorisation | inherited: delta-mind, mail |\n| Delta Mind · Archive preview / Invoice preview / Newsletter batch / Reply drafts / Sent mail / Memory | Archive preview / Invoice preview / Newsletter batch / Reply drafts / Sent mail / Memory | inherited: delta-mind, mail |\n| Morgenbriefing (network) | Morgenbriefing | persönlich, briefing |\n| Morgenbriefing · Calendar-Bot / Kalender und Issues / Mail-Prüfung / Redaktion | Calendar-Bot / Kalender und Issues / Mail-Prüfung / Redaktion | inherited: persönlich, briefing |\n| IURIO PR monitor / IURIO Task monitor | PR monitor / Task monitor | iurio, entwicklung |\n| Daily action website | Daily action website | persönlich |\n| zaz Service-Agent | Service-Agent | zaz |\n| Inbox-Testmitteilung | Inbox-Testmitteilung | test |",
+        "text": "| Heute | Neuer Name | Tags |\n|---|---|---|\n| Delta Mind · Mail network | Mail | delta-mind, mail |\n| Delta Mind · Intake / Triage / List filter / Review / Categorisation | Intake / Triage / List filter / Review / Categorisation | geerbt: delta-mind, mail |\n| Delta Mind · Archive preview / Invoice preview / Newsletter batch / Reply drafts / Sent mail / Memory | Archive preview / Invoice preview / Newsletter batch / Reply drafts / Sent mail / Memory | geerbt: delta-mind, mail |\n| Morgenbriefing (network) | Morgenbriefing | persönlich, briefing |\n| Morgenbriefing · Calendar-Bot / Kalender und Issues / Mail-Prüfung / Redaktion | Calendar-Bot / Kalender und Issues / Mail-Prüfung / Redaktion | geerbt: persönlich, briefing |\n| IURIO PR monitor / IURIO Task monitor | PR monitor / Task monitor | iurio, entwicklung |\n| Daily action website | Daily action website | persönlich |\n| zaz Service-Agent | Service-Agent | zaz |\n| Inbox-Testmitteilung | Inbox-Testmitteilung | test |"
+      },
+      {
+        "path": "sections.2.title",
+        "source": "Deferred",
+        "text": "Zurückgestellt"
+      },
+      {
+        "path": "sections.2.body",
+        "source": "Deferred during implementation on October 11, 2026, and reported to the owner: tags in portable export and import (the package format in pods-protocol needs its own versioned feature) and tags on inbox items in the phone app. The desktop and browser show tags everywhere Pods and networks are listed.",
+        "text": "Bei der Umsetzung am 11. Oktober 2026 zurückgestellt und dir gemeldet: Tags beim portablen Export und Import (das Paketformat in pods-protocol braucht ein eigenes versioniertes Feature) und Tags an Einträgen im Handy-Posteingang. Desktop und Browser zeigen Tags überall, wo Pods und Netzwerke gelistet sind."
+      }
+    ]
+  },
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-11",
+    "reference": "Owner in chat: \"Passt Go\" on revision 1 (free tags, renaming table as proposed, names keep their language).",
+    "target": {
+      "revision": 1
+    },
+    "scope": "Free tags for Pods and networks, filter and chips, network rename, renaming of the existing Pods and networks."
+  }
+}

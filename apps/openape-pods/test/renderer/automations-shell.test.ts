@@ -158,3 +158,45 @@ describe('Automatisierungen', () => {
     expect(wrapper!.emitted('secrets')!.at(-1)).toEqual([{ type: 'revokeConsumer' }])
   })
 })
+
+describe('Tags (issue 1459)', () => {
+  // The Delta Mind network carries two tags; its members inherit them, one standalone Pod has its own.
+  function tagged(): MapView {
+    const copy = structuredClone(view)
+    const network = copy.automations.find(item => item.name.startsWith('Delta Mind'))!
+    network.tags = { own: ['delta-mind', 'mail'], inherited: [], revision: 1 }
+    for (const member of copy.pods.filter(item => network.members.includes(item.id))) member.tags = { own: [], inherited: ['delta-mind', 'mail'], revision: 0 }
+    copy.pods.find(item => item.name === 'IURIO PR monitor')!.tags = { own: ['iurio'], inherited: [], revision: 3 }
+    return parseMapView(copy)
+  }
+
+  it('filters the list by an own or inherited tag and shows the chips', async () => {
+    await mountShell({ view: tagged() })
+    await button('List').trigger('click')
+    expect(button('#delta-mind')).toBeTruthy()
+    await button('#iurio').trigger('click')
+    expect(wrapper!.findAll('.automations-list tbody tr').map(row => row.find('b').text())).toEqual(['IURIO PR monitor'])
+    expect(wrapper!.find('.automations-list .tag-chips').text()).toBe('iurio')
+    await button('#delta-mind').trigger('click')
+    const rows = wrapper!.findAll('.automations-list tbody tr')
+    expect(rows.length).toBeGreaterThan(1)
+    expect(rows.every(row => row.find('.tag.inherited').exists())).toBe(true)
+    await button('All tags').trigger('click')
+    expect(wrapper!.findAll('.automations-list tbody tr').length).toBeGreaterThan(rows.length)
+  })
+
+  it('saves edited own tags as one workspace command with the current revision', async () => {
+    await mountShell({ view: tagged() })
+    const id = pod('IURIO PR monitor').id
+    ;(wrapper!.vm as unknown as { open: (id: string) => void }).open(id)
+    await flushPromises()
+    const editor = wrapper!.find('[data-tags]')
+    await editor.find('input').setValue('  Entwicklung ')
+    await editor.find('form').trigger('submit')
+    await editor.find('input').setValue('a/b')
+    await editor.find('form').trigger('submit')
+    expect(editor.find('[role="alert"]').exists()).toBe(true)
+    await editor.findAll('button').find(item => item.text() === 'Save tags')!.trigger('click')
+    expect(wrapper!.emitted('command')!.at(-1)).toEqual([{ channel: 'workspace', body: { type: 'tag', id, revision: 3, tags: ['iurio', 'entwicklung'] } }])
+  })
+})
