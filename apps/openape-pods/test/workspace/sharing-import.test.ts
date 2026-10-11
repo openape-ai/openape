@@ -23,6 +23,9 @@ import { createPortablePackage } from '../../src/worker/sharing/package'
 import type { PortableDescription, PortablePayload } from '../../src/worker/sharing/package'
 import { PodGroups } from '../../src/worker/workspace/groups'
 import { WorkspaceDetails } from '../../src/worker/workspace/details'
+import { ItemTagStore } from '../../src/worker/workspace/item-tags'
+import { capturePortableSource } from '../../src/worker/sharing/source'
+import { mapPortableSource } from '../../src/worker/sharing/mapping'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
 const bytes = (value: string) => new TextEncoder().encode(value)
@@ -118,6 +121,21 @@ it('creates one independent paused copy and returns it for a repeated commit', a
   expect(podRows(store, existing.id)).toBe(before)
 })
 
+it('keeps a Pod\'s own tags through a real export and import round trip', async () => {
+  const source = workspace(); const pod = source.store.createPod({ name: 'Tagged source' })
+  installExample(source.store, source.resources, pod.id, 'deterministic', 'a'.repeat(64))
+  new ItemTagStore(source.store).execute({ type: 'tag', id: pod.id, revision: 0, tags: ['delta-mind', 'mail'] })
+  const captured = capturePortableSource(source.store, owner, { kind: 'pod', id: pod.id })
+  const content = await mapPortableSource(source.store.root, captured, { package: { key: 'tagged', revision: 1, title: 'Tagged', description: '' }, pods: [{ podId: pod.id, key: 'tagged', description: '', defaults: [], aliases: [], assets: [] }], compositions: [] })
+  const exported = await createPortablePackage(content.description, content.payloads, '')
+  expect(exported.manifest.pods[0]!.tags).toEqual(['delta-mind', 'mail'])
+  const { store, importer } = workspace(); const id = randomUUID()
+  const committed = await importer.commit(id, (await importer.stage(id, exported.archive)).revision)
+  const imported = new ItemTagStore(store)
+  expect(imported.own(committed.pods[0]!.podId)).toEqual(['delta-mind', 'mail'])
+  expect(imported.view()).toEqual([{ id: committed.pods[0]!.podId, tags: ['delta-mind', 'mail'], revision: 1, inherited: [] }])
+})
+
 it('keeps unfinished setup from activating and finishes only resolved imports', async () => {
   const { store, resources, importer } = workspace(); const id = randomUUID(); await importer.stage(id, (await packageFixture(true)).archive)
   importer.configure(id, 1, { pods: { fixture: { input_2: 5, input_6: 'eu' } }, compositions: {} })
@@ -200,17 +218,17 @@ it('binds declared aliases to matching local assignments and exposes them to scr
 
 const schema = { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false }
 
-async function networkFixture() {
+async function networkFixture(tags = false) {
   const script = { kind: 'script' as const, mediaType: 'text/javascript', content: bytes('export async function run() { return { status: "completed" } }') }
   const pod = (key: string, contract: { takes: string[], gives: string[], summary: string }, shared: boolean) => ({ key, title: `Imported ${key}`, description: '', script: `pods/${key}/run.mjs`, packages: null, contract, requestedCapabilities: [], access: [],
-    inputs: shared ? [{ key: 'input_1', label: 'region', description: '', kind: 'string' as const, required: true, sharingGroup: 'shared_1_1' }] : [], bindings: shared ? [{ alias: 'region', input: 'input_1' }] : [], applications: [], assets: [] })
+    inputs: shared ? [{ key: 'input_1', label: 'region', description: '', kind: 'string' as const, required: true, sharingGroup: 'shared_1_1' }] : [], bindings: shared ? [{ alias: 'region', input: 'input_1' }] : [], applications: [], assets: [], ...(tags && shared ? { tags: ['filing'] } : {}) })
   const document = { version: 1, kind: 'network', formatVersion: 6, channels: [{ name: 'report.ready', title: 'Report ready', schemaVersion: 1, schema }], members: [{ pod: 'first', source: { schedule: { kind: 'interval', seconds: 600 } }, serialCase: false }, { pod: 'second', source: null, serialCase: false }], routes: [], joins: [], feedback: [],
     values: [{ name: 'region', input: 'input_1' }], legacyVariables: [], collections: [{ key: 'collection_1', name: 'reports', schema: 'data/flow/collection_1.json', retention: {}, access: [{ pod: 'second', operations: ['read', 'write'] }] }], artifacts: [{ key: 'artifacts_1', collection: 'collection_1', access: [{ pod: 'second', operations: ['read', 'create'] }] }], calls: [] }
   return createPortablePackage({
-    format: 'openape-package', version: 1, package: { key: 'flow', revision: 1, title: 'Portable network', description: '' }, requiredFeatures: ['portable_aliases_v1'], entry: { kind: 'network', key: 'flow' }, applications: [],
+    format: 'openape-package', version: 1, package: { key: 'flow', revision: 1, title: 'Portable network', description: '' }, requiredFeatures: ['portable_aliases_v1', ...(tags ? ['portable_tags_v1'] : [])], entry: { kind: 'network', key: 'flow' }, applications: [],
     pods: [pod('first', { takes: [], gives: ['report.ready'], summary: 'Creates reports' }, false), pod('second', { takes: ['report.ready'], gives: [], summary: 'Files reports' }, true)],
     compositions: [{ key: 'flow', kind: 'network', title: 'Imported network', document: 'compositions/flow.json', documentVersion: 1, nodes: [{ pod: 'first', after: [], handoff: false }, { pod: 'second', after: [], handoff: false }], calls: [], dataSchemas: ['data/flow/collection_1.json'],
-      inputs: [{ key: 'input_1', label: 'region', description: '', kind: 'string', required: true, sharingGroup: 'shared_1_1' }] }],
+      inputs: [{ key: 'input_1', label: 'region', description: '', kind: 'string', required: true, sharingGroup: 'shared_1_1' }], ...(tags ? { tags: ['delta-mind'] } : {}) }],
   }, [{ ...script, path: 'pods/first/run.mjs' }, { ...script, path: 'pods/second/run.mjs' }, { path: 'compositions/flow.json', kind: 'composition', mediaType: 'application/json', content: bytes(canonicalPortableJson(document)) }, { path: 'data/flow/collection_1.json', kind: 'data-schema', mediaType: 'application/json', content: bytes(canonicalPortableJson({ version: 1, schema, indexes: [] })) }], '')
 }
 
@@ -226,7 +244,7 @@ function approve(store: PodDatabase, resources: ResourceRegistry, podId: string,
 }
 
 it('creates an imported persistent network paused with shared values, data access and published member definitions', async () => {
-  const { store, resources, importer } = workspace(); const exported = await networkFixture(); const id = randomUUID()
+  const { store, resources, importer } = workspace(); const exported = await networkFixture(true); const id = randomUUID()
   const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime)
   const real: ImportEngines = { networks: new NetworkEngine(store, dispatcher, resources, '/unused', () => owner), catalog: new DefinitionCatalog(store, resources, owner) }
   const groups = new PodGroups(store); groups.execute({ type: 'organize', action: 'create', name: 'Delta', revision: groups.view().revision }); const groupId = groups.view().groups[0]!.id
@@ -235,6 +253,8 @@ it('creates an imported persistent network paused with shared values, data acces
   view = importer.configure(id, view.revision, { pods: {}, compositions: { flow: { input_1: 'eu' } } })
   view = await importer.commit(id, view.revision); const [first, second] = view.pods.map(pod => pod.podId) as [string, string]
   expect(new PodVariables(store).values(second)).toEqual({ region: 'eu' })
+  const tags = new ItemTagStore(store)
+  expect([tags.own(first), tags.own(second)]).toEqual([[], ['filing']])
   await expect(importer.finalize(id, view.revision, 'flow', groupId, {}, real)).rejects.toThrow('Finish Pod setup and approve')
   view = importer.complete(id, view.revision)
   expect(view).toMatchObject({ state: 'completed', unresolved: [{ scope: 'composition', key: 'flow' }] })
@@ -254,6 +274,10 @@ it('creates an imported persistent network paused with shared values, data acces
   view = await importer.finalize(id, view.revision, 'flow', groupId, { collection_1: existing }, real)
   const networkId = view.compositions[0]!.networkId!
   expect(view.unresolved).toEqual([])
+  // The network gets its own tags; members inherit them in the view without a copied row.
+  expect(tags.own(networkId)).toEqual(['delta-mind'])
+  expect(tags.view()).toEqual(expect.arrayContaining([{ id: first, tags: [], revision: 0, inherited: ['delta-mind'] }, { id: second, tags: ['filing'], revision: 1, inherited: ['delta-mind'] }]))
+  expect(store.db.prepare('SELECT count(*) AS count FROM item_tags').get()!.count).toBe(2)
   expect(real.networks.execute({ type: 'list' }).networks.find(item => item.id === networkId)).toMatchObject({ state: 'paused', groupId, name: 'Imported network' })
   expect(store.db.prepare('SELECT pod_id FROM network_members WHERE network_id=? ORDER BY rowid').all(networkId).map(row => row.pod_id)).toEqual([first, second])
   expect(store.db.prepare('SELECT name,value FROM composition_config WHERE network_id=?').all(networkId)).toEqual([{ name: 'region', value: '"eu"' }])

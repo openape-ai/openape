@@ -70,6 +70,7 @@ export async function mapPortablePod(root: string, source: PortablePodSource, ch
   const key = portableKey(choices.key)
   const inputs = new PortableInputs(choices.defaults)
   const pod: PortablePod = { key, title: choices.title ?? source.pod.name, description: choices.description, script: `pods/${key}/run.mjs`, packages: null, contract: source.manifest.contract ?? null, requestedCapabilities: [], access: [], inputs: [], bindings: [], applications: [], assets: [], schedule: source.schedule?.spec ?? null }
+  if (source.tags.length) pod.tags = [...source.tags]
   const payloads: PortablePayload[] = [{ path: pod.script, kind: 'script', mediaType: 'text/javascript', content: Buffer.from(portableScriptSource(source)) }]
   const applications: PortableApplication[] = []
   const capabilities = new Map<string, string>()

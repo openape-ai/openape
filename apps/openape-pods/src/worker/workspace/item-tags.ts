@@ -22,6 +22,12 @@ export class ItemTagStore {
     return item ? inboxTags(item.tags, item.inherited) : []
   }
 
+  /** One Pod's or network's own tags, without inherited ones; portable export carries exactly these. */
+  own(id: string): string[] {
+    const row = this.store.db.prepare('SELECT tags FROM item_tags WHERE id=?').get(id)
+    return row ? parse(row.tags) : []
+  }
+
   execute(command: Extract<WorkspaceCommand, { type: 'tag' }>): void {
     this.store.transaction(() => {
       if (!this.store.db.prepare('SELECT 1 FROM pods WHERE id=? UNION ALL SELECT 1 FROM networks WHERE id=?').get(command.id, command.id)) throw new Error('Pod or network not found')
