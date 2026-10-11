@@ -99,4 +99,13 @@ describe('approve-route grants decided as once or always', () => {
     expect(await unanswered.authority.release('batch', [unanswered.binding])).toBe(1)
     expect(unanswered.grant.status).toBe('revoked')
   })
+
+  it('revokes through the given owner revoke for a brokered Pod, never with the Pod token (issue 1462)', async () => {
+    const brokered = await fixture('once')
+    brokered.grant.status = 'pending'
+    const owner: string[] = []
+    expect(await brokered.authority.release('batch', [brokered.binding], async (grantId) => { owner.push(grantId); return { status: 'revoked' } })).toBe(1)
+    expect(owner).toEqual(['grant-1'])
+    expect(brokered.revoked).toEqual([])
+  })
 })
