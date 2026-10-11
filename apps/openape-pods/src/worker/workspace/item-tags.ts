@@ -1,4 +1,5 @@
 import type { ItemTags, WorkspaceCommand } from '../../contracts/control'
+import { inboxTags } from '../../contracts/inbox'
 import type { PodDatabase } from '../storage/database'
 
 const parse = (value: unknown): string[] => JSON.parse(String(value)) as string[]
@@ -13,6 +14,12 @@ export class ItemTagStore {
     const inherited = new Map<string, string[]>()
     for (const row of this.store.db.prepare(`SELECT member.pod_id,tag.tags FROM network_members member JOIN networks network ON network.id=member.network_id JOIN item_tags tag ON tag.id=network.id WHERE network.state!='archived'`).all()) inherited.set(row.pod_id as string, parse(row.tags))
     return Array.from(new Set([...own.keys(), ...inherited.keys()]), id => ({ id, tags: own.get(id)?.tags ?? [], revision: own.get(id)?.revision ?? 0, inherited: inherited.get(id) ?? [] }))
+  }
+
+  /** What the inbox shows for a Pod: its own tags followed by the inherited ones (issue 1461). */
+  podTags(podId: string): string[] {
+    const item = this.view().find(entry => entry.id === podId)
+    return item ? inboxTags(item.tags, item.inherited) : []
   }
 
   /** One Pod's or network's own tags, without inherited ones; portable export carries exactly these. */

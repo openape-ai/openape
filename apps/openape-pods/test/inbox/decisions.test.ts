@@ -113,3 +113,22 @@ it('fails clearly for a changed or vanished source and for missing evidence, wit
   await expect(decisions.decide({ type: 'decide', sourceId: choice.sourceId, digest: choice.digest, option: 'keep' })).rejects.toThrow('no longer waiting')
   for (const call of [worker.networks, worker.runs]) expect(call).not.toHaveBeenCalled()
 })
+
+it('carries the Pod tags, own before inherited and without repeats, and keeps untagged digests (issue 1461)', async () => {
+  const before = await fixture().decisions.collect()
+  const current = sources()
+  Object.assign(current.map!.pods[0]!, { tags: { own: ['finanzen', 'mail'], inherited: ['mail', 'team-a'], revision: 1 } })
+  Object.assign(current.map!.pods[1]!, { tags: { own: [], inherited: [], revision: 0 } })
+  const list = await fixture(current).decisions.collect()
+  for (const item of list) expect(parseInboxDecision(item)).toEqual(item)
+  const tagged = list.filter(item => item.podId === pod)
+  expect(tagged.map(item => item.type).sort()).toEqual(['effect', 'network-batch', 'network-batch', 'secret'])
+  for (const item of tagged) expect(item.podTags).toEqual(['finanzen', 'mail', 'team-a'])
+  // A tag change is visible to the owner, so it changes the digest; Pods without tags keep theirs.
+  const digest = (sourceId: string) => before.find(item => item.sourceId === sourceId)!.digest
+  for (const item of tagged) expect(item.digest).not.toBe(digest(item.sourceId))
+  for (const item of list.filter(entry => entry.podId !== pod)) {
+    expect(item).not.toHaveProperty('podTags')
+    expect(item.digest).toBe(digest(item.sourceId))
+  }
+})

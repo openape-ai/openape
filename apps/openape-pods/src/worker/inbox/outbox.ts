@@ -1,11 +1,12 @@
 import { createHash } from 'node:crypto'
 import type { PodDatabase } from '../storage/database'
+import { ItemTagStore } from '../workspace/item-tags'
 
 // Durable queue for owner notifications from Pod scripts (plan M3, issue 1446). The worker only queues;
 // the desktop main process delivers to the account inbox with its signed runtime session.
 
 export interface Notify { key: string, title: string, body: string, links: { title: string, url: string }[] }
-export interface InboxPublication { eventId: string, kind: 'message', title: string, body: string, podId: string, podName: string, runId: string, links: Notify['links'] }
+export interface InboxPublication { eventId: string, kind: 'message', title: string, body: string, podId: string, podName: string, podTags?: string[], runId: string, links: Notify['links'] }
 export type InboxOutboxCommand = { type: 'due' } | { type: 'settle', eventId: string, outcome: { state: 'delivered', itemId: string } | { state: 'refused', reason: string } | { state: 'retry', reason: string } } | { type: 'status' }
 
 // Same bounds as the relay, so a script learns about an invalid message while it runs, not later in delivery.
@@ -42,7 +43,9 @@ export class InboxOutbox {
         if (existing.digest !== digest) throw new Error(`notify key "${notify.key}" was already used with different content`)
         return { eventId, queued: false }
       }
-      const publication: InboxPublication = { eventId, kind: 'message', title: notify.title, body: notify.body, podId: pod.id, podName: pod.name.slice(0, 200), runId, links: notify.links }
+      // The tags as they are now; the queued publication is retried unchanged, so the inbox deduplicates it.
+      const podTags = new ItemTagStore(this.store).podTags(pod.id)
+      const publication: InboxPublication = { eventId, kind: 'message', title: notify.title, body: notify.body, podId: pod.id, podName: pod.name.slice(0, 200), ...(podTags.length ? { podTags } : {}), runId, links: notify.links }
       this.store.db.prepare('INSERT INTO inbox_outbox(event_id,pod_id,run_id,digest,publication,state,next_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?)')
         .run(eventId, pod.id, runId, digest, JSON.stringify(publication), 'pending', this.now(), this.now(), this.now())
       return { eventId, queued: true }

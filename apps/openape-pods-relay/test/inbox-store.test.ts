@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
+import { parseInboxDecisions } from '../../openape-pods/src/contracts/inbox'
 import { InboxStore, inboxLimits, parsePublication } from '../server/utils/inbox-store'
 
 const cleanup: (() => void)[] = []
@@ -99,6 +100,33 @@ it('syncs a runtime decision set: new ones push once, changed ones update, vanis
   // Resolved and deleted decisions drop their pending push; only the other runtime's decision is still due.
   expect(store.claimOutbox().map(entry => store.item(owner, entry.itemId).decision?.runtimeId)).toEqual([expect.not.stringMatching(runtime)])
   expect(() => store.openDecision(other, b!.id)).toThrow('not_found')
+})
+
+it('carries optional Pod tags on messages and decisions and refuses invalid ones (issue 1461)', () => {
+  const { store } = setup()
+  const pod = randomUUID()
+  const base = { kind: 'message', title: 'Belege', body: 'Rechnung abgelegt.', podId: pod, podName: 'Belege' }
+  // Older desktops send no tags; their publication stays unchanged and so keeps its retry digest.
+  const plain = parsePublication({ ...base, eventId: 'plain' })
+  expect(plain).not.toHaveProperty('podTags')
+  const plainId = store.publish(owner, runtime, plain).id
+  const tagged = parsePublication({ ...base, eventId: 'tagged', podTags: ['finanzen', 'mail-2'] })
+  const taggedId = store.publish(owner, runtime, tagged).id
+  expect(store.publish(owner, runtime, tagged)).toEqual({ id: taggedId, created: false })
+  expect(store.item(owner, plainId).pod).toEqual({ id: pod, name: 'Belege' })
+  expect(store.item(owner, taggedId).pod).toEqual({ id: pod, name: 'Belege', tags: ['finanzen', 'mail-2'] })
+  for (const podTags of [['Finanzen'], ['mail', 'mail'], ['has space'], [''], 'mail', [1], Array.from({ length: 17 }, (_, index) => `tag-${index}`)]) {
+    expect(() => parsePublication({ ...base, eventId: 'bad', podTags })).toThrow('invalid_inbox_item')
+  }
+
+  const tags = (sourceId: string, digest: string, podTags?: string[]) => ({ ...decision(sourceId, digest), podId: pod, podName: 'Belege', ...(podTags ? { podTags } : {}) })
+  store.syncDecisions(owner, runtime, parseInboxDecisions({ decisions: [tags('effect:t', 'a'.repeat(64), ['finanzen']), decision('effect:u')] }))
+  const [, taggedDecision] = store.list(owner, { kind: 'decision' }).items
+  expect(taggedDecision!.pod).toEqual({ id: pod, name: 'Belege', tags: ['finanzen'] })
+  // Removed tags change the digest, so the stored decision loses them.
+  store.syncDecisions(owner, runtime, [tags('effect:t', 'b'.repeat(64)), decision('effect:u')])
+  expect(store.item(owner, taggedDecision!.id).pod).toEqual({ id: pod, name: 'Belege' })
+  expect(() => parseInboxDecisions({ decisions: [tags('effect:x', 'a'.repeat(64), ['Groß'])] })).toThrow('Invalid inbox tags')
 })
 
 it('holds the push of an IdP approval until it stayed open for the delay and drops it when decided meanwhile', () => {
