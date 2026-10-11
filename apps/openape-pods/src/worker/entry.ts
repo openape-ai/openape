@@ -42,6 +42,7 @@ import { PodGroups } from './workspace/groups'
 import { listedPods } from './workspace/pod-list'
 import { mapView } from './workspace/map-view'
 import { AutomationDescriptions } from './workspace/automation-descriptions'
+import { ItemTagStore, renameNetwork } from './workspace/item-tags'
 import { SecretRequests } from './secrets/store'
 import type { SecretRowCommand } from './secrets/store'
 import { ScriptWorkspace } from './workspace/scripts'
@@ -483,10 +484,12 @@ port.on('message', async (event) => {
     const command = parseCommand(request.command)
     if (command.type === 'organize') new PodGroups(store).execute(command)
     if (command.type === 'describeAutomation') new AutomationDescriptions(store).execute(command)
+    if (command.type === 'tag') new ItemTagStore(store).execute(command)
+    if (command.type === 'renameNetwork') renameNetwork(store, command)
     if (command.type === 'pauseAll') store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE lifecycle=\'active\'').run()
     if (command.type === 'create') store.createPod({ name: command.name })
     if (command.type === 'update') { store.updatePod(command.id, command.revision, { name: command.name, lifecycle: command.lifecycle }); if (command.lifecycle === 'archived') dispatcher.cancelPod(command.id, 'Pod archived') }
-    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: listedPods(store), organization: new PodGroups(store).view(), descriptions: new AutomationDescriptions(store).view(), ...(command.type === 'map' ? { map: mapView(store) } : {}) } })
+    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: listedPods(store), organization: new PodGroups(store).view(), descriptions: new AutomationDescriptions(store).view(), tags: new ItemTagStore(store).view(), ...(command.type === 'map' ? { map: mapView(store) } : {}) } })
   }
   catch (error) { port.postMessage({ id: request.id, error: error instanceof Error ? error.message : 'Workspace operation failed' }) }
 })

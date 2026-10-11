@@ -20,6 +20,7 @@ import type { SecretsCommand, SecretsView } from '../../contracts/secrets'
 import type { PortableSourceSelection } from '../../contracts/sharing'
 import type { Layers } from '../utils/automation-layout'
 import { ungrouped } from '../utils/automation-layout'
+import { allTags, withTag } from '../utils/tags'
 
 /**
  * The two product surfaces behind one tab bar: Automatisierungen (this file) and Entscheidungen
@@ -40,6 +41,20 @@ const secretForm = ref<{ podId: string, alias: string | null } | null>(null)
 const inboxView = ref<InstanceType<typeof DecisionsInbox> | null>(null)
 const waiting = computed(() => props.decisions ?? inboxView.value?.total ?? 0)
 const current = computed(() => props.tab ?? 'automations')
+// The tag filter is a per-device preference; private windows or blocked storage simply start without one.
+const tagKey = 'pods.automations.tag'
+function storedTag(): string | null {
+  try { return localStorage.getItem(tagKey) }
+  catch { return null }
+}
+const tag = ref<string | null>(storedTag())
+const tags = computed(() => props.view ? allTags(props.view) : [])
+const filtered = computed(() => props.view ? withTag(props.view, tag.value && tags.value.includes(tag.value) ? tag.value : null) : null)
+function selectTag(value: string | null) {
+  tag.value = value; pinned.value = null; hovered.value = null
+  try { if (value) localStorage.setItem(tagKey, value); else localStorage.removeItem(tagKey) }
+  catch {}
+}
 const groups = computed(() => [...new Set([...props.view?.pods.map(pod => pod.group) ?? [], ...props.view?.automations.map(automation => automation.group) ?? []].filter((name): name is string => !!name))])
 const chips: { key: keyof Layers, label: string, color: string }[] = [{ key: 'channel', label: 'Channels', color: 'var(--accent)' }, { key: 'read', label: 'Read', color: 'var(--read)' }, { key: 'write', label: 'Write', color: 'var(--warn)' }, { key: 'auth', label: 'Approvals', color: 'var(--idp)' }, { key: 'paused', label: 'Paused', color: 'var(--muted)' }]
 function selectGroup(value: string) { group.value = value; pinned.value = null; hovered.value = null }
@@ -88,6 +103,14 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
                 {{ t('Without group') }}
               </button>
             </div>
+            <div v-if="tags.length" class="seg" role="group" :aria-label="t('Tags')">
+              <button :aria-pressed="!tag || !tags.includes(tag)" @click="selectTag(null)">
+                {{ t('All tags') }}
+              </button>
+              <button v-for="name in tags" :key="name" :aria-pressed="tag === name" @click="selectTag(name)">
+                #{{ name }}
+              </button>
+            </div>
           </div>
           <div class="tb-right">
             <div class="layers" role="group" :aria-label="t('Layers')">
@@ -110,9 +133,9 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
             <span><i class="k-svc" />{{ t('Service, via HTTPS') }}</span><span><i class="k-app" />{{ t('Application, installed') }}</span><span><i class="k-dir" />{{ t('Folder or file') }}</span><span><i class="k-key" />{{ t('Secret') }}</span>
           </div>
         </div>
-        <AutomationsList v-if="mode === 'list'" :view="view" :group="group" :layers="layers" :now="now" @open="detail = $event" />
+        <AutomationsList v-if="mode === 'list'" :view="filtered!" :group="group" :layers="layers" :now="now" @open="detail = $event" />
         <div v-else class="automations-live">
-          <AutomationsMap :view="view" :group="group" :layers="layers" :pinned="pinned" :playing="playing" :now="now" @hover="hovered = $event" @pin="pinned = $event" @open="detail = $event" />
+          <AutomationsMap :view="filtered!" :group="group" :layers="layers" :pinned="pinned" :playing="playing" :now="now" @hover="hovered = $event" @pin="pinned = $event" @open="detail = $event" />
           <AutomationInfo :id="hovered ?? pinned" :view="view" :pinned="!!pinned && !hovered" :now="now" @open="detail = $event" />
         </div>
       </template>

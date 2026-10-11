@@ -5,6 +5,7 @@ import type { CentralCommand } from '../../contracts/central'
 import type { NetworkCommand, NetworkView } from '../../contracts/networks'
 import type { ScheduleCommand } from '../../contracts/scheduling'
 import type { RunCommand } from '../../contracts/runs'
+import type { WorkspaceCommand } from '../../contracts/control'
 import type { MapView } from '../../contracts/map-view'
 import type { SecretsCommand, SecretsView } from '../../contracts/secrets'
 import type { PortableSourceSelection } from '../../contracts/sharing'
@@ -51,6 +52,7 @@ async function run(action: () => Promise<unknown>, settle?: (error: string | nul
 function localCommand(command: CentralCommand) {
   if (command.channel === 'scheduling') void run(() => window.pods.scheduling(command.body as unknown as ScheduleCommand))
   else if (command.channel === 'runs') void run(() => window.pods.runs(command.body as unknown as RunCommand))
+  else if (command.channel === 'workspace') void run(() => window.pods.workspace(command.body as unknown as WorkspaceCommand))
 }
 const networkCommand = (command: NetworkCommand, settle?: (error: string | null) => void) => void run(() => window.pods.networks(command), settle)
 const networkControl = (control: NetworkControl) => void run(() => window.pods.networks(control))
