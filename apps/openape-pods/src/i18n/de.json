@@ -3132,6 +3132,7 @@
   "The identity provider did not deny this grant": "Der Identity Provider hat diesen Grant nicht abgelehnt",
   "The identity provider did not revoke this grant": "Der Identity Provider hat diesen Grant nicht widerrufen",
   "Deciding a grant needs an active owner session (the MCP sign-in); otherwise the owner decides at the IdP": "Über einen Grant zu entscheiden braucht eine aktive Owner-Sitzung (die MCP-Anmeldung); sonst entscheidet der Owner beim IdP",
+  "Revoking a brokered Pod grant needs an active owner session (the MCP sign-in); otherwise the owner revokes it at the IdP": "Einen vermittelten Pod-Grant zu widerrufen braucht eine aktive Owner-Sitzung (die MCP-Anmeldung); sonst widerruft ihn der Owner beim IdP",
   "Invalid grant identity": "Ungültige Grant-Kennung",
   "This Pod belongs to another owner or identity provider than the signed-in owner": "Dieser Pod gehört einem anderen Owner oder Identity Provider als dem angemeldeten Owner",
   "This grant was not requested by this Pod for itself; it is decided at the IdP only": "Dieser Grant wurde nicht von diesem Pod für sich selbst angefordert; über ihn wird nur beim IdP entschieden",

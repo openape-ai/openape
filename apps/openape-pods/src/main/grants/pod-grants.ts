@@ -32,6 +32,7 @@ export interface GrantDecision { id: string, podId: string, state: GrantState, g
 
 const grantIdPattern = /^[\w-]{1,128}$/
 const riskOrder = ['low', 'medium', 'high', 'critical']
+const endedStates = ['revoked', 'denied', 'expired', 'used']
 
 /**
  * The details of a whole-program grant: one per action and first resource, without selector, so every operation of
@@ -171,14 +172,27 @@ export class PodGrants {
     return this.decided(podId, connection, denied, false, typeOf(grant.request.grant_type))
   }
 
-  /** Revokes as the requesting Pod identity, which only reduces authority and needs no owner session. */
-  async revoke(podId: string, grantId: string, signal: AbortSignal): Promise<GrantResult> {
+  /**
+   * Revokes a Pod grant and records the IdP state; a grant the IdP already shows as ended only updates the ledger. A
+   * direct Pod identity revokes its own grant, which only reduces authority. A brokered grant exists only at the
+   * owner's decision IdP, where only the owner may revoke it, and the agent provider does not forward a revoke, so it
+   * needs the owner session.
+   */
+  async revoke(owner: OwnerSession | null, podId: string, grantId: string, signal: AbortSignal): Promise<GrantResult> {
     const connection = await this.dependencies.connection(podId)
     const grant = await this.read(connection, grantId, signal)
-    if (['revoked', 'denied', 'expired', 'used'].includes(grant.status)) return this.result(await this.record(podId, connection, grant))
-    const reply = await connectionRequest(connection.issuer, `/api/grants/${encodeURIComponent(grantId)}/revoke`, {}, signal, await connection.accessToken())
+    if (endedStates.includes(grant.status)) return this.result(await this.record(podId, connection, grant))
+    const reply = connection.brokered
+      ? await this.revokeAsOwner(owner, podId, grantId, signal)
+      : await connectionRequest(connection.issuer, `/api/grants/${encodeURIComponent(grantId)}/revoke`, {}, signal, await connection.accessToken())
     if (reply.status !== 'revoked') throw new Error('The identity provider did not revoke this grant')
     return this.result(await this.record(podId, connection, { ...grant, status: 'revoked' }))
+  }
+
+  private async revokeAsOwner(owner: OwnerSession | null, podId: string, grantId: string, signal: AbortSignal): Promise<Record<string, unknown>> {
+    if (!owner) throw new Error('Revoking a brokered Pod grant needs an active owner session (the MCP sign-in); otherwise the owner revokes it at the IdP')
+    const { issuer, bearer } = await this.decidable(owner, podId, grantId, signal)
+    return await connectionRequest(issuer, `/api/grants/${encodeURIComponent(grantId)}/revoke`, {}, signal, bearer)
   }
 
   /** The grant read with the owner's token and checked against this owner's Pod identity, before any decision. */

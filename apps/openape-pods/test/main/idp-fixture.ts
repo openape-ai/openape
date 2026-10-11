@@ -36,7 +36,15 @@ export async function brokerRejections(requests: Record<string, unknown>[]): Pro
   return errors.filter(error => error !== null)
 }
 
-export function identityProvider() {
+/** The provenance the decision IdP keeps on a brokered grant; a brokered Pod connection carries the same. */
+export const brokered = { connection_id: '00000000-0000-4000-8000-0000000000b1', broker_issuer: issuer, agent_issuer: issuer, owner, key_id: 'key' }
+
+/**
+ * With `brokered`, the Pod identities are brokered like those of pods.openape.ai: every grant carries the provenance,
+ * and the agent provider forwards reads but not a revoke, so a revoke with the Pod token finds no grant (404); only
+ * the owner revokes at the decision IdP.
+ */
+export function identityProvider(options: { brokered?: typeof brokered } = {}) {
   const keys = generateKeyPairSync('ed25519')
   const grants = new Map<string, StubGrant>()
   const state = { reuse: false, approvals: [] as string[], decisions: [] as Decision[], tokens: [] as string[], creates: [] as Record<string, unknown>[], revokedTokens: [] as string[] }
@@ -65,8 +73,10 @@ export function identityProvider() {
       const body = init?.body ? JSON.parse(String(init.body)) as Record<string, unknown> : {}
       state.decisions.push({ action, id: id!, bearer, body })
       if (action === 'approve') state.approvals.push(url.pathname)
-      // Like the IdP: only the owner decides; the requesting Pod may revoke its own grant.
+      // Like the IdP: only the owner decides; the requesting Pod may revoke its own direct grant.
+      if (action === 'revoke' && options.brokered && bearer !== ownerToken) return json({ title: 'Grant not found' }, 404)
       if (action !== 'revoke' && bearer !== ownerToken) return json({ title: 'Direct human authentication is required' }, 403)
+      if (action === 'revoke' && !['pending', 'approved'].includes(grant.status)) return json({ title: `Grant cannot be revoked (status: ${grant.status})` }, 400)
       if (action === 'revoke') { grant.status = 'revoked'; return json({ id, status: 'revoked', request: grant.request }) }
       if (grant.status !== 'pending') return json({ title: 'Grant already decided' }, 400)
       grant.status = action === 'approve' ? 'approved' : 'denied'; grant.decided_by = owner
@@ -82,10 +92,11 @@ export function identityProvider() {
       return json({ authz_jwt: `${head}.${payload}.${sign(null, Buffer.from(`${head}.${payload}`), keys.privateKey).toString('base64url')}` })
     }
     if (action === 'consume') return json({ status: 'valid' })
-    if (action === undefined && (init?.method ?? 'GET') === 'GET') return json({ id, status: grant.status, request: grant.request, ...(grant.decided_by ? { decided_by: grant.decided_by } : {}) })
+    if (action === undefined && (init?.method ?? 'GET') === 'GET') return json({ id, status: grant.status, request: grant.request, ...(grant.decided_by ? { decided_by: grant.decided_by } : {}), ...(options.brokered ? { brokered: options.brokered } : {}) })
     return json({ title: 'Unsupported' }, 404)
   })
-  const decide = (id: string, status: 'approved' | 'denied') => { grants.get(id)!.status = status }
+  /** A decision made outside Pods, by the owner at the IdP or by its expiry. */
+  const decide = (id: string, status: 'approved' | 'denied' | 'revoked' | 'expired') => { grants.get(id)!.status = status }
   /** A grant that another requester or for another target asked for, to prove Pods never decides it. */
   const foreign = (request: Record<string, unknown>) => { const id = `grant-${grants.size + 1}`; grants.set(id, { status: 'pending', request: { audience: 'shapes', grant_type: 'always', ...request } }); return id }
   return { state, fetch, decide, foreign }
@@ -101,7 +112,7 @@ export const podSubject = (id: string) => `pod-${id.slice(-4)}@example.test`
 const profiles: PodDatabase[] = []
 export function closeProfiles(): void { for (const store of profiles.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) } }
 
-export async function workerFixture(options: { pods?: string[], resources?: () => Record<string, unknown>[] } = {}) {
+export async function workerFixture(options: { pods?: string[], resources?: () => Record<string, unknown>[], brokered?: typeof brokered } = {}) {
   const { FixtureWorker } = await import('../../src/main/worker')
   const { ConnectionManager } = await import('../../src/main/connections/manager')
   const { ProgramManager } = await import('../../src/main/programs/manager')
@@ -110,7 +121,7 @@ export async function workerFixture(options: { pods?: string[], resources?: () =
   for (const id of options.pods ?? [podId, deniedPodId]) store.createPod({ name: `Pod ${id.slice(-4)}` }, id)
   const ledger = new GrantLedger(store)
   const worker = new FixtureWorker(() => {})
-  const connection = (id: string) => ({ issuer, subject: podSubject(id), owner, keyId: 'key', targetHost: `pods:${id}`, accessToken: async () => 'SYNTHETIC_POD_AGENT', identity: { podId: id, connectionId: randomUUID(), issuer, owner, subject: podSubject(id), keyId: 'key' }, ownerConnection: 'owner-connection' })
+  const connection = (id: string) => ({ issuer, subject: podSubject(id), owner, keyId: 'key', targetHost: `pods:${id}`, accessToken: async () => 'SYNTHETIC_POD_AGENT', identity: { podId: id, connectionId: randomUUID(), issuer, owner, subject: podSubject(id), keyId: 'key' }, ownerConnection: 'owner-connection', ...(options.brokered ? { decisionIssuer: issuer, brokered: options.brokered } : {}) })
   // The real ConnectionManager.request runs; only the provisioned Pod identity is synthetic.
   const connections = Object.assign(Object.create(ConnectionManager.prototype), { podConnection: async (id: string) => connection(id) })
   const approvals: RunApproval[] = []; const bound: Record<string, unknown>[] = []
