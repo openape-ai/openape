@@ -8,6 +8,7 @@ import { PodVariables } from '../resources/variables'
 import type { NetworkEngine } from '../scheduling/network-engine'
 import type { PodDatabase } from '../storage/database'
 import type { DefinitionCatalog } from '../workspace/definition-catalog'
+import { ItemTagStore } from '../workspace/item-tags'
 
 export type PortableValue = string | number | boolean
 export interface CompositionDocument {
@@ -152,6 +153,8 @@ export async function finalizeNetwork(context: CompositionContext, engines: { ne
     }
     const networkId = engines.networks.execute({ type: 'create', draft }).createdId
     if (!networkId) throw new Error('Network creation returned no identity')
+    // Only the network's own tags; its members inherit them in the tag view and are never copied.
+    if (composition.tags) new ItemTagStore(context.store).execute({ type: 'tag', id: networkId, revision: 0, tags: composition.tags })
     grantData(context, networkId, groupId, document, files, reuse)
     record(networkId)
   })

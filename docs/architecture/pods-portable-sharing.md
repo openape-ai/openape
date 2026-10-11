@@ -183,6 +183,18 @@ archives with bounded content and transfer sizes.
 `portable_aliases_v1` remains a required importer feature, not an advertised
 runtime capability. File validation requires the caller
 to supply its actual supported features; the exporter set is named separately.
+
+Tags (issue 1460): a Pod and a composition may carry an optional `tags` list, their
+own owner tags only. A present list is non-empty, at most 8 entries, unique and
+already normalized by the shared `normalizeTag` rules in
+`packages/pods-protocol/src/tags.ts` (also used by the owner tag command).
+`portable_tags_v1` is required exactly when some Pod or composition carries tags,
+so untagged packages stay importable by older desktops, and older importers refuse
+tagged packages with the unsupported-feature error. Export reads only own rows of
+`item_tags`; import re-applies them to the created Pod at commit and to the created
+network at finalization through `ItemTagStore`. Tags a member inherits from its
+network stay computed and are never copied.
+
 Package Pod keys, asset paths and composition keys define the
 future handoff/reference/call aliases; M3 must map them to fresh local identities
 and immutable call revisions while retaining legacy UUID behavior. M2 proves inert
