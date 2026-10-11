@@ -56,6 +56,7 @@ import { runtimeArgv } from './grants/execution-context'
 import type { GrantSpec } from './grants/pod-grants'
 import type { OwnerSession } from './connections/owner-session'
 import { apesLogin } from './connections/apes-login'
+import { pendingApprovals } from './inbox/approvals'
 import type { ApesLogin } from './connections/apes-login'
 import type { GrantLedgerCommand } from '../worker/resources/grants'
 import type { SandboxReach, SandboxView } from '../contracts/sandbox'
@@ -434,11 +435,21 @@ export class FixtureWorker {
   async mcpApesSession(endsAt: number, signal: AbortSignal): Promise<OwnerSession | null> {
     await this.setupReady
     if (!this.connections) throw new Error('Connection service unavailable')
-    const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
-    // The bundled apes CLI renews an expired key login under its own lock; Pods only reads the login.
-    this.apesLogin ??= apesLogin({ executable: process.execPath, script: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs') })
-    return this.connections.apesOwnerSession(endsAt, signal, this.apesLogin)
+    return this.connections.apesOwnerSession(endsAt, signal, this.ownerApesLogin())
   }
+
+  // The bundled apes CLI renews an expired key login under its own lock; Pods only reads the login.
+  private ownerApesLogin(): ApesLogin {
+    const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+    this.apesLogin ??= apesLogin({ executable: process.execPath, script: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs') })
+    return this.apesLogin
+  }
+
+  /** How many grants wait for the owner at the IdP, for the account inbox (issue 1458). */
+  readonly inboxApprovals = pendingApprovals(() => this.ownerApesLogin(), async () => {
+    const { owner, email } = await this.remoteOwner()
+    return { issuer: owner.issuer, email }
+  })
 
   async indexRemotePods(owner: Owner): Promise<void> {
     await this.setupReady

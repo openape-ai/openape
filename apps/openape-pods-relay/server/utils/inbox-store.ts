@@ -4,8 +4,8 @@ import { dirname } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 import { ProtocolError } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
-import type { InboxDecision } from '../../../openape-pods/src/contracts/inbox'
-import type { InboxDecisionData, InboxDevice, InboxItem, InboxPublication, InboxSubscription, OutboxEntry } from '../../shared/inbox-types'
+import type { InboxApprovals, InboxDecision } from '../../../openape-pods/src/contracts/inbox'
+import type { InboxApprovalCount, InboxDecisionData, InboxDevice, InboxItem, InboxPublication, InboxSubscription, OutboxEntry } from '../../shared/inbox-types'
 
 // Push services that browsers hand out today; anything else is refused before the server ever connects to it.
 const pushHosts = [/^web\.push\.apple\.com$/, /^fcm\.googleapis\.com$/, /^updates\.push\.services\.mozilla\.com$/, /\.notify\.windows\.com$/]
@@ -24,7 +24,7 @@ export function parseSubscription(input: unknown): InboxSubscription {
 
 // `idpPushDelayMs`: an IdP approval is often granted at once by the owner's own session (issue 1455); its push
 // waits this long, and a decision that resolves meanwhile drops the pending push without notifying.
-export const inboxLimits = { bodyBytes: 64 * 1024, retentionMs: 90 * 86400000, tombstoneMs: 30 * 86400000, itemsPerOwner: 10000, page: 50, pushAgeMs: 86400000, idpPushDelayMs: 60000 }
+export const inboxLimits = { bodyBytes: 64 * 1024, retentionMs: 90 * 86400000, tombstoneMs: 30 * 86400000, itemsPerOwner: 10000, page: 50, pushAgeMs: 86400000, idpPushDelayMs: 60000, approvalsFreshMs: 30 * 60000 }
 const key = (owner: Owner) => JSON.stringify([owner.issuer, owner.subject])
 const id = /^[0-9a-f-]{36}$/
 const eventKey = /^[\w.:-]{1,200}$/
@@ -77,6 +77,7 @@ export class InboxStore {
       CREATE INDEX IF NOT EXISTS owner_items ON items(owner,position);
       CREATE INDEX IF NOT EXISTS owner_changes ON items(owner,sequence);
       CREATE INDEX IF NOT EXISTS due_outbox ON outbox(state,next);
+      CREATE TABLE IF NOT EXISTS approvals(owner TEXT NOT NULL,runtime_id TEXT NOT NULL,pending INTEGER,url TEXT NOT NULL,updated INTEGER NOT NULL,PRIMARY KEY(owner,runtime_id));
       PRAGMA user_version=1;`)
     // Added for decisions (M2); an older server ignores the column, so the version stays 1.
     if (!this.db.prepare('PRAGMA table_info(items)').all().some(column => column.name === 'decision')) this.db.exec('ALTER TABLE items ADD COLUMN decision TEXT')
@@ -236,12 +237,27 @@ export class InboxStore {
     })
   }
 
+  /** A runtime reports the grants waiting for the owner at the IdP; the newest report of any runtime counts. */
+  setApprovals(owner: Owner, runtimeId: string, approvals: InboxApprovals): void {
+    this.db.prepare('INSERT INTO approvals(owner,runtime_id,pending,url,updated) VALUES(?,?,?,?,?) ON CONFLICT(owner,runtime_id) DO UPDATE SET pending=excluded.pending,url=excluded.url,updated=excluded.updated')
+      .run(key(owner), runtimeId, approvals.pending, approvals.url, this.now())
+  }
+
+  approvals(owner: Owner): InboxApprovalCount | null { return this.latestApprovals(key(owner)) }
+  // A report older than `approvalsFreshMs` no longer tells how many grants wait, so its count is unknown.
+  private latestApprovals(ownerKey: string): InboxApprovalCount | null {
+    const row = this.db.prepare('SELECT pending,url,updated FROM approvals WHERE owner=? ORDER BY updated DESC LIMIT 1').get(ownerKey)
+    if (!row) return null
+    const updated = Number(row.updated)
+    return { pending: row.pending === null || this.now() - updated > inboxLimits.approvalsFreshMs ? null : Number(row.pending), url: String(row.url), updated }
+  }
+
   badgeCount(owner: Owner): number { return this.badge(key(owner)) }
   private badge(ownerKey: string): number {
     const row = this.db.prepare(`SELECT count(*) AS count FROM items
       WHERE owner=? AND deleted IS NULL AND archived IS NULL
       AND ((kind='decision' AND state='open') OR (kind='message' AND read IS NULL))`).get(ownerKey)
-    return Number(row!.count)
+    return Number(row!.count) + (this.latestApprovals(ownerKey)?.pending ?? 0)
   }
 
   /** What a due push announces, with the account's current badge; null once the item is gone or its decision resolved. */

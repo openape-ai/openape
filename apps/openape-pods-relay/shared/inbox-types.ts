@@ -5,3 +5,5 @@ export interface InboxItem { id: string, kind: 'message' | 'decision', state: st
 export interface InboxDevice { id: string, agent: string, created: number, seen: number, push?: boolean }
 export interface InboxSubscription { endpoint: string, p256dh: string, auth: string }
 export interface OutboxEntry { id: string, owner: string, itemId: string, attempts: number, created: number }
+/** Grants waiting for the owner at the IdP; `pending` is null while the count is unknown or stale. */
+export interface InboxApprovalCount { pending: number | null, url: string, updated: number }
