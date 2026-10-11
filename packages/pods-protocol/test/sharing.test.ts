@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { assertPortableCompatibility, canonicalPortableJson, parsePortableManifest as parseManifest, portableContentBytes, portablePath, sharingLimits } from '../src/sharing'
+import { assertPortableCompatibility, canonicalPortableJson, parsePortableManifest as parseManifest, portableContentBytes, portablePath, portableTagsFeature, sharingLimits } from '../src/sharing'
 import type { PortableManifest, PortablePod } from '../src/sharing'
 
 function parsePortableManifest(value: unknown) { return parseManifest(value, ['portable_aliases_v1']) }
@@ -242,4 +242,26 @@ it('refuses competing standalone schedules on composition members', () => {
   const manifest = fixture()
   manifest.pods[0]!.schedule = { kind: 'interval', seconds: 60 }
   expect(() => parsePortableManifest(manifest)).toThrow('standalone schedules')
+})
+
+it('carries own Pod and composition tags only under the tag feature and refuses invalid tags', () => {
+  const features = ['portable_aliases_v1', portableTagsFeature]
+  const tagged = () => { const manifest = fixture(); manifest.requiredFeatures = features; manifest.pods[0]!.tags = ['mail', 'kunden-ä']; manifest.compositions[0]!.tags = ['morning']; return manifest }
+  const parsed = parseManifest(tagged(), features)
+  expect([parsed.pods[0]!.tags, parsed.pods[1]!.tags, parsed.compositions[0]!.tags]).toEqual([['mail', 'kunden-ä'], undefined, ['morning']])
+  expect(portableContentBytes(parsed, features)).toEqual(portableContentBytes(tagged(), features))
+  // An older importer names the missing feature instead of guessing at an unknown field.
+  expect(() => parseManifest(tagged(), ['portable_aliases_v1'])).toThrow('runtime does not support: portable_tags_v1')
+  // Untagged packages neither require nor declare the feature, so older importers still accept them.
+  expect(() => parseManifest(fixture(), features)).not.toThrow()
+  expect(() => parseManifest({ ...fixture(), requiredFeatures: features }, features)).toThrow('tag feature is required exactly')
+  expect(() => parseManifest({ ...tagged(), requiredFeatures: ['portable_aliases_v1'] }, features)).toThrow('tag feature is required exactly')
+  const refused = (change: (manifest: PortableManifest) => void) => { const manifest = tagged(); change(manifest); return () => parseManifest(manifest, features) }
+  expect(refused((manifest) => { manifest.pods[0]!.tags = ['Mail'] })).toThrow('tags must be normalized')
+  expect(refused((manifest) => { manifest.pods[0]!.tags = ['two words'] })).toThrow('tags must be normalized')
+  expect(refused((manifest) => { manifest.pods[0]!.tags = ['bad_tag'] })).toThrow('invalid tag')
+  expect(refused((manifest) => { manifest.pods[0]!.tags = ['x'.repeat(33)] })).toThrow('invalid tag')
+  expect(refused((manifest) => { manifest.pods[0]!.tags = ['mail', 'mail'] })).toThrow('duplicate')
+  expect(refused((manifest) => { manifest.pods[0]!.tags = Array.from({ length: 9 }, (_, index) => `tag-${index}`) })).toThrow('list limit')
+  expect(refused((manifest) => { manifest.compositions[0]!.tags = [] })).toThrow('empty tag list')
 })

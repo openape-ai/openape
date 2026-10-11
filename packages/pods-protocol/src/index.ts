@@ -1,5 +1,6 @@
 export * from './releases'
 export * from './sharing'
+export * from './tags'
 
 export interface Owner { issuer: string, subject: string }
 export interface DeviceKeys { signing: string, agreement: string }
