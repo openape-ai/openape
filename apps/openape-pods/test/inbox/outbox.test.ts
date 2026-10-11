@@ -8,6 +8,8 @@ import { InboxOutbox, parseNotify } from '../../src/worker/inbox/outbox'
 import type { InboxPublication } from '../../src/worker/inbox/outbox'
 import { parseFrame } from '../../src/contracts/runs'
 import { PodDatabase } from '../../src/worker/storage/database'
+import { ItemTagStore } from '../../src/worker/workspace/item-tags'
+import { seedNetwork } from '../storage/network-fixture'
 
 const stores: PodDatabase[] = []; const roots: string[] = []
 afterEach(() => { for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
@@ -29,6 +31,24 @@ it('queues one durable message per key across retried runs and refuses changed c
   const reopened = new PodDatabase(root); stores.push(reopened)
   const due = new InboxOutbox(reopened).execute({ type: 'due' }) as InboxPublication[]
   expect(due).toMatchObject([{ eventId: `${pod.id}:invoice-42`, kind: 'message', title: 'Rechnung abgelegt', podId: pod.id, podName: 'Belege' }])
+})
+
+it('snapshots the Pod tags, own before inherited, when a message is queued (issue 1461)', () => {
+  const root = mkdtempSync(join(tmpdir(), 'pods-inbox-outbox-')); roots.push(root)
+  const store = new PodDatabase(root); stores.push(store)
+  const seeded = seedNetwork(store)
+  const tags = new ItemTagStore(store)
+  tags.execute({ type: 'tag', id: seeded.networkId, revision: 0, tags: ['delta-mind', 'mail'] })
+  tags.execute({ type: 'tag', id: seeded.pod.id, revision: 0, tags: ['intake', 'mail'] })
+  const outbox = new InboxOutbox(store)
+  outbox.queue(seeded.pod, randomUUID(), parseNotify(message))
+  // A later tag change leaves the queued publication unchanged, so its retries stay identical.
+  tags.execute({ type: 'tag', id: seeded.pod.id, revision: 1, tags: [] })
+  const untagged = store.createPod({ name: 'Ohne Tags' })
+  outbox.queue(untagged, randomUUID(), parseNotify(message))
+  const due = outbox.execute({ type: 'due' }) as InboxPublication[]
+  expect(due.map(item => [item.podId, item.podTags])).toEqual([[seeded.pod.id, ['intake', 'mail', 'delta-mind']], [untagged.id, undefined]])
+  expect(due[1]).not.toHaveProperty('podTags')
 })
 
 it('retries uncertain deliveries with backoff and keeps refusals and receipts final', () => {

@@ -77,3 +77,13 @@ it('promotes no sender when a second sender line could be forged', () => {
   const item = decision({}, { body: 'Context\nsender: real@example.com\nnote: hi\nsender: boss@example.com' })
   expect(list([item]).find('.sender').exists()).toBe(false)
 })
+
+it('shows the Pod tags as chips on message and decision cards, and nothing without tags (issue 1461)', () => {
+  const pod = { id: crypto.randomUUID(), name: 'Belege' }
+  const message = decision({}, { kind: 'message', decision: null, pod: { ...pod, tags: ['finanzen', 'mail'] } })
+  const tagged = decision({}, { pod: { ...pod, tags: ['finanzen'] } })
+  const cards = list([message, tagged, decision({}, { pod }), decision()]).findAll('li')
+  expect(cards.map(card => card.findAll('.tag').map(chip => chip.text()))).toEqual([['finanzen', 'mail'], ['finanzen'], [], []])
+  expect(cards[0]!.get('.tags').text()).toBe('Tags: finanzen mail')
+  expect(cards[2]!.find('.tags').exists()).toBe(false)
+})

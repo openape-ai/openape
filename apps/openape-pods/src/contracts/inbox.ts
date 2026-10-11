@@ -1,3 +1,5 @@
+import { normalizeTag, tagLimits } from './tags'
+
 /**
  * Owner decisions as the desktop publishes them to the account inbox (plan issue 1446, M2).
  * The desktop stays the authority: the inbox shows a decision and returns the chosen option,
@@ -17,6 +19,8 @@ export interface InboxDecision {
   digest: string
   podId: string | null
   podName: string | null
+  /** The Pod's own tags followed by those inherited from its network; absent when it has none and from desktops before issue 1461. */
+  podTags?: string[]
   title: string
   body: string
   authority: InboxAuthority
@@ -32,6 +36,16 @@ export const inboxSourceId = /^[\w.:-]{1,200}$/
 const optionKey = /^[\w.-]{1,64}$/
 const digestPattern = /^[a-f0-9]{64}$/
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
+const inboxTagLimit = 2 * tagLimits.perItem
+
+/** A Pod's tags as the inbox shows them: its own followed by those inherited from its network, without repeats (issue 1461). */
+export function inboxTags(own: string[], inherited: string[]): string[] { return [...new Set([...own, ...inherited])] }
+
+/** Tags of an inbox message or decision, exactly as stored by the desktop: normalized and without repeats. */
+export function parseInboxTags(value: unknown): string[] {
+  if (!Array.isArray(value) || value.length > inboxTagLimit || new Set(value).size !== value.length || value.some(tag => normalizeTag(tag) !== tag)) throw new Error('Invalid inbox tags')
+  return value as string[]
+}
 
 function record(value: unknown, fields: string[]): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid inbox decision')
@@ -44,7 +58,7 @@ function text(value: unknown, maximum: number, empty = false): string {
 }
 
 export function parseInboxDecision(value: unknown): InboxDecision {
-  const item = record(value, ['sourceId', 'type', 'digest', 'podId', 'podName', 'title', 'body', 'authority', 'options', 'link'])
+  const item = record(value, ['sourceId', 'type', 'digest', 'podId', 'podName', 'podTags', 'title', 'body', 'authority', 'options', 'link'])
   if (typeof item.sourceId !== 'string' || !inboxSourceId.test(item.sourceId) || !inboxDecisionTypes.includes(item.type as InboxDecisionType) || !item.sourceId.startsWith(`${String(item.type)}:`)) throw new Error('Invalid inbox decision source')
   if (typeof item.digest !== 'string' || !digestPattern.test(item.digest)) throw new Error('Invalid inbox decision digest')
   if (item.podId !== null && (typeof item.podId !== 'string' || !uuid.test(item.podId))) throw new Error('Invalid inbox decision Pod')
@@ -65,7 +79,7 @@ export function parseInboxDecision(value: unknown): InboxDecision {
   }
   return {
     sourceId: item.sourceId, type: item.type as InboxDecisionType, digest: item.digest, podId: item.podId as string | null,
-    podName: item.podName === null ? null : text(item.podName, 200), title: text(item.title, inboxDecisionLimits.title), body: text(item.body, inboxDecisionLimits.body, true),
+    podName: item.podName === null ? null : text(item.podName, 200), ...(item.podTags === undefined ? {} : { podTags: parseInboxTags(item.podTags) }), title: text(item.title, inboxDecisionLimits.title), body: text(item.body, inboxDecisionLimits.body, true),
     authority: item.authority as InboxAuthority, options, link,
   }
 }
