@@ -20,7 +20,7 @@ For a first task, use a small folder of non-sensitive sample files and read-only
 
 Automations is the landing tab. The five counters at the top are system counts: active, paused, degraded, decisions waiting for you and unknown deliveries. Their subtitles come from your data, for example the name of a degraded Pod and its reason.
 
-The map shows your Pods in the middle, the services, applications and folders they read on the left, pure destinations on the right and the authorities above: your decisions, the identity provider and the AI. Dotted lines carry the recorded reads and writes of the last 24 hours; networks appear as groups with their members. List shows the same Pods as a table. Filter by group and hide layers with the chips Channels, Read, Write, Approvals and Paused.
+The map shows your Pods in the middle, the services, applications and folders they read on the left, pure destinations on the right and the authorities above: your decisions, the identity provider and the AI. Dotted lines carry the recorded reads and writes of the last 24 hours; networks appear as groups with their members. List shows the same Pods as a table. With tags, the map starts empty: activate one or more tags to show their Pods; each tag shows how many Pods carry it, and Without tag, All and None are always available. The choice is remembered on this device. Layers opens the chips Channels, Read, Write, Approvals and Paused; Legend explains the node shapes.
 
 Select a node to read its facts in the info panel. Open details opens the detail page with schedule, members, decision points, numbers, access by kind, secrets as aliases, channels, the developer section and the latest run. Pause, Resume and Run now are the owner commands on this page; nothing here writes to your accounts.
 
@@ -232,12 +232,12 @@ The handbook is available as complete English and German offline editions with m
 
 ## Organize pods in groups
 
-Groups organize related Pods; the Automations tab filters the map and the list by group. Every Pod belongs to one flat group or Ungrouped. Group names and membership are saved on this Mac and included in backups.
+Groups organize related Pods; the list and the detail page show each Pod's group, while the map is filtered by tags. Every Pod belongs to one flat group or Ungrouped. Group names and membership are saved on this Mac and included in backups.
 
 Grouping does not share resources or permissions, invalidate a script or alter a running task. New Pods begin in Ungrouped. Removing a group keeps every pod; deleting a pod remains a separate Data & backups action.
 
 1. Ask Codex to set the group of a Pod, or open the Pod editor with Details öffnen and choose Group under Settings; a new name creates the group. Names contain 1–100 characters; up to fifty groups are supported.
-2. Choose a group chip on the Automations tab to show only that group; All and Without group are always available.
+2. Tag Pods by area, for example with the group name, to show a group on its own on the Automations tab.
 3. Rename or remove a group through Codex; removing keeps every Pod and moves it to Ungrouped.
 
 ## Overview

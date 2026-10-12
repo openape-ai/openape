@@ -13,7 +13,7 @@ import type { SecretsView } from '../../src/contracts/secrets'
 const view = parseMapView(fixture) as MapView
 const NOW = view.at + 11 * 60000
 let wrapper: VueWrapper | undefined
-afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en') })
+afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en'); localStorage.clear() })
 async function mountShell(props: Record<string, unknown> = {}) {
   wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, decisions: 17, ...props } })
   await flushPromises()
@@ -46,15 +46,19 @@ describe('Automatisierungen', () => {
     expect(wrapper!.find('.automations-stamp').text()).toBe(`Live · ${clock(NOW, 'en')}`)
   })
 
-  it('offers map and list, the groups of the organization, five layer chips and the Codex button', async () => {
+  it('offers map and list, five layer chips behind one menu and the Codex button', async () => {
     applyLanguage('de')
     await mountShell()
     expect(wrapper!.find('[aria-label="Ansicht"]').findAll('button').map(item => item.text())).toEqual(['Karte', 'Liste'])
-    expect(wrapper!.find('[aria-label="Gruppe"]').findAll('button').map(item => item.text())).toEqual(['Alle', 'Delta Mind', 'iurio', 'Linde', 'Ohne Gruppe'])
+    expect(wrapper!.find('[aria-label="Gruppe"]').exists()).toBe(false)
+    // Without any tag in the workspace there is no tag bar and everything stays visible.
+    expect(wrapper!.find('[aria-label="Tags"]').exists()).toBe(false)
+    expect(wrapper!.find('.layers-menu summary').text()).toBe('Ebenen 5/5')
     expect(wrapper!.find('[aria-label="Ebenen"]').findAll('button').map(item => item.text())).toEqual(['Kanäle', 'Lesen', 'Schreiben', 'Freigaben', 'Pausierte'])
     expect(wrapper!.find('[data-testid="automations-map"] canvas').attributes('aria-label')).toBe('Animierte Netzkarte aller Pods mit Datenquellen, Speichern und Entscheidungsstellen')
     await button('Pausierte').trigger('click')
     expect(button('Pausierte').attributes('aria-pressed')).toBe('false')
+    expect(wrapper!.find('.layers-menu summary').text()).toBe('Ebenen 4/5')
     await button('⚙ Einstellungen').trigger('click'); await flushPromises()
     expect(wrapper!.find('.app-settings-menu').exists()).toBe(true)
     await button('⚙ Einstellungen').trigger('click'); await flushPromises()
@@ -63,9 +67,11 @@ describe('Automatisierungen', () => {
     expect(wrapper!.emitted('update:tab')).toEqual([['decisions']])
     await button('Neue Automatisierung mit Codex').trigger('click')
     expect(wrapper!.emitted('codex')).toEqual([[null, null]])
-    await button('iurio').trigger('click')
+    // The new automation goes next to the pinned Pod, in its group.
+    const monitor = pod('IURIO PR monitor').id
+    ;(wrapper!.vm as unknown as { pin: (id: string) => void }).pin(monitor)
     await button('Neue Automatisierung mit Codex').trigger('click')
-    expect(wrapper!.emitted('codex')!.at(-1)).toEqual([null, 'iurio'])
+    expect(wrapper!.emitted('codex')!.at(-1)).toEqual([monitor, 'iurio'])
   })
 
   it('lists the same Pods as a table with group, kind, cadence, reads, writes, channels and last run', async () => {
@@ -82,9 +88,7 @@ describe('Automatisierungen', () => {
     expect(cells('Triage')).toEqual(['Triage', 'Delta Mind', 'KI', 'bei Items', 'TypeSafe / Jev, delta', 'delta', '← mail.filtered → mail.triaged', 'vor 1 h · abgeschlossen'])
     expect(cells('zaz Service-Agent')).toEqual(['zaz Service-Agent', 'ohne Gruppe', 'Regeln', 'alle 1 min', 'zaz.delta-mind.at', 'zaz.delta-mind.at', '–', 'vor 11 min · abgeschlossen'])
     expect(cells('DOCPIT')).toEqual(['IURIO · DOCPIT mail management', 'iurio', 'eingeklappt', '–', 'patrick@docpit.eu', 'patrick@docpit.eu', '–', 'pausiert'])
-    await button('Linde').trigger('click')
-    expect(wrapper!.findAll('tbody tr').map(row => row.find('td').text())).toEqual(['Linde · Portal development and systems', 'Linde · Server report'])
-    await wrapper!.findAll('tbody tr')[1]!.trigger('click')
+    await rows.find(row => row.text().includes('Linde · Server report'))!.trigger('click')
     expect(wrapper!.find('.automation-detail .dhead b').text()).toBe('Linde · Server report')
   })
 
@@ -170,19 +174,37 @@ describe('Tags (issue 1459)', () => {
     return parseMapView(copy)
   }
 
-  it('filters the list by an own or inherited tag and shows the chips', async () => {
+  const rows = () => wrapper!.findAll('.automations-list tbody tr').map(row => row.find('b').text())
+
+  it('starts empty, shows the Pods per tag and adds every activated tag to the list', async () => {
+    const tagsView = tagged()
+    const members = tagsView.pods.filter(item => item.tags?.inherited.includes('mail')).length
+    const visible = tagsView.pods.filter(item => item.lifecycle !== 'archived').length
+    await mountShell({ view: tagsView })
+    await button('List').trigger('click')
+    expect(wrapper!.find('.automations-empty').text()).toBe(`Activate tags to see their Pods (${visible} Pods).`)
+    expect(wrapper!.find('.automations-list').exists()).toBe(false)
+    expect(wrapper!.find('[aria-label="Tags"]').findAll('button[aria-pressed]').map(item => item.text())).toEqual([`#delta-mind ${members}`, '#iurio 1', `#mail ${members}`, `Without tag ${visible - members - 1}`])
+    await button('#iurio 1').trigger('click')
+    expect(rows()).toEqual(['IURIO PR monitor'])
+    expect(wrapper!.find('.automations-list .tag-chips').text()).toBe('iurio')
+    await button(`#delta-mind ${members}`).trigger('click')
+    expect(rows()).toContain('IURIO PR monitor')
+    expect(rows().length).toBeGreaterThan(1)
+    expect(wrapper!.findAll('.automations-list tbody tr').filter(row => row.find('.tag.inherited').exists()).length).toBe(rows().length - 1)
+    await button('All').trigger('click')
+    expect(rows()).toHaveLength(23)
+    await button('None').trigger('click')
+    expect(wrapper!.find('.automations-empty').exists()).toBe(true)
+  })
+
+  it('remembers the activated tags on this device', async () => {
+    await mountShell({ view: tagged() })
+    await button('#iurio 1').trigger('click')
+    wrapper!.unmount()
     await mountShell({ view: tagged() })
     await button('List').trigger('click')
-    expect(button('#delta-mind')).toBeTruthy()
-    await button('#iurio').trigger('click')
-    expect(wrapper!.findAll('.automations-list tbody tr').map(row => row.find('b').text())).toEqual(['IURIO PR monitor'])
-    expect(wrapper!.find('.automations-list .tag-chips').text()).toBe('iurio')
-    await button('#delta-mind').trigger('click')
-    const rows = wrapper!.findAll('.automations-list tbody tr')
-    expect(rows.length).toBeGreaterThan(1)
-    expect(rows.every(row => row.find('.tag.inherited').exists())).toBe(true)
-    await button('All tags').trigger('click')
-    expect(wrapper!.findAll('.automations-list tbody tr').length).toBeGreaterThan(rows.length)
+    expect(rows()).toEqual(['IURIO PR monitor'])
   })
 
   it('saves edited own tags as one workspace command with the current revision', async () => {

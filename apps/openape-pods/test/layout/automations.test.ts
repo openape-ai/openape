@@ -15,16 +15,27 @@ import { screenshotPath } from './evidence'
 // follows the content, the info panel moves below the map under 1000 px, dark mode uses tokens.
 // Text and commands are asserted in test/renderer/automations-shell.test.ts.
 const view = parseMapView(fixture) as MapView
+// Every group becomes a tag; network members inherit their network's tags.
+function tagged(): MapView {
+  const copy = structuredClone(view)
+  const tag = (group: string | null) => (group ?? 'privat').toLowerCase().replace(/\s+/g, '-')
+  for (const automation of copy.automations) automation.tags = { own: [tag(automation.group)], inherited: [], revision: 1 }
+  for (const pod of copy.pods) {
+    const network = copy.automations.find(automation => automation.members.includes(pod.id))
+    pod.tags = network ? { own: [], inherited: network.tags!.own, revision: 0 } : pod.group ? { own: [tag(pod.group)], inherited: [], revision: 1 } : undefined
+  }
+  return parseMapView(copy)
+}
 const NOW = view.at + 11 * 60000
 // Nodes ease towards their targets at 14 % per frame; 40 frames bring them within a pixel.
 const frames = (count = 40) => new Promise<void>((done) => { const tick = (left: number) => left ? requestAnimationFrame(() => tick(left - 1)) : done(); tick(count) })
 let wrapper: VueWrapper | undefined
-afterEach(() => { wrapper?.unmount(); wrapper = undefined; document.documentElement.style.colorScheme = ''; applyLanguage('en') })
-async function mountShell(width: number, height: number, dark = false) {
+afterEach(() => { wrapper?.unmount(); wrapper = undefined; document.documentElement.style.colorScheme = ''; applyLanguage('en'); localStorage.clear() })
+async function mountShell(width: number, height: number, dark = false, shown = view) {
   await page.viewport(width, height)
   document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
   applyLanguage('de')
-  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, decisions: 17 } })
+  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view: shown, live: false, now: NOW, decisions: 17 } })
   await flushPromises(); await frames()
   return wrapper
 }
@@ -33,7 +44,7 @@ const canvas = () => document.querySelector('[data-testid="automations-map"] can
 async function shot(name: string) { expect(document.documentElement.scrollWidth, `${name}: page overflow`).toBeLessThanOrEqual(innerWidth); await page.screenshot({ path: screenshotPath(`redesign-${name}.png`) }) }
 
 describe('Automatisierungen layout', () => {
-  it('sizes the canvas from its content and relays out a filtered group', async () => {
+  it('sizes the canvas from its content and places the info panel beside it', async () => {
     await mountShell(1440, 1000)
     const full = canvas().height
     expect(full).toBeGreaterThan(geometry.firstRow + geometry.cluster.h + geometry.single.h + geometry.collapsed.h)
@@ -43,12 +54,26 @@ describe('Automatisierungen layout', () => {
     expect(info.left).toBeGreaterThan(canvas().getBoundingClientRect().right)
     await shot('01-automatisierungen-karte')
     await shot('02-automatisierungen-karte-voll')
-    await button('iurio').trigger('click'); await flushPromises(); await frames()
-    expect(canvas().height).toBe(geometry.columnStart + 4 * geometry.columnStep + 60)
-    expect(canvas().height).toBeLessThan(full)
-    await shot('03-gruppe-iurio')
+  })
+
+  it('starts empty with tags, shows activated tags and relays out the map', async () => {
+    await mountShell(1440, 1000, false, tagged())
+    expect(document.querySelector('.automations-empty')!.getBoundingClientRect().height).toBeGreaterThan(80)
+    expect(canvas()).toBeNull()
+    await shot('03-tags-leer')
     await button('Alle').trigger('click'); await flushPromises(); await frames()
-    expect(canvas().height).toBe(full)
+    const full = canvas().height
+    await button('Keine').trigger('click'); await flushPromises()
+    await wrapper!.findAll('button').find(item => item.text().startsWith('#iurio'))!.trigger('click'); await flushPromises(); await frames()
+    // Only IURIO Pods remain, so Telegram is written and no longer read: four rows in the side columns.
+    expect(canvas().height).toBe(geometry.columnStart + 3 * geometry.columnStep + 60)
+    expect(canvas().height).toBeLessThan(full)
+    await shot('03-tag-iurio')
+    await wrapper!.findAll('button').find(item => item.text().startsWith('#linde'))!.trigger('click'); await flushPromises(); await frames()
+    await shot('03-tags-iurio-linde')
+    await document.querySelector<HTMLElement>('.layers-menu summary')!.click(); await flushPromises()
+    expect(document.querySelector('.layers-menu .layers')!.getBoundingClientRect().right).toBeLessThanOrEqual(1440)
+    await shot('03-ebenen-menue')
     await button('Liste').trigger('click'); await flushPromises()
     expect(document.querySelector('.automations-list')!.getBoundingClientRect().width).toBeGreaterThan(1000)
     await shot('04-liste')
@@ -94,7 +119,9 @@ describe('Automatisierungen layout', () => {
   })
 
   it('moves the info panel below the map under 1000 px and keeps the toolbar inside 390 px', async () => {
-    await mountShell(390, 844)
+    await mountShell(390, 844, false, tagged())
+    expect(document.querySelector('.automations-tags')!.getBoundingClientRect().right).toBeLessThanOrEqual(390)
+    await button('Alle').trigger('click'); await flushPromises(); await frames()
     const map = canvas().getBoundingClientRect(); const info = document.querySelector('.automation-info')!.getBoundingClientRect()
     expect(info.top).toBeGreaterThanOrEqual(map.bottom)
     expect(map.width).toBeLessThanOrEqual(390)

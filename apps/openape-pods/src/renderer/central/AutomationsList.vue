@@ -8,11 +8,11 @@ import type { Layers } from '../utils/automation-layout'
 import { tagsOf } from '../utils/tags'
 
 /** The same Pods as a table: group, kind, cadence, what they read and write, channels and the last run. */
-const props = defineProps<{ view: MapView, group: string, layers: Layers, now: number }>()
+const props = defineProps<{ view: MapView, layers: Layers, now: number }>()
 const emit = defineEmits<{ open: [id: string] }>()
 const rows = computed(() => {
   const model = buildModel(props.view)
-  const visible = visibleNodes(model, props.group, props.layers)
+  const visible = visibleNodes(model, props.layers)
   return model.nodes.filter(item => (item.kind === 'pod' || item.kind === 'collapsed') && visible.has(item.id)).map((item) => {
     const pod = props.view.pods.find(pod => pod.id === item.id)
     const automation = props.view.automations.find(automation => automation.id === item.id)
@@ -65,7 +65,7 @@ const rows = computed(() => {
         </tr>
         <tr v-if="!rows.length">
           <td colspan="8" class="muted">
-            {{ t('Nothing in this group.') }}
+            {{ t('Nothing matches the filter.') }}
           </td>
         </tr>
       </tbody>
