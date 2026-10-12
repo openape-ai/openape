@@ -1,7 +1,7 @@
 import { access, mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { cleanupAfterEach, launch, retainsCompleteUnit, seed } from './fixtures/crash'
+import { cleanupAfterEach, launch, openPod, retainsCompleteUnit, seed } from './fixtures/crash'
 import { PodDatabase, digest } from '../src/worker/storage/database'
 import { ResourceRegistry } from '../src/worker/resources/registry'
 import { installExample } from '../src/worker/runs/examples'
@@ -10,7 +10,7 @@ import { podDirectories } from '../src/runtime/environment'
 // Termination cases are split across two files so they run on separate workers.
 cleanupAfterEach()
 describe('checkpoint recovery in Electron', () => {
-  it.each(['worker', 'app'] as const)('retains a complete unit through %s termination and retries without duplication', target => retainsCompleteUnit(target))
+  it.each(['worker', 'app'] as const)('retains a complete unit through %s termination and retries without duplication', target => retainsCompleteUnit(target), 120000)
 })
 
 it('serves shared-data administration through the actual Electron preload, main and worker route', async () => {
@@ -19,7 +19,8 @@ it('serves shared-data administration through the actual Electron preload, main 
   expect(await page.evaluate(() => window.pods.domain({ type: 'list' }))).toMatchObject({ namespaces: [], questions: [], unknownEffects: [] })
   await expect(page.evaluate(() => window.pods.domain({ type: 'list', owner: 'forged' } as never))).rejects.toThrow('Unsupported data fields')
   expect((await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
-  await page.getByText('Checkpoint recovery', { exact: true }).first().waitFor()
+  await openPod(page, 'Checkpoint recovery')
+  await page.getByRole('heading', { name: 'Checkpoint recovery' }).waitFor()
   await mkdir('.artifacts', { recursive: true })
   await page.screenshot({ path: '.artifacts/domain-route.png', fullPage: true })
 })
@@ -79,7 +80,9 @@ it('settles claimed work of a killed worker through a real desktop restart and c
   // The interrupted claim is never resumed by the dead run; once its processes are proven stopped it waits for a retry.
   await expect.poll(() => inspect(database => database.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count), { timeout: 30000 }).toBe(0)
   await expect.poll(() => inspect(database => database.db.prepare('SELECT state FROM work_items').get()!.state), { timeout: 30000 }).not.toBe('claimed')
-  await reopened.evaluate(() => new Promise(resolve => setTimeout(resolve, 1000)))
+  expect(inspect(database => database.db.prepare('SELECT state FROM work_items').get()!.state)).toBe('retry_wait')
+  // Simulates the elapsed retry backoff instead of waiting a minute.
+  inspect(database => database.db.prepare('UPDATE work_items SET ready_at=? WHERE state=\'retry_wait\'').run(Date.now()))
   await expect.poll(async () => {
     try { await reopened.evaluate(podId => window.pods.runs({ type: 'start', podId }), consumer); return true }
     catch { return false }
@@ -89,4 +92,4 @@ it('settles claimed work of a killed worker through a real desktop restart and c
   await mkdir('.artifacts', { recursive: true })
   await reopened.screenshot({ path: '.artifacts/work-recovery-native.png', fullPage: true })
   await reopenedApp.close()
-})
+}, 180000)

@@ -36,11 +36,12 @@ network table. New tables:
 | `owner_questions` | Durable owner questions bound to object and input fingerprint; answers become `owner`-written entries |
 | `action_approvals`, `approval_batches` | Object/action approvals decided at the IdP (replaces approve routes) |
 | `effect_attempts`, `effect_receipts` | External action identity, intent, provider receipt, confirmed or unknown outcome (generalized network effect ledger) |
-| `artifacts`, `artifact_references` | Immutable files referenced by namespace entries |
 | `storage_receipts` | Conversion, backup and restore receipts |
 | `legacy_records` | Generic inert history: every row of every retired network table as JSON |
+| `local_only_pods` | Former network members: published as placeholders, refused for browser commands |
 
-Renamed: `network_owners` → `owners`, `network_scheduler_state` → `scheduler_state`.
+Renamed: `network_owners` → `owners`. `network_scheduler_state` is retired with the other
+network tables.
 Dropped columns: `pod_grants.network_id/network_revision`, `pod_sandbox(_deny).network_revision`.
 
 Namespace paths are lowercase segments (`[a-z0-9][a-z0-9._@+-]*`, at most 8 segments,
@@ -52,19 +53,19 @@ prefix owns it. Listing matches whole segments only, so `mail/class` never reads
 ## Script API
 
 ```js
-await context.data.get('delta-mind/mail/messages/AAMk…')        // null or { key, revision, value, author, updatedAt, result? }
+await context.data.get('delta-mind/mail/messages/AAMk…')       // null or { key, revision, value, author, updatedAt, result? }
 await context.data.set(key, value, { expectedRevision: 0 })     // writer only; never in a results namespace
 await context.data.delete(key, { expectedRevision })
 await context.data.list('delta-mind/mail/messages', { cursor, limit })
 await context.work.find({ operation, limit })                   // ready work, oldest first, bounded
 await context.work.claim({ key, expectedInputFingerprint })     // one winner; returns claimToken and the input entry
-await context.work.complete({ claimToken, result, artifacts })  // result entry + completion marker, one transaction
+await context.work.complete({ claimToken, result })             // result entry + completion marker, one transaction
 await context.work.defer({ claimToken, reason, until })         // waiting for a prerequisite; no model call
 await context.work.fail({ claimToken, reason, retryable })
 await context.decisions.ask({ namespace, key, fingerprint, title, body, options, data })
-await context.approvals.request({ action: 'mail.archive', object, title, payload })
+await context.approvals.request({ action: 'mail.archive', object, payload })  // title derived from the payload
 await context.approvals.get(id)
-await context.mail.archive({ application, mailbox, approval })  // the authorized mail effect service
+await context.mail.archiveApproved({ application, mailbox, approval })  // the authorized mail effect service
 ```
 
 A script declares the operations it serves:
@@ -88,8 +89,10 @@ changes do not invalidate content analysis. Work states: `ready`, `claimed`, `co
   without creating duplicates. A changed input supersedes older open items.
 - A claim holds while its run holds its run lease; `lease` increments per claim and fences
   late completions. Completion re-reads the input entry and rejects a stale fingerprint.
-- A finished run releases its unfinished claims to `retry_wait` with bounded backoff, or to
-  `unknown` when the run left an unresolved external effect. Restart never replays an
+- A finished run releases its unfinished claims to `retry_wait` with bounded backoff, to
+  `unknown` when the run left an unresolved external effect, or to `blocked` for owner
+  review when the run completed an application write. An interrupted run keeps its claims
+  until automatic recovery has proven its processes stopped. Restart never replays an
   unknown effect.
 - The scheduler skips a scheduled run of a Pod that declares work when nothing is ready,
   due or awaiting approval; sources without `work` run on their schedule.
@@ -99,7 +102,7 @@ changes do not invalidate content analysis. Work states: `ready`, `claimed`, `co
 `context.approvals.request` records one item per stable action object and payload hash.
 Items of one Pod collect into one open IdP batch (two-minute quiet window, at most 100
 grants, seven days), using the existing grant authority and audience `pods-graph-gate`.
-Polling happens inside the Pod's own runs. `context.mail.archive` verifies the approval at
+Polling happens inside the Pod's own runs. `context.mail.archiveApproved` verifies the approval at
 the IdP, re-reads the message, compares the approved version, sender and subject, moves it
 once and records intent and receipt in `effect_attempts`; an unknown outcome holds that mail.
 Denied, expired and superseded approvals stay final.
@@ -165,7 +168,26 @@ private checkpoint).
 Refuses before mutation when any invocation is running, stopping, interrupted or unknown,
 any delivery is pending, claimed, retrying, blocked or unknown, a choice is undecided, a gate
 task is open or uncertain, an effect attempt is intent or unknown, a join is pending, or
-network data/artifacts or staging rows exist. Otherwise it copies every legacy row to
+network data/artifacts or staging rows exist, or a network package import is in progress.
+Running `codex-network` MCP actions are marked interrupted. Otherwise it copies every legacy row to
 `legacy_records`, maps effect attempts/receipts and member checkpoints, verifies counts and
-SHA-256 per table, drops the network tables and writes a `conversion` receipt. Schema 46
+SHA-256 per table, drops the network tables and writes a `conversion` receipt. Network tags become the
+members' own tags (within the tag limit), network denylists are merged into the members'
+own denylists (more than 32 entries blocks the conversion), and every former member is
+recorded in `local_only_pods`. Schema 46
 upgrades through 47; schema 45 and older are refused.
+
+## Implementation notes (M1–M5)
+
+Recorded during implementation; none changes the plan's scope.
+
+- Files: `data_artifacts` and the `artifacts` field of results were dropped before
+  release. Large files stay in assigned folders and records name their path and digest;
+  no Pod needed managed artifacts.
+- Owner administration of shared data is one MCP action, `domain` (list, define,
+  setReaders, assignWriter, entries, set, delete, work, reprocess, release, answer,
+  resolveApproval, resolveEffect). Writes are journaled under their `requestId`.
+- Rollout deviates from R1/R2: the relay and the desktop are switched in one window while
+  the desktop is quit, because the relay contract changes together with the retired
+  network reads.
+

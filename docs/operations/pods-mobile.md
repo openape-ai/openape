@@ -18,7 +18,7 @@ Run `pnpm deploy:image pods-relay --dry-run`, then `pnpm deploy:image pods-relay
 
 The desktop registers once per profile through the central workspace (Register this desktop): `session/begin`, the owner's browser login through `/mobile-auth/start` and `/mobile-auth/callback`, then `session/exchange`. Its signed runtime session (`session/refresh`, request proofs on every call) carries `/api/runtime/v1/workspace`, `/api/runtime/v1/inbox` and `/api/runtime/v1/inbox/decisions`. Only `runtime` registrations can authenticate; registrations of the removed native app remain in the relay database without access.
 
-Before installing a desktop update, compare its workspace format, network tables and schema with the deployed relay. Deploy and verify the compatible relay first; then back up the stopped desktop profile and install the signed app. A healthy relay alone does not prove compatibility with the desktop publication contract.
+Before installing a desktop update, compare its workspace format and schema with the deployed relay. Deploy and verify the compatible relay first; then back up the stopped desktop profile and install the signed app. A healthy relay alone does not prove compatibility with the desktop publication contract.
 
 A rotated refresh token replay revokes its session family, not a still-valid runtime registration. Use Register this desktop and the normal owner browser login to recover the same runtime ID, keys and generation. Reauthentication keeps local adoption receipts, publication journals and effect records; it does not replay uncertain work. Previous revoked sessions stay revoked.
 

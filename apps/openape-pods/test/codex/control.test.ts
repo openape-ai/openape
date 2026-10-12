@@ -32,13 +32,17 @@ function fixture() {
 }
 
 it('administers shared data as the owner: namespaces, owner records, questions and uncertain effects', async () => {
-  const { store, send, pod } = fixture()
+  const { store, send, pod, codex } = fixture()
   const reader = store.createPod({ name: 'Reader' })
   const domain = (command: Record<string, unknown>) => send({ action: 'domain', command })
   await domain({ type: 'define', path: 'synthetic/records', writer: 'owner', mode: 'records', readers: [reader.id] })
   await domain({ type: 'define', path: 'synthetic/results', writer: pod.id, mode: 'results', readers: [] })
   await expect(domain({ type: 'define', path: 'synthetic/records/inner', writer: 'owner', mode: 'records', readers: [] })).rejects.toThrow('may not contain or lie inside another namespace')
-  await expect(domain({ type: 'set', key: 'synthetic/records/sender-a', value: { rule: 'newsletter' }, revision: 0 })).resolves.toEqual({ revision: 1 })
+  const write = parseCodexRequest({ id: randomUUID(), action: { action: 'domain', command: { type: 'set', key: 'synthetic/records/sender-a', value: { rule: 'newsletter' }, revision: 0 } } })
+  await expect(codex.execute(write, new AbortController().signal)).resolves.toEqual({ revision: 1 })
+  // A lost response is retried with the same requestId and returns the recorded result instead of writing again.
+  await expect(codex.execute(write, new AbortController().signal)).resolves.toEqual({ revision: 1 })
+  await expect(codex.execute({ ...write, action: { action: 'domain', command: { type: 'set', key: 'synthetic/records/sender-a', value: {}, revision: 1 } } }, new AbortController().signal)).rejects.toThrow('different command')
   await expect(domain({ type: 'set', key: 'synthetic/results/x', value: {}, revision: 0 })).rejects.toThrow()
   expect(await domain({ type: 'entries', path: 'synthetic/records' })).toMatchObject({ entries: [{ key: 'synthetic/records/sender-a', value: { rule: 'newsletter' } }] })
   // An uncertain effect is settled by the owner's observation; nothing is executed again.
