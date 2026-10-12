@@ -58,6 +58,7 @@ function profile47(root: string, change = '', version = 47) {
   run('INSERT INTO item_tags VALUES(?,\'["mail"]\',1,1)', ids.network)
   run('INSERT INTO item_tags VALUES(?,\'["delta-mind"]\',2,1)', ids.member)
   run('INSERT INTO pod_sandbox_deny VALUES(?,?,1,\'["~/.ssh"]\')', ids.member, `network:${ids.network}`)
+  run('INSERT INTO pod_sandbox VALUES(?,?,1,\'owner\')', ids.member, `network:${ids.network}`)
   run('INSERT INTO pod_grants VALUES(?,?,?,?,\'pods-mail\',\'[]\',\'archive\',\'always\',\'revoked\',?,1,0,1,1)', ids.grant, ids.member, owner.issuer, owner.subject, ids.network)
   run('INSERT INTO pod_grants VALUES(?,?,?,?,\'pod-runtime\',\'[]\',\'run\',\'always\',\'approved\',NULL,NULL,1,1,1)', ids.ownGrant, ids.standalone, owner.issuer, owner.subject)
   database.exec(`${change}COMMIT; PRAGMA user_version=${version};`)
@@ -97,6 +98,9 @@ it('converts the network runtime into standalone Pods, keeping history, effects,
   expect(store.db.prepare('SELECT outcome FROM effect_receipts ORDER BY sequence').all()).toEqual([{ outcome: 'intent' }, { outcome: 'confirmed_applied' }])
   // The member continues from its network checkpoint.
   expect(store.db.prepare('SELECT revision,body FROM checkpoints WHERE pod_id=?').get(ids.member)).toEqual({ revision: 3, body: '{"lastDeliveredDate":"2026-10-12"}' })
+  expect(store.db.prepare('SELECT json_extract(body,\'$.body\') AS body FROM legacy_records WHERE source=\'checkpoints\'').all()).toEqual([{ body: '{"old":true}' }])
+  // The network's owner level gave the member owner reach; it keeps that level as its own.
+  expect(store.db.prepare('SELECT level FROM pod_sandbox WHERE pod_id=?').all(ids.member)).toEqual([{ level: 'owner' }])
   // Inherited tags become own tags; the network's denylist keeps restricting the former member.
   expect(store.db.prepare('SELECT tags FROM item_tags WHERE id=?').get(ids.member)).toEqual({ tags: '["delta-mind","mail"]' })
   expect(store.db.prepare('SELECT paths FROM pod_sandbox_deny WHERE pod_id=?').get(ids.member)).toEqual({ paths: '["~/.ssh"]' })
@@ -116,6 +120,7 @@ it.each([
   ['an open network delivery', 'INSERT INTO network_deliveries(id,network_id,event_id,subscription_id,case_id,case_revision,state,ready_at,accepted_at) VALUES(\'d\',\'n\',\'e\',\'s\',\'c\',1,\'pending\',1,1);', 'open network deliveries'],
   ['an archive move with an unknown outcome', 'UPDATE network_effect_attempts SET state=\'unknown\';', 'archive moves with an unknown outcome'],
   ['an undecided owner choice', 'INSERT INTO network_choices VALUES(\'n\',1,\'e\',\'g\',NULL,NULL,NULL);', 'undecided owner choices'],
+  ['a scheduled retry of a failed invocation', 'INSERT INTO network_invocation_controls(run_id,retry_at) SELECT run_id,1 FROM network_invocations;', 'scheduled retries'],
 ])('refuses the conversion while the network runtime holds %s and changes nothing', (_name, change, reason) => {
   const root = directory(); profile47(root, change)
   let failure: unknown

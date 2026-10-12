@@ -15,7 +15,7 @@ interface Batch { id: string, pod_id: string, title: string, expires_at: number,
  * Collection and batching follow the former approve routes (issues 1449, 1458): requests collect until two quiet
  * minutes or ten minutes passed, up to 30 per IdP request, and join one open IdP batch for seven days and 100 grants.
  */
-export const approvalLimits = { items: 30, members: 100, expiryMs: 7 * 24 * 60 * 60 * 1000, joinMarginMs: 60 * 60 * 1000, quietMs: 2 * 60 * 1000, maxMs: 10 * 60 * 1000, fastPolls: 120, slowPollMs: 60_000, payloadBytes: 16 * 1024 } as const
+export const approvalLimits = { items: 30, members: 100, expiryMs: 7 * 24 * 60 * 60 * 1000, joinMarginMs: 2 * 24 * 60 * 60 * 1000, perPod: 500, quietMs: 2 * 60 * 1000, maxMs: 10 * 60 * 1000, fastPolls: 120, slowPollMs: 60_000, payloadBytes: 16 * 1024 } as const
 const batchTitles: Record<ApprovalAction, string> = { 'mail.archive': 'Archive newsletters' }
 
 function row(value: unknown): Row { return value as Row }
@@ -66,6 +66,7 @@ export class Approvals {
       if (existing) return this.view(row(existing))
       const now = Date.now()
       this.store.db.prepare(`UPDATE action_approvals SET state='withdrawn',reason='The object changed; this approval does not cover the new content',updated_at=? WHERE pod_id=? AND action=? AND object=? AND state IN ('collecting','requested','approved')`).run(now, principal.podId, input.action as string, input.object as string)
+      if (Number(this.store.db.prepare('SELECT count(*) AS count FROM action_approvals WHERE pod_id=? AND state IN (\'collecting\',\'requested\',\'approved\',\'unknown\')').get(principal.podId)!.count) >= approvalLimits.perPod) throw new Error('Too many open approvals; wait until the owner decided some')
       const id = randomUUID()
       this.store.db.prepare('INSERT INTO action_approvals(id,pod_id,action,object,payload,payload_hash,title,authority,state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,\'{}\',\'collecting\',?,?)').run(id, principal.podId, input.action as string, input.object as string, canonicalJson(payload), hash, title, now, now)
       return this.view(row(this.store.db.prepare('SELECT * FROM action_approvals WHERE id=?').get(id)))
@@ -80,7 +81,7 @@ export class Approvals {
 
   /** Whether a run of the Pod has approval work: a collection ready to request or a request to read. */
   due(podId: string, now = Date.now()): boolean {
-    if (this.store.db.prepare('SELECT 1 FROM action_approvals WHERE pod_id=? AND (state=\'requested\' OR (state=\'approved\' AND batch_id IS NOT NULL)) LIMIT 1').get(podId)) return true
+    if (this.store.db.prepare('SELECT 1 FROM action_approvals WHERE pod_id=? AND state=\'requested\' LIMIT 1').get(podId)) return true
     const collecting = this.store.db.prepare('SELECT count(*) AS count,min(created_at) AS first,max(created_at) AS last FROM action_approvals WHERE pod_id=? AND state=\'collecting\'').get(podId)!
     return Number(collecting.count) > 0 && this.ready(Number(collecting.count), Number(collecting.first), Number(collecting.last), now)
   }
@@ -176,7 +177,10 @@ export class Approvals {
     const item = row(this.store.db.prepare('SELECT * FROM action_approvals WHERE id=? AND pod_id=?').get(id, podId))
     if (!item || item.state !== 'approved' || !item.batch_id || !item.grant_id) throw new Error(`The approval is ${item?.state ?? 'missing'}; nothing may happen without an approved request`)
     const batch = this.store.db.prepare('SELECT * FROM approval_batches WHERE id=?').get(item.batch_id) as unknown as Batch
-    if (batch.expires_at <= Date.now()) throw new Error('The approval expired before it was used')
+    if (batch.expires_at <= Date.now()) {
+      this.store.db.prepare('UPDATE action_approvals SET state=\'expired\',reason=\'The approval expired before it was used\',updated_at=? WHERE id=? AND state=\'approved\'').run(Date.now(), id)
+      throw new Error('The approval expired before it was used')
+    }
     const body = { manifest: this.manifest(batch, [item]), grants: [{ key: item.id, id: item.grant_id }] }
     try {
       if (await service({ operation: 'consume', ...body }, signal) !== true) throw new Error('The approval was not confirmed by the IdP')

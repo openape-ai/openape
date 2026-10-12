@@ -18,6 +18,7 @@ export type DomainCommand =
   | { type: 'delete', key: string, revision: number }
   | { type: 'work', operation: string, states?: WorkState[] }
   | { type: 'reprocess', operation: string }
+  | { type: 'selectRule', operation: string, ruleVersion: number }
   | { type: 'release', key: string, evidence: string }
   | { type: 'answer', questionId: string, option: string }
   | { type: 'resolveApproval', id: string, decision: 'renew' | 'withdraw', evidence: string }
@@ -49,6 +50,7 @@ const shapes: Record<DomainCommand['type'], [string[], string[]]> = {
   delete: [['key', 'revision'], []],
   work: [['operation'], ['states']],
   reprocess: [['operation'], []],
+  selectRule: [['operation', 'ruleVersion'], []],
   release: [['key', 'evidence'], []],
   answer: [['questionId', 'option'], []],
   resolveApproval: [['id', 'decision', 'evidence'], []],
@@ -67,7 +69,7 @@ export function parseDomainCommand(input: unknown): DomainCommand {
   for (const key of ['path', 'writer', 'key', 'operation', 'questionId', 'option', 'id']) {
     if (key in value && !text(value[key], 600)) throw new Error(`Invalid domain data ${key}`)
   }
-  for (const key of ['revision', 'attempt']) {
+  for (const key of ['revision', 'attempt', 'ruleVersion']) {
     if (key in value && !revision(value[key])) throw new Error(`Invalid domain data ${key}`)
   }
   if ('evidence' in value && !text(value.evidence, 2000)) throw new Error('Reconciliation needs the owner\'s observation')
@@ -88,7 +90,7 @@ export const domainHelp = {
     '{type:define,path,writer:<podId>|owner,mode:records|results,readers:[podId],schema?:{required,types}} — a namespace never contains or lies inside another; results are written only by a Pod',
     '{type:setReaders,path,readers,revision} | {type:assignWriter,path,writer,revision} — a writer change fences the former writer',
     '{type:entries,path,cursor?} reads one page; {type:set,key:<namespace>/<record>,value,revision} and {type:delete,key,revision} write owner records (owner namespaces only)',
-    '{type:work,operation,states?} lists work items; {type:reprocess,operation} reevaluates every object once more; {type:release,key,evidence} releases blocked or unknown work after the owner reconciled it',
+    '{type:work,operation,states?} lists work items; {type:reprocess,operation} reevaluates every object once more; {type:selectRule,operation,ruleVersion} selects one of the rule versions the script declares, and affected objects become work again; {type:release,key,evidence} releases blocked or unknown work after the owner reconciled it',
     '{type:answer,questionId,option} answers an owner question',
     '{type:resolveApproval,id,decision:renew|withdraw,evidence} settles an uncertain approval; it never approves anything',
     '{type:resolveEffect,actionKey,attempt,applied,evidence} records what the owner observed about an uncertain external effect; it never executes the effect again',

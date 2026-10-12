@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { recordKey } from '../../contracts/domain-data'
+import { ownerWriter, recordKey } from '../../contracts/domain-data'
 import { canonicalJson } from '../../contracts/canonical-json'
 import { workLimits } from '../../contracts/work'
 import type { WorkDeclaration, WorkState } from '../../contracts/work'
@@ -49,7 +49,7 @@ export class WorkLedger {
       this.store.db.prepare('INSERT INTO work_operations(operation,input,output,fields,filter,rule_version,updated_at) VALUES(?,?,?,?,?,?,?)').run(name, declaration.input, declaration.output, JSON.stringify(declaration.fields), canonicalJson(declaration.filter), declaration.ruleVersions.at(-1)!, Date.now())
       operation = this.operation(name)
     }
-    if (operation.input !== declaration.input || operation.output !== declaration.output || operation.fields !== JSON.stringify(declaration.fields) || operation.filter !== canonicalJson(declaration.filter)) throw new Error(`${name} differs from its selected contract; select the new contract explicitly`)
+    if (operation.input !== declaration.input || operation.output !== declaration.output || operation.fields !== JSON.stringify(declaration.fields) || operation.filter !== canonicalJson(declaration.filter)) throw new Error(`${name} differs from its selected contract; select the new contract with the domain command selectRule`)
     if (!declaration.ruleVersions.includes(operation.rule_version)) throw new Error(`${name} uses rule version ${operation.rule_version}, which the active script does not implement`)
     const input = this.data.namespace(operation.input); const output = this.data.namespace(operation.output)
     if (input.writer !== podId && !input.readers.includes(podId)) throw new Error(`This Pod may not read ${operation.input}`)
@@ -158,8 +158,9 @@ export class WorkLedger {
       const row = this.claimed(principal, input.claimToken)
       const { operation } = this.serving(principal.podId, row.operation)
       const entry = this.data.get(principal, `${operation.input}/${row.object}`)
-      if (!entry || this.fingerprint(operation, entry.value) !== row.fingerprint) {
-        this.store.db.prepare(`UPDATE work_items SET state='superseded',claim_token=NULL,reason='The input changed while the work ran; the stale result was discarded',updated_at=? WHERE key=?`).run(Date.now(), row.key)
+      // A changed input, rule version or reprocess generation makes the running result stale.
+      if (!entry || this.fingerprint(operation, entry.value) !== row.fingerprint || operation.rule_version !== row.rule_version || operation.generation !== row.generation) {
+        this.store.db.prepare(`UPDATE work_items SET state='superseded',claim_token=NULL,reason='The input or rule changed while the work ran; the stale result was discarded',updated_at=? WHERE key=?`).run(Date.now(), row.key)
         throw new StaleWork('Work input changed while it ran; the result was not stored')
       }
       const written = this.data.writeResult(principal, operation.output, recordKey(row.object), input.result, { operation: operation.operation, ruleVersion: row.rule_version, input: { key: entry.key, revision: entry.revision, fingerprint: row.fingerprint }, workKey: row.key })
@@ -230,10 +231,20 @@ export class WorkLedger {
     }))
   }
 
-  /** Owner command: selects the rule version an operation uses; affected objects become work again. */
+  /**
+   * Owner command: selects the contract and rule version the serving Pod's active script declares for an operation;
+   * objects whose result depends on the change become work again.
+   */
   selectRule(name: string, ruleVersion: number): void {
-    if (!Number.isSafeInteger(ruleVersion) || ruleVersion < 1) throw new Error('Invalid rule version')
-    this.store.db.prepare('UPDATE work_operations SET rule_version=?,cursor=0,updated_at=? WHERE operation=?').run(ruleVersion, Date.now(), this.operation(name).operation)
+    const operation = this.operation(name)
+    const writer = this.data.namespace(operation.output).writer
+    const declaration = writer === ownerWriter ? undefined : this.declarations(writer).find(item => item.operation === name)
+    if (!declaration) throw new Error(`No active script serves ${name}`)
+    if (!declaration.ruleVersions.includes(ruleVersion)) throw new Error(`The active script of ${name} does not implement rule version ${ruleVersion}`)
+    this.data.namespace(declaration.input)
+    if (this.data.namespace(declaration.output).writer !== writer) throw new Error(`The serving Pod is not the writer of ${declaration.output}`)
+    this.store.db.prepare('UPDATE work_operations SET input=?,output=?,fields=?,filter=?,rule_version=?,cursor=0,updated_at=? WHERE operation=?')
+      .run(declaration.input, declaration.output, JSON.stringify(declaration.fields), canonicalJson(declaration.filter), ruleVersion, Date.now(), name)
   }
 
   /** Owner command: reprocesses every object of an operation once more; earlier external actions keep their own identities. */

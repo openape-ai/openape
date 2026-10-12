@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, rename, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, realpath, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { PodDatabase } from '../storage/database'
 import { assertDataIdle, createBackup, parseBackupManifest } from './backup'
@@ -28,12 +28,18 @@ export async function automaticBackupDue(root: string, now = Date.now()): Promis
   return status.lastSuccessAt === null || now - status.lastSuccessAt >= automaticBackups.intervalMs
 }
 
-/** Verified generations, newest first; an unreadable folder never counts as one and is never deleted here. */
-async function generations(directory: string): Promise<{ path: string, createdAt: string }[]> {
+/**
+ * Generations of this profile, newest first. Backups of other profiles in the same folder (for example the original of a
+ * restored profile) are never counted or deleted here, nor is an unreadable folder.
+ */
+async function generations(directory: string, sourceRoot: string): Promise<{ path: string, createdAt: string }[]> {
   const result: { path: string, createdAt: string }[] = []
   for (const name of await readdir(directory)) {
     if (!name.startsWith('OpenApe-Pods-')) continue
-    try { result.push({ path: join(directory, name), createdAt: parseBackupManifest(JSON.parse(await readFile(join(directory, name, 'backup.json'), 'utf8'))).createdAt }) }
+    try {
+      const manifest = parseBackupManifest(JSON.parse(await readFile(join(directory, name, 'backup.json'), 'utf8')))
+      if (manifest.sourceRoot === sourceRoot) result.push({ path: join(directory, name), createdAt: manifest.createdAt })
+    }
     catch { continue }
   }
   return result.sort((left, right) => right.createdAt.localeCompare(left.createdAt))
@@ -48,7 +54,7 @@ export async function runAutomaticBackup(store: PodDatabase, directory: string, 
     await mkdir(directory, { recursive: true, mode: 0o700 })
     const path = await createBackup(store, directory)
     await writeStatus(store.root, { lastSuccessAt: now, lastAttemptAt: now, lastError: null, path })
-    for (const old of (await generations(directory)).slice(automaticBackups.keep)) await removePackageTree(old.path)
+    for (const old of (await generations(directory, await realpath(store.root))).slice(automaticBackups.keep)) await removePackageTree(old.path)
     return path
   }
   catch (error) {

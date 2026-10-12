@@ -190,4 +190,21 @@ Recorded during implementation; none changes the plan's scope.
 - Rollout deviates from R1/R2: the relay and the desktop are switched in one window while
   the desktop is quit, because the relay contract changes together with the retired
   network reads.
+- Review follow-ups (October 12): approval exchanges run after the run authority exists and
+  finish before the script starts; owner recovery settles the claims of an inspected run;
+  `selectRule` selects a changed work contract or rule version; a result is discarded when
+  the input, rule version or generation changed during the run; an answer slot belongs to the
+  Pod that asked; an emptied database file in a used profile counts as missing; blockers are
+  checked before the pre-upgrade copy, a failed conversion removes its redundant copy, and
+  automatic backup rotation only counts generations of the same profile.
+- Known limits, accepted for this release: an approval that was used up at the IdP while the
+  move was then refused (the message changed) is final, and the result says the message was not
+  archived; a result skipped by discovery while its upstream input was momentarily different is
+  not rediscovered if that input later returns to the exact earlier content; a storage failure
+  after startup ends the worker and shows recovery after quitting and reopening Pods; schema-47
+  backups with open network work cannot be restored by this version (use the paired rollback
+  profile of the previous release).
+- The owner MCP session may answer owner questions and decide object approvals, as decided on
+  October 10, 2026 for grants; the phone inbox may decide questions, held work and uncertain
+  actions of local-only Pods, which it reaches only as the signed-in owner.
 

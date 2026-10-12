@@ -297,13 +297,20 @@ it('purges table rows that an older server stored and keeps their hashes', () =>
   expect(reopened.db.prepare('SELECT hash,value FROM parts WHERE key=\'table/resources/0\'').get()).toEqual({ hash: 'a'.repeat(64), value: 'null' })
 })
 
-it('refuses browser changes to a local-only Pod and keeps the runtime commands of the desktop', () => {
+it('refuses browser changes to a local-only Pod but still creates new Pods', () => {
   const { store, actor, state, lease } = setup()
   const local = { ...state, pods: state.pods.map((pod, index) => index ? pod : { ...pod, localOnly: true as const }) }
   publishV2(store, actor, lease, {}, local, 1)
   const podId = state.pods[0]!.id
   expect(() => store.submit(actor.owner, actor.id, 2, { channel: 'runs', body: { type: 'start', podId } }, randomUUID())).toThrow('local_pod_requires_desktop')
-  expect(store.submit(actor.owner, actor.id, 2, { channel: 'runs', body: { type: 'start', podId } }, randomUUID(), true)).toMatchObject({ state: 'accepted' })
+  // Creating a Pod touches no local-only Pod.
+  expect(store.submit(actor.owner, actor.id, 2, { channel: 'workspace', body: { type: 'create', name: 'New' } }, randomUUID())).toMatchObject({ state: 'accepted' })
+})
+
+it('keeps the runtime commands of the desktop for a local-only Pod', () => {
+  const { store, actor, state, lease } = setup()
+  publishV2(store, actor, lease, {}, { ...state, pods: state.pods.map((pod, index) => index ? pod : { ...pod, localOnly: true as const }) }, 1)
+  expect(store.submit(actor.owner, actor.id, 2, { channel: 'runs', body: { type: 'start', podId: state.pods[0]!.id } }, randomUUID(), true)).toMatchObject({ state: 'accepted' })
 })
 
 it('serves the published map read model through view=map without naming a Pod', () => {

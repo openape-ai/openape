@@ -1,4 +1,4 @@
-import { accessSync, constants, existsSync, lstatSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs'
+import { accessSync, constants, existsSync, lstatSync, readdirSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { StorageFailure, StorageReason } from '../../contracts/storage'
 import { PodDatabase } from './database'
@@ -6,7 +6,7 @@ import { StorageError } from './errors'
 
 export { StorageError }
 
-const sqliteReasons: Record<number, StorageReason> = { 3: 'permission', 5: 'busy', 6: 'busy', 8: 'permission', 10: 'io', 11: 'corrupt', 13: 'disk-full', 14: 'io', 23: 'permission', 26: 'corrupt' }
+const sqliteReasons: Record<number, StorageReason> = { 19: 'invalid-data', 3: 'permission', 5: 'busy', 6: 'busy', 8: 'permission', 10: 'io', 11: 'corrupt', 13: 'disk-full', 14: 'io', 23: 'permission', 26: 'corrupt' }
 const systemReasons: Record<string, StorageReason> = { EACCES: 'permission', EPERM: 'permission', EROFS: 'permission', ENOSPC: 'disk-full', EDQUOT: 'disk-full', EIO: 'io' }
 const messageReasons: [RegExp, StorageReason][] = [
   [/needs a newer application/, 'schema-newer'],
@@ -47,7 +47,8 @@ function sleep(ms: number): void { Atomics.wait(new Int32Array(new SharedArrayBu
  */
 export function openStorage(root: string, attempts = 3): PodDatabase {
   const path = join(root, 'control.sqlite')
-  if (!existsSync(path) && hasProfileContent(root)) throw new StorageError('missing', 'The database of this profile is missing while its other data remains. Pods does not start an empty database over it; restore a backup or put the database back.')
+  // An emptied file (a truncated copy, a full disk) is as missing as a deleted one.
+  if ((!existsSync(path) || statSync(path).size === 0) && hasProfileContent(root)) throw new StorageError('missing', 'The database of this profile is missing or empty while its other data remains. Pods does not start an empty database over it; restore a backup or put the database back.')
   const auxiliary = ['-wal', '-shm'].filter(suffix => !existsSync(`${path}${suffix}`))
   try { return open(root, attempts) }
   catch (error) {

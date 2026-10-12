@@ -166,6 +166,14 @@ export function commandPodIds(command: CentralCommand, snapshot: { workspace: { 
   if (command.channel === 'workspace' && body.type === 'update') return [centralId(body.id)]
   // Tags label; they never change what a Pod may do.
   if (command.channel === 'workspace' && body.type === 'tag') return []
+  // Reading the workspace and creating a Pod touch no existing Pod.
+  if (command.channel === 'workspace' && ['list', 'map', 'create'].includes(body.type as string)) return []
+  // An import creates new Pods; an export names its source Pod, and its later steps refer to that reviewed export.
+  if (command.channel === 'sharing') {
+    if (body.scope === 'import') return []
+    const selection = body.selection as { id?: unknown } | undefined
+    return typeof selection?.id === 'string' ? [centralId(selection.id)] : []
+  }
   return snapshot.workspace.pods.map(pod => pod.id)
 }
 

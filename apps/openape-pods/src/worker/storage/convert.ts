@@ -59,6 +59,9 @@ const blockers: [string, string][] = [
   ['staged network data', 'SELECT (SELECT count(*) FROM network_data_staging)+(SELECT count(*) FROM network_artifact_staging)'],
   ['network collection records or artifacts', 'SELECT (SELECT count(*) FROM data_records)+(SELECT count(*) FROM artifacts)'],
   ['network package imports in progress', 'SELECT count(*) FROM portable_imports WHERE (state IN (\'staged\',\'committed\') AND json_array_length(manifest,\'$.compositions\')>0) OR (state=\'completed\' AND archive_hash IS NOT NULL)'],
+  ['held or uncertain approval items', 'SELECT count(*) FROM network_gate_items WHERE outcome IN (\'held\',\'unknown\')'],
+  ['running approval steps', 'SELECT count(*) FROM network_gate_task_attempts WHERE state IN (\'running\',\'interrupted\')'],
+  ['scheduled retries or reviews of failed invocations', 'SELECT count(*) FROM network_invocation_controls WHERE (retry_at IS NOT NULL AND retry_consumed_at IS NULL) OR review_required=1'],
   ['active network-scoped grants', 'SELECT count(*) FROM pod_grants WHERE network_id IS NOT NULL AND state IN (\'pending\',\'approved\')'],
 ]
 
@@ -74,10 +77,15 @@ function archive(database: DatabaseSync, source: string, table: string, where = 
   return { rows: original.length, digest }
 }
 
-export function convert47(database: DatabaseSync): ConversionReceipt {
-  assertKnownSchema(database, 47)
+/** Read-only: refuses a database whose legacy network work cannot be converted safely, before anything is copied. */
+export function assertNoOpenNetworkWork(database: DatabaseSync): void {
   const open = blockers.map(([label, sql]) => [label, count(database, sql)] as const).filter(([, total]) => total > 0)
   if (open.length) throw new StorageError('conversion-blocked', `The network runtime still holds ${open.map(([label, total]) => `${total} ${label}`).join(', ')}. Open the previous version of OpenApe Pods, finish or reconcile them, then update again; nothing was changed.`)
+}
+
+export function convert47(database: DatabaseSync): ConversionReceipt {
+  assertKnownSchema(database, 47)
+  assertNoOpenNetworkWork(database)
   const target = statements()
   const existing = new Set((database.prepare('SELECT name FROM sqlite_schema WHERE type=\'table\'').all() as { name: string }[]).map(row => row.name))
   const renamed: Record<string, string> = { owners: 'network_owners' }
@@ -97,7 +105,8 @@ export function convert47(database: DatabaseSync): ConversionReceipt {
   database.exec('INSERT INTO effect_receipts SELECT logical_action_key,attempt,sequence,outcome,body,created_at FROM network_effect_receipts')
   const effects = count(database, 'SELECT count(*) FROM effect_attempts')
   if (effects !== count(database, 'SELECT count(*) FROM network_effect_attempts')) throw new StorageError('invalid-data', 'An archive effect has no invocation to name its Pod')
-  // A member's network checkpoint is its private state; the Pod continues from it.
+  // A member's network checkpoint is its private state; the Pod continues from it. Its replaced standalone state stays history.
+  archived.checkpoints = archive(database, 'checkpoints', 'checkpoints', 'pod_id IN (SELECT pod_id FROM network_checkpoints)')
   const checkpoints = database.prepare('UPDATE checkpoints SET revision=revision+1,body=(SELECT body FROM network_checkpoints n WHERE n.pod_id=checkpoints.pod_id) WHERE pod_id IN (SELECT pod_id FROM network_checkpoints)').run().changes
   // Network tags were shown on members as inherited; members keep them as their own labels.
   for (const row of database.prepare(`SELECT m.pod_id,t.tags FROM network_members m JOIN item_tags t ON t.id=m.network_id WHERE m.pod_id IN (SELECT id FROM pods)`).all()) {
@@ -117,6 +126,10 @@ export function convert47(database: DatabaseSync): ConversionReceipt {
     if (paths.length > 32) throw new StorageError('conversion-blocked', 'A former network member would exceed 32 denied paths; shorten the network denylist in the previous version, then update again; nothing was changed.')
     database.prepare('INSERT INTO pod_sandbox_deny VALUES(?,\'pod\',NULL,?) ON CONFLICT(pod_id,source) DO UPDATE SET paths=excluded.paths').run(row.pod_id as string, JSON.stringify(paths))
   }
+  // A current network's owner level gave its members owner reach (any owner source won); the member keeps it as its own.
+  database.exec(`INSERT INTO pod_sandbox SELECT s.pod_id,'pod',NULL,'owner' FROM pod_sandbox s JOIN networks n ON n.id=substr(s.source,9)
+    WHERE s.source LIKE 'network:%' AND s.level='owner' AND n.state!='archived' AND n.revision=s.network_revision GROUP BY s.pod_id
+    ON CONFLICT(pod_id,source) DO UPDATE SET level='owner'`)
   // Retained tables whose definition changed are rebuilt from the baseline, rowids included.
   const changed = target.filter(item => item.kind === 'table' && existing.has(item.table) && database.prepare('SELECT sql FROM sqlite_schema WHERE type=\'table\' AND name=?').get(item.name)?.sql !== item.sql).map(item => item.name)
   const rebuilt = [...changed, ...Object.keys(renamed).filter(name => !existing.has(name))]
@@ -133,7 +146,8 @@ export function convert47(database: DatabaseSync): ConversionReceipt {
     const list = ['rowid', ...kept.map(column => `"${column}"`)].join(',')
     const where = name === 'pod_sandbox' || name === 'pod_sandbox_deny' ? 'WHERE source=\'pod\'' : name === 'pod_grants' ? 'WHERE network_id IS NULL' : ''
     database.exec(`INSERT INTO "${name}"(${list}) SELECT ${list} FROM "conversion_${name}" ${where} ORDER BY rowid`)
-    if (!where && count(database, `SELECT count(*) FROM "${name}"`) !== count(database, `SELECT count(*) FROM "conversion_${name}"`)) throw new StorageError('invalid-data', `Rebuilding ${name} lost rows`)
+    const total = count(database, `SELECT count(*) FROM "${name}"`) + (where ? archived[name]!.rows : 0)
+    if (total !== count(database, `SELECT count(*) FROM "conversion_${name}"`)) throw new StorageError('invalid-data', `Rebuilding ${name} lost rows`)
     database.exec(`DROP TABLE "conversion_${name}"`)
   }
   for (const table of [...retiredTables].reverse()) database.exec(`DROP TABLE "${table}"`)
