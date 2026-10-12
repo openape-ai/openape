@@ -77,7 +77,7 @@ async function desktop(email: string) {
   await send('/api/runtime/v1/workspace', { type: 'heartbeat', lease, hash: published.hash })
   return {
     podId: fixture.view.id,
-    message: (eventId: string, title: string, body: string, links: { title: string, url: string }[] = []) => send('/api/runtime/v1/inbox', { eventId, kind: 'message', title, body, podId: fixture.view.id, podName: 'Belege', links }),
+    message: (eventId: string, title: string, body: string, links: { title: string, url: string }[] = [], podTags?: string[]) => send('/api/runtime/v1/inbox', { eventId, kind: 'message', title, body, podId: fixture.view.id, podName: 'Belege', ...(podTags ? { podTags } : {}), links }),
     decisions: (decisions: unknown[]) => send('/api/runtime/v1/inbox/decisions', { decisions }),
     claim: () => send('/api/runtime/v1/workspace', { type: 'claim', lease }) as Promise<{ id: string, command: { body: Record<string, unknown> } } | null>,
     complete: (id: string) => publish(++revision, { id, result: { status: 'applied' }, error: null }),
@@ -116,12 +116,12 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   mkdirSync(shots, { recursive: true })
   const mac = await desktop(owner)
   const digest = (seed: string) => sha256(seed)
-  const effect = { sourceId: 'effect:mail-1', type: 'effect', digest: digest('effect-1'), podId: mac.podId, podName: 'Belege', title: 'Rechnung an Buchhaltung zustellen?', body: 'Die Zustellung der Rechnung R-2026-104 ist unklar.\nZustellen oder als bereits erledigt markieren.', authority: 'pods', options: [{ key: 'deliver', title: 'Erneut zustellen', input: null }, { key: 'seen', title: 'Bereits zugestellt', input: 'evidence' }], link: null }
+  const effect = { sourceId: 'effect:mail-1', type: 'effect', digest: digest('effect-1'), podId: mac.podId, podName: 'Belege', podTags: ['finanzen'], title: 'Rechnung an Buchhaltung zustellen?', body: 'Die Zustellung der Rechnung R-2026-104 ist unklar.\nZustellen oder als bereits erledigt markieren.', authority: 'pods', options: [{ key: 'deliver', title: 'Erneut zustellen', input: null }, { key: 'seen', title: 'Bereits zugestellt', input: 'evidence' }], link: null }
   const idpGrant = { sourceId: 'approval:grant-1', type: 'approval', digest: digest('grant-1'), podId: mac.podId, podName: 'Belege', title: 'Zugriff auf mail.example freigeben', body: 'Der Pod möchte Mails lesen.', authority: 'idp', options: [], link: { title: 'In OpenApe ID freigeben', url: 'https://id.openape.ai/grant-approval/1' } }
   const desktopOnly = { sourceId: 'proposal:setup-1', type: 'proposal', digest: digest('setup-1'), podId: mac.podId, podName: 'Belege', title: 'Einrichtung prüfen', body: 'Die Einrichtung braucht einen lokalen Ordner.', authority: 'pods', options: [], link: null }
   const mailChoice = { sourceId: 'network-choice:mail-3', type: 'network-choice', digest: digest('choice-3'), podId: null, podName: null, title: 'Ready to explore this?', body: 'Review uncertain mail · Synthetic company · Mail network\naccount: owner@pods-inbox.test\ncategory: newsletter\nconfidence: 0.87\nsender: news@example.com\nurgency: normal', authority: 'pods', options: [{ key: 'keep', title: 'Keep for review', input: null }, { key: 'newsletter', title: 'Newsletter candidate', input: null }, { key: 'invoice', title: 'Invoice review', input: null }, { key: 'reply', title: 'Reply preview', input: null }], link: null }
   await mac.decisions([mailChoice, effect, idpGrant, desktopOnly])
-  await mac.message('notify-1', 'Monatsabschluss bereit', 'Alle Belege für September sind abgelegt.', [{ title: 'Bericht öffnen', url: 'https://report.openape.ai/d/example' }])
+  await mac.message('notify-1', 'Monatsabschluss bereit', 'Alle Belege für September sind abgelegt.', [{ title: 'Bericht öffnen', url: 'https://report.openape.ai/d/example' }], ['finanzen', 'monatsabschluss'])
   await mac.message('notify-2', 'Neue Rechnung', 'Eine Rechnung von Beispiel GmbH wurde erkannt.')
 
   // Sign-in inside the app lands on Decisions; both tabs carry separate counts.
@@ -146,6 +146,7 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
 
   // An actual completed decision: evidence is required, acceptance is not shown as applied, the desktop applies it.
   await page.getByRole('link', { name: /Rechnung an Buchhaltung/ }).click()
+  expect(await page.locator('article .tags').textContent()).toBe('Tags: finanzen ')
   await page.getByRole('button', { name: 'Bereits zugestellt' }).click()
   await page.getByRole('button', { name: '„Bereits zugestellt“ senden' }).click()
   await expect.poll(() => page.getByText('Bitte zuerst ausfüllen.').isVisible()).toBe(true)
@@ -185,6 +186,20 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   await expect.poll(() => page.getAttribute('html', 'data-app-badge')).toBe('3')
   expect(await (await context.request.get(`${relay.url}/inbox/api/v1/badge`)).json()).toEqual({ count: 3 })
   await shot(page, '07-message-detail')
+  // The detail carries the same Pod tag chips as the card, narrow and wide, light and dark (issue 1463).
+  expect(await page.locator('article .tags').textContent()).toBe('Tags: finanzen monatsabschluss ')
+  for (const [width, height] of [[390, 844], [1280, 800]] as const) {
+    await page.setViewportSize({ width, height })
+    expect(await noHorizontalScroll(page)).toBe(true)
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme })
+      // A full-page capture straight after a viewport change tiles the stale layout; let it settle first.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))))
+      await shot(page, `07-message-detail-tags-${width}-${colorScheme}`)
+    }
+  }
+  await page.emulateMedia({ colorScheme: 'light' })
+  await page.setViewportSize({ width: 375, height: 812 })
 
   // Restart: the installed app reopens with the same session and read state.
   const state = await context.storageState()
