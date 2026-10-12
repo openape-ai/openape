@@ -18,7 +18,7 @@ import type { InfrastructureFailure } from '../contracts/infrastructure'
 import { MailArchiveService } from './mail/archive/service'
 import { ArchiveStore } from './mail/archive/store'
 import { handleMailArchive } from './mail/archive/handler'
-import { handleGate, releaseNetworkGrants } from './gates/handler'
+import { handleApproval, handleGate, releaseApprovalGrants, releaseNetworkGrants } from './gates/handler'
 import { assignedJev, parseJevRequest, typesafeOrigin } from '../contracts/jev'
 import { executeJev } from './connections/jev-service'
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
@@ -110,6 +110,7 @@ import { app, shell, utilityProcess } from 'electron'
 import type { UtilityProcess } from 'electron'
 import { dirname, join } from 'node:path'
 import type { WorkerStatus } from '../contracts/ipc'
+import type { ApprovalManifest } from '../contracts/approvals'
 import { parseStorageFailure, storageReadinessMs } from '../contracts/storage'
 import { automaticBackupDirectory } from './storage-recovery'
 import type { StorageFailure } from '../contracts/storage'
@@ -431,6 +432,7 @@ export class FixtureWorker {
       try { await releaseArchivedNetworkGrants({ grants, owner, ledger: command => this.dispatch({ grants: command }), revokeResource: async (podId, id, revision) => { await this.resources({ type: 'revoke', podId, id, revision }) }, resources: podId => this.resources({ type: 'list', podId }) }, signal) }
       catch (error) { console.error('Could not release the grants and sandbox of an archived network', error) }
     }
+    await this.releaseApprovals(connections, signal, owner)
     for (const release of parseNetworkGateReleases(await this.dispatch({ networkGateRelease: { type: 'list' } }))) {
       const retry = this.releaseRetry.get(release.taskId)
       if (retry && retry.at > Date.now()) continue
@@ -443,6 +445,24 @@ export class FixtureWorker {
         const failures = (retry?.failures ?? 0) + 1
         this.releaseRetry.set(release.taskId, { at: Date.now() + Math.min(60 * 60000, 60000 * 2 ** failures), failures })
         console.error(`Could not release the approval grants of network gate batch ${release.taskId}`, error)
+      }
+    }
+  }
+
+  private async releaseApprovals(connections: ConnectionManager, signal: AbortSignal, owner: () => Promise<OwnerSession | null>): Promise<void> {
+    for (const release of await this.dispatch({ approvalRelease: { type: 'list' } }) as { podId: string, manifest: ApprovalManifest, grants: { key: string, id: string }[] }[]) {
+      const id = `approval:${release.manifest.batchId}`
+      const retry = this.releaseRetry.get(id)
+      if (retry && retry.at > Date.now()) continue
+      try {
+        await releaseApprovalGrants(release, connections, signal, owner)
+        await this.dispatch({ approvalRelease: { type: 'released', keys: release.grants.map(grant => grant.key) } })
+        this.releaseRetry.delete(id)
+      }
+      catch (error) {
+        const failures = (retry?.failures ?? 0) + 1
+        this.releaseRetry.set(id, { at: Date.now() + Math.min(60 * 60000, 60000 * 2 ** failures), failures })
+        console.error(`Could not release the grants of approval batch ${release.manifest.batchId}`, error)
       }
     }
   }
@@ -879,7 +899,7 @@ export class FixtureWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { definitions: DefinitionCommand } | { networkGateRelease: { type: 'list' } | { type: 'released', taskId: string } } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grants?: { key: string, id: string }[] } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { approvalRelease: { type: 'list' } | { type: 'released', keys: string[] } } | { approvalCheck: { scope: ServiceScope, manifest: ApprovalManifest, operation: string, grants: { key: string, id: string }[] } } | { definitions: DefinitionCommand } | { networkGateRelease: { type: 'list' } | { type: 'released', taskId: string } } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grants?: { key: string, id: string }[] } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     if (this.updateFrozen && !('data' in command && ['prepareUpdate', 'releaseUpdate'].includes(command.data.type))) return Promise.reject(new Error('Pods is preparing an update; retry after restart'))
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
@@ -915,7 +935,7 @@ export class FixtureWorker {
 
   private async executeService(request: ServiceRequest): Promise<unknown> {
     if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size - this.parked.size >= 16) throw new Error('Invalid or excessive broker request')
-    if (request.kind !== undefined && request.kind !== 'gate' && request.kind !== 'mailArchive' && request.kind !== 'mailMove' && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
+    if (request.kind !== undefined && request.kind !== 'approval' && request.kind !== 'gate' && request.kind !== 'mailArchive' && request.kind !== 'mailMove' && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
     const scope = parseServiceScope(request.scope)
     const controller = new AbortController(); this.services.set(request.id, controller)
     const check = async (domain?: { path: string, ownerPid: number }) => parseResourceState(await this.dispatch({ serviceCheck: { scope, ...(domain ? { domain } : {}) } }))
@@ -996,6 +1016,11 @@ export class FixtureWorker {
         return value
       }
       const state = await check()
+      if (request.kind === 'approval') {
+        if (!this.connections) throw new Error('Connection service unavailable')
+        const result = await handleApproval({ body: request.body, scope, connections: this.connections, check, checkApproval: async (manifest, operation, grants) => this.dispatch({ approvalCheck: { scope, manifest, operation, grants } }), signal: controller.signal })
+        await check(); controller.signal.throwIfAborted(); return result
+      }
       if (request.kind === 'gate') {
         if (!this.connections) throw new Error('Connection service unavailable')
         const result = await handleGate({ body: request.body, scope, connections: this.connections, check, checkGate: async (manifest, operation, grants) => this.dispatch({ networkGateCheck: { scope, manifest, operation, grants } }), signal: controller.signal })

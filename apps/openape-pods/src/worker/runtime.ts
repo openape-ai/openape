@@ -20,6 +20,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { CentralProjection } from './central/projection'
 import { boundedStep } from './scheduling/tick-step'
 import { parseOwner } from '@openape/pods-protocol'
+import { parseApprovalManifest } from '../contracts/approvals'
 import { scheduleDomains } from './scheduling/fair-scheduler'
 import { NetworkEngine } from './scheduling/network-engine'
 import { parseNetworkCommand } from '../contracts/networks'
@@ -96,7 +97,7 @@ const runtime: AgentRuntime = {
   runtimeDirectories: [dirname(dirname(executable))], environment: { ELECTRON_RUN_AS_NODE: '1' },
   binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs'),
 }
-const runServices: RunServices = { gate: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'gate'), mailArchive: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'mailArchive'), shell: async (scope, signal) => {
+const runServices: RunServices = { approval: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'approval'), gate: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'gate'), mailArchive: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'mailArchive'), shell: async (scope, signal) => {
   const { podId, runId, epoch, assignmentRevision, capabilities } = scope
   return await mailBridge.execute({ podId, runId, epoch, assignmentRevision, capabilities }, {}, signal, 'shell') as Awaited<ReturnType<NonNullable<RunServices['shell']>>>
 }, closeShell: async (scope) => {
@@ -130,7 +131,7 @@ dispatcher = new RunDispatcher(store, registry, runtime, runServices)
 const data = new DataControl(store, runtime.helper)
 const setup = new SetupControl(store, registry)
 const details = new WorkspaceDetails(store, registry)
-const scheduler = new Scheduler(store, dispatcher, Date.now, false, podId => !dispatcher.work.pending(podId))
+const scheduler = new Scheduler(store, dispatcher, Date.now, false, podId => !dispatcher.approvals.due(podId) && !dispatcher.work.pending(podId))
 const fixtureProvider = process.env.PODS_FIXTURE_MODEL_PORT ? async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${process.env.PODS_FIXTURE_MODEL_PORT}/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }) : undefined
 runServices.provider = fixtureProvider
 const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
@@ -405,6 +406,19 @@ port.on('message', async (event) => {
       const reason = (events.find(item => item.type === 'started')?.data as { reason?: string } | undefined)?.reason ?? 'manual'
       const network = store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=?').get(check.scope.runId)
       port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason, runtime: !network } }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'approvalRelease' in request.command) {
+      const release = request.command.approvalRelease as { type?: unknown, keys?: unknown }
+      if (release?.type === 'list') { port.postMessage({ id: request.id, state: dispatcher.approvals.releasable() }); return }
+      if (release?.type !== 'released' || !Array.isArray(release.keys) || release.keys.some(key => typeof key !== 'string')) throw new Error('Invalid approval release')
+      dispatcher.approvals.released(release.keys as string[])
+      port.postMessage({ id: request.id, state: true }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'approvalCheck' in request.command) {
+      const check = request.command.approvalCheck as ServiceCheck & { manifest: unknown, operation: string, grants?: { key: string, id: string }[] }
+      authorizeRunService(store, registry, dispatcher.runs, check)
+      dispatcher.approvals.authorize(check.scope.podId, parseApprovalManifest(check.manifest), check.operation, check.grants)
+      port.postMessage({ id: request.id, state: true }); return
     }
     if (request.command && typeof request.command === 'object' && 'networkGateRelease' in request.command) {
       const release = request.command.networkGateRelease as { type?: unknown, taskId?: unknown }

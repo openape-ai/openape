@@ -46,12 +46,19 @@ export class OwnerQuestions {
       if (!this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=? AND run_id=? AND boot_id NOT LIKE \'fenced:%\'').get(principal.podId, principal.runId)) throw new Error('Questions require the Pod\'s active run')
       const existing = this.store.db.prepare('SELECT * FROM owner_questions WHERE namespace=? AND key=? AND fingerprint=?').get(namespace, key, fingerprint)
       if (existing) return question(existing)
+      this.assertAnswerSlot(`${namespace}/${key}`)
       if (Number(this.store.db.prepare('SELECT count(*) AS count FROM owner_questions WHERE pod_id=? AND state=\'pending\'').get(principal.podId)!.count) >= pendingPerPod) throw new Error('Too many open owner questions; wait until the owner answered some')
       this.store.db.prepare('UPDATE owner_questions SET state=\'superseded\' WHERE namespace=? AND key=? AND state=\'pending\'').run(namespace, key)
       const id = randomUUID()
       this.store.db.prepare('INSERT INTO owner_questions VALUES(?,?,?,?,?,?,?,?,?,\'pending\',NULL,NULL,?)').run(id, principal.podId, namespace, key, fingerprint, title, body, JSON.stringify(options), canonicalJson(data), Date.now())
       return this.get(id)
     })
+  }
+
+  /** An answer may replace an earlier answer, never another owner record such as a policy. */
+  private assertAnswerSlot(key: string): void {
+    const existing = this.data.get(ownerWriter, key)
+    if (existing && !(existing.value && typeof existing.value === 'object' && 'questionId' in existing.value)) throw new Error('This key holds an owner record that is not an answer')
   }
 
   get(id: string): OwnerQuestion {
@@ -73,7 +80,9 @@ export class OwnerQuestions {
       const decidedAt = Date.now()
       this.store.db.prepare('UPDATE owner_questions SET state=\'decided\',option=?,decided_at=? WHERE id=? AND state=\'pending\'').run(option, decidedAt, id)
       const key = `${current.namespace}/${current.key}`
-      this.data.set(ownerWriter, key, { option, questionId: id, fingerprint: current.fingerprint, title: current.title, decidedAt, data: current.data }, this.data.revision(key))
+      this.assertAnswerSlot(key)
+      // The owner's answer is the option; what the asking Pod supplied stays marked as its question.
+      this.data.set(ownerWriter, key, { option, questionId: id, fingerprint: current.fingerprint, decidedAt, question: { podId: current.podId, title: current.title, data: current.data } }, this.data.revision(key))
       return this.get(id)
     })
   }

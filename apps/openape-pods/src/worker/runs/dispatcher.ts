@@ -52,6 +52,10 @@ import { DomainData } from '../data/domain'
 import { WorkLedger } from '../data/work'
 import { OwnerQuestions } from '../data/questions'
 import { dataOperations, handleDataOperation } from '../data/ports'
+import { Approvals } from '../data/approvals'
+import type { ApprovalService } from '../data/approvals'
+import { archiveApproved as archiveApprovedMail, parseArchiveTarget as parseApprovedArchive } from '../data/mail-archive'
+import { parseOwner } from '@openape/pods-protocol'
 
 interface NetworkExecution { invocations: NetworkInvocations, authority: NetworkAuthority, emissions: NetworkEmission[] }
 
@@ -76,6 +80,7 @@ export interface RunServices {
   provider?: AgentGatewayServices['provider']
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
   mailMove?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
+  approval?: (body: Parameters<ApprovalService>[0], signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
 }
 
 const maxAgentCallsPerRun = 50
@@ -88,12 +93,18 @@ export class RunDispatcher {
   readonly data: DomainData
   readonly work: WorkLedger
   readonly questions: OwnerQuestions
+  readonly approvals: Approvals
   private active = new Map<string, { controller: AbortController, work: Promise<void> }>()
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly runtime: AgentRuntime, private readonly services?: RunServices) {
     this.runs = new RunStore(store)
     this.data = new DomainData(store)
     this.work = new WorkLedger(store, this.data)
     this.questions = new OwnerQuestions(store, this.data)
+    this.approvals = new Approvals(store, () => {
+      const registration = store.db.prepare('SELECT body FROM remote_registration WHERE id=1').get()
+      if (!registration) throw new Error('Owner approvals require an initialized owner identity')
+      return parseOwner((JSON.parse(String(registration.body)) as { owner: unknown }).owner)
+    })
     store.transaction(() => {
       fenceNetworkBoot(store)
       store.db.prepare('UPDATE runs SET state=\'interrupted\',error=\'Previous worker stopped; explicit recovery is required\',checkpoint_revision=(SELECT revision FROM checkpoints WHERE pod_id=runs.pod_id) WHERE state=\'running\' AND id IN (SELECT run_id FROM run_leases)').run()
@@ -312,6 +323,13 @@ export class RunDispatcher {
         if (archiveMember) throw new Error('The archive member moves its approved mail only through network.archive')
         return invokeTool(payload, toolSignal)
       }
+      // Approval requests and decisions are exchanged with the IdP inside the Pod's own run, never in the background.
+      if (!network && this.services?.approval && this.approvals.due(pod.id)) {
+        const service: ApprovalService = (body, serviceSignal) => this.services!.approval!(body, serviceSignal, scope)
+        try { await boundedStep(30000, () => this.approvals.sync(pod.id, service, signal), () => {}) }
+        catch (error) { appendEvent('approvals', { error: error instanceof Error ? error.message.slice(0, 2000) : 'Approval exchange failed' }) }
+        assertCurrent()
+      }
       if (this.services?.shell && !network) {
         const environment = await retryService('runtime authorization', () => this.services!.shell!(scope, signal), signal, 30000)
         Object.assign(runtime, { home: environment.home, shell: environment.shell, environment: { ...environment.environment, ...runtime.environment } })
@@ -411,6 +429,21 @@ export class RunDispatcher {
             return { staged: true }
           }
           if (operation === 'network.emit') throw new Error('Network emission requires a network invocation')
+          if (operation === 'approvals.request') { const view = this.approvals.request({ podId: pod.id, runId: id }, payload); appendEvent('approval-request', { id: view.id, state: view.state }); return view }
+          if (operation === 'approvals.get') return this.approvals.get(pod.id, String((payload as { id?: unknown } | null)?.id ?? ''))
+          if (operation === 'mail.archiveApproved') {
+            if (!this.services?.mailMove || !this.services.approval) throw new Error('Mail archive service is unavailable')
+            const target = parseApprovedArchive(payload)
+            const service: ApprovalService = (body, serviceSignal) => this.services!.approval!(body, serviceSignal, scope)
+            const body = (argv: string[]) => ({ application: target.application, argv })
+            const tools = { read: async (argv: string[]) => invokeTool(body(argv), operationSignal), move: async (argv: string[]) => { appendEvent('recovery-boundary', { kind: 'effect', operation: 'mail.archive' }); return this.services!.mailMove!(body(argv), operationSignal, scope) } }
+            // Archive work pauses the script budget like other bounded service waits, and the run waits for it.
+            infrastructureWaiting++
+            const work = archiveApprovedMail(this.store, this.approvals, service, { podId: pod.id, runId: id }, target, tools, assertCurrent, operationSignal)
+            pendingAgents.add(work)
+            try { const outcome = await work; appendEvent('mail-archive', outcome); return outcome }
+            finally { pendingAgents.delete(work); infrastructureWaiting-- }
+          }
           if (dataOperations.has(operation)) {
             const reply = handleDataOperation(this, operation, payload, { podId: pod.id, runId: id }, manifest)
             if (operation.startsWith('work.') && operation !== 'work.find' && operation !== 'work.contract') appendEvent('work', { operation, ...(reply && typeof reply === 'object' && 'key' in reply ? { key: (reply as { key: unknown }).key } : {}) })
