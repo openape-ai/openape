@@ -211,3 +211,23 @@ describe('namespace ownership', () => {
     expect(f.data.list(run, 'acme/policies', { cursor: first.cursor, limit: 2 }).entries.map(entry => entry.key)).toEqual(['acme/policies/c'])
   })
 })
+
+describe('owner questions', () => {
+  it('asks once per input, records the answer apart from the question and never overwrites another owner record', () => {
+    const f = mail()
+    f.data.define({ path: 'acme/mail/owner-answers', writer: 'owner', mode: 'records', readers: [f.classifier] })
+    f.data.set('owner', 'acme/mail/owner-answers/policy', { senders: ['x@example.com'] }, 0)
+    const run = f.run(f.classifier)
+    const ask = (key: string, fingerprint: string) => f.questions.ask(run, { namespace: 'acme/mail/owner-answers', key, fingerprint, title: 'Newsletter?', body: '', options: [{ key: 'newsletter', title: 'Newsletter' }, { key: 'keep', title: 'Keep' }], data: { sender: 'a@example.com' } })
+    const first = ask('m1', 'c1')
+    expect(ask('m1', 'c1').id).toBe(first.id)
+    expect(() => ask('policy', 'c1')).toThrow('not an answer')
+    f.questions.answer(first.id, 'keep')
+    expect(f.data.get(run, 'acme/mail/owner-answers/m1')!.value).toMatchObject({ option: 'keep', fingerprint: 'c1', question: { podId: f.classifier, data: { sender: 'a@example.com' } } })
+    expect(f.data.get(run, 'acme/mail/owner-answers/policy')!.value).toEqual({ senders: ['x@example.com'] })
+    // A changed input asks again and supersedes nothing that was already decided.
+    const second = ask('m1', 'c2')
+    expect(second.id).not.toBe(first.id)
+    expect(f.questions.get(first.id).state).toBe('decided')
+  })
+})

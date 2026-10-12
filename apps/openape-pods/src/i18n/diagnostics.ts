@@ -1,6 +1,7 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'The approval is {p0}; nothing may happen without an approved request',
   'Data value lacks required field {p0}',
   'Data field {p0} has type {p1}, expected {p2}',
   'A script declares 1 to {p0} work operations',

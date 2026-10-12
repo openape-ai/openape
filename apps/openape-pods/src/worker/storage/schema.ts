@@ -154,6 +154,7 @@ CREATE TABLE action_approvals(
   grant_id TEXT CHECK(grant_id IS NULL OR length(grant_id) BETWEEN 1 AND 128),
   state TEXT NOT NULL CHECK(state IN ('collecting','requested','approved','denied','expired','consumed','withdrawn','unknown')),
   reason TEXT CHECK(reason IS NULL OR length(reason)<=2000),
+  released_at INTEGER,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
   UNIQUE(pod_id,action,object,payload_hash),
