@@ -36,7 +36,7 @@ function fixture() {
   const approvals = new Approvals(f.store, () => owner)
   approvals.collect = { quietMs: 0, maxMs: 0 }
   const run = f.run(pod)
-  const ask = (version = mailContentVersion(mail), subject = mail.subject) => approvals.request(run, { action: 'mail.archive', object: `${mailbox}:${mail.id}`, title: `${subject} · news@example.invalid`, payload: { mailbox, messageId: mail.id, version, subject, sender: 'news@example.invalid' } })
+  const ask = (version = mailContentVersion(mail), subject = mail.subject) => approvals.request(run, { action: 'mail.archive', object: `${mailbox}:${mail.id}`, title: 'Ignored script title', payload: { mailbox, messageId: mail.id, version, subject, sender: 'news@example.invalid' } })
   return { ...f, podId: pod, approvals, run, ask }
 }
 
@@ -96,6 +96,14 @@ describe('object approvals at the IdP', () => {
     expect(() => f.approvals.resolve(asked.id, 'renew', '')).toThrow('observation')
     f.approvals.resolve(asked.id, 'renew', 'No request is visible at the IdP')
     expect(f.approvals.get(f.podId, asked.id).state).toBe('collecting')
+  })
+
+  it('shows the owner a title derived from the bound message, never the script\'s, and binds the object to it', () => {
+    const f = fixture()
+    expect(f.ask().title).toBe(`${mail.subject} · news@example.invalid`)
+    const request = (object: string, payload: Record<string, string>) => () => f.approvals.request(f.run, { action: 'mail.archive', object, payload })
+    expect(request(`${mailbox}:other-message`, { mailbox, messageId: mail.id, version: 'v', subject: 's', sender: 'x@example.invalid' })).toThrow('mailbox and message ID')
+    expect(request(`${mailbox}:${mail.id}`, { mailbox, messageId: mail.id, version: 'v', subject: 's' })).toThrow('subject and sender')
   })
 
   it('lets the desktop act only on the stored requests of the calling Pod', async () => {

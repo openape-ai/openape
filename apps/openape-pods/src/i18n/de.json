@@ -3340,5 +3340,9 @@
   "Archive needs the approval of this message": "Die Archivierung braucht die Freigabe dieser Nachricht",
   "The approval does not name a message of this mailbox": "Die Freigabe nennt keine Nachricht dieses Postfachs",
   "Owner approvals require an initialized owner identity": "Owner-Freigaben brauchen eine eingerichtete Owner-Identität",
-  "Invalid approval release": "Ungültige Freigabe-Rücknahme"
+  "Invalid approval release": "Ungültige Freigabe-Rücknahme",
+  "A mail archive approval names mailbox, messageId, version, subject and sender": "Eine Mail-Archivfreigabe nennt Postfach, Nachrichten-ID, Version, Betreff und Absender",
+  "A mail archive approval object is the mailbox and message ID": "Das Objekt einer Mail-Archivfreigabe ist Postfach und Nachrichten-ID",
+  "Unsupported approval action": "Nicht unterstützte Freigabeaktion",
+  "An approval names an action and its object": "Eine Freigabe nennt eine Aktion und ihr Objekt"
 }

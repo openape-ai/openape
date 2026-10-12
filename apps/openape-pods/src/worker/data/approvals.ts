@@ -19,6 +19,19 @@ export const approvalLimits = { items: 30, members: 100, expiryMs: 7 * 24 * 60 *
 const batchTitles: Record<ApprovalAction, string> = { 'mail.archive': 'Archive newsletters' }
 
 function row(value: unknown): Row { return value as Row }
+// eslint-disable-next-line no-control-regex
+const line = (value: unknown, limit: number) => String(value).replace(/[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069]+/g, ' ').trim().slice(0, limit)
+
+/** Each action fixes its payload fields, its object identity and the title the owner reads at the IdP. */
+export function actionTitle(action: ApprovalAction, object: string, payload: Record<string, unknown>): string {
+  if (action === 'mail.archive') {
+    const fields = ['mailbox', 'messageId', 'version', 'subject', 'sender']
+    if (Object.keys(payload).some(key => !fields.includes(key)) || fields.some(key => typeof payload[key] !== 'string' || !String(payload[key]).trim())) throw new Error('A mail archive approval names mailbox, messageId, version, subject and sender')
+    if (object !== `${String(payload.mailbox).toLowerCase()}:${String(payload.messageId)}`) throw new Error('A mail archive approval object is the mailbox and message ID')
+    return `${line(payload.subject, 80)} · ${line(payload.sender, 38)}`.slice(0, 120)
+  }
+  throw new Error('Unsupported approval action')
+}
 
 export class Approvals {
   collect: { quietMs: number, maxMs: number } = { quietMs: approvalLimits.quietMs, maxMs: approvalLimits.maxMs }
@@ -41,11 +54,11 @@ export class Approvals {
   request(principal: { podId: string, runId: string }, value: unknown): ApprovalView {
     const input = plainJson(value) as Record<string, unknown>
     if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['action', 'object', 'title', 'payload'].includes(key))) throw new Error('Invalid approval request')
-    if (!approvalActions.includes(input.action as ApprovalAction) || typeof input.object !== 'string' || !input.object || input.object.length > 500 || typeof input.title !== 'string' || !input.title.trim()) throw new Error('An approval names an action, its object and a title')
-    // eslint-disable-next-line no-control-regex
-    const title = input.title.replace(/[\u0000-\u001F\u007F]+/g, ' ').trim().slice(0, 120)
+    if (!approvalActions.includes(input.action as ApprovalAction) || typeof input.object !== 'string' || !input.object || input.object.length > 500 || (input.title !== undefined && typeof input.title !== 'string')) throw new Error('An approval names an action and its object')
     const payload = input.payload as Record<string, unknown>
     if (!payload || typeof payload !== 'object' || Array.isArray(payload) || canonicalJson(payload).length > approvalLimits.payloadBytes) throw new Error('Approval payload is limited to 16 KiB')
+    // What the owner sees at the IdP is derived from the bound payload, never from text the script chose.
+    const title = actionTitle(input.action as ApprovalAction, input.object as string, payload)
     const hash = digest(canonicalJson(payload))
     return this.store.transaction(() => {
       this.assertRun(principal)
@@ -54,7 +67,7 @@ export class Approvals {
       const now = Date.now()
       this.store.db.prepare(`UPDATE action_approvals SET state='withdrawn',reason='The object changed; this approval does not cover the new content',updated_at=? WHERE pod_id=? AND action=? AND object=? AND state IN ('collecting','requested','approved')`).run(now, principal.podId, input.action as string, input.object as string)
       const id = randomUUID()
-      this.store.db.prepare('INSERT INTO action_approvals(id,pod_id,action,object,payload,payload_hash,title,authority,state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,\'{}\',\'collecting\',?,?)').run(id, principal.podId, input.action as string, input.object as string, canonicalJson(payload), hash, title || (input.object as string).slice(0, 120), now, now)
+      this.store.db.prepare('INSERT INTO action_approvals(id,pod_id,action,object,payload,payload_hash,title,authority,state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,\'{}\',\'collecting\',?,?)').run(id, principal.podId, input.action as string, input.object as string, canonicalJson(payload), hash, title, now, now)
       return this.view(row(this.store.db.prepare('SELECT * FROM action_approvals WHERE id=?').get(id)))
     })
   }
