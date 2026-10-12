@@ -1,14 +1,14 @@
 import { createHash } from 'node:crypto'
 import { parseOwner } from '@openape/pods-protocol'
 import { DatabaseSync } from 'node:sqlite'
-import { baselineSchema, schema47Additions } from './schema.ts'
+import { baselineSchema, schema47Additions, schema48Additions } from './schema.ts'
 
 let expectedObjects: { type: string, name: string, sql: string }[] | undefined
 function baselineObjects(): { type: string, name: string, sql: string }[] {
   if (expectedObjects) return expectedObjects
   const reference = new DatabaseSync(':memory:')
   try {
-    reference.exec(`${baselineSchema}${schema47Additions}`)
+    reference.exec(`${baselineSchema}${schema47Additions}${schema48Additions}`)
     expectedObjects = reference.prepare('SELECT type,name,sql FROM sqlite_schema WHERE sql IS NOT NULL AND name NOT LIKE \'sqlite_%\'').all() as { type: string, name: string, sql: string }[]
     return expectedObjects
   }

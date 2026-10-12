@@ -1,5 +1,6 @@
 import { assertIntegrity } from '../storage/integrity'
 import { restoreNetworkStorage } from '../storage/network-restore'
+import { fenceRestoredRuntime } from '../storage/restore-fence'
 import { assertSupportedSchema, upgradeToCurrent } from '../storage/upgrade'
 import { DependencyStore, removePackageTree } from '../dependencies/store'
 import { checkLock, packageDigest, packageFiles } from '../dependencies/tree'
@@ -187,6 +188,7 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
       database.exec('DELETE FROM script_credential_approvals;')
       database.exec('DELETE FROM deletion_jobs; UPDATE data_settings SET used_bytes=0,error=NULL;')
       restoreNetworkStorage(database)
+      fenceRestoredRuntime(database, manifest.createdAt)
       database.exec('COMMIT;')
     }
     finally { database.close() }

@@ -48,6 +48,10 @@ import type { NetworkAuthority, NetworkEmission } from '../scheduling/network-ev
 import { canonicalNetworkJson } from '../scheduling/network-events'
 import { assertNetworkQuota } from '../scheduling/network-quota'
 import { fenceNetworkBoot } from '../scheduling/network-boot'
+import { DomainData } from '../data/domain'
+import { WorkLedger } from '../data/work'
+import { OwnerQuestions } from '../data/questions'
+import { dataOperations, handleDataOperation } from '../data/ports'
 
 interface NetworkExecution { invocations: NetworkInvocations, authority: NetworkAuthority, emissions: NetworkEmission[] }
 
@@ -81,14 +85,21 @@ const networkPorts = new Set(['graph.contract', 'graph.emit', 'network.emit', 'n
 
 export class RunDispatcher {
   readonly runs: RunStore
+  readonly data: DomainData
+  readonly work: WorkLedger
+  readonly questions: OwnerQuestions
   private active = new Map<string, { controller: AbortController, work: Promise<void> }>()
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly runtime: AgentRuntime, private readonly services?: RunServices) {
     this.runs = new RunStore(store)
+    this.data = new DomainData(store)
+    this.work = new WorkLedger(store, this.data)
+    this.questions = new OwnerQuestions(store, this.data)
     store.transaction(() => {
       fenceNetworkBoot(store)
       store.db.prepare('UPDATE runs SET state=\'interrupted\',error=\'Previous worker stopped; explicit recovery is required\',checkpoint_revision=(SELECT revision FROM checkpoints WHERE pod_id=runs.pod_id) WHERE state=\'running\' AND id IN (SELECT run_id FROM run_leases)').run()
       store.db.prepare('UPDATE run_leases SET boot_id=?').run(`fenced:${this.runs.bootId}`)
       store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE state=\'intent\'').run()
+      store.db.prepare('UPDATE effect_attempts SET state=\'unknown\' WHERE state=\'intent\'').run()
     })
   }
 
@@ -400,6 +411,11 @@ export class RunDispatcher {
             return { staged: true }
           }
           if (operation === 'network.emit') throw new Error('Network emission requires a network invocation')
+          if (dataOperations.has(operation)) {
+            const reply = handleDataOperation(this, operation, payload, { podId: pod.id, runId: id }, manifest)
+            if (operation.startsWith('work.') && operation !== 'work.find' && operation !== 'work.contract') appendEvent('work', { operation, ...(reply && typeof reply === 'object' && 'key' in reply ? { key: (reply as { key: unknown }).key } : {}) })
+            return reply
+          }
           if (operation === 'mail.archive') {
             if (!this.services?.mailArchive) throw new Error('Mail archive service is unavailable')
             // Standalone archives record each move in the archive store, which holds only its own unresolved batch.
@@ -495,7 +511,10 @@ export class RunDispatcher {
       this.runs.interrupt(id, failure instanceof Error ? failure.message : 'Execution cleanup is unverified')
       return
     }
-    this.runs.finish(id, state, summary, error, completedInputIds, retryEpoch, failure)
+    this.store.transaction(() => {
+      this.work.settleRun(id)
+      this.runs.finish(id, state, summary, error, completedInputIds, retryEpoch, failure)
+    })
   }
 
 }

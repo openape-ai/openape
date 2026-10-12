@@ -1,7 +1,10 @@
 import { assertIntegrity } from './integrity.ts'
-import { baselineRows, baselineSchema, schema47Additions, schemaVersion } from './schema.ts'
+import { baselineRows, baselineSchema, schema47Additions, schema48Additions, schema48Rows, schemaVersion } from './schema.ts'
 import { assertSupportedSchema, assertUpgradable, upgradeToCurrent } from './upgrade.ts'
+import { restoreReviewGate } from './restore-fence.ts'
 import type { GraphContract } from '../../contracts/graphs.ts'
+import { parseWorkDeclarations } from '../../contracts/work.ts'
+import type { WorkDeclaration } from '../../contracts/work.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statfsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -29,6 +32,7 @@ export interface ScriptManifest {
   assignmentRevision: number
   effects: 'readOnly' | 'reconciledEffects'
   contract?: GraphContract
+  work?: WorkDeclaration[]
 }
 export interface SourceInput { id: string, locator: string, version: string, content: string }
 export interface ClaimInput { id: string, matter: string, kind: 'finding' | 'question' | 'gap', text: string, sourceIds: string[], supersedes?: string }
@@ -56,13 +60,15 @@ function hash(value: unknown): asserts value is string {
   if (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) throw new Error('Invalid content hash')
 }
 export function parseManifest(value: unknown): ScriptManifest {
-  record(value, ['schemaVersion', 'contentHash', 'entrypoint', 'dependencyLockHash', 'runtimeVersion', 'capabilities', 'triggers', 'inputSchemaHash', 'outputSchemaHash', 'checkpointSchemaVersion', 'assignmentRevision', 'effects', 'contract'])
+  record(value, ['schemaVersion', 'contentHash', 'entrypoint', 'dependencyLockHash', 'runtimeVersion', 'capabilities', 'triggers', 'inputSchemaHash', 'outputSchemaHash', 'checkpointSchemaVersion', 'assignmentRevision', 'effects', 'contract', 'work'])
   if (value.schemaVersion !== 1 || value.entrypoint !== 'run.mjs' || !['readOnly', 'reconciledEffects'].includes(value.effects as string)) throw new Error('Unsupported script contract')
   for (const key of ['contentHash', 'dependencyLockHash', 'inputSchemaHash', 'outputSchemaHash']) hash(value[key])
   text(value.runtimeVersion, 'runtime', 100); integer(value.checkpointSchemaVersion); integer(value.assignmentRevision)
   if (!Array.isArray(value.capabilities) || value.capabilities.length > 100 || value.capabilities.some(cap => typeof cap !== 'string' || !/^[a-z][\w.-]{0,100}$/.test(cap))) throw new Error('Invalid capabilities')
   if (!Array.isArray(value.triggers) || !value.triggers.length || value.triggers.some(trigger => !['manual', 'schedule', 'event'].includes(trigger))) throw new Error('Invalid triggers')
-  return structuredClone(value) as unknown as ScriptManifest
+  const manifest = structuredClone(value) as unknown as ScriptManifest
+  if (value.work !== undefined) manifest.work = parseWorkDeclarations(value.work)
+  return manifest
 }
 function syncDirectory(path: string): void {
   const fd = openSync(path, 'r')
@@ -100,6 +106,7 @@ export class PodDatabase {
       this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;')
       this.db.function('pod_activated', (podId) => { this.onActivated(String(podId)); return null })
       this.db.exec('CREATE TEMP TRIGGER pod_activated AFTER UPDATE OF lifecycle ON pods WHEN NEW.lifecycle=\'active\' AND OLD.lifecycle<>\'active\' BEGIN SELECT pod_activated(NEW.id); END')
+      this.db.exec(restoreReviewGate)
       mkdirSync(this.blobs, { recursive: true, mode: 0o700 })
     }
     catch (error) { this.db.close(); throw error }
@@ -109,11 +116,11 @@ export class PodDatabase {
     const version = this.db.prepare('PRAGMA user_version').get()?.user_version as number
     if (version === schemaVersion) return
     if (version === 0) {
-      this.transaction(() => this.db.exec(`${baselineSchema}${schema47Additions}${baselineRows}PRAGMA user_version=${schemaVersion};`))
+      this.transaction(() => this.db.exec(`${baselineSchema}${schema47Additions}${schema48Additions}${baselineRows}${schema48Rows}PRAGMA user_version=${schemaVersion};`))
       return
     }
     // Refuse an unsupported database before writing a full copy of it on every start.
-    if (version !== 46) assertUpgradable(this.db)
+    if (version !== 46 && version !== 47) assertUpgradable(this.db)
     const backup = join(this.root, `before-v${version}-${randomUUID()}.sqlite`)
     this.db.prepare('VACUUM INTO ?').run(backup); chmodSync(backup, 0o600)
     const copy = openSync(backup, 'r')
@@ -129,8 +136,8 @@ export class PodDatabase {
     this.db.exec('PRAGMA foreign_keys=OFF')
     try { this.transaction(() => { upgradeToCurrent(this.db, version); this.db.exec(`PRAGMA user_version=${schemaVersion}`) }) }
     finally { this.db.exec('PRAGMA foreign_keys=ON') }
-    // Only the schema-45 rebuild leaves free pages; schema 46 gains empty tables.
-    if (version !== 46) this.db.exec('VACUUM')
+    // Only the schema-45 rebuild leaves free pages; later schemas gain empty tables.
+    if (version === 45) this.db.exec('VACUUM')
   }
 
   transaction<T>(operation: () => T): T {

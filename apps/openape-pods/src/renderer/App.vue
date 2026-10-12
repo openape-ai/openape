@@ -39,7 +39,7 @@ export default defineComponent({
     globalPage(): boolean { return ['App settings', 'Pods', 'Import', 'Share'].includes(this.selected) },
     sharingApi(): (command: SharingCommand) => Promise<import('../contracts/sharing').SharingState> { return command => window.pods.sharing!(command) },
     pod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.podId) },
-    workerLabel(): string { if (this.connectionError) return t('Unavailable'); return label({ starting: 'Starting', ready: 'Ready', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting']) },
+    workerLabel(): string { if (this.connectionError) return t('Unavailable'); return label({ starting: 'Starting', ready: 'Ready', recovery: 'Needs attention', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting']) },
     attention(): boolean { return !!this.connectionError || this.status?.worker.state === 'error' },
     currentRun(): RunRecord | undefined { return this.runs.find(run => run.state === 'running') },
     needsRecovery(): boolean { const run = this.runs[0]; return !this.schedule?.retry && !!run && ['interrupted', 'failed', 'cancelled', 'blocked'].includes(run.state) && run.recovery?.state !== 'retryQueued' },

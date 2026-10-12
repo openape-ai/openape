@@ -69,7 +69,7 @@ beforeAll(async () => {
   vi.spyOn(process, 'cwd').mockReturnValue(root)
   Object.defineProperty(process, 'parentPort', { configurable: true, value: { postMessage: replies, on: (_event: string, callback: typeof listener) => { listener = callback } } })
   vi.stubEnv('PODS_RUNTIME_EXECUTABLE', process.execPath)
-  await import('../../src/worker/entry')
+  await (await import('../../src/worker/entry')).started
   vi.mocked(process.cwd).mockRestore()
   await send({ id: 'provider', command: { provider: null } })
   await send({ id: 'startup-inspection', command: { inspectCredentials: true } })
