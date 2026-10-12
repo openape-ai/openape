@@ -1,6 +1,6 @@
 import { assertRecordSchema, dataLimits, dataWriter, namespacePath, ownerWriter, parseRecordSchema, plainJson, recordKey, splitDataKey } from '../../contracts/domain-data'
 import type { DataMode, RecordSchema } from '../../contracts/domain-data'
-import { canonicalNetworkJson as canonicalJson } from '../../contracts/network-json'
+import { canonicalJson } from '../../contracts/canonical-json'
 import type { PodDatabase } from '../storage/database'
 import { digest } from '../storage/database'
 
@@ -14,7 +14,6 @@ export interface DataEntryView {
   author: string
   updatedAt: number
   result?: DataResultBinding
-  artifacts: string[]
 }
 export interface NamespaceView { path: string, writer: string, mode: DataMode, schema: RecordSchema | null, readers: string[], revision: number, writerEpoch: number, entries: number }
 interface NamespaceRow { path: string, writer: string, mode: DataMode, schema: string | null, writer_epoch: number, revision: number }
@@ -115,7 +114,7 @@ export class DomainData {
   private view(row: Record<string, unknown>): DataEntryView {
     return {
       key: `${String(row.namespace)}/${String(row.key)}`, revision: Number(row.revision), value: JSON.parse(String(row.value)), author: String(row.author), updatedAt: Number(row.updated_at),
-      ...(row.result ? { result: JSON.parse(String(row.result)) as DataResultBinding } : {}), artifacts: JSON.parse(String(row.artifacts)) as string[],
+      ...(row.result ? { result: JSON.parse(String(row.result)) as DataResultBinding } : {}),
     }
   }
 
@@ -169,24 +168,24 @@ export class DomainData {
       this.assertWriter(principal, namespace)
       if (namespace.mode === 'results') throw new Error(`${namespace.path} holds results; complete the claimed work instead`)
       if (principal !== ownerWriter) this.assertRunning(principal)
-      return this.write(namespace, record, deleting ? null : this.encode(namespace, value), expectedRevision, principal, null, [])
+      return this.write(namespace, record, deleting ? null : this.encode(namespace, value), expectedRevision, principal, null)
     })
   }
 
   /** The result entry of a completed work item; the caller holds the transaction and has verified the claim. */
-  writeResult(principal: { podId: string, runId: string }, output: string, record: string, value: unknown, binding: DataResultBinding, artifacts: string[]): { revision: number } {
+  writeResult(principal: { podId: string, runId: string }, output: string, record: string, value: unknown, binding: DataResultBinding): { revision: number } {
     const namespace = this.row(output)
     this.assertWriter(principal, namespace)
     if (namespace.mode !== 'results') throw new Error(`${namespace.path} is not a results namespace`)
     const current = Number(this.store.db.prepare('SELECT revision FROM data_entries WHERE namespace=? AND key=?').get(namespace.path, recordKey(record))?.revision ?? 0)
-    return this.write(namespace, record, this.encode(namespace, value), current, principal, binding, artifacts)
+    return this.write(namespace, record, this.encode(namespace, value), current, principal, binding)
   }
 
   private assertRunning(principal: { podId: string, runId: string }): void {
     if (!this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=? AND run_id=? AND boot_id NOT LIKE \'fenced:%\'').get(principal.podId, principal.runId)) throw new Error('Data writes require the Pod\'s active run')
   }
 
-  private write(namespace: NamespaceRow, record: string, body: string | null, expectedRevision: number, principal: DataPrincipal, binding: DataResultBinding | null, artifacts: string[]): { revision: number } {
+  private write(namespace: NamespaceRow, record: string, body: string | null, expectedRevision: number, principal: DataPrincipal, binding: DataResultBinding | null): { revision: number } {
     const current = this.store.db.prepare('SELECT revision,deleted FROM data_entries WHERE namespace=? AND key=?').get(namespace.path, record)
     const revision = Number(current?.revision ?? 0)
     if (revision !== expectedRevision) throw new DataConflict(`${namespace.path}/${record}`, revision)
@@ -196,9 +195,9 @@ export class DomainData {
     const hash = digest(body ?? 'deleted')
     const result = binding ? canonicalJson(binding) : null
     const runId = principal === ownerWriter ? null : principal.runId
-    this.store.db.prepare(`INSERT INTO data_entries VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(namespace,key) DO UPDATE SET revision=excluded.revision,sequence=excluded.sequence,value=excluded.value,
-      deleted=excluded.deleted,digest=excluded.digest,author=excluded.author,run_id=excluded.run_id,writer_epoch=excluded.writer_epoch,result=excluded.result,artifacts=excluded.artifacts,updated_at=excluded.updated_at`)
-      .run(namespace.path, record, next, sequence, body, body === null ? 1 : 0, hash, author(principal), runId, namespace.writer_epoch, result, JSON.stringify(artifacts), now)
+    this.store.db.prepare(`INSERT INTO data_entries VALUES(?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(namespace,key) DO UPDATE SET revision=excluded.revision,sequence=excluded.sequence,value=excluded.value,
+      deleted=excluded.deleted,digest=excluded.digest,author=excluded.author,run_id=excluded.run_id,writer_epoch=excluded.writer_epoch,result=excluded.result,updated_at=excluded.updated_at`)
+      .run(namespace.path, record, next, sequence, body, body === null ? 1 : 0, hash, author(principal), runId, namespace.writer_epoch, result, now)
     this.store.db.prepare('INSERT INTO data_entry_revisions VALUES(?,?,?,?,?,?,?,?,?,?)').run(namespace.path, record, next, body, body === null ? 1 : 0, hash, author(principal), runId, result, now)
     this.store.db.prepare('DELETE FROM data_entry_revisions WHERE namespace=? AND key=? AND revision<=?').run(namespace.path, record, next - dataLimits.history)
     return { revision: next }

@@ -1,11 +1,10 @@
 import { randomUUID } from 'node:crypto'
 import { parseOwner } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
-import { canonicalNetworkJson } from '../../contracts/network-json'
+import { canonicalJson } from '../../contracts/canonical-json'
 import { definitionDefaults } from '../../contracts/definitions'
 import type { DefinitionVersionView, DefinitionView } from '../../contracts/definitions'
 import { emptyPackages, parsePackages } from '../../contracts/dependencies'
-import { parseGraphContract } from '../../contracts/graphs'
 import { DependencyStore } from '../dependencies/store'
 import { digest, parseManifest } from '../storage/database'
 import type { PodDatabase, ScriptManifest } from '../storage/database'
@@ -43,7 +42,7 @@ export class DefinitionCatalog {
     const manifest = row.manifest ? parseManifest(JSON.parse(row.manifest as string)) : null
     const view: DefinitionVersionView = {
       version, state: row.state === 'published' ? 'published' : 'legacy', contentHash: row.content_hash as string, lockHash: row.lock_hash as string,
-      contract: manifest?.contract ? parseGraphContract(manifest.contract) : null,
+      work: manifest?.work ?? null,
       capabilities: manifest?.capabilities ?? [], packages: row.packages ? parsePackages(JSON.parse(row.packages as string)) : emptyPackages(),
       defaults: definitionDefaults(Object.fromEntries(this.store.db.prepare('SELECT name,value FROM definition_config WHERE definition_id=? AND definition_version=? AND kind=\'public\'').all(id, version).map(item => [item.name as string, JSON.parse(item.value as string)]))),
     }
@@ -60,7 +59,7 @@ export class DefinitionCatalog {
 
   adopt(podId?: string): void {
     this.store.transaction(() => {
-      this.store.db.prepare('INSERT OR IGNORE INTO network_owners VALUES(?,?)').run(this.owner.issuer, this.owner.subject)
+      this.store.db.prepare('INSERT OR IGNORE INTO owners VALUES(?,?)').run(this.owner.issuer, this.owner.subject)
       for (const pod of podId ? [this.store.getPod(podId)] : this.store.listPods()) {
         if (!podId && !this.ownsPod(pod.id)) continue
         this.assertPod(pod.id)
@@ -110,7 +109,7 @@ export class DefinitionCatalog {
       }
       const version = Number(this.store.db.prepare('SELECT max(version) AS version FROM pod_definition_versions WHERE definition_id=?').get(id)!.version) + 1
       const previous = this.source(id, version - 1)
-      const unchanged = previous.view.state === state && previous.view.contentHash === expectedScript && previous.view.lockHash === manifest.dependencyLockHash && canonicalNetworkJson(previous.view.defaults) === canonicalNetworkJson(definitionDefaults(defaults)) && this.store.db.prepare('SELECT name FROM pod_definitions WHERE id=?').get(id)!.name === name
+      const unchanged = previous.view.state === state && previous.view.contentHash === expectedScript && previous.view.lockHash === manifest.dependencyLockHash && canonicalJson(previous.view.defaults) === canonicalJson(definitionDefaults(defaults)) && this.store.db.prepare('SELECT name FROM pod_definitions WHERE id=?').get(id)!.name === name
       if (!unchanged) {
         if (version > 1000) throw new Error('Definition version limit reached')
         this.insertVersion(id, version, podId, manifest, state, defaults)
@@ -149,8 +148,8 @@ export class DefinitionCatalog {
   private insertVersion(id: string, version: number, podId: string, manifest: ScriptManifest | null, state: 'legacy' | 'published', defaults: Record<string, unknown>): void {
     const values = definitionDefaults(defaults)
     const packages = manifest ? new DependencyStore(this.store).scriptManifest(podId, manifest.contentHash) : emptyPackages()
-    this.store.db.prepare('INSERT INTO pod_definition_versions VALUES(?,?,?,?,?,?)').run(id, version, manifest?.contentHash ?? this.store.putBlob(''), manifest?.dependencyLockHash ?? digest(''), canonicalNetworkJson(manifest?.contract ?? {}), Date.now())
+    this.store.db.prepare('INSERT INTO pod_definition_versions VALUES(?,?,?,?,?,?)').run(id, version, manifest?.contentHash ?? this.store.putBlob(''), manifest?.dependencyLockHash ?? digest(''), canonicalJson(manifest?.contract ?? {}), Date.now())
     this.store.db.prepare('INSERT INTO pod_definition_sources VALUES(?,?,?,?,?,?,?)').run(id, version, state, podId, manifest ? JSON.stringify(manifest) : null, JSON.stringify(packages), manifest ? new DependencyStore(this.store).scriptSet(podId, manifest.contentHash) : null)
-    for (const [name, value] of Object.entries(values)) this.store.db.prepare('INSERT INTO definition_config(definition_id,definition_version,name,kind,value) VALUES(?,?,?,?,?)').run(id, version, name, 'public', canonicalNetworkJson(value))
+    for (const [name, value] of Object.entries(values)) this.store.db.prepare('INSERT INTO definition_config(definition_id,definition_version,name,kind,value) VALUES(?,?,?,?,?)').run(id, version, name, 'public', canonicalJson(value))
   }
 }

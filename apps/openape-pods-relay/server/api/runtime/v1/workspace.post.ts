@@ -12,9 +12,6 @@ export default defineEventHandler(event => boundary(event, () => workspaceBounda
   store.assertLease(runtime, lease)
   if (body.type === 'heartbeat') { store.heartbeat(runtime, lease, text(body.hash, 64)); return { ok: true } }
   if (body.type === 'disconnect') { store.disconnect(runtime, lease); return { ok: true } }
-  if (body.type === 'networks') { store.publishNetworks(runtime, lease, body.view); return { ok: true } }
-  if (body.type === 'readClaim') return new Response(JSON.stringify(store.claimNetworkRead(runtime, lease)), { headers: { 'content-type': 'application/json' } })
-  if (body.type === 'readComplete') { store.completeNetworkRead(runtime, lease, centralId(body.id), body.value, body.error === null ? null : text(body.error, 2000)); return { ok: true } }
   if (body.type === 'claim') return new Response(JSON.stringify(store.claim(runtime, lease)), { headers: { 'content-type': 'application/json' } })
   if (body.type === 'parts') { store.stage(runtime, lease, centralObject(body.parts)); return { ok: true } }
   if (body.type === 'publish') {

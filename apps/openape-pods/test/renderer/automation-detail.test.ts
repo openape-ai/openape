@@ -15,7 +15,6 @@ const NOW = view.at + 11 * 60000
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en') })
 const pod = (name: string) => view.pods.find(item => item.name === name)!
-const automation = (name: string) => view.automations.find(item => item.name === name)!
 async function mountDetail(id: string, desktop = true) {
   applyLanguage('de')
   wrapper = mount(AutomationDetail, { attachTo: document.body, props: { view, id, now: NOW, desktop } })
@@ -26,23 +25,11 @@ const button = (text: string) => wrapper!.findAll('button').find(item => item.te
 const section = (eyebrow: string) => wrapper!.findAll('.sec').find(item => item.find('.eyebrow').exists() && item.find('.eyebrow').text() === eyebrow)!
 
 describe('AutomationDetail', () => {
-  it('shows the latest assistant script update of a network member', async () => {
-    const triage = pod('Triage')
-    const previous = 'a'.repeat(64); const script = 'b'.repeat(64)
-    Object.assign(triage, { scriptUpdate: { at: view.at, previous, script } })
-    try {
-      await mountDetail(triage.id)
-      expect(wrapper!.find('[data-script-update]').text()).toBe(`SkriptänderungenVom Assistenten aktualisiert ${stamp(view.at, 'de')}: aaaaaaaa → bbbbbbbb`)
-    }
-    finally { delete (triage as { scriptUpdate?: unknown }).scriptUpdate }
-  })
-
-  it('shows a Pod with state, schedule, membership, access by kind, secrets as aliases, channels, developer facts and the latest run', async () => {
-    const triage = pod('Triage')
-    await mountDetail(triage.id)
-    expect(wrapper!.find('.dhead b').text()).toBe('Triage')
+  it('shows a Pod with state, access by kind, secrets as aliases, shared data, declared work, developer facts and the latest run', async () => {
+    const classification = pod('Mail-Klassifizierung')
+    await mountDetail(classification.id)
+    expect(wrapper!.find('.dhead b').text()).toBe('Mail-Klassifizierung')
     expect(wrapper!.findAll('.row .pill').map(item => item.text())).toEqual(['aktiv', 'Pod', 'Delta Mind'])
-    expect(section('Teil von').text()).toContain('Delta Mind · Mail-Netzwerk')
     expect(section('Services, per HTTPS').text()).toContain('TypeSafe / Jev')
     expect(section('Services, per HTTPS').text()).toContain('jev-1.13.0 · 20')
     expect(section('Services, per HTTPS').text()).toContain('zugewiesen')
@@ -50,16 +37,27 @@ describe('AutomationDetail', () => {
     expect(section('Verzeichnisse und Dateien').text()).toContain('readWrite')
     expect(section('Geheimnisse').text()).toContain('keine')
     expect(button('+ Geheimnis').exists()).toBe(true)
-    expect(section('Kanäle').text().replace(/\s+/g, ' ')).toContain('nimmt mail.filtered (7)')
-    expect(section('Kanäle').text().replace(/\s+/g, ' ')).toContain('gibt mail.triaged (8)')
-    expect(section('Für Entwickler').text()).toContain(`pods/${triage.id}/pod-script.mjs`)
-    expect(section('Für Entwickler').text()).toContain(`Aktives Script: ${triage.script!.slice(0, 12)}`)
-    expect(section('Letzter Lauf').text()).toContain(stamp(triage.lastRun!.at, 'de'))
+    const shared = section('Gemeinsame Daten').text().replace(/\s+/g, ' ')
+    expect(shared).toContain('schreibt delta-mind/mail/classifications (15)')
+    expect(shared).toContain('liest delta-mind/mail/messages')
+    expect(shared).toContain('liest delta-mind/mail/owner-answers')
+    expect(section('Für Entwickler').text()).toContain(`pods/${classification.id}/pod-script.mjs`)
+    expect(section('Für Entwickler').text()).toContain(`Aktives Script: ${classification.script!.slice(0, 12)}`)
+    expect(section('Letzter Lauf').text()).toContain(stamp(classification.lastRun!.at, 'de'))
     expect(section('Letzter Lauf').text()).toContain('abgeschlossen')
     expect(section('Letzter Lauf').text()).toContain('10 Läufe gesamt')
+    expect(wrapper!.find('[data-work]').exists()).toBe(false)
     expect(JSON.stringify(wrapper!.html())).not.toMatch(/credentialId|"value"/)
-    await section('Teil von').find('button').trigger('click')
-    expect(wrapper!.emitted('open')).toEqual([[automation('Delta Mind · Mail-Netzwerk').id]])
+  })
+
+  it('shows declared work waiting and held for the owner', async () => {
+    const invoices = pod('Rechnungsprüfung')
+    Object.assign(invoices, { work: { pending: 3, held: 1 } })
+    try {
+      await mountDetail(invoices.id)
+      expect(wrapper!.find('[data-work]').text()).toBe('Deklarierte Arbeit3 wartend · 1 für dich angehalten')
+    }
+    finally { Object.assign(invoices, { work: { pending: 0, held: 0 } }) }
   })
 
   it('emits the exact lifecycle, run, secret and folder commands of a Pod', async () => {
@@ -88,26 +86,6 @@ describe('AutomationDetail', () => {
     expect(wrapper!.emitted('command')).toEqual([[{ channel: 'scheduling', body: { type: 'lifecycle', podId: paused.id, revision: paused.revision, lifecycle: 'active' } }]])
     expect(button('Im Editor öffnen').attributes('disabled')).toBeDefined()
     expect(button('Im Editor öffnen').attributes('title')).toBe('Nur am Desktop')
-  })
-
-  it('shows a network with members, decision points and numbers and pauses it only on the desktop', async () => {
-    const network = automation('Delta Mind · Mail-Netzwerk')
-    await mountDetail(network.id)
-    expect(wrapper!.findAll('.row .pill').map(item => item.text())).toEqual(['aktiv', 'Netzwerk', 'Delta Mind'])
-    expect(section('Zeitplan').text()).toBe('Zeitplanalle 15 min')
-    expect(section('Mitglieder').findAll('button')).toHaveLength(11)
-    expect(section('Entscheidungsstellen').text()).toContain('Review uncertain mail: du entscheidest (17 offen)')
-    expect(section('Entscheidungsstellen').text()).toContain('Approve newsletter preview (no move): Freigabe am IdP (0 Batches)')
-    expect(section('Zahlen').text()).toContain('Lieferungen: 80')
-    expect(section('Zahlen').text()).toContain('mail.unsure 14')
-    await section('Mitglieder').findAll('button')[3]!.trigger('click')
-    expect(wrapper!.emitted('open')).toEqual([[network.members[3]]])
-    await button('Pausieren').trigger('click')
-    expect(wrapper!.emitted('network')).toEqual([[{ type: 'pause', id: network.id, revision: network.revision }]])
-    wrapper!.unmount()
-    await mountDetail(network.id, false)
-    expect(button('Pausieren').attributes('disabled')).toBeDefined()
-    expect(button('Pausieren').attributes('title')).toBe('Nur am Desktop')
   })
 
   it('opens from the shell by list row or info panel and closes again', async () => {

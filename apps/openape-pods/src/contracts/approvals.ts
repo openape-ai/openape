@@ -1,6 +1,6 @@
 import { parseOwner } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
-import { canonicalNetworkJson as canonicalJson } from './network-json'
+import { canonicalJson } from './canonical-json'
 
 /**
  * Owner approvals of single object actions (issue 1465), decided at the owner's IdP. Each item is one once-or-always

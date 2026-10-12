@@ -7,14 +7,14 @@ import { kpiFacts } from '../utils/kpis'
 const props = defineProps<{ view: MapView }>()
 const facts = computed(() => kpiFacts(props.view))
 const pausedDetail = computed(() => {
-  const { networks, drafts, archived } = facts.value.paused
-  const parts = [networks ? t('{count} networks', { count: networks }) : '', drafts ? t('{count} drafts', { count: drafts }) : '', archived ? t('{count} archived', { count: archived }) : ''].filter(Boolean)
+  const { drafts, archived } = facts.value.paused
+  const parts = [drafts ? t('{count} drafts', { count: drafts }) : '', archived ? t('{count} archived', { count: archived }) : ''].filter(Boolean)
   return parts.length ? t('of which {parts}', { parts: parts.join(', ') }) : t('nothing paused')
 })
 const degradedDetail = computed(() => facts.value.degraded.name ? `${facts.value.degraded.name} · ${diagnostic(facts.value.degraded.reason)}` : t('nothing degraded'))
 const decisionDetail = computed(() => {
-  const { gates, approvals } = facts.value.decisions
-  const parts = [...gates.map(gate => gate.group ? `${gate.title} · ${gate.group}` : gate.title), ...(approvals ? [t('{count} runtime requests', { count: approvals })] : [])]
+  const { questions, approvals } = facts.value.decisions
+  const parts = [...(questions ? [t('{count} questions', { count: questions })] : []), ...(approvals ? [t('{count} approvals', { count: approvals })] : [])]
   return parts.length ? parts.join(', ') : t('nothing waiting')
 })
 </script>
@@ -22,7 +22,7 @@ const decisionDetail = computed(() => {
 <template>
   <div class="kpi-row" role="list">
     <div class="kpi" role="listitem">
-      <b>{{ facts.active }}</b><span>{{ t('active') }}</span><small>{{ t('Pods and networks with a running schedule') }}</small>
+      <b>{{ facts.active }}</b><span>{{ t('active') }}</span><small>{{ t('Pods with a running schedule') }}</small>
     </div>
     <div class="kpi" role="listitem">
       <b>{{ facts.paused.total }}</b><span>{{ t('paused') }}</span><small>{{ pausedDetail }}</small>

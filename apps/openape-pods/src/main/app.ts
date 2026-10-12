@@ -10,7 +10,7 @@ import { CentralController, offlineAlert } from './central/controller'
 import { centralObject } from '../contracts/central'
 import { RemoteController, RemoteServiceError } from './remote/controller'
 import { InboxDecisions } from './inbox/decisions'
-import { parseNetworkCommand } from '../contracts/networks'
+import { parseDomainCommand } from '../contracts/domain-admin'
 import { searchPackages } from './package-catalog'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -85,7 +85,7 @@ const worker = new FixtureWorker((next) => {
 })
 const remote = new RemoteController(root, worker)
 if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
-  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: () => worker.centralSnapshot(), networkRead: command => worker.centralNetworkRead(command), version: () => worker.centralVersion(), execute: command => worker.centralExecute(command), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
+  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: () => worker.centralSnapshot(), version: () => worker.centralVersion(), execute: command => worker.centralExecute(command), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
   worker.central = central
   worker.inbox = new InboxDecisions(worker, t)
 }
@@ -377,9 +377,9 @@ async function start(): Promise<void> {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.definitions(parseDefinitionCommand(command))
   })
-  ipcMain.handle(channels.networks, (event, command: unknown, ...extra: unknown[]) => {
+  ipcMain.handle(channels.domain, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
-    return worker.networks(parseNetworkCommand(command))
+    return worker.domain(parseDomainCommand(command))
   })
   ipcMain.handle(channels.scheduling, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
@@ -474,8 +474,8 @@ async function start(): Promise<void> {
   if (central) watchCentral(central)
   // Pod notifications wait in the worker outbox until the account inbox acknowledges them.
   setInterval(() => { remote.deliverInbox().catch((error: unknown) => console.error('Could not deliver Pod notifications', error)) }, 15000).unref()
-  // Always grants of finished network approval batches would stay active at the IdP; a few batches are released per minute.
-  setInterval(() => { worker.releaseNetworkGrants(AbortSignal.timeout(50000)).catch((error: unknown) => console.error('Could not release network approval grants', error)) }, 60000).unref()
+  // Always grants of finished object approvals would stay active at the IdP; a few batches are released per minute.
+  setInterval(() => { worker.releaseApprovalGrants(AbortSignal.timeout(50000)).catch((error: unknown) => console.error('Could not release approval grants', error)) }, 60000).unref()
   // Decisions are taken through the central workspace, so they are published only while it is online.
   setInterval(() => {
     const inbox = worker.inbox

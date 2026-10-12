@@ -3,7 +3,7 @@ import { onBeforeUnmount, onMounted, ref, shallowRef, watch } from 'vue'
 import type { MapView } from '../../contracts/map-view'
 import { t } from '../i18n'
 import { ago } from '../utils/cadence'
-import { buildModel, canvasWidth, clusterAt, colorResolver, curve, edgeWidth, hitTest, particleCount, pointAt, relayout, step, visibleNodes, boxSize, YOU } from '../utils/automation-layout'
+import { buildModel, canvasWidth, colorResolver, curve, edgeWidth, hitTest, particleCount, pointAt, relayout, step, visibleNodes, boxSize, YOU } from '../utils/automation-layout'
 import type { Layers, MapModel, MapNode } from '../utils/automation-layout'
 
 /**
@@ -30,7 +30,7 @@ function rebuild(keepPositions = true) {
   model.value.links.forEach((link, index) => { const count = particleCount(link.flow); for (let k = 0; k < count; k++) particles.push({ link: index, t: (k / count + index * 0.07) % 1, s: 0.0001 + ((index * 7) % 5) * 0.00002 }) })
 }
 watch(() => props.view, () => rebuild())
-watch(() => [props.layers.channel, props.layers.read, props.layers.write, props.layers.auth, props.layers.paused], () => rebuild())
+watch(() => [props.layers.data, props.layers.read, props.layers.write, props.layers.auth, props.layers.paused], () => rebuild())
 
 let resolve: ((token: string) => string) | null = null
 let scheme = ''
@@ -43,28 +43,19 @@ function css() {
 const font = (size: number, weight = 400) => `${weight} ${size}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`
 function fit(ctx: CanvasRenderingContext2D, text: string, width: number) { if (ctx.measureText(text).width <= width) return text; let a = text; while (a.length > 1 && ctx.measureText(`${a}…`).width > width) a = a.slice(0, -1); return `${a}…` }
 const nodeName = (item: MapNode) => item.id === YOU ? t('You · Pods inbox') : item.name
-const nodeSub = (item: MapNode) => item.kind === 'collapsed' ? t('{count} Pods · paused', { count: Number(item.sub) }) : item.id === YOU ? t('questions, rules') : item.sub === 'idp' ? t('approvals: once / standing') : item.rk === 'application' ? `${item.sub} · ${t('installed')}` : item.rk === 'service' ? `${t('https')} · ${item.sub}` : item.rk === 'ssh' ? t('SSH · read only') : item.sub
+const nodeSub = (item: MapNode) => item.id === YOU ? t('questions, rules') : item.sub === 'idp' ? t('approvals: once / standing') : item.rk === 'application' ? `${item.sub} · ${t('installed')}` : item.rk === 'service' ? `${t('https')} · ${item.sub}` : item.rk === 'ssh' ? t('SSH · read only') : item.sub
 
 function draw(now: number) {
   const element = canvas.value; const ctx = element?.getContext('2d')
   if (!element || !ctx) return
   if (element.height !== height.value) element.height = height.value
   const g = css(); const text = g('--text'); const muted = g('--muted'); const surface = g('--surface'); const border = g('--border')
-  const colors = { channel: g('--accent'), read: g('--read'), write: g('--warn'), auth: g('--idp') }
+  const colors = { data: g('--accent'), read: g('--read'), write: g('--warn'), auth: g('--idp') }
   const dt = props.playing ? now - last : 0; last = now
   step(model.value, reduced ? 1 : 0.14)
   const nodes = new Map(model.value.nodes.map(item => [item.id, item]))
   const shown = (id: string) => visible.value.has(id)
   ctx.clearRect(0, 0, element.width, element.height)
-  ctx.fillStyle = g('--tint')
-  for (const cluster of model.value.clusters) {
-    ctx.globalAlpha = 0.45; ctx.beginPath(); ctx.roundRect(cluster.x, cluster.y, cluster.w, cluster.h, 16); ctx.fill(); ctx.globalAlpha = 1
-    ctx.fillStyle = muted; ctx.font = font(12, 600); ctx.textAlign = 'left'
-    const automation = props.view.automations.find(item => item.id === cluster.id)
-    const facts = automation ? [automation.name.toUpperCase(), automation.schedule?.spec?.kind === 'interval' ? t('every {count} min', { count: automation.schedule.spec.seconds / 60 }) : automation.schedule?.spec?.kind === 'daily' ? t('daily {time}', { time: automation.schedule.spec.time }) : '', automation.counts.done ? t('{count} deliveries', { count: automation.counts.done }) : '', automation.lastRun ? `${t('last')} ${ago(automation.lastRun.at, props.now)}` : ''].filter(Boolean) : [cluster.name]
-    ctx.fillText(fit(ctx, facts.join(' · '), cluster.w - 24), cluster.x + 12, cluster.y + 18)
-    ctx.fillStyle = g('--tint')
-  }
   const labels: { x: number, y: number, text: string }[] = []
   const focus = hover ?? props.pinned
   model.value.links.forEach((link) => {
@@ -73,7 +64,7 @@ function draw(now: number) {
     const paused = a.paused || b.paused
     const c = curve(a, b, link.type)
     ctx.strokeStyle = colors[link.type]; ctx.globalAlpha = paused ? 0.18 : link.flow > 0 ? (a.kind === 'ai' ? 0.35 : 0.6) : 0.2; ctx.lineWidth = edgeWidth(link.flow)
-    ctx.setLineDash(link.type === 'channel' && link.flow > 0 ? [] : [5, 4])
+    ctx.setLineDash(link.type === 'data' && link.flow > 0 ? [] : [5, 4])
     ctx.beginPath(); ctx.moveTo(c.p0.x, c.p0.y); ctx.quadraticCurveTo(c.c.x, c.c.y, c.p1.x, c.p1.y); ctx.stroke()
     const q = pointAt(c, 0.97); const q2 = pointAt(c, 1); const angle = Math.atan2(q2.y - q.y, q2.x - q.x)
     ctx.setLineDash([]); ctx.fillStyle = colors[link.type]; ctx.beginPath(); ctx.moveTo(q2.x, q2.y); ctx.lineTo(q2.x - 8 * Math.cos(angle - 0.4), q2.y - 8 * Math.sin(angle - 0.4)); ctx.lineTo(q2.x - 8 * Math.cos(angle + 0.4), q2.y - 8 * Math.sin(angle + 0.4)); ctx.fill()
@@ -85,7 +76,7 @@ function draw(now: number) {
     if (!a || !b || !props.layers[link.type] || !shown(a.id) || !shown(b.id) || a.paused || b.paused) continue
     particle.t = (particle.t + particle.s * dt) % 1
     const q = pointAt(curve(a, b, link.type), particle.t)
-    ctx.fillStyle = colors[link.type]; ctx.beginPath(); ctx.arc(q.x, q.y, link.type === 'channel' ? 3.2 : 2.6, 0, 7); ctx.fill()
+    ctx.fillStyle = colors[link.type]; ctx.beginPath(); ctx.arc(q.x, q.y, link.type === 'data' ? 3.2 : 2.6, 0, 7); ctx.fill()
   }
   const pulse = 0.5 + 0.5 * Math.sin(now / 500)
   for (const item of model.value.nodes) {
@@ -107,21 +98,21 @@ function draw(now: number) {
     }
     const { w, h } = boxSize(item.kind); const x = item.x - w / 2; const y = item.y - h / 2
     const stroke = item.kind === 'auth' ? g('--idp') : item.kind === 'ai' ? g('--accent') : item.rk === 'directory' ? g('--warn') : item.rk === 'application' ? g('--application') : item.rk === 'service' ? g('--service') : text
-    ctx.fillStyle = focus === item.id ? g('--tint') : surface; ctx.strokeStyle = stroke; ctx.lineWidth = item.kind === 'auth' ? 2 : 1.4; ctx.setLineDash(item.kind === 'collapsed' ? [4, 4] : [])
+    ctx.fillStyle = focus === item.id ? g('--tint') : surface; ctx.strokeStyle = stroke; ctx.lineWidth = item.kind === 'auth' ? 2 : 1.4
     const radius = item.kind === 'auth' || item.rk === 'service' ? 20 : item.rk === 'directory' ? 4 : 8
     ctx.beginPath()
     if (item.rk === 'directory') { ctx.moveTo(x, y + 8); ctx.lineTo(x + 22, y + 8); ctx.lineTo(x + 28, y + 2); ctx.lineTo(x + w, y + 2); ctx.lineTo(x + w, y + h); ctx.lineTo(x, y + h); ctx.closePath() }
     else {
       ctx.roundRect(x, y, w, h, radius)
     }
-    ctx.fill(); ctx.stroke(); ctx.setLineDash([])
+    ctx.fill(); ctx.stroke()
     const gx = x + 16; const gy = item.y; ctx.strokeStyle = stroke; ctx.lineWidth = 1.2
     if (item.rk === 'service') { ctx.beginPath(); ctx.arc(gx, gy, 6, 0, 7); ctx.stroke(); ctx.beginPath(); ctx.ellipse(gx, gy, 2.5, 6, 0, 0, 7); ctx.stroke(); ctx.beginPath(); ctx.moveTo(gx - 6, gy); ctx.lineTo(gx + 6, gy); ctx.stroke() }
     else if (item.rk === 'application') { for (const [dx, dy] of [[-6, -6], [1, -6], [-6, 1], [1, 1]]) { ctx.beginPath(); ctx.roundRect(gx + dx!, gy + dy!, 5, 5, 1); ctx.stroke() } }
     else if (item.rk === 'directory') { ctx.beginPath(); ctx.roundRect(gx - 7, gy - 4, 14, 10, 1.5); ctx.stroke(); ctx.beginPath(); ctx.moveTo(gx - 7, gy - 4); ctx.lineTo(gx - 7, gy - 7); ctx.lineTo(gx - 2, gy - 7); ctx.lineTo(gx, gy - 4); ctx.stroke() }
     if (item.both) { ctx.fillStyle = g('--warn'); ctx.fillRect(x + w - 4, y + 6, 4, h - 12) }
     ctx.fillStyle = text; ctx.textAlign = 'left'; ctx.font = font(12, 600)
-    const glyph = !!item.rk && item.kind !== 'collapsed'; const tx = glyph ? x + 30 : item.x; const tw = glyph ? w - 38 : w - 16
+    const glyph = !!item.rk; const tx = glyph ? x + 30 : item.x; const tw = glyph ? w - 38 : w - 16
     if (!glyph) ctx.textAlign = 'center'
     const sub = nodeSub(item)
     ctx.fillText(fit(ctx, nodeName(item), tw), tx, item.y - (sub ? 2 : -4))
@@ -143,11 +134,10 @@ function move(event: MouseEvent) {
   const p = position(event); const item = hitTest(model.value, visible.value, p.x, p.y)
   const id = item?.id ?? null
   if (id !== hover) { hover = id; emit('hover', id) }
-  canvas.value!.style.cursor = item || clusterAt(model.value, p.x, p.y) ? 'pointer' : 'default'
+  canvas.value!.style.cursor = item ? 'pointer' : 'default'
 }
 function click(event: MouseEvent) {
   const p = position(event); const item = hitTest(model.value, visible.value, p.x, p.y)
-  if (!item) { const cluster = clusterAt(model.value, p.x, p.y); if (cluster) { emit('open', cluster.id); return } }
   emit('pin', item ? (props.pinned === item.id ? null : item.id) : null)
 }
 function doubleClick(event: MouseEvent) {

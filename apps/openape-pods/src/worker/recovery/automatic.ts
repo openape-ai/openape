@@ -6,7 +6,6 @@ import { RunStore } from '../runs/store'
 export async function recoverStoppedRuns(store: PodDatabase, helper: string, limit = 10): Promise<void> {
   const candidates = store.db.prepare(`SELECT r.* FROM runs r
     WHERE r.state IN ('interrupted','failed','cancelled','blocked','completedWithGaps')
-      AND NOT EXISTS(SELECT 1 FROM network_invocations n WHERE n.run_id=r.id)
       AND NOT EXISTS(SELECT 1 FROM recovery_reviews review WHERE review.run_id=r.id)
       AND NOT EXISTS(SELECT 1 FROM run_events e WHERE e.run_id=r.id AND e.type='recovery')
       AND (EXISTS(SELECT 1 FROM accepted_events e WHERE e.run_id=r.id AND e.state IN ('blocked','claimed'))

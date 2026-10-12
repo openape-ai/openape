@@ -1,6 +1,6 @@
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import { AuthorityError } from '../../contracts/infrastructure'
-import { assertGateOperation } from '../../contracts/network-capabilities'
+import { assertGateOperation } from '../../contracts/mail-archive-port'
 import type { PodResource } from '../../contracts/resources'
 import { programRequest } from '../../main/programs/invoke'
 import { readActions } from '../../main/programs/session'

@@ -5,8 +5,7 @@ import { normalizeTag, tagLimits } from './tags'
  * The desktop stays the authority: the inbox shows a decision and returns the chosen option,
  * and the desktop maps it back to the same owner command its own Decisions view would send.
  */
-// Desktops before issue 1455 also publish setup `proposal` (M5) and `workflow-*` (M4) decisions; the relay accepts them until those builds are replaced.
-export type InboxDecisionType = 'network-choice' | 'network-batch' | 'workflow-held' | 'workflow-batch' | 'approval' | 'effect' | 'secret' | 'proposal'
+export type InboxDecisionType = 'question' | 'work' | 'approval' | 'effect' | 'secret'
 /** Who settles the decision: Pods itself, the owner's identity provider, or OpenApe Secrets. */
 export type InboxAuthority = 'pods' | 'idp' | 'secrets'
 /** `evidence`: the owner states what was observed; `value`: the owner types the requested setting. */
@@ -19,7 +18,7 @@ export interface InboxDecision {
   digest: string
   podId: string | null
   podName: string | null
-  /** The Pod's own tags followed by those inherited from its network; absent when it has none and from desktops before issue 1461. */
+  /** The Pod's tags; absent when it has none and from desktops before issue 1461. */
   podTags?: string[]
   title: string
   body: string
@@ -31,15 +30,12 @@ export interface InboxDecision {
 export interface InboxDecide { type: 'decide', sourceId: string, digest: string, option: string, input?: string }
 
 export const inboxDecisionLimits = { decisions: 500, title: 300, body: 4000, options: 16, option: 200, input: 4000, publicationBytes: 1024 * 1024 } as const
-export const inboxDecisionTypes: InboxDecisionType[] = ['network-choice', 'network-batch', 'workflow-held', 'workflow-batch', 'approval', 'effect', 'secret', 'proposal']
+export const inboxDecisionTypes: InboxDecisionType[] = ['question', 'work', 'approval', 'effect', 'secret']
 export const inboxSourceId = /^[\w.:-]{1,200}$/
 const optionKey = /^[\w.-]{1,64}$/
 const digestPattern = /^[a-f0-9]{64}$/
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
 const inboxTagLimit = 2 * tagLimits.perItem
-
-/** A Pod's tags as the inbox shows them: its own followed by those inherited from its network, without repeats (issue 1461). */
-export function inboxTags(own: string[], inherited: string[]): string[] { return [...new Set([...own, ...inherited])] }
 
 /** Tags of an inbox message or decision, exactly as stored by the desktop: normalized and without repeats. */
 export function parseInboxTags(value: unknown): string[] {

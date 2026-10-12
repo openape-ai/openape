@@ -1,10 +1,8 @@
 import type { PortableSourceSelection } from '../../contracts/sharing'
-import { parseOwner, sharingLimits } from '@openape/pods-protocol'
+import { parseOwner } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
 import { homedir } from 'node:os'
-import { canonicalNetworkJson } from '../../contracts/network-json'
-import { parseNetworkDefinition } from '../../contracts/networks'
-import { parseGraphContract } from '../../contracts/graphs'
+import { canonicalJson } from '../../contracts/canonical-json'
 import { emptyPackages, parsePackages } from '../../contracts/dependencies'
 import { parseSchedule } from '../../contracts/scheduling'
 import { ResourceRegistry } from '../resources/registry'
@@ -13,7 +11,6 @@ import { DefinitionCatalog } from '../workspace/definition-catalog'
 import { ItemTagStore } from '../workspace/item-tags'
 import { digest, parseManifest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
-import { networkConfiguration } from '../scheduling/network-config'
 
 export type { PortableSourceSelection } from '../../contracts/sharing'
 
@@ -27,7 +24,6 @@ function podSource(store: PodDatabase, resources: ResourceRegistry, catalog: Def
   if (!script) throw new Error('Portable source script is missing')
   const manifest = parseManifest(JSON.parse(String(script.manifest)))
   if (manifest.contentHash !== pod.activeScript || manifest.assignmentRevision !== pod.bindingRevision) throw new Error('Portable source script binding changed')
-  if (manifest.contract) manifest.contract = parseGraphContract(manifest.contract)
   const content = new TextDecoder('utf-8', { fatal: true }).decode(store.readBlob(pod.activeScript))
   if (content.length > 200000) throw new Error('Portable script exceeds the native character limit')
   const dependency = store.db.prepare(`SELECT s.dependency_hash,d.manifest,d.lockfile FROM script_dependencies s
@@ -40,26 +36,6 @@ function podSource(store: PodDatabase, resources: ResourceRegistry, catalog: Def
   return { pod, manifest, content, tags: new ItemTagStore(store).own(id), resourceEpoch, resources: resources.list(id), variables: new PodVariables(store).list(id), binding, definitions, schedule: schedule ? { revision: Number(schedule.revision), spec: parseSchedule(JSON.parse(String(schedule.spec))) } : null, packages, dependencyHash: dependency ? String(dependency.dependency_hash) : null, lock: dependency ? String(dependency.lockfile) : null }
 }
 export type PortablePodSource = ReturnType<typeof podSource>
-
-function networkSource(store: PodDatabase, owner: Owner, id: string) {
-  const row = store.db.prepare(`SELECT n.state,r.contract,r.content_hash FROM networks n JOIN network_revisions r ON r.network_id=n.id AND r.revision=n.revision
-    WHERE n.id=? AND n.owner_issuer=? AND n.owner_subject=? AND n.state!='archived'`).get(id, owner.issuer, owner.subject)
-  if (!row) throw new Error('Network is unavailable to this export owner')
-  const definition = parseNetworkDefinition(JSON.parse(String(row.contract)))
-  if (definition.id !== id || digest(String(row.contract)) !== row.content_hash) throw new Error('Portable network revision digest changed')
-  const collections = store.db.prepare(`SELECT c.id,c.name,c.current_version,c.retention,v.schema,v.indexes FROM data_collections c
-    JOIN data_collection_versions v ON v.collection_id=c.id AND v.version=c.current_version WHERE c.id IN (
-      SELECT collection_id FROM data_permissions WHERE network_id=? UNION
-      SELECT s.collection_id FROM artifact_permissions p JOIN artifact_scopes s ON s.id=p.scope_id WHERE p.network_id=? AND s.collection_id IS NOT NULL
-    ) ORDER BY c.id`).all(id, id)
-  const dataPermissions = store.db.prepare('SELECT pod_id,collection_id,operation,revision FROM data_permissions WHERE network_id=? ORDER BY pod_id,collection_id,operation').all(id)
-  const scopes = store.db.prepare(`SELECT DISTINCT s.id,s.collection_id,s.private_network_id FROM artifact_permissions p JOIN artifact_scopes s ON s.id=p.scope_id WHERE p.network_id=? ORDER BY s.id`).all(id)
-  if (scopes.some(scope => scope.private_network_id !== null && scope.private_network_id !== id)) throw new Error('Portable artifact scope belongs to another private network')
-  const artifactPermissions = store.db.prepare('SELECT pod_id,scope_id,operation,revision FROM artifact_permissions WHERE network_id=? ORDER BY pod_id,scope_id,operation').all(id)
-  const configuration = definition.members.map(member => ({ podId: member.podId, fields: networkConfiguration(store, id, member.podId) }))
-  const sharedValues = store.db.prepare('SELECT name,value FROM composition_config WHERE network_id=? ORDER BY name').all(id).map(row => ({ name: String(row.name), value: JSON.parse(String(row.value)) as unknown }))
-  return { definition, state: String(row.state), tags: new ItemTagStore(store).own(id), collections, dataPermissions, scopes, artifactPermissions, configuration, sharedValues }
-}
 
 function localReferences(value: unknown, references: Set<string>): void {
   if (typeof value === 'string') {
@@ -77,20 +53,12 @@ function localReferences(value: unknown, references: Set<string>): void {
 
 export function capturePortableSource(store: PodDatabase, ownerValue: Owner, selection: PortableSourceSelection) {
   const owner = parseOwner(ownerValue)
-  if (!['pod', 'network'].includes(selection.kind) || !/^[a-f0-9-]{36}$/.test(selection.id)) throw new Error('Invalid portable source selection')
+  if (selection.kind !== 'pod' || !/^[a-f0-9-]{36}$/.test(selection.id)) throw new Error('Invalid portable source selection')
   return store.transaction(() => {
     const resources = new ResourceRegistry(store, () => { throw new Error('Portable source capture cannot mutate resources') })
     const catalog = new DefinitionCatalog(store, resources, owner)
-    const network = selection.kind === 'network' ? networkSource(store, owner, selection.id) : null
-    const ids = network?.definition.members.map(member => member.podId) ?? [selection.id]
-    if (ids.length > sharingLimits.pods) throw new Error('Portable export exceeds the Pod limit')
-    const pods = ids.map(id => podSource(store, resources, catalog, id))
-    for (const member of network?.definition.members ?? []) {
-      const current = pods.find(item => item.pod.id === member.podId)!
-      const definition = catalog.source(member.definitionId, member.definitionVersion)
-      if (current.binding?.binding_revision !== member.bindingRevision || definition.view.contentHash !== current.pod.activeScript || definition.view.lockHash !== current.manifest.dependencyLockHash || definition.dependencyHash !== current.dependencyHash || current.binding?.definition_id !== member.definitionId || current.binding?.definition_version !== member.definitionVersion) throw new Error('Network member no longer matches its published definition')
-    }
-    const source = { owner, selection: { ...selection }, pods, network }
+    const pods = [podSource(store, resources, catalog, selection.id)]
+    const source = { owner, selection: { ...selection }, pods }
     const privateReferences = new Set([store.root, homedir(), owner.subject])
     const privateValues = new Set<string>()
     const remember = (value: unknown): void => {
@@ -104,7 +72,7 @@ export function capturePortableSource(store: PodDatabase, ownerValue: Owner, sel
         for (const item of Object.values(value)) remember(item)
       }
     }
-    localReferences({ pods: pods.map(({ content: _content, lock: _lock, ...pod }) => pod), network }, privateReferences)
+    localReferences({ pods: pods.map(({ content: _content, lock: _lock, ...pod }) => pod) }, privateReferences)
     for (const pod of pods) {
       for (const variable of pod.variables) remember(variable.value)
       for (const field of [...pod.definitions.filter(field => field.kind === 'public')]) remember(JSON.parse(String(field.value)))
@@ -128,13 +96,11 @@ export function capturePortableSource(store: PodDatabase, ownerValue: Owner, sel
         if (authentication && typeof authentication === 'object') remember(authentication)
       }
     }
-    for (const field of network?.sharedValues ?? []) remember(field.value)
     const fingerprintSource = {
       ...source,
       pods: pods.map(item => ({ ...item, pod: { ...item.pod, lifecycle: 'paused' } })),
-      network: network ? { ...network, state: 'paused' } : null,
     }
-    return { ...source, fingerprint: digest(canonicalNetworkJson(fingerprintSource)), privateReferences: [...privateReferences].sort(), privateValues: [...privateValues].sort() }
+    return { ...source, fingerprint: digest(canonicalJson(fingerprintSource)), privateReferences: [...privateReferences].sort(), privateValues: [...privateValues].sort() }
   })
 }
 export type PortableSource = ReturnType<typeof capturePortableSource>

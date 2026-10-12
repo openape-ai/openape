@@ -16,7 +16,7 @@ import { registerAuthDomain } from '../connections/ledger'
 import { startMailProxy } from '../mail/proxy'
 import { inspectDomainRecords } from '../../worker/recovery/domains'
 import { ProgramState } from './state'
-import { assertGateOperation } from '../../contracts/network-capabilities'
+import { assertGateOperation } from '../../contracts/mail-archive-port'
 
 /** Read operations of an adapter; any other action is a write whose run is never replayed automatically. */
 export const readActions = ['read', 'list', 'get']
