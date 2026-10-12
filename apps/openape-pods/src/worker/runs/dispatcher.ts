@@ -1,7 +1,6 @@
 import { InboxOutbox, parseNotify } from '../inbox/outbox'
 import { RunCancellation, unresolvedOperation } from '../recovery/policy'
 import type { RecoveryFailure } from '../recovery/policy'
-import { boundedStep } from '../scheduling/tick-step'
 import { AuthorityError, InfrastructureError, NonRetryableError, retryInfrastructure } from '../../contracts/infrastructure'
 import { assignedJev, parseJevRequest, parseJevResult } from '../../contracts/jev'
 import type { JevRequest, JevEvaluation } from '../../contracts/jev'
@@ -218,17 +217,23 @@ export class RunDispatcher {
         finally { pendingAgents.delete(operation) }
       }
       const scriptTool = async (payload: unknown, toolSignal: AbortSignal) => invokeTool(payload, toolSignal)
-      // Approval requests and decisions are exchanged with the IdP inside the Pod's own run, never in the background.
-      if (this.services?.approval && this.approvals.due(pod.id)) {
-        const service: ApprovalService = (body, serviceSignal) => this.services!.approval!(body, serviceSignal, scope)
-        try { await boundedStep(30000, () => this.approvals.sync(pod.id, service, signal), () => {}) }
-        catch (error) { appendEvent('approvals', { error: error instanceof Error ? error.message.slice(0, 2000) : 'Approval exchange failed' }) }
-        assertCurrent()
-      }
       if (this.services?.shell) {
         const environment = await retryService('runtime authorization', () => this.services!.shell!(scope, signal), signal, 30000)
         Object.assign(runtime, { home: environment.home, shell: environment.shell, environment: { ...environment.environment, ...runtime.environment } })
         shellScope = scope
+      }
+      // Approval requests and decisions are exchanged with the IdP inside the Pod's own run, after its run authority
+      // exists, and finish before the script starts; a slow exchange is aborted, never left running beside the script.
+      if (this.services?.approval && this.approvals.due(pod.id)) {
+        const service: ApprovalService = (body, serviceSignal) => this.services!.approval!(body, serviceSignal, scope)
+        const exchange = new AbortController()
+        const stop = () => exchange.abort()
+        const timer = setTimeout(stop, 30000)
+        signal.addEventListener('abort', stop, { once: true })
+        try { await this.approvals.sync(pod.id, service, exchange.signal) }
+        catch (error) { appendEvent('approvals', { error: error instanceof Error ? error.message.slice(0, 2000) : 'Approval exchange failed' }) }
+        finally { clearTimeout(timer); signal.removeEventListener('abort', stop) }
+        assertCurrent()
       }
       let mail: MailRecipeSession | undefined
       appendEvent('environment', { script: artifact, workspace: input.workspace, values: Object.fromEntries(Object.entries(runtime.environment).filter(([key]) => ['HOME', 'TMPDIR', 'PATH', 'SHELL', 'PODS_POD_ID', 'LANG', 'TERM'].includes(key))) })

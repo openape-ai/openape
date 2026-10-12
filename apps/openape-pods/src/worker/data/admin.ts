@@ -26,6 +26,7 @@ export class DomainAdministration {
       case 'delete': return data.set(ownerWriter, command.key, null, command.revision, true)
       case 'work': return { counts: work.counts(command.operation)[command.operation] ?? null, items: work.items(command.operation, command.states) }
       case 'reprocess': work.reprocess(command.operation); return this.overview()
+      case 'selectRule': work.selectRule(command.operation, command.ruleVersion); return this.overview()
       case 'release': work.release(command.key, command.evidence); return this.overview()
       case 'answer': return questions.answer(command.questionId, command.option)
       case 'resolveApproval': approvals.resolve(command.id, command.decision, command.evidence); return this.overview()

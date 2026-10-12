@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, truncateSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, truncateSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createHash } from 'node:crypto'
@@ -85,20 +85,36 @@ describe('storage failures stay recoverable and leave the original data untouche
     }
   })
 
-  it('rolls an interrupted conversion back completely and succeeds once the cause is gone', () => {
-    // The conversion stops after its backup because the network runtime still holds a delivery.
+  it('refuses open network work before copying anything', () => {
     const root = profile47('INSERT INTO network_deliveries(id,network_id,event_id,subscription_id,case_id,case_revision,state,ready_at,accepted_at) VALUES(\'d\',\'n\',\'e\',\'s\',\'c\',1,\'pending\',1,1);')
     expect(failure(root).reason).toBe('conversion-blocked')
+    expect(failure(root).reason).toBe('conversion-blocked')
+    expect(readdirSync(root).filter(name => name.startsWith('before-v47-'))).toEqual([])
+  })
+
+  it('rolls an interrupted conversion back completely, keeps no redundant copy and succeeds once the cause is gone', () => {
+    // The conversion stops midway: merging the network denylist would exceed the limit of the member's own list.
+    const paths = (prefix: string) => JSON.stringify(Array.from({ length: 20 }, (_, index) => `/private/${prefix}/${index}`))
+    const root = profile47(`INSERT INTO pod_sandbox_deny VALUES('00000000-0000-4000-8000-000000000001','pod',NULL,'${paths('own')}'); INSERT INTO pod_sandbox_deny VALUES('00000000-0000-4000-8000-000000000001','network:n',1,'${paths('network')}');`)
+    expect(failure(root)).toMatchObject({ reason: 'conversion-blocked', message: expect.stringContaining('32 denied paths') })
     const after = new DatabaseSync(join(root, 'control.sqlite'))
     expect(after.prepare('PRAGMA user_version').get()!.user_version).toBe(47)
     expect(after.prepare('SELECT count(*) AS count FROM pods').get()!.count).toBe(1)
     expect(after.prepare('SELECT count(*) AS count FROM sqlite_schema WHERE name=\'legacy_records\'').get()!.count).toBe(0)
-    after.exec('DELETE FROM network_deliveries')
+    expect(readdirSync(root).filter(name => name.startsWith('before-v47-'))).toEqual([])
+    after.exec('DELETE FROM pod_sandbox_deny WHERE source=\'network:n\'')
     after.close()
-    expect(readdirSync(root).filter(name => name.startsWith('before-v47-'))).toHaveLength(1)
     const store = openStorage(root, 1)
     expect(store.db.prepare('PRAGMA user_version').get()!.user_version).toBe(schemaVersion)
     store.close()
+    expect(readdirSync(root).filter(name => name.startsWith('before-v47-'))).toHaveLength(1)
+  })
+
+  it('treats an emptied database file in a used profile as missing instead of starting over', () => {
+    const root = profile()
+    writeFileSync(join(root, 'control.sqlite'), '')
+    expect(failure(root).reason).toBe('missing')
+    expect(statSync(join(root, 'control.sqlite')).size).toBe(0)
   })
 
   it('reports lock contention as busy and opens after the lock is released', () => {
@@ -171,7 +187,13 @@ describe('backups and restore', () => {
       // Busy profiles are skipped, not recorded as failures.
       store.db.prepare('INSERT INTO dependency_domains VALUES(\'x\',2)').run()
       expect(await runAutomaticBackup(store, directory)).toBeNull()
+      store.db.prepare('DELETE FROM dependency_domains').run()
     }
     finally { store.close() }
+    // Another profile (a restored copy) shares the folder; its backups never rotate this profile's generations away.
+    const other = new PodDatabase(profile())
+    try { for (let index = 0; index < 5; index++) await runAutomaticBackup(other, directory, Date.now() + index) }
+    finally { other.close() }
+    expect((await listBackups(directory, true)).filter(backup => backup.valid)).toHaveLength(8)
   })
 })

@@ -131,6 +131,20 @@ describe('self-discovered work on shared domain data', () => {
     expect(f.classify(() => ({ isInvoice: true }))).toBe(1)
     f.work.reprocess('acme/mail-classification')
     expect(f.classify(() => ({ isInvoice: true }))).toBe(1)
+    // A changed contract is refused until the owner selects it.
+    f.activate(f.classifier, [classification({ ruleVersions: [2], fields: ['contentRevision', 'subject'] })])
+    expect(() => f.classify(() => ({}))).toThrow('selectRule')
+    expect(() => f.work.selectRule('acme/mail-classification', 3)).toThrow('does not implement rule version 3')
+    f.work.selectRule('acme/mail-classification', 2)
+    // A claim taken before a reprocess cannot store its result over the newer generation.
+    f.write('m2', { contentRevision: 'c2', subject: 'Second' })
+    const run = f.run(f.classifier)
+    try {
+      const claim = f.work.claim(run, { key: f.work.find(run, { operation: 'acme/mail-classification' }).find(item => item.object === 'm2')!.key })
+      f.work.reprocess('acme/mail-classification')
+      expect(() => f.work.complete(run, { claimToken: claim.claimToken, result: { isInvoice: true } })).toThrow('the result was not stored')
+    }
+    finally { f.finish(run) }
   })
 
   it('waits for a missing prerequisite without new attempts and blocks repeated failures', () => {
@@ -229,5 +243,17 @@ describe('owner questions', () => {
     const second = ask('m1', 'c2')
     expect(second.id).not.toBe(first.id)
     expect(f.questions.get(first.id).state).toBe('decided')
+    f.finish(run)
+    // Another reader neither replaces this Pod's open question nor overwrites its answer.
+    f.data.setReaders('acme/mail/owner-answers', [f.classifier, f.invoices], f.data.namespace('acme/mail/owner-answers').revision)
+    const other = f.run(f.invoices)
+    const foreign = (key: string, fingerprint: string) => f.questions.ask(other, { namespace: 'acme/mail/owner-answers', key, fingerprint, title: 'Mine?', body: '', options: [{ key: 'keep', title: 'Keep' }, { key: 'drop', title: 'Drop' }] })
+    try {
+      expect(() => foreign('m1', 'c3')).toThrow('Another Pod already asks')
+      f.questions.answer(second.id, 'keep')
+      expect(() => foreign('m1', 'c3')).toThrow('another Pod\'s question')
+      expect(f.questions.get(second.id).state).toBe('decided')
+    }
+    finally { f.finish(other) }
   })
 })

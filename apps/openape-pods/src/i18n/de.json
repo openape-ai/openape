@@ -2910,7 +2910,6 @@
   "Work item is {p0}": "Der Arbeitseintrag ist {p0}",
   "Work operation {p0} is not registered": "Die Arbeitsoperation {p0} ist nicht registriert",
   "Work requires the Pod's active run": "Arbeit braucht den aktiven Lauf des Pods",
-  "{p0} differs from its selected contract; select the new contract explicitly": "{p0} weicht von seinem gewählten Vertrag ab; wähle den neuen Vertrag ausdrücklich",
   "{p0} uses rule version {p1}, which the active script does not implement": "{p0} verwendet die Regelversion {p1}, die das aktive Script nicht umsetzt",
   "This key holds an owner record that is not an answer": "Dieser Schlüssel enthält einen Owner-Eintrag, der keine Antwort ist",
   "Invalid approval authority": "Ungültige Freigabebindung",
@@ -3014,5 +3013,13 @@
   "Invalid domain data {p0}": "Ungültige gemeinsame Daten: {p0}",
   "Invalid references: {p0}": "Ungültige Verweise: {p0}",
   "Prepare and approve this Pod identity before it requests approvals": "Bereite diese Pod-Identität vor und gib sie frei, bevor sie Freigaben anfragt.",
-  "This requestId was used with a different command": "Diese requestId wurde bereits mit einem anderen Befehl verwendet"
+  "This requestId was used with a different command": "Diese requestId wurde bereits mit einem anderen Befehl verwendet",
+  "Too many open approvals; wait until the owner decided some": "Zu viele offene Freigaben; warte, bis der Owner einige entschieden hat",
+  "No active script serves {p0}": "Kein aktives Skript bedient {p0}",
+  "The active script of {p0} does not implement rule version {p1}": "Das aktive Skript von {p0} setzt Regelversion {p1} nicht um",
+  "The serving Pod is not the writer of {p0}": "Der bedienende Pod ist nicht der Schreiber von {p0}",
+  "The input or rule changed while the work ran; the stale result was discarded": "Eingabe oder Regel haben sich während der Arbeit geändert; das veraltete Ergebnis wurde verworfen",
+  "{p0} differs from its selected contract; select the new contract with the domain command selectRule": "{p0} weicht von seinem gewählten Vertrag ab; wähle den neuen Vertrag mit dem domain-Befehl selectRule",
+  "Another Pod already asks the owner about this key": "Ein anderer Pod fragt den Owner bereits zu diesem Schlüssel",
+  "This key holds the answer to another Pod's question": "Dieser Schlüssel enthält die Antwort auf die Frage eines anderen Pods"
 }

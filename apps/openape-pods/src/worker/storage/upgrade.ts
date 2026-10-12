@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { assertKnownSchema, convert47, schema47Tags } from './convert.ts'
+import { assertKnownSchema, assertNoOpenNetworkWork, convert47, schema47Tags } from './convert.ts'
 import { schemaVersion } from './schema.ts'
 
 /** The oldest schema this version converts: the one the October 2026 releases wrote since issue 1455. */
@@ -10,9 +10,10 @@ export function assertSupportedSchema(version: number): void {
   if (version > 0 && version < upgradableSchema) throw new Error(`This data has schema ${version} and was created by an older OpenApe Pods version. Open or restore it with that version first and update it to schema ${upgradableSchema}; this version starts at schema ${upgradableSchema}.`)
 }
 
-/** Read-only: refuses a database that is not exactly the schema it declares. */
+/** Read-only: refuses a database that is not exactly the schema it declares or still holds open network work. */
 export function assertUpgradable(database: DatabaseSync, version: number): void {
   assertKnownSchema(database, version)
+  assertNoOpenNetworkWork(database)
 }
 
 /**

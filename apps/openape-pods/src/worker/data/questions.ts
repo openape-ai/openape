@@ -44,21 +44,26 @@ export class OwnerQuestions {
       if (view.writer !== ownerWriter) throw new Error('Owner answers go to a namespace the owner writes')
       if (!view.readers.includes(principal.podId)) throw new Error(`This Pod may not read ${namespace}`)
       if (!this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=? AND run_id=? AND boot_id NOT LIKE \'fenced:%\'').get(principal.podId, principal.runId)) throw new Error('Questions require the Pod\'s active run')
-      const existing = this.store.db.prepare('SELECT * FROM owner_questions WHERE namespace=? AND key=? AND fingerprint=?').get(namespace, key, fingerprint)
+      const existing = this.store.db.prepare('SELECT * FROM owner_questions WHERE pod_id=? AND namespace=? AND key=? AND fingerprint=?').get(principal.podId, namespace, key, fingerprint)
       if (existing) return question(existing)
-      this.assertAnswerSlot(`${namespace}/${key}`)
+      // One answer slot belongs to the Pod that asked about it; another Pod neither replaces nor overwrites it.
+      if (this.store.db.prepare('SELECT 1 FROM owner_questions WHERE namespace=? AND key=? AND pod_id<>? AND state=\'pending\'').get(namespace, key, principal.podId)) throw new Error('Another Pod already asks the owner about this key')
+      this.assertAnswerSlot(`${namespace}/${key}`, principal.podId)
       if (Number(this.store.db.prepare('SELECT count(*) AS count FROM owner_questions WHERE pod_id=? AND state=\'pending\'').get(principal.podId)!.count) >= pendingPerPod) throw new Error('Too many open owner questions; wait until the owner answered some')
-      this.store.db.prepare('UPDATE owner_questions SET state=\'superseded\' WHERE namespace=? AND key=? AND state=\'pending\'').run(namespace, key)
+      this.store.db.prepare('UPDATE owner_questions SET state=\'superseded\' WHERE pod_id=? AND namespace=? AND key=? AND state=\'pending\'').run(principal.podId, namespace, key)
       const id = randomUUID()
       this.store.db.prepare('INSERT INTO owner_questions VALUES(?,?,?,?,?,?,?,?,?,\'pending\',NULL,NULL,?)').run(id, principal.podId, namespace, key, fingerprint, title, body, JSON.stringify(options), canonicalJson(data), Date.now())
       return this.get(id)
     })
   }
 
-  /** An answer may replace an earlier answer, never another owner record such as a policy. */
-  private assertAnswerSlot(key: string): void {
+  /** An answer may replace an earlier answer of the same Pod, never another owner record such as a policy. */
+  private assertAnswerSlot(key: string, podId: string): void {
     const existing = this.data.get(ownerWriter, key)
-    if (existing && !(existing.value && typeof existing.value === 'object' && 'questionId' in existing.value)) throw new Error('This key holds an owner record that is not an answer')
+    if (!existing) return
+    const questionId = existing.value && typeof existing.value === 'object' ? (existing.value as { questionId?: unknown }).questionId : undefined
+    if (typeof questionId !== 'string') throw new Error('This key holds an owner record that is not an answer')
+    if (this.store.db.prepare('SELECT pod_id FROM owner_questions WHERE id=?').get(questionId)?.pod_id !== podId) throw new Error('This key holds the answer to another Pod\'s question')
   }
 
   get(id: string): OwnerQuestion {
@@ -80,7 +85,7 @@ export class OwnerQuestions {
       const decidedAt = Date.now()
       this.store.db.prepare('UPDATE owner_questions SET state=\'decided\',option=?,decided_at=? WHERE id=? AND state=\'pending\'').run(option, decidedAt, id)
       const key = `${current.namespace}/${current.key}`
-      this.assertAnswerSlot(key)
+      this.assertAnswerSlot(key, current.podId)
       // The owner's answer is the option; what the asking Pod supplied stays marked as its question.
       this.data.set(ownerWriter, key, { option, questionId: id, fingerprint: current.fingerprint, decidedAt, question: { podId: current.podId, title: current.title, data: current.data } }, this.data.revision(key))
       return this.get(id)

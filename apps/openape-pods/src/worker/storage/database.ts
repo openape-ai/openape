@@ -6,7 +6,7 @@ import { StorageError } from './errors.ts'
 import { parseWorkDeclarations } from '../../contracts/work.ts'
 import type { WorkDeclaration } from '../../contracts/work.ts'
 import { createHash, randomUUID } from 'node:crypto'
-import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statfsSync, writeFileSync } from 'node:fs'
+import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -138,6 +138,11 @@ export class PodDatabase {
     // Foreign keys stay off while the tables are rebuilt; upgradeToCurrent checks every reference afterwards.
     this.db.exec('PRAGMA foreign_keys=OFF')
     try { this.transaction(() => { upgradeToCurrent(this.db, version); this.db.exec(`PRAGMA user_version=${schemaVersion}`) }) }
+    catch (error) {
+      // The rolled-back database is unchanged, so its copy is redundant; repeated attempts never fill the disk.
+      rmSync(backup, { force: true })
+      throw error
+    }
     finally { this.db.exec('PRAGMA foreign_keys=ON') }
     // The conversion drops the network tables; their pages return to the file system.
     this.db.exec('VACUUM')
