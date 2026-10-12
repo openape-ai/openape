@@ -5,7 +5,6 @@ import type { ScriptRuntime } from '../runs/runner'
 import type { PodDatabase } from '../storage/database'
 import { PortableExporter } from './export'
 import { PortableImporter } from './import'
-import type { ImportEngines } from './import'
 import { mapPortableSource } from './mapping'
 import type { PortableExportChoices } from './mapping'
 import { capturePortableSource } from './source'
@@ -15,7 +14,7 @@ import type { PortableSourceSelection } from './source'
 export class SharingService {
   private readonly importer: PortableImporter
   private readonly exporter: PortableExporter<PortableExportChoices>
-  constructor(private readonly store: PodDatabase, resources: ResourceRegistry, private readonly owner: Owner, npmRoot: string, private readonly engines: ImportEngines) {
+  constructor(private readonly store: PodDatabase, resources: ResourceRegistry, private readonly owner: Owner, npmRoot: string) {
     this.importer = new PortableImporter(store, resources, owner, npmRoot)
     this.exporter = new PortableExporter(store, owner, npmRoot, (source, choices) => mapPortableSource(store.root, source, choices))
   }
@@ -23,9 +22,6 @@ export class SharingService {
   // What the owner chooses from before a review: every current reference needs an include or omit decision, aliasable resources need a portable name.
   source(selection: PortableSourceSelection): PortableSourceView {
     const source = capturePortableSource(this.store, this.owner, selection)
-    const compositions: PortableSourceView['compositions'] = [
-      ...(source.network ? [{ id: source.network.definition.id, kind: 'network' as const, name: source.network.definition.name }] : []),
-    ]
     return {
       selection,
       pods: source.pods.map(pod => ({
@@ -35,14 +31,13 @@ export class SharingService {
         variables: pod.variables.map(variable => variable.name),
         configuration: pod.definitions.map(declaration => String(declaration.name)),
       })),
-      compositions,
     }
   }
 
   async execute(command: SharingCommand, runtime: ScriptRuntime, signal: AbortSignal): Promise<SharingState> {
     if (command.scope === 'import') {
       if (command.type === 'pickFile') throw new Error('File selection requires the owner window')
-      return this.importer.execute(command, runtime, signal, this.engines)
+      return this.importer.execute(command, runtime, signal)
     }
     const imports = () => this.importer.list()
     if (command.type === 'inspectSource') return { imports: imports(), source: this.source(command.selection) }

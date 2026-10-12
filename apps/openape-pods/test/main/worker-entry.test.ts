@@ -4,7 +4,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, expect, it, vi } from 'vitest'
-import { seedNetwork } from '../storage/network-fixture'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { installExample } from '../../src/worker/runs/examples'
@@ -13,8 +12,6 @@ import { RunDispatcher } from '../../src/worker/runs/dispatcher'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
 import type { RunServices } from '../../src/worker/runs/dispatcher'
 import type { ProgramAuthority } from '../../src/main/programs/grants'
-import { NetworkEngine } from '../../src/worker/scheduling/network-engine'
-import { CentralProjection } from '../../src/worker/central/projection'
 import { MailBridge } from '../../src/worker/mail/bridge'
 import { createPortablePackage } from '../../src/worker/sharing/package'
 
@@ -135,22 +132,20 @@ it('routes assigned SSH observations through the real worker entry without requi
   finally { bridge.mockRestore(); store.close() }
 })
 
-it('lists descriptions with the workspace and routes a description command through the real worker', async () => {
+it('lists the workspace and refuses retired network and description commands in the real worker', async () => {
   await send({ id: 'workspace-list', command: { type: 'list' } })
-  expect(replies).toHaveBeenCalledWith({ id: 'workspace-list', state: expect.objectContaining({ descriptions: [], pods: expect.arrayContaining([expect.objectContaining({ name: 'Scheduled example' })]) }) })
-  await send({ id: 'describe-unknown', command: { type: 'describeAutomation', id: randomUUID(), revision: 0, text: 'Nothing to describe' } })
-  expect(replies).toHaveBeenCalledWith({ id: 'describe-unknown', error: 'Network not found' })
-  await send({ id: 'describe-forged', command: { type: 'describeAutomation', id: randomUUID(), revision: 0, text: 'Purpose', owner: 'forged' } })
-  expect(replies).toHaveBeenCalledWith({ id: 'describe-forged', error: 'Unsupported workspace command' })
+  expect(replies).toHaveBeenCalledWith({ id: 'workspace-list', state: expect.objectContaining({ pods: expect.arrayContaining([expect.objectContaining({ name: 'Scheduled example' })]) }) })
+  await send({ id: 'describe-retired', command: { type: 'describeAutomation', id: randomUUID(), revision: 0, text: 'Nothing to describe' } })
+  expect(replies).toHaveBeenCalledWith({ id: 'describe-retired', error: 'Unsupported workspace command' })
+  await send({ id: 'networks-retired', command: { networks: { type: 'list' } } })
+  expect(replies).toHaveBeenCalledWith(expect.objectContaining({ id: 'networks-retired', error: expect.any(String) }))
 })
 
-it('validates the local network route before mutation', async () => {
-  await send({ id: 'networks-list', command: { networks: { type: 'list' } } })
-  expect(replies).toHaveBeenCalledWith({ id: 'networks-list', state: { networks: [] } })
-  await send({ id: 'networks-invalid', command: { networks: { type: 'list', owner: 'forged' } } })
-  expect(replies).toHaveBeenCalledWith(expect.objectContaining({ id: 'networks-invalid', error: expect.any(String) }))
-  await send({ id: 'networks-unreviewed', command: { networks: { type: 'create', draft: { name: 'Unreviewed', groupId: randomUUID(), channels: [], members: [{ podId: randomUUID(), source: { schedule: null }, serialCase: false }] } } } })
-  expect(replies).toHaveBeenCalledWith({ id: 'networks-unreviewed', error: 'Network creation requires a reviewed setup fingerprint' })
+it('administers shared data through the real worker and refuses malformed commands', async () => {
+  await send({ id: 'domain-list', command: { domain: { type: 'list' } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'domain-list', state: expect.objectContaining({ namespaces: [], questions: [], unknownEffects: [] }) })
+  await send({ id: 'domain-forged', command: { domain: { type: 'list', owner: 'forged' } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'domain-forged', error: 'Unsupported data fields' })
 })
 
 it('prevents reviewed master and browser starts from bypassing the suspended production runtime', async () => {
@@ -177,7 +172,6 @@ it('starts only the requested local owner run while the central scheduler gate i
   const runId = randomUUID()
   const start = vi.spyOn(RunDispatcher.prototype, 'start').mockReturnValue(runId)
   const scheduled = vi.spyOn(Scheduler.prototype, 'tick')
-  const networkTick = vi.spyOn(NetworkEngine.prototype, 'tick')
   const action = { action: 'run', podId: pod.id, revision: pod.revision }
   const request = { id: randomUUID(), action }
   try {
@@ -194,33 +188,27 @@ it('starts only the requested local owner run while the central scheduler gate i
     expect(replies).toHaveBeenCalledWith({ id: 'owner-replay', state: { runId } })
     expect(start).toHaveBeenCalledExactlyOnceWith(pod.id, { reason: 'manual', eventIds: [], operationId: `codex:${request.id}` }, undefined)
     expect(scheduled).not.toHaveBeenCalled()
-    expect(networkTick).not.toHaveBeenCalled()
     await send('suspend')
     await send({ id: 'suspended-owner-start', command: { codex: { id: randomUUID(), action }, ownerOperation: true } })
     expect(replies).toHaveBeenCalledWith({ id: 'suspended-owner-start', error: expect.stringContaining('ready local runtime') })
     expect(start).toHaveBeenCalledTimes(1)
   }
   finally {
-    start.mockRestore(); scheduled.mockRestore(); networkTick.mockRestore()
+    start.mockRestore(); scheduled.mockRestore()
     await send('resume')
     await send({ id: 'restore-owner-gate', command: { central: { type: 'gate', until: Date.now() + 3600000 } } })
   }
 })
 
-it('rechecks network browser mutation authority in the real worker when an older relay lacks the guard', async () => {
+it('refuses browser changes to a local-only Pod in the real worker and allows its labels', async () => {
   const store = new PodDatabase(root)
-  const network = seedNetwork(store)
+  const pod = store.createPod({ name: 'Local mail Pod' })
+  store.db.prepare('INSERT INTO local_only_pods VALUES(?)').run(pod.id)
   store.close()
-  await send({ id: 'network-legacy-start', command: { central: { type: 'assertCommand', command: { channel: 'runs', body: { type: 'start', podId: network.pod.id } } } } })
-  expect(replies).toHaveBeenCalledWith({ id: 'network-legacy-start', error: expect.stringContaining('desktop review') })
-  await send({ id: 'network-safe-pause', command: { central: { type: 'assertCommand', command: { channel: 'scheduling', body: { type: 'lifecycle', podId: network.pod.id, revision: 1, lifecycle: 'paused' } } } } })
-  expect(replies).toHaveBeenCalledWith({ id: 'network-safe-pause', state: true })
-  await send({ id: 'network-describe', command: { central: { type: 'assertCommand', command: { channel: 'details', body: { type: 'describe', podId: network.pod.id, revision: 0, text: 'Explains this member' } } } } })
-  expect(replies).toHaveBeenCalledWith({ id: 'network-describe', state: true })
-  await send({ id: 'network-describe-collection', command: { central: { type: 'assertCommand', command: { channel: 'workspace', body: { type: 'describeAutomation', id: network.networkId, revision: 0, text: 'Explains this network' } } } } })
-  expect(replies).toHaveBeenCalledWith({ id: 'network-describe-collection', state: true })
-  await send({ id: 'network-activate', command: { central: { type: 'assertCommand', command: { channel: 'details', body: { type: 'activate', podId: network.pod.id, hash: 'a'.repeat(64), expectedActive: null, assignmentRevision: 1 } } } } })
-  expect(replies).toHaveBeenCalledWith({ id: 'network-activate', error: expect.stringContaining('desktop review') })
+  await send({ id: 'local-start', command: { central: { type: 'assertCommand', command: { channel: 'runs', body: { type: 'start', podId: pod.id } } } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'local-start', error: expect.stringContaining('change it there') })
+  await send({ id: 'local-tag', command: { central: { type: 'assertCommand', command: { channel: 'workspace', body: { type: 'tag', id: pod.id, revision: 0, tags: ['mail'] } } } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'local-tag', state: true })
 })
 it('routes validated portable import commands through the real worker only after identity setup', async () => {
   const exported = await createPortablePackage({
@@ -245,19 +233,4 @@ it('routes validated portable import commands through the real worker only after
     expect(store.listPods().slice(before)).toMatchObject([{ name: 'Imported through entry', lifecycle: 'paused', activeScript: null }])
   }
   finally { store.db.exec('DELETE FROM remote_registration'); store.close() }
-})
-
-it('keeps browser decision reads scoped to the requested network and omits choices from traces', async () => {
-  const first = randomUUID(); const second = randomUUID()
-  const choices = [first, second].map(networkId => ({ networkId, revision: 1, eventId: randomUUID(), caseId: randomUUID(), gate: 'review', title: 'Review', payload: 'private choice', truncated: false, options: [{ key: 'keep', title: 'Keep' }, { key: 'other', title: 'Other' }] }))
-  const ownerCheck = vi.spyOn(CentralProjection.prototype, 'assertOwner').mockImplementation(() => {})
-  const execute = vi.spyOn(NetworkEngine.prototype, 'execute').mockImplementation(() => ({ networks: [], choices: structuredClone(choices) }))
-  try {
-    const owner = { issuer: 'https://identity.example.invalid', subject: 'owner' }
-    await send({ id: 'scoped-choice-detail', command: { central: { type: 'networkRead', owner, command: { type: 'detail', id: first, revision: 1 } } } })
-    expect(replies).toHaveBeenCalledWith({ id: 'scoped-choice-detail', state: { networks: [], choices: [choices[0]], gates: undefined } })
-    await send({ id: 'scoped-choice-trace', command: { central: { type: 'networkRead', owner, command: { type: 'trace', id: first, revision: 1, before: null, caseId: null } } } })
-    expect(replies).toHaveBeenCalledWith({ id: 'scoped-choice-trace', state: { networks: [] } })
-  }
-  finally { execute.mockRestore(); ownerCheck.mockRestore() }
 })

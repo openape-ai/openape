@@ -2,10 +2,10 @@ import type { ScheduleSpec } from './scheduling'
 import { normalizeTags } from './tags'
 
 /**
- * The read model behind the Automatisierungen surface: every Pod and network of the owner
- * with the systems they read and write, measured flows of the last 24 hours and the five system
- * KPIs. Derived in the worker from existing tables, never stored; desktop, browser and MCP read
- * the same JSON. Secrets appear as aliases only.
+ * The read model behind the Automatisierungen surface: every Pod of the owner with the systems it reads and writes,
+ * the shared data it writes and reads (issue 1465), measured flows of the last 24 hours and the five system KPIs.
+ * Derived in the worker from existing tables, never stored; desktop, browser and MCP read the same JSON. Secrets
+ * appear as aliases only.
  */
 export type MapPodKind = 'source' | 'decision' | 'effect' | 'code'
 export type MapSystemKind = 'service' | 'application' | 'directory' | 'ssh'
@@ -15,8 +15,8 @@ export interface MapResource { kind: MapResourceKind, name: string, how: string,
 export interface MapRun { at: number, state: string, summary: string }
 export interface MapSchedule { spec: ScheduleSpec | null, enabled: boolean }
 export interface MapApproval { grantId: string, title: string, runId: string }
-/** Owner tags of a Pod or network (issue 1459): its own with their revision, and those inherited from its network. */
-export interface MapTags { own: string[], inherited: string[], revision: number }
+/** Owner tags of a Pod (issue 1459) with their revision. */
+export interface MapTags { own: string[], revision: number }
 export interface MapPod {
   id: string
   name: string
@@ -29,49 +29,32 @@ export interface MapPod {
   draft: boolean
   kind: MapPodKind
   ai: boolean
-  channels: { takes: string[], gives: string[] }
+  /** Shared data namespaces this Pod writes and reads. */
+  data: { writes: string[], reads: string[] }
+  /** Declared work waiting for this Pod and work held for the owner (blocked or unknown). */
+  work: { pending: number, held: number }
   resources: MapResource[]
   secrets: string[]
   schedule: MapSchedule | null
   lastRun: MapRun | null
   runs: number
-  automation: string | null
   queue: { blocked: number, error: string | null }
   approvals: MapApproval[]
   unknown: { key: string, runId: string }[]
-  // Latest script update of a network member through the local assistant, while that version is active.
-  scriptUpdate?: { at: number, previous: string, script: string }
   tags?: MapTags
 }
-export interface MapGateOption { key: string, title: string, channel: string }
-export interface MapGate { key: string, kind: 'choose' | 'approve', title: string, takes: string, options: MapGateOption[], open: number, batches: Record<string, number> }
-export interface MapAutomation {
-  id: string
-  revision: number
-  kind: 'network'
-  name: string
-  group: string | null
-  groupId: string | null
-  state: 'active' | 'paused' | 'archived'
-  members: string[]
-  schedule: MapSchedule | null
-  counts: Record<string, number>
-  flows: Record<string, number>
-  gates: MapGate[]
-  lastRun: MapRun | null
-  tags?: MapTags
-}
-export interface MapEdge { from: string, to: string, type: 'read' | 'write' | 'channel', channel: string | null, flow: number }
+/** `data` runs from the writer Pod of a namespace to each reader Pod; channel names the namespace. */
+export interface MapEdge { from: string, to: string, type: 'read' | 'write' | 'data', channel: string | null, flow: number }
 export interface MapKpis {
   active: number
   paused: number
   degraded: { podId: string, reason: string }[]
-  decisions: { networkId: string, gate: string, title: string, kind: 'choose' | 'approve', count: number }[]
+  decisions: { podId: string, kind: 'question' | 'approval', title: string, count: number }[]
   unknownDeliveries: number
 }
-export interface MapView { at: number, window: { from: number, to: number }, kpis: MapKpis, systems: MapSystem[], pods: MapPod[], automations: MapAutomation[], edges: MapEdge[] }
+export interface MapView { at: number, window: { from: number, to: number }, kpis: MapKpis, systems: MapSystem[], pods: MapPod[], edges: MapEdge[] }
 
-export const mapLimits = { pods: 100, automations: 64, systems: 400, edges: 4000 } as const
+export const mapLimits = { pods: 100, systems: 400, edges: 4000, namespaces: 256 } as const
 function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid map view')
   return value as Record<string, unknown>
@@ -89,46 +72,23 @@ function text(value: unknown, maximum = 4096): string {
   return value
 }
 
-// Desktops before issue 1455 (M5) publish automations as `collections` and each Pod's as `collection`; the relay reads both until those builds are replaced.
-function currentNames(view: Record<string, unknown>): Record<string, unknown> {
-  if (!Object.hasOwn(view, 'collections')) return view
-  const { collections, pods, ...rest } = view
-  return { ...rest, automations: collections, pods: list(pods, mapLimits.pods).map((pod) => { const { collection, ...fields } = object(pod); return { ...fields, automation: collection ?? null } }) }
-}
-
-// Desktops before issue 1455 (M4) also publish workflows as chains and bounded networks; the relay shows persistent networks only.
-function networksOnly(view: Record<string, unknown>): Record<string, unknown> {
-  const automations = list(view.automations, mapLimits.automations).map(object)
-  const retired = new Set(automations.filter(item => item.kind !== 'network' || item.bounded === true).map(item => item.id))
-  if (!retired.size && !automations.some(item => Object.hasOwn(item, 'bounded'))) return view
-  const kept = automations.filter(item => !retired.has(item.id)).map(({ bounded: _bounded, ...item }) => item)
-  const gates = new Set(kept.flatMap(item => list(item.gates, 32).map(gate => `gate:${String(object(gate).key)}`)))
-  const retiredGate = (node: unknown) => typeof node === 'string' && node.startsWith('gate:') && !gates.has(node)
-  return {
-    ...view,
-    automations: kept,
-    pods: list(view.pods, mapLimits.pods).map((pod) => { const item = object(pod); return retired.has(item.automation) ? { ...item, automation: null } : item }),
-    edges: list(view.edges, mapLimits.edges).map(object).filter(edge => !retiredGate(edge.from) && !retiredGate(edge.to)),
-  }
-}
-
 function tags(value: unknown): void {
   if (value === undefined) return
   const item = object(value)
-  if (Object.keys(item).some(key => !['own', 'inherited', 'revision'].includes(key)) || !Number.isSafeInteger(item.revision) || Number(item.revision) < 0) throw new Error('Invalid map tags')
-  for (const field of [item.own, item.inherited]) {
-    if (JSON.stringify(normalizeTags(field)) !== JSON.stringify(field)) throw new Error('Invalid map tags')
-  }
+  if (Object.keys(item).some(key => !['own', 'revision'].includes(key)) || !Number.isSafeInteger(item.revision) || Number(item.revision) < 0 || JSON.stringify(normalizeTags(item.own)) !== JSON.stringify(item.own)) throw new Error('Invalid map tags')
 }
 
 /** Shape check for what crosses the relay and MCP; the content stays the worker's. */
 export function parseMapView(value: unknown): MapView {
-  const view = networksOnly(currentNames(object(value)))
-  if (Object.keys(view).some(key => !['at', 'window', 'kpis', 'systems', 'pods', 'automations', 'edges'].includes(key))) throw new Error('Invalid map view fields')
+  const view = object(value)
+  if (Object.keys(view).some(key => !['at', 'window', 'kpis', 'systems', 'pods', 'edges'].includes(key))) throw new Error('Invalid map view fields')
   integer(view.at); const window = object(view.window); integer(window.from); integer(window.to)
   const kpis = object(view.kpis); integer(kpis.active); integer(kpis.paused); integer(kpis.unknownDeliveries)
   for (const item of list(kpis.degraded, mapLimits.pods)) { const row = object(item); text(row.podId, 36); text(row.reason) }
-  for (const item of list(kpis.decisions, 512)) { const row = object(item); text(row.networkId, 36); text(row.gate, 64); text(row.title, 120); integer(row.count) }
+  for (const item of list(kpis.decisions, 512)) {
+    const row = object(item); text(row.podId, 36); text(row.title, 300); integer(row.count)
+    if (!['question', 'approval'].includes(String(row.kind))) throw new Error('Invalid map decision')
+  }
   const systems = new Set<string>()
   for (const item of list(view.systems, mapLimits.systems)) {
     const row = object(item); const id = text(row.id, 4200); text(row.name); text(row.how)
@@ -145,22 +105,14 @@ export function parseMapView(value: unknown): MapView {
     }
     for (const alias of list(pod.secrets, 64)) text(alias, 200)
     tags(pod.tags)
-    if (pod.scriptUpdate !== undefined) {
-      const update = object(pod.scriptUpdate); integer(update.at)
-      if ([update.previous, update.script].some(hash => typeof hash !== 'string' || !/^[a-f0-9]{64}$/.test(hash))) throw new Error('Invalid map script update')
-    }
-    nodes.add(id)
-  }
-  for (const item of list(view.automations, mapLimits.automations)) {
-    const automation = object(item); const id = text(automation.id, 36); text(automation.name, 200); tags(automation.tags)
-    if (automation.kind !== 'network' || !['active', 'paused', 'archived'].includes(String(automation.state))) throw new Error('Invalid map automation')
-    for (const member of list(automation.members, 64)) { if (!nodes.has(text(member, 36))) throw new Error('Invalid map automation member') }
-    for (const gate of list(automation.gates, 32)) { const row = object(gate); text(row.key, 64); text(row.title, 120); integer(row.open); nodes.add(`gate:${text(row.key, 64)}`) }
+    const data = object(pod.data)
+    for (const path of [...list(data.writes, mapLimits.namespaces), ...list(data.reads, mapLimits.namespaces)]) text(path, 200)
+    const work = object(pod.work); integer(work.pending); integer(work.held)
     nodes.add(id)
   }
   for (const item of list(view.edges, mapLimits.edges)) {
     const edge = object(item); integer(edge.flow)
-    if (!['read', 'write', 'channel'].includes(String(edge.type)) || !nodes.has(text(edge.from, 4200)) || !nodes.has(text(edge.to, 4200))) throw new Error('Invalid map edge')
+    if (!['read', 'write', 'data'].includes(String(edge.type)) || !nodes.has(text(edge.from, 4200)) || !nodes.has(text(edge.to, 4200))) throw new Error('Invalid map edge')
   }
   return structuredClone(view) as unknown as MapView
 }

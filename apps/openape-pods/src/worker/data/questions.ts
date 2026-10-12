@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { namespacePath, ownerWriter, plainJson, recordKey } from '../../contracts/domain-data'
-import { canonicalNetworkJson as canonicalJson } from '../../contracts/network-json'
+import { canonicalJson } from '../../contracts/canonical-json'
 import type { PodDatabase } from '../storage/database'
 import type { DomainData } from './domain'
 

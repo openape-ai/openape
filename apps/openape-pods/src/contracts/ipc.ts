@@ -3,7 +3,7 @@ import type { UpdateCommand, UpdateView } from './updates'
 import type { DefinitionCommand, DefinitionsView } from './definitions'
 import type { McpSessionCommand, McpSessionView } from './mcp-session'
 import type { CodexCommand, CodexConnection } from './codex'
-import type { NetworkCommand, NetworkView } from './networks'
+import type { DomainCommand } from './domain-admin'
 import type { PackageSearch, PackageOption } from './package-catalog'
 import type { ProgramCommand, TerminalView, ConsoleView } from './programs'
 import type { LanguageCommand, Language } from './language'
@@ -19,7 +19,7 @@ import type { ResourceCommand, ResourceState } from './resources'
 import type { WorkspaceCommand, WorkspaceState } from './control'
 import type { SecretsCommand, SecretsView } from './secrets'
 
-export const channels = { storage: 'pods:storage', updates: 'pods:updates', mcpSession: 'pods:mcp-session', central: 'pods:central', codex: 'pods:codex', networks: 'pods:networks', definitions: 'pods:definitions', packages: 'pods:packages', programs: 'pods:programs', language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling', sharing: 'pods:sharing', secrets: 'pods:secrets' } as const
+export const channels = { storage: 'pods:storage', updates: 'pods:updates', mcpSession: 'pods:mcp-session', central: 'pods:central', codex: 'pods:codex', domain: 'pods:domain', definitions: 'pods:definitions', packages: 'pods:packages', programs: 'pods:programs', language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling', sharing: 'pods:sharing', secrets: 'pods:secrets' } as const
 export type WorkerState = 'starting' | 'ready' | 'recovery' | 'error' | 'stopped'
 /** `recovery`: storage is not ready (`storage` says why); the window, diagnostics and recovery stay usable, nothing runs. */
 export interface WorkerStatus { state: WorkerState, pid: number | null, error: string | null, storage?: StorageFailure }
@@ -40,7 +40,8 @@ export interface PodsBridge {
   definitions: (command: DefinitionCommand) => Promise<DefinitionsView>
   // Optional like central: fixtures of older surfaces omit it; the preload always provides it.
   sharing?: (command: SharingCommand) => Promise<SharingState>
-  networks: (command: NetworkCommand) => Promise<NetworkView>
+  /** Owner administration of shared domain data; the result shape depends on the command (contracts/domain-admin.ts). */
+  domain: (command: DomainCommand) => Promise<unknown>
   packages: (command: PackageSearch) => Promise<PackageOption[]>
   programs: (command: ProgramCommand) => Promise<ResourceState | TerminalView | ConsoleView | null>
   language: (command: LanguageCommand) => Promise<Language>

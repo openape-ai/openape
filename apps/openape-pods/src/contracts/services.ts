@@ -3,7 +3,7 @@ import type { RunApproval } from './activity'
 import { parseScriptCapabilities } from './credentials'
 
 export interface ServiceScope { podId: string, runId: string, epoch: number, assignmentRevision: number, capabilities: string[] }
-export interface ServiceRequest { id: string, scope: ServiceScope, body: unknown, kind?: 'approval' | 'gate' | 'mailArchive' | 'mailMove' | 'credential' | 'jev' | 'http' | 'shell' | 'shellClose' }
+export interface ServiceRequest { id: string, scope: ServiceScope, body: unknown, kind?: 'approval' | 'mailArchive' | 'mailMove' | 'credential' | 'jev' | 'http' | 'shell' | 'shellClose' }
 export interface ServiceCheck { infrastructure?: RetryNotice | null, authorityLost?: true, scope: ServiceScope, domain?: { path: string, ownerPid: number }, approval?: RunApproval }
 export function parseServiceScope(value: unknown): ServiceScope {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid service scope')
@@ -17,10 +17,9 @@ export type RunContextRequest = ServiceCheck
 
 /** Interval at which a running Pod's runtime grant, owner, identity and key are re-checked at the IdP. */
 export const runAuthorityWatchMs = 60 * 1000
-/** `runtime` is false for network and decision-maintenance runs, which execute no runtime and hold no runtime grant. */
-export interface RunContext { name: string, reason: string, runtime: boolean }
+export interface RunContext { name: string, reason: string }
 export function parseRunContext(value: unknown): RunContext {
   const context = value as RunContext | null
-  if (!context || typeof context !== 'object' || typeof context.name !== 'string' || typeof context.reason !== 'string' || typeof context.runtime !== 'boolean') throw new Error('Invalid run context')
+  if (!context || typeof context !== 'object' || typeof context.name !== 'string' || typeof context.reason !== 'string') throw new Error('Invalid run context')
   return context
 }

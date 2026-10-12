@@ -33,11 +33,10 @@ export class RunRetention {
       const candidates = this.store.db.prepare(`
         WITH ranked AS (
           SELECT id, state, finished_at, row_number() OVER (PARTITION BY pod_id ORDER BY started_at DESC, rowid DESC) AS position
-          FROM runs WHERE NOT EXISTS(SELECT 1 FROM network_invocations i WHERE i.run_id=runs.id AND i.execution_kind='gate_maintenance')
+          FROM runs
         )
         SELECT r.id FROM ranked r
         WHERE position > ? AND finished_at IS NOT NULL AND state != 'running'
-          AND NOT EXISTS (SELECT 1 FROM network_invocations WHERE run_id=r.id)
           AND NOT EXISTS (SELECT 1 FROM run_leases WHERE run_id=r.id)
           AND NOT EXISTS (SELECT 1 FROM effect_ledger WHERE run_id=r.id AND state!='completed')
           AND NOT EXISTS (SELECT 1 FROM run_events boundary WHERE boundary.run_id=r.id AND boundary.type='recovery-boundary'

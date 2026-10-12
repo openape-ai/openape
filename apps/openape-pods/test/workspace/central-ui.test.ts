@@ -263,12 +263,12 @@ it('shows the automatic retry time instead of a blocked queue for a temporary se
   expect(wrapper.find('.central-blocked').exists()).toBe(false)
 })
 
-it('shows a network member summary instead of mounting the legacy browser editor', async () => {
+it('shows a local-only Pod summary instead of mounting the browser editor', async () => {
   const f = await browserFixture()
-  f.view.networkId = '00000000-0000-4000-8000-000000000021'
+  f.view.localOnly = true
   wrapper = mount(CentralWorkspace, { props: { client: f.client, sharedEditor: true } }); await flushPromises()
   await wrapper.get('.central-pod').trigger('click'); await flushPromises()
-  expect(wrapper.text()).toContain('review changes on the desktop')
+  expect(wrapper.text()).toContain('open and change it there')
   expect(wrapper.find('.remote-editor').exists()).toBe(false)
   expect(wrapper.find('textarea').exists()).toBe(false)
 })

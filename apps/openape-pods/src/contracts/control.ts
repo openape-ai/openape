@@ -3,38 +3,24 @@ import type { JevAvailability } from './jev'
 import { parseGroupCommand, parseOrganization } from './groups'
 import type { GroupCommand, Organization } from './groups'
 import { parseMapView } from './map-view'
-import { normalizeTag, normalizeTags } from './tags'
+import { normalizeTags } from './tags'
 import type { MapView } from './map-view'
 
 export interface StoredPod { id: string, name: string, revision: number, lifecycle: 'active' | 'paused' | 'archived', activeScript: string | null, description?: string }
-/** What a network is for, written by the owner. Informational: never part of a definition, pin or hash. */
-export interface AutomationDescription { id: string, text: string, revision: number }
-/**
- * Free owner labels of a Pod or network (issue 1459); `inherited` are the tags of the network a Pod belongs to, shown
- * but never stored on the Pod. Informational like descriptions: never part of a definition, pin or hash.
- */
-export interface ItemTags { id: string, tags: string[], revision: number, inherited: string[] }
-export interface WorkspaceState { jev?: JevAvailability | null, pods: StoredPod[], organization: Organization, descriptions?: AutomationDescription[], tags?: ItemTags[], map?: MapView }
-export type WorkspaceCommand = GroupCommand | { type: 'list' } | { type: 'map' } | { type: 'pauseAll' } | { type: 'create', name: string } | { type: 'update', id: string, revision: number, name: string, lifecycle: StoredPod['lifecycle'] } | { type: 'describeAutomation', id: string, revision: number, text: string } | { type: 'tag', id: string, revision: number, tags: string[] } | { type: 'renameNetwork', id: string, name: string }
+/** Free owner labels of a Pod (issue 1459). Informational: never part of a definition, pin or hash. */
+export interface ItemTags { id: string, tags: string[], revision: number }
+export interface WorkspaceState { jev?: JevAvailability | null, pods: StoredPod[], organization: Organization, tags?: ItemTags[], map?: MapView }
+export type WorkspaceCommand = GroupCommand | { type: 'list' } | { type: 'map' } | { type: 'pauseAll' } | { type: 'create', name: string } | { type: 'update', id: string, revision: number, name: string, lifecycle: StoredPod['lifecycle'] } | { type: 'tag', id: string, revision: number, tags: string[] }
 const automationId = /^[a-f0-9-]{36}$/
 export function parseCommand(value: unknown): WorkspaceCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid workspace command')
   if ((value as Record<string, unknown>).type === 'organize') return parseGroupCommand(value)
   const command = value as Record<string, unknown>
-  const keys = ['list', 'map', 'pauseAll'].includes(command.type as string) ? ['type'] : command.type === 'create' ? ['type', 'name'] : command.type === 'update' ? ['type', 'id', 'revision', 'name', 'lifecycle'] : command.type === 'describeAutomation' ? ['type', 'id', 'revision', 'text'] : command.type === 'tag' ? ['type', 'id', 'revision', 'tags'] : command.type === 'renameNetwork' ? ['type', 'id', 'name'] : []
+  const keys = ['list', 'map', 'pauseAll'].includes(command.type as string) ? ['type'] : command.type === 'create' ? ['type', 'name'] : command.type === 'update' ? ['type', 'id', 'revision', 'name', 'lifecycle'] : command.type === 'tag' ? ['type', 'id', 'revision', 'tags'] : []
   if (!keys.length || Object.keys(command).some(key => !keys.includes(key))) throw new Error('Unsupported workspace command')
   if (command.type === 'tag') {
     if (typeof command.id !== 'string' || !automationId.test(command.id) || !Number.isSafeInteger(command.revision) || (command.revision as number) < 0) throw new Error('Invalid tags')
     return { type: 'tag', id: command.id, revision: command.revision as number, tags: normalizeTags(command.tags) }
-  }
-  if (command.type === 'renameNetwork') {
-    const name = typeof command.name === 'string' ? command.name.trim() : ''
-    if (typeof command.id !== 'string' || !automationId.test(command.id) || !name || name.length > 120 || name.includes('\0')) throw new Error('Invalid network name')
-    return { type: 'renameNetwork', id: command.id, name }
-  }
-  if (command.type === 'describeAutomation') {
-    if (typeof command.id !== 'string' || !automationId.test(command.id) || !Number.isSafeInteger(command.revision) || (command.revision as number) < 0 || typeof command.text !== 'string' || command.text.length > 1000 || command.text.includes('\0')) throw new Error('Invalid description')
-    return structuredClone(command) as WorkspaceCommand
   }
   if (!['list', 'map', 'pauseAll'].includes(command.type as string)) {
     for (const key of ['name']) {
@@ -56,7 +42,6 @@ export function parseWorkspace(value: unknown): WorkspaceState {
     if (pod.description !== undefined && (typeof pod.description !== 'string' || pod.description.length > 160)) throw new Error('Invalid pod description')
   }
   parseOrganization(state.organization, state.pods.map(pod => pod.id))
-  if (state.tags !== undefined && (!Array.isArray(state.tags) || state.tags.length > 1000 || state.tags.some(item => !item || typeof item.id !== 'string' || !automationId.test(item.id) || !Number.isSafeInteger(item.revision) || item.revision < 0 || JSON.stringify(normalizeTags(item.tags)) !== JSON.stringify(item.tags) || !Array.isArray(item.inherited) || item.inherited.some(tag => normalizeTag(tag) !== tag)))) throw new Error('Invalid workspace tags')
-  if (state.descriptions !== undefined && (!Array.isArray(state.descriptions) || state.descriptions.length > 200 || state.descriptions.some(item => !item || typeof item.id !== 'string' || !automationId.test(item.id) || typeof item.text !== 'string' || !item.text || item.text.length > 1000 || !Number.isSafeInteger(item.revision) || item.revision < 1))) throw new Error('Invalid workspace descriptions')
+  if (state.tags !== undefined && (!Array.isArray(state.tags) || state.tags.length > 1000 || state.tags.some(item => !item || typeof item.id !== 'string' || !automationId.test(item.id) || !Number.isSafeInteger(item.revision) || item.revision < 0 || JSON.stringify(normalizeTags(item.tags)) !== JSON.stringify(item.tags)))) throw new Error('Invalid workspace tags')
   return state
 }

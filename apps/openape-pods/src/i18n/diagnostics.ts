@@ -1,6 +1,8 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Invalid domain data {p0}',
+  'Invalid references: {p0}',
   'The approval is {p0}; nothing may happen without an approved request',
   'Data value lacks required field {p0}',
   'Data field {p0} has type {p1}, expected {p2}',
@@ -27,7 +29,6 @@ export const diagnosticPatterns = [
   'Declare at most {p0} program grants',
   'Declare at most {p0} HTTP grants',
   'Declare at most {p0} sandbox {p1}',
-  'The network is at revision {p0}; read it again before declaring its sandbox or grants',
   '{p0} has no operations a whole-program grant can cover; grant single commands',
   'Unexpected grant status {p0}',
   'This grant is {p0}; request it again instead',
@@ -42,7 +43,6 @@ export const diagnosticPatterns = [
   'Collection {p0} already exists in this group; choose to reuse it explicitly',
   'Collection {p0} has a different schema; a reused collection must match exactly',
   'Value does not match the declared input {p0}',
-  'Portable network diagnostics: {p0}',
   'Feedback exceeded {p0} hops',
   'Tool output exceeded {p0} bytes; read smaller pages, for example with --limit',
   'Feedback case is older than {p0} ms',
@@ -99,11 +99,7 @@ export const diagnosticPatterns = [
   'Database schema {p0} cannot be upgraded',
   'Retained artifact size mismatch: {p0}',
   'Incomplete or altered storage: {p0}',
-  'Invalid network references: {p0}',
-  'Invalid network content digest: {p0}',
-  'Invalid network boundary: {p0}',
   'This data has schema {p0} and was created by an older OpenApe Pods version. Open or restore it with that version first and update it to schema {p1}; this version starts at schema {p2}.',
-  'Network member {p0} has a binding that differs from its Pod; restore the previous version of OpenApe Pods and review the network',
   'Schema 45 lacks table {p0}',
   'Schema 45 lacks column {p0}.{p1}',
   'Upgrade of {p0} lost rows',

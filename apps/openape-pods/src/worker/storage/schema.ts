@@ -1,197 +1,10 @@
 /**
- * The complete control database of schema 47. A fresh profile is created from it; a schema-46 profile gains the
- * tables of `schema47Additions`, and a schema-45 profile or backup is rebuilt into it by upgrade.ts (issue 1455, M8).
- * Older profiles and backups are refused.
+ * The complete control database of schema 48 (issue 1465): Pods, scripts, runs and grants, and the shared domain data,
+ * work ledger, owner questions, object approvals and external effects of autonomous Pods. A fresh profile is created
+ * from it; convert.ts converts schema-46 and schema-47 profiles and backups, archiving every row of the retired network
+ * runtime in legacy_records. Older profiles and backups are refused.
  */
 export const schemaVersion = 48
-
-/** Tables added after the schema-46 baseline; empty on upgrade (issue 1459: tags of Pods and networks). */
-export const schema47Additions = `
-CREATE TABLE item_tags(
-  id TEXT PRIMARY KEY,
-  tags TEXT NOT NULL CHECK(json_valid(tags) AND json_type(tags)='array'),
-  revision INTEGER NOT NULL CHECK(revision>0),
-  updated_at INTEGER NOT NULL
-);
-`
-
-/**
- * Shared domain data, self-discovered work, owner questions, object approvals and external effects (issue 1465).
- * A namespace has exactly one writer (a Pod ID or the owner) and explicitly authorized reader Pods. Writers are
- * plain text, so deleting or replacing a Pod never deletes the public records it wrote.
- */
-export const schema48Additions = `
-CREATE TABLE data_namespaces(
-  path TEXT PRIMARY KEY CHECK(length(path) BETWEEN 1 AND 200),
-  writer TEXT NOT NULL CHECK(length(writer) BETWEEN 1 AND 64),
-  mode TEXT NOT NULL CHECK(mode IN ('records','results')),
-  schema TEXT CHECK(schema IS NULL OR (json_valid(schema) AND json_type(schema)='object')),
-  writer_epoch INTEGER NOT NULL CHECK(writer_epoch>0),
-  revision INTEGER NOT NULL CHECK(revision>0),
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
-CREATE TABLE data_readers(
-  path TEXT NOT NULL REFERENCES data_namespaces(path),
-  pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,
-  PRIMARY KEY(path,pod_id)
-);
-CREATE TABLE data_sequence(id INTEGER PRIMARY KEY CHECK(id=1), value INTEGER NOT NULL CHECK(value>=0));
-CREATE TABLE data_entries(
-  namespace TEXT NOT NULL REFERENCES data_namespaces(path),
-  key TEXT NOT NULL CHECK(length(key) BETWEEN 1 AND 300),
-  revision INTEGER NOT NULL CHECK(revision>0),
-  sequence INTEGER NOT NULL UNIQUE,
-  value TEXT CHECK(value IS NULL OR json_valid(value)),
-  deleted INTEGER NOT NULL CHECK(deleted IN (0,1)),
-  digest TEXT NOT NULL CHECK(length(digest)=64),
-  author TEXT NOT NULL,
-  run_id TEXT,
-  writer_epoch INTEGER NOT NULL,
-  result TEXT CHECK(result IS NULL OR (json_valid(result) AND json_type(result)='object')),
-  artifacts TEXT NOT NULL DEFAULT '[]' CHECK(json_valid(artifacts) AND json_type(artifacts)='array'),
-  updated_at INTEGER NOT NULL,
-  PRIMARY KEY(namespace,key),
-  CHECK((deleted=1 AND value IS NULL) OR (deleted=0 AND value IS NOT NULL))
-);
-CREATE INDEX data_entry_changes ON data_entries(namespace,sequence);
-CREATE TABLE data_entry_revisions(
-  namespace TEXT NOT NULL,
-  key TEXT NOT NULL,
-  revision INTEGER NOT NULL CHECK(revision>0),
-  value TEXT CHECK(value IS NULL OR json_valid(value)),
-  deleted INTEGER NOT NULL CHECK(deleted IN (0,1)),
-  digest TEXT NOT NULL,
-  author TEXT NOT NULL,
-  run_id TEXT,
-  result TEXT CHECK(result IS NULL OR json_valid(result)),
-  created_at INTEGER NOT NULL,
-  PRIMARY KEY(namespace,key,revision)
-);
-CREATE TABLE data_artifacts(
-  id TEXT PRIMARY KEY,
-  namespace TEXT NOT NULL REFERENCES data_namespaces(path),
-  content_hash TEXT NOT NULL CHECK(length(content_hash)=64),
-  size INTEGER NOT NULL CHECK(size BETWEEN 0 AND 268435456),
-  media_type TEXT NOT NULL,
-  author TEXT NOT NULL,
-  run_id TEXT,
-  created_at INTEGER NOT NULL
-);
-CREATE TABLE work_operations(
-  operation TEXT PRIMARY KEY CHECK(length(operation) BETWEEN 1 AND 120),
-  input TEXT NOT NULL REFERENCES data_namespaces(path),
-  output TEXT NOT NULL REFERENCES data_namespaces(path),
-  fields TEXT NOT NULL CHECK(json_valid(fields) AND json_type(fields)='array'),
-  filter TEXT NOT NULL CHECK(json_valid(filter) AND json_type(filter)='object'),
-  rule_version INTEGER NOT NULL CHECK(rule_version>0),
-  generation INTEGER NOT NULL DEFAULT 0 CHECK(generation>=0),
-  cursor INTEGER NOT NULL DEFAULT 0 CHECK(cursor>=0),
-  updated_at INTEGER NOT NULL
-);
-CREATE TABLE work_items(
-  key TEXT PRIMARY KEY CHECK(length(key)=64),
-  operation TEXT NOT NULL REFERENCES work_operations(operation),
-  object TEXT NOT NULL,
-  input_revision INTEGER NOT NULL CHECK(input_revision>0),
-  fingerprint TEXT NOT NULL CHECK(length(fingerprint)=64),
-  rule_version INTEGER NOT NULL CHECK(rule_version>0),
-  generation INTEGER NOT NULL CHECK(generation>=0),
-  state TEXT NOT NULL CHECK(state IN ('ready','claimed','completed','retry_wait','waiting','blocked','unknown','superseded')),
-  attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt>=0),
-  lease INTEGER NOT NULL DEFAULT 0 CHECK(lease>=0),
-  claim_token TEXT,
-  run_id TEXT,
-  pod_id TEXT,
-  ready_at INTEGER NOT NULL,
-  reason TEXT CHECK(reason IS NULL OR length(reason)<=2000),
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  CHECK(state!='claimed' OR (claim_token IS NOT NULL AND run_id IS NOT NULL AND lease>0))
-);
-CREATE INDEX work_queue ON work_items(operation,state,ready_at,created_at);
-CREATE INDEX work_object ON work_items(operation,object,state);
-CREATE INDEX work_run ON work_items(run_id) WHERE run_id IS NOT NULL;
-CREATE TABLE owner_questions(
-  id TEXT PRIMARY KEY,
-  pod_id TEXT NOT NULL,
-  namespace TEXT NOT NULL REFERENCES data_namespaces(path),
-  key TEXT NOT NULL,
-  fingerprint TEXT NOT NULL CHECK(length(fingerprint) BETWEEN 1 AND 128),
-  title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 300),
-  body TEXT NOT NULL CHECK(length(body)<=4000),
-  options TEXT NOT NULL CHECK(json_valid(options) AND json_type(options)='array'),
-  data TEXT NOT NULL CHECK(json_valid(data) AND json_type(data)='object'),
-  state TEXT NOT NULL CHECK(state IN ('pending','decided','superseded','withdrawn')),
-  option TEXT,
-  decided_at INTEGER,
-  created_at INTEGER NOT NULL,
-  UNIQUE(namespace,key,fingerprint),
-  CHECK((state='decided')=(option IS NOT NULL AND decided_at IS NOT NULL))
-);
-CREATE INDEX owner_questions_open ON owner_questions(state,created_at);
-CREATE TABLE approval_batches(
-  id TEXT PRIMARY KEY,
-  pod_id TEXT NOT NULL REFERENCES pods(id),
-  title TEXT NOT NULL,
-  expires_at INTEGER NOT NULL,
-  url TEXT CHECK(url IS NULL OR length(url)<=2048),
-  next_poll_at INTEGER NOT NULL,
-  polls INTEGER NOT NULL DEFAULT 0 CHECK(polls>=0),
-  error TEXT CHECK(error IS NULL OR length(error)<=2000),
-  created_at INTEGER NOT NULL
-);
-CREATE TABLE action_approvals(
-  id TEXT PRIMARY KEY,
-  pod_id TEXT NOT NULL REFERENCES pods(id),
-  action TEXT NOT NULL CHECK(action IN ('mail.archive')),
-  object TEXT NOT NULL CHECK(length(object) BETWEEN 1 AND 500),
-  payload TEXT NOT NULL CHECK(json_valid(payload) AND json_type(payload)='object'),
-  payload_hash TEXT NOT NULL CHECK(length(payload_hash)=64),
-  title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 120),
-  authority TEXT NOT NULL CHECK(json_valid(authority) AND json_type(authority)='object'),
-  batch_id TEXT REFERENCES approval_batches(id),
-  grant_id TEXT CHECK(grant_id IS NULL OR length(grant_id) BETWEEN 1 AND 128),
-  state TEXT NOT NULL CHECK(state IN ('collecting','requested','approved','denied','expired','consumed','withdrawn','unknown')),
-  reason TEXT CHECK(reason IS NULL OR length(reason)<=2000),
-  released_at INTEGER,
-  created_at INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL,
-  UNIQUE(pod_id,action,object,payload_hash),
-  CHECK(state IN ('collecting','withdrawn') OR batch_id IS NOT NULL)
-);
-CREATE INDEX action_approvals_state ON action_approvals(pod_id,state,created_at);
-CREATE TABLE effect_attempts(
-  action_key TEXT NOT NULL CHECK(length(action_key)=64),
-  attempt INTEGER NOT NULL CHECK(attempt>0),
-  pod_id TEXT NOT NULL,
-  run_id TEXT,
-  operation TEXT NOT NULL,
-  input_hash TEXT NOT NULL CHECK(length(input_hash)=64),
-  state TEXT NOT NULL CHECK(state IN ('intent','unknown','confirmed_applied','confirmed_not_applied')),
-  origin TEXT NOT NULL CHECK(json_valid(origin) AND json_type(origin)='object'),
-  created_at INTEGER NOT NULL,
-  PRIMARY KEY(action_key,attempt)
-);
-CREATE UNIQUE INDEX effect_execution_guard ON effect_attempts(action_key) WHERE state!='confirmed_not_applied';
-CREATE TABLE effect_receipts(
-  action_key TEXT NOT NULL,
-  attempt INTEGER NOT NULL,
-  sequence INTEGER NOT NULL CHECK(sequence>0),
-  outcome TEXT NOT NULL CHECK(outcome IN ('intent','unknown','confirmed_applied','confirmed_not_applied')),
-  body TEXT NOT NULL CHECK(json_valid(body)),
-  created_at INTEGER NOT NULL,
-  PRIMARY KEY(action_key,attempt,sequence),
-  FOREIGN KEY(action_key,attempt) REFERENCES effect_attempts(action_key,attempt)
-);
-CREATE TABLE storage_receipts(
-  id TEXT PRIMARY KEY,
-  kind TEXT NOT NULL CHECK(kind IN ('conversion','restore','restore-reviewed')),
-  body TEXT NOT NULL CHECK(json_valid(body) AND json_type(body)='object'),
-  created_at INTEGER NOT NULL
-);
-`
-export const schema48Rows = 'INSERT INTO data_sequence VALUES(1,0);\n'
 
 export const baselineSchema = `
 -- Pods, scripts and knowledge
@@ -310,7 +123,6 @@ CREATE TABLE secret_requests(
   error TEXT
 );
 CREATE TABLE local_only_pods(pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE);
-
 -- Resources, grants and sandbox
 CREATE TABLE resources(
   id TEXT PRIMARY KEY,
@@ -360,36 +172,19 @@ CREATE TABLE pod_grants(
   display TEXT NOT NULL,
   grant_type TEXT NOT NULL CHECK(grant_type IN ('once','timed','always')),
   state TEXT NOT NULL CHECK(state IN ('pending','approved','denied','revoked','expired','used')),
-  network_id TEXT,
-  network_revision INTEGER,
   approved_in_session INTEGER NOT NULL DEFAULT 0,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX pod_grants_coverage ON pod_grants(pod_id, cli_id, state);
-CREATE INDEX pod_grants_network ON pod_grants(network_id, state);
 CREATE TABLE pod_sandbox(
-  pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,
-  source TEXT NOT NULL,
-  network_revision INTEGER,
-  level TEXT NOT NULL CHECK(level IN ('isolated','owner')),
-  PRIMARY KEY(pod_id, source)
+  pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,
+  level TEXT NOT NULL CHECK(level IN ('isolated','owner'))
 );
 CREATE TABLE pod_sandbox_deny(
-  pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,
-  source TEXT NOT NULL,
-  network_revision INTEGER,
-  paths TEXT NOT NULL,
-  PRIMARY KEY(pod_id, source)
+  pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,
+  paths TEXT NOT NULL
 );
-CREATE TABLE network_sandbox_resources(
-  network_id TEXT NOT NULL,
-  network_revision INTEGER NOT NULL,
-  pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,
-  resource_id TEXT NOT NULL,
-  PRIMARY KEY(network_id, resource_id)
-);
-
 -- Runs and scheduling
 CREATE TABLE settings(
   id INTEGER PRIMARY KEY CHECK(id=1),
@@ -494,7 +289,6 @@ CREATE TABLE inbox_outbox(
   updated_at INTEGER NOT NULL
 );
 CREATE INDEX inbox_outbox_due ON inbox_outbox(state, next_at);
-
 -- Mail knowledge
 CREATE TABLE mail_inventory(
   pod_id TEXT PRIMARY KEY REFERENCES pods(id),
@@ -536,7 +330,6 @@ CREATE TABLE source_derivations(
   operation TEXT NOT NULL,
   PRIMARY KEY(pod_id,source_id)
 );
-
 -- Workspace, account and data
 CREATE TABLE connections(
   id TEXT PRIMARY KEY,
@@ -565,12 +358,6 @@ CREATE TABLE pod_memberships(
   group_id TEXT NOT NULL REFERENCES pod_groups(id) ON DELETE CASCADE
 );
 CREATE INDEX group_members ON pod_memberships(group_id);
-CREATE TABLE automation_descriptions(
-  id TEXT PRIMARY KEY,
-  body TEXT NOT NULL,
-  revision INTEGER NOT NULL,
-  updated_at INTEGER NOT NULL
-);
 CREATE TABLE remote_registration(id INTEGER PRIMARY KEY CHECK(id=1), body TEXT NOT NULL, enabled INTEGER NOT NULL);
 CREATE TABLE remote_pods(
   pod_id TEXT PRIMARY KEY REFERENCES pods(id),
@@ -581,7 +368,6 @@ CREATE TABLE remote_pods(
   identity TEXT,
   error TEXT
 );
-
 -- Conversations and the assistant action journal
 CREATE TABLE master_messages(
   id TEXT PRIMARY KEY,
@@ -637,9 +423,8 @@ CREATE TABLE chat_message_context(
 );
 CREATE INDEX chat_message_history ON chat_message_context(conversation_id,revision);
 CREATE TABLE control_runs(id TEXT PRIMARY KEY, run_id TEXT NOT NULL, kind TEXT NOT NULL);
-
 -- Definitions and sharing
-CREATE TABLE network_owners(
+CREATE TABLE owners(
   issuer TEXT NOT NULL CHECK(length(issuer) BETWEEN 1 AND 2048),
   subject TEXT NOT NULL CHECK(length(subject) BETWEEN 1 AND 320),
   PRIMARY KEY(issuer,subject)
@@ -650,7 +435,7 @@ CREATE TABLE pod_definitions(
   owner_subject TEXT NOT NULL,
   name TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  FOREIGN KEY(owner_issuer,owner_subject) REFERENCES network_owners(issuer,subject)
+  FOREIGN KEY(owner_issuer,owner_subject) REFERENCES owners(issuer,subject)
 );
 CREATE TABLE pod_definition_versions(
   definition_id TEXT NOT NULL REFERENCES pod_definitions(id),
@@ -701,7 +486,7 @@ CREATE TABLE definition_instance_requests(
   error TEXT,
   created_at INTEGER NOT NULL,
   FOREIGN KEY(definition_id,definition_version) REFERENCES pod_definition_versions(definition_id,version),
-  FOREIGN KEY(owner_issuer,owner_subject) REFERENCES network_owners(issuer,subject)
+  FOREIGN KEY(owner_issuer,owner_subject) REFERENCES owners(issuer,subject)
 );
 CREATE TABLE definition_update_drafts(
   draft_id TEXT PRIMARY KEY REFERENCES script_drafts(id),
@@ -726,7 +511,7 @@ CREATE TABLE portable_imports(
   error TEXT,
   created_at INTEGER NOT NULL,
   updated_at INTEGER NOT NULL,
-  FOREIGN KEY(owner_issuer,owner_subject) REFERENCES network_owners(issuer,subject)
+  FOREIGN KEY(owner_issuer,owner_subject) REFERENCES owners(issuer,subject)
 );
 CREATE TABLE portable_import_pods(
   import_id TEXT NOT NULL REFERENCES portable_imports(id),
@@ -735,557 +520,180 @@ CREATE TABLE portable_import_pods(
   PRIMARY KEY(import_id,key)
 );
 
--- Networks
-CREATE TABLE networks(
+-- Tags of Pods (issue 1459)
+CREATE TABLE item_tags(
   id TEXT PRIMARY KEY,
-  owner_issuer TEXT NOT NULL,
-  owner_subject TEXT NOT NULL,
-  group_id TEXT NOT NULL REFERENCES pod_groups(id),
-  name TEXT NOT NULL,
-  state TEXT NOT NULL DEFAULT 'paused' CHECK(state IN ('active','paused','archived')),
+  tags TEXT NOT NULL CHECK(json_valid(tags) AND json_type(tags)='array'),
   revision INTEGER NOT NULL CHECK(revision>0),
-  activation_epoch INTEGER NOT NULL DEFAULT 1 CHECK(activation_epoch>0),
-  restore_nonce TEXT NOT NULL,
-  baseline_state TEXT NOT NULL DEFAULT 'ready' CHECK(baseline_state IN ('ready','review_required')),
-  baseline_receipt TEXT CHECK(baseline_receipt IS NULL OR json_valid(baseline_receipt)),
-  created_at INTEGER NOT NULL,
-  FOREIGN KEY(owner_issuer,owner_subject) REFERENCES network_owners(issuer,subject),
-  CHECK(state!='active' OR baseline_state='ready'),
-  UNIQUE(id,group_id),
-  UNIQUE(id,owner_issuer,owner_subject,group_id),
-  FOREIGN KEY(id,revision) REFERENCES network_revisions(network_id,revision) DEFERRABLE INITIALLY DEFERRED
+  updated_at INTEGER NOT NULL
 );
-CREATE TABLE network_revisions(
-  network_id TEXT NOT NULL REFERENCES networks(id),
-  revision INTEGER NOT NULL CHECK(revision>0),
-  contract TEXT NOT NULL CHECK(json_valid(contract) AND json_type(contract)='object'),
-  content_hash TEXT NOT NULL CHECK(length(content_hash)=64),
-  created_at INTEGER NOT NULL,
-  PRIMARY KEY(network_id,revision)
-);
-CREATE TABLE network_members(
-  network_id TEXT NOT NULL REFERENCES networks(id),
-  pod_id TEXT NOT NULL UNIQUE REFERENCES pods(id),
-  source_binding_id TEXT UNIQUE,
-  UNIQUE(network_id,source_binding_id),
-  PRIMARY KEY(network_id,pod_id)
-);
-CREATE TABLE network_subscriptions(
-  id TEXT PRIMARY KEY,
-  network_id TEXT NOT NULL,
-  network_revision INTEGER NOT NULL,
-  pod_id TEXT NOT NULL,
-  channel TEXT NOT NULL,
-  schema_hash TEXT NOT NULL CHECK(length(schema_hash)=64),
-  serial_case INTEGER NOT NULL DEFAULT 0 CHECK(serial_case IN (0,1)),
-  UNIQUE(network_id,network_revision,pod_id,channel),
-  UNIQUE(network_id,id),
-  FOREIGN KEY(network_id,network_revision) REFERENCES network_revisions(network_id,revision),
-  FOREIGN KEY(network_id,pod_id) REFERENCES network_members(network_id,pod_id)
-);
-CREATE TABLE composition_config(
-  network_id TEXT NOT NULL REFERENCES networks(id),
-  name TEXT NOT NULL,
-  value TEXT NOT NULL CHECK(json_valid(value)),
-  PRIMARY KEY(network_id,name)
-);
-CREATE TABLE network_checkpoints(
-  network_id TEXT NOT NULL,
-  pod_id TEXT PRIMARY KEY,
-  revision INTEGER NOT NULL DEFAULT 0 CHECK(revision>=0),
-  body TEXT NOT NULL CHECK(json_valid(body) AND json_type(body)='object'),
-  FOREIGN KEY(network_id,pod_id) REFERENCES network_members(network_id,pod_id)
-);
-CREATE TABLE network_source_clocks(
-  network_id TEXT NOT NULL,
-  pod_id TEXT NOT NULL,
-  next_at INTEGER NOT NULL,
-  PRIMARY KEY(network_id,pod_id),
-  FOREIGN KEY(network_id,pod_id) REFERENCES network_members(network_id,pod_id)
-);
-CREATE TABLE network_scheduler_state(
-  id INTEGER PRIMARY KEY CHECK(id=1),
-  next_domain INTEGER NOT NULL DEFAULT 0 CHECK(next_domain BETWEEN 0 AND 2),
-  last_network TEXT,
-  last_progress_at INTEGER,
-  last_error_domain INTEGER CHECK(last_error_domain BETWEEN 0 AND 2),
-  last_error TEXT
-);
-CREATE TABLE network_runtime_status(
-  network_id TEXT PRIMARY KEY REFERENCES networks(id),
-  last_pod TEXT,
-  last_dispatch_at INTEGER,
-  intake_error TEXT
-);
-CREATE TABLE network_maintenance_status(
-  network_id TEXT NOT NULL REFERENCES networks(id),
-  operation TEXT NOT NULL CHECK(operation IN ('traces','artifacts')),
-  body TEXT CHECK(body IS NULL OR json_valid(body)),
-  failure_count INTEGER NOT NULL CHECK(failure_count>0),
-  first_at INTEGER NOT NULL,
-  last_at INTEGER NOT NULL,
-  PRIMARY KEY(network_id,operation)
-);
-CREATE TABLE network_process_previews(
-  id TEXT PRIMARY KEY,
-  network_id TEXT NOT NULL REFERENCES networks(id),
-  preview TEXT NOT NULL CHECK(json_valid(preview) AND json_type(preview)='object'),
-  fingerprint TEXT NOT NULL CHECK(length(fingerprint)=64),
-  expires_at INTEGER NOT NULL,
-  consumed_at INTEGER,
-  state TEXT NOT NULL DEFAULT 'preview' CHECK(state IN ('preview','running','stopped','finished')),
-  remaining INTEGER NOT NULL CHECK(remaining BETWEEN 0 AND 100),
-  CHECK((state='preview')=(consumed_at IS NULL))
-);
-CREATE INDEX network_process_active ON network_process_previews(network_id,state,expires_at);
-CREATE TABLE network_trace_events(
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  network_id TEXT NOT NULL REFERENCES networks(id),
-  case_id TEXT,
-  run_id TEXT REFERENCES network_invocations(run_id),
-  event_id TEXT,
-  kind TEXT NOT NULL,
-  body TEXT NOT NULL CHECK(json_valid(body) AND json_type(body)='object'),
-  created_at INTEGER NOT NULL,
-  FOREIGN KEY(network_id,case_id) REFERENCES network_cases(network_id,id),
-  FOREIGN KEY(network_id,run_id) REFERENCES network_invocations(network_id,run_id),
-  FOREIGN KEY(network_id,event_id) REFERENCES network_events(network_id,id)
-);
-CREATE INDEX network_trace_cursor ON network_trace_events(network_id,id);
 
--- Network cases, events and deliveries
-CREATE TABLE network_cases(
-  id TEXT PRIMARY KEY,
-  network_id TEXT NOT NULL,
-  group_id TEXT NOT NULL,
-  current_revision INTEGER NOT NULL CHECK(current_revision>0),
-  created_at INTEGER NOT NULL,
-  UNIQUE(network_id,id),
-  FOREIGN KEY(network_id,group_id) REFERENCES networks(id,group_id),
-  FOREIGN KEY(id,current_revision) REFERENCES network_case_revisions(case_id,revision) DEFERRABLE INITIALLY DEFERRED
-);
-CREATE TABLE network_case_revisions(
-  case_id TEXT NOT NULL REFERENCES network_cases(id),
+-- Shared domain data, work, owner questions, approvals and effects (issue 1465)
+CREATE TABLE data_namespaces(
+  path TEXT PRIMARY KEY CHECK(length(path) BETWEEN 1 AND 200),
+  writer TEXT NOT NULL CHECK(length(writer) BETWEEN 1 AND 64),
+  mode TEXT NOT NULL CHECK(mode IN ('records','results')),
+  schema TEXT CHECK(schema IS NULL OR (json_valid(schema) AND json_type(schema)='object')),
+  writer_epoch INTEGER NOT NULL CHECK(writer_epoch>0),
   revision INTEGER NOT NULL CHECK(revision>0),
-  source_mapping TEXT NOT NULL CHECK(json_valid(source_mapping)),
-  outcome TEXT NOT NULL DEFAULT 'open' CHECK(outcome IN ('open','completed','blocked','superseded','discarded')),
   created_at INTEGER NOT NULL,
-  PRIMARY KEY(case_id,revision)
+  updated_at INTEGER NOT NULL
 );
-CREATE TABLE network_case_sources(
-  network_id TEXT NOT NULL,
-  source_binding_id TEXT NOT NULL,
-  source_item TEXT NOT NULL,
-  source_version TEXT NOT NULL,
-  case_id TEXT NOT NULL,
-  case_revision INTEGER NOT NULL,
-  PRIMARY KEY(network_id,source_binding_id,source_item,source_version),
-  FOREIGN KEY(network_id,source_binding_id) REFERENCES network_members(network_id,source_binding_id),
-  FOREIGN KEY(network_id,case_id) REFERENCES network_cases(network_id,id),
-  FOREIGN KEY(case_id,case_revision) REFERENCES network_case_revisions(case_id,revision)
+CREATE TABLE data_readers(
+  path TEXT NOT NULL REFERENCES data_namespaces(path),
+  pod_id TEXT NOT NULL REFERENCES pods(id) ON DELETE CASCADE,
+  PRIMARY KEY(path,pod_id)
 );
-CREATE TABLE network_events(
+CREATE TABLE data_sequence(id INTEGER PRIMARY KEY CHECK(id=1), value INTEGER NOT NULL CHECK(value>=0));
+CREATE TABLE data_entries(
+  namespace TEXT NOT NULL REFERENCES data_namespaces(path),
+  key TEXT NOT NULL CHECK(length(key) BETWEEN 1 AND 300),
+  revision INTEGER NOT NULL CHECK(revision>0),
+  sequence INTEGER NOT NULL UNIQUE,
+  value TEXT CHECK(value IS NULL OR json_valid(value)),
+  deleted INTEGER NOT NULL CHECK(deleted IN (0,1)),
+  digest TEXT NOT NULL CHECK(length(digest)=64),
+  author TEXT NOT NULL,
+  run_id TEXT,
+  writer_epoch INTEGER NOT NULL,
+  result TEXT CHECK(result IS NULL OR (json_valid(result) AND json_type(result)='object')),
+  updated_at INTEGER NOT NULL,
+  PRIMARY KEY(namespace,key),
+  CHECK((deleted=1 AND value IS NULL) OR (deleted=0 AND value IS NOT NULL))
+);
+CREATE INDEX data_entry_changes ON data_entries(namespace,sequence);
+CREATE TABLE data_entry_revisions(
+  namespace TEXT NOT NULL,
+  key TEXT NOT NULL,
+  revision INTEGER NOT NULL CHECK(revision>0),
+  value TEXT CHECK(value IS NULL OR json_valid(value)),
+  deleted INTEGER NOT NULL CHECK(deleted IN (0,1)),
+  digest TEXT NOT NULL,
+  author TEXT NOT NULL,
+  run_id TEXT,
+  result TEXT CHECK(result IS NULL OR json_valid(result)),
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY(namespace,key,revision)
+);
+CREATE TABLE work_operations(
+  operation TEXT PRIMARY KEY CHECK(length(operation) BETWEEN 1 AND 120),
+  input TEXT NOT NULL REFERENCES data_namespaces(path),
+  output TEXT NOT NULL REFERENCES data_namespaces(path),
+  fields TEXT NOT NULL CHECK(json_valid(fields) AND json_type(fields)='array'),
+  filter TEXT NOT NULL CHECK(json_valid(filter) AND json_type(filter)='object'),
+  rule_version INTEGER NOT NULL CHECK(rule_version>0),
+  generation INTEGER NOT NULL DEFAULT 0 CHECK(generation>=0),
+  cursor INTEGER NOT NULL DEFAULT 0 CHECK(cursor>=0),
+  updated_at INTEGER NOT NULL
+);
+CREATE TABLE work_items(
+  key TEXT PRIMARY KEY CHECK(length(key)=64),
+  operation TEXT NOT NULL REFERENCES work_operations(operation),
+  object TEXT NOT NULL,
+  input_revision INTEGER NOT NULL CHECK(input_revision>0),
+  fingerprint TEXT NOT NULL CHECK(length(fingerprint)=64),
+  rule_version INTEGER NOT NULL CHECK(rule_version>0),
+  generation INTEGER NOT NULL CHECK(generation>=0),
+  state TEXT NOT NULL CHECK(state IN ('ready','claimed','completed','retry_wait','waiting','blocked','unknown','superseded')),
+  attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt>=0),
+  lease INTEGER NOT NULL DEFAULT 0 CHECK(lease>=0),
+  claim_token TEXT,
+  run_id TEXT,
+  pod_id TEXT,
+  ready_at INTEGER NOT NULL,
+  reason TEXT CHECK(reason IS NULL OR length(reason)<=2000),
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL,
+  CHECK(state!='claimed' OR (claim_token IS NOT NULL AND run_id IS NOT NULL AND lease>0))
+);
+CREATE INDEX work_queue ON work_items(operation,state,ready_at,created_at);
+CREATE INDEX work_object ON work_items(operation,object,state);
+CREATE INDEX work_run ON work_items(run_id) WHERE run_id IS NOT NULL;
+CREATE TABLE owner_questions(
   id TEXT PRIMARY KEY,
-  network_id TEXT NOT NULL,
-  network_revision INTEGER NOT NULL,
-  producer_pod_id TEXT NOT NULL,
-  definition_id TEXT NOT NULL,
-  definition_version INTEGER NOT NULL,
-  case_id TEXT NOT NULL,
-  case_revision INTEGER NOT NULL,
-  channel TEXT NOT NULL,
-  item_key TEXT NOT NULL,
-  origin TEXT NOT NULL CHECK(json_valid(origin) AND json_type(origin)='object'),
-  schema_hash TEXT NOT NULL CHECK(length(schema_hash)=64),
+  pod_id TEXT NOT NULL,
+  namespace TEXT NOT NULL REFERENCES data_namespaces(path),
+  key TEXT NOT NULL,
+  fingerprint TEXT NOT NULL CHECK(length(fingerprint) BETWEEN 1 AND 128),
+  title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 300),
+  body TEXT NOT NULL CHECK(length(body)<=4000),
+  options TEXT NOT NULL CHECK(json_valid(options) AND json_type(options)='array'),
+  data TEXT NOT NULL CHECK(json_valid(data) AND json_type(data)='object'),
+  state TEXT NOT NULL CHECK(state IN ('pending','decided','superseded','withdrawn')),
+  option TEXT,
+  decided_at INTEGER,
+  created_at INTEGER NOT NULL,
+  UNIQUE(namespace,key,fingerprint),
+  CHECK((state='decided')=(option IS NOT NULL AND decided_at IS NOT NULL))
+);
+CREATE INDEX owner_questions_open ON owner_questions(state,created_at);
+CREATE TABLE approval_batches(
+  id TEXT PRIMARY KEY,
+  pod_id TEXT NOT NULL REFERENCES pods(id),
+  title TEXT NOT NULL,
+  expires_at INTEGER NOT NULL,
+  url TEXT CHECK(url IS NULL OR length(url)<=2048),
+  next_poll_at INTEGER NOT NULL,
+  polls INTEGER NOT NULL DEFAULT 0 CHECK(polls>=0),
+  error TEXT CHECK(error IS NULL OR length(error)<=2000),
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE action_approvals(
+  id TEXT PRIMARY KEY,
+  pod_id TEXT NOT NULL REFERENCES pods(id),
+  action TEXT NOT NULL CHECK(action IN ('mail.archive')),
+  object TEXT NOT NULL CHECK(length(object) BETWEEN 1 AND 500),
   payload TEXT NOT NULL CHECK(json_valid(payload) AND json_type(payload)='object'),
   payload_hash TEXT NOT NULL CHECK(length(payload_hash)=64),
-  accepted_at INTEGER NOT NULL,
-  UNIQUE(network_id,id),
-  UNIQUE(network_id,id,case_id,case_revision),
-  FOREIGN KEY(network_id,network_revision) REFERENCES network_revisions(network_id,revision),
-  FOREIGN KEY(network_id,producer_pod_id) REFERENCES network_members(network_id,pod_id),
-  FOREIGN KEY(definition_id,definition_version) REFERENCES pod_definition_versions(definition_id,version),
-  FOREIGN KEY(network_id,case_id) REFERENCES network_cases(network_id,id),
-  FOREIGN KEY(case_id,case_revision) REFERENCES network_case_revisions(case_id,revision)
-);
-CREATE TABLE network_event_identities(
-  network_id TEXT NOT NULL REFERENCES networks(id),
-  namespace TEXT NOT NULL CHECK(namespace IN ('source','derived','replay')),
-  identity_hash TEXT NOT NULL CHECK(length(identity_hash)=64),
-  event_id TEXT NOT NULL,
-  payload_hash TEXT NOT NULL CHECK(length(payload_hash)=64),
-  schema_hash TEXT NOT NULL CHECK(length(schema_hash)=64),
-  accepted_at INTEGER NOT NULL,
-  PRIMARY KEY(network_id,namespace,identity_hash)
-);
-CREATE TABLE network_deliveries(
-  id TEXT PRIMARY KEY,
-  network_id TEXT NOT NULL,
-  event_id TEXT NOT NULL,
-  subscription_id TEXT NOT NULL,
-  case_id TEXT NOT NULL,
-  case_revision INTEGER NOT NULL,
-  state TEXT NOT NULL DEFAULT 'pending' CHECK(state IN ('pending','claimed','done','retry_wait','blocked','unknown','discarded')),
-  ready_at INTEGER NOT NULL,
-  accepted_at INTEGER NOT NULL,
-  attempt INTEGER NOT NULL DEFAULT 0 CHECK(attempt BETWEEN 0 AND 3),
-  generation INTEGER NOT NULL DEFAULT 0 CHECK(generation>=0),
-  claim_token TEXT,
-  boot_nonce TEXT,
-  restore_nonce TEXT,
-  activation_epoch INTEGER,
-  run_id TEXT REFERENCES network_invocations(run_id),
-  reason TEXT,
-  review_receipt TEXT CHECK(review_receipt IS NULL OR json_valid(review_receipt)),
-  UNIQUE(event_id,subscription_id),
-  FOREIGN KEY(network_id,run_id) REFERENCES network_invocations(network_id,run_id),
-  FOREIGN KEY(network_id,event_id,case_id,case_revision) REFERENCES network_events(network_id,id,case_id,case_revision),
-  FOREIGN KEY(network_id,subscription_id) REFERENCES network_subscriptions(network_id,id),
-  FOREIGN KEY(network_id,case_id) REFERENCES network_cases(network_id,id),
-  FOREIGN KEY(case_id,case_revision) REFERENCES network_case_revisions(case_id,revision),
-  CHECK(state!='claimed' OR (run_id IS NOT NULL AND claim_token IS NOT NULL AND boot_nonce IS NOT NULL AND restore_nonce IS NOT NULL AND activation_epoch IS NOT NULL AND generation>0))
-);
-CREATE INDEX network_delivery_ready ON network_deliveries(subscription_id,state,ready_at,accepted_at,id);
-CREATE INDEX network_delivery_case ON network_deliveries(network_id,case_id,case_revision,state);
-CREATE INDEX network_delivery_run ON network_deliveries(run_id,state);
-CREATE INDEX network_control_pending_age ON network_deliveries(network_id,state,accepted_at);
-CREATE TABLE network_queue_counts(
-  network_id TEXT NOT NULL REFERENCES networks(id),
-  state TEXT NOT NULL CHECK(state IN ('pending','claimed','done','retry_wait','blocked','unknown','discarded')),
-  count INTEGER NOT NULL CHECK(count>=0),
-  PRIMARY KEY(network_id,state)
-);
-CREATE TABLE network_joins(
-  network_id TEXT NOT NULL REFERENCES networks(id),
-  join_id TEXT NOT NULL,
-  case_id TEXT NOT NULL,
-  case_revision INTEGER NOT NULL,
-  network_revision INTEGER NOT NULL,
-  declaration TEXT NOT NULL CHECK(json_valid(declaration) AND json_type(declaration)='object'),
-  deadline INTEGER NOT NULL,
-  state TEXT NOT NULL CHECK(state IN ('pending','completed','blocked','discarded')),
-  reason TEXT,
-  PRIMARY KEY(network_id,join_id,case_id,case_revision),
-  FOREIGN KEY(network_id,network_revision) REFERENCES network_revisions(network_id,revision),
-  FOREIGN KEY(network_id,case_id) REFERENCES network_cases(network_id,id),
-  FOREIGN KEY(case_id,case_revision) REFERENCES network_case_revisions(case_id,revision)
-);
-CREATE TABLE network_join_inputs(
-  network_id TEXT NOT NULL,
-  join_id TEXT NOT NULL,
-  case_id TEXT NOT NULL,
-  case_revision INTEGER NOT NULL,
-  channel TEXT NOT NULL,
-  event_id TEXT NOT NULL,
-  PRIMARY KEY(network_id,join_id,case_id,case_revision,channel),
-  FOREIGN KEY(network_id,join_id,case_id,case_revision) REFERENCES network_joins(network_id,join_id,case_id,case_revision),
-  FOREIGN KEY(network_id,event_id,case_id,case_revision) REFERENCES network_events(network_id,id,case_id,case_revision)
-);
-CREATE TABLE network_choices(
-  network_id TEXT NOT NULL,
-  network_revision INTEGER NOT NULL,
-  event_id TEXT NOT NULL,
-  gate_key TEXT NOT NULL,
-  option_key TEXT,
-  result_event_id TEXT,
-  decided_at INTEGER,
-  PRIMARY KEY(network_id,event_id,gate_key),
-  FOREIGN KEY(network_id,network_revision) REFERENCES network_revisions(network_id,revision),
-  FOREIGN KEY(network_id,event_id) REFERENCES network_events(network_id,id),
-  FOREIGN KEY(network_id,result_event_id) REFERENCES network_events(network_id,id),
-  CHECK((option_key IS NULL AND result_event_id IS NULL AND decided_at IS NULL) OR (option_key IS NOT NULL AND result_event_id IS NOT NULL AND decided_at IS NOT NULL))
-);
-CREATE INDEX network_choices_waiting ON network_choices(network_id,network_revision,decided_at);
-
--- Network invocations and effects
-CREATE TABLE network_invocations(
-  run_id TEXT PRIMARY KEY REFERENCES runs(id),
-  network_id TEXT NOT NULL,
-  network_revision INTEGER NOT NULL,
-  pod_id TEXT NOT NULL,
-  boot_nonce TEXT NOT NULL,
-  restore_nonce TEXT NOT NULL,
-  activation_epoch INTEGER NOT NULL CHECK(activation_epoch>0),
-  claim_token TEXT NOT NULL,
-  generation INTEGER NOT NULL CHECK(generation>0),
-  state TEXT NOT NULL CHECK(state IN ('running','stopping','completed','failed','interrupted','blocked','unknown')),
-  manifest TEXT NOT NULL CHECK(json_valid(manifest) AND json_type(manifest)='object'),
-  staged_checkpoint TEXT CHECK(staged_checkpoint IS NULL OR json_valid(staged_checkpoint)),
-  execution_kind TEXT NOT NULL DEFAULT 'script' CHECK(execution_kind IN ('script','gate_maintenance')),
-  UNIQUE(network_id,run_id),
-  FOREIGN KEY(network_id,network_revision) REFERENCES network_revisions(network_id,revision),
-  FOREIGN KEY(network_id,pod_id) REFERENCES network_members(network_id,pod_id)
-);
-CREATE INDEX network_control_invocation_state ON network_invocations(pod_id,state,run_id);
-CREATE INDEX network_control_invocation_health ON network_invocations(network_id,state,run_id);
-CREATE INDEX network_gate_pod_admission ON network_invocations(pod_id);
-CREATE TABLE network_invocation_controls(
-  run_id TEXT PRIMARY KEY REFERENCES network_invocations(run_id),
-  trace_bytes INTEGER NOT NULL DEFAULT 0 CHECK(trace_bytes BETWEEN 0 AND 2097152),
-  trace_count INTEGER NOT NULL DEFAULT 0 CHECK(trace_count BETWEEN 0 AND 1000),
-  resolved_receipt TEXT CHECK(resolved_receipt IS NULL OR (json_valid(resolved_receipt) AND json_type(resolved_receipt)='object')),
-  settlement_receipt TEXT CHECK(settlement_receipt IS NULL OR (json_valid(settlement_receipt) AND json_type(settlement_receipt)='object')),
-  review_required INTEGER NOT NULL DEFAULT 0 CHECK(review_required IN (0,1)),
-  snapshots TEXT CHECK(snapshots IS NULL OR (json_valid(snapshots) AND json_type(snapshots)='object')),
-  deadline INTEGER,
-  retry_of TEXT REFERENCES network_invocations(run_id),
-  retry_at INTEGER,
-  retry_consumed_at INTEGER,
-  process_preview_id TEXT REFERENCES network_process_previews(id),
-  creator_pid INTEGER CHECK(creator_pid IS NULL OR creator_pid>0),
-  retry_authority TEXT CHECK(retry_authority IS NULL OR (json_valid(retry_authority) AND json_type(retry_authority)='object')),
-  attempt INTEGER NOT NULL DEFAULT 1 CHECK(attempt BETWEEN 1 AND 3),
-  diagnostic TEXT CHECK(diagnostic IS NULL OR length(diagnostic)<=10000),
-  failure_kind TEXT CHECK(failure_kind IN ('transient','invalid','uncertain','exhausted','timeout','quota','recovery')),
-  stopped_receipt TEXT CHECK(stopped_receipt IS NULL OR json_valid(stopped_receipt))
-);
-CREATE INDEX network_control_retry ON network_invocation_controls(retry_at,run_id) WHERE retry_at IS NOT NULL;
-CREATE INDEX network_control_deadline ON network_invocation_controls(deadline,run_id) WHERE deadline IS NOT NULL;
-CREATE TABLE network_effect_attempts(
-  logical_action_key TEXT NOT NULL,
-  attempt INTEGER NOT NULL CHECK(attempt>0),
-  run_id TEXT NOT NULL REFERENCES network_invocations(run_id),
-  case_id TEXT NOT NULL,
-  case_revision INTEGER NOT NULL,
-  input_hash TEXT NOT NULL CHECK(length(input_hash)=64),
-  manifest_hash TEXT NOT NULL CHECK(length(manifest_hash)=64),
-  state TEXT NOT NULL CHECK(state IN ('intent','unknown','confirmed_applied','confirmed_not_applied')),
+  title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 120),
+  authority TEXT NOT NULL CHECK(json_valid(authority) AND json_type(authority)='object'),
+  batch_id TEXT REFERENCES approval_batches(id),
+  grant_id TEXT CHECK(grant_id IS NULL OR length(grant_id) BETWEEN 1 AND 128),
+  state TEXT NOT NULL CHECK(state IN ('collecting','requested','approved','denied','expired','consumed','withdrawn','unknown')),
+  reason TEXT CHECK(reason IS NULL OR length(reason)<=2000),
+  released_at INTEGER,
   created_at INTEGER NOT NULL,
-  network_id TEXT NOT NULL,
-  PRIMARY KEY(logical_action_key,attempt),
-  FOREIGN KEY(network_id,run_id) REFERENCES network_invocations(network_id,run_id),
-  FOREIGN KEY(network_id,case_id) REFERENCES network_cases(network_id,id),
-  FOREIGN KEY(case_id,case_revision) REFERENCES network_case_revisions(case_id,revision)
+  updated_at INTEGER NOT NULL,
+  UNIQUE(pod_id,action,object,payload_hash),
+  CHECK(state IN ('collecting','withdrawn') OR batch_id IS NOT NULL)
 );
-CREATE UNIQUE INDEX network_effect_execution_guard ON network_effect_attempts(logical_action_key) WHERE state!='confirmed_not_applied';
-CREATE TABLE network_effect_receipts(
-  logical_action_key TEXT NOT NULL,
+CREATE INDEX action_approvals_state ON action_approvals(pod_id,state,created_at);
+CREATE TABLE effect_attempts(
+  action_key TEXT NOT NULL CHECK(length(action_key)=64),
+  attempt INTEGER NOT NULL CHECK(attempt>0),
+  pod_id TEXT NOT NULL,
+  run_id TEXT,
+  operation TEXT NOT NULL,
+  input_hash TEXT NOT NULL CHECK(length(input_hash)=64),
+  state TEXT NOT NULL CHECK(state IN ('intent','unknown','confirmed_applied','confirmed_not_applied')),
+  origin TEXT NOT NULL CHECK(json_valid(origin) AND json_type(origin)='object'),
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY(action_key,attempt)
+);
+CREATE UNIQUE INDEX effect_execution_guard ON effect_attempts(action_key) WHERE state!='confirmed_not_applied';
+CREATE TABLE effect_receipts(
+  action_key TEXT NOT NULL,
   attempt INTEGER NOT NULL,
   sequence INTEGER NOT NULL CHECK(sequence>0),
   outcome TEXT NOT NULL CHECK(outcome IN ('intent','unknown','confirmed_applied','confirmed_not_applied')),
   body TEXT NOT NULL CHECK(json_valid(body)),
   created_at INTEGER NOT NULL,
-  PRIMARY KEY(logical_action_key,attempt,sequence),
-  FOREIGN KEY(logical_action_key,attempt) REFERENCES network_effect_attempts(logical_action_key,attempt)
+  PRIMARY KEY(action_key,attempt,sequence),
+  FOREIGN KEY(action_key,attempt) REFERENCES effect_attempts(action_key,attempt)
 );
-
--- Network approval gates
-CREATE TABLE network_gate_tasks(
+CREATE TABLE storage_receipts(
   id TEXT PRIMARY KEY,
-  network_id TEXT NOT NULL,
-  network_revision INTEGER NOT NULL,
-  pod_id TEXT NOT NULL,
-  generation INTEGER NOT NULL CHECK(generation>0),
-  state TEXT NOT NULL CHECK(state IN ('preparing','pending','consuming','approved','denied','expired','superseded','unknown')),
-  manifest TEXT NOT NULL CHECK(json_valid(manifest) AND json_type(manifest)='object'),
-  manifest_hash TEXT NOT NULL CHECK(length(manifest_hash)=64),
-  restore_nonce TEXT NOT NULL,
-  expires_at INTEGER NOT NULL,
-  grant_id TEXT,
-  created_at INTEGER NOT NULL,
-  UNIQUE(network_id,id),
-  FOREIGN KEY(network_id,network_revision) REFERENCES network_revisions(network_id,revision),
-  FOREIGN KEY(network_id,pod_id) REFERENCES network_members(network_id,pod_id)
-);
-CREATE TABLE network_gate_task_attempts(
-  task_id TEXT NOT NULL REFERENCES network_gate_tasks(id),
-  attempt INTEGER NOT NULL CHECK(attempt>0),
-  run_id TEXT NOT NULL UNIQUE REFERENCES network_invocations(run_id),
-  generation INTEGER NOT NULL CHECK(generation>0),
-  step_token TEXT NOT NULL,
-  state TEXT NOT NULL CHECK(state IN ('running','completed','interrupted','blocked','unknown')),
-  created_at INTEGER NOT NULL,
-  finished_at INTEGER,
-  network_id TEXT NOT NULL,
-  FOREIGN KEY(network_id,task_id) REFERENCES network_gate_tasks(network_id,id),
-  FOREIGN KEY(network_id,run_id) REFERENCES network_invocations(network_id,run_id),
-  PRIMARY KEY(task_id,attempt)
-);
-CREATE UNIQUE INDEX network_gate_one_step ON network_gate_task_attempts(task_id) WHERE state='running';
-CREATE TABLE network_gate_attempt_controls(
-  task_id TEXT NOT NULL,
-  attempt INTEGER NOT NULL,
-  operation TEXT NOT NULL CHECK(operation IN ('not_started','create','status','consume')),
-  PRIMARY KEY(task_id,attempt),
-  FOREIGN KEY(task_id,attempt) REFERENCES network_gate_task_attempts(task_id,attempt)
-);
-CREATE TABLE network_gate_controls(
-  task_id TEXT PRIMARY KEY REFERENCES network_gate_tasks(id),
-  network_id TEXT NOT NULL,
-  gate_key TEXT NOT NULL,
-  summary TEXT NOT NULL CHECK(length(summary)<=4096),
-  next_poll_at INTEGER NOT NULL,
-  poll_count INTEGER NOT NULL DEFAULT 0 CHECK(poll_count>=0),
-  url TEXT CHECK(url IS NULL OR length(url)<=2048),
-  error TEXT CHECK(error IS NULL OR length(error)<=10000),
-  resolution TEXT CHECK(resolution IS NULL OR (json_valid(resolution) AND json_type(resolution)='object')),
-  FOREIGN KEY(network_id,task_id) REFERENCES network_gate_tasks(network_id,id)
-);
-CREATE INDEX network_gate_due ON network_gate_controls(next_poll_at,task_id);
-CREATE TABLE network_gate_items(
-  task_id TEXT NOT NULL REFERENCES network_gate_tasks(id),
-  delivery_id TEXT NOT NULL REFERENCES network_deliveries(id),
-  event_id TEXT NOT NULL REFERENCES network_events(id),
-  delivery_generation INTEGER NOT NULL CHECK(delivery_generation>=0),
-  payload_hash TEXT NOT NULL CHECK(length(payload_hash)=64),
-  outcome TEXT NOT NULL CHECK(outcome IN ('held','released','excluded','denied','expired','obsolete','unknown')),
-  receipt TEXT CHECK(receipt IS NULL OR (json_valid(receipt) AND json_type(receipt)='object')),
-  PRIMARY KEY(task_id,delivery_id)
-);
-CREATE UNIQUE INDEX network_gate_item_held ON network_gate_items(delivery_id) WHERE outcome IN ('held','released','unknown');
-CREATE TABLE network_gate_item_grants(
-  task_id TEXT NOT NULL,
-  delivery_id TEXT NOT NULL,
-  grant_id TEXT NOT NULL CHECK(length(grant_id) BETWEEN 1 AND 128),
-  PRIMARY KEY(task_id,delivery_id),
-  FOREIGN KEY(task_id,delivery_id) REFERENCES network_gate_items(task_id,delivery_id)
-);
-
--- Shared data and artifacts
-CREATE TABLE data_collections(
-  id TEXT PRIMARY KEY,
-  owner_issuer TEXT NOT NULL,
-  owner_subject TEXT NOT NULL,
-  group_id TEXT NOT NULL REFERENCES pod_groups(id),
-  name TEXT NOT NULL,
-  current_version INTEGER NOT NULL CHECK(current_version>0),
-  retention TEXT NOT NULL CHECK(json_valid(retention) AND json_type(retention)='object'),
-  UNIQUE(owner_issuer,owner_subject,group_id,name),
-  UNIQUE(id,owner_issuer,owner_subject,group_id),
-  FOREIGN KEY(owner_issuer,owner_subject) REFERENCES network_owners(issuer,subject),
-  FOREIGN KEY(id,current_version) REFERENCES data_collection_versions(collection_id,version) DEFERRABLE INITIALLY DEFERRED
-);
-CREATE TABLE data_collection_versions(
-  collection_id TEXT NOT NULL REFERENCES data_collections(id),
-  version INTEGER NOT NULL CHECK(version>0),
-  schema TEXT NOT NULL CHECK(json_valid(schema) AND json_type(schema)='object'),
-  indexes TEXT NOT NULL CHECK(json_valid(indexes) AND json_type(indexes)='array'),
-  created_at INTEGER NOT NULL,
-  PRIMARY KEY(collection_id,version)
-);
-CREATE TABLE data_permissions(
-  network_id TEXT NOT NULL,
-  pod_id TEXT NOT NULL,
-  collection_id TEXT NOT NULL,
-  owner_issuer TEXT NOT NULL,
-  owner_subject TEXT NOT NULL,
-  group_id TEXT NOT NULL,
-  operation TEXT NOT NULL CHECK(operation IN ('read','write','delete')),
-  revision INTEGER NOT NULL CHECK(revision>0),
-  PRIMARY KEY(network_id,pod_id,collection_id,operation),
-  FOREIGN KEY(network_id,pod_id) REFERENCES network_members(network_id,pod_id),
-  FOREIGN KEY(network_id,owner_issuer,owner_subject,group_id) REFERENCES networks(id,owner_issuer,owner_subject,group_id),
-  FOREIGN KEY(collection_id,owner_issuer,owner_subject,group_id) REFERENCES data_collections(id,owner_issuer,owner_subject,group_id)
-);
-CREATE TABLE data_records(
-  collection_id TEXT NOT NULL REFERENCES data_collections(id),
-  record_key TEXT NOT NULL,
-  revision INTEGER NOT NULL CHECK(revision>0),
-  tombstone INTEGER NOT NULL CHECK(tombstone IN (0,1)),
-  PRIMARY KEY(collection_id,record_key),
-  FOREIGN KEY(collection_id,record_key,revision) REFERENCES data_record_revisions(collection_id,record_key,revision) DEFERRABLE INITIALLY DEFERRED
-);
-CREATE TABLE data_record_revisions(
-  collection_id TEXT NOT NULL,
-  record_key TEXT NOT NULL,
-  revision INTEGER NOT NULL CHECK(revision>0),
-  schema_version INTEGER NOT NULL,
-  author_run_id TEXT NOT NULL REFERENCES network_invocations(run_id),
-  definition_id TEXT NOT NULL,
-  definition_version INTEGER NOT NULL,
-  body TEXT CHECK(body IS NULL OR (json_valid(body) AND json_type(body)='object')),
-  tombstone INTEGER NOT NULL CHECK(tombstone IN (0,1)),
-  created_at INTEGER NOT NULL,
-  PRIMARY KEY(collection_id,record_key,revision),
-  FOREIGN KEY(collection_id,record_key) REFERENCES data_records(collection_id,record_key),
-  FOREIGN KEY(collection_id,schema_version) REFERENCES data_collection_versions(collection_id,version),
-  FOREIGN KEY(definition_id,definition_version) REFERENCES pod_definition_versions(definition_id,version),
-  CHECK((tombstone=1 AND body IS NULL) OR (tombstone=0 AND body IS NOT NULL))
-);
-CREATE TABLE data_record_provenance(
-  collection_id TEXT NOT NULL,
-  record_key TEXT NOT NULL,
-  revision INTEGER NOT NULL,
-  pod_id TEXT NOT NULL REFERENCES pods(id),
-  source_refs TEXT NOT NULL CHECK(json_valid(source_refs)),
-  verification TEXT NOT NULL DEFAULT 'proposed' CHECK(verification IN ('proposed','owner_verified')),
-  PRIMARY KEY(collection_id,record_key,revision),
-  FOREIGN KEY(collection_id,record_key,revision) REFERENCES data_record_revisions(collection_id,record_key,revision)
-);
-CREATE TABLE data_index_values(
-  collection_id TEXT NOT NULL,
-  schema_version INTEGER NOT NULL,
-  index_name TEXT NOT NULL,
-  record_key TEXT NOT NULL,
-  value_type TEXT NOT NULL,
-  value_text TEXT,
-  value_number REAL,
-  PRIMARY KEY(collection_id,schema_version,index_name,record_key),
-  FOREIGN KEY(collection_id,record_key) REFERENCES data_records(collection_id,record_key)
-);
-CREATE INDEX data_index_lookup ON data_index_values(collection_id,schema_version,index_name,value_type,value_text,value_number,record_key);
-CREATE TABLE network_data_staging(
-  run_id TEXT NOT NULL REFERENCES network_invocations(run_id),
-  collection_id TEXT NOT NULL REFERENCES data_collections(id),
-  record_key TEXT NOT NULL,
-  base_revision INTEGER NOT NULL CHECK(base_revision>=0),
-  revision INTEGER NOT NULL CHECK(revision>base_revision),
-  schema_version INTEGER NOT NULL,
-  body TEXT CHECK(body IS NULL OR json_valid(body)),
-  tombstone INTEGER NOT NULL CHECK(tombstone IN (0,1)),
-  artifact_refs TEXT NOT NULL CHECK(json_valid(artifact_refs)),
-  PRIMARY KEY(run_id,collection_id,record_key,revision)
-);
-CREATE TABLE artifact_scopes(
-  id TEXT PRIMARY KEY,
-  owner_issuer TEXT NOT NULL,
-  owner_subject TEXT NOT NULL,
-  group_id TEXT NOT NULL REFERENCES pod_groups(id),
-  collection_id TEXT,
-  private_network_id TEXT,
-  UNIQUE(id,owner_issuer,owner_subject,group_id),
-  FOREIGN KEY(owner_issuer,owner_subject) REFERENCES network_owners(issuer,subject),
-  FOREIGN KEY(collection_id,owner_issuer,owner_subject,group_id) REFERENCES data_collections(id,owner_issuer,owner_subject,group_id),
-  FOREIGN KEY(private_network_id,owner_issuer,owner_subject,group_id) REFERENCES networks(id,owner_issuer,owner_subject,group_id),
-  CHECK((collection_id IS NOT NULL AND private_network_id IS NULL) OR (collection_id IS NULL AND private_network_id IS NOT NULL))
-);
-CREATE TABLE artifacts(
-  id TEXT PRIMARY KEY,
-  scope_id TEXT NOT NULL REFERENCES artifact_scopes(id),
-  content_hash TEXT NOT NULL CHECK(length(content_hash)=64),
-  size INTEGER NOT NULL CHECK(size BETWEEN 0 AND 268435456),
-  media_type TEXT NOT NULL,
-  storage_ref TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK(kind IN ('conversion','restore','restore-reviewed')),
+  body TEXT NOT NULL CHECK(json_valid(body) AND json_type(body)='object'),
   created_at INTEGER NOT NULL
 );
-CREATE TABLE artifact_permissions(
-  network_id TEXT NOT NULL,
-  pod_id TEXT NOT NULL,
-  scope_id TEXT NOT NULL,
-  owner_issuer TEXT NOT NULL,
-  owner_subject TEXT NOT NULL,
-  group_id TEXT NOT NULL,
-  operation TEXT NOT NULL CHECK(operation IN ('read','create')),
-  revision INTEGER NOT NULL CHECK(revision>0),
-  PRIMARY KEY(network_id,pod_id,scope_id,operation),
-  FOREIGN KEY(network_id,pod_id) REFERENCES network_members(network_id,pod_id),
-  FOREIGN KEY(network_id,owner_issuer,owner_subject,group_id) REFERENCES networks(id,owner_issuer,owner_subject,group_id),
-  FOREIGN KEY(scope_id,owner_issuer,owner_subject,group_id) REFERENCES artifact_scopes(id,owner_issuer,owner_subject,group_id)
-);
-CREATE TABLE artifact_references(
-  artifact_id TEXT NOT NULL REFERENCES artifacts(id),
-  reference_kind TEXT NOT NULL CHECK(reference_kind IN ('record','event','invocation','gate','definition')),
-  reference_id TEXT NOT NULL,
-  PRIMARY KEY(artifact_id,reference_kind,reference_id)
-);
-CREATE TABLE network_artifact_staging(
-  run_id TEXT NOT NULL REFERENCES network_invocations(run_id),
-  id TEXT PRIMARY KEY,
-  scope_id TEXT NOT NULL REFERENCES artifact_scopes(id),
-  content_hash TEXT NOT NULL,
-  size INTEGER NOT NULL CHECK(size BETWEEN 0 AND 131072),
-  media_type TEXT NOT NULL,
-  storage_ref TEXT NOT NULL
+
+-- Generic inert history of the retired network runtime (issue 1465): one row per converted legacy row
+CREATE TABLE legacy_records(
+  source TEXT NOT NULL CHECK(length(source) BETWEEN 1 AND 64),
+  row_id INTEGER NOT NULL,
+  body TEXT NOT NULL CHECK(json_valid(body) AND json_type(body)='object'),
+  PRIMARY KEY(source,row_id)
 );
 `
 
@@ -1295,5 +703,5 @@ INSERT INTO settings VALUES(1,1,2);
 INSERT INTO data_settings VALUES(1,10737418240,0,NULL);
 INSERT INTO onboarding VALUES(1,0,NULL);
 INSERT INTO pod_organization VALUES(1,1);
-INSERT INTO network_scheduler_state(id) VALUES(1);
+INSERT INTO data_sequence VALUES(1,0);
 `

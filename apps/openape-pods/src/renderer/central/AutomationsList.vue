@@ -7,27 +7,26 @@ import { buildModel, ungrouped, visibleNodes } from '../utils/automation-layout'
 import type { Layers } from '../utils/automation-layout'
 import { tagsOf } from '../utils/tags'
 
-/** The same Pods as a table: group, kind, cadence, what they read and write, channels and the last run. */
+/** The same Pods as a table: group, kind, cadence, what they read and write, shared data and the last run. */
 const props = defineProps<{ view: MapView, layers: Layers, now: number }>()
 const emit = defineEmits<{ open: [id: string] }>()
 const rows = computed(() => {
   const model = buildModel(props.view)
   const visible = visibleNodes(model, props.layers)
-  return model.nodes.filter(item => (item.kind === 'pod' || item.kind === 'collapsed') && visible.has(item.id)).map((item) => {
+  return model.nodes.filter(item => item.kind === 'pod' && visible.has(item.id)).map((item) => {
     const pod = props.view.pods.find(pod => pod.id === item.id)
-    const automation = props.view.automations.find(automation => automation.id === item.id)
     const name = (id: string) => model.nodes.find(node => node.id === id)?.name ?? id
     const facts = {
       reads: model.links.filter(link => link.type === 'read' && link.to === item.id).map(link => ({ name: name(link.from) })),
       writes: model.links.filter(link => link.type === 'write' && link.from === item.id).map(link => ({ name: name(link.to) })),
-      channels: model.links.filter(link => link.type === 'channel' && (link.from === item.id || link.to === item.id)).map(link => ({ direction: link.from === item.id ? 'gives' : 'takes', channel: link.label })),
+      data: model.links.filter(link => link.type === 'data' && (link.from === item.id || link.to === item.id)).map(link => ({ direction: link.from === item.id ? 'writes' : 'reads', namespace: link.label })),
     }
     return {
       id: item.id, name: item.name, description: pod?.description ?? '', tags: tagsOf(props.view, item.id), group: item.group === ungrouped ? t('without group') : item.group ?? '',
-      kind: item.kind === 'collapsed' ? t('collapsed') : item.ai ? t('AI') : t('rules'),
-      cadence: item.kind === 'collapsed' ? cadence(automation?.schedule ?? null) : cadence(pod?.schedule ?? null, pod?.channels.takes),
+      kind: item.ai ? t('AI') : t('rules'),
+      cadence: cadence(pod?.schedule ?? null, pod?.data.reads),
       reads: facts.reads.map(fact => fact.name).join(', ') || '–', writes: facts.writes.map(fact => fact.name).join(', ') || '–',
-      channels: facts.channels.map(fact => `${fact.direction === 'gives' ? '→' : '←'} ${fact.channel}`),
+      data: [...new Set(facts.data.map(fact => `${fact.direction === 'writes' ? '→' : '←'} ${fact.namespace}`))],
       last: item.paused ? t('paused') : pod?.lastRun ? (pod.lastRun.state === 'running' ? t('running') : `${ago(pod.lastRun.at, props.now)} · ${diagnostic(pod.lastRun.state)}`) : '–',
     }
   })
@@ -40,7 +39,7 @@ const rows = computed(() => {
       <thead>
         <tr>
           <th>{{ t('Pod') }}</th><th>{{ t('Group') }}</th><th>{{ t('Kind') }}</th><th>{{ t('Runs on') }}</th><th>{{ t('Reads') }}</th><th>{{ t('Writes') }}</th><th class="mono">
-            {{ t('Channels') }}
+            {{ t('Shared data') }}
           </th><th>{{ t('Last') }}</th>
         </tr>
       </thead>
@@ -49,14 +48,14 @@ const rows = computed(() => {
           <td>
             <b>{{ row.name }}</b><div class="automations-list-purpose">
               {{ row.description }}
-            </div><div v-if="row.tags.own.length || row.tags.inherited.length" class="tag-chips">
-              <span v-for="tag in row.tags.own" :key="tag" class="tag">{{ tag }}</span><span v-for="tag in row.tags.inherited" :key="`inherited-${tag}`" class="tag inherited" :title="t('from network')">{{ tag }}</span>
+            </div><div v-if="row.tags.own.length" class="tag-chips">
+              <span v-for="tag in row.tags.own" :key="tag" class="tag">{{ tag }}</span>
             </div>
           </td><td>{{ row.group }}</td><td>{{ row.kind }}</td><td>{{ row.cadence }}</td><td>{{ row.reads }}</td><td>{{ row.writes }}</td>
           <td class="mono">
-            <template v-if="row.channels.length">
-              <div v-for="channel in row.channels" :key="channel">
-                {{ channel }}
+            <template v-if="row.data.length">
+              <div v-for="entry in row.data" :key="entry">
+                {{ entry }}
               </div>
             </template><template v-else>
               –

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { recordKey } from '../../contracts/domain-data'
-import { canonicalNetworkJson as canonicalJson } from '../../contracts/network-json'
+import { canonicalJson } from '../../contracts/canonical-json'
 import { workLimits } from '../../contracts/work'
 import type { WorkDeclaration, WorkState } from '../../contracts/work'
 import type { PodDatabase } from '../storage/database'
@@ -153,7 +153,7 @@ export class WorkLedger {
   }
 
   /** Writes the result and the completion marker in one transaction; a stale input or claim writes nothing. */
-  complete(principal: WorkPrincipal, input: { claimToken: string, result: unknown, artifacts?: string[] }): { revision: number } {
+  complete(principal: WorkPrincipal, input: { claimToken: string, result: unknown }): { revision: number } {
     return this.store.transaction(() => {
       const row = this.claimed(principal, input.claimToken)
       const { operation } = this.serving(principal.podId, row.operation)
@@ -162,11 +162,7 @@ export class WorkLedger {
         this.store.db.prepare(`UPDATE work_items SET state='superseded',claim_token=NULL,reason='The input changed while the work ran; the stale result was discarded',updated_at=? WHERE key=?`).run(Date.now(), row.key)
         throw new StaleWork('Work input changed while it ran; the result was not stored')
       }
-      const artifacts = (input.artifacts ?? []).map(id => String(id))
-      for (const id of artifacts) {
-        if (!this.store.db.prepare('SELECT 1 FROM data_artifacts WHERE id=? AND namespace=?').get(id, operation.output)) throw new Error('A result references an artifact outside its namespace')
-      }
-      const written = this.data.writeResult(principal, operation.output, recordKey(row.object), input.result, { operation: operation.operation, ruleVersion: row.rule_version, input: { key: entry.key, revision: entry.revision, fingerprint: row.fingerprint }, workKey: row.key }, artifacts)
+      const written = this.data.writeResult(principal, operation.output, recordKey(row.object), input.result, { operation: operation.operation, ruleVersion: row.rule_version, input: { key: entry.key, revision: entry.revision, fingerprint: row.fingerprint }, workKey: row.key })
       this.store.db.prepare(`UPDATE work_items SET state='completed',claim_token=NULL,reason=NULL,updated_at=? WHERE key=? AND lease=?`).run(Date.now(), row.key, row.lease)
       return written
     })
@@ -197,13 +193,16 @@ export class WorkLedger {
 
   /**
    * Settles the claims a finished or interrupted run still holds: an unresolved external effect of the run holds them
-   * as unknown, otherwise they retry with backoff. Neither path replays anything by itself.
+   * as unknown, an application write the run completed holds them for the owner (a new run would write again under a
+   * new identity), otherwise they retry with backoff. No path replays anything by itself.
    */
   settleRun(runId: string): void {
     const unknown = !!this.store.db.prepare(`SELECT 1 FROM effect_ledger WHERE run_id=? AND state IN ('intent','unknown') UNION ALL SELECT 1 FROM effect_attempts WHERE run_id=? AND state IN ('intent','unknown') LIMIT 1`).get(runId, runId)
+    const wrote = !!this.store.db.prepare(`SELECT 1 FROM effect_ledger WHERE run_id=? AND operation='program.call' AND state='completed' LIMIT 1`).get(runId)
     const now = Date.now()
     for (const row of this.store.db.prepare('SELECT * FROM work_items WHERE run_id=? AND state=\'claimed\'').all(runId) as unknown as ItemRow[]) {
       if (unknown) this.store.db.prepare(`UPDATE work_items SET state='unknown',claim_token=NULL,reason='The run left an external action with an unknown outcome; reconcile it before this work continues',updated_at=? WHERE key=?`).run(now, row.key)
+      else if (wrote) this.store.db.prepare(`UPDATE work_items SET state='blocked',claim_token=NULL,reason='The run changed an application before it ended; review what happened before this work continues',updated_at=? WHERE key=?`).run(now, row.key)
       else this.store.db.prepare(`UPDATE work_items SET state=?,claim_token=NULL,ready_at=?,reason='The run ended before this work was completed',updated_at=? WHERE key=?`).run(row.attempt >= workLimits.attempts ? 'blocked' : 'retry_wait', now + backoff[Math.min(row.attempt - 1, backoff.length - 1)]!, now, row.key)
     }
   }

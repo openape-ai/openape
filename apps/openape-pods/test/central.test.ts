@@ -1,9 +1,7 @@
 import { ProtocolError } from '@openape/pods-protocol'
-import { seedNetwork } from './storage/network-fixture'
 // @vitest-environment node
 import { DataControl } from '../src/worker/data/control'
 import { commandPodIds, parseCentralCommand } from '../src/contracts/central'
-import { networkBrowserMutationAllowed } from '../src/contracts/central-networks'
 import { randomUUID } from 'node:crypto'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -68,9 +66,6 @@ type Completion = Parameters<WorkspaceStore['publishParts']>[6]
 function relay(server: WorkspaceStore, actor: WorkspaceActor) {
   return async (body: Record<string, unknown>): Promise<unknown> => {
     const lease = String(body.lease)
-    if (body.type === 'networks') return server.publishNetworks(actor, lease, body.view)
-    if (body.type === 'readClaim') return server.claimNetworkRead(actor, lease)
-    if (body.type === 'readComplete') return server.completeNetworkRead(actor, lease, String(body.id), body.value, body.error as string | null)
     if (body.type === 'inventory') return server.inventory(actor.owner)
     if (body.type === 'read') return body.view ? server.view(actor.owner, String(body.runtimeId), String(body.podId), body as never) : server.read(actor.owner, String(body.runtimeId), String(body.podId))
     if (body.type === 'operation') return server.visibleOperation(actor.owner, String(body.id))
@@ -343,15 +338,6 @@ it('publishes the description summary with the workspace inventory', () => {
   expect(restored.workspace.pods.find(item => item.id === pod.id)?.description).toBe('Watches the task board and reports changes by Telegram.')
 })
 
-it('publishes network descriptions with the workspace inventory', async () => {
-  const { store, projection, actor } = fixture()
-  const { AutomationDescriptions } = await import('../src/worker/workspace/automation-descriptions')
-  const { networkId: id, pod } = seedNetwork(store)
-  store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(pod.id, JSON.stringify(actor.owner), actor.id, actor.generation, 'ready', '{}')
-  new AutomationDescriptions(store).execute({ type: 'describeAutomation', id, revision: 0, text: 'Sends one morning briefing by Telegram.' })
-  expect(reassemble(projection.snapshot(actor.owner)).workspace.descriptions).toEqual([{ id, text: 'Sends one morning briefing by Telegram.', revision: 1 }])
-})
-
 it('publishes only TypeSafe availability through both full and partitioned central snapshots', async () => {
   const { store, projection, actor, pod } = fixture()
   const { SetupControl } = await import('../src/worker/onboarding/control')
@@ -416,16 +402,12 @@ it('deletes through MCP with coordinated cleanup and keeps an owner-scoped recei
   expect(() => server.visibleOperation({ ...actor.owner, subject: 'other' }, id)).toThrow('workspace_operation_not_found')
 })
 
-it('accepts descriptions through the central workspace while other network member changes stay desktop-only', () => {
+it('accepts tags through the central workspace and refuses retired network commands', () => {
   const id = randomUUID()
-  const collection = parseCentralCommand({ channel: 'workspace', body: { type: 'describeAutomation', id, revision: 0, text: 'Sorts incoming mail.' } })
-  expect(commandPodIds(collection, { workspace: { pods: [{ id: randomUUID() }, { id: randomUUID() }] } })).toEqual([])
-  expect(networkBrowserMutationAllowed(collection)).toBe(true)
-  expect(networkBrowserMutationAllowed(parseCentralCommand({ channel: 'details', body: { type: 'describe', podId: id, revision: 0, text: 'Reads the mailbox.' } }))).toBe(true)
-  expect(networkBrowserMutationAllowed(parseCentralCommand({ channel: 'runs', body: { type: 'start', podId: id } }))).toBe(false)
-  expect(networkBrowserMutationAllowed({ channel: 'details', body: { type: 'activate', podId: id } })).toBe(false)
-  expect(() => parseCentralCommand({ channel: 'workspace', body: { type: 'describeAutomation', id, revision: 0, text: 'x'.repeat(1001) } })).toThrow()
-  expect(() => parseCentralCommand({ channel: 'workspace', body: { type: 'pauseAll' } })).toThrow()
+  const tag = parseCentralCommand({ channel: 'workspace', body: { type: 'tag', id, revision: 0, tags: ['mail'] } })
+  expect(commandPodIds(tag, { workspace: { pods: [{ id: randomUUID() }, { id: randomUUID() }] } })).toEqual([])
+  for (const body of [{ type: 'describeAutomation', id, revision: 0, text: 'Sorts incoming mail.' }, { type: 'renameNetwork', id, name: 'Mail' }, { type: 'pauseAll' }]) expect(() => parseCentralCommand({ channel: 'workspace', body })).toThrow()
+  expect(() => parseCentralCommand({ channel: 'sharing', body: { type: 'finalize', id, revision: 1, composition: 'mail', groupId: null, reuse: {} } })).toThrow()
 })
 
 it('allows only reviewed deletion through the central data channel', () => {
@@ -436,17 +418,22 @@ it('allows only reviewed deletion through the central data channel', () => {
   }
 })
 
-it('connects network volume with stable parts and leaves complete data local', () => {
-  const f = fixture(); const network = seedNetwork(f.store)
-  f.store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(network.pod.id, JSON.stringify(f.actor.owner), f.actor.id, f.actor.generation, 'ready', '{}')
+it('publishes a local-only Pod as a placeholder with stable parts and leaves its complete data local', () => {
+  const f = fixture(); const pod = f.store.createPod({ name: 'Mail classification' })
+  f.store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(pod.id, JSON.stringify(f.actor.owner), f.actor.id, f.actor.generation, 'ready', '{}')
+  f.store.db.prepare('INSERT INTO local_only_pods VALUES(?)').run(pod.id)
+  const runId = randomUUID()
+  f.store.db.prepare('INSERT INTO runs VALUES(?,?,?,\'completed\',1,2,\'private-mail-summary\',NULL,0,1)').run(runId, pod.id, 'a'.repeat(64))
   f.store.transaction(() => {
     f.store.db.prepare(`WITH RECURSIVE sequence(value) AS (SELECT 0 UNION ALL SELECT value+1 FROM sequence WHERE value<11999)
-      INSERT INTO run_events SELECT ?,value,'log',?,1 FROM sequence`).run(network.runId, JSON.stringify({ message: 'x'.repeat(4096) }))
+      INSERT INTO run_events SELECT ?,value,'log',?,1 FROM sequence`).run(runId, JSON.stringify({ message: 'x'.repeat(4096) }))
   })
+  f.store.db.prepare('INSERT INTO pod_variables VALUES(?,?,?,1)').run(pod.id, 'business', 'private-local-variable')
   const snapshot = f.projection.snapshot(f.actor.owner)
   expect(Buffer.byteLength(JSON.stringify(snapshot))).toBeLessThan(1024 * 1024)
-  expect(snapshot.pods.find(pod => pod.id === network.pod.id)!.runs.runs).toEqual([])
-  expect(f.store.db.prepare('SELECT count(*) AS count FROM run_events').get()!.count).toBe(12000)
+  expect(JSON.stringify(snapshot)).not.toContain('private-mail-summary')
+  expect(JSON.stringify(snapshot)).not.toContain('private-local-variable')
+  expect(snapshot.pods.find(item => item.id === pod.id)).toMatchObject({ localOnly: true, runs: { runs: [] }, resources: { resources: [], variables: [] } })
   const before = splitSnapshot(snapshot)
   f.store.db.prepare('DELETE FROM run_events WHERE sequence<1000').run()
   expect(splitSnapshot(f.projection.snapshot(f.actor.owner))).toEqual(before)
@@ -455,61 +442,17 @@ it('connects network volume with stable parts and leaves complete data local', (
   const published = publishSnapshot(server, f.actor, lease, snapshot)
   server.heartbeat(f.actor, lease, published.hash)
   expect(server.inventory(f.actor.owner)[0]!.online).toBe(true)
-}, 15000)
-
-it('serves runtime reads without executing owner commands or changing the publication revision', async () => {
-  const f = fixture(); const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
-  const execute = vi.fn(); const networkRead = vi.fn(async () => ({ networks: [] }))
-  const controller = new CentralController(f.root, relay(server, f.actor), { snapshot: async () => f.projection.snapshot(f.actor.owner), networkRead, execute, gate: async () => {} }, '/unused-no-artifacts')
-  cleanup.push(() => controller.stop()); controller.start()
-  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
-  expect(controller.networkReads).toBe(true)
-  const revision = server.inventory(f.actor.owner)[0]!.revision
-  const id = server.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })
-  let result: unknown
-  await vi.waitFor(() => { result = server.networkReadResult(f.actor.owner, f.actor.id, id); expect(result).toBeDefined() }, { timeout: 4000 })
-  expect(result).toEqual({ value: { networks: [] }, error: null })
-  expect(server.inventory(f.actor.owner)[0]!.revision).toBe(revision)
-  expect(execute).not.toHaveBeenCalled()
-})
-
-it('keeps the runtime online when the optional network read service fails', async () => {
-  const f = fixture(); const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
-  const log = vi.spyOn(console, 'error').mockImplementation(() => {})
-  const networkRead = vi.fn(async () => { throw new Error('Synthetic network read is too large') })
-  const controller = new CentralController(f.root, relay(server, f.actor), { snapshot: async () => f.projection.snapshot(f.actor.owner), networkRead, execute: vi.fn(), gate: async () => {} }, '/unused-no-artifacts')
-  cleanup.push(() => log.mockRestore()); cleanup.push(() => controller.stop()); controller.start()
-  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
-  expect(controller.status().networkReadError).toContain('too large')
-  expect(server.inventory(f.actor.owner)[0]!.online).toBe(true)
-  expect(log).toHaveBeenCalledWith('Network read service unavailable', expect.any(Error))
-})
-
-it('keeps private network configuration local and rejects legacy mutation bypasses', () => {
-  const f = fixture(); const network = seedNetwork(f.store)
-  f.store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(network.pod.id, JSON.stringify(f.actor.owner), f.actor.id, f.actor.generation, 'ready', '{}')
-  f.store.db.prepare('INSERT INTO pod_variables VALUES(?,?,?,1)').run(network.pod.id, 'business', 'private-network-variable')
-  f.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), network.pod.id, 'reference', 'ready', 'private-network-resource', '{}')
-  f.store.db.prepare('INSERT INTO pod_variables VALUES(?,?,?,1)').run(f.pod.id, 'legacy', 'retained-legacy-variable')
-  const snapshot = f.projection.snapshot(f.actor.owner)
-  expect(JSON.stringify(snapshot)).not.toContain('private-network-')
-  expect(JSON.stringify(snapshot)).toContain('retained-legacy-variable')
-  expect(snapshot.pods.find(pod => pod.id === network.pod.id)).toMatchObject({ networkId: network.networkId, resources: { resources: [], variables: [] } })
-  const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
-  const { lease } = server.begin(f.actor)
-  const published = publishSnapshot(server, f.actor, lease, snapshot)
-  server.heartbeat(f.actor, lease, published.hash)
-  expect(() => server.submit(f.actor.owner, f.actor.id, published.revision, { channel: 'runs', body: { type: 'start', podId: network.pod.id } }, randomUUID())).toThrow('network_member_requires_desktop_review')
+  // A browser never changes the placeholder blind; the desktop's own Pod stays changeable.
+  expect(() => server.submit(f.actor.owner, f.actor.id, published.revision, { channel: 'runs', body: { type: 'start', podId: pod.id } }, randomUUID())).toThrow('local_pod_requires_desktop')
   expect(() => server.submit(f.actor.owner, f.actor.id, published.revision, { channel: 'runs', body: { type: 'start', podId: f.pod.id } }, randomUUID())).not.toThrow()
-  expect(f.store.db.prepare('SELECT value FROM pod_variables WHERE pod_id=?').get(network.pod.id)!.value).toBe('private-network-variable')
-})
+}, 15000)
 
 it('applies a phone decision once through the workspace operation and refuses the same decision afterwards', async () => {
   const runId = randomUUID()
   let waiting = true
   let podId = ''
-  const sources = async () => ({ map: { pods: [{ id: podId, name: 'Monitor', approvals: [], unknown: waiting ? [{ key: 'invoice-7', runId }] : [] }], collections: [] }, networks: { networks: [] }, workflows: {}, proposals: [], resources: {}, secrets: null })
-  const worker = { inboxSources: sources, approvalLink: vi.fn(), networks: vi.fn(), workflows: vi.fn(), secrets: vi.fn(), master: vi.fn(), runs: vi.fn(async () => { waiting = false; return {} }) } as unknown as DecisionWorker & { runs: ReturnType<typeof vi.fn> }
+  const sources = async () => ({ map: { pods: [{ id: podId, name: 'Monitor', approvals: [], unknown: waiting ? [{ key: 'invoice-7', runId }] : [] }] }, domain: { namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }, secrets: null })
+  const worker = { inboxSources: sources, domain: vi.fn(), secrets: vi.fn(), runs: vi.fn(async () => { waiting = false; return {} }) } as unknown as DecisionWorker & { runs: ReturnType<typeof vi.fn> }
   const decisions = new InboxDecisions(worker, key => key)
   const { controller, server, actor, pod } = connected({ executor: { execute: async command => decisions.decide(parseInboxDecide(command.body)) } })
   podId = pod.id

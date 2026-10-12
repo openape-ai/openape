@@ -9,7 +9,7 @@ import type { CredentialCache } from '../connections/cache'
 import { PodToolBroker } from '../broker/tools'
 import type { BrokerLease } from '../broker/tools'
 import { startMailProxy } from '../mail/proxy'
-import { archiveRefusal } from '../../contracts/network-capabilities'
+import { archiveRefusal } from '../../contracts/mail-archive-port'
 
 /** The sandbox decides which application a script can call; `programRequest` finds it among the Pod's assigned applications. */
 export function programRequest(resources: PodResource[], podId: string, capabilities: string[], body: unknown) {

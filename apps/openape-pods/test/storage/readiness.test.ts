@@ -28,6 +28,17 @@ function profile(): string {
 function databaseSet(root: string): Record<string, string> {
   return Object.fromEntries(readdirSync(root).filter(name => name.startsWith('control.sqlite')).map(name => [name, createHash('sha256').update(readFileSync(join(root, name))).digest('hex')]))
 }
+/** A real schema-47 profile (desktop 7fab4b84) with one Pod; `change` runs before the version is set. */
+function profile47(change = ''): string {
+  const root = mkdtempSync(join(tmpdir(), 'pods-readiness-')); roots.push(root)
+  const database = new DatabaseSync(join(root, 'control.sqlite'), { enableForeignKeyConstraints: false })
+  database.exec(readFileSync(join(import.meta.dirname, 'fixtures/schema-47.sql'), 'utf8'))
+  database.exec(`INSERT INTO settings VALUES(1,1,2); INSERT INTO data_settings VALUES(1,10737418240,0,NULL); INSERT INTO onboarding VALUES(1,0,NULL); INSERT INTO pod_organization VALUES(1,1); INSERT INTO network_scheduler_state(id) VALUES(1);
+    INSERT INTO pods VALUES('00000000-0000-4000-8000-000000000001','Kept',1,'paused',NULL,1); INSERT INTO checkpoints VALUES('00000000-0000-4000-8000-000000000001',0,'{}');
+    ${change} PRAGMA user_version=47;`)
+  database.close()
+  return root
+}
 function failure(root: string) {
   try { openStorage(root, 1).close() }
   catch (error) { return classifyStorageError(error) }
@@ -74,24 +85,25 @@ describe('storage failures stay recoverable and leave the original data untouche
     }
   })
 
-  it('rolls an interrupted migration back completely and succeeds once the cause is gone', () => {
-    const root = profile()
-    const database = new DatabaseSync(join(root, 'control.sqlite'))
-    // A schema-47 profile whose upgrade breaks halfway: one new table already exists.
-    database.exec('DROP TABLE storage_receipts; DROP TABLE effect_receipts; DROP TABLE effect_attempts; PRAGMA user_version=47;')
-    database.close()
-    expect(failure(root).reason).not.toBe('corrupt')
-    const after = new DatabaseSync(join(root, 'control.sqlite'), { readOnly: true })
+  it('rolls an interrupted conversion back completely and succeeds once the cause is gone', () => {
+    // The conversion stops after its backup because the network runtime still holds a delivery.
+    const root = profile47('INSERT INTO network_deliveries(id,network_id,event_id,subscription_id,case_id,case_revision,state,ready_at,accepted_at) VALUES(\'d\',\'n\',\'e\',\'s\',\'c\',1,\'pending\',1,1);')
+    expect(failure(root).reason).toBe('conversion-blocked')
+    const after = new DatabaseSync(join(root, 'control.sqlite'))
     expect(after.prepare('PRAGMA user_version').get()!.user_version).toBe(47)
     expect(after.prepare('SELECT count(*) AS count FROM pods').get()!.count).toBe(1)
+    expect(after.prepare('SELECT count(*) AS count FROM sqlite_schema WHERE name=\'legacy_records\'').get()!.count).toBe(0)
+    after.exec('DELETE FROM network_deliveries')
     after.close()
     expect(readdirSync(root).filter(name => name.startsWith('before-v47-'))).toHaveLength(1)
+    const store = openStorage(root, 1)
+    expect(store.db.prepare('PRAGMA user_version').get()!.user_version).toBe(schemaVersion)
+    store.close()
   })
 
   it('reports lock contention as busy and opens after the lock is released', () => {
-    const root = profile()
-    // An upgrade must write; another process holds the write lock meanwhile.
-    const setup = new DatabaseSync(join(root, 'control.sqlite')); setup.exec('DROP TABLE storage_receipts; DROP TABLE effect_receipts; DROP TABLE effect_attempts; DROP TABLE action_approvals; DROP TABLE approval_batches; DROP TABLE owner_questions; DROP TABLE work_items; DROP TABLE work_operations; DROP TABLE data_artifacts; DROP TABLE data_entry_revisions; DROP TABLE data_entries; DROP TABLE data_sequence; DROP TABLE data_readers; DROP TABLE data_namespaces; PRAGMA user_version=47;'); setup.close()
+    // A conversion must write; another process holds the write lock meanwhile.
+    const root = profile47()
     const holder = new DatabaseSync(join(root, 'control.sqlite')); holder.exec('PRAGMA busy_timeout=0; BEGIN IMMEDIATE; INSERT INTO pod_groups VALUES(\'held\',\'Held\',0)')
     expect(failure(root).reason).toBe('busy')
     holder.exec('ROLLBACK'); holder.close()

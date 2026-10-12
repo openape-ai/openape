@@ -8,8 +8,7 @@ const props = defineProps<{ sandbox: SandboxView, busy: boolean, readonly?: bool
 const emit = defineEmits<{ save: [deny: string[]] }>()
 const entry = ref('')
 const error = ref('')
-const own = computed(() => props.sandbox.denySources.find(item => item.source === 'pod')?.deny ?? [])
-const inherited = computed(() => props.sandbox.denySources.filter(item => item.source !== 'pod').flatMap(item => item.deny).filter(path => !own.value.includes(path)))
+const own = computed(() => props.sandbox.deny)
 
 function add(): void {
   error.value = ''
@@ -38,10 +37,7 @@ function add(): void {
           −
         </button>
       </article>
-      <article v-for="path in inherited" :key="`network:${path}`" class="deny-row">
-        <span class="deny-path">{{ path }}<small>{{ t('Denied by a network') }}</small></span>
-      </article>
-      <p v-if="!own.length && !inherited.length" class="deny-row muted">
+      <p v-if="!own.length" class="deny-row muted">
         {{ t('No denied paths') }}
       </p>
       <form v-if="!readonly" class="deny-row" @submit.prevent="add">
@@ -64,8 +60,7 @@ function add(): void {
 .deny-list { background:var(--surface); border:1px solid var(--border); border-radius:12px; margin:16px 0; overflow:hidden; }
 .deny-row { display:flex; align-items:center; gap:12px; margin:0; padding:10px 18px; border-bottom:1px solid var(--border); }
 .deny-row:last-child { border-bottom:0; }
-.deny-path { display:grid; gap:4px; flex:1; min-width:0; overflow-wrap:anywhere; font-size:14px; }
-.deny-path small { color:var(--muted); font-size:12px; }
+.deny-path { flex:1; min-width:0; overflow-wrap:anywhere; font-size:14px; }
 .deny-row input { flex:1; min-width:0; padding:7px; border:1px solid var(--border); border-radius:6px; background:var(--surface); color:inherit; font:inherit; }
 .deny-row .text-button { font-size:23px; line-height:1; padding:2px 10px; margin:0; }
 </style>

@@ -1,4 +1,4 @@
-import { canonicalNetworkJson as canonicalJson } from '../../contracts/network-json'
+import { canonicalJson } from '../../contracts/canonical-json'
 import { parseWorkDeclarations } from '../../contracts/work'
 import type { ScriptManifest } from '../storage/database'
 import type { DataPrincipal, DomainData  } from './domain'
@@ -49,9 +49,8 @@ export function handleDataOperation(services: { data: DomainData, work: WorkLedg
       return services.work.claim(principal, { key: text(input.key, 'work key'), expectedInputFingerprint: input.expectedInputFingerprint === undefined ? undefined : text(input.expectedInputFingerprint, 'fingerprint') })
     }
     case 'work.complete': {
-      const input = fields(payload, ['claimToken', 'result'], ['artifacts'])
-      if (input.artifacts !== undefined && !Array.isArray(input.artifacts)) throw new Error('Invalid result artifacts')
-      return services.work.complete(principal, { claimToken: text(input.claimToken, 'claim'), result: input.result, artifacts: input.artifacts as string[] | undefined })
+      const input = fields(payload, ['claimToken', 'result'])
+      return services.work.complete(principal, { claimToken: text(input.claimToken, 'claim'), result: input.result })
     }
     case 'work.defer': {
       const input = fields(payload, ['claimToken', 'reason'], ['until'])

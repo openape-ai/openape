@@ -4,12 +4,6 @@ import { automaticBackupDue, runAutomaticBackup } from './data/automatic-backup'
 import { InboxOutbox, parseInboxOutboxCommand } from './inbox/outbox'
 import { recoverStoppedRuns } from './recovery/automatic'
 import { AsyncLocalStorage } from 'node:async_hooks'
-import type { CodexNetworkCommand } from '../contracts/codex-networks'
-import { CodexNetworks } from './codex/networks'
-import type { NetworkCommand, NetworkView } from '../contracts/networks'
-import { assertNetworkBrowserCommand } from './central/network-projection'
-import { parseCentralCommand } from '../contracts/central'
-import { publicNetworkOverview, parseCentralNetworkRead } from '../contracts/central-networks'
 import { DefinitionWorkspace } from './workspace/definitions'
 import { parseDefinitionCommand, parseDefinitionProvision } from '../contracts/definitions'
 import { cleanupEncryptedBackupStaging } from './data/encrypted-backup'
@@ -20,21 +14,18 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { CentralProjection } from './central/projection'
 import { boundedStep } from './scheduling/tick-step'
 import { parseOwner } from '@openape/pods-protocol'
+import { commandPodIds, parseCentralCommand } from '../contracts/central'
 import { parseApprovalManifest } from '../contracts/approvals'
-import { scheduleDomains } from './scheduling/fair-scheduler'
-import { NetworkEngine } from './scheduling/network-engine'
-import { parseNetworkCommand } from '../contracts/networks'
 import type { AdministrationJournal } from '../contracts/codex-admin'
 import { DesktopRegistration } from './remote/registration'
 import type { RemoteInternal } from './remote/registration'
 import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
-import { DefinitionCatalog } from './workspace/definition-catalog'
 import { recoverPortableImports } from './sharing/import'
 import { SharingService } from './sharing/service'
 import { parseSharingCommand } from '../contracts/sharing'
 import { DependencyStore } from './dependencies/store'
 import { programRequest } from '../main/programs/invoke'
-import { archiveRefusal } from '../contracts/network-capabilities'
+import { archiveRefusal } from '../contracts/mail-archive-port'
 import { podDirectories } from '../runtime/environment'
 import { ProgramControl } from './resources/programs'
 import type { ProgramInternal } from './resources/programs'
@@ -43,8 +34,8 @@ import { PodVariables } from './resources/variables'
 import { PodGroups } from './workspace/groups'
 import { listedPods } from './workspace/pod-list'
 import { mapView } from './workspace/map-view'
-import { AutomationDescriptions } from './workspace/automation-descriptions'
-import { ItemTagStore, renameNetwork } from './workspace/item-tags'
+import { ItemTagStore } from './workspace/item-tags'
+import { DomainAdministration } from './data/admin'
 import { SecretRequests } from './secrets/store'
 import type { SecretRowCommand } from './secrets/store'
 import { ScriptWorkspace } from './workspace/scripts'
@@ -97,7 +88,7 @@ const runtime: AgentRuntime = {
   runtimeDirectories: [dirname(dirname(executable))], environment: { ELECTRON_RUN_AS_NODE: '1' },
   binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs'),
 }
-const runServices: RunServices = { approval: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'approval'), gate: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'gate'), mailArchive: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'mailArchive'), shell: async (scope, signal) => {
+const runServices: RunServices = { approval: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'approval'), mailArchive: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'mailArchive'), shell: async (scope, signal) => {
   const { podId, runId, epoch, assignmentRevision, capabilities } = scope
   return await mailBridge.execute({ podId, runId, epoch, assignmentRevision, capabilities }, {}, signal, 'shell') as Awaited<ReturnType<NonNullable<RunServices['shell']>>>
 }, closeShell: async (scope) => {
@@ -140,16 +131,15 @@ const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
 const master = new MasterService(store, runtime, masterControl, fixtureProvider)
 const ownerOperations = new AsyncLocalStorage<boolean>()
-const codex = new CodexControl(store, masterControl, new CodexNetworks(store, networkOwner, executeCodexNetwork))
+const codex = new CodexControl(store, masterControl, dispatcher)
 
 const remote = new DesktopRegistration(store)
-function networkOwner() {
+function registeredOwner() {
   const row = store.db.prepare('SELECT body FROM remote_registration WHERE id=1').get()
-  if (!row) throw new Error('Persistent networks require an initialized owner identity')
+  if (!row) throw new Error('This needs an initialized owner identity')
   return parseOwner((JSON.parse(row.body as string) as { owner: unknown }).owner)
 }
-const networks = new NetworkEngine(store, dispatcher, registry, runtime.helper, networkOwner, false)
-if (process.env.PODS_FIXTURE_GATE_COLLECT === '0') networks.gates.collect = { quietMs: 0, maxMs: 0 }
+if (process.env.PODS_FIXTURE_GATE_COLLECT === '0') dispatcher.approvals.collect = { quietMs: 0, maxMs: 0 }
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 let centralUntil = process.env.PODS_CENTRAL_ENABLED === '1' ? 0 : Infinity
 let scanAt = 0
@@ -172,35 +162,19 @@ function tickStep<T>(phase: string, limitMs: number, work: () => Promise<T>): Pr
   tickPhase = phase
   return boundedStep(limitMs, work, () => { tickTimeout = { phase, at: Date.now() }; console.error(`Scheduler step ${phase} did not finish within ${limitMs} ms; continuing`) })
 }
-async function executeCodexNetwork(command: CodexNetworkCommand): Promise<NetworkView> {
-  if ((command.type === 'updateMemberScript' || command.type === 'replayFailed') && (!startupReady || (Date.now() >= centralUntil && ownerOperations.getStore() !== true) || suspended || maintenance)) throw new Error('Network execution requires a ready local runtime')
-  if (command.type === 'updateMemberScript') return networks.updateMemberScript(command)
-  if (command.type === 'replayFailed') return networks.replayFailed(command)
-  return executeNetwork(command, ownerOperations.getStore() === true)
-}
-async function executeNetwork(command: NetworkCommand, ownerOperation: boolean): Promise<NetworkView> {
-  if (command.type === 'create' && !command.draft.expectedSetup) throw new Error('Network creation requires a reviewed setup fingerprint')
-  if ((command.type === 'activate' || command.type === 'process') && (!startupReady || (Date.now() >= centralUntil && !ownerOperation) || suspended || maintenance)) throw new Error('Network execution requires a ready local runtime')
-  const result = command.type === 'inspect' || command.type === 'retry' || command.type === 'reconcileEffect' || command.type === 'resolveConflict' || command.type === 'discardFailure' ? await networks.recover(command) : networks.execute(command)
-  if (command.type === 'process' && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => networks.tick()])
-  return result
+/** One scheduling pass; a failing pass is logged and retried on the next tick so later ticks still run. */
+function schedule(): void {
+  try { scheduler.tick() }
+  catch (error) { console.error('Scheduling failed; retrying on the next tick', error) }
 }
 
 function startControlledRun(podId: string, operationId: string, accepted?: (runId: string) => void): string {
   const schedulingAllowed = Date.now() < centralUntil
   if (!startupReady || suspended || maintenance || (!schedulingAllowed && ownerOperations.getStore() !== true)) throw new Error('Controlled execution requires a ready local runtime')
-  let runId: string | null = null
-  let failure: unknown
-  scheduleDomains(store, [() => {
-    const occupied = occupiedRunSlots(store)
-    const maximum = Number(store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency)
-    if (occupied >= maximum) return
-    try { runId = dispatcher.start(podId, { reason: 'manual', eventIds: [], operationId }, accepted) }
-    catch (error) { failure = error }
-    if (schedulingAllowed) scheduler.tick()
-  }, () => { if (schedulingAllowed) networks.tick() }])
-  if (failure) throw failure
-  if (!runId) throw new Error('No fair execution slot available; retry after pending work progresses')
+  const maximum = Number(store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency)
+  if (occupiedRunSlots(store) >= maximum) throw new Error('No execution slot available; retry after pending work progresses')
+  const runId = dispatcher.start(podId, { reason: 'manual', eventIds: [], operationId }, accepted)
+  if (schedulingAllowed) schedule()
   return runId
 }
 
@@ -233,9 +207,7 @@ const timer = setInterval(() => {
       if (error) { for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, String(error)); await tickStep('master stop', 60000, () => master.stop()); return }
       if (Date.now() >= scanAt) { await tickStep('reference scan', 120000, () => watcher.scan()); scanAt = Date.now() + 15000 }
       tickPhase = 'scheduling'
-      if (!suspended && !maintenance && Date.now() < centralUntil) {
-        scheduleDomains(store, [() => scheduler.tick(), () => networks.tick()])
-      }
+      if (!suspended && !maintenance && Date.now() < centralUntil) schedule()
     }
     catch (error) { console.error('Scheduler stopped', error); process.exit(1) }
   })().finally(() => { ticking = null; lastTickAt = Date.now(); tickPhase = '' })
@@ -245,7 +217,7 @@ port.on('message', async (event) => {
   if (event.data && typeof event.data === 'object' && 'serviceParked' in event.data) { const { id, parked } = event.data.serviceParked as { id: string, parked: boolean }; mailBridge.park(id, parked === true); return }
   if (event.data === 'suspend') { suspended = true; return }
   if (event.data === 'resume') { suspended = false; scanAt = 0; return }
-  if (event.data === 'stop') { scriptController.abort(); suspended = true; clearInterval(timer); await ticking; await Promise.allSettled(preparing ? [preparing] : []); await master.stop(); await networks.stop(); await dispatcher.stop(); store.close(); process.exit(0) }
+  if (event.data === 'stop') { scriptController.abort(); suspended = true; clearInterval(timer); await ticking; await Promise.allSettled(preparing ? [preparing] : []); await master.stop(); await dispatcher.stop(); store.close(); process.exit(0) }
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
@@ -258,22 +230,13 @@ port.on('message', async (event) => {
         if (!centralUntil && ticking) await Promise.race([ticking, delay(5000)])
         port.postMessage({ id: request.id, state: { lastTickAt, tickingSince: ticking ? tickStartedAt : null, tickPhase: ticking ? tickPhase : null, tickTimeout } }); return
       }
-      if (command.type === 'assertCommand') { assertNetworkBrowserCommand(store, parseCentralCommand(command.command)); port.postMessage({ id: request.id, state: true }); return }
-      if (command.type === 'version') { port.postMessage({ id: request.id, state: Number(store.db.prepare('SELECT total_changes() AS changes').get()!.changes) }); return }
-      if (command.type === 'networkRead') {
-        if (maintenance) throw new Error('Application data is being maintained; retry when it finishes')
-        const owner = parseOwner(command.owner)
-        new CentralProjection(store, registry, scripts, dispatcher, scheduler).assertOwner(owner)
-        const query = parseCentralNetworkRead(command.command)
-        const result = networks.execute(query)
-        if (query.type === 'list') { port.postMessage({ id: request.id, state: publicNetworkOverview(result) }); return }
-        result.networks = result.networks.filter(network => network.id === query.id)
-        if (query.type === 'detail') result.gates = result.gates?.filter(gate => gate.networkId === query.id).map(gate => ({ ...gate, url: null }))
-        else delete result.gates
-        if (query.type === 'detail') result.choices = result.choices?.filter(choice => choice.networkId === query.id)
-        else delete result.choices
-        port.postMessage({ id: request.id, state: result }); return
+      if (command.type === 'assertCommand') {
+        // A local-only Pod is published as a placeholder; changing it blind from a browser is refused.
+        const targets = commandPodIds(parseCentralCommand(command.command), { workspace: { pods: store.listPods() } })
+        if (targets.some(id => store.db.prepare('SELECT 1 FROM local_only_pods WHERE pod_id=?').get(id))) throw new Error('This Pod keeps its data on the desktop; change it there')
+        port.postMessage({ id: request.id, state: true }); return
       }
+      if (command.type === 'version') { port.postMessage({ id: request.id, state: Number(store.db.prepare('SELECT total_changes() AS changes').get()!.changes) }); return }
       if (command.type !== 'snapshot') throw new Error('Unsupported central worker command')
       port.postMessage({ id: request.id, state: new CentralProjection(store, registry, scripts, dispatcher, scheduler).snapshot(parseOwner(command.owner)) }); return
     }
@@ -324,7 +287,6 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'inspectCredentials' in request.command) {
       await cleanupEncryptedBackupStaging(store.root)
       await recoverStoppedRuns(store, runtime.helper)
-      await networks.reconcileStartup()
       await new DependencyStore(store).recover(runtime.helper)
       new ProgramControl(store, registry).execute({ type: 'recover' })
       await recoverPortableImports(store)
@@ -337,17 +299,17 @@ port.on('message', async (event) => {
       const registered = store.db.prepare('SELECT 1 FROM remote_registration WHERE id=1').get()
       const unavailableReason = registered ? undefined : 'Finish desktop identity setup before using reusable definitions.'
       if (command.type === 'list') {
-        const state = registered ? new DefinitionWorkspace(store, registry, networkOwner()).view() : { definitions: [], instances: [], provisioning: [] }
+        const state = registered ? new DefinitionWorkspace(store, registry, registeredOwner()).view() : { definitions: [], instances: [], provisioning: [] }
         port.postMessage({ id: request.id, state: { ...state, ...(unavailableReason ? { unavailableReason } : {}) } }); return
       }
       if (command.type === 'previewUpdate' && registered) {
-        port.postMessage({ id: request.id, state: await new DefinitionWorkspace(store, registry, networkOwner()).execute(command, scriptController.signal) }); return
+        port.postMessage({ id: request.id, state: await new DefinitionWorkspace(store, registry, registeredOwner()).execute(command, scriptController.signal) }); return
       }
       if (unavailableReason) throw new Error(unavailableReason)
       maintenance = true
       try {
         await ticking
-        preparing = new DefinitionWorkspace(store, registry, networkOwner(), (podId, update) => networks.updateInstance(podId, update)).execute(command, scriptController.signal)
+        preparing = new DefinitionWorkspace(store, registry, registeredOwner()).execute(command, scriptController.signal)
         port.postMessage({ id: request.id, state: await preparing })
       }
       finally { preparing = null; maintenance = false }
@@ -356,7 +318,7 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'sharing' in request.command) {
       const command = parseSharingCommand(request.command.sharing)
       if (!store.db.prepare('SELECT 1 FROM remote_registration WHERE id=1').get()) throw new Error('Finish desktop identity setup before sharing packages')
-      sharing ??= new SharingService(store, registry, networkOwner(), join(dirname(runtime.entry), '../vendor/npm'), { networks, catalog: new DefinitionCatalog(store, registry, networkOwner()) })
+      sharing ??= new SharingService(store, registry, registeredOwner(), join(dirname(runtime.entry), '../vendor/npm'))
       const slow = (command.scope === 'export' && (command.type === 'review' || command.type === 'download')) || (command.scope === 'import' && command.type === 'prepareDependencies')
       if (!slow) { port.postMessage({ id: request.id, state: await sharing.execute(command, runtime, scriptController.signal) }); return }
       maintenance = true
@@ -370,12 +332,11 @@ port.on('message', async (event) => {
     }
     if (request.command && typeof request.command === 'object' && 'definitionProvision' in request.command) {
       const receipt = parseDefinitionProvision(request.command.definitionProvision)
-      const result = new DefinitionWorkspace(store, registry, networkOwner(), (podId, update) => networks.updateInstance(podId, update)).provisioned(receipt.requestId, receipt.error)
+      const result = new DefinitionWorkspace(store, registry, registeredOwner()).provisioned(receipt.requestId, receipt.error)
       port.postMessage({ id: request.id, state: result }); return
     }
-    if (request.command && typeof request.command === 'object' && 'networks' in request.command) {
-      const result = await executeNetwork(parseNetworkCommand(request.command.networks), 'ownerOperation' in request.command && request.command.ownerOperation === true)
-      port.postMessage({ id: request.id, state: result }); return
+    if (request.command && typeof request.command === 'object' && 'domain' in request.command) {
+      port.postMessage({ id: request.id, state: new DomainAdministration(store, dispatcher).execute(request.command.domain) }); return
     }
     if (request.command && typeof request.command === 'object' && 'inboxOutbox' in request.command) {
       port.postMessage({ id: request.id, state: new InboxOutbox(store).execute(parseInboxOutboxCommand(request.command.inboxOutbox)) }); return
@@ -404,8 +365,7 @@ port.on('message', async (event) => {
       authorizeRunService(store, registry, dispatcher.runs, check)
       const events = dispatcher.runs.events(check.scope.podId, check.scope.runId)
       const reason = (events.find(item => item.type === 'started')?.data as { reason?: string } | undefined)?.reason ?? 'manual'
-      const network = store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=?').get(check.scope.runId)
-      port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason, runtime: !network } }); return
+      port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason } }); return
     }
     if (request.command && typeof request.command === 'object' && 'approvalRelease' in request.command) {
       const release = request.command.approvalRelease as { type?: unknown, keys?: unknown }
@@ -418,19 +378,6 @@ port.on('message', async (event) => {
       const check = request.command.approvalCheck as ServiceCheck & { manifest: unknown, operation: string, grants?: { key: string, id: string }[] }
       authorizeRunService(store, registry, dispatcher.runs, check)
       dispatcher.approvals.authorize(check.scope.podId, parseApprovalManifest(check.manifest), check.operation, check.grants)
-      port.postMessage({ id: request.id, state: true }); return
-    }
-    if (request.command && typeof request.command === 'object' && 'networkGateRelease' in request.command) {
-      const release = request.command.networkGateRelease as { type?: unknown, taskId?: unknown }
-      if (release?.type === 'list') { port.postMessage({ id: request.id, state: networks.gates.releasable() }); return }
-      if (release?.type !== 'released' || typeof release.taskId !== 'string') throw new Error('Invalid network gate release')
-      networks.gates.released(release.taskId)
-      port.postMessage({ id: request.id, state: true }); return
-    }
-    if (request.command && typeof request.command === 'object' && 'networkGateCheck' in request.command) {
-      const check = request.command.networkGateCheck as ServiceCheck & { manifest: unknown, operation: string, grants?: unknown }
-      authorizeRunService(store, registry, dispatcher.runs, check)
-      networks.gates.authorizeService(check.scope, check.manifest, check.operation, check.grants)
       port.postMessage({ id: request.id, state: true }); return
     }
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {
@@ -478,7 +425,7 @@ port.on('message', async (event) => {
       if (command.type === 'recover') { if (command.action === 'inspect') await recovery.inspect(command.podId, command.runId); else await recovery.retry(command.podId, command.runId) }
       if (command.type === 'retryQueue') recovery.retryQueue(command.podId)
       if (command.type === 'start') scheduler.requestManual(command.podId, command.expectedScript)
-      if (['start', 'recover', 'retryQueue'].includes(command.type) && startupReady && !suspended && Date.now() < centralUntil) scheduleDomains(store, [() => scheduler.tick(), () => networks.tick()])
+      if (['start', 'recover', 'retryQueue'].includes(command.type) && startupReady && !suspended && Date.now() < centralUntil) schedule()
       const id = 'runId' in command ? command.runId : undefined
       if (command.type === 'cancel') dispatcher.cancel(command.podId, command.runId)
       port.postMessage({ id: request.id, state: dispatcher.view(command.podId, id, command.type === 'list' ? command.after : undefined) })
@@ -509,13 +456,11 @@ port.on('message', async (event) => {
     }
     const command = parseCommand(request.command)
     if (command.type === 'organize') new PodGroups(store).execute(command)
-    if (command.type === 'describeAutomation') new AutomationDescriptions(store).execute(command)
     if (command.type === 'tag') new ItemTagStore(store).execute(command)
-    if (command.type === 'renameNetwork') renameNetwork(store, command)
     if (command.type === 'pauseAll') store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE lifecycle=\'active\'').run()
     if (command.type === 'create') store.createPod({ name: command.name })
     if (command.type === 'update') { store.updatePod(command.id, command.revision, { name: command.name, lifecycle: command.lifecycle }); if (command.lifecycle === 'archived') dispatcher.cancelPod(command.id, 'Pod archived') }
-    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: listedPods(store), organization: new PodGroups(store).view(), descriptions: new AutomationDescriptions(store).view(), tags: new ItemTagStore(store).view(), ...(command.type === 'map' ? { map: mapView(store) } : {}) } })
+    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: listedPods(store), organization: new PodGroups(store).view(), tags: new ItemTagStore(store).view(), ...(command.type === 'map' ? { map: mapView(store) } : {}) } })
   }
   catch (error) { port.postMessage({ id: request.id, error: error instanceof Error ? error.message : 'Workspace operation failed' }) }
 })

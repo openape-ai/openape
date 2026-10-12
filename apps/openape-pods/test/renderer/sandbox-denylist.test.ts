@@ -8,26 +8,19 @@ import PodResources from '../../src/renderer/PodResources.vue'
 import SandboxDenylist from '../../src/renderer/SandboxDenylist.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
 
-const networkId = '00000000-0000-4000-8000-000000000002'
-function view(own: string[], level: SandboxView['level'] = 'owner'): SandboxView {
-  return {
-    level,
-    sources: [{ source: 'pod', level }],
-    deny: [...new Set([...own, '~/Library/LaunchAgents'])],
-    denySources: [{ source: `network:${networkId}`, deny: ['~/Library/LaunchAgents'] }, ...(own.length ? [{ source: 'pod', deny: own }] : [])],
-  }
+function view(deny: string[], level: SandboxView['level'] = 'owner'): SandboxView {
+  return { level, deny }
 }
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en') })
 const button = (label: string) => wrapper!.findAll('button').find(item => item.attributes('aria-label') === label || item.text().trim() === label)
 
-it('shows the level and the denied paths and edits only the Pod\'s own entries', async () => {
+it('shows the level and the denied paths and edits them', async () => {
   applyLanguage('de')
   wrapper = mount(SandboxDenylist, { props: { sandbox: view(['~/.ssh']), busy: false } })
   expect(wrapper.text()).toContain('Stufe Owner: Programme erreichen, was du auf diesem Mac erreichst, außer den Pods-Daten und deinem apes-Login.')
   expect(wrapper.get('.trust-note').text()).toBe('Als Owner ausführen bedeutet volles Vertrauen in den Code dieses Pods, einschließlich der Möglichkeit, als du zu handeln. Die verbleibenden Schutzmaßnahmen verhindern nur den direkten Zugriff.')
-  expect(wrapper.findAll('.deny-path').map(item => item.text())).toEqual(['~/.ssh', '~/Library/LaunchAgentsVon einem Netzwerk gesperrt'])
-  // A network entry is shown but cannot be removed from the Pod.
+  expect(wrapper.findAll('.deny-path').map(item => item.text())).toEqual(['~/.ssh'])
   expect(wrapper.findAll('.deny-row button.text-button')).toHaveLength(1)
   await button('~/.ssh wieder erlauben')!.trigger('click')
   expect(wrapper.emitted('save')).toEqual([[[]]])

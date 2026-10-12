@@ -47,7 +47,7 @@ export async function managedArtifacts(root: string, snapshot: CentralSnapshot, 
     for (const name of (await readdir(join(canonical, relative))).sort()) await walk(podId, `${relative}/${name}`, `${publicPath}/${name}`)
   }
   for (const pod of snapshot.pods) {
-    if (pod.networkId) continue
+    if (pod.localOnly) continue
     const hashes = new Set(snapshot.blobs.filter(blob => blob.podId === pod.id).map(blob => blob.hash))
     for (const hash of [...hashes].sort()) {
       if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('Invalid stored artifact hash')

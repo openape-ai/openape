@@ -267,7 +267,7 @@ export class ConnectionManager {
     const identities = new PodIdentityManager(this.credentials)
     const pods = (metadata.pods ?? {}) as Record<string, PodEntry>
     let entry = pods[podId]
-    if (requireExistingIdentity && (!entry?.prepared || !entry.identity)) throw new Error('Prepare and approve this Pod identity before enabling network gates')
+    if (requireExistingIdentity && (!entry?.prepared || !entry.identity)) throw new Error('Prepare and approve this Pod identity before it requests approvals')
     if (!entry) {
       if (!metadata.broker && !this.directAgents) throw new Error('Allow Pods to create agents in this pod’s settings first')
       entry = { connectionId: randomUUID(), prepared: false, ...(metadata.broker ? { broker: metadata.broker as PodBrokerConnection } : {}) }; pods[podId] = entry; metadata.pods = pods; await this.save(owner, metadata)

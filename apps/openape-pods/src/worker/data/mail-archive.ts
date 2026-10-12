@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { archiveNotStarted } from '../../contracts/network-capabilities'
-import { canonicalNetworkJson as canonicalJson } from '../../contracts/network-json'
+import { archiveNotStarted } from '../../contracts/mail-archive-port'
+import { canonicalJson } from '../../contracts/canonical-json'
 import type { PodDatabase } from '../storage/database'
 import { digest } from '../storage/database'
 import type { ApprovalService, Approvals } from './approvals'

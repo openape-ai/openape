@@ -42,7 +42,7 @@ export class PortableExporter<Choices> {
     if (capturePortableSource(this.store, this.owner, selection).fingerprint !== source.fingerprint) throw new Error('Portable source changed; review the export again')
     const result = await createPortablePackage(content.description, content.payloads, this.npmRoot)
     if (capturePortableSource(this.store, this.owner, selection).fingerprint !== source.fingerprint) throw new Error('Portable source changed; review the export again')
-    const publicDefaults = new Set([...result.manifest.pods, ...result.manifest.compositions].flatMap(item => item.inputs.map(input => input.default)).filter(value => typeof value === 'string'))
+    const publicDefaults = new Set(result.manifest.pods.flatMap(item => item.inputs.map(input => input.default)).filter(value => typeof value === 'string'))
     const findings = await scanPortableFilesAsync([
       { path: 'manifest.json', content: new TextEncoder().encode(canonicalPortableJson(result.manifest)), text: true },
     ], source.privateReferences, source.privateValues.filter(value => !publicDefaults.has(value)))

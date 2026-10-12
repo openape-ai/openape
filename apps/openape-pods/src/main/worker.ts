@@ -2,15 +2,11 @@ import type { InboxOutboxCommand } from '../worker/inbox/outbox'
 import type { DecisionSources, InboxDecisions } from './inbox/decisions'
 import { parseInboxDecide } from '../contracts/inbox'
 import { readOnlyAction } from './codex/routing'
-import { boundedCodexNetworkResult, parseCodexNetworkAction } from '../contracts/codex-networks'
 import { applicationBundle, applicationDefinition } from './programs/application'
 import { parseSharingCommand } from '../contracts/sharing'
 import type { PortableImportCommand, SharingCommand, SharingState } from '../contracts/sharing'
-import { parseCentralNetworkRead } from '../contracts/central-networks'
 import { parseDefinitionCommand, parseDefinitionsView } from '../contracts/definitions'
 import type { DefinitionCommand, DefinitionsView } from '../contracts/definitions'
-import type { NetworkGateManifest } from '../contracts/network-gates'
-import { parseNetworkGateReleases } from '../contracts/network-gates'
 import { resolveSshTarget, sshGrantArgv } from './ssh/configuration'
 import { invokeSsh } from './ssh/invoke'
 import { AuthorityError, InfrastructureError, NonRetryableError, retryInfrastructure } from '../contracts/infrastructure'
@@ -18,7 +14,7 @@ import type { InfrastructureFailure } from '../contracts/infrastructure'
 import { MailArchiveService } from './mail/archive/service'
 import { ArchiveStore } from './mail/archive/store'
 import { handleMailArchive } from './mail/archive/handler'
-import { handleApproval, handleGate, releaseApprovalGrants, releaseNetworkGrants } from './gates/handler'
+import { handleApproval, releaseApprovalGrants } from './gates/handler'
 import { assignedJev, parseJevRequest, typesafeOrigin } from '../contracts/jev'
 import { executeJev } from './connections/jev-service'
 import { mkdir, readFile, readdir, rm, writeFile } from 'node:fs/promises'
@@ -37,8 +33,7 @@ import { modelResources } from '../worker/master/resources'
 import { sameOwner } from '@openape/pods-protocol'
 import type { RemoteInternal } from '../worker/remote/registration'
 import type { Owner } from '@openape/pods-protocol'
-import { parseNetworkCommand, parseNetworkView } from '../contracts/networks'
-import type { NetworkCommand, NetworkView } from '../contracts/networks'
+import type { DomainCommand, DomainOverview } from '../contracts/domain-admin'
 import type { ServiceScope, RunContextRequest, ServiceCheck, ServiceRequest  } from '../contracts/services'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import { approvalURL } from '../contracts/activity'
@@ -47,9 +42,9 @@ import { assignedDirectories, directoryPolicy } from '../runtime/directories'
 import { podEnvironment, podEnvironmentValues, visibleEnvironment } from '../runtime/environment'
 import { podWorkspace } from './programs/console'
 import { invokeProgram, programRequest } from './programs/invoke'
-import { administerGrants, administerSandbox, releaseArchivedNetworkGrants } from './grants/administration'
+import { administerGrants, administerSandbox } from './grants/administration'
 import type { Administration } from './grants/administration'
-import { archiveRefusal, assertArchiveMove } from '../contracts/network-capabilities'
+import { archiveRefusal, assertArchiveMove } from '../contracts/mail-archive-port'
 import { ProgramManager } from './programs/manager'
 import { PodGrants, commandSpec, httpSpec } from './grants/pod-grants'
 import { runtimeArgv } from './grants/execution-context'
@@ -185,7 +180,7 @@ export class FixtureWorker {
     this.credentials = createMacOSCredentialCache(join(this.root, 'credentials'))
     const fixturePort = process.env.NODE_ENV === 'test' ? process.env.OPENAPE_PODS_FIXTURE_MODEL_PORT : undefined
     if (fixturePort && (!/^\d+$/.test(fixturePort) || Number(fixturePort) < 1024 || Number(fixturePort) > 65535)) throw new Error('Invalid synthetic model port')
-    // Synthetic fixtures freeze gate batches at once instead of collecting inputs for two minutes.
+    // Synthetic fixtures freeze approval batches at once instead of collecting inputs for two minutes.
     const fixtureGates = process.env.NODE_ENV === 'test' && !!process.env.OPENAPE_PODS_FIXTURE_DIR
     this.child = utilityProcess.fork(join(__dirname, '../worker/entry.cjs'), [], { cwd: root, env: { HOME: root, TMPDIR: root, PATH: '/usr/bin:/bin', PODS_RUNTIME_EXECUTABLE: process.execPath, PODS_BACKUP_DIRECTORY: automaticBackupDirectory(profileBase), ...(process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1' ? { PODS_CENTRAL_ENABLED: '1' } : {}), ...(fixturePort ? { PODS_FIXTURE_MODEL_PORT: fixturePort } : {}), ...(fixtureGates ? { PODS_FIXTURE_GATE_COLLECT: '0' } : {}) }, serviceName: 'OpenApe Pods Fixture Worker', stdio: 'pipe' })
     const child = this.child
@@ -390,18 +385,15 @@ export class FixtureWorker {
     return this.grants
   }
 
-  /**
-   * The effective sandbox reach of a Pod: its own level and, for a network member, the network's (the more permissive
-   * wins), with the denylists of both.
-   */
+  /** The sandbox reach of a Pod: its level and denylist plus the paths every Pod is denied. */
   async sandboxReach(podId: string): Promise<SandboxReach> {
     const view = await this.dispatch({ grants: { type: 'sandbox', podId } }) as SandboxView
     return { level: view.level, protectedPaths: [...ownerProtectedPaths(this.root, this.profileBase, homedir()), ...controlSocketProtection(this.profileBase)], deny: deniedPaths(view.deny, homedir()) }
   }
 
-  /** The Pod's resources with its sandbox; a saved denylist replaces the Pod's own entries, never a network's. */
+  /** The Pod's resources with its sandbox; a saved denylist replaces the Pod's entries. */
   private async sandboxState(podId: string, deny?: string[]): Promise<ResourceState> {
-    if (deny) await this.dispatch({ grants: { type: 'deny', podId, source: 'pod', revision: null, deny } })
+    if (deny) await this.dispatch({ grants: { type: 'deny', podId, deny } })
     const [state, sandbox] = await Promise.all([this.dispatch({ resource: { type: 'list', podId } }), this.dispatch({ grants: { type: 'sandbox', podId } })])
     return { ...parseResourceState(state), sandbox: sandbox as SandboxView }
   }
@@ -414,39 +406,16 @@ export class FixtureWorker {
 
   inboxOutbox(command: InboxOutboxCommand): Promise<unknown> { return this.dispatch({ inboxOutbox: command }) }
 
-  /** Revokes always grants of finished network approval batches at the IdP; a failure is logged and retried later with backoff. */
-  async releaseNetworkGrants(signal: AbortSignal): Promise<void> {
+  /** Revokes always grants of finished object approvals at the IdP; a failure is logged and retried later with backoff. */
+  async releaseApprovalGrants(signal: AbortSignal): Promise<void> {
     if (!this.connections) return
     // Brokered Pod grants are revoked by the owner (issue 1462); the sweep derives that session from the apes login
     // only when a brokered grant needs it, and closing it never touches the login.
     let session: Promise<OwnerSession | null> | undefined
     const owner = () => session ??= this.mcpApesSession(Date.now() + 5 * 60000, signal)
-    try { await this.releaseSweep(this.connections, signal, owner) }
+    try { await this.releaseApprovals(this.connections, signal, owner) }
     // A failed derivation was already reported by the revoke that needed it; only an open session is closed here.
     finally { if (session) await (await session.catch(() => null))?.close() }
-  }
-
-  private async releaseSweep(connections: ConnectionManager, signal: AbortSignal, owner: () => Promise<OwnerSession | null>): Promise<void> {
-    const grants = this.podGrants()
-    if (grants) {
-      try { await releaseArchivedNetworkGrants({ grants, owner, ledger: command => this.dispatch({ grants: command }), revokeResource: async (podId, id, revision) => { await this.resources({ type: 'revoke', podId, id, revision }) }, resources: podId => this.resources({ type: 'list', podId }) }, signal) }
-      catch (error) { console.error('Could not release the grants and sandbox of an archived network', error) }
-    }
-    await this.releaseApprovals(connections, signal, owner)
-    for (const release of parseNetworkGateReleases(await this.dispatch({ networkGateRelease: { type: 'list' } }))) {
-      const retry = this.releaseRetry.get(release.taskId)
-      if (retry && retry.at > Date.now()) continue
-      try {
-        await releaseNetworkGrants(release, connections, signal, owner)
-        await this.dispatch({ networkGateRelease: { type: 'released', taskId: release.taskId } })
-        this.releaseRetry.delete(release.taskId)
-      }
-      catch (error) {
-        const failures = (retry?.failures ?? 0) + 1
-        this.releaseRetry.set(release.taskId, { at: Date.now() + Math.min(60 * 60000, 60000 * 2 ** failures), failures })
-        console.error(`Could not release the approval grants of network gate batch ${release.taskId}`, error)
-      }
-    }
   }
 
   private async releaseApprovals(connections: ConnectionManager, signal: AbortSignal, owner: () => Promise<OwnerSession | null>): Promise<void> {
@@ -528,11 +497,6 @@ export class FixtureWorker {
     }
     if (request.action.action === 'runtime') return { ...await this.dispatch({ codex: request }) as object, workspace: workspaceHelp, ...(this.central ? { central: this.central.status() } : {}) }
     const reading = readOnlyAction(request.action)
-    if (request.action.action === 'networks') {
-      const command = parseCodexNetworkAction(request.action)
-      // Opens the approval page in the owner's browser like the desktop button; the owner decides there.
-      if (command.type === 'gateOpen') return boundedCodexNetworkResult(command, await this.networks(command))
-    }
     if (!reading && this.central && !this.central.executing) return this.central.local(() => this.codex(request, owner))
     if (request.action.action === 'desktop') {
       const action = parseDesktopAction(request.action)
@@ -713,7 +677,7 @@ export class FixtureWorker {
 
   /** Requests a grant as the Pod; in an owner session approves it as continuing, otherwise opens and returns its IdP page. */
   private async provisionGrant(podId: string, spec: GrantSpec, owner: OwnerSession | null): Promise<{ grantId: string, approval: string | null }> {
-    const { grant, approval } = await this.podGrants()!.request(podId, spec, null, AbortSignal.timeout(120000))
+    const { grant, approval } = await this.podGrants()!.request(podId, spec, AbortSignal.timeout(120000))
     if (!approval) return { grantId: grant.id, approval: null }
     if (owner) { await this.podGrants()!.approve(owner, podId, grant.id, 'always', AbortSignal.timeout(60000)); return { grantId: grant.id, approval: null } }
     await shell.openExternal(approval)
@@ -726,7 +690,6 @@ export class FixtureWorker {
       vendor: join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/'),
       resources: podId => this.resources({ type: 'list', podId }),
       podName: async podId => grantPodName(parseWorkspace(await this.dispatch({ type: 'list' })).pods.find(pod => pod.id === podId)?.name ?? 'Pod'),
-      networks: () => this.networks({ type: 'list' }),
       ledger: command => this.dispatch({ grants: command }),
       programDefinition: async entry => entry.path.endsWith('.app') ? applicationDefinition(entry.path, join(this.root, 'applications')) : programDefinition(entry.path, entry.adapterPath, entry.commandName, entry.runtimePath),
       addProgram: async (podId, definition) => { await this.program({ type: 'add', podId, epoch: (await this.resources({ type: 'list', podId })).epoch }, definition) },
@@ -764,8 +727,8 @@ export class FixtureWorker {
 
   // Direct reads for the inbox projection: reading never becomes a workspace operation.
   async inboxSources(): Promise<DecisionSources> {
-    const [workspace, networks, secrets] = await Promise.all([this.dispatch({ type: 'map' }), this.dispatch({ networks: { type: 'list' } }), this.secretsGate?.view() ?? null])
-    return { map: parseWorkspace(workspace).map ?? null, networks: parseNetworkView(networks), secrets }
+    const [workspace, domain, secrets] = await Promise.all([this.dispatch({ type: 'map' }), this.dispatch({ domain: { type: 'list' } }), this.secretsGate?.view() ?? null])
+    return { map: parseWorkspace(workspace).map ?? null, domain: domain as DomainOverview, secrets }
   }
 
   // Imported Pods are ordinary local Pods: a connected workspace gives each its own identity as soon as the paused copy exists.
@@ -819,17 +782,19 @@ export class FixtureWorker {
     }
   }
 
-  async networks(command: NetworkCommand): Promise<NetworkView> {
-    const parsed = parseNetworkCommand(command)
-    const central = this.centralAction(['detail', 'setup', 'trace', 'records', 'archivePreview'].includes(parsed.type) ? 'list' : parsed.type)
-    if (central) return central.local(() => this.networks(parsed))
-    const view = parseNetworkView(await this.dispatch({ networks: parsed, ownerOperation: this.central?.executing === true }))
-    if (parsed.type === 'gateOpen') {
-      const url = view.gates?.find(gate => gate.networkId === parsed.id && gate.id === parsed.taskId && gate.generation === parsed.generation && gate.state === 'pending')?.url
-      if (!url || new URL(url).protocol !== 'https:') throw new Error('No approval is waiting for this batch')
+  /** Owner administration of shared domain data; changes run as central local operations like every other owner command. */
+  async domain(command: DomainCommand): Promise<unknown> {
+    if (command.type === 'openApproval') {
+      const overview = await this.dispatch({ domain: { type: 'list' } }) as DomainOverview
+      const url = overview.approvals.find(item => item.id === command.id && item.state === 'requested')?.batchUrl
+      if (!url || URL.parse(url)?.protocol !== 'https:') throw new Error('No approval is waiting at the IdP for this item')
       await shell.openExternal(url)
+      return overview
     }
-    return view
+    const reading = ['list', 'entries', 'work'].includes(command.type)
+    const central = reading ? null : this.centralAction(command.type)
+    if (central) return central.local(() => this.domain(command))
+    return this.dispatch({ domain: command })
   }
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { const central = this.centralAction(command.type); if (central) return central.local(() => this.scheduling(command)); return parseScheduleView(await this.dispatch({ schedule: command })) }
@@ -858,11 +823,6 @@ export class FixtureWorker {
     }
     await this.indexRemotePods(owner)
     return await this.dispatch({ central: { type: 'snapshot', owner } }) as CentralSnapshot
-  }
-
-  async centralNetworkRead(command: unknown): Promise<NetworkView> {
-    const { owner } = await this.remoteOwner()
-    return parseNetworkView(await this.dispatch({ central: { type: 'networkRead', owner, command: parseCentralNetworkRead(command) } }))
   }
 
   async centralGate(until: number): Promise<CentralGate> { return await this.dispatch({ central: { type: 'gate', until } }) as CentralGate }
@@ -899,13 +859,13 @@ export class FixtureWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { approvalRelease: { type: 'list' } | { type: 'released', keys: string[] } } | { approvalCheck: { scope: ServiceScope, manifest: ApprovalManifest, operation: string, grants: { key: string, id: string }[] } } | { definitions: DefinitionCommand } | { networkGateRelease: { type: 'list' } | { type: 'released', taskId: string } } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { networkGateCheck: { scope: ServiceScope, manifest: NetworkGateManifest, operation: string, grants?: { key: string, id: string }[] } } | { networks: NetworkCommand, ownerOperation?: boolean } | { central: { type: 'snapshot', owner: Owner } | { type: 'networkRead', owner: Owner, command: NetworkCommand } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { approvalRelease: { type: 'list' } | { type: 'released', keys: string[] } } | { approvalCheck: { scope: ServiceScope, manifest: ApprovalManifest, operation: string, grants: { key: string, id: string }[] } } | { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { domain: DomainCommand } | { central: { type: 'snapshot', owner: Owner } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     if (this.updateFrozen && !('data' in command && ['prepareUpdate', 'releaseUpdate'].includes(command.data.type))) return Promise.reject(new Error('Pods is preparing an update; retry after restart'))
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
     const id = randomUUID()
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Worker response timed out; reload state before retrying')) }, 'data' in command ? 15 * 60 * 1000 : 'sharing' in command ? 10 * 60 * 1000 : 'central' in command && command.central.type === 'snapshot' ? 60000 : 'codex' in command ? 180000 : 'scripts' in command && command.scripts.type === 'prepareDependencies' ? 210000 : ('run' in command && command.run.type === 'recover') || ('networks' in command && ['inspect', 'retry', 'reconcileEffect', 'resolveConflict', 'discardFailure'].includes(command.networks.type)) || 'inspectCredentials' in command ? 30000 : 10000)
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Worker response timed out; reload state before retrying')) }, 'data' in command ? 15 * 60 * 1000 : 'sharing' in command ? 10 * 60 * 1000 : 'central' in command && command.central.type === 'snapshot' ? 60000 : 'codex' in command ? 180000 : 'scripts' in command && command.scripts.type === 'prepareDependencies' ? 210000 : ('run' in command && command.run.type === 'recover') || 'inspectCredentials' in command ? 30000 : 10000)
       this.pending.set(id, { resolve, reject, timer }); child.postMessage({ id, command })
     })
   }
@@ -935,7 +895,7 @@ export class FixtureWorker {
 
   private async executeService(request: ServiceRequest): Promise<unknown> {
     if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size - this.parked.size >= 16) throw new Error('Invalid or excessive broker request')
-    if (request.kind !== undefined && request.kind !== 'approval' && request.kind !== 'gate' && request.kind !== 'mailArchive' && request.kind !== 'mailMove' && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
+    if (request.kind !== undefined && request.kind !== 'approval' && request.kind !== 'mailArchive' && request.kind !== 'mailMove' && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
     const scope = parseServiceScope(request.scope)
     const controller = new AbortController(); this.services.set(request.id, controller)
     const check = async (domain?: { path: string, ownerPid: number }) => parseResourceState(await this.dispatch({ serviceCheck: { scope, ...(domain ? { domain } : {}) } }))
@@ -961,7 +921,7 @@ export class FixtureWorker {
       }
       if (request.kind === 'shell') {
         await check()
-        if (!this.connections || !context.runtime || this.shellIdentities.has(scope.runId)) throw new Error('Pod execution authority is unavailable or already in use')
+        if (!this.connections || this.shellIdentities.has(scope.runId)) throw new Error('Pod execution authority is unavailable or already in use')
         // A run starts with no reused tokens, so the runtime grant, owner, identity and key are checked at the IdP.
         const tokens = new RunGrantTokens(); this.runTokens.set(scope.runId, tokens)
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
@@ -991,16 +951,14 @@ export class FixtureWorker {
         this.shellIdentities.set(scope.runId, { refresh: signal => authority.refresh(assignment, signal), close: async () => { monitoring.abort(); await monitor } })
         return { home: environment.home, environment: environment.environment }
       }
-      // Every other service needs the run's active runtime authority; network and decision-maintenance runs execute no runtime.
+      // Every other service needs the run's active runtime authority.
       const runtime = this.shellIdentities.get(scope.runId)
-      if (context.runtime && !runtime) throw new AuthorityError('Pod execution authority is not active for this run')
-      if (runtime) {
-        try { await runtime.refresh(controller.signal) }
-        catch (error) {
-          if (error instanceof InfrastructureError) throw error
-          await this.dispatch({ serviceCheck: { scope, authorityLost: true } })
-          throw error instanceof AuthorityError ? error : new AuthorityError('Pod execution permission is no longer active; review the Pod permissions before retrying')
-        }
+      if (!runtime) throw new AuthorityError('Pod execution authority is not active for this run')
+      try { await runtime.refresh(controller.signal) }
+      catch (error) {
+        if (error instanceof InfrastructureError) throw error
+        await this.dispatch({ serviceCheck: { scope, authorityLost: true } })
+        throw error instanceof AuthorityError ? error : new AuthorityError('Pod execution permission is no longer active; review the Pod permissions before retrying')
       }
       const tokens = this.grantTokens(scope.runId)
       if (request.kind === 'credential') {
@@ -1019,11 +977,6 @@ export class FixtureWorker {
       if (request.kind === 'approval') {
         if (!this.connections) throw new Error('Connection service unavailable')
         const result = await handleApproval({ body: request.body, scope, connections: this.connections, check, checkApproval: async (manifest, operation, grants) => this.dispatch({ approvalCheck: { scope, manifest, operation, grants } }), signal: controller.signal })
-        await check(); controller.signal.throwIfAborted(); return result
-      }
-      if (request.kind === 'gate') {
-        if (!this.connections) throw new Error('Connection service unavailable')
-        const result = await handleGate({ body: request.body, scope, connections: this.connections, check, checkGate: async (manifest, operation, grants) => this.dispatch({ networkGateCheck: { scope, manifest, operation, grants } }), signal: controller.signal })
         await check(); controller.signal.throwIfAborted(); return result
       }
       if (request.kind === 'mailArchive') {

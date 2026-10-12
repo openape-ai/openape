@@ -13,7 +13,7 @@ import fixture from './map-view.json'
 const view = parseMapView(fixture) as MapView
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.unstubAllGlobals(); applyLanguage('en') })
-const order = 'Zeig mir zuerst Bauform (Pod oder Netz), Karte, benötigte Zugriffe und die Beispiele, die du als Prüfung verwendest. Lege erst danach an, aktiviere nur als Vorschau, und fordere Rechte ausschließlich über Permissions und den IdP an.'
+const order = 'Zeig mir zuerst Bauform (welche Pods welche gemeinsamen Daten lesen und schreiben), Karte, benötigte Zugriffe und die Beispiele, die du als Prüfung verwendest. Lege erst danach an, aktiviere nur als Vorschau, und fordere Rechte ausschließlich über Permissions und den IdP an.'
 
 describe('Codex handoff', () => {
   it('builds the brief from the group and the pinned node', () => {
@@ -51,9 +51,9 @@ describe('Codex handoff', () => {
     wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: view.at, desktop: true, codex: 'disconnected' } })
     await flushPromises()
     const shell = wrapper.vm as unknown as { pin: (id: string | null) => void }
-    shell.pin(view.pods.find(pod => pod.name === 'Triage')!.id); await flushPromises()
+    shell.pin(view.pods.find(pod => pod.name === 'Mail-Klassifizierung')!.id); await flushPromises()
     await wrapper.findAll('button').find(item => item.text() === 'Neue Automatisierung mit Codex')!.trigger('click'); await flushPromises()
-    expect(wrapper.find('[data-testid="codex-brief"]').text()).toBe(`Lege eine neue Automatisierung an in der Gruppe Delta Mind. Wie Triage, aber mit anderer Quelle. ${order}`)
+    expect(wrapper.find('[data-testid="codex-brief"]').text()).toBe(`Lege eine neue Automatisierung an in der Gruppe Delta Mind. Wie Mail-Klassifizierung, aber mit anderer Quelle. ${order}`)
     expect(wrapper.find('.codex-handoff .pill').text()).toBe('Codex nicht verbunden')
     await wrapper.findAll('button').find(item => item.text() === 'Schließen')!.trigger('click')
     expect(wrapper.find('.codex-handoff').exists()).toBe(false)

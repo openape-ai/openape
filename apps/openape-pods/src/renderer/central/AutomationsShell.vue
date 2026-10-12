@@ -4,11 +4,9 @@ import type { MapView } from '../../contracts/map-view'
 import { language, t } from '../i18n'
 import { clock } from '../utils/cadence'
 import AutomationDetail from './AutomationDetail.vue'
-import type { NetworkControl } from './AutomationDetail.vue'
 import AutomationInfo from './AutomationInfo.vue'
 import DecisionsInbox from './DecisionsInbox.vue'
-import type { NetworkGateView } from '../../contracts/network-gate-view'
-import type { NetworkChoiceView, NetworkCommand } from '../../contracts/networks'
+import type { DomainCommand, DomainOverview } from '../../contracts/domain-admin'
 import type { CentralCommand } from '../../contracts/central'
 import AutomationsList from './AutomationsList.vue'
 import AutomationsMap from './AutomationsMap.vue'
@@ -25,10 +23,10 @@ import { allTags, tagCounts, untagged, withTags } from '../utils/tags'
  * The two product surfaces behind one tab bar: Automatisierungen (this file) and Entscheidungen
  * (the `decisions` slot). Settings open from the gear; creation hands a brief to Codex.
  */
-const props = defineProps<{ view: MapView | null, live: boolean, now: number, decisions?: number, tab?: 'automations' | 'decisions', desktop?: boolean, subject?: string, codex?: 'connected' | 'disconnected', inbox?: { choices: NetworkChoiceView[], gates: NetworkGateView[] }, secrets?: SecretsView | null, sharing?: boolean }>()
-const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'logout': [], 'codex': [pinned: string | null, group: string | null], 'command': [command: CentralCommand], 'network': [control: NetworkControl], 'secretSave': [podId: string, alias: string, value: string], 'secrets': [command: SecretsCommand], 'folder': [podId: string], 'openPod': [id: string], 'share': [selection: PortableSourceSelection], 'advanced': [], 'import': [], 'networkCommand': [command: NetworkCommand, settle?: (error: string | null) => void] }>()
+const props = defineProps<{ view: MapView | null, live: boolean, now: number, decisions?: number, tab?: 'automations' | 'decisions', desktop?: boolean, subject?: string, codex?: 'connected' | 'disconnected', domain?: DomainOverview | null, inboxUrl?: string, secrets?: SecretsView | null, sharing?: boolean }>()
+const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'logout': [], 'codex': [pinned: string | null, group: string | null], 'command': [command: CentralCommand], 'secretSave': [podId: string, alias: string, value: string], 'secrets': [command: SecretsCommand], 'folder': [podId: string], 'openPod': [id: string], 'share': [selection: PortableSourceSelection], 'advanced': [], 'import': [], 'domain': [command: DomainCommand, settle?: (error: string | null) => void] }>()
 const mode = ref<'map' | 'list'>('map')
-const layers = ref<Layers>({ channel: true, read: true, write: true, auth: true, paused: true })
+const layers = ref<Layers>({ data: true, read: true, write: true, auth: true, paused: true })
 const playing = ref(true)
 const pinned = ref<string | null>(null)
 const hovered = ref<string | null>(null)
@@ -67,10 +65,10 @@ function closeLayers() { if (layersMenu.value) layersMenu.value.open = false }
 function closeLayersOutside(event: PointerEvent) { if (!layersMenu.value?.contains(event.target as Node)) closeLayers() }
 onMounted(() => document.addEventListener('pointerdown', closeLayersOutside))
 onBeforeUnmount(() => document.removeEventListener('pointerdown', closeLayersOutside))
-const chips: { key: keyof Layers, label: string, color: string }[] = [{ key: 'channel', label: 'Channels', color: 'var(--accent)' }, { key: 'read', label: 'Read', color: 'var(--read)' }, { key: 'write', label: 'Write', color: 'var(--warn)' }, { key: 'auth', label: 'Approvals', color: 'var(--idp)' }, { key: 'paused', label: 'Paused', color: 'var(--muted)' }]
-/** Codex places the new automation next to the pinned Pod or network. */
+const chips: { key: keyof Layers, label: string, color: string }[] = [{ key: 'data', label: 'Shared data', color: 'var(--accent)' }, { key: 'read', label: 'Read', color: 'var(--read)' }, { key: 'write', label: 'Write', color: 'var(--warn)' }, { key: 'auth', label: 'Approvals', color: 'var(--idp)' }, { key: 'paused', label: 'Paused', color: 'var(--muted)' }]
+/** Codex places the new automation next to the pinned Pod. */
 function pinnedGroup(): string | null {
-  const item = props.view?.pods.find(pod => pod.id === pinned.value) ?? props.view?.automations.find(automation => automation.id === pinned.value)
+  const item = props.view?.pods.find(pod => pod.id === pinned.value)
   return item ? item.group ?? t('without group') : null
 }
 function openCodex() { handoff.value = true; emit('codex', pinned.value, pinnedGroup()) }
@@ -113,7 +111,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
               <summary>{{ t('Layers') }} {{ shownLayers }}/{{ chips.length }}</summary>
               <div class="layers" role="group" :aria-label="t('Layers')">
                 <button v-for="chip in chips" :key="chip.key" class="lay" :aria-pressed="layers[chip.key]" @click="layers[chip.key] = !layers[chip.key]">
-                  <i :class="{ dash: chip.key === 'paused' }" :style="{ background: chip.color }" />{{ t(chip.label as 'Channels') }}
+                  <i :class="{ dash: chip.key === 'paused' }" :style="{ background: chip.color }" />{{ t(chip.label as 'Shared data') }}
                 </button>
               </div>
             </details>
@@ -157,10 +155,10 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
       <p v-if="!view" class="muted" role="status">
         {{ t('Loading workspace…') }}
       </p>
-      <DecisionsInbox v-else ref="inboxView" :view="view" :choices="inbox?.choices ?? []" :gates="inbox?.gates ?? []" :requests="secrets?.requests ?? []" :secrets-origin="secrets?.origin" :desktop="!!desktop" @secrets="emit('secrets', $event)" @network="(command, settle) => emit('networkCommand', command, settle)" @command="emit('command', $event)" />
+      <DecisionsInbox v-else ref="inboxView" :view="view" :domain="domain ?? null" :inbox-url="inboxUrl" :requests="secrets?.requests ?? []" :secrets-origin="secrets?.origin" :desktop="!!desktop" @secrets="emit('secrets', $event)" @domain="(command, settle) => emit('domain', command, settle)" @command="emit('command', $event)" />
     </section>
     <AppSettingsMenu v-if="settings" :browser="!desktop" :subject="subject" :consumer="secrets?.consumer ?? null" :sharing="!!sharing" @revoke="emit('secrets', { type: 'revokeConsumer' })" @advanced="emit('advanced')" @import="emit('import')" @close="settings = false" @logout="emit('logout')" @keydown.escape="settings = false" />
-    <AutomationDetail v-if="view && detail" :id="detail" :key="detail" :view="view" :now="now" :desktop="!!desktop" :requests="secrets?.requests ?? []" :sharing="!!sharing" @editor="emit('openPod', $event)" @share="emit('share', $event)" @close="detail = null; secretForm = null" @open="(id) => { detail = id; pinned = id }" @command="emit('command', $event)" @network="emit('network', $event)" @secret="(podId, alias) => { secretForm = { podId, alias } }" @folder="emit('folder', $event)">
+    <AutomationDetail v-if="view && detail" :id="detail" :key="detail" :view="view" :now="now" :desktop="!!desktop" :requests="secrets?.requests ?? []" :sharing="!!sharing" @editor="emit('openPod', $event)" @share="emit('share', $event)" @close="detail = null; secretForm = null" @open="(id) => { detail = id; pinned = id }" @command="emit('command', $event)" @secret="(podId, alias) => { secretForm = { podId, alias } }" @folder="emit('folder', $event)">
       <template #secret>
         <SecretForm v-if="secretForm && secretForm.podId === detail" :key="secretForm.alias ?? ''" :pod-id="secretForm.podId" :alias="secretForm.alias" :desktop="!!desktop" @save="(podId, alias, value) => { secretForm = null; emit('secretSave', podId, alias, value) }" @file="(podId, alias) => { secretForm = null; emit('secrets', { type: 'importFile', podId, alias }) }" @request="(podId, alias, purpose) => { secretForm = null; emit('secrets', { type: 'request', podId, alias, purpose }) }" @cancel="secretForm = null" />
       </template>

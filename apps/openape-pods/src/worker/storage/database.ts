@@ -1,8 +1,8 @@
 import { assertIntegrity } from './integrity.ts'
-import { baselineRows, baselineSchema, schema47Additions, schema48Additions, schema48Rows, schemaVersion } from './schema.ts'
+import { baselineRows, baselineSchema, schemaVersion } from './schema.ts'
 import { assertSupportedSchema, assertUpgradable, upgradeToCurrent } from './upgrade.ts'
 import { restoreReviewGate } from './restore-fence.ts'
-import type { GraphContract } from '../../contracts/graphs.ts'
+import { StorageError } from './errors.ts'
 import { parseWorkDeclarations } from '../../contracts/work.ts'
 import type { WorkDeclaration } from '../../contracts/work.ts'
 import { createHash, randomUUID } from 'node:crypto'
@@ -31,7 +31,8 @@ export interface ScriptManifest {
   checkpointSchemaVersion: number
   assignmentRevision: number
   effects: 'readOnly' | 'reconciledEffects'
-  contract?: GraphContract
+  /** Retired network contract (takes/gives) kept only on archived script history; never executed (issue 1465). */
+  contract?: unknown
   work?: WorkDeclaration[]
 }
 export interface SourceInput { id: string, locator: string, version: string, content: string }
@@ -103,6 +104,8 @@ export class PodDatabase {
       this.db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;')
       this.migrate()
       assertIntegrity(this.db)
+      // Converted data starts only with its conversion receipt (issue 1465).
+      if (this.db.prepare('SELECT 1 FROM legacy_records LIMIT 1').get() && !this.db.prepare('SELECT 1 FROM storage_receipts WHERE kind=\'conversion\'').get()) throw new StorageError('invalid-data', 'Converted data has no conversion receipt')
       this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;')
       this.db.function('pod_activated', (podId) => { this.onActivated(String(podId)); return null })
       this.db.exec('CREATE TEMP TRIGGER pod_activated AFTER UPDATE OF lifecycle ON pods WHEN NEW.lifecycle=\'active\' AND OLD.lifecycle<>\'active\' BEGIN SELECT pod_activated(NEW.id); END')
@@ -116,11 +119,11 @@ export class PodDatabase {
     const version = this.db.prepare('PRAGMA user_version').get()?.user_version as number
     if (version === schemaVersion) return
     if (version === 0) {
-      this.transaction(() => this.db.exec(`${baselineSchema}${schema47Additions}${schema48Additions}${baselineRows}${schema48Rows}PRAGMA user_version=${schemaVersion};`))
+      this.transaction(() => this.db.exec(`${baselineSchema}${baselineRows}PRAGMA user_version=${schemaVersion};`))
       return
     }
     // Refuse an unsupported database before writing a full copy of it on every start.
-    if (version !== 46 && version !== 47) assertUpgradable(this.db)
+    assertUpgradable(this.db, version)
     const backup = join(this.root, `before-v${version}-${randomUUID()}.sqlite`)
     this.db.prepare('VACUUM INTO ?').run(backup); chmodSync(backup, 0o600)
     const copy = openSync(backup, 'r')
@@ -136,8 +139,8 @@ export class PodDatabase {
     this.db.exec('PRAGMA foreign_keys=OFF')
     try { this.transaction(() => { upgradeToCurrent(this.db, version); this.db.exec(`PRAGMA user_version=${schemaVersion}`) }) }
     finally { this.db.exec('PRAGMA foreign_keys=ON') }
-    // Only the schema-45 rebuild leaves free pages; later schemas gain empty tables.
-    if (version === 45) this.db.exec('VACUUM')
+    // The conversion drops the network tables; their pages return to the file system.
+    this.db.exec('VACUUM')
   }
 
   transaction<T>(operation: () => T): T {

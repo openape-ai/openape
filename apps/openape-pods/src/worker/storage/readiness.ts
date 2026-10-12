@@ -2,11 +2,9 @@ import { accessSync, constants, existsSync, lstatSync, readdirSync, renameSync, 
 import { join } from 'node:path'
 import type { StorageFailure, StorageReason } from '../../contracts/storage'
 import { PodDatabase } from './database'
+import { StorageError } from './errors'
 
-/** A classified storage failure; the reason decides the explanation and remedies the owner sees. */
-export class StorageError extends Error {
-  constructor(readonly reason: StorageReason, message: string) { super(message) }
-}
+export { StorageError }
 
 const sqliteReasons: Record<number, StorageReason> = { 3: 'permission', 5: 'busy', 6: 'busy', 8: 'permission', 10: 'io', 11: 'corrupt', 13: 'disk-full', 14: 'io', 23: 'permission', 26: 'corrupt' }
 const systemReasons: Record<string, StorageReason> = { EACCES: 'permission', EPERM: 'permission', EROFS: 'permission', ENOSPC: 'disk-full', EDQUOT: 'disk-full', EIO: 'io' }
@@ -14,7 +12,7 @@ const messageReasons: [RegExp, StorageReason][] = [
   [/needs a newer application/, 'schema-newer'],
   [/created by an older OpenApe Pods version|cannot be upgraded|does not have the schema/, 'schema-older'],
   [/Database integrity check failed|file is not a database|malformed/, 'corrupt'],
-  [/Incomplete or altered storage|Invalid network|inconsistent reference|lost rows/, 'invalid-data'],
+  [/Incomplete or altered storage|Invalid references|inconsistent reference|lost rows/, 'invalid-data'],
   [/database is locked|database is busy/, 'busy'],
 ]
 

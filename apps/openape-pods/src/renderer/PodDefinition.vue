@@ -25,7 +25,7 @@ const pending = computed(() => view.value.provisioning.filter(item => item.state
 const differences = computed(() => update.value
   ? [
       { label: t('Code'), before: update.value.beforeCode, after: update.value.afterCode },
-      { label: t('Contract'), before: update.value.before.contract, after: update.value.after.contract },
+      { label: t('Declared work'), before: update.value.before.work, after: update.value.after.work },
       { label: t('Dependencies'), before: { lock: update.value.before.lockHash, packages: update.value.before.packages }, after: { lock: update.value.after.lockHash, packages: update.value.after.packages } },
       { label: t('Public defaults'), before: update.value.before.defaults, after: update.value.after.defaults },
       { label: t('Requested rights'), before: update.value.before.capabilities, after: update.value.after.capabilities },
@@ -105,7 +105,7 @@ async function activate() {
     if (!binding.value || !update.value?.draftId || !validated.value || update.value.after.version !== version.value) return
     await command({ type: 'activateUpdate', podId: props.pod.id, draftId: update.value.draftId, expectedBinding: binding.value.bindingRevision })
     update.value = null; validated.value = false
-    message.value = 'Version selected. This instance and its network remain paused until explicitly resumed.'
+    message.value = 'Version selected. This instance remains paused until explicitly resumed.'
   })
 }
 </script>
@@ -155,7 +155,7 @@ async function activate() {
     </fieldset>
     <section v-if="update" :aria-label="t('Definition update review')">
       <h3>{{ t('Definition update review') }}</h3>
-      <p>{{ t('Review all changes before validating this instance. Open decisions and uncertain effects must be resolved before a network update.') }}</p>
+      <p>{{ t('Review all changes before validating this instance. Open decisions and uncertain effects must be resolved before an update.') }}</p>
       <div v-for="difference in differences" :key="difference.label" class="definition-difference">
         <h4>{{ difference.label }}</h4>
         <div><strong>{{ t('Before') }}</strong><pre>{{ display(difference.before) }}</pre></div>

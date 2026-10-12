@@ -2,8 +2,6 @@
 import SharingImport from '../SharingImport.vue'
 import type { SharingCommand, SharingState } from '../../contracts/sharing'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import type { NetworkChoiceView } from '../../contracts/networks'
-import type { NetworkGateView } from '../../contracts/network-gate-view'
 import type { CentralCommand, CentralRuntime } from '../../contracts/central'
 import type { BrowserWorkspaceClient } from './client'
 import { WorkspaceRequestError } from './client'
@@ -26,7 +24,6 @@ const connectionError = ref('')
 const page = ref<'Automations' | 'Pods' | 'Import'>('Automations')
 const now = ref(Date.now())
 const tab = ref<'automations' | 'decisions'>('automations')
-const inbox = ref<{ choices: NetworkChoiceView[], gates: NetworkGateView[] }>({ choices: [], gates: [] })
 const runtimes = ref<CentralRuntime[]>([])
 const runtimeId = ref('')
 const loaded = ref(false)
@@ -48,22 +45,10 @@ async function signIn() {
 }
 function inventory(value: CentralRuntime[]) {
   runtimes.value = value; loaded.value = true; now.value = Date.now()
-  void loadInbox()
   if (!value.some(host => host.id === runtimeId.value)) runtimeId.value = value[0]?.id ?? ''
 }
 function back() {
   workspace.value?.requestNavigation(() => { workspace.value?.showInventory(true); page.value = 'Automations' })
-}
-// Choices and batches are bounded reads served by the online desktop, one per network with open decisions.
-async function loadInbox() {
-  const host = runtime.value
-  if (!host?.online || !props.client.network) { inbox.value = { choices: [], gates: [] }; return }
-  const pending = (host.networks?.networks ?? []).filter(network => network.decisions)
-  try {
-    const details = await Promise.all(pending.map(network => props.client.network!(host.id, { type: 'detail', id: network.id, revision: network.revision })))
-    inbox.value = { choices: details.flatMap(detail => detail.choices ?? []), gates: details.flatMap(detail => detail.gates ?? []) }
-  }
-  catch (cause) { connectionError.value = cause instanceof Error ? cause.message : String(cause) }
 }
 async function openPod(id: string) {
   if (!runtime.value) return
@@ -103,9 +88,9 @@ defineExpose({ openPod })
     <p v-if="subject && loaded && !runtime && page === 'Automations'" class="muted">
       {{ t('Connect your desktop to bring your Pods online.') }}
     </p>
-    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :decisions="runtime?.workspace.map ? kpiFacts(runtime.workspace.map).decisions.count : undefined" :tab="tab" :inbox="{ choices: inbox.choices, gates: inbox.gates }" :subject="subject" :sharing="!!runtime?.online" @update:tab="tab = $event" @logout="logout" @command="remoteCommand" @open-pod="openPod" @import="page = 'Import'" />
-    <SharingImport v-if="subject && page === 'Import' && runtime" :api="sharingApi" :organization="runtime.workspace.organization" :desktop="false" @open-pod="openPod" />
-    <CentralWorkspace v-if="subject" v-show="page === 'Pods'" ref="workspace" :client="client" embedded shared-editor @inventory="inventory" @connection="connectionError = $event" @network="back" @login="expired" @logout="logout" />
+    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :decisions="runtime?.workspace.map ? kpiFacts(runtime.workspace.map).decisions.count : undefined" :tab="tab" inbox-url="/inbox/" :subject="subject" :sharing="!!runtime?.online" @update:tab="tab = $event" @logout="logout" @command="remoteCommand" @open-pod="openPod" @import="page = 'Import'" />
+    <SharingImport v-if="subject && page === 'Import' && runtime" :api="sharingApi" :desktop="false" @open-pod="openPod" />
+    <CentralWorkspace v-if="subject" v-show="page === 'Pods'" ref="workspace" :client="client" embedded shared-editor @inventory="inventory" @connection="connectionError = $event" @login="expired" @logout="logout" />
   </WorkspaceFrame>
 </template>
 

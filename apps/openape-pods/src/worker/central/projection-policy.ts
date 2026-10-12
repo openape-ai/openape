@@ -1,5 +1,5 @@
 /**
- * Pods whose tables stay local: members of persistent networks, their invocations, archived Pods and the Pods
- * schema 45 kept local because networks had called their workflows (issue 1455).
+ * Pods whose tables stay local: archived Pods and the Pods the owner keeps local, among them the former network
+ * members whose runs hold mail-derived business data (issues 1455 and 1465).
  */
-export const privatePods = `SELECT pod_id FROM network_members UNION SELECT pod_id FROM network_invocations UNION SELECT id FROM pods WHERE lifecycle='archived' UNION SELECT pod_id FROM local_only_pods`
+export const privatePods = `SELECT id AS pod_id FROM pods WHERE lifecycle='archived' UNION SELECT pod_id FROM local_only_pods`

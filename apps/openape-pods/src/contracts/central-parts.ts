@@ -8,7 +8,7 @@ import type { RunEvent, RunRecord, RunView } from './runs'
 import { parseScheduleView } from './scheduling'
 import { parseScriptView } from './scripts'
 import type { ScriptView } from './scripts'
-import { centralId, centralMaxBytes, centralObject, centralRevision, legacyCentralTables } from './central'
+import { assertLocalOnly, centralId, centralMaxBytes, centralObject, centralRevision, legacyCentralTables } from './central'
 import type { CentralPod, CentralSnapshot } from './central'
 
 // Format 2 publishes a snapshot as content-addressed parts. Only parts whose hash
@@ -97,7 +97,7 @@ export function validatePart(key: string, value: unknown): void {
   }
   if (kind === 'pod') {
     const pod = centralObject(value) as PodPart
-    if (pod.networkId !== undefined) centralId(pod.networkId)
+    assertLocalOnly(pod as unknown as Record<string, unknown>)
     if (pod.id !== podId || typeof pod.ready !== 'boolean') throw new Error('Invalid Pod snapshot binding')
     parsePodDetails(pod.details); parseScriptView(pod.scripts); parseScheduleView(pod.scheduling)
     if (parseResourceState(pod.resources).resources.some(resource => resource.podId !== podId)) throw new Error('Invalid resource Pod binding')

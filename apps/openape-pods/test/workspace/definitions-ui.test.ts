@@ -10,7 +10,7 @@ const groupId = '00000000-0000-4000-8000-000000000003'
 const draftId = '00000000-0000-4000-8000-000000000004'
 const props = { pod: { id: podId, name: 'Source', revision: 1, lifecycle: 'paused' as const, activeScript: 'a'.repeat(64) } }
 function fixture() {
-  const before = { version: 1, state: 'published' as const, contentHash: 'a'.repeat(64), lockHash: 'b'.repeat(64), contract: null, capabilities: [], packages: { dependencies: {} }, defaults: {} }
+  const before = { version: 1, state: 'published' as const, contentHash: 'a'.repeat(64), lockHash: 'b'.repeat(64), work: null, capabilities: [], packages: { dependencies: {} }, defaults: {} }
   const after = { ...before, version: 2, contentHash: 'c'.repeat(64), capabilities: ['mail.read'], defaults: { label: 'Public value' } }
   const view: DefinitionsView = { definitions: [{ id: definitionId, name: 'Reusable', versions: [before, after] }], instances: [{ podId, definitionId, version: 1, bindingRevision: 1, groupId, diverged: false }], provisioning: [] }
   const definitions = vi.fn().mockImplementation(async command => ({ ...structuredClone(view), ...['previewUpdate', 'prepareUpdate'].includes(command.type) ? { update: { podId, before, after, beforeCode: 'old source', afterCode: 'new source', changed: ['code', 'rights', 'defaults'], ...(command.type === 'prepareUpdate' ? { draftId } : {}) } } : {} }))
@@ -37,7 +37,7 @@ it('requires a visible diff and an independent validation before switching one i
   expect(f.definitions).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'activateUpdate' }))
   await button('Use version for this instance').trigger('click'); await flushPromises()
   expect(f.definitions).toHaveBeenCalledWith({ type: 'activateUpdate', podId, draftId, expectedBinding: 1 })
-  expect(wrapper.get('[role="status"]').text()).toContain('remain paused')
+  expect(wrapper.get('[role="status"]').text()).toContain('remains paused')
   wrapper.unmount()
 })
 it('keeps the same creation request after failure and offers an explicit identity retry', async () => {

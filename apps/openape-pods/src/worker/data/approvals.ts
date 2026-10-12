@@ -3,7 +3,7 @@ import type { Owner } from '@openape/pods-protocol'
 import { approvalActions, parseApprovalAuthority } from '../../contracts/approvals'
 import type { ApprovalAction, ApprovalAuthority, ApprovalManifest, ApprovalState, ApprovalView } from '../../contracts/approvals'
 import { plainJson } from '../../contracts/domain-data'
-import { canonicalNetworkJson as canonicalJson } from '../../contracts/network-json'
+import { canonicalJson } from '../../contracts/canonical-json'
 import type { PodDatabase } from '../storage/database'
 import { digest } from '../storage/database'
 
