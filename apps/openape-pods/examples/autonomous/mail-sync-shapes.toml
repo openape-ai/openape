@@ -1,0 +1,38 @@
+schema = "openape-shapes/v1"
+[cli]
+id = "o365-cli"
+executable = "o365-cli"
+audience = "shapes"
+version = "autonomous-mail-sync-1"
+[[operation]]
+id = "workflow.delta"
+command = ["workflow", "delta"]
+required_options = ["account", "folder"]
+display = "Read {folder} changes of {account}"
+action = "read"
+risk = "low"
+resource_chain = ["account:email={account}", "mail:*"]
+[[operation]]
+id = "workflow.read"
+command = ["workflow", "read"]
+required_options = ["account", "message"]
+display = "Read one provider-versioned message for {account}"
+action = "read"
+risk = "low"
+resource_chain = ["account:email={account}", "mail:*"]
+[[operation]]
+id = "workflow.categorize"
+command = ["workflow", "categorize"]
+required_options = ["account", "message", "expected-version", "categories"]
+display = "Set the managed categories (Rechnung, Newsletter, Antwort nötig, Prüfen, Behalten) of one message of {account}"
+action = "categorize"
+risk = "medium"
+resource_chain = ["account:email={account}", "mail:*"]
+[[operation]]
+id = "auth.login"
+command = ["auth", "login"]
+required_options = ["account"]
+display = "Sign in {account} in the Pod terminal"
+action = "login"
+risk = "medium"
+resource_chain = ["account:email={account}"]

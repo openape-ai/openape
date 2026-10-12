@@ -1,94 +1,29 @@
-# Networks
+# Networks (retired)
 
-Networks are the only way to connect Pods. A network is a persistent, owner-bound
-definition over Pods of one group: each member declares which channels it takes
-and gives, and the network routes every item between them. Connections are never
-drawn or stored; they follow from the member contracts and the network
-definition. A Pod outside a network runs on its own schedule. The overall model
-is summarized in [Pods model](model.md); the design record of the networks plan
-is the [network contract](../../../docs/architecture/pods-networks/contracts.md).
+Networks were the earlier way to connect Pods: a persistent definition over the
+Pods of one group that routed items between the channels each member declared
+in its `contract`. They were retired with issue 1465 (October 2026). Pods now
+share data instead: each Pod writes its results to a namespace it is the writer
+of, and other Pods find their own declared work there. See
+[Pods model](model.md#shared-data-and-work) and the runtime help section
+`sharedData`.
 
-## Member contract
+What the retirement means:
 
-```js
-export const contract = {
-  takes: ['mail.category.invoice'],
-  gives: ['invoice.filed'],
-  summary: 'PDF in Buchhaltung',
-}
-```
+- The network runtime, its MCP action `networks`, the network workspace API,
+  network gates, channels, joins and feedback transitions no longer exist.
+  A script declaring `contract` is refused at validation, and `context.network`
+  and `context.emit` no longer exist; declare `work` instead.
+- Converting a profile to the new storage keeps archived history readable. Tags
+  a network gave its members became their own tags, network denylists became
+  the members' own denylists, and Pods that belonged to a network keep their
+  data on the desktop: the browser workspace shows them but cannot change them.
+- Portable packages that contain a network are refused; import their Pods from
+  single-Pod packages.
+- The mail network was replaced by separate Mail Pods that read shared mail data
+  and archive only messages the owner approved at the identity provider.
 
-- At most 8 taken and 16 given channels; the summary has 1 to 40 characters.
-  Channel names match `^[a-z][a-z0-9-]*(\.[a-z][a-z0-9-]*){0,4}$` and have at
-  most 64 characters. A script without `contract` cannot join a network.
-- A member without `takes` is a source. Sources emit with
-  `context.network.emit({ channel, key, sourceItemId, sourceVersion, payload })`
-  and provider-stable identities and versions; never derive a version from the
-  run time.
-- Consumers read `context.items` (the claimed inputs of one invocation) and emit
-  with `context.emit(channel, { key, data, reason?, confidence? })`. Emits are
-  accepted only when the invocation settles successfully, so a failed run hands
-  nothing on and a retry cannot duplicate.
-- Validation answers `graph.contract` with two synthetic items per taken channel
-  and refuses any emit outside `contract.gives`.
-
-## Definition
-
-A network declares typed channels (`schemaVersion` and a JSON schema per
-channel), its members (with an optional source schedule and case
-serialization), routes, joins and bounded feedback:
-
-- **Routes** sit between members. `approve` holds items until the owner decided
-  the batch at the identity provider, which approves or denies each item;
-  denied items go to `excluded`. Items of one approve route share one open IdP
-  batch for up to seven days and 100 items; a batch that expires unanswered asks
-  again. The account inbox only counts these grants and links to the IdP.
-  `choose` holds items until the owner picked one
-  option per item on the Entscheidungen tab. No Pod or model approves, denies or
-  chooses.
-- **Joins** let a member wait for all inputs of one case.
-- **Feedback** declares one bounded transition back to an earlier channel with
-  a delay, a hop limit and a maximum case age; any other cycle is refused.
-- Shared values configure the declared public fields of the member definitions.
-  Members read them in `context.config`; every shared string value also appears
-  in `context.variables`.
-
-A network is created paused from a reviewed setup fingerprint, activated
-separately and archived only after an archive review (`archivePreview`, then
-`archiveNetwork` with its fingerprint) shows no unsettled work. Codex and Claude
-Code create and change networks through the `networks` MCP action; see
-[Claude Code](claude-code.md) and `runtime.networks`.
-
-## Runtime ports
-
-A network member uses the same sandbox, grants and limits as a standalone Pod
-for programs, mail reads, HTTP destinations, secrets, folders, Jev and
-`agent.run`; see [Pods model](model.md#sandbox-and-grants). Scoped data (`context.data`) and artifacts (`context.artifacts`)
-require explicit permissions. A consumer whose every input comes from an approve
-route may archive the approved mail with
-`context.network.archive({ application, mailbox })`; each move is bound to the
-owner's grant of that item and re-verified immediately before the move.
-
-## Reading networks
-
-The **Automatisierungen** tab shows every network as a group on one map next to
-standalone Pods and the systems they read and write; the MCP `workspace` tool
-returns the same read model with `{ type: "read", view: "map" }`. Dotted lines
-carry the recorded deliveries of the last 24 hours; a count is not proof that a
-downstream external effect succeeded. Open choices and pending approvals are
-counted on the **Entscheidungen** tab.
-
-## Portable packages
-
-A network exports as a package of kind `network`; a single Pod exports as kind
-`pod`. Import refuses every other kind. Format version 1 keeps the composition
-fields `calls` and node `after`/`handoff`, which are always empty.
-
-## Owner choices as input
-
-A member reads the owner's decided choose-route choices of its own network with
-`await context.network.choices({ gate, limit })`. It returns `{ gate, option, decidedAt, data }`
-newest first (at most 1000, default 500), where `data` is the item the owner decided on.
-The call is read-only and never returns another network's choices. Declared feedback
-transitions cannot combine with routing gates, so this port is how a member learns from
-repeated owner decisions, for example the Delta Mind Categorisation learning newsletter senders.
+The design record of the former networks is kept in
+[the network contract](../../../docs/architecture/pods-networks/contracts.md);
+the replacement design is in
+[autonomous Pods](../../../docs/architecture/pods-autonomous/design.md).

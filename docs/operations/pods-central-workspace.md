@@ -52,8 +52,9 @@ the `runtimes.snapshot` column at start; the column itself stays, so the previou
 service can open the database after a rollback. Desktops before M8 still publish
 `table/` parts with raw rows: the service accepts them unread and keeps only their key
 and hash (needed for the manifest digest); rows stored earlier are emptied at start.
-`begin` still announces `networkReads: 1`, which those desktops need to publish their
-networks. A desktop refuses a service whose `begin` names no format. Parts live in
+Since issue 1465 `begin` no longer announces `networkReads`: networks were retired,
+and a desktop from before that change must be replaced together with the service.
+A desktop refuses a service whose `begin` names no format. Parts live in
 additive tables; `user_version` stays 1.
 
 Rollback window: an M8 desktop still publishes the `schema` part (its storage schema),
@@ -107,8 +108,9 @@ Since issue 1455 (M8) the desktop publishes views, never table rows
 | Pod views | Details and claims, script versions and drafts, resources (metadata only) and variables, schedule, runs and run events |
 | Managed artifacts | Referenced script/source blobs and regular files under each Pod's managed workspace |
 
-Network members, their invocations and archived Pods publish an empty view; their
-data stays local.
+Archived Pods publish an empty view. Pods that belonged to a retired network publish
+a placeholder (`localOnly`): their data stays on the desktop, and the service refuses
+browser commands for them (`local_pod_requires_desktop`).
 
 Credential stores, private keys, access/refresh tokens, native login files,
 execution-domain records, process leases, remote device tokens, local HOME,
@@ -198,7 +200,8 @@ support for operator-assisted recovery and retention remains a rollout concern;
 central mode disables uncoordinated local restore/deletion/cleanup to prevent competing state.
 Pod Settings exposes archive and confirmed deletion. MCP submits the reviewed archived
 Pod through `channel: data`, `type: deletePod` with its current `podId`, `revision`
-and `name`. The executor retains the idle and network/data-reference guards, purges local
+and `name`. The executor retains the idle and shared-data guards (a namespace the Pod writes, open
+approvals and uncertain effects block deletion), purges local
 keys, and publishes removal through the normal completion transaction. That transaction
 also removes the deleted Pod’s stored artifacts. Owner-scoped operation receipts remain
 readable after removal; retry the same operation ID after a lost response. Shared chat

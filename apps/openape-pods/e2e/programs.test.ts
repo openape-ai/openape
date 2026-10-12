@@ -166,7 +166,7 @@ it('packaged program UI: exposes the external terminal and reuses application se
   store.db.prepare('INSERT INTO resources VALUES(?,?,1,\'tool\',\'ready\',?,?)').run(randomUUID(), f.podId, 'https://api.example.com', JSON.stringify({ type: 'http', origin: 'https://api.example.com', methods: ['GET', 'POST'], capability: 'tool.http_fixture.request' }))
   // The app matches calls to recorded Pod grants by coverage; the read command grant is the one the script uses.
   const read = await resolveCommand(loadAdapter('fixture', f.assignment.adapterPath), ['fixture', 'read'])
-  store.db.prepare('INSERT INTO pod_grants VALUES(?,?,?,?,?,?,?,\'always\',\'approved\',NULL,NULL,0,?,?)').run('read', f.podId, f.identity.issuer, f.identity.subject, 'fixture', JSON.stringify([read.detail]), read.detail.display, Date.now(), Date.now())
+  store.db.prepare('INSERT INTO pod_grants VALUES(?,?,?,?,?,?,?,\'always\',\'approved\',0,?,?)').run('read', f.podId, f.identity.issuer, f.identity.subject, 'fixture', JSON.stringify([read.detail]), read.detail.display, Date.now(), Date.now())
   store.close()
   const app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: f.root, NODE_ENV: 'test' } })
   failOnKeychainDialog(app)

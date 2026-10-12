@@ -5,7 +5,6 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { unzipSync } from 'fflate'
 import { afterEach, expect, it, vi } from 'vitest'
-import { networkFixture, closeNetworks } from '../scheduling/network-fixture'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { PodVariables } from '../../src/worker/resources/variables'
@@ -14,7 +13,6 @@ import { capturePortableSource } from '../../src/worker/sharing/source'
 import { PortableExporter } from '../../src/worker/sharing/export'
 import { readPortableAssets } from '../../src/worker/sharing/assets'
 import { DefinitionCatalog } from '../../src/worker/workspace/definition-catalog'
-import { ItemTagStore } from '../../src/worker/workspace/item-tags'
 import { mapPortableSource } from '../../src/worker/sharing/mapping'
 import type { PortableExportChoices } from '../../src/worker/sharing/mapping'
 import { createPortablePackage, exportFormatFeatures, validatePortableFiles } from '../../src/worker/sharing/package'
@@ -28,8 +26,7 @@ vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
 const bytes = (value: string) => new TextEncoder().encode(value)
 const stores: PodDatabase[] = []
 const assetRoots: string[] = []
-afterEach(async () => {
-  await closeNetworks()
+afterEach(() => {
   for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) }
   for (const root of assetRoots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
@@ -45,7 +42,6 @@ function mappingChoices(source: ReturnType<typeof capturePortableSource>): Porta
   return {
     package: { key: 'fixture', revision: 1, title: 'Portable fixture', description: '' },
     pods: source.pods.map((pod, index) => ({ podId: pod.pod.id, key: `pod_${index + 1}`, description: '', defaults: [], aliases: [], assets: [] })),
-    compositions: (source.network ? [source.network.definition.id] : []).map((id, index) => ({ id, key: `composition_${index + 1}`, defaults: [] })),
   }
 }
 function fixture() {
@@ -223,38 +219,6 @@ it('removes only the exact generated terminal binding comment and preserves user
   expect(portableScriptSource(source)).toBe(source.content)
 })
 
-it('captures and maps an owned persistent network without source identities or runtime pause state', async () => {
-  const f = networkFixture()
-  const source = f.pod('Source', { takes: [], gives: ['work.ready'], summary: 'Produce' }, async () => {})
-  const target = f.pod('Target', { takes: ['work.ready'], gives: [], summary: 'Consume' }, async () => {})
-  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: target, source: null, serialCase: false }], ['work.ready'])
-  const selected = { kind: 'network' as const, id }
-  const first = capturePortableSource(f.store, f.owner, selected)
-  expect(first.pods.map(item => item.pod.id)).toEqual([source, target])
-  expect(first.network!.definition.members).toHaveLength(2)
-  f.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(source)
-  expect(capturePortableSource(f.store, f.owner, selected).fingerprint).toBe(first.fingerprint)
-  expect(() => capturePortableSource(f.store, { ...f.owner, subject: 'another-owner' }, selected)).toThrow('export owner')
-  const content = await mapPortableSource(f.store.root, first, mappingChoices(first))
-  const exported = await createPortablePackage(content.description, content.payloads, '')
-  expect(exported.manifest.entry).toEqual({ kind: 'network', key: 'composition_1' })
-  const serialized = Object.values(unzipSync(exported.archive)).map(file => Buffer.from(file).toString()).join('\n')
-  for (const id of [source, target, first.network!.definition.id, f.groupId]) expect(serialized).not.toContain(id)
-  // Untagged packages do not require the tag feature, so older desktops still import them.
-  expect(exported.manifest.requiredFeatures).toEqual(['portable_aliases_v1'])
-  expect(JSON.stringify(exported.manifest)).not.toContain('"tags"')
-  const tags = new ItemTagStore(f.store)
-  tags.execute({ type: 'tag', id, revision: 0, tags: ['delta-mind'] }); tags.execute({ type: 'tag', id: source, revision: 0, tags: ['intake', 'mail'] })
-  const tagged = capturePortableSource(f.store, f.owner, selected)
-  expect(tagged.fingerprint).not.toBe(first.fingerprint)
-  const taggedContent = await mapPortableSource(f.store.root, tagged, mappingChoices(tagged))
-  const manifest = (await createPortablePackage(taggedContent.description, taggedContent.payloads, '')).manifest
-  expect(manifest.requiredFeatures).toEqual(['portable_aliases_v1', 'portable_tags_v1'])
-  expect(manifest.compositions[0]!.tags).toEqual(['delta-mind'])
-  // Only own tags travel: the target inherits the network tag in the view, but the package does not copy it.
-  expect(manifest.pods.map(pod => pod.tags)).toEqual([['intake', 'mail'], undefined])
-})
-
 it('expires reviews and refuses source changes during asynchronous preparation', async () => {
   const f = sourceFixture(); let now = 0; let change = false
   const exporter = new PortableExporter(f.store, f.owner, '', async () => {
@@ -308,43 +272,6 @@ it('exports two application bindings as distinct recipient accounts without path
   const serialized = Object.values(unzipSync(exported.archive)).map(file => Buffer.from(file).toString()).join('\n')
   for (const privateValue of [...applicationIds, ...stateIds, root, 'PRIVATE_ENV_CANARY']) expect(serialized).not.toContain(privateValue)
   expect(exported.manifest.applications.every(application => application.testedVersions.length === 0)).toBe(true)
-})
-
-it('retains collection names, retention, artifact association and explicit shared-input precedence', async () => {
-  const f = networkFixture()
-  const producer = f.pod('Producer', { takes: [], gives: ['work.ready'], summary: 'Produce' }, async () => {})
-  const consumer = f.pod('Consumer', { takes: ['work.ready'], gives: [], summary: 'Consume' }, async () => {})
-  const id = f.create([{ podId: producer, source: { schedule: null }, serialCase: false }, { podId: consumer, source: null, serialCase: false }], ['work.ready'])
-  for (const podId of [producer, consumer]) {
-    const binding = f.store.db.prepare('SELECT definition_id FROM instance_definition_bindings WHERE pod_id=?').get(podId)!
-    f.store.db.prepare('INSERT INTO definition_config VALUES(?,1,?,?,?)').run(binding.definition_id!, 'label', 'public', JSON.stringify('Base label'))
-  }
-  f.store.db.prepare('INSERT INTO composition_config VALUES(?,?,?)').run(id, 'label', JSON.stringify('Shared label'))
-  const collectionId = randomUUID(); const scopeId = randomUUID()
-  f.store.transaction(() => {
-    f.store.db.prepare('INSERT INTO data_collections VALUES(?,?,?,?,?,1,?)').run(collectionId, f.owner.issuer, f.owner.subject, f.groupId, 'invoices', JSON.stringify({ days: 30 }))
-    f.store.db.prepare('INSERT INTO data_collection_versions VALUES(?,1,?,?,0)').run(collectionId, JSON.stringify({ type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false }), '[]')
-    f.store.db.prepare('INSERT INTO data_permissions VALUES(?,?,?,?,?,?,?,1)').run(id, producer, collectionId, f.owner.issuer, f.owner.subject, f.groupId, 'read')
-    f.store.db.prepare('INSERT INTO artifact_scopes VALUES(?,?,?,?,?,NULL)').run(scopeId, f.owner.issuer, f.owner.subject, f.groupId, collectionId)
-    f.store.db.prepare('INSERT INTO artifact_permissions VALUES(?,?,?,?,?,?,?,1)').run(id, consumer, scopeId, f.owner.issuer, f.owner.subject, f.groupId, 'read')
-    f.store.db.prepare('INSERT INTO artifacts VALUES(?,?,?,?,?,?,0)').run(randomUUID(), scopeId, 'b'.repeat(64), 0, 'text/plain', 'PRIVATE_ARTIFACT_CANARY')
-  })
-  const source = capturePortableSource(f.store, f.owner, { kind: 'network', id }); const choices = mappingChoices(source)
-  expect(source.privateValues).toEqual(expect.arrayContaining(['Base label', 'Shared label']))
-  choices.compositions[0]!.defaults = ['value:label']
-  const content = await mapPortableSource(f.store.root, source, choices)
-  const exported = await createPortablePackage(content.description, content.payloads, '')
-  const archive = unzipSync(exported.archive)
-  const document = JSON.parse(Buffer.from(archive['compositions/composition_1.json']!).toString())
-  expect(document.collections[0]).toMatchObject({ name: 'invoices', retention: { days: 30 }, access: [{ pod: 'pod_1', operations: ['read'] }] })
-  expect(document.artifacts[0]).toMatchObject({ collection: document.collections[0].key, access: [{ pod: 'pod_2', operations: ['read'] }] })
-  const shared = exported.manifest.compositions[0]!.inputs[0]!
-  expect(shared.default).toBe('Shared label')
-  expect(exported.manifest.pods[0]!.inputs[0]!.sharingGroup).toBe(shared.sharingGroup)
-  expect(shared.sharingGroup).not.toBeNull()
-  expect(exported.manifest.pods[1]!.inputs[0]!.sharingGroup).toBe(shared.sharingGroup)
-  const serialized = Object.values(archive).map(file => Buffer.from(file).toString()).join('\n')
-  for (const value of ['PRIVATE_ARTIFACT_CANARY', collectionId, scopeId]) expect(serialized).not.toContain(value)
 })
 
 it('serializes preparation and still scans selected defaults inside payloads', async () => {

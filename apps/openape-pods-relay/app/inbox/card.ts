@@ -1,7 +1,7 @@
 import type { InboxItem } from './client'
 import { t } from './i18n'
 
-// The desktop lists an item's payload as `key: value` lines below one context line (network choices).
+// The desktop lists an item's facts as `key: value` lines below one context line (owner questions).
 const fact = /^([a-z][\w.-]{0,40}): (.+)$/i
 
 export interface CardSummary { sender: string | null, excerpt: string | null, hints: string[] }

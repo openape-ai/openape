@@ -1,102 +1,69 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import type { CentralCommand } from '../../contracts/central'
+import type { DomainCommand, DomainOverview, DomainQuestionView } from '../../contracts/domain-admin'
 import type { MapView } from '../../contracts/map-view'
-import type { NetworkGateView } from '../../contracts/network-gate-view'
-import type { NetworkChoiceView, NetworkCommand } from '../../contracts/networks'
 import type { SecretRequestRow, SecretsCommand } from '../../contracts/secrets'
 import { diagnostic, label, language, t } from '../i18n'
 import { clock, stamp } from '../utils/cadence'
 
 /**
- * Everything that waits for the owner, in five sections: questions per choose route, approval
- * batches decided at the identity provider, runtime rights, unknown deliveries and secret
- * requests. Every decision leaves as an existing owner command; nothing here approves on its own.
+ * Everything that waits for the owner: questions of Pods, object approvals decided at the identity
+ * provider, runtime rights, held work, uncertain actions and deliveries, and secret requests. Every
+ * decision leaves as an existing owner command; nothing here approves on its own.
  */
-const props = defineProps<{ view: MapView, choices: NetworkChoiceView[], gates: NetworkGateView[], desktop: boolean, requests?: SecretRequestRow[], secretsOrigin?: string }>()
-const emit = defineEmits<{ network: [command: NetworkCommand, settle?: (error: string | null) => void], command: [command: CentralCommand], secrets: [command: SecretsCommand] }>()
-const headline = ['subject', 'title', 'name']
+/** Without `domain` (a browser), questions and approvals are answered in the Pods inbox at `inboxUrl`. */
+const props = defineProps<{ view: MapView, domain: DomainOverview | null, desktop: boolean, requests?: SecretRequestRow[], secretsOrigin?: string, inboxUrl?: string }>()
+const emit = defineEmits<{ domain: [command: DomainCommand, settle?: (error: string | null) => void], command: [command: CentralCommand], secrets: [command: SecretsCommand] }>()
 const groupBy = ref('')
 const raw = ref(false)
-/** A choice is shown as saving until its event leaves the waiting list; a refused save returns the case with its error. */
-const saving = ref<Record<string, { eventId: string, title: string, channel: string }>>({})
+/** An answer is shown as saving until its question leaves the waiting list; a refused save returns it with its error. */
+const saving = ref<Record<string, string>>({})
 const failures = ref<Record<string, string>>({})
 const evidence = ref<Record<string, string>>({})
-const openBatch = ['preparing', 'pending', 'consuming', 'unknown', 'superseded']
 
-interface Case { id: string, networkId: string, revision: number, gate: string, title: string, event: NetworkChoiceView, payload: Record<string, unknown>, versions: number, options: { key: string, title: string, channel: string }[] }
-const gateDefinition = (networkId: string, key: string) => props.view.automations.find(automation => automation.id === networkId)?.gates.find(gate => gate.key === key)
-function parse(payload: string): Record<string, unknown> {
-  try { const value = JSON.parse(payload); return value && typeof value === 'object' && !Array.isArray(value) ? value : { payload } }
-  catch { return { payload } }
-}
-/** Latest event per case; earlier events of the same case count as versions. */
-const cases = computed<Case[]>(() => {
-  const byCase = new Map<string, Case>()
-  for (const choice of props.choices) {
-    const id = `${choice.networkId}:${choice.gate}:${choice.caseId}`
-    const existing = byCase.get(id)
-    const definition = gateDefinition(choice.networkId, choice.gate)
-    const options = choice.options.map(option => ({ ...option, channel: definition?.options.find(item => item.key === option.key)?.channel ?? '' }))
-    if (existing) { existing.versions++; existing.event = choice; existing.payload = parse(choice.payload); existing.options = options }
-    else {
-      byCase.set(id, { id, networkId: choice.networkId, revision: choice.revision, gate: choice.gate, title: choice.title, event: choice, payload: parse(choice.payload), versions: 1, options })
-    }
-  }
-  return [...byCase.values()]
-})
-const gateHeads = computed(() => {
-  const keys = new Map<string, { networkId: string, gate: string, title: string, takes: string, options: string[], network: string }>()
-  for (const item of cases.value) {
-    const key = `${item.networkId}:${item.gate}`
-    if (keys.has(key)) continue
-    const definition = gateDefinition(item.networkId, item.gate)
-    keys.set(key, { networkId: item.networkId, gate: item.gate, title: item.title, takes: definition?.takes ?? '', options: item.options.map(option => option.title), network: props.view.automations.find(automation => automation.id === item.networkId)?.name ?? '' })
-  }
-  return [...keys.values()]
-})
-const fields = computed(() => [...new Set(cases.value.flatMap(item => Object.keys(item.payload)))].filter(field => !headline.includes(field) && field !== 'evidence' && field !== 'date'))
-const isSaving = (item: Case) => saving.value[item.id]?.eventId === item.event.eventId
-const open = (items: Case[]) => items.filter(item => !isSaving(item))
-const openEvents = computed(() => open(cases.value).reduce((sum, item) => sum + item.versions, 0))
-const headlineOf = (item: Case) => headline.map(key => item.payload[key]).find(value => typeof value === 'string' && value) as string | undefined ?? item.event.caseId
-const rest = (item: Case) => Object.entries(item.payload).filter(([key]) => !headline.includes(key))
-function format(key: string, value: unknown): string {
-  if (key === 'date') { const parsed = Date.parse(String(value)); return Number.isNaN(parsed) ? String(value) : stamp(parsed, language.value) }
-  if (key === 'evidence') return `${String(value).slice(0, 12)}…`
+const podName = (id: string) => props.view.pods.find(pod => pod.id === id)?.name ?? id
+const questions = computed(() => props.domain?.questions ?? [])
+const fields = computed(() => [...new Set(questions.value.flatMap(item => Object.keys(item.data)))])
+const open = (items: DomainQuestionView[]) => items.filter(item => !saving.value[item.id])
+function format(value: unknown): string {
   if (typeof value === 'boolean') return t(value ? 'yes' : 'no')
   if (typeof value === 'number') return value.toLocaleString(language.value === 'de' ? 'de-AT' : 'en-GB')
   return typeof value === 'string' ? value : JSON.stringify(value)
 }
-function groups(items: Case[]): [string, Case[]][] {
-  const map = new Map<string, Case[]>()
-  for (const item of items) { const key = String(item.payload[groupBy.value]); (map.get(key) ?? map.set(key, []).get(key)!).push(item) }
-  return [...map.entries()].sort((a, b) => b[1].length - a[1].length)
-}
-function choose(item: Case, key: string) {
-  const option = item.options.find(option => option.key === key)
-  if (!option) return
-  const eventId = item.event.eventId
-  saving.value = { ...saving.value, [item.id]: { eventId, title: option.title, channel: option.channel } }
+/** Questions per asking Pod and title; with a field selected, per value of that field. */
+const sections = computed(() => {
+  const map = new Map<string, { key: string, title: string, podId: string, items: DomainQuestionView[] }>()
+  for (const item of questions.value) {
+    const value = groupBy.value ? format(item.data[groupBy.value]) : ''
+    const key = `${item.podId}:${item.title}:${value}`
+    const section = map.get(key) ?? map.set(key, { key, title: groupBy.value ? `${item.title} · ${groupBy.value} = ${value}` : item.title, podId: item.podId, items: [] }).get(key)!
+    section.items.push(item)
+  }
+  return [...map.values()]
+})
+function answer(item: DomainQuestionView, option: string) {
+  saving.value = { ...saving.value, [item.id]: item.options.find(entry => entry.key === option)?.title ?? option }
   const { [item.id]: _previous, ...others } = failures.value
   failures.value = others
-  emit('network', { type: 'choose', id: item.networkId, revision: item.revision, eventId, gate: item.gate, option: key }, (error) => {
-    if (!error || saving.value[item.id]?.eventId !== eventId) return
+  emit('domain', { type: 'answer', questionId: item.id, option }, (error) => {
+    if (!error) return
     const { [item.id]: _refused, ...rest } = saving.value
     saving.value = rest
     failures.value = { ...failures.value, [item.id]: error }
   })
 }
-function chooseAll(items: Case[], key: string) { for (const item of open(items)) choose(item, key) }
+function answerAll(items: DomainQuestionView[], option: string) { for (const item of open(items)) answer(item, option) }
 
-const batches = computed(() => props.gates.filter(gate => openBatch.includes(gate.state)))
-const approveGates = computed(() => props.view.automations.flatMap(automation => automation.gates.filter(gate => gate.kind === 'approve').map(gate => ({ ...gate, automation }))))
-const podName = (id: string) => props.view.pods.find(pod => pod.id === id)?.name ?? id
+const approvals = computed(() => props.domain?.approvals ?? [])
+const held = computed(() => props.domain?.held ?? [])
+const effects = computed(() => props.domain?.unknownEffects ?? [])
 const rights = computed(() => props.view.pods.flatMap(pod => [...pod.approvals.map(approval => ({ pod, approval, error: null as string | null })), ...(pod.queue.blocked && !pod.approvals.length ? [{ pod, approval: null, error: pod.queue.error }] : [])]))
 const unknown = computed(() => props.view.pods.flatMap(pod => pod.unknown.map(item => ({ pod, ...item }))))
 const requests = computed(() => (props.requests ?? []).filter(row => row.status !== 'collected' && row.status !== 'expired'))
 const requestState = (status: SecretRequestRow['status']) => status === 'failed' ? t('failed') : status === 'filled' ? t('filled') : t('requested')
-const total = computed(() => openEvents.value + batches.value.length + rights.value.length + unknown.value.length + requests.value.length)
+const intent = (value: unknown) => Object.entries(value && typeof value === 'object' ? value : {}).map(([key, item]) => `${key}: ${format(item)}`).join(' · ')
+const total = computed(() => open(questions.value).length + approvals.value.length + rights.value.length + held.value.length + effects.value.length + unknown.value.length + requests.value.length)
 defineExpose({ total })
 </script>
 
@@ -105,107 +72,98 @@ defineExpose({ total })
     <h1>{{ t('Decisions') }}</h1>
     <div class="kpi-row" role="list">
       <div class="kpi" role="listitem">
-        <b>{{ openEvents }}</b><span>{{ t('Questions') }}</span><small>{{ openEvents ? `${t('in {count} cases', { count: open(cases).length })} · ${gateHeads.map(head => head.network).join(', ')}` : t('no questions') }}</small>
+        <b>{{ open(questions).length }}</b><span>{{ t('Questions') }}</span><small>{{ questions.length ? [...new Set(questions.map(item => podName(item.podId)))].join(', ') : t('no questions') }}</small>
       </div>
       <div class="kpi" role="listitem">
-        <b>{{ batches.length }}</b><span>{{ t('Approvals waiting') }}</span><small>{{ batches.length ? t('batches decided at the IdP') : t('no waiting batches') }}</small>
+        <b>{{ approvals.length }}</b><span>{{ t('Approvals waiting') }}</span><small>{{ approvals.length ? t('decided at the IdP') : t('no waiting approvals') }}</small>
       </div>
       <div class="kpi" role="listitem">
         <b>{{ rights.length }}</b><span>{{ t('Rights') }}</span><small>{{ rights.length ? t('{count} runtime requests', { count: rights.length }) : t('no open runtime request') }}</small>
       </div>
       <div class="kpi" role="listitem">
-        <b>{{ unknown.length }}</b><span>{{ t('unknown deliveries') }}</span><small>{{ unknown.length ? t('{count} deliveries to reconcile', { count: unknown.length }) : t('nothing to reconcile') }}</small>
+        <b>{{ held.length + effects.length + unknown.length }}</b><span>{{ t('To reconcile') }}</span><small>{{ held.length + effects.length + unknown.length ? t('held work and uncertain actions') : t('nothing to reconcile') }}</small>
       </div>
       <div class="kpi" role="listitem">
         <b>{{ requests.length }}</b><span>{{ t('Secrets') }}</span><small>{{ requests.length ? t('{count} secret requests', { count: requests.length }) : t('no secret requests') }}</small>
       </div>
     </div>
 
-    <h2>{{ t('Questions') }} <span class="meta">· {{ t('you choose one way per case') }}</span></h2>
+    <h2>{{ t('Questions') }} <span class="meta">· {{ t('your answer becomes a rule the Pod reads') }}</span></h2>
     <div class="ctrls">
       <label class="meta">{{ t('Group by') }} <select v-model="groupBy" class="secondary"><option value="">–</option><option v-for="field in fields" :key="field" :value="field">{{ field }}</option></select></label>
       <label class="meta"><input v-model="raw" type="checkbox"> {{ t('show technical details') }}</label>
     </div>
-    <div class="inbox" data-testid="choices">
-      <p v-if="!cases.length" class="muted">
+    <div class="inbox" data-testid="questions">
+      <p v-if="!domain && inboxUrl" class="muted">
+        {{ t('Questions and approvals of your Pods are answered in the Pods inbox.') }} <a :href="inboxUrl">{{ t('Open the Pods inbox') }}</a>
+      </p>
+      <p v-else-if="!questions.length" class="muted">
         {{ t('Nothing waits for your decision.') }}
       </p>
-      <template v-for="head in gateHeads" :key="`${head.networkId}:${head.gate}`">
-        <div class="gatehead">
-          <b>{{ head.title }}</b> <span class="meta">{{ head.network }} · {{ t('takes {channel} · {count} ways: {options} · {open} open', { channel: head.takes, count: head.options.length, options: head.options.join(', '), open: open(cases.filter(item => item.networkId === head.networkId && item.gate === head.gate)).length }) }}</span>
+      <div v-for="section in sections" :key="section.key" class="grp">
+        <div class="row">
+          <b>{{ section.title }}</b><span class="meta">{{ podName(section.podId) }} · {{ t('{count} open', { count: open(section.items).length }) }}</span>
+          <span v-if="open(section.items).length > 1" class="opts"><button v-for="option in section.items[0]!.options" :key="option.key" class="secondary" type="button" @click="answerAll(section.items, option.key)">{{ t('all: {title}', { title: option.title }) }}</button></span>
         </div>
-        <template v-for="[groupKey, list] in (groupBy ? groups(cases.filter(item => item.networkId === head.networkId && item.gate === head.gate)) : [['', cases.filter(item => item.networkId === head.networkId && item.gate === head.gate)] as [string, Case[]]])" :key="groupKey">
-          <div :class="groupBy ? 'grp' : 'plain'">
-            <div v-if="groupBy" class="row">
-              <span class="pill off">{{ groupBy }} = {{ groupKey }}</span><span class="meta">{{ t('{count} cases', { count: list.length }) }}</span><span v-if="open(list).length > 1" class="opts"><button v-for="option in list[0]!.options" :key="option.key" class="secondary" type="button" @click="chooseAll(list, option.key)">{{ t('all: {title}', { title: option.title }) }}</button></span>
+        <template v-for="item in section.items" :key="item.id">
+          <div v-if="saving[item.id]" class="item done" data-saving>
+            <div class="row">
+              <span class="pill warn">{{ t('Saving: {title}', { title: saving[item.id]! }) }}</span><span class="subj">{{ item.body || item.key }}</span>
             </div>
-            <template v-for="item in list" :key="item.id">
-              <div v-if="isSaving(item)" class="item done" data-saving>
-                <div class="row">
-                  <span class="pill warn">{{ t('Saving: {title}', { title: saving[item.id]!.title }) }}</span><span class="subj">{{ headlineOf(item) }}</span><span class="meta">→ {{ saving[item.id]!.channel }}</span>
-                </div>
-              </div>
-              <div v-else class="item" :data-case="item.id">
-                <div class="row">
-                  <span class="subj">{{ headlineOf(item) }}</span><span v-if="item.versions > 1" class="pill warn">{{ t('{count} versions', { count: item.versions }) }}</span>
-                </div>
-                <dl class="facts">
-                  <template v-for="[key, value] in rest(item)" :key="key">
-                    <dt>{{ key }}</dt><dd>{{ format(key, value) }}</dd>
-                  </template>
-                </dl>
-                <div class="row auth">
-                  <span class="pill pods">{{ item.title }}</span><span class="meta mono">{{ gateDefinition(item.networkId, item.gate)?.takes }} · {{ t('Case {id}', { id: item.event.caseId.slice(0, 8) }) }}</span>
-                </div>
-                <p v-if="failures[item.id]" class="error-message" role="alert">
-                  {{ t('Not saved: {reason}', { reason: diagnostic(failures[item.id]!) }) }}
-                </p>
-                <div class="opts">
-                  <button v-for="option in item.options" :key="option.key" class="secondary" type="button" :title="`→ ${option.channel}`" @click="choose(item, option.key)">
-                    {{ option.title }}
-                  </button>
-                </div>
-                <pre v-if="raw" class="raw">{{ JSON.stringify({ eventId: item.event.eventId, caseId: item.event.caseId, gate: item.gate, payload: item.payload }, null, 1) }}</pre>
-              </div>
-            </template>
+          </div>
+          <div v-else class="item" :data-question="item.id">
+            <div class="row">
+              <span class="subj">{{ item.body || item.key }}</span>
+            </div>
+            <dl class="facts">
+              <template v-for="(value, key) in item.data" :key="key">
+                <dt>{{ key }}</dt><dd>{{ format(value) }}</dd>
+              </template>
+            </dl>
+            <p v-if="failures[item.id]" class="error-message" role="alert">
+              {{ t('Not saved: {reason}', { reason: diagnostic(failures[item.id]!) }) }}
+            </p>
+            <div class="opts">
+              <button v-for="option in item.options" :key="option.key" class="secondary" type="button" @click="answer(item, option.key)">
+                {{ option.title }}
+              </button>
+            </div>
+            <pre v-if="raw" class="raw">{{ JSON.stringify({ id: item.id, namespace: item.namespace, key: item.key, data: item.data }, null, 1) }}</pre>
           </div>
         </template>
-      </template>
+      </div>
     </div>
 
-    <h2>{{ t('Approvals waiting') }} <span class="meta">· {{ t('batches decided at the IdP') }}</span></h2>
-    <div class="inbox" data-testid="batches">
-      <div v-if="!batches.length" class="item">
+    <h2>{{ t('Approvals waiting') }} <span class="meta">· {{ t('each action on one object, decided at the IdP') }}</span></h2>
+    <div class="inbox" data-testid="approvals">
+      <div v-if="!approvals.length" class="item">
         <div class="row">
-          <span class="pill off">{{ t('none') }}</span><span class="meta">{{ approveGates.length ? approveGates.map(gate => t('Gate "{title}" has no frozen batch. A batch forms as soon as candidates arrive; at most 30 items, valid for 12 hours.', { title: gate.title })).join(' ') : t('no waiting batches') }}</span>
+          <span class="pill off">{{ t('none') }}</span><span class="meta">{{ t('no waiting approvals') }}</span>
         </div>
       </div>
-      <div v-for="batch in batches" :key="batch.id" class="item">
+      <div v-for="approval in approvals" :key="approval.id" class="item">
         <div class="row">
-          <span class="pill" :class="batch.state === 'unknown' ? 'warn' : 'idp'">{{ label(batch.state) }}</span><span class="subj">{{ t('Approval batch') }} · {{ batch.gate }}</span><span class="meta">{{ podName(batch.podId) }} · {{ t('{count} items', { count: batch.items.length }) }} · {{ t('expires {time}', { time: stamp(batch.expiresAt, language) }) }}</span>
+          <span class="pill" :class="approval.state === 'unknown' ? 'warn' : 'idp'">{{ label(approval.state) }}</span><span class="subj">{{ approval.title }}</span><span class="meta">{{ podName(approval.podId) }} · {{ stamp(approval.updatedAt, language) }}</span>
         </div>
-        <p v-if="batch.error" class="error-message">
-          {{ diagnostic(batch.error) }}
+        <p v-if="approval.reason" class="meta">
+          {{ diagnostic(approval.reason) }}
         </p>
-        <ul class="plainlist">
-          <li v-for="item in batch.items" :key="item.deliveryId">
-            {{ item.title }} <span class="meta">{{ label(item.outcome) }}</span>
-          </li>
-        </ul>
-        <p v-if="batch.state !== 'unknown'" class="meta">
-          {{ t('Select the items to approve at the IdP; unselected items are denied.') }}
-        </p>
-        <label v-else class="meta">{{ t('Evidence') }} <input v-model="evidence[batch.id]" maxlength="4000"></label>
-        <div class="opts">
-          <template v-if="batch.url">
-            <button v-if="desktop" class="secondary idp" type="button" @click="emit('network', { type: 'gateOpen', id: batch.networkId, revision: view.automations.find(automation => automation.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation })">
-              {{ t('Decide at the IdP') }}
+        <template v-if="approval.state === 'unknown'">
+          <label class="meta">{{ t('Observation') }} <input v-model="evidence[approval.id]" maxlength="2000"></label>
+          <div class="opts">
+            <button class="secondary" type="button" :disabled="!evidence[approval.id]?.trim()" @click="emit('domain', { type: 'resolveApproval', id: approval.id, decision: 'renew', evidence: evidence[approval.id] ?? '' })">
+              {{ t('Ask again') }}
             </button>
-            <a v-else class="secondary idp" :href="batch.url" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
-          </template>
-          <button v-if="batch.state === 'unknown'" class="secondary" type="button" :disabled="!desktop || !evidence[batch.id]?.trim()" @click="emit('network', { type: 'gateDiscard', id: batch.networkId, revision: view.automations.find(automation => automation.id === batch.networkId)?.revision ?? 1, taskId: batch.id, generation: batch.generation, evidence: evidence[batch.id] ?? '' })">
-            {{ t('Discard batch') }}
+            <button class="secondary" type="button" :disabled="!evidence[approval.id]?.trim()" @click="emit('domain', { type: 'resolveApproval', id: approval.id, decision: 'withdraw', evidence: evidence[approval.id] ?? '' })">
+              {{ t('Withdraw') }}
+            </button>
+          </div>
+        </template>
+        <div v-else-if="approval.state === 'requested' && approval.batchUrl" class="opts">
+          <button v-if="desktop" class="secondary idp" type="button" @click="emit('domain', { type: 'openApproval', id: approval.id })">
+            {{ t('Decide at the IdP') }}
           </button>
+          <a v-else class="secondary idp" :href="approval.batchUrl" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
         </div>
       </div>
     </div>
@@ -229,11 +187,42 @@ defineExpose({ total })
       </div>
     </div>
 
-    <h2>{{ t('unknown deliveries') }} <span class="meta">· {{ t('you confirm what arrived outside') }}</span></h2>
-    <div class="inbox" data-testid="deliveries">
-      <div v-if="!unknown.length" class="item">
+    <h2>{{ t('To reconcile') }} <span class="meta">· {{ t('you confirm what happened outside') }}</span></h2>
+    <div class="inbox" data-testid="reconcile">
+      <div v-if="!held.length && !effects.length && !unknown.length" class="item">
         <div class="row">
-          <span class="pill off">{{ t('none') }}</span><span class="meta">{{ t('Appears when a Pod did not get an answer: run, key, destination, plus "Delivered" or "Not delivered, send again".') }}</span>
+          <span class="pill off">{{ t('none') }}</span><span class="meta">{{ t('Appears when a Pod could not finish safely or did not get an answer; nothing runs again until you state what happened.') }}</span>
+        </div>
+      </div>
+      <div v-for="item in held" :key="item.key" class="item">
+        <div class="row">
+          <span class="pill warn">{{ label(item.state) }}</span><span class="subj">{{ t('Held work') }} · {{ item.operation }}</span><span class="meta mono">{{ item.object }}</span>
+        </div>
+        <p v-if="item.reason" class="meta">
+          {{ diagnostic(item.reason) }}
+        </p>
+        <label class="meta">{{ t('Observation') }} <input v-model="evidence[item.key]" maxlength="2000"></label>
+        <div class="opts">
+          <button class="secondary" type="button" :disabled="!evidence[item.key]?.trim()" @click="emit('domain', { type: 'release', key: item.key, evidence: evidence[item.key] ?? '' })">
+            {{ t('Release after review') }}
+          </button>
+        </div>
+      </div>
+      <div v-for="effect in effects" :key="effect.actionKey + effect.attempt" class="item">
+        <div class="row">
+          <span class="pill warn">{{ t('Uncertain action') }}</span><span class="subj">{{ podName(effect.podId) }} · {{ effect.operation }}</span><span class="meta">{{ stamp(effect.createdAt, language) }}</span>
+        </div>
+        <p class="meta mono">
+          {{ intent(effect.intent) }}
+        </p>
+        <label class="meta">{{ t('Observation') }} <input v-model="evidence[effect.actionKey]" maxlength="2000"></label>
+        <div class="opts">
+          <button class="secondary" type="button" :disabled="!evidence[effect.actionKey]?.trim()" @click="emit('domain', { type: 'resolveEffect', actionKey: effect.actionKey, attempt: effect.attempt, applied: true, evidence: evidence[effect.actionKey] ?? '' })">
+            {{ t('It happened') }}
+          </button>
+          <button class="secondary" type="button" :disabled="!evidence[effect.actionKey]?.trim()" @click="emit('domain', { type: 'resolveEffect', actionKey: effect.actionKey, attempt: effect.attempt, applied: false, evidence: evidence[effect.actionKey] ?? '' })">
+            {{ t('It did not happen') }}
+          </button>
         </div>
       </div>
       <div v-for="item in unknown" :key="item.runId + item.key" class="item">
@@ -251,7 +240,6 @@ defineExpose({ total })
         </div>
       </div>
     </div>
-
     <h2>{{ t('Secrets') }} <span class="meta">· {{ t('requests through OpenApe Secrets') }}</span></h2>
     <div class="inbox" data-testid="secrets">
       <div v-for="row in requests" :key="row.id" class="item" data-testid="secret-request">

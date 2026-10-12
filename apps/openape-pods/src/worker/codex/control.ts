@@ -1,5 +1,6 @@
-import { codexNetworkHelp } from '../../contracts/codex-networks'
-import type { CodexNetworks } from './networks'
+import { DomainAdministration } from '../data/admin'
+import type { DomainServices } from '../data/admin'
+import { domainHelp } from '../../contracts/domain-admin'
 import { jevAvailability } from '../onboarding/store'
 import { programHelp } from './program-help'
 import { runtimeReference } from '../master/reference'
@@ -16,13 +17,14 @@ import { ChatRegistry } from '../master/chat-registry'
 import type { MasterControl } from '../master/control'
 
 export class CodexControl {
-  constructor(private readonly store: PodDatabase, private readonly master: MasterControl, private readonly networks?: CodexNetworks) {}
+  constructor(private readonly store: PodDatabase, private readonly master: MasterControl, private readonly domain?: DomainServices) {}
 
   async execute(request: CodexRequest, signal: AbortSignal): Promise<unknown> {
     const { action } = request
-    if (action.action === 'networks') {
-      if (!this.networks) throw new Error('Network MCP is unavailable in this runtime')
-      return this.networks.request(request)
+    if (action.action === 'domain') {
+      if (!this.domain) throw new Error('Domain data administration is unavailable in this runtime')
+      if (Object.keys(action).some(key => !['action', 'command'].includes(key))) throw new Error('Invalid domain action fields')
+      return boundedCodexResult(this.domainCommand(request.id, action.command))
     }
     let result: unknown
     switch (action.action) {
@@ -33,6 +35,25 @@ export class CodexControl {
     return boundedCodexResult(result)
   }
 
+  /** Writes are journaled under the requestId: a repeat with the same command returns the recorded result without running again. */
+  private domainCommand(requestId: string, command: unknown): unknown {
+    const administration = new DomainAdministration(this.store, this.domain!)
+    const type = (command as { type?: unknown } | null)?.type
+    if (type === 'list' || type === 'entries' || type === 'work') return administration.execute(command)
+    const key = `codex-domain:${requestId}`
+    const request = JSON.stringify(command); const hash = digest(request)
+    return this.store.transaction(() => {
+      const prior = this.store.db.prepare('SELECT request_hash,result FROM master_actions WHERE id=?').get(key)
+      if (prior) {
+        if (prior.request_hash !== hash) throw new Error('This requestId was used with a different command')
+        return JSON.parse(prior.result as string) as unknown
+      }
+      const result = administration.execute(command)
+      this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result ?? null))
+      return result
+    })
+  }
+
   private runtime(action: Record<string, unknown>) {
     if (Object.keys(action).length !== 1) throw new Error('Invalid runtime fields')
     const { actions } = runtimeReference
@@ -40,11 +61,11 @@ export class CodexControl {
       ...runtimeReference,
       jevConnection: jevAvailability(this.store),
       programHelp,
-      networks: codexNetworkHelp,
+      domain: domainHelp,
       desktop: desktopHelp,
       workflow: [
-        'Connected local Codex administers Pods directly. Codex governs any confirmation. Call list, then select with exact podIds. Reinspect current revisions after changes. Networks are the only way to connect Pods; see networks.',
-        'Access: each MCP connection needs a session from the owner. While the owner is logged in with the apes CLI on this Mac (a human login of the registered owner), Pods opens it silently and renews it every hour; apes logout ends it. Otherwise the call fails with login_required and session {state:"pending",via:"browser",expiresAt}: Pods opened the owner\'s DDISA sign-in in the browser on this Mac; ask the owner to finish it and confirm it in the Pods app. Never wait for the owner inside one call: call {action:"session"} (always allowed) about every 5 seconds until state is signed_in, then retry the original call with the same requestId. On expired or denied tell the owner and retry the original call once for a new sign-in. A session acts as the owner and allows every action here for one hour, including network creation, activation and archive, member changes, recovery, owner routing and the grant decisions of the grants and sandbox actions. Pods records evidence sent through MCP with the prefix "Assistant request: " in receipts and traces.',
+        'Connected local Codex administers Pods directly. Codex governs any confirmation. Call list, then select with exact podIds. Reinspect current revisions after changes. Pods never call each other: each Pod reads the shared data it is a reader of, finds its own declared work there and writes its results to the namespace it writes; see domain and script.work.',
+        'Access: each MCP connection needs a session from the owner. While the owner is logged in with the apes CLI on this Mac (a human login of the registered owner), Pods opens it silently and renews it every hour; apes logout ends it. Otherwise the call fails with login_required and session {state:"pending",via:"browser",expiresAt}: Pods opened the owner\'s DDISA sign-in in the browser on this Mac; ask the owner to finish it and confirm it in the Pods app. Never wait for the owner inside one call: call {action:"session"} (always allowed) about every 5 seconds until state is signed_in, then retry the original call with the same requestId. On expired or denied tell the owner and retry the original call once for a new sign-in. A session acts as the owner and allows every action here for one hour, including domain data administration, recovery and the grant decisions of the grants and sandbox actions. Pods records evidence sent through MCP with the prefix "Assistant request: " in receipts and traces.',
         'Save drafts and ordinary variables directly. Configure resources before validation. Import secrets by a private owner file path, never by their values. Do not copy owner login stores into Pods.',
         'Use scripts prepareDependencies when packages change. Validate the draft with current resources. Every assigned Pod secret is available to its scripts without declarations or approval. Then activate, resume and setSchedule with enabled=true as requested.',
         'run returns the actual runId. recovery list returns status and unresolved effect keys without run contents. Resolve uncertain delivery only with real external evidence; never guess that an effect failed.',

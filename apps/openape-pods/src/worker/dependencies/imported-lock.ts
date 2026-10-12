@@ -3,9 +3,8 @@ import { lstat, open, readdir, realpath } from 'node:fs/promises'
 import { createRequire } from 'node:module'
 import { join } from 'node:path'
 import { canonicalPortableJson } from '@openape/pods-protocol'
-import { dataFields } from '../../contracts/network-data'
+import { dataFields, plainObject  } from '../../contracts/fields'
 import { parsePackages } from '../../contracts/dependencies'
-import { networkDataObject } from '../../contracts/network-payload'
 import type { PackageManifest } from '../../contracts/dependencies'
 
 interface LockEntry {
@@ -26,7 +25,7 @@ function packageName(name: string): string {
 }
 function dependencyMap(value: unknown, semver: Semver): Record<string, string> {
   if (value === undefined) return {}
-  const fields = dataFields(value, Object.keys(networkDataObject(value)))
+  const fields = dataFields(value, Object.keys(plainObject(value)))
   if (Object.keys(fields).length > 1000) throw new Error('Imported dependency list exceeds its limit')
   for (const [name, range] of Object.entries(fields)) {
     packageName(name)
@@ -55,13 +54,13 @@ function metadata(item: Record<string, unknown>, semver: Semver): void {
     if (!Array.isArray(values) || values.length > 32 || values.some(value => typeof value !== 'string' || !/^!?[a-z0-9_-]{1,40}$/.test(value))) throw new Error('Invalid imported dependency platform metadata')
   }
   if (item.engines !== undefined) {
-    const engines = networkDataObject(item.engines)
+    const engines = plainObject(item.engines)
     if (Object.keys(engines).length > 16 || Object.entries(engines).some(([name, value]) => !/^[a-z0-9_-]{1,32}$/.test(name) || typeof value !== 'string' || value.length > 200 || !semver.validRange(value))) throw new Error('Invalid imported dependency engine metadata')
   }
   if (item.bin !== undefined) {
     const paths = typeof item.bin === 'string'
       ? [item.bin]
-      : Object.entries(networkDataObject(item.bin)).map(([name, path]) => {
+      : Object.entries(plainObject(item.bin)).map(([name, path]) => {
           if (!/^[\w.@-]{1,214}$/.test(name) || ['.', '..'].includes(name)) throw new Error('Invalid imported dependency executable metadata')
           return path
         })
@@ -100,7 +99,7 @@ function entry(value: unknown, path: string, semver: Semver): LockEntry {
   if (item.dev === true || item.devOptional === true) throw new Error('Imported script locks cannot contain development dependencies')
   const dependencies = dependencyMap(item.dependencies, semver); const optionalDependencies = dependencyMap(item.optionalDependencies, semver); const peerDependencies = dependencyMap(item.peerDependencies, semver)
   if (item.peerDependenciesMeta !== undefined) {
-    const metadata = dataFields(item.peerDependenciesMeta, Object.keys(networkDataObject(item.peerDependenciesMeta)))
+    const metadata = dataFields(item.peerDependenciesMeta, Object.keys(plainObject(item.peerDependenciesMeta)))
     for (const [name, value] of Object.entries(metadata)) {
       const peer = dataFields(value, ['optional'])
       packageName(name)
@@ -114,7 +113,7 @@ function inspectImportedLock(value: unknown, manifest: PackageManifest, npmRoot:
   const clean = JSON.parse(canonicalPortableJson(value))
   const lock = dataFields(clean, ['lockfileVersion', 'packages'], ['name', 'version', 'requires'])
   if (lock.lockfileVersion !== 3 || (lock.requires !== undefined && lock.requires !== true)) throw new Error('Imported dependency lock requires version 3')
-  const packages = dataFields(lock.packages, Object.keys(networkDataObject(lock.packages)))
+  const packages = dataFields(lock.packages, Object.keys(plainObject(lock.packages)))
   if (!Object.hasOwn(packages, '') || Object.keys(packages).length > 1000) throw new Error('Imported dependency lock exceeds its package limit')
   const root = dataFields(packages[''], [], ['dependencies', 'name', 'version'])
   if (canonicalPortableJson(parsePackages({ dependencies: root.dependencies ?? {} })) !== canonicalPortableJson(parsePackages(manifest))) throw new Error('Imported dependency lock does not match package.json')

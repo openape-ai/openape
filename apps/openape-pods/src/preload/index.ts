@@ -1,10 +1,12 @@
 import { parseUpdateCommand, parseUpdateView } from '../contracts/updates'
+import { parseStorageRecoveryCommand } from '../contracts/storage'
+import type { StorageRecoveryView } from '../contracts/storage'
 import { parseSharingCommand } from '../contracts/sharing'
 import type { SharingState } from '../contracts/sharing'
 import { parseDefinitionCommand, parseDefinitionsView } from '../contracts/definitions'
 import { parseMcpSessionCommand, parseMcpSessionView } from '../contracts/mcp-session'
 import { parseCodexCommand, parseCodexConnection } from '../contracts/codex'
-import { parseNetworkCommand, parseNetworkView } from '../contracts/networks'
+import { parseDomainCommand } from '../contracts/domain-admin'
 import { parsePackageSearch, parsePackageOptions } from '../contracts/package-catalog'
 import { parseProgramCommand, parseTerminalView, parseConsoleView } from '../contracts/programs'
 import { parseSecretsCommand, parseSecretsView } from '../contracts/secrets'
@@ -24,13 +26,14 @@ import { channels, isPodStatus } from '../contracts/ipc'
 import type { PodsBridge } from '../contracts/ipc'
 
 const bridge: PodsBridge = {
+  async storage(command) { return ipcRenderer.invoke(channels.storage, parseStorageRecoveryCommand(command)) as Promise<StorageRecoveryView> },
   async updates(command) { return parseUpdateView(await ipcRenderer.invoke(channels.updates, parseUpdateCommand(command))) },
   async mcpSession(command) { return parseMcpSessionView(await ipcRenderer.invoke(channels.mcpSession, parseMcpSessionCommand(command))) },
   async central(command) { return ipcRenderer.invoke(channels.central, command) },
   async codex(command) { return parseCodexConnection(await ipcRenderer.invoke(channels.codex, parseCodexCommand(command))) },
   async definitions(command) { return parseDefinitionsView(await ipcRenderer.invoke(channels.definitions, parseDefinitionCommand(command))) },
   async sharing(command) { return ipcRenderer.invoke(channels.sharing, parseSharingCommand(command)) as Promise<SharingState> },
-  async networks(command) { return parseNetworkView(await ipcRenderer.invoke(channels.networks, parseNetworkCommand(command))) },
+  async domain(command) { return await ipcRenderer.invoke(channels.domain, parseDomainCommand(command)) as unknown },
   async packages(command) { return parsePackageOptions(await ipcRenderer.invoke(channels.packages, parsePackageSearch(command))) },
   async programs(command) {
     const request = parseProgramCommand(command)

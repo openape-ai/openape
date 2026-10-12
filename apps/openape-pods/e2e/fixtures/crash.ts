@@ -1,6 +1,6 @@
 import { fixtureShellIdentity } from './shell-identity'
 import { _electron as electron } from 'playwright'
-import type { ElectronApplication } from 'playwright'
+import type { ElectronApplication, Page } from 'playwright'
 import { mkdtemp, realpath, rm, readFile, mkdir } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -62,11 +62,21 @@ export async function seed() {
   }
   finally { store.close() }
 }
+// The desktop opens on the Automatisierungen landing; a Pod's own pages open from its detail panel.
+export async function openPod(page: Page, name: string) {
+  await page.getByRole('button', { name: 'List', exact: true }).click()
+  await page.getByRole('row').filter({ hasText: name }).first().click()
+  await page.getByRole('button', { name: 'Open details', exact: true }).click()
+}
 export type Termination = 'worker' | 'app' | 'quit' | 'script'
 
 // A committed unit survives the termination, is inspected and retried without duplication.
 export async function retainsCompleteUnit(target: Termination) {
   const { root, podId } = await seed(); const packaged = target !== 'worker'
+  // Automatic recovery retries only active Pods.
+  const seeded = new PodDatabase(root)
+  try { seeded.db.prepare('UPDATE pods SET lifecycle=\'active\' WHERE id=?').run(podId) }
+  finally { seeded.close() }
   const { app, page } = await launch(root, packaged)
   await page.evaluate(podId => window.pods.runs({ type: 'start', podId }), podId)
   const current = async () => (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs[0]!
@@ -96,11 +106,10 @@ export async function retainsCompleteUnit(target: Termination) {
   const { page: reopened } = await launch(root, packaged)
   const stopped = (await reopened.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs[0]!
   expect(stopped.state).toBe(target === 'quit' ? 'cancelled' : target === 'script' ? 'failed' : 'interrupted')
+  await openPod(reopened, 'Checkpoint recovery')
   await reopened.getByRole('tab', { name: 'History', exact: true }).click()
-  await reopened.getByRole('button', { name: 'Prepare retry' }).click()
-  await reopened.getByText('The check is complete. You can retry the unfinished work.', { exact: true }).waitFor()
-  await reopened.getByRole('button', { name: 'Retry unfinished work' }).click()
-  await reopened.getByText('Recovered committed unit', { exact: true }).waitFor()
+  // Automatic recovery retries once the stopped processes are proven; no owner step is needed.
+  await reopened.getByText('Recovered committed unit', { exact: true }).waitFor({ timeout: 60000 })
   const store = new PodDatabase(root)
   try {
     expect(store.checkpoint(podId)).toEqual({ revision: 1, body: { unitCommitted: true } })

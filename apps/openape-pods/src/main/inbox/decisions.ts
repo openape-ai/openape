@@ -1,18 +1,17 @@
 import { createHash } from 'node:crypto'
 import type { InboxDecide, InboxDecision, InboxDecisionOption, InboxDecisionType } from '../../contracts/inbox'
-import { inboxDecisionLimits, inboxSourceId, inboxTags, parseInboxDecision } from '../../contracts/inbox'
+import { inboxDecisionLimits, inboxSourceId, parseInboxDecision } from '../../contracts/inbox'
 import type { MapView } from '../../contracts/map-view'
-import type { NetworkChoiceView, NetworkCommand, NetworkView } from '../../contracts/networks'
-import type { NetworkGateView } from '../../contracts/network-gate-view'
+import type { DomainCommand, DomainOverview } from '../../contracts/domain-admin'
 import type { RunCommand } from '../../contracts/runs'
 import type { SecretsCommand, SecretsView } from '../../contracts/secrets'
 import type { MessageKey, Parameters } from '../../i18n'
 
-export interface DecisionSources { map: MapView | null, networks: NetworkView, secrets: SecretsView | null }
+export interface DecisionSources { map: MapView | null, domain: DomainOverview, secrets: SecretsView | null }
 /** The worker calls the projection needs; owner commands run inside the claimed workspace operation. */
 export interface DecisionWorker {
   inboxSources: () => Promise<DecisionSources>
-  networks: (command: NetworkCommand) => Promise<unknown>
+  domain: (command: DomainCommand) => Promise<unknown>
   runs: (command: RunCommand) => Promise<unknown>
   secrets: (command: SecretsCommand) => Promise<unknown>
 }
@@ -21,22 +20,11 @@ type Act = (option: string, input: string) => Promise<unknown>
 export interface DecisionEntry { decision: InboxDecision, act: Act }
 type Draft = Omit<InboxDecision, 'sourceId' | 'type' | 'digest'>
 
-// Batch states the desktop Decisions view lists as open.
-const openBatch = ['preparing', 'pending', 'consuming', 'unknown', 'superseded'] as const
-const headline = ['subject', 'title', 'name']
-
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
 const clip = (value: string, maximum: number) => value.length > maximum ? `${value.slice(0, maximum - 1)}…` : value
 function sourceId(type: InboxDecisionType, parts: string[]): string {
   const readable = `${type}:${parts.join(':')}`
   return inboxSourceId.test(readable) ? readable : `${type}:${sha256(parts.join('\n')).slice(0, 40)}`
-}
-function payloadFields(payload: string): Record<string, unknown> {
-  try {
-    const value = JSON.parse(payload) as unknown
-    return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : { payload }
-  }
-  catch { return { payload } }
 }
 // One field per line: a line break inside a value would forge another `key: value` line (e.g. a fake sender).
 const show = (value: unknown) => (typeof value === 'string' ? value : JSON.stringify(value)).replace(/\s*[\r\n\u2028\u2029]\s*/g, ' ⏎ ')
@@ -65,7 +53,7 @@ export class InboxDecisions {
 
   private async entries(): Promise<DecisionEntry[]> {
     const sources = await this.worker.inboxSources()
-    const entries = [...this.networkRoutes(sources), ...this.effects(sources), ...this.secrets(sources)]
+    const entries = [...this.questions(sources), ...this.approvals(sources), ...this.held(sources), ...this.uncertain(sources), ...this.effects(sources), ...this.secrets(sources)]
     // One malformed source (for example a non-HTTPS issuer) must not block every other decision.
     const valid = entries.filter((entry) => {
       try { parseInboxDecision(entry.decision); return true }
@@ -85,56 +73,56 @@ export class InboxDecisions {
     return { decision: { sourceId: id, type, digest: sha256(JSON.stringify([id, content])), ...content }, act }
   }
 
-  // Network members change only through desktop review; the phone may still take route decisions for the network.
-  private members(sources: DecisionSources): Set<string> { return new Set((sources.map?.automations ?? []).filter(automation => automation.kind === 'network').flatMap(automation => automation.members)) }
   private podName(sources: DecisionSources, podId: string): string | null { return sources.map?.pods.find(pod => pod.id === podId)?.name ?? null }
   // Tags appear only when the Pod has any, so decisions of untagged Pods keep their digest.
   private pod(sources: DecisionSources, podId: string): Pick<InboxDecision, 'podId' | 'podName' | 'podTags'> {
-    const tags = sources.map?.pods.find(pod => pod.id === podId)?.tags
-    const podTags = tags ? inboxTags(tags.own, tags.inherited) : []
+    const podTags = sources.map?.pods.find(pod => pod.id === podId)?.tags?.own ?? []
     return { podId, podName: this.podName(sources, podId), ...(podTags.length ? { podTags } : {}) }
   }
 
-  /** Owner decisions of network routes: an open item of a choose route, or an approve-route batch that Pods must settle. */
-  private networkRoutes(sources: DecisionSources): DecisionEntry[] {
-    const network = (id: string) => sources.map?.automations.find(automation => automation.id === id)
-    // Only the latest event of a case is open; an earlier event is superseded, as on the desktop.
-    const latest = new Map<string, NetworkChoiceView>()
-    for (const choice of sources.networks.choices ?? []) latest.set(`${choice.networkId}:${choice.gate}:${choice.caseId}`, choice)
-    const choices = Array.from(latest.values(), choice => this.choice(choice, network(choice.networkId)?.name))
-    const batches = (sources.networks.gates ?? []).filter(batch => (openBatch as readonly string[]).includes(batch.state)).flatMap(batch => this.batch(sources, batch, network(batch.networkId)?.revision ?? 1))
-    return [...choices, ...batches]
+  /** Owner questions of Pods (issue 1465); the answer becomes an owner-written entry the asking Pod reads. */
+  private questions(sources: DecisionSources): DecisionEntry[] {
+    return sources.domain.questions.map((question) => {
+      const facts = Object.entries(question.data).map(([key, value]) => `${key}: ${show(value)}`)
+      return this.entry('question', [question.id], { ...this.pod(sources, question.podId), title: question.title, body: [question.body, ...facts].filter(Boolean).join('\n'), authority: 'pods', options: question.options.map(option => ({ ...option, input: null })), link: null },
+        async option => this.worker.domain({ type: 'answer', questionId: question.id, option }))
+    })
   }
 
-  private choice(choice: NetworkChoiceView, network: string | undefined): DecisionEntry {
-    const fields = payloadFields(choice.payload)
-    const title = headline.map(key => fields[key]).find(value => typeof value === 'string' && value) as string | undefined ?? choice.caseId
-    const facts = Object.entries(fields).filter(([key]) => !headline.includes(key)).map(([key, value]) => `${key}: ${show(value)}`)
-    const options = choice.options.map(option => ({ key: option.key, title: option.title, input: null }))
-    return this.entry('network-choice', [choice.eventId], { podId: null, podName: null, title, body: [network ? `${choice.title} · ${network}` : choice.title, ...facts].join('\n'), authority: 'pods', options, link: null },
-      async option => this.worker.networks({ type: 'choose', id: choice.networkId, revision: choice.revision, eventId: choice.eventId, gate: choice.gate, option }))
+  // A requested approval is decided at the IdP and only counted in the inbox (issue 1458); an uncertain one is settled here.
+  private approvals(sources: DecisionSources): DecisionEntry[] {
+    return sources.domain.approvals.filter(approval => approval.state === 'unknown').map(approval => this.entry('approval', [approval.id], {
+      ...this.pod(sources, approval.podId), title: `${this.t('Uncertain approval')} · ${approval.title}`, body: [approval.object, ...(approval.reason ? [approval.reason] : [])].join('\n'), authority: 'pods',
+      options: [{ key: 'renew', title: this.t('Ask again'), input: 'evidence' }, { key: 'withdraw', title: this.t('Withdraw'), input: 'evidence' }], link: null,
+    }, async (option, evidence) => this.worker.domain({ type: 'resolveApproval', id: approval.id, decision: option === 'renew' ? 'renew' : 'withdraw', evidence })))
   }
 
-  // A pending batch is decided at the IdP and only counted in the inbox (issue 1458); Pods lists what it settles itself.
-  private batch(sources: DecisionSources, batch: NetworkGateView, revision: number): DecisionEntry[] {
-    const unknown = batch.state === 'unknown'
-    if (!unknown && batch.state !== 'superseded') return []
-    const lines = [this.t('{count} items', { count: batch.items.length }), ...batch.items.map(item => `- ${item.title} (${item.outcome})`), ...(batch.error ? [batch.error] : [])]
-    // An uncertain or superseded batch can ask the IdP again with the owner's reason; the runtime checks that no item is in use.
-    const options: InboxDecisionOption[] = [...(unknown ? [{ key: 'discard', title: this.t('Discard batch'), input: 'evidence' as const }] : []), { key: 'review', title: this.t('Request fresh approval'), input: 'evidence' as const }]
-    return [this.entry('network-batch', [batch.id, String(batch.generation)], { ...this.pod(sources, batch.podId), title: `${this.t('Approval batch')} · ${batch.gate}`, body: lines.join('\n'), authority: 'pods', options, link: null },
-      async (option, evidence) => this.worker.networks({ type: option === 'review' ? 'gateReview' : 'gateDiscard', id: batch.networkId, revision, taskId: batch.id, generation: batch.generation, evidence }))]
+  /** Work a Pod could not finish safely; it runs again only after the owner states what was observed. */
+  private held(sources: DecisionSources): DecisionEntry[] {
+    const writer = (operation: string) => sources.domain.namespaces.find(namespace => namespace.path === sources.domain.operations.find(item => item.operation === operation)?.output)?.writer
+    return sources.domain.held.map((item) => {
+      const podId = writer(item.operation)
+      return this.entry('work', [item.key], {
+        ...(podId && podId !== 'owner' ? this.pod(sources, podId) : { podId: null, podName: null }), title: `${this.t('Held work')} · ${item.operation}`, body: [item.object, ...(item.reason ? [item.reason] : [])].join('\n'), authority: 'pods',
+        options: [{ key: 'release', title: this.t('Release after review'), input: 'evidence' }], link: null,
+      }, async (_option, evidence) => this.worker.domain({ type: 'release', key: item.key, evidence }))
+    })
+  }
+
+  /** External effects whose outcome is unknown; the owner records what happened and nothing is executed again. */
+  private uncertain(sources: DecisionSources): DecisionEntry[] {
+    return sources.domain.unknownEffects.map(effect => this.entry('effect', [effect.actionKey, String(effect.attempt)], {
+      ...this.pod(sources, effect.podId), title: `${this.t('Uncertain action')} · ${effect.operation}`, body: Object.entries(effect.intent && typeof effect.intent === 'object' ? effect.intent : {}).map(([key, value]) => `${key}: ${show(value)}`).join('\n'), authority: 'pods',
+      options: [{ key: 'applied', title: this.t('It happened'), input: 'evidence' }, { key: 'notApplied', title: this.t('It did not happen'), input: 'evidence' }], link: null,
+    }, async (option, evidence) => this.worker.domain({ type: 'resolveEffect', actionKey: effect.actionKey, attempt: effect.attempt, applied: option === 'applied', evidence })))
   }
 
   // Replaces the desktop confirmation dialog: the owner states what was observed outside, never an automatic resend.
-  // Network members keep their retained network recovery, so their deliveries are reviewed on the desktop.
   private effects(sources: DecisionSources): DecisionEntry[] {
-    const members = this.members(sources)
     return (sources.map?.pods ?? []).flatMap(pod => pod.unknown.map((item) => {
-      const desktop = members.has(pod.id)
-      const options: InboxDecisionOption[] = desktop ? [] : [{ key: 'delivered', title: this.t('Delivered'), input: 'evidence' }, { key: 'resend', title: this.t('Not delivered, send again'), input: 'evidence' }]
+      const options: InboxDecisionOption[] = [{ key: 'delivered', title: this.t('Delivered'), input: 'evidence' }, { key: 'resend', title: this.t('Not delivered, send again'), input: 'evidence' }]
       return this.entry('effect', [pod.id, item.runId, item.key], {
-        ...this.pod(sources, pod.id), title: `${this.t('unknown deliveries')} · ${item.key}`, body: desktop ? `${item.runId}\n${this.t('Only on the desktop')}` : item.runId, authority: 'pods', options, link: null,
+        ...this.pod(sources, pod.id), title: `${this.t('unknown deliveries')} · ${item.key}`, body: item.runId, authority: 'pods', options, link: null,
       }, async (option, evidence) => this.worker.runs({ type: 'resolveHttp', podId: pod.id, runId: item.runId, key: item.key, applied: option === 'delivered', evidence }))
     }))
   }

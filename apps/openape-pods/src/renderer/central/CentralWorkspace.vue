@@ -12,7 +12,7 @@ import { WorkspaceRequestError } from './client'
 import { connected, connectionAfter, connectionLevel } from './status'
 
 const props = defineProps<{ client: CentralClient, desktop?: boolean, desktopStatus?: CentralStatus | null, embedded?: boolean, sharedEditor?: boolean }>()
-const emit = defineEmits<{ network: [runtimeId: string, networkId: string], settings: [], login: [], logout: [], inventory: [value: CentralRuntime[]], connection: [error: string] }>()
+const emit = defineEmits<{ settings: [], login: [], logout: [], inventory: [value: CentralRuntime[]], connection: [error: string] }>()
 const runtimes = ref<CentralRuntime[]>([])
 const selected = ref<{ runtimeId: string, podId: string } | null>(null)
 const current = shallowRef<CentralSummary | null>(null)
@@ -58,10 +58,6 @@ const available = computed(() => !!listed.value?.online && !!current.value && (s
 const runList = computed(() => [...current.value?.pod.runs.runs ?? [], ...olderRuns.value])
 const localEditor = computed(() => props.desktop && !!props.desktopStatus?.runtimeId && selected.value?.runtimeId === props.desktopStatus.runtimeId)
 function visiblePods(host: CentralRuntime) { return host.workspace.pods.filter(pod => (pod.lifecycle === 'archived') === archived.value && pod.name.toLowerCase().includes(search.value.toLowerCase())) }
-function memberships(runtimeId: string, id: string) {
-  const host = runtimes.value.find(item => item.id === runtimeId)
-  return (host?.networks?.networks.filter(network => network.podIds?.includes(id)).map(network => network.name) ?? []).join(' · ')
-}
 
 function editorState() {
   return JSON.stringify([name.value, description.value, source.value?.id, code.value, variableName.value, variableValue.value, scheduleKind.value, interval.value, dailyTime.value, timezone.value, scheduleEnabled.value, groupId.value])
@@ -299,7 +295,7 @@ onBeforeUnmount(() => { generation++; abort.abort() })
             {{ host.online ? t('Desktop online') : host.lastSeenAt ? t('Desktop offline since {time}', { time: time(host.lastSeenAt) }) : t('Desktop offline') }}<span v-if="runtimes.length > 1"> · {{ host.id }}</span>
           </p>
           <button v-for="pod in visiblePods(host)" :key="pod.id" class="inventory-row central-pod" :disabled="busy" @click="select(host.id, pod.id)">
-            <span><strong>{{ pod.name }}</strong><small v-if="pod.description" class="inventory-purpose">{{ pod.description }}</small><small>{{ memberships(host.id, pod.id) || (host.id === desktopStatus?.runtimeId || sharedEditor ? t('Standalone Pod') : host.workspace.organization.groups.find(group => group.podIds.includes(pod.id))?.name || t('Ungrouped')) }}</small></span><small v-if="pod.queue?.blocked" class="central-blocked">{{ t('Schedule blocked') }}</small><span class="badge">{{ pod.online ? label(pod.lifecycle) : t('Offline') }}</span><span aria-hidden="true">›</span>
+            <span><strong>{{ pod.name }}</strong><small v-if="pod.description" class="inventory-purpose">{{ pod.description }}</small><small>{{ host.workspace.organization.groups.find(group => group.podIds.includes(pod.id))?.name || t('Ungrouped') }}</small></span><small v-if="pod.queue?.blocked" class="central-blocked">{{ t('Schedule blocked') }}</small><span class="badge">{{ pod.online ? label(pod.lifecycle) : t('Offline') }}</span><span aria-hidden="true">›</span>
           </button>
           <p v-if="!visiblePods(host).length" class="central-muted">
             {{ archived ? t('No archived Pods') : t('No matching Pods') }}
@@ -346,14 +342,11 @@ onBeforeUnmount(() => { generation++; abort.abort() })
           </button>
         </div>
         <slot v-else-if="localEditor && current && $slots['local-editor']" name="local-editor" :pod-id="current.pod.id" />
-        <section v-else-if="current?.pod.networkId" class="central-card">
+        <section v-else-if="current?.pod.localOnly" class="central-card">
           <h1>{{ current.pod.scripts.pod.name }}</h1>
           <p role="status">
-            {{ t('This Pod belongs to network work. Read its network details; review changes on the desktop.') }}
+            {{ t('This Pod keeps its runs and results on the desktop; open and change it there.') }}
           </p>
-          <button v-if="sharedEditor && runtime" class="text-button" @click="emit('network', runtime.id, current.pod.networkId)">
-            {{ t('Networks') }}
-          </button>
         </section>
         <RemotePodEditor v-else-if="sharedEditor && current && runtime" :key="`${runtime.id}:${current.pod.id}`" :client="client" :runtime="runtime" :summary="current" :online="available" @dirty="remoteDirty = $event" @busy="remoteBusy = $event" @settings="emit('settings')" />
         <template v-else-if="current && baseline">

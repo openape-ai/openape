@@ -2,7 +2,6 @@ import { createBackup, restoreBackup } from '../../src/worker/data/backup'
 import { WorkspaceDetails } from '../../src/worker/workspace/details'
 import { parseDefinitionsView } from '../../src/contracts/definitions'
 import { DataRetention } from '../../src/worker/data/retention'
-import { networkFixture, closeNetworks } from '../scheduling/network-fixture'
 import { validateDraft } from '../../src/worker/master/validation'
 import { executeScript } from '../../src/worker/runs/runner'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
@@ -21,7 +20,7 @@ import { podDirectories } from '../../src/runtime/environment'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
 const stores: PodDatabase[] = []; const roots: string[] = []
-afterEach(async () => { await closeNetworks(); vi.restoreAllMocks(); const opened = stores.splice(0); for (const store of opened) store.close(); for (const root of [...opened.map(store => store.root), ...roots.splice(0)]) rmSync(root, { recursive: true, force: true }) })
+afterEach(() => { vi.restoreAllMocks(); const opened = stores.splice(0); for (const store of opened) store.close(); for (const root of [...opened.map(store => store.root), ...roots.splice(0)]) rmSync(root, { recursive: true, force: true }) })
 const owner = { issuer: 'https://id.example.test', subject: 'owner' }
 function fixture() {
   const store = new PodDatabase(mkdtempSync(join(tmpdir(), 'pods-definitions-'))); stores.push(store)
@@ -174,45 +173,6 @@ it('skips foreign owners during adoption and makes identical publication retries
   expect(f.workspace.view().instances).toHaveLength(1)
   expect(() => f.workspace.provisioned(randomUUID(), null)).toThrow('not found')
 })
-it('repins an idle compatible network as a paused revision without reviving archived networks', () => {
-  const f = networkFixture()
-  const source = f.pod('Source', { takes: [], gives: ['input'], summary: 'Source' }, async () => {})
-  const sink = f.pod('Sink', { takes: ['input'], gives: [], summary: 'Sink' }, async () => {})
-  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: sink, source: null, serialCase: true }], ['input'])
-  const binding = f.store.db.prepare('SELECT * FROM instance_definition_bindings WHERE pod_id=?').get(sink)!
-  f.store.db.prepare('INSERT INTO pod_definition_versions SELECT definition_id,2,content_hash,lock_hash,contract,created_at FROM pod_definition_versions WHERE definition_id=? AND version=1').run(binding.definition_id!)
-  f.engine.execute({ type: 'activate', id, revision: 1 })
-  f.engine.updateInstance(sink, () => { f.store.db.prepare('UPDATE instance_definition_bindings SET definition_version=2,binding_revision=2 WHERE pod_id=?').run(sink) })
-  expect(f.store.db.prepare('SELECT state,revision,baseline_state FROM networks WHERE id=?').get(id)).toEqual({ state: 'paused', revision: 2, baseline_state: 'ready' })
-  expect(f.store.db.prepare('SELECT revision FROM network_revisions WHERE network_id=? ORDER BY revision').all(id)).toEqual([{ revision: 1 }, { revision: 2 }])
-  expect(f.engine.execute({ type: 'activate', id, revision: 2 }).networks[0]!.state).toBe('active')
-  f.store.db.prepare('INSERT INTO pod_definition_versions SELECT definition_id,3,content_hash,lock_hash,?,created_at FROM pod_definition_versions WHERE definition_id=? AND version=1').run(JSON.stringify({ takes: ['missing'], gives: [], summary: 'Incompatible' }), binding.definition_id!)
-  expect(() => f.engine.updateInstance(sink, () => { f.store.db.prepare('UPDATE instance_definition_bindings SET definition_version=3,binding_revision=3 WHERE pod_id=?').run(sink) })).toThrow()
-  expect(f.store.db.prepare('SELECT definition_version,binding_revision FROM instance_definition_bindings WHERE pod_id=?').get(sink)).toEqual({ definition_version: 2, binding_revision: 2 })
-  expect(f.store.db.prepare('SELECT state,revision FROM networks WHERE id=?').get(id)).toEqual({ state: 'active', revision: 2 })
-  f.store.db.prepare('UPDATE networks SET state=\'archived\' WHERE id=?').run(id)
-  const update = vi.fn()
-  expect(() => f.engine.updateInstance(sink, update)).toThrow('Archived')
-  expect(update).not.toHaveBeenCalled()
-  expect(f.store.db.prepare('SELECT state FROM networks WHERE id=?').get(id)!.state).toBe('archived')
-})
-it('retains old version processing when an open join blocks a network update', () => {
-  const f = networkFixture()
-  const source = f.pod('Source', { takes: [], gives: ['input'], summary: 'Source' }, async () => {})
-  const sink = f.pod('Sink', { takes: ['input'], gives: [], summary: 'Sink' }, async () => {})
-  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: sink, source: null, serialCase: true }], ['input'])
-  const caseId = randomUUID()
-  f.store.transaction(() => {
-    f.store.db.prepare('INSERT INTO network_cases VALUES(?,?,?,1,?)').run(caseId, id, f.groupId, Date.now())
-    f.store.db.prepare('INSERT INTO network_case_revisions VALUES(?,1,\'{}\',\'open\',?)').run(caseId, Date.now())
-    f.store.db.prepare('INSERT INTO network_joins VALUES(?,?,?,1,1,?, ?,\'pending\',NULL)').run(id, 'waiting', caseId, '{}', Date.now() + 10000)
-  })
-  const update = vi.fn()
-  expect(() => f.engine.updateInstance(sink, update)).toThrow('current version remains pinned')
-  expect(update).not.toHaveBeenCalled()
-  expect(f.store.db.prepare('SELECT definition_version,binding_revision FROM instance_definition_bindings WHERE pod_id=?').get(sink)).toEqual({ definition_version: 1, binding_revision: 1 })
-})
-
 it('backs up adopted empty scripts and restores the same instance identity as requiring recovery', async () => {
   const f = fixture(); const empty = f.store.createPod({ name: 'No script yet' })
   await f.execute({ type: 'adopt' }); const definition = await published(f)
@@ -236,38 +196,6 @@ it('backs up adopted empty scripts and restores the same instance identity as re
   const recovered = await recovery.execute({ type: 'retryProvision', requestId }, new AbortController().signal)
   expect(recovered.provisioning.find(item => item.requestId === requestId)!.state).toBe('ready')
   expect(restored.db.prepare('SELECT * FROM script_drafts WHERE pod_id=?').all(podId)).toEqual(priorDrafts)
-})
-
-it('validates and activates a network definition through the workspace and rejects stale permissions', async () => {
-  const f = networkFixture()
-  const source = f.pod('Source', { takes: [], gives: ['input'], summary: 'Source' }, async () => {})
-  const sink = f.pod('Sink', { takes: ['input'], gives: [], summary: 'Sink' }, async () => {})
-  const id = f.create([{ podId: source, source: { schedule: null }, serialCase: false }, { podId: sink, source: null, serialCase: true }], ['input'])
-  const workspace = new DefinitionWorkspace(f.store, f.resources, f.owner, (podId, update) => f.engine.updateInstance(podId, update))
-  const execute = (command: unknown) => workspace.execute(command, new AbortController().signal)
-  const definitionId = workspace.view().instances.find(instance => instance.podId === sink)!.definitionId
-  await execute({ type: 'publish', podId: sink, expectedScript: f.store.getPod(sink).activeScript, name: 'Reusable sink', defaults: { label: 'Reviewed' } })
-  const update = await execute({ type: 'prepareUpdate', podId: sink, definitionId, version: 2, expectedBinding: 1 })
-  const draftId = update.update!.draftId!
-  const manifest = join(f.store.root, 'runtime.json'); await writeFile(manifest, JSON.stringify({ dependencyLockHash: 'a'.repeat(64) }))
-  const runtime = { manifest, helper: '/unused', environment: {} } as unknown as AgentRuntime
-  await validateDraft(f.store, f.resources, runtime, draftId, 1, new AbortController().signal)
-  f.resources.assignReference(sink, 'Own reference', join(f.store.root, 'reference.txt'))
-  await expect(execute({ type: 'activateUpdate', podId: sink, draftId, expectedBinding: 1 })).rejects.toThrow('current script and permissions')
-  expect(workspace.view().instances.find(instance => instance.podId === sink)!.version).toBe(1)
-  expect(f.store.db.prepare('SELECT revision FROM networks WHERE id=?').get(id)!.revision).toBe(1)
-  await validateDraft(f.store, f.resources, runtime, draftId, 1, new AbortController().signal)
-  await execute({ type: 'activateUpdate', podId: sink, draftId, expectedBinding: 1 })
-  expect(workspace.view().instances.find(instance => instance.podId === sink)).toMatchObject({ version: 2, bindingRevision: 2, diverged: false })
-  expect(f.store.db.prepare('SELECT state,revision FROM networks WHERE id=?').get(id)).toEqual({ state: 'paused', revision: 2 })
-  expect(f.store.db.prepare('SELECT network_revision FROM network_subscriptions WHERE pod_id=? ORDER BY network_revision').all(sink)).toEqual([{ network_revision: 1 }, { network_revision: 2 }])
-  const shared = await execute({ type: 'instantiate', requestId: randomUUID(), definitionId, version: 2, name: 'Shared copy', groupId: f.groupId })
-  const local = await execute({ type: 'prepareLocal', podId: sink, expectedScript: f.store.getPod(sink).activeScript, name: 'Local network sink', defaults: { label: 'Local' } })
-  const binding = local.instances.find(instance => instance.podId === sink)!
-  expect(binding.definitionId).not.toBe(definitionId)
-  expect(f.store.db.prepare('SELECT definition_id,definition_version,binding_revision FROM instance_definition_bindings WHERE pod_id=?').get(sink)).toEqual({ definition_id: binding.definitionId, definition_version: 1, binding_revision: 3 })
-  expect(f.store.db.prepare('SELECT state,revision FROM networks WHERE id=?').get(id)).toEqual({ state: 'paused', revision: 3 })
-  expect(local.instances.find(instance => instance.podId === shared.createdPodId)).toMatchObject({ definitionId, version: 2 })
 })
 
 it.each(['http', 'ssh', 'app'])('refuses publication of instance-specific %s capabilities before creating a definition', async (kind) => {

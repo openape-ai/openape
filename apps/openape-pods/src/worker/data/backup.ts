@@ -1,5 +1,5 @@
 import { assertIntegrity } from '../storage/integrity'
-import { restoreNetworkStorage } from '../storage/network-restore'
+import { fenceRestoredRuntime } from '../storage/restore-fence'
 import { assertSupportedSchema, upgradeToCurrent } from '../storage/upgrade'
 import { DependencyStore, removePackageTree } from '../dependencies/store'
 import { checkLock, packageDigest, packageFiles } from '../dependencies/tree'
@@ -17,12 +17,8 @@ export interface BackupManifest { format: 'openape-pods-backup', version: 1, sch
 const uuid = (value: string) => /^[a-f0-9-]{36}$/.test(value)
 // MCP journal entries (including the command calling here) are receipts, not work: their real work holds
 // leases. Other running actions, such as a script validation on the dependency tree, are real work.
-export const activeMasterAction = 'id NOT LIKE \'codex-admin:%\' AND id NOT LIKE \'codex-network:%\''
-export function networkDataBusy(store: PodDatabase): boolean {
-  return !!store.db.prepare('SELECT 1 FROM network_invocations WHERE state IN (\'running\',\'stopping\') UNION ALL SELECT 1 FROM network_gate_task_attempts WHERE state=\'running\' UNION ALL SELECT 1 FROM network_deliveries WHERE state=\'claimed\' UNION ALL SELECT 1 FROM network_gate_tasks WHERE state=\'consuming\' LIMIT 1').get()
-}
+export const activeMasterAction = 'id NOT LIKE \'codex-admin:%\''
 export function assertDataIdle(store: PodDatabase): void {
-  if (networkDataBusy(store)) throw new Error('Finish or recover network work before changing application data')
   if (store.db.prepare('SELECT 1 FROM dependency_domains LIMIT 1').get()) throw new Error('Finish dependency preparation before changing application data')
   if (store.db.prepare('SELECT 1 FROM pod_descriptions WHERE state=\'running\'').get()) throw new Error('Wait for the description update before changing stored data')
   if (store.db.prepare('SELECT 1 FROM program_leases LIMIT 1').get() || store.db.prepare('SELECT 1 FROM run_leases LIMIT 1').get() || store.db.prepare(`SELECT 1 FROM master_actions WHERE state='running' AND ${activeMasterAction} LIMIT 1`).get()) throw new Error('Finish or recover active work before changing application data')
@@ -31,7 +27,7 @@ function allowed(path: string): boolean {
   relativePath(path)
   if (path === 'control.sqlite') return true
   const parts = path.split('/')
-  if (parts[0] === 'blobs' || parts[0] === 'artifacts') return parts.length === 2 && /^[a-f0-9]{64}$/.test(parts[1])
+  if (parts[0] === 'blobs') return parts.length === 2 && /^[a-f0-9]{64}$/.test(parts[1])
   if (parts[0] === 'dependencies') return uuid(parts[1] ?? '') && /^[a-f0-9]{64}$/.test(parts[2] ?? '') && parts.length > 3
   if (parts[0] === 'pods') return uuid(parts[1] ?? '') && parts[2] === 'workspace' && parts.length > 3
   return parts[0] === 'snapshots' && parts.length === 4 && uuid(parts[1]) && uuid(parts[2]) && (uuid(parts[3]) || parts[3] === 'manifest.json')
@@ -56,13 +52,6 @@ function checkDatabase(database: DatabaseSync, schema: number): void {
 function requiredBlobs(database: DatabaseSync): string[] {
   return database.prepare('SELECT hash FROM sources UNION SELECT hash FROM scripts UNION SELECT content_hash AS hash FROM pod_definition_versions').all().map(row => row.hash as string)
 }
-function retainedArtifacts(database: DatabaseSync): { path: string, hash: string, size: number }[] {
-  return database.prepare('SELECT content_hash,storage_ref,size FROM artifacts UNION ALL SELECT content_hash,storage_ref,size FROM network_artifact_staging').all().map((row) => {
-    const hash = String(row.content_hash); const path = String(row.storage_ref); const size = Number(row.size)
-    if (!/^[a-f0-9]{64}$/.test(hash) || path !== `artifacts/${hash}` || !Number.isSafeInteger(size) || size < 0 || size > 256 * 1024 * 1024) throw new Error('Invalid retained artifact storage')
-    return { path, hash, size }
-  })
-}
 /** A schema-45 or schema-46 backup is brought to the current schema before anything else reads it. */
 function upgradeRestored(database: DatabaseSync, schema: number): void {
   if (schema === schemaVersion) return
@@ -82,14 +71,10 @@ export async function createBackup(store: PodDatabase, parent: string, observe: 
     const saved = await open(databasePath, 'r'); try { await saved.sync() }
     finally { await saved.close() }
     const database = new DatabaseSync(databasePath, { readOnly: true })
-    const paths = new Map<string, string | undefined>(); const artifactSizes = new Map<string, number>(); let schema: number
+    const paths = new Map<string, string | undefined>(); let schema: number
     try {
       schema = database.prepare('PRAGMA user_version').get()!.user_version as number; checkDatabase(database, schema); assertIntegrity(database, true)
       for (const hash of requiredBlobs(database)) { if (!/^[a-f0-9]{64}$/.test(hash)) throw new Error('Invalid referenced blob'); paths.set(`blobs/${hash}`, hash) }
-      for (const artifact of retainedArtifacts(database)) {
-        if (artifactSizes.has(artifact.path) && artifactSizes.get(artifact.path) !== artifact.size) throw new Error('Invalid retained artifact storage')
-        paths.set(artifact.path, artifact.hash); artifactSizes.set(artifact.path, artifact.size)
-      }
       for (const row of database.prepare('SELECT id FROM pods').all()) {
         if (!uuid(row.id as string)) throw new Error('Invalid pod identity in backup')
         for (const path of await files(sourceRoot, `pods/${row.id}/workspace`)) paths.set(path, undefined)
@@ -110,7 +95,6 @@ export async function createBackup(store: PodDatabase, parent: string, observe: 
     for (const [path, expected] of paths) {
       if (!allowed(path) || paths.size > 100000) throw new Error('Unsupported backup inventory')
       observe(path); const file = await copyVerified(sourceRoot, path, stage)
-      if (artifactSizes.has(path) && artifactSizes.get(path) !== file.size) throw new Error(`Retained artifact size mismatch: ${path}`)
       if (expected && file.hash !== expected) throw new Error(`Referenced evidence is corrupt: ${path}`)
       size += file.size; if (size > 10 * 1024 ** 3) throw new Error('Backup exceeds 10 GiB')
       records.push(file)
@@ -145,10 +129,6 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
       const names = new Set(records.keys())
       for (const hash of requiredBlobs(database)) {
         if (records.get(`blobs/${hash}`)?.hash !== hash) throw new Error('Backup omits referenced evidence')
-      }
-      for (const artifact of retainedArtifacts(database)) {
-        const file = manifest.files.find(file => file.path === artifact.path)
-        if (!file || file.hash !== artifact.hash || file.size !== artifact.size) throw new Error('Backup omits retained artifact evidence')
       }
       database.exec('PRAGMA foreign_keys=ON; PRAGMA synchronous=FULL; BEGIN IMMEDIATE;')
       database.exec('UPDATE pods SET lifecycle=\'paused\' WHERE lifecycle!=\'archived\'; UPDATE schedules SET enabled=0,error=\'Restored profile: review before enabling\'; DELETE FROM run_leases; DELETE FROM execution_domains; DELETE FROM validations; UPDATE resource_epochs SET epoch=epoch+1; UPDATE resources SET state=\'refreshRequired\',revision=revision+1 WHERE state!=\'revoked\'; UPDATE connections SET state=\'revoked\',error=\'Restored profile: reconnect\',metadata=\'{}\'; UPDATE onboarding SET complete=0; UPDATE master_actions SET state=\'interrupted\',error=\'Restored action requires inspection\' WHERE state=\'running\'; UPDATE master_messages SET state=\'interrupted\' WHERE state=\'streaming\'; UPDATE runs SET state=\'interrupted\',error=\'Restored run requires inspection\' WHERE state=\'running\'; UPDATE accepted_events SET state=\'blocked\',error=\'Restored input requires review\' WHERE state IN (\'pending\',\'claimed\');')
@@ -186,7 +166,7 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
       database.exec('UPDATE master_contexts SET thread_id=NULL,state=\'interrupted\',error=\'Restored chat history; new model context required\';')
       database.exec('DELETE FROM script_credential_approvals;')
       database.exec('DELETE FROM deletion_jobs; UPDATE data_settings SET used_bytes=0,error=NULL;')
-      restoreNetworkStorage(database)
+      fenceRestoredRuntime(database, manifest.createdAt)
       database.exec('COMMIT;')
     }
     finally { database.close() }

@@ -20,7 +20,7 @@ import { runFailure, runHeadline, runResult } from './run-activity'
 import RunApproval from './RunApproval.vue'
 import type { RunApproval as Approval } from '../contracts/activity'
 import PodKnowledge from './PodKnowledge.vue'
-import type { AutomationDescription, StoredPod, WorkspaceState } from '../contracts/control'
+import type { StoredPod, WorkspaceState } from '../contracts/control'
 import type { PodDetails } from '../contracts/details'
 import type { RunRecord } from '../contracts/runs'
 import type { ScheduleView } from '../contracts/scheduling'
@@ -32,14 +32,14 @@ export default defineComponent({
   emits: ['settings'],
   setup() { return { access: usePodAccess() } },
   data() {
-    return { sharing: typeof window.pods?.sharing === 'function', shareSelection: null as PortableSourceSelection | null, requestedRun: '', descriptions: [] as AutomationDescription[], requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: this.initialPodId ? 'Overview' : 'Pods', tabs: ['Overview', 'Script', 'Values', 'Permissions', 'Settings', 'History'], pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { sharing: typeof window.pods?.sharing === 'function', shareSelection: null as PortableSourceSelection | null, requestedRun: '', requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: this.initialPodId ? 'Overview' : 'Pods', tabs: ['Overview', 'Script', 'Values', 'Permissions', 'Settings', 'History'], pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     activeTab(): string { return this.selected === 'Knowledge' ? 'Overview' : this.selected },
     globalPage(): boolean { return ['App settings', 'Pods', 'Import', 'Share'].includes(this.selected) },
     sharingApi(): (command: SharingCommand) => Promise<import('../contracts/sharing').SharingState> { return command => window.pods.sharing!(command) },
     pod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.podId) },
-    workerLabel(): string { if (this.connectionError) return t('Unavailable'); return label({ starting: 'Starting', ready: 'Ready', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting']) },
+    workerLabel(): string { if (this.connectionError) return t('Unavailable'); return label({ starting: 'Starting', ready: 'Ready', recovery: 'Needs attention', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting']) },
     attention(): boolean { return !!this.connectionError || this.status?.worker.state === 'error' },
     currentRun(): RunRecord | undefined { return this.runs.find(run => run.state === 'running') },
     needsRecovery(): boolean { const run = this.runs[0]; return !this.schedule?.retry && !!run && ['interrupted', 'failed', 'cancelled', 'blocked'].includes(run.state) && run.recovery?.state !== 'retryQueued' },
@@ -59,7 +59,7 @@ export default defineComponent({
     t, runFailure, runHeadline, runResult, diagnostic, label, dateTime,
     async openRun(podId: string, runId: string) { await this.selectPod(podId); this.requestedRun = runId; this.selected = 'History' },
     openValues(alias = '') { this.requestedSecret = alias; this.selected = 'Values' },
-    workspaceChanged(state: WorkspaceState) { if (state.organization.revision < this.organization.revision) return; this.pods = state.pods; this.organization = state.organization; this.descriptions = state.descriptions ?? [] },
+    workspaceChanged(state: WorkspaceState) { if (state.organization.revision < this.organization.revision) return; this.pods = state.pods; this.organization = state.organization },
     poll() { if (this.closed) return; this.timer = setTimeout(async () => { await this.refresh(); this.poll() }, 1000) },
     async refresh() {
       if (this.busy || (!this.access.remote && this.status?.worker.state !== 'ready')) return
@@ -135,7 +135,7 @@ export default defineComponent({
         <AppSettings v-if="selected === 'App settings'" />
         <LocalShell v-else-if="selected === 'Pods'" :sharing="sharing" @open-pod="selectPod" @share="share" @advanced="navigate('App settings')" @import="selected = 'Import'" />
         <template v-else-if="selected === 'Import'">
-          <SharingImport :api="sharingApi" :organization="organization" desktop :resources="podResources" @changed="refresh" @open-pod="selectPod" />
+          <SharingImport :api="sharingApi" desktop :resources="podResources" @changed="refresh" @open-pod="selectPod" />
         </template>
         <template v-else-if="selected === 'Share' && shareSelection">
           <SharingExport :key="shareSelection.id" :selection="shareSelection" :api="sharingApi" @done="selected = 'Pods'" />

@@ -1,9 +1,12 @@
 import { assertIntegrity } from './integrity.ts'
-import { baselineRows, baselineSchema, schema47Additions, schemaVersion } from './schema.ts'
+import { baselineRows, baselineSchema, schemaVersion } from './schema.ts'
 import { assertSupportedSchema, assertUpgradable, upgradeToCurrent } from './upgrade.ts'
-import type { GraphContract } from '../../contracts/graphs.ts'
+import { restoreReviewGate } from './restore-fence.ts'
+import { StorageError } from './errors.ts'
+import { parseWorkDeclarations } from '../../contracts/work.ts'
+import type { WorkDeclaration } from '../../contracts/work.ts'
 import { createHash, randomUUID } from 'node:crypto'
-import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, statfsSync, writeFileSync } from 'node:fs'
+import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { DatabaseSync } from 'node:sqlite'
 
@@ -28,7 +31,9 @@ export interface ScriptManifest {
   checkpointSchemaVersion: number
   assignmentRevision: number
   effects: 'readOnly' | 'reconciledEffects'
-  contract?: GraphContract
+  /** Retired network contract (takes/gives) kept only on archived script history; never executed (issue 1465). */
+  contract?: unknown
+  work?: WorkDeclaration[]
 }
 export interface SourceInput { id: string, locator: string, version: string, content: string }
 export interface ClaimInput { id: string, matter: string, kind: 'finding' | 'question' | 'gap', text: string, sourceIds: string[], supersedes?: string }
@@ -56,13 +61,15 @@ function hash(value: unknown): asserts value is string {
   if (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) throw new Error('Invalid content hash')
 }
 export function parseManifest(value: unknown): ScriptManifest {
-  record(value, ['schemaVersion', 'contentHash', 'entrypoint', 'dependencyLockHash', 'runtimeVersion', 'capabilities', 'triggers', 'inputSchemaHash', 'outputSchemaHash', 'checkpointSchemaVersion', 'assignmentRevision', 'effects', 'contract'])
+  record(value, ['schemaVersion', 'contentHash', 'entrypoint', 'dependencyLockHash', 'runtimeVersion', 'capabilities', 'triggers', 'inputSchemaHash', 'outputSchemaHash', 'checkpointSchemaVersion', 'assignmentRevision', 'effects', 'contract', 'work'])
   if (value.schemaVersion !== 1 || value.entrypoint !== 'run.mjs' || !['readOnly', 'reconciledEffects'].includes(value.effects as string)) throw new Error('Unsupported script contract')
   for (const key of ['contentHash', 'dependencyLockHash', 'inputSchemaHash', 'outputSchemaHash']) hash(value[key])
   text(value.runtimeVersion, 'runtime', 100); integer(value.checkpointSchemaVersion); integer(value.assignmentRevision)
   if (!Array.isArray(value.capabilities) || value.capabilities.length > 100 || value.capabilities.some(cap => typeof cap !== 'string' || !/^[a-z][\w.-]{0,100}$/.test(cap))) throw new Error('Invalid capabilities')
   if (!Array.isArray(value.triggers) || !value.triggers.length || value.triggers.some(trigger => !['manual', 'schedule', 'event'].includes(trigger))) throw new Error('Invalid triggers')
-  return structuredClone(value) as unknown as ScriptManifest
+  const manifest = structuredClone(value) as unknown as ScriptManifest
+  if (value.work !== undefined) manifest.work = parseWorkDeclarations(value.work)
+  return manifest
 }
 function syncDirectory(path: string): void {
   const fd = openSync(path, 'r')
@@ -97,9 +104,12 @@ export class PodDatabase {
       this.db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;')
       this.migrate()
       assertIntegrity(this.db)
+      // Converted data starts only with its conversion receipt (issue 1465).
+      if (this.db.prepare('SELECT 1 FROM legacy_records LIMIT 1').get() && !this.db.prepare('SELECT 1 FROM storage_receipts WHERE kind=\'conversion\'').get()) throw new StorageError('invalid-data', 'Converted data has no conversion receipt')
       this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;')
       this.db.function('pod_activated', (podId) => { this.onActivated(String(podId)); return null })
       this.db.exec('CREATE TEMP TRIGGER pod_activated AFTER UPDATE OF lifecycle ON pods WHEN NEW.lifecycle=\'active\' AND OLD.lifecycle<>\'active\' BEGIN SELECT pod_activated(NEW.id); END')
+      this.db.exec(restoreReviewGate)
       mkdirSync(this.blobs, { recursive: true, mode: 0o700 })
     }
     catch (error) { this.db.close(); throw error }
@@ -109,11 +119,11 @@ export class PodDatabase {
     const version = this.db.prepare('PRAGMA user_version').get()?.user_version as number
     if (version === schemaVersion) return
     if (version === 0) {
-      this.transaction(() => this.db.exec(`${baselineSchema}${schema47Additions}${baselineRows}PRAGMA user_version=${schemaVersion};`))
+      this.transaction(() => this.db.exec(`${baselineSchema}${baselineRows}PRAGMA user_version=${schemaVersion};`))
       return
     }
     // Refuse an unsupported database before writing a full copy of it on every start.
-    if (version !== 46) assertUpgradable(this.db)
+    assertUpgradable(this.db, version)
     const backup = join(this.root, `before-v${version}-${randomUUID()}.sqlite`)
     this.db.prepare('VACUUM INTO ?').run(backup); chmodSync(backup, 0o600)
     const copy = openSync(backup, 'r')
@@ -128,9 +138,14 @@ export class PodDatabase {
     // Foreign keys stay off while the tables are rebuilt; upgradeToCurrent checks every reference afterwards.
     this.db.exec('PRAGMA foreign_keys=OFF')
     try { this.transaction(() => { upgradeToCurrent(this.db, version); this.db.exec(`PRAGMA user_version=${schemaVersion}`) }) }
+    catch (error) {
+      // The rolled-back database is unchanged, so its copy is redundant; repeated attempts never fill the disk.
+      rmSync(backup, { force: true })
+      throw error
+    }
     finally { this.db.exec('PRAGMA foreign_keys=ON') }
-    // Only the schema-45 rebuild leaves free pages; schema 46 gains empty tables.
-    if (version !== 46) this.db.exec('VACUUM')
+    // The conversion drops the network tables; their pages return to the file system.
+    this.db.exec('VACUUM')
   }
 
   transaction<T>(operation: () => T): T {

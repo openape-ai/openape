@@ -2,7 +2,6 @@ import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { canonicalPortableJson } from '@openape/pods-protocol'
 import { afterEach, expect, it, vi  } from 'vitest'
 import { createBackup, restoreBackup } from '../../src/worker/data/backup'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
@@ -14,14 +13,9 @@ import { PodVariables } from '../../src/worker/resources/variables'
 import { runAliases } from '../../src/contracts/runs'
 import { parsePortableImportCommand } from '../../src/contracts/sharing'
 import { PortableImporter, recoverPortableImports } from '../../src/worker/sharing/import'
-import type { ImportEngines } from '../../src/worker/sharing/import'
-import { NetworkEngine } from '../../src/worker/scheduling/network-engine'
-import { RunDispatcher } from '../../src/worker/runs/dispatcher'
-import { DefinitionCatalog } from '../../src/worker/workspace/definition-catalog'
-import { digest, PodDatabase, schemaVersion  } from '../../src/worker/storage/database'
+import { PodDatabase, schemaVersion  } from '../../src/worker/storage/database'
 import { createPortablePackage } from '../../src/worker/sharing/package'
 import type { PortableDescription, PortablePayload } from '../../src/worker/sharing/package'
-import { PodGroups } from '../../src/worker/workspace/groups'
 import { WorkspaceDetails } from '../../src/worker/workspace/details'
 import { ItemTagStore } from '../../src/worker/workspace/item-tags'
 import { capturePortableSource } from '../../src/worker/sharing/source'
@@ -75,7 +69,7 @@ it('stages one journal per request key without creating Pods', async () => {
   expect(staged).toMatchObject({ state: 'staged', revision: 1, transferSha256: exported.transferSha256, unresolved: [{ scope: 'pod', key: 'fixture', requirement: 'value', name: 'input_2' }] })
   expect(await importer.stage(id, exported.archive)).toEqual(staged)
   expect(() => parsePortableImportCommand({ type: 'stage', id, archive: exported.archive, extra: true })).toThrow('Invalid import command')
-  expect(() => parsePortableImportCommand({ type: 'configure', id, revision: 1, values: { pods: { fixture: { input_1: {} } }, compositions: {} } })).toThrow('Invalid import command')
+  expect(() => parsePortableImportCommand({ type: 'configure', id, revision: 1, values: { pods: { fixture: { input_1: {} } } } })).toThrow('Invalid import command')
   expect(parsePortableImportCommand({ type: 'bind', id, revision: 1, pod: 'fixture', alias: 'api', resourceId: id, bundle: null }).type).toBe('bind')
   await expect(importer.stage(id, (await packageFixture(true)).archive)).rejects.toThrow('reused with a different package')
   await expect(new PortableImporter(store, resources, { ...owner, subject: 'someone-else' }, '').stage(id, exported.archive)).rejects.toThrow('another owner')
@@ -88,12 +82,12 @@ it('stages one journal per request key without creating Pods', async () => {
 
 it('accepts only declared scalar values at the current revision', async () => {
   const { importer } = workspace(); const id = randomUUID(); const staged = await importer.stage(id, (await packageFixture(true)).archive)
-  const set = (revision: number, input: string, value: string | number | boolean | null) => importer.configure(id, revision, { pods: { fixture: { [input]: value } }, compositions: {} })
+  const set = (revision: number, input: string, value: string | number | boolean | null) => importer.configure(id, revision, { pods: { fixture: { [input]: value } } })
   expect(() => set(1, 'input_2', 11)).toThrow('does not match')
   expect(() => set(1, 'input_2', '5')).toThrow('does not match')
   expect(() => set(1, 'input_3', 'secret-value')).toThrow('bound through setup')
   expect(() => set(1, 'missing', 1)).toThrow('undeclared input')
-  expect(() => importer.configure(id, 1, { pods: { other: { input_1: 'x' } }, compositions: {} })).toThrow('undeclared package member')
+  expect(() => importer.configure(id, 1, { pods: { other: { input_1: 'x' } } })).toThrow('undeclared package member')
   const configured = set(1, 'input_2', 5)
   expect(configured).toMatchObject({ revision: 2, values: { pods: { fixture: { input_2: 5 } } }, unresolved: [{ requirement: 'value', name: 'input_5' }, { requirement: 'value', name: 'input_6' }, { requirement: 'secret', name: 'token' }, { requirement: 'access', name: 'api' }, { requirement: 'access', name: 'inbox' }, { requirement: 'access', name: 'archive' }, { requirement: 'application', name: 'cli' }] })
   expect(() => set(1, 'input_2', 6)).toThrow('Import changed')
@@ -106,7 +100,7 @@ it('accepts only declared scalar values at the current revision', async () => {
 it('creates one independent paused copy and returns it for a repeated commit', async () => {
   const { store, importer } = workspace(); const existing = store.createPod({ name: 'Existing' }); new PodVariables(store).save(existing.id, 'greeting', 'mine', 0)
   const before = podRows(store, existing.id); const id = randomUUID(); await importer.stage(id, (await packageFixture()).archive)
-  importer.configure(id, 1, { pods: { fixture: { input_2: 5 } }, compositions: {} })
+  importer.configure(id, 1, { pods: { fixture: { input_2: 5 } } })
   const committed = await importer.commit(id, 2); const podId = committed.pods[0]!.podId
   expect(committed).toMatchObject({ state: 'committed', unresolved: [] })
   expect(store.getPod(podId)).toMatchObject({ name: 'Imported fixture', lifecycle: 'paused', activeScript: null })
@@ -126,19 +120,19 @@ it('keeps a Pod\'s own tags through a real export and import round trip', async 
   installExample(source.store, source.resources, pod.id, 'deterministic', 'a'.repeat(64))
   new ItemTagStore(source.store).execute({ type: 'tag', id: pod.id, revision: 0, tags: ['delta-mind', 'mail'] })
   const captured = capturePortableSource(source.store, owner, { kind: 'pod', id: pod.id })
-  const content = await mapPortableSource(source.store.root, captured, { package: { key: 'tagged', revision: 1, title: 'Tagged', description: '' }, pods: [{ podId: pod.id, key: 'tagged', description: '', defaults: [], aliases: [], assets: [] }], compositions: [] })
+  const content = await mapPortableSource(source.store.root, captured, { package: { key: 'tagged', revision: 1, title: 'Tagged', description: '' }, pods: [{ podId: pod.id, key: 'tagged', description: '', defaults: [], aliases: [], assets: [] }] })
   const exported = await createPortablePackage(content.description, content.payloads, '')
   expect(exported.manifest.pods[0]!.tags).toEqual(['delta-mind', 'mail'])
   const { store, importer } = workspace(); const id = randomUUID()
   const committed = await importer.commit(id, (await importer.stage(id, exported.archive)).revision)
   const imported = new ItemTagStore(store)
   expect(imported.own(committed.pods[0]!.podId)).toEqual(['delta-mind', 'mail'])
-  expect(imported.view()).toEqual([{ id: committed.pods[0]!.podId, tags: ['delta-mind', 'mail'], revision: 1, inherited: [] }])
+  expect(imported.view()).toEqual([{ id: committed.pods[0]!.podId, tags: ['delta-mind', 'mail'], revision: 1 }])
 })
 
 it('keeps unfinished setup from activating and finishes only resolved imports', async () => {
   const { store, resources, importer } = workspace(); const id = randomUUID(); await importer.stage(id, (await packageFixture(true)).archive)
-  importer.configure(id, 1, { pods: { fixture: { input_2: 5, input_6: 'eu' } }, compositions: {} })
+  importer.configure(id, 1, { pods: { fixture: { input_2: 5, input_6: 'eu' } } })
   const committed = await importer.commit(id, 2); const podId = committed.pods[0]!.podId
   expect(new PodVariables(store).values(podId)).toEqual({ greeting: 'hello', limit: '5', first: 'eu', second: 'eu' })
   expect(() => new WorkspaceDetails(store, resources).execute({ type: 'activate', podId, hash: 'a'.repeat(64), assignmentRevision: 1, expectedActive: null })).toThrow('Finish the import setup')
@@ -147,7 +141,7 @@ it('keeps unfinished setup from activating and finishes only resolved imports', 
   await expect(validateDraft(store, resources, {} as AgentRuntime, draft, 1, new AbortController().signal)).rejects.toThrow('Finish the import setup')
   expect(() => installExample(store, resources, podId, 'deterministic', 'a'.repeat(64))).toThrow('Finish the import setup')
   expect(() => importer.complete(id, committed.revision)).toThrow('setup is incomplete')
-  const plain = randomUUID(); await importer.stage(plain, (await packageFixture()).archive); importer.configure(plain, 1, { pods: { fixture: { input_2: 2 } }, compositions: {} })
+  const plain = randomUUID(); await importer.stage(plain, (await packageFixture()).archive); importer.configure(plain, 1, { pods: { fixture: { input_2: 2 } } })
   const ready = await importer.commit(plain, 2); const completed = importer.complete(plain, ready.revision)
   expect(completed.state).toBe('completed')
   expect(importer.complete(plain, ready.revision)).toEqual(completed)
@@ -158,7 +152,7 @@ it('keeps unfinished setup from activating and finishes only resolved imports', 
 
 it('binds declared aliases to matching local assignments and exposes them to scripts', async () => {
   const { root, store, resources, importer } = workspace(); const id = randomUUID(); await importer.stage(id, (await packageFixture(true)).archive)
-  importer.configure(id, 1, { pods: { fixture: { input_5: 'eu' } }, compositions: {} })
+  importer.configure(id, 1, { pods: { fixture: { input_5: 'eu' } } })
   let view = await importer.commit(id, 2); const podId = view.pods[0]!.podId
   const open = () => importer.view(id).unresolved.map(item => `${item.requirement}:${item.name}`)
   expect(open()).toEqual(['value:input_2', 'secret:token', 'access:api', 'access:inbox', 'access:archive', 'application:cli'])
@@ -203,117 +197,17 @@ it('binds declared aliases to matching local assignments and exposes them to scr
   expect(runAliases(resources.aliases(podId), [{ id: reference.id, hash: 'a'.repeat(64), path: '/snapshot/template.txt' }])).toEqual({ applications: { cli: 'Tool CLI' }, http: { api: 'https://api.example.test' }, directories: { archive: inbox, inbox }, references: { 'assets/template.txt': { id: reference.id, hash: 'a'.repeat(64), path: '/snapshot/template.txt' } } })
   expect(() => resources.alias(podId, 'Not a key', api.resource)).toThrow('invalid local key')
   expect(() => resources.alias(podId, 'api', randomUUID())).toThrow('current file, directory or tool')
-  expect(() => importer.configure(id, view.revision, { pods: { fixture: { input_2: 6 } }, compositions: {} })).toThrow('now a Pod variable')
-  view = importer.configure(id, view.revision, { pods: { fixture: { input_4: 'https://moved.example.test' } }, compositions: {} })
+  expect(() => importer.configure(id, view.revision, { pods: { fixture: { input_2: 6 } } })).toThrow('now a Pod variable')
+  view = importer.configure(id, view.revision, { pods: { fixture: { input_4: 'https://moved.example.test' } } })
   expect(open()).toEqual(['access:api'])
   expect(() => importer.complete(id, view.revision)).toThrow('setup is incomplete')
-  view = importer.configure(id, view.revision, { pods: { fixture: { input_4: null } }, compositions: {} })
+  view = importer.configure(id, view.revision, { pods: { fixture: { input_4: null } } })
   view = importer.complete(id, view.revision)
   expect(view.state).toBe('completed')
   resources.revoke(podId, api.resource, 1)
   expect(runAliases(resources.aliases(podId), []).http).toEqual({})
   bind('api', tool('https://api.example.test', ['GET']).resource)
   expect(runAliases(resources.aliases(podId), []).http).toEqual({ api: 'https://api.example.test' })
-})
-
-const schema = { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false }
-
-async function networkFixture(tags = false) {
-  const script = { kind: 'script' as const, mediaType: 'text/javascript', content: bytes('export async function run() { return { status: "completed" } }') }
-  const pod = (key: string, contract: { takes: string[], gives: string[], summary: string }, shared: boolean) => ({ key, title: `Imported ${key}`, description: '', script: `pods/${key}/run.mjs`, packages: null, contract, requestedCapabilities: [], access: [],
-    inputs: shared ? [{ key: 'input_1', label: 'region', description: '', kind: 'string' as const, required: true, sharingGroup: 'shared_1_1' }] : [], bindings: shared ? [{ alias: 'region', input: 'input_1' }] : [], applications: [], assets: [], ...(tags && shared ? { tags: ['filing'] } : {}) })
-  const document = { version: 1, kind: 'network', formatVersion: 6, channels: [{ name: 'report.ready', title: 'Report ready', schemaVersion: 1, schema }], members: [{ pod: 'first', source: { schedule: { kind: 'interval', seconds: 600 } }, serialCase: false }, { pod: 'second', source: null, serialCase: false }], routes: [], joins: [], feedback: [],
-    values: [{ name: 'region', input: 'input_1' }], legacyVariables: [], collections: [{ key: 'collection_1', name: 'reports', schema: 'data/flow/collection_1.json', retention: {}, access: [{ pod: 'second', operations: ['read', 'write'] }] }], artifacts: [{ key: 'artifacts_1', collection: 'collection_1', access: [{ pod: 'second', operations: ['read', 'create'] }] }], calls: [] }
-  return createPortablePackage({
-    format: 'openape-package', version: 1, package: { key: 'flow', revision: 1, title: 'Portable network', description: '' }, requiredFeatures: ['portable_aliases_v1', ...(tags ? ['portable_tags_v1'] : [])], entry: { kind: 'network', key: 'flow' }, applications: [],
-    pods: [pod('first', { takes: [], gives: ['report.ready'], summary: 'Creates reports' }, false), pod('second', { takes: ['report.ready'], gives: [], summary: 'Files reports' }, true)],
-    compositions: [{ key: 'flow', kind: 'network', title: 'Imported network', document: 'compositions/flow.json', documentVersion: 1, nodes: [{ pod: 'first', after: [], handoff: false }, { pod: 'second', after: [], handoff: false }], calls: [], dataSchemas: ['data/flow/collection_1.json'],
-      inputs: [{ key: 'input_1', label: 'region', description: '', kind: 'string', required: true, sharingGroup: 'shared_1_1' }], ...(tags ? { tags: ['delta-mind'] } : {}) }],
-  }, [{ ...script, path: 'pods/first/run.mjs' }, { ...script, path: 'pods/second/run.mjs' }, { path: 'compositions/flow.json', kind: 'composition', mediaType: 'application/json', content: bytes(canonicalPortableJson(document)) }, { path: 'data/flow/collection_1.json', kind: 'data-schema', mediaType: 'application/json', content: bytes(canonicalPortableJson({ version: 1, schema, indexes: [] })) }], '')
-}
-
-// Approves a member the way the network fixture does: a contract-bearing script version, active and validated for the current resources.
-function approve(store: PodDatabase, resources: ResourceRegistry, podId: string, contract: { takes: string[], gives: string[], summary: string }): void {
-  installExample(store, resources, podId, 'deterministic', 'a'.repeat(64))
-  const manifest = JSON.parse(String(store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=?').get(podId)!.manifest)) as Record<string, unknown>
-  const code = `export const contract=${JSON.stringify(contract)};\nexport async function run(context) { return {status:'completed',summary:'Synthetic',completedInputIds:context.input.eventIds,gapIds:[]}; }\n`
-  const hash = digest(code); store.storeScript(podId, { ...manifest, contentHash: hash, contract }, code)
-  const pod = store.getPod(podId)
-  store.db.prepare('UPDATE pods SET active_script=? WHERE id=?').run(hash, podId)
-  store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(podId, hash, pod.bindingRevision, resources.epoch(podId), JSON.stringify({ synthetic: true }))
-}
-
-it('creates an imported persistent network paused with shared values, data access and published member definitions', async () => {
-  const { store, resources, importer } = workspace(); const exported = await networkFixture(true); const id = randomUUID()
-  const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime)
-  const real: ImportEngines = { networks: new NetworkEngine(store, dispatcher, resources, '/unused', () => owner), catalog: new DefinitionCatalog(store, resources, owner) }
-  const groups = new PodGroups(store); groups.execute({ type: 'organize', action: 'create', name: 'Delta', revision: groups.view().revision }); const groupId = groups.view().groups[0]!.id
-  let view = await importer.stage(id, exported.archive)
-  expect(view.unresolved.map(item => `${item.scope}:${item.requirement}:${item.name}`)).toEqual(['pod:value:input_1', 'composition:value:input_1', 'composition:composition:null'])
-  view = importer.configure(id, view.revision, { pods: {}, compositions: { flow: { input_1: 'eu' } } })
-  view = await importer.commit(id, view.revision); const [first, second] = view.pods.map(pod => pod.podId) as [string, string]
-  expect(new PodVariables(store).values(second)).toEqual({ region: 'eu' })
-  const tags = new ItemTagStore(store)
-  expect([tags.own(first), tags.own(second)]).toEqual([[], ['filing']])
-  await expect(importer.finalize(id, view.revision, 'flow', groupId, {}, real)).rejects.toThrow('Finish Pod setup and approve')
-  view = importer.complete(id, view.revision)
-  expect(view).toMatchObject({ state: 'completed', unresolved: [{ scope: 'composition', key: 'flow' }] })
-  await expect(importer.finalize(id, view.revision, 'flow', groupId, {}, real)).rejects.toThrow('Validate and activate the script')
-  approve(store, resources, first, { takes: [], gives: ['report.ready'], summary: 'Creates reports' }); approve(store, resources, second, { takes: ['report.ready'], gives: [], summary: 'Files reports' })
-  const existing = randomUUID()
-  store.transaction(() => {
-    store.db.prepare('INSERT INTO data_collections VALUES(?,?,?,?,?,1,?)').run(existing, owner.issuer, owner.subject, groupId, 'reports', '{}')
-    store.db.prepare('INSERT INTO data_collection_versions VALUES(?,1,?,?,0)').run(existing, JSON.stringify({ ...schema, properties: { other: { type: 'string' } }, required: ['other'] }), '[]')
-  })
-  await expect(importer.finalize(id, view.revision, 'flow', groupId, {}, real)).rejects.toThrow('already exists in this group')
-  await expect(importer.finalize(id, view.revision, 'flow', groupId, { collection_1: existing }, real)).rejects.toThrow('different schema')
-  expect(store.db.prepare('SELECT count(*) AS count FROM networks').get()!.count).toBe(0)
-  expect(store.db.prepare('SELECT count(*) AS count FROM pod_memberships WHERE group_id=?').get(groupId)!.count).toBe(0)
-  expect(importer.list().map(item => item.id)).toEqual([id])
-  store.db.prepare('UPDATE data_collection_versions SET schema=?').run(JSON.stringify(schema))
-  view = await importer.finalize(id, view.revision, 'flow', groupId, { collection_1: existing }, real)
-  const networkId = view.compositions[0]!.networkId!
-  expect(view.unresolved).toEqual([])
-  // The network gets its own tags; members inherit them in the view without a copied row.
-  expect(tags.own(networkId)).toEqual(['delta-mind'])
-  expect(tags.view()).toEqual(expect.arrayContaining([{ id: first, tags: [], revision: 0, inherited: ['delta-mind'] }, { id: second, tags: ['filing'], revision: 1, inherited: ['delta-mind'] }]))
-  expect(store.db.prepare('SELECT count(*) AS count FROM item_tags').get()!.count).toBe(2)
-  expect(real.networks.execute({ type: 'list' }).networks.find(item => item.id === networkId)).toMatchObject({ state: 'paused', groupId, name: 'Imported network' })
-  expect(store.db.prepare('SELECT pod_id FROM network_members WHERE network_id=? ORDER BY rowid').all(networkId).map(row => row.pod_id)).toEqual([first, second])
-  expect(store.db.prepare('SELECT name,value FROM composition_config WHERE network_id=?').all(networkId)).toEqual([{ name: 'region', value: '"eu"' }])
-  expect(store.db.prepare('SELECT s.state,c.name,c.value FROM instance_definition_bindings b JOIN pod_definition_sources s ON s.definition_id=b.definition_id AND s.version=b.definition_version LEFT JOIN definition_config c ON c.definition_id=b.definition_id AND c.definition_version=b.definition_version WHERE b.pod_id=?').all(second)).toEqual([{ state: 'published', name: 'region', value: '"eu"' }])
-  expect(store.db.prepare('SELECT id,name,group_id FROM data_collections').all()).toEqual([{ id: existing, name: 'reports', group_id: groupId }])
-  expect(store.db.prepare('SELECT pod_id,operation FROM data_permissions WHERE network_id=? ORDER BY operation').all(networkId)).toEqual([{ pod_id: second, operation: 'read' }, { pod_id: second, operation: 'write' }])
-  expect(store.db.prepare('SELECT count(*) AS count FROM artifact_scopes WHERE collection_id IS NOT NULL').get()!.count).toBe(1)
-  expect(store.db.prepare('SELECT operation FROM artifact_permissions WHERE network_id=? ORDER BY operation').all(networkId).map(row => row.operation)).toEqual(['create', 'read'])
-  expect(store.db.prepare('SELECT count(*) AS count FROM pod_memberships WHERE group_id=?').get(groupId)!.count).toBe(2)
-  expect((await importer.finalize(id, view.revision, 'flow', groupId, {}, real)).compositions).toEqual(view.compositions)
-  expect(store.db.prepare('SELECT count(*) AS count FROM networks').get()!.count).toBe(1)
-  expect(store.db.prepare('SELECT archive_hash FROM portable_imports WHERE id=?').get(id)!.archive_hash).toBeNull()
-  expect(importer.list()).toEqual([])
-})
-
-it('lets the owner abandon deferred compositions of a completed import and releases its archive', async () => {
-  const { store, importer } = workspace(); const id = randomUUID(); await importer.stage(id, (await networkFixture()).archive)
-  let view = importer.configure(id, 1, { pods: {}, compositions: { flow: { input_1: 'eu' } } })
-  view = await importer.commit(id, view.revision); view = importer.complete(id, view.revision)
-  expect(importer.list().map(item => item.id)).toEqual([id])
-  view = importer.cancel(id, view.revision)
-  expect(view).toMatchObject({ state: 'completed', unresolved: [] })
-  expect(store.db.prepare('SELECT archive_hash FROM portable_imports WHERE id=?').get(id)!.archive_hash).toBeNull()
-  expect(importer.list()).toEqual([])
-  expect(store.listPods()).toHaveLength(2)
-})
-
-it('drops a deferred network that lost a member and completes the rest of the import', async () => {
-  const { store, importer } = workspace(); const id = randomUUID(); await importer.stage(id, (await networkFixture()).archive)
-  let view = importer.configure(id, 1, { pods: {}, compositions: { flow: { input_1: 'eu' } } })
-  view = await importer.commit(id, view.revision); const first = view.pods[0]!.podId
-  store.updatePod(first, store.getPod(first).revision, { name: 'Imported first', lifecycle: 'archived' })
-  expect(importer.view(id).unresolved).toEqual([])
-  deletePod(store, first)
-  expect(importer.view(id)).toMatchObject({ pods: [{ key: 'second' }], unresolved: [] })
-  expect(importer.complete(id, view.revision).state).toBe('completed')
 })
 
 it('recovers interrupted staging and commit as a pending import or one complete copy', async () => {
@@ -323,7 +217,7 @@ it('recovers interrupted staging and commit as a pending import or one complete 
   expect(() => importer.view(lost)).toThrow('Import not found')
   await retention.cleanup(); expect(readdirSync(store.blobs)).toEqual([])
   const id = randomUUID(); const staged = await importer.stage(id, exported.archive); const podId = staged.pods[0]!.podId
-  importer.configure(id, 1, { pods: { fixture: { input_2: 5 } }, compositions: {} })
+  importer.configure(id, 1, { pods: { fixture: { input_2: 5 } } })
   await retention.cleanup(); expect(readdirSync(store.blobs)).toEqual([exported.transferSha256])
   for (const point of ['staged', 'beforeCommit'] as const) {
     await expect(importer.commit(id, 2, (reached) => { if (reached === point) throw new Error(`crash at ${point}`) })).rejects.toThrow(`crash at ${point}`)
@@ -355,7 +249,7 @@ it('cancels only pending imports and forgets journals whose Pods were deleted', 
   const ids = Array.from({ length: 8 }, () => randomUUID())
   for (const id of ids) await importer.stage(id, exported.archive)
   await expect(importer.stage(randomUUID(), exported.archive)).rejects.toThrow('Finish or cancel an existing import')
-  importer.configure(ids[0]!, 1, { pods: { fixture: { input_2: 5 } }, compositions: {} })
+  importer.configure(ids[0]!, 1, { pods: { fixture: { input_2: 5 } } })
   const committed = await importer.commit(ids[0]!, 2); const podId = committed.pods[0]!.podId
   expect(() => importer.cancel(ids[0]!, committed.revision)).toThrow('already exists')
   expect(store.listPods()).toHaveLength(2)
@@ -372,7 +266,7 @@ it('restores unfinished imports closed', async () => {
   const { root, store: reopened } = workspace(); const exported = await packageFixture()
   const current = new PortableImporter(reopened, new ResourceRegistry(reopened, () => {}), owner, '')
   const pending = randomUUID(); await current.stage(pending, exported.archive)
-  const id = randomUUID(); await current.stage(id, exported.archive); current.configure(id, 1, { pods: { fixture: { input_2: 5 } }, compositions: {} }); await current.commit(id, 2)
+  const id = randomUUID(); await current.stage(id, exported.archive); current.configure(id, 1, { pods: { fixture: { input_2: 5 } } }); await current.commit(id, 2)
   const backup = await createBackup(reopened, root)
   expect(existsSync(join(backup, 'blobs', exported.transferSha256))).toBe(false)
   const restored = new PodDatabase(await restoreBackup(backup, root, schemaVersion)); stores.push(restored)
@@ -385,4 +279,15 @@ it('restores unfinished imports closed', async () => {
   expect(readFileSync(path, 'utf8')).toBe('Reusable template')
   expect(restored.db.prepare('SELECT count(*) AS count FROM portable_imports WHERE archive_hash IS NOT NULL').get()!.count).toBe(0)
   await expect(after.commit(id, 3)).resolves.toMatchObject({ state: 'committed' })
+})
+
+it('refuses a package that still composes Pods into a network before anything is staged', async () => {
+  const description: PortableDescription = {
+    format: 'openape-package', version: 1, package: { key: 'network', revision: 1, title: 'Retired network', description: '' }, requiredFeatures: ['portable_aliases_v1'],
+    entry: { kind: 'network', key: 'mail' }, applications: [],
+    compositions: [{ key: 'mail', kind: 'network', title: 'Mail', document: 'compositions/mail.json', documentVersion: 1, nodes: [{ pod: 'fixture', after: [], handoff: false }], calls: [], inputs: [], dataSchemas: [] }],
+    pods: [{ key: 'fixture', title: 'Member', description: '', script: 'pods/fixture/run.mjs', packages: null, contract: null, requestedCapabilities: [], access: [], inputs: [], bindings: [], applications: [], assets: [], schedule: null }],
+  }
+  const payloads: PortablePayload[] = [{ path: 'pods/fixture/run.mjs', kind: 'script', mediaType: 'text/javascript', content: bytes('export async function run() {}') }, { path: 'compositions/mail.json', kind: 'composition', mediaType: 'application/json', content: bytes('{}') }]
+  await expect(createPortablePackage(description, payloads, '')).rejects.toThrow('This package contains a network')
 })
