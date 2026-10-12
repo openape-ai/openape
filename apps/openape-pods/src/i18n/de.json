@@ -3052,5 +3052,6 @@
   "Unreadable baseline statement": "Unlesbare Anweisung des Basisschemas",
   "Invalid domain data {p0}": "Ungültige gemeinsame Daten: {p0}",
   "Invalid references: {p0}": "Ungültige Verweise: {p0}",
-  "Prepare and approve this Pod identity before it requests approvals": "Bereite diese Pod-Identität vor und gib sie frei, bevor sie Freigaben anfragt."
+  "Prepare and approve this Pod identity before it requests approvals": "Bereite diese Pod-Identität vor und gib sie frei, bevor sie Freigaben anfragt.",
+  "This requestId was used with a different command": "Diese requestId wurde bereits mit einem anderen Befehl verwendet"
 }

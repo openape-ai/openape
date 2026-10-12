@@ -24,7 +24,7 @@ export class CodexControl {
     if (action.action === 'domain') {
       if (!this.domain) throw new Error('Domain data administration is unavailable in this runtime')
       if (Object.keys(action).some(key => !['action', 'command'].includes(key))) throw new Error('Invalid domain action fields')
-      return boundedCodexResult(new DomainAdministration(this.store, this.domain).execute(action.command))
+      return boundedCodexResult(this.domainCommand(request.id, action.command))
     }
     let result: unknown
     switch (action.action) {
@@ -33,6 +33,25 @@ export class CodexControl {
       default: result = withoutRunContent(await this.master.execute(`codex:${request.id}`, action, signal, this.conversation()))
     }
     return boundedCodexResult(result)
+  }
+
+  /** Writes are journaled under the requestId: a repeat with the same command returns the recorded result without running again. */
+  private domainCommand(requestId: string, command: unknown): unknown {
+    const administration = new DomainAdministration(this.store, this.domain!)
+    const type = (command as { type?: unknown } | null)?.type
+    if (type === 'list' || type === 'entries' || type === 'work') return administration.execute(command)
+    const key = `codex-domain:${requestId}`
+    const request = JSON.stringify(command); const hash = digest(request)
+    return this.store.transaction(() => {
+      const prior = this.store.db.prepare('SELECT request_hash,result FROM master_actions WHERE id=?').get(key)
+      if (prior) {
+        if (prior.request_hash !== hash) throw new Error('This requestId was used with a different command')
+        return JSON.parse(prior.result as string) as unknown
+      }
+      const result = administration.execute(command)
+      this.store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'completed\',?,NULL)').run(key, hash, request, JSON.stringify(result ?? null))
+      return result
+    })
   }
 
   private runtime(action: Record<string, unknown>) {

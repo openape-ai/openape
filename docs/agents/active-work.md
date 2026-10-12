@@ -1,5 +1,12 @@
 # Active work
 
+## Autonomous Pods: shared data replaces networks — issue 1465
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1465. Plan revision 2 (owner approval October 12, including the production switch): https://report.openape.ai/d/01M4R7G9398CQ3QADNFVM7YKWT?v=2; source `.claude/plans/2026-10-12-autonomous-pods/plan.json`; frozen design `docs/architecture/pods-autonomous/design.md`.
+- Branch `feature/issue-1465-autonomous-pods` from `7fab4b84`: schema 48 (shared data, work ledger, owner questions, object approvals, storage readiness and recovery), approved mail archive, network runtime and APIs removed, MCP action `domain`.
+- Checks: Pods unit tests, relay tests, lint, typecheck; Electron E2E for shared data, crash recovery and Codex acceptance.
+- Next: PR, cutover (backup, relay + desktop in one window, Mail and Morgenbriefing Pods), 48 h observation with two briefings.
+
 ## Pod tag chips on the inbox item detail — issue 1463
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1463. Branch `feature/issue-1463-inbox-detail-tags` from `83bd3ab0`.

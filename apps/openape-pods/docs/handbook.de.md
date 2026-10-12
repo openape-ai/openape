@@ -20,30 +20,30 @@ Verwende zuerst einen kleinen Ordner mit unkritischen Beispieldateien und nur Le
 
 Automatisierungen ist der Starttab. Die fünf Kennzahlen oben sind Systemzähler: aktiv, pausiert, gestört, Entscheidungen warten auf dich und unklare Zustellungen. Ihre Untertitel kommen aus deinen Daten, etwa der Name eines gestörten Pods und sein Grund.
 
-Die Karte zeigt deine Pods in der Mitte, links die Services, Applikationen und Verzeichnisse, die sie lesen, rechts reine Ziele und oben die Autoritäten: deine Entscheidungen, den Identity Provider und die KI. Gepunktete Linien tragen die aufgezeichneten Lese- und Schreibzugriffe der letzten 24 Stunden; Netze erscheinen als Gruppen mit ihren Mitgliedern. Liste zeigt dieselben Pods als Tabelle. Mit Tags startet die Karte leer: Aktiviere einen oder mehrere Tags, um ihre Pods zu zeigen; jeder Tag zeigt, wie viele Pods ihn tragen, und Ohne Tag, Alle und Keine sind immer verfügbar. Die Auswahl bleibt auf diesem Gerät gespeichert. Ebenen öffnet die Chips Kanäle, Lesen, Schreiben, Freigaben und Pausierte; Legende erklärt die Knotenformen.
+Die Karte zeigt deine Pods in der Mitte, links die Services, Applikationen und Verzeichnisse, die sie lesen, rechts reine Ziele und oben die Autoritäten: deine Entscheidungen, den Identity Provider und die KI. Gepunktete Linien tragen die aufgezeichneten Lese- und Schreibzugriffe der letzten 24 Stunden; Pods, die Daten teilen, stehen vom Schreiber zum Leser angeordnet, und jede Linie gemeinsamer Daten nennt ihren Namensraum. Liste zeigt dieselben Pods als Tabelle. Mit Tags startet die Karte leer: Aktiviere einen oder mehrere Tags, um ihre Pods zu zeigen; jeder Tag zeigt, wie viele Pods ihn tragen, und Ohne Tag, Alle und Keine sind immer verfügbar. Die Auswahl bleibt auf diesem Gerät gespeichert. Ebenen öffnet die Chips Gemeinsame Daten, Lesen, Schreiben, Freigaben und Pausierte; Legende erklärt die Knotenformen.
 
-Wähle einen Knoten, um seine Fakten im Infofeld zu lesen. Details öffnen führt zur Detailseite mit Zeitplan, Mitgliedern, Entscheidungsstellen, Zahlen, Zugriffen nach Art, Geheimnissen als Aliase, Kanälen, dem Entwicklerabschnitt und dem letzten Lauf. Pausieren, Fortsetzen und Jetzt ausführen sind die Owner-Befehle auf dieser Seite; nichts hier schreibt in deine Konten.
+Wähle einen Knoten, um seine Fakten im Infofeld zu lesen. Details öffnen führt zur Detailseite mit Zeitplan, den gemeinsamen Daten, die ein Pod schreibt und liest, seiner wartenden Arbeit, Zahlen, Zugriffen nach Art, Geheimnissen als Aliase, dem Entwicklerabschnitt und dem letzten Lauf. Pausieren, Fortsetzen und Jetzt ausführen sind die Owner-Befehle auf dieser Seite; nichts hier schreibt in deine Konten.
 
 Stand HH:MM kennzeichnet im Browser einen veröffentlichten Schnappschuss; Live · HH:MM bedeutet, der Desktop antwortet direkt. Der Browser zeigt denselben Tab aus dem Schnappschuss des gewählten Desktops. Native Bedienelemente wie das Öffnen des Script-Ordners oder die Wahl einer privaten Datei bleiben am Desktop und sind im Browser deaktiviert.
 
 1. Öffne Pods; Automatisierungen ist die Startseite.
 2. Wechsle zwischen Karte und Liste, wähle eine Gruppe und schalte die Ebenen um.
-3. Wähle einen Pod oder ein Netz und wähle Details öffnen.
+3. Wähle einen Pod und wähle Details öffnen.
 4. Nutze Pausieren, Fortsetzen oder Jetzt ausführen auf der Detailseite. Details öffnen im Entwicklerabschnitt öffnet den Pod-Editor für Berechtigungen, Variablen und Geheimnisse, Historie und Identität.
 
 ![Automatisierungen: Karte, Liste und Detail](images/handbook-automations-de.png)
 
 ## Entscheidungen: alles, was auf dich wartet
 
-Der Tab Entscheidungen listet fünf Arten von Owner-Entscheidungen: Rückfragen aus Wahlrouten eines Netzwerks, Freigaben von Bündeln beim Identity Provider, Rechte, die einem Pod fehlen, Unklare Zustellungen mit unklarem Ergebnis und Geheimnisse, die über OpenApe Secrets angefragt sind. Die Zahl im Tab ist die Anzahl offener Einträge.
+Der Tab Entscheidungen listet, was auf dich wartet: Rückfragen deiner Pods, Freigaben einzelner Aktionen an einzelnen Objekten beim Identity Provider, Rechte, die einem Pod fehlen, angehaltene Arbeit und unklare Aktionen unter Abzugleichen, unklare Zustellungen und Geheimnisse, die über OpenApe Secrets angefragt sind. Die Zahl im Tab ist die Anzahl offener Einträge.
 
-Rückfragen zeigen die aufgezeichneten Felder jedes Falls und die Optionen des Gates mit ihren genauen Titeln; Bündeln nach fasst Fälle nach einem Feld zusammen, sodass eine Wahl für die ganze Gruppe gilt. Freigaben verlinken zum Identity Provider, der ein Bündel als Liste mit einem Häkchen pro Eintrag zeigt: Die ausgewählten Einträge werden freigegeben, die übrigen abgelehnt. Jeder Eintrag hat einen eigenen einmaligen Grant; nur freigegebene Einträge laufen weiter, ein abgelehnter Eintrag geht in den Ausschluss-Kanal des Gates, falls es einen gibt. Rechte öffnen die Freigabe; unklare Zustellungen brauchen deine Beobachtung am Ziel, bevor du Zugestellt oder Nicht zugestellt, erneut senden wählst.
+Eine Rückfrage zeigt die aufgezeichneten Felder ihres Falls und die Optionen mit ihren genauen Titeln; Bündeln nach fasst Fälle nach einem Feld zusammen, sodass eine Wahl die ganze Gruppe beantwortet. Deine Antwort wird als gemeinsame Daten gespeichert, die der fragende Pod liest; sie führt selbst nichts aus. Eine Freigabe bindet eine Aktion an ein Objekt, etwa das Archivieren einer Nachricht, und wird beim Identity Provider entschieden; eine abgelaufene oder abgelehnte Freigabe kannst du erneut anfragen oder zurückziehen. Angehaltene Arbeit wartet, bis du sie nach Prüfung freigibst. Eine unklare Aktion braucht deine Beobachtung am Ziel, bevor du Ist passiert oder Ist nicht passiert wählst; eine unklare Zustellung braucht sie vor Zugestellt oder Nicht zugestellt, erneut senden.
 
 Pods entscheidet nie für dich: kein Modell und kein Zeitplan wählt, genehmigt, schließt aus oder pausiert. Deine angemeldete Codex-Sitzung handelt eine Stunde lang mit deiner Identität, wie ein angemeldetes CLI, das du mit Codex nutzt: Sie kann Rechte, die deine Pods anfragen, genehmigen, ablehnen und widerrufen, und die Aktivität eines Laufs kennzeichnet solche Freigaben als in der Codex-Sitzung freigegeben. Außerhalb dieser Sitzung werden Rechte ausschließlich beim Identity Provider entschieden; die App zeigt Status und Links.
 
 1. Öffne Entscheidungen; der Tab zeigt, wie viele Einträge warten.
-2. Lies den Fall und wähle eine Option; Bündeln nach entscheidet viele Fälle mit demselben Feld auf einmal. Öffne bei einem Freigabe-Bündel den Identity Provider, wähle die freizugebenden Einträge und bestätige.
-3. Prüfe bei unklaren Zustellungen zuerst das Ziel, notiere deine Beobachtung und halte sie fest.
+2. Lies den Fall und wähle eine Option; Bündeln nach entscheidet viele Fälle mit demselben Feld auf einmal. Öffne eine Freigabe beim Identity Provider und entscheide sie dort.
+3. Prüfe bei unklaren Aktionen und Zustellungen zuerst das Ziel und halte dann fest, was du gesehen hast.
 4. Geheimnisse listet offene Anfragen mit dem Link zum Ausfüllen auf secrets.openape.ai.
 
 ![Entscheidungen: alles, was auf dich wartet](images/handbook-decisions-de.png)
@@ -431,31 +431,31 @@ Verwende examples/mail-notification.mjs aus dem Quellcode. Der erste erfolgreich
 
 Prüfe das Skript und führe es manuell aus, bevor du in Einstellungen ein 15-Minuten-Intervall aktivierst. Bestätige den Geheimniszugriff für den exakten Quelltext. Das Rezept speichert eine ausstehende Meldung vor dem Versand und die Empfangsbestätigung vor dem Fortschritt. Bei unklarem Versand prüfst du das Ziel und klärst das Ergebnis in Historie, bevor du erneut startest.
 
-## Netze auf der Karte
+## Gemeinsame Daten zwischen Pods
 
-Netze erscheinen auf der Karte der Automatisierungen als Gruppen mit ihren Mitgliedern: Ein Netz tauscht Einträge über die deklarierten Kanäle seiner Pods aus. Codex legt sie an und ändert sie; die Detailseite zeigt Mitglieder, Entscheidungsstellen, Zahlen, Zeitplan und den letzten Lauf und bietet Pausieren und Fortsetzen. Die Rechte der Pods bleiben erhalten. Jedes Mitglied nutzt seine eigenen Anwendungen, HTTP-Ziele, Geheimnisse und Ordner genau wie ein einzelner Pod, und jeder Befehl und jedes Ziel braucht weiterhin seinen Grant, freigegeben beim Identity Provider oder in deiner Codex-Sitzung; nur das Archiv-Mitglied hinter einer Freigaberoute verschiebt Mail ausschließlich über das freigegebene Bündel.
+Pods rufen einander nie auf. Ein Pod schreibt seine Ergebnisse in gemeinsame Daten, und andere Pods finden dort ihre eigene Arbeit. Gemeinsame Daten liegen in Namensräumen wie delta-mind/mail/messages; jeder Namensraum hat genau einen Schreiber, einen Pod oder dich, und die Pods, die du als Leser einträgst. Von einem übergeordneten Namensraum wird nichts geerbt.
 
-Codex kann außerdem das Skript eines Netzwerk-Pods korrigieren, während das Netzwerk weiterläuft – solange Kanäle, Rechte und Abhängigkeiten gleich bleiben und dieser Pod keine laufende oder unsichere Arbeit hat. Offene Fragen anderer Pods bleiben davon unberührt. Die Detailseite des Pods zeigt die Änderung unter Skriptänderungen; fehlgeschlagene Läufe dieses Pods können danach mit dem korrigierten Skript neu starten, sofern sie keine externe Wirkung versucht haben.
+Ein Pod, der Arbeit deklariert, nennt den Namensraum, den er liest, und den, in den er seine Ergebnisse schreibt. Jede neue oder geänderte Eingabe wird zu einer Arbeit; eine unveränderte Eingabe wird nie erneut bearbeitet, auch wenn ihr Ergebnis negativ war. Ein geplanter Lauf ohne bereite Arbeit wird übersprungen. Ein Pod behält seine eigenen Rechte: Jede Anwendung, jedes HTTP-Ziel, jedes Geheimnis und jeder Ordner braucht weiterhin seinen Grant, freigegeben beim Identity Provider oder in deiner Codex-Sitzung.
 
-Gepunktete Linien zeigen die aufgezeichneten Übergaben der letzten 24 Stunden. Ein Zähler bestätigt keine erfolgreiche externe Aktion: Prüfe die Historie des Pods und das tatsächliche Ergebnis. Kanalbezeichnungen behalten ihre genauen technischen Namen. Offene Rückfragen und wartende Freigaben eines Netzes zählt der Tab Entscheidungen.
+Gepunktete Linien auf der Karte zeigen die aufgezeichneten Schreib- und Lesezugriffe der letzten 24 Stunden. Ein Zähler bestätigt keine erfolgreiche externe Aktion: Prüfe die Historie des Pods und das tatsächliche Ergebnis. Rückfragen und Freigaben deiner Pods zählt der Tab Entscheidungen.
 
-Prompt-Engineering beschreibt eine begrenzte Aufgabe und ihre Ergebniskriterien innerhalb eines Pods. Loop-Engineering verwendet endliche Versuchs- und Zeitlimits im Script und ein sichtbares Fehler- oder Prüfergebnis beim Erreichen des Limits. Netz-Engineering verbindet validierte Ergebnisse über deklarierte Kanäle und Entscheidungen des Owners. Ein Modell vergibt keine Rechte und genehmigt keine Freigabe. Netze laufen weiterhin in begrenzten manuellen oder geplanten Ausführungen; ein Kreislauf zwischen Pods braucht einen deklarierten, begrenzten Rückkopplungsschritt.
+Prompt-Engineering beschreibt eine begrenzte Aufgabe und ihre Ergebniskriterien innerhalb eines Pods. Loop-Engineering verwendet endliche Versuchs- und Zeitlimits im Script und ein sichtbares Fehler- oder Prüfergebnis beim Erreichen des Limits. Ein Modell vergibt keine Rechte und genehmigt keine Aktion.
 
-Netze sind der einzige Weg, Pods zu verbinden; ein Pod außerhalb eines Netzes läuft nach seinem eigenen Zeitplan. Lass Codex ein Netz bauen, wenn Pods ihre Ergebnisse aneinander weitergeben sollen.
+Mail-Bearbeitung läuft als eigene Pods für Synchronisierung, Klassifizierung und die Folgeprüfungen; jeder liest die gemeinsamen Maildaten, die er braucht. Ohne Freigabe für die jeweilige Nachricht beim Identity Provider wird nichts archiviert, und unsichere Mail wartet als Rückfrage im Tab Entscheidungen.
 
-Mail-Bearbeitung läuft als Netz mit Freigabe-Gates: Ohne freigegebenes Bündel wird nichts archiviert, und unsichere Mail wartet als Rückfrage im Tab Entscheidungen. Der erste Lauf setzt einen stillen Ausgangspunkt; geschützte Absender, Empfänger und bekannte Unterhaltungen bleiben zur menschlichen Prüfung.
+Frühere Versionen verbanden Pods über Netze. Netze wurden abgelöst; ihre Historie bleibt lesbar, und Pods, die zu einem Netz gehörten, behalten ihre Daten auf dem Desktop.
 
-1. Übergib den Auftrag an Codex: welche Pods zusammengehören, welche Kanäle sie nehmen und geben und welche Gates einen Menschen brauchen.
-2. Prüfe das Netz auf der Karte und seiner Detailseite; ein Netz mit Diagnosen startet nicht und wird nicht aktiviert.
-3. Führe es einmal aus, entscheide die offenen Rückfragen und aktiviere den Zeitplan erst nach geprüftem Ergebnis.
+1. Übergib den Auftrag an Codex: welche Pods welche Daten schreiben, wer sie liest und welche Aktionen deine Freigabe brauchen.
+2. Prüfe Namensräume, Schreiber und Leser auf der Karte und den Detailseiten.
+3. Führe jeden Pod einmal aus, beantworte die offenen Rückfragen und aktiviere Zeitpläne erst nach geprüftem Ergebnis.
 
 ## Mit deinem Codex arbeiten
 
-Der verbundene Codex auf diesem Mac verwaltet Pods direkt: Variablen und Ressourcen, Skriptvalidierung und Aktivierung, Zeitpläne, Start und Wiederherstellung von Läufen sowie Anlegen, Aktivieren, Pausieren, Ändern und Archivieren von Netzwerken. Eine globale Node-Installation ist nicht nötig; Pods liefert seine Laufzeit mit.
+Der verbundene Codex auf diesem Mac verwaltet Pods direkt: Variablen und Ressourcen, Skriptvalidierung und Aktivierung, Zeitpläne, Start und Wiederherstellung von Läufen sowie Namensräume gemeinsamer Daten mit ihrem Schreiber und ihren Lesern. Eine globale Node-Installation ist nicht nötig; Pods liefert seine Laufzeit mit.
 
 Neue Automatisierung mit Codex im Tab Automatisierungen schreibt einen Auftrag mit der gewählten Gruppe oder dem gewählten Knoten und den Pods, die es schon kennt; der Desktop öffnet Codex, der Browser kopiert den Auftrag zum Einfügen.
 
-Jede Codex-Sitzung braucht zuerst deine Anmeldung. Solange du auf diesem Mac mit apes login angemeldet bist, öffnet Pods die Sitzung beim ersten Aufruf ohne Rückfrage. Andernfalls öffnet Pods die DDISA-Anmeldung im Browser und fragt danach in der Pods-App, ob Codex für eine Stunde vollen Zugriff auf Pods erhält; bestätige nur eine Anfrage, die du gerade selbst gestellt hast. Codex wiederholt dann den Aufruf. Nach der Stunde oder nach Sitzung beenden in den Einstellungen fragt Pods erneut, ohne dass Codex neu starten muss. Innerhalb der Sitzung richten sich Rückfragen nach den Einstellungen des Codex-Clients; Pods hat keine zusätzliche Freigabewarteschlange. Codex handelt mit deiner Identität: Es kann eine Option an einem Auswahl-Gate wählen, einen Freigabe-Batch beim Identity Provider öffnen, Rechte, die deine Pods anfragen, genehmigen oder ablehnen (auch eine wartende Lauf- oder Netzfreigabe) und sie widerrufen. Es kann nur Rechte entscheiden, die ein Pod von dir für sich selbst angefragt hat; nach dem Ende der Sitzung warten Freigaben wieder auf den Identity Provider. Voller Zugriff hebt Skriptvalidierung, Revisionsprüfungen und echte Anmeldungen bei Anbietern nicht auf.
+Jede Codex-Sitzung braucht zuerst deine Anmeldung. Solange du auf diesem Mac mit apes login angemeldet bist, öffnet Pods die Sitzung beim ersten Aufruf ohne Rückfrage. Andernfalls öffnet Pods die DDISA-Anmeldung im Browser und fragt danach in der Pods-App, ob Codex für eine Stunde vollen Zugriff auf Pods erhält; bestätige nur eine Anfrage, die du gerade selbst gestellt hast. Codex wiederholt dann den Aufruf. Nach der Stunde oder nach Sitzung beenden in den Einstellungen fragt Pods erneut, ohne dass Codex neu starten muss. Innerhalb der Sitzung richten sich Rückfragen nach den Einstellungen des Codex-Clients; Pods hat keine zusätzliche Freigabewarteschlange. Codex handelt mit deiner Identität: Es kann die Rückfrage eines Pods beantworten, eine Freigabe beim Identity Provider öffnen, Rechte, die deine Pods anfragen, genehmigen oder ablehnen (auch eine wartende Lauffreigabe) und sie widerrufen. Es kann nur Rechte entscheiden, die ein Pod von dir für sich selbst angefragt hat; nach dem Ende der Sitzung warten Freigaben wieder auf den Identity Provider. Voller Zugriff hebt Skriptvalidierung, Revisionsprüfungen und echte Anmeldungen bei Anbietern nicht auf.
 
 Codex erhält Ressourcenmetadaten und Laufstatus, keine Kontotokens, Pod-Schlüssel, Laufinhalte oder Geheimniswerte. Eine bereitgestellte private Geheimnisdatei kann direkt in den verschlüsselten Speicher importiert werden, ohne ihren Wert im Tool-Aufruf zu übertragen. E-Mails, Webseiten und andere externe Inhalte bleiben Daten, keine Anweisungen.
 
@@ -471,16 +471,16 @@ Trenne die Verbindung unter Desktop-Einstellungen → Work from Codex (Zahnradme
 
 ## Portable Pakete teilen und importieren
 
-Teilen packt einen Pod oder ein vollständiges Netzwerk in eine .openape-Datei: die gewählten Skripte, ihre Abhängigkeits-Locks, deklarierte Eingaben und Zugriffe sowie die Dateien, die du ausdrücklich aufnimmst. Zugangsdaten, Lauf-Historie, private Ordner, Kontozustände und lokale Identitäten verlassen dein Gerät nie, und die Prüfung zeigt die exakten Dateien, bevor etwas geschrieben wird.
+Teilen packt einen Pod in eine .openape-Datei: die gewählten Skripte, ihre Abhängigkeits-Locks, deklarierte Eingaben und Zugriffe sowie die Dateien, die du ausdrücklich aufnimmst. Zugangsdaten, Lauf-Historie, private Ordner, Kontozustände und lokale Identitäten verlassen dein Gerät nie, und die Prüfung zeigt die exakten Dateien, bevor etwas geschrieben wird.
 
 Jede Dateireferenz braucht eine Entscheidung (aufnehmen oder weglassen), jeder zugewiesene Ordner, jedes HTTP-Ziel und jede Anwendung bekommt einen portablen Alias, und deine Werte bleiben privat, sofern du einen nicht als öffentliche Vorgabe aufnimmst. Eine Datenschutzprüfung markiert lokale Identitäten, Pfade und wahrscheinliche Zugangsdaten; blockierende Funde müssen parametrisiert, Prüffunde bestätigt werden. Die Prüfung ist eine Heuristik, lies deinen Quelltext vor dem Teilen.
 
-Importieren erzeugt pausierte Kopien mit neuen Identitäten. Nichts läuft, bevor du auf jedem Pod eigene Ordner, Ziele, Anwendungen und Geheimnisse zuweist, die Einrichtung abschließt und die Skripte selbst validierst und aktivierst. Netzwerke werden pausiert angelegt, und erst, nachdem ihre Mitglieds-Skripte freigegeben sind.
+Importieren erzeugt eine pausierte Kopie mit neuer Identität. Nichts läuft, bevor du eigene Ordner, Ziele, Anwendungen und Geheimnisse zuweist, die Einrichtung abschließt und das Skript selbst validierst und aktivierst. Pakete, die ein Netz enthalten, werden abgelehnt; importiere ihre Pods aus Einzel-Pod-Paketen.
 
 Im Browser kannst du einen Import auf dem verbundenen Desktop prüfen und einrichten; das Öffnen der Paketdatei und das Speichern eines Exports passieren auf dem Desktop. Ein Abbruch vor der pausierten Kopie verwirft alles; danach gehören die Pods dir und werden einzeln gelöscht.
 
-1. Öffne die Detailseite eines Pods oder eines Netzes und wähle Exportieren…; lege Pakettitel, Schlüssel, Aliase, aufgenommene Dateien und öffentliche Vorgaben fest.
+1. Öffne die Detailseite eines Pods und wähle Exportieren…; lege Pakettitel, Schlüssel, Aliase, aufgenommene Dateien und öffentliche Vorgaben fest.
 2. Prüfe das exakte Paket und seine Datenschutzfunde, bestätige, was du geprüft hast, und speichere die .openape-Datei.
 3. Öffne auf dem empfangenden Gerät das Zahnradmenü → Portable Pods → Importieren… und öffne die Paketdatei.
 4. Gib die erforderlichen Werte ein, erstelle die pausierte Kopie, binde dann auf jedem Pod Ordner, Ziele und Anwendungen und lege Geheimnisse an.
-5. Schließe die Einrichtung ab, validiere und aktiviere jeden Pod; aktiviere das importierte Netz und Zeitpläne erst, wenn du bereit bist.
+5. Schließe die Einrichtung ab, validiere und aktiviere den Pod; aktiviere seinen Zeitplan erst, wenn du bereit bist.

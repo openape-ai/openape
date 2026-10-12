@@ -76,7 +76,7 @@ it('lets two Pods share data through the native sandbox: the consumer finds its 
   const done = 'return {status:\'completed\',summary:\'Synthetic shared data\',completedInputIds:context.input.eventIds,gapIds:[]}'
   const source = await scripted('Source', `export async function run(context) { const current = await context.data.get('native/records/one'); if (!current) await context.data.set('native/records/one', { subject: 'Synthetic native item' }, { expectedRevision: 0 }); ${done} }\n`)
   const work = [{ operation: 'native/assessment', input: 'native/records', output: 'native/results', fields: ['subject'], filter: {}, ruleVersions: [1] }]
-  const consumer = await scripted('Consumer', `export const work = ${JSON.stringify(work)};\nexport async function run(context) { for (const item of await context.work.find({ operation: 'native/assessment' })) { const claim = await context.work.claim({ key: item.key }); await context.work.complete({ claimToken: claim.claimToken, result: { relevant: false, subject: claim.input.value.subject } }) } ${done} }\n`)
+  const consumer = await scripted('Consumer', `export const work = ${JSON.stringify(work)};\nexport async function run(context) { for (const item of await context.work.find({ operation: 'native/assessment' })) { const claim = await context.work.claim({ key: item.key }); await context.work.complete({ claimToken: claim.claimToken, result: { relevant: false, subject: claim.input.value.subject } }) } ${done} }\n`, work)
   const { DomainData } = await import('../src/worker/data/domain')
   const data = new DomainData(f.store)
   data.define({ path: 'native/records', writer: source, mode: 'records', readers: [consumer] })
