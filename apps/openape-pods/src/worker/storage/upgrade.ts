@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { baselineSchema, schema47Additions, schemaVersion } from './schema.ts'
+import { baselineSchema, schema47Additions, schema48Additions, schema48Rows, schemaVersion } from './schema.ts'
 
 /** The only schema this version upgrades: the one the October 2026 releases (up to issue 1455, M4) wrote. */
 export const upgradableSchema = 45
@@ -116,13 +116,14 @@ export function upgradeToBaseline(database: DatabaseSync): void {
 }
 
 /**
- * Brings a schema-45 or schema-46 database to the current schema inside the caller's transaction: schema 45 is
+ * Brings a schema-45, -46 or -47 database to the current schema inside the caller's transaction: schema 45 is
  * rebuilt into the schema-46 baseline first, then the later additive tables are created empty.
  */
 export function upgradeToCurrent(database: DatabaseSync, version: number): void {
   if (version === upgradableSchema) upgradeToBaseline(database)
-  else if (version !== 46) throw new Error(`Database schema ${version} cannot be upgraded`)
-  database.exec(schema47Additions)
+  else if (version !== 46 && version !== 47) throw new Error(`Database schema ${version} cannot be upgraded`)
+  if (version < 47) database.exec(schema47Additions)
+  database.exec(`${schema48Additions}${schema48Rows}`)
 }
 
 /** Read-only: refuses a database that is not exactly schema 45 or whose member bindings diverge. */

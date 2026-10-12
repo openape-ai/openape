@@ -6,7 +6,7 @@ import type { DataCommand, DataView } from '../contracts/data'
 
 export default defineComponent({
   components: { SoftwareUpdates },
-  data() { return { view: null as DataView | null, limitGiB: 10, busy: false, error: '', notice: '' } },
+  data() { return { view: null as DataView | null, limitGiB: 10, busy: false, error: '', notice: '', evidence: '' } },
   async mounted() { await this.perform({ type: 'status' }) },
   methods: {
     t, diagnostic, label, number,
@@ -17,6 +17,7 @@ export default defineComponent({
         this.view = await window.pods.data(command); this.limitGiB = this.view.limitBytes / 1024 ** 3
         if (command.type === 'cleanup') this.notice = 'Unused files cleaned. Referenced evidence and pending inputs are retained.'
         if (command.type === 'limit') this.notice = 'Storage limit saved.'
+        if (command.type === 'reviewRestore') { this.notice = 'Restore review recorded. Pods can be resumed again.'; this.evidence = '' }
       }
       catch (error) { this.error = error instanceof Error ? error.message : 'Data operation failed' }
       finally { this.busy = false }
@@ -45,6 +46,13 @@ export default defineComponent({
       <p v-if="busy" role="status">
         {{ t("Working…") }}
       </p>
+      <form v-if="view?.restoreReview" class="fixture-note" data-testid="restore-review" @submit.prevent="perform({ type: 'reviewRestore', evidence })">
+        <strong role="alert">{{ t('This profile was restored from a backup of {date}. Pods stay paused until you confirm that external actions since then are checked.', { date: view.restoreReview.backupCreatedAt }) }}</strong>
+        <label>{{ t('What did you check (for example sent mails, archived messages, published briefings)?') }}<textarea v-model="evidence" required maxlength="4000" :disabled="busy" /></label>
+        <button :disabled="busy || !evidence.trim()">
+          {{ t('Confirm the restore review') }}
+        </button>
+      </form>
       <template v-if="view">
         <dl><div><dt>{{ t("Application data") }}</dt><dd>{{ size(view.usedBytes) }}</dd></div><div><dt>{{ t("Disk available") }}</dt><dd>{{ size(view.freeBytes) }}</dd></div><div><dt>{{ t("Pending local deletions") }}</dt><dd>{{ view.pendingDeletion }}</dd></div></dl>
         <form @submit.prevent="perform({ type: 'limit', bytes: Math.round(limitGiB * 1024 ** 3) })">

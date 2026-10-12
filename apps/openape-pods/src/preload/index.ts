@@ -1,4 +1,6 @@
 import { parseUpdateCommand, parseUpdateView } from '../contracts/updates'
+import { parseStorageRecoveryCommand } from '../contracts/storage'
+import type { StorageRecoveryView } from '../contracts/storage'
 import { parseSharingCommand } from '../contracts/sharing'
 import type { SharingState } from '../contracts/sharing'
 import { parseDefinitionCommand, parseDefinitionsView } from '../contracts/definitions'
@@ -24,6 +26,7 @@ import { channels, isPodStatus } from '../contracts/ipc'
 import type { PodsBridge } from '../contracts/ipc'
 
 const bridge: PodsBridge = {
+  async storage(command) { return ipcRenderer.invoke(channels.storage, parseStorageRecoveryCommand(command)) as Promise<StorageRecoveryView> },
   async updates(command) { return parseUpdateView(await ipcRenderer.invoke(channels.updates, parseUpdateCommand(command))) },
   async mcpSession(command) { return parseMcpSessionView(await ipcRenderer.invoke(channels.mcpSession, parseMcpSessionCommand(command))) },
   async central(command) { return ipcRenderer.invoke(channels.central, command) },

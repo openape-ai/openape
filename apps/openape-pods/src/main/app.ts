@@ -27,6 +27,8 @@ import { verifyUpdate } from './update'
 import { selectedProfile, selectProfile } from './profile'
 import { parseDataCommand } from '../contracts/data'
 import { restoreBackup } from '../worker/data/backup'
+import { parseStorageRecoveryCommand } from '../contracts/storage'
+import { automaticBackupDirectory, automaticBackupStatus, listBackups, preserveRecoveryCopy, recoveryCopies, storageDiagnostics } from './storage-recovery'
 import { schemaVersion } from '../worker/storage/database'
 import { parseOnboardingCommand } from '../contracts/onboarding'
 import { parseMasterCommand } from '../contracts/master'
@@ -190,6 +192,30 @@ async function start(): Promise<void> {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, args)
     return status
   })
+  ipcMain.handle(channels.storage, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    if (!window) throw new Error('Owner window is unavailable')
+    const command = parseStorageRecoveryCommand(value)
+    const view = async () => ({ failure: status.worker.storage ?? null, diagnostics: await storageDiagnostics(root), backups: await listBackups(automaticBackupDirectory(profileBase), true), recoveryCopies: await recoveryCopies(profileBase), lastAutomaticBackup: await automaticBackupStatus(root) })
+    if (command.type === 'view') return view()
+    if (status.worker.state !== 'recovery') throw new Error('Storage recovery is available only while storage is not ready')
+    if (command.type === 'openFolder') { await shell.openPath(root); return view() }
+    if (command.type === 'retry') { await worker.retryStorage(); return view() }
+    // The database set must be still while it is copied or replaced.
+    await worker.stopForRecovery()
+    if (command.type === 'preserve') { await preserveRecoveryCopy(root, profileBase); return view() }
+    let source = command.path
+    if (!source) {
+      const selected = await dialog.showOpenDialog(window, { title: t('Choose an OpenApe Pods backup folder'), properties: ['openDirectory'] })
+      if (selected.canceled || selected.filePaths.length !== 1) return view()
+      source = selected.filePaths[0]!
+    }
+    const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Restore and restart'), message: t('Restore this backup into a new profile?'), detail: t('The current profile is retained. Connections require reconnection, resources require review, and schedules remain disabled. Pods will restart after verification.'), buttons: [t('Cancel'), t('Restore and restart')], defaultId: 0, cancelId: 0 })
+    if (answer.response !== 1) return view()
+    const parent = join(await realpath(profileBase), 'profiles'); await mkdir(parent, { recursive: true, mode: 0o700 })
+    selectProfile(profileBase, await restoreBackup(await realpath(source), parent, schemaVersion)); app.relaunch(); app.quit()
+    return view()
+  })
   ipcMain.handle(channels.data, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     const command = parseDataCommand(value)
@@ -206,6 +232,7 @@ async function start(): Promise<void> {
       const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Restore and restart'), message: t('Restore this backup into a new profile?'), detail: t('The current profile is retained. Connections require reconnection, resources require review, and schedules remain disabled. Pods will restart after verification.'), buttons: [t('Cancel'), t('Restore and restart')], defaultId: 0, cancelId: 0 })
       if (answer.response !== 1) return worker.data({ type: 'status' })
       if (status.worker.state === 'starting') throw new Error('Wait for startup to finish before restoring')
+      if (status.worker.state === 'recovery') await worker.stopForRecovery()
       const parent = join(await realpath(profileBase), 'profiles'); await mkdir(parent, { recursive: true, mode: 0o700 })
       const result = status.worker.state === 'ready' ? await worker.data({ type: 'restore', source: path, parent }) : { usedBytes: 0, freeBytes: 0, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null, result: { kind: 'restore' as const, path: await restoreBackup(path, parent, schemaVersion) } }
       if (!result.result || result.result.kind !== 'restore') throw new Error('Restored profile is missing')

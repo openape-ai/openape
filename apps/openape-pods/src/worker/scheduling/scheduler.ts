@@ -9,7 +9,8 @@ import { nextDue } from './clock'
 
 interface Driver { start: (podId: string, trigger: RunTrigger) => string }
 export class Scheduler {
-  constructor(private readonly store: PodDatabase, private readonly driver: Driver, private readonly now: () => number = Date.now, private readonly immediateDispatch = true) {}
+  /** `idle`: a Pod whose script declares work and has none ready skips its scheduled run (issue 1465). */
+  constructor(private readonly store: PodDatabase, private readonly driver: Driver, private readonly now: () => number = Date.now, private readonly immediateDispatch = true, private readonly idle: (podId: string) => boolean = () => false) {}
 
   view(podId: string): ScheduleView {
     this.store.getPod(podId)
@@ -81,7 +82,7 @@ export class Scheduler {
     for (const row of due) {
       try {
         this.store.transaction(() => {
-          if (!this.store.db.prepare('SELECT 1 FROM accepted_events WHERE pod_id=? AND source=\'schedule\' AND state=\'pending\'').get(row.pod_id as string)) this.acceptEvent(row.pod_id as string, 'schedule', `${row.revision}:${row.next_at}`, { dueAt: row.next_at })
+          if (!this.store.db.prepare('SELECT 1 FROM accepted_events WHERE pod_id=? AND source=\'schedule\' AND state=\'pending\'').get(row.pod_id as string) && !this.idle(row.pod_id as string)) this.acceptEvent(row.pod_id as string, 'schedule', `${row.revision}:${row.next_at}`, { dueAt: row.next_at })
           this.store.db.prepare('UPDATE schedules SET next_at=?,error=NULL WHERE pod_id=?').run(nextDue(parseSchedule(JSON.parse(row.spec as string)), row.next_at as number, this.now()), row.pod_id as string)
         })
       }

@@ -110,6 +110,9 @@ import { app, shell, utilityProcess } from 'electron'
 import type { UtilityProcess } from 'electron'
 import { dirname, join } from 'node:path'
 import type { WorkerStatus } from '../contracts/ipc'
+import { parseStorageFailure, storageReadinessMs } from '../contracts/storage'
+import { automaticBackupDirectory } from './storage-recovery'
+import type { StorageFailure } from '../contracts/storage'
 
 const secretsOrigin = 'https://secrets.openape.ai'
 // Waiting calls are parked outside the service limit, but bounded per run and in total.
@@ -183,10 +186,23 @@ export class FixtureWorker {
     if (fixturePort && (!/^\d+$/.test(fixturePort) || Number(fixturePort) < 1024 || Number(fixturePort) > 65535)) throw new Error('Invalid synthetic model port')
     // Synthetic fixtures freeze gate batches at once instead of collecting inputs for two minutes.
     const fixtureGates = process.env.NODE_ENV === 'test' && !!process.env.OPENAPE_PODS_FIXTURE_DIR
-    this.child = utilityProcess.fork(join(__dirname, '../worker/entry.cjs'), [], { cwd: root, env: { HOME: root, TMPDIR: root, PATH: '/usr/bin:/bin', PODS_RUNTIME_EXECUTABLE: process.execPath, ...(process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1' ? { PODS_CENTRAL_ENABLED: '1' } : {}), ...(fixturePort ? { PODS_FIXTURE_MODEL_PORT: fixturePort } : {}), ...(fixtureGates ? { PODS_FIXTURE_GATE_COLLECT: '0' } : {}) }, serviceName: 'OpenApe Pods Fixture Worker', stdio: 'pipe' })
+    this.child = utilityProcess.fork(join(__dirname, '../worker/entry.cjs'), [], { cwd: root, env: { HOME: root, TMPDIR: root, PATH: '/usr/bin:/bin', PODS_RUNTIME_EXECUTABLE: process.execPath, PODS_BACKUP_DIRECTORY: automaticBackupDirectory(profileBase), ...(process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1' ? { PODS_CENTRAL_ENABLED: '1' } : {}), ...(fixturePort ? { PODS_FIXTURE_MODEL_PORT: fixturePort } : {}), ...(fixtureGates ? { PODS_FIXTURE_GATE_COLLECT: '0' } : {}) }, serviceName: 'OpenApe Pods Fixture Worker', stdio: 'pipe' })
     const child = this.child
     const reportError = (error: string) => { this.state = { state: 'error', pid: child.pid ?? null, error }; this.publish(this.state) }
+    let storage: StorageFailure | undefined
+    this.state = { state: 'starting', pid: child.pid ?? null, error: null }
+    // The window never waits on the database: without a readiness report in time it shows recovery, nothing runs.
+    const deadline = setTimeout(() => {
+      if (this.child !== child || this.state.state !== 'starting') return
+      storage = { reason: 'timeout', message: `Storage did not report readiness within ${storageReadinessMs / 1000} seconds; automation stays stopped`, at: Date.now() }
+      this.state = { state: 'recovery', pid: child.pid ?? null, error: storage.message, storage }; this.publish(this.state)
+    }, storageReadinessMs)
     child.on('message', (message: unknown) => {
+      if (message && typeof message === 'object' && 'storage' in message) {
+        try { storage = parseStorageFailure(message.storage) }
+        catch { storage = { reason: 'unknown', message: 'Storage reported an unreadable failure', at: Date.now() } }
+        return
+      }
       if (message && typeof message === 'object' && 'programCancel' in message) { this.programs?.cancelPod(String(message.programCancel)); return }
       if (message && typeof message === 'object' && 'serviceCancel' in message) { this.services.get(String(message.serviceCancel))?.abort(new Error('Pod tool call cancelled')); return }
       if (message && typeof message === 'object' && 'service' in message) {
@@ -209,6 +225,7 @@ export class FixtureWorker {
         catch (error) { request.reject(error instanceof Error ? error : new Error('Invalid worker response')) }
         return
       }
+      clearTimeout(deadline); storage = undefined
       this.state = { state: 'ready', pid: child.pid ?? null, error: null }
       this.setupReady = (async () => { await this.initializeConnections(); this.publish(this.state) })().catch((error: unknown) => { reportError(error instanceof Error ? error.message : 'Connection setup failed') })
     })
@@ -216,7 +233,8 @@ export class FixtureWorker {
       this.programs?.cancelAll()
       void this.closeShellIdentities().catch((error: unknown) => { console.error('Pod shell credential cleanup failed', error) })
       for (const service of this.services.values()) service.abort(new Error('Owning worker stopped'))
-      this.state = this.stopping ? { state: 'stopped', pid: null, error: null } : { state: 'error', pid: null, error: `Worker exited (${code}). Quit and reopen Pods to recover.` }
+      clearTimeout(deadline)
+      this.state = this.stopping ? { state: 'stopped', pid: null, error: null } : storage ? { state: 'recovery', pid: null, error: storage.message, storage } : { state: 'error', pid: null, error: `Worker exited (${code}). Quit and reopen Pods to recover.` }
       for (const request of this.pending.values()) { clearTimeout(request.timer); request.reject(new Error('Worker stopped before replying')) }
       this.pending.clear()
       this.child = null; this.publish(this.state)
@@ -1057,6 +1075,19 @@ export class FixtureWorker {
   }
 
   lifecycle(event: 'suspend' | 'resume'): void { if (this.state.state === 'ready' && !this.stopping) this.child?.postMessage(event) }
+
+  /** Ends a worker that is still trying to open storage; recovery copies and restores need it stopped. */
+  async stopForRecovery(): Promise<void> {
+    if (this.state.state !== 'recovery') throw new Error('Storage is not in recovery')
+    const child = this.child
+    if (child) await new Promise<void>((resolve) => { child.once('exit', () => resolve()); child.kill() })
+  }
+
+  /** Opens storage again after the owner fixed or restored it; automation starts only if it becomes ready. */
+  async retryStorage(): Promise<void> {
+    await this.stopForRecovery()
+    this.start(this.root, this.profileBase)
+  }
 
   async stop(): Promise<void> {
     await this.setupReady

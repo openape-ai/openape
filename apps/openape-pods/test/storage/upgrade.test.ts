@@ -62,11 +62,12 @@ it('creates a fresh profile whose schema equals an upgraded schema-45 profile', 
   expect(objects(join(upgraded, 'control.sqlite'))).toEqual(objects(join(fresh, 'control.sqlite')))
 })
 
+const schema48Tables = ['storage_receipts', 'effect_receipts', 'effect_attempts', 'action_approvals', 'approval_batches', 'owner_questions', 'work_items', 'work_operations', 'data_artifacts', 'data_entry_revisions', 'data_entries', 'data_sequence', 'data_readers', 'data_namespaces']
 it('adds the schema-47 tables to a schema-46 profile without touching its rows (issue 1459)', () => {
   const fresh = directory(); open(fresh).close(); stores.pop()
   const root = directory(); const store = open(root)
   const pod = store.createPod({ name: 'Kept' }).id
-  store.db.exec('DROP TABLE item_tags; PRAGMA user_version=46;')
+  store.db.exec(`DROP TABLE item_tags; ${schema48Tables.map(table => `DROP TABLE ${table};`).join(' ')} PRAGMA user_version=46;`)
   store.close(); stores.pop()
   const upgraded = open(root)
   expect(upgraded.db.prepare('PRAGMA user_version').get()!.user_version).toBe(schemaVersion)
