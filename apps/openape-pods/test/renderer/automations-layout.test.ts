@@ -4,6 +4,7 @@ import type { MapView } from '../../src/contracts/map-view'
 import { parseMapView } from '../../src/contracts/map-view'
 import { IDP, YOU, buildModel, curve, edgeWidth, geometry, hitTest, particleCount, relayout, step, ungrouped, visibleNodes } from '../../src/renderer/utils/automation-layout'
 import { kpiFacts } from '../../src/renderer/utils/kpis'
+import { withTags } from '../../src/renderer/utils/tags'
 import fixture from './map-view.json'
 
 const view = parseMapView(fixture) as MapView
@@ -36,29 +37,32 @@ it('turns the read model into columns: systems, pods, sinks, authorities; paused
   expect(model.links.filter(link => link.from === docpit.id && link.type === 'auth').map(link => link.to)).toEqual([YOU, IDP])
 })
 
-it('lays rows out from the top and lets the canvas height follow the content; a group filter keeps only connected systems', () => {
-  const full = relayout(buildModel(view), view, 'all', all)
+it('lays rows out from the top and lets the canvas height follow the content; a tag filter keeps only connected systems', () => {
+  const full = relayout(buildModel(view), view, all)
   const network = full.clusters.find(cluster => cluster.kind === 'network')!
   expect(network).toMatchObject({ x: geometry.cluster.x, y: geometry.firstRow, w: geometry.cluster.w, h: geometry.cluster.h })
   expect(full.clusters).toHaveLength(1)
   expect(full.height).toBeGreaterThan(geometry.cluster.h + geometry.single.h + geometry.collapsed.h + geometry.firstRow)
-  const systems = full.nodes.filter(node => node.kind === 'system' && visibleNodes(full, 'all', all).has(node.id))
+  const systems = full.nodes.filter(node => node.kind === 'system' && visibleNodes(full, all).has(node.id))
   expect(systems.every(node => node.tx === geometry.systemX)).toBe(true)
   expect(Math.max(...systems.map(node => node.ty))).toBeLessThanOrEqual(full.height - 60)
-  const initech = relayout(buildModel(view), view, 'initech', all)
-  const visible = visibleNodes(initech, 'initech', all)
+  const tagged = structuredClone(view)
+  for (const item of [...tagged.pods, ...tagged.automations].filter(item => item.group === 'initech')) item.tags = { own: ['initech'], inherited: [], revision: 1 }
+  const filtered = withTags(tagged, ['initech'])
+  const initech = relayout(buildModel(filtered), filtered, all)
+  const visible = visibleNodes(initech, all)
   expect(Array.from(visible, id => initech.nodes.find(node => node.id === id)!.name).sort()).toEqual(['INITECH PR monitor', 'INITECH Task monitor', 'INITECH · DOCPIT mail management', 'api.telegram.org', 'az', 'dev.azure.com', 'id.openape.ai', 'initech', 'patrick@docpit.eu', 'you'])
-  // Five systems on the left need more height than the minimum, less than the full map.
-  expect(initech.height).toBe(geometry.columnStart + 4 * geometry.columnStep + 60)
+  // Only INITECH Pods remain, so Telegram is written and no longer read: four rows in the side columns need more height than the minimum, less than the full map.
+  expect(initech.height).toBe(geometry.columnStart + 3 * geometry.columnStep + 60)
   expect(initech.height).toBeLessThan(full.height)
   expect(initech.clusters).toEqual([])
-  const noPaused = visibleNodes(initech, 'initech', { ...all, paused: false })
+  const noPaused = visibleNodes(initech, { ...all, paused: false })
   expect([...noPaused].some(id => initech.nodes.find(node => node.id === id)!.kind === 'collapsed')).toBe(false)
   expect(noPaused.has('app:pods-mail:patrick@docpit.eu')).toBe(false)
 })
 
 it('eases nodes towards their targets, bends curves by link type and sizes particles and lines from measured flow', () => {
-  const model = relayout(buildModel(view), view, 'all', all)
+  const model = relayout(buildModel(view), view, all)
   for (const node of model.nodes) { node.x = 0; node.y = 0 }
   expect(step(model)).toBe(true)
   const first = model.nodes[0]!
@@ -72,8 +76,8 @@ it('eases nodes towards their targets, bends curves by link type and sizes parti
   expect(Math.hypot(read.c.x - (read.p0.x + read.p1.x) / 2, read.c.y - (read.p0.y + read.p1.y) / 2)).toBeCloseTo(Math.min(60, Math.hypot(read.p1.x - read.p0.x, read.p1.y - read.p0.y) * 0.15), 5)
   expect([0, 1, 3, 10, 150].map(particleCount)).toEqual([0, 2, 3, 4, 5])
   expect([0, 3, 15, 100].map(edgeWidth)).toEqual([1, 1.5, 3.5, 3.5])
-  expect(hitTest(model, visibleNodes(model, 'all', all), b.tx, b.ty)?.id).toBe(b.id)
-  expect(hitTest(model, visibleNodes(model, 'all', all), 5, 5)).toBeNull()
+  expect(hitTest(model, visibleNodes(model, all), b.tx, b.ty)?.id).toBe(b.id)
+  expect(hitTest(model, visibleNodes(model, all), 5, 5)).toBeNull()
 })
 
 it('derives KPI subtitles from the data only', () => {

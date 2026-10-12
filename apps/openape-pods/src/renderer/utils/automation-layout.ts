@@ -95,11 +95,9 @@ export function buildModel(view: MapView, previous?: MapModel): MapModel {
   return { nodes, links: [...unique.values()], clusters: [], height: geometry.minimumHeight }
 }
 
-export const inGroup = (item: { group: string | null }, group: string): boolean => group === 'all' || item.group === group
-
-/** A node is visible when its group and layer are selected, or when it is a system or authority connected to a visible node. */
-export function visibleNodes(model: MapModel, group: string, layers: Layers): Set<string> {
-  const own = new Set(model.nodes.filter(item => item.group !== null && inGroup(item, group) && (layers.paused || !item.paused)).map(item => item.id))
+/** A Pod is visible when its layer is selected; a system or authority when it is connected to a visible Pod. */
+export function visibleNodes(model: MapModel, layers: Layers): Set<string> {
+  const own = new Set(model.nodes.filter(item => item.group !== null && (layers.paused || !item.paused)).map(item => item.id))
   const visible = new Set(own)
   for (const link of model.links) {
     if (!layers[link.type]) continue
@@ -110,8 +108,8 @@ export function visibleNodes(model: MapModel, group: string, layers: Layers): Se
 }
 
 /** Places every visible node in its column or row; the canvas height follows the content. */
-export function relayout(model: MapModel, view: MapView, group: string, layers: Layers): MapModel {
-  const visible = visibleNodes(model, group, layers)
+export function relayout(model: MapModel, view: MapView, layers: Layers): MapModel {
+  const visible = visibleNodes(model, layers)
   const shown = model.nodes.filter(item => visible.has(item.id))
   const g = geometry
   const row = (items: MapNode[], y: number, gap: number, cx = 600) => { const w = (items.length - 1) * gap; items.forEach((item, index) => { item.tx = cx - w / 2 + index * gap; item.ty = y }) }

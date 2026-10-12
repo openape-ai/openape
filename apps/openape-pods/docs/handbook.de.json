@@ -19,7 +19,7 @@
       "image": "handbook-automations-de.png",
       "paragraphs": [
         "Automatisierungen ist der Starttab. Die fünf Kennzahlen oben sind Systemzähler: aktiv, pausiert, gestört, Entscheidungen warten auf dich und unklare Zustellungen. Ihre Untertitel kommen aus deinen Daten, etwa der Name eines gestörten Pods und sein Grund.",
-        "Die Karte zeigt deine Pods in der Mitte, links die Services, Applikationen und Verzeichnisse, die sie lesen, rechts reine Ziele und oben die Autoritäten: deine Entscheidungen, den Identity Provider und die KI. Gepunktete Linien tragen die aufgezeichneten Lese- und Schreibzugriffe der letzten 24 Stunden; Netze erscheinen als Gruppen mit ihren Mitgliedern. Liste zeigt dieselben Pods als Tabelle. Filtere nach Gruppe und blende Ebenen mit den Chips Kanäle, Lesen, Schreiben, Freigaben und Pausierte aus.",
+        "Die Karte zeigt deine Pods in der Mitte, links die Services, Applikationen und Verzeichnisse, die sie lesen, rechts reine Ziele und oben die Autoritäten: deine Entscheidungen, den Identity Provider und die KI. Gepunktete Linien tragen die aufgezeichneten Lese- und Schreibzugriffe der letzten 24 Stunden; Netze erscheinen als Gruppen mit ihren Mitgliedern. Liste zeigt dieselben Pods als Tabelle. Mit Tags startet die Karte leer: Aktiviere einen oder mehrere Tags, um ihre Pods zu zeigen; jeder Tag zeigt, wie viele Pods ihn tragen, und Ohne Tag, Alle und Keine sind immer verfügbar. Die Auswahl bleibt auf diesem Gerät gespeichert. Ebenen öffnet die Chips Kanäle, Lesen, Schreiben, Freigaben und Pausierte; Legende erklärt die Knotenformen.",
         "Wähle einen Knoten, um seine Fakten im Infofeld zu lesen. Details öffnen führt zur Detailseite mit Zeitplan, Mitgliedern, Entscheidungsstellen, Zahlen, Zugriffen nach Art, Geheimnissen als Aliase, Kanälen, dem Entwicklerabschnitt und dem letzten Lauf. Pausieren, Fortsetzen und Jetzt ausführen sind die Owner-Befehle auf dieser Seite; nichts hier schreibt in deine Konten.",
         "Stand HH:MM kennzeichnet im Browser einen veröffentlichten Schnappschuss; Live · HH:MM bedeutet, der Desktop antwortet direkt. Der Browser zeigt denselben Tab aus dem Schnappschuss des gewählten Desktops. Native Bedienelemente wie das Öffnen des Script-Ordners oder die Wahl einer privaten Datei bleiben am Desktop und sind im Browser deaktiviert."
       ],
@@ -231,12 +231,12 @@
       "id": "groups",
       "title": "Pods in Gruppen organisieren",
       "paragraphs": [
-        "Gruppen ordnen zusammengehörige Pods; der Tab Automatisierungen filtert Karte und Liste nach Gruppe. Jeder Pod gehört zu genau einer flachen Gruppe oder zu Nicht gruppiert. Gruppennamen und Zuordnungen werden auf diesem Mac gespeichert und in Sicherungen aufgenommen.",
+        "Gruppen ordnen zusammengehörige Pods; Liste und Detailseite zeigen die Gruppe jedes Pods, die Karte wird über Tags gefiltert. Jeder Pod gehört zu genau einer flachen Gruppe oder zu Nicht gruppiert. Gruppennamen und Zuordnungen werden auf diesem Mac gespeichert und in Sicherungen aufgenommen.",
         "Gruppieren teilt keine Ressourcen oder Berechtigungen, macht kein Skript ungültig und beeinflusst keinen laufenden Auftrag. Neue Pods beginnen unter Nicht gruppiert. Das Entfernen einer Gruppe behält alle Pods. Einen Pod zu löschen ist eine separate Aktion mit Bestätigung."
       ],
       "steps": [
         "Bitte Codex, die Gruppe eines Pods zu setzen, oder öffne den Pod-Editor mit Details öffnen und wähle unter Einstellungen die Gruppe; ein neuer Name legt die Gruppe an. Namen enthalten 1–100 Zeichen; bis zu fünfzig Gruppen werden unterstützt.",
-        "Wähle einen Gruppen-Chip im Tab Automatisierungen, um nur diese Gruppe zu zeigen; Alle und Ohne Gruppe sind immer verfügbar.",
+        "Vergib Tags nach Bereich, etwa mit dem Gruppennamen, um eine Gruppe im Tab Automatisierungen allein zu zeigen.",
         "Benenne eine Gruppe über Codex um oder entferne sie; das Entfernen behält alle Pods und verschiebt sie nach Nicht gruppiert."
       ]
     },

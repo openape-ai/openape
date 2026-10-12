@@ -19,8 +19,7 @@ import SecretForm from './SecretForm.vue'
 import type { SecretsCommand, SecretsView } from '../../contracts/secrets'
 import type { PortableSourceSelection } from '../../contracts/sharing'
 import type { Layers } from '../utils/automation-layout'
-import { ungrouped } from '../utils/automation-layout'
-import { allTags, withTag } from '../utils/tags'
+import { allTags, tagCounts, untagged, withTags } from '../utils/tags'
 
 /**
  * The two product surfaces behind one tab bar: Automatisierungen (this file) and Entscheidungen
@@ -29,7 +28,6 @@ import { allTags, withTag } from '../utils/tags'
 const props = defineProps<{ view: MapView | null, live: boolean, now: number, decisions?: number, tab?: 'automations' | 'decisions', desktop?: boolean, subject?: string, codex?: 'connected' | 'disconnected', inbox?: { choices: NetworkChoiceView[], gates: NetworkGateView[] }, secrets?: SecretsView | null, sharing?: boolean }>()
 const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'logout': [], 'codex': [pinned: string | null, group: string | null], 'command': [command: CentralCommand], 'network': [control: NetworkControl], 'secretSave': [podId: string, alias: string, value: string], 'secrets': [command: SecretsCommand], 'folder': [podId: string], 'openPod': [id: string], 'share': [selection: PortableSourceSelection], 'advanced': [], 'import': [], 'networkCommand': [command: NetworkCommand, settle?: (error: string | null) => void] }>()
 const mode = ref<'map' | 'list'>('map')
-const group = ref('all')
 const layers = ref<Layers>({ channel: true, read: true, write: true, auth: true, paused: true })
 const playing = ref(true)
 const pinned = ref<string | null>(null)
@@ -41,25 +39,37 @@ const secretForm = ref<{ podId: string, alias: string | null } | null>(null)
 const inboxView = ref<InstanceType<typeof DecisionsInbox> | null>(null)
 const waiting = computed(() => props.decisions ?? inboxView.value?.total ?? 0)
 const current = computed(() => props.tab ?? 'automations')
-// The tag filter is a per-device preference; private windows or blocked storage simply start without one.
-const tagKey = 'pods.automations.tag'
-function storedTag(): string | null {
-  try { return localStorage.getItem(tagKey) }
-  catch { return null }
+// The tag selection is a per-device preference; private windows or blocked storage start without one.
+const tagKey = 'pods.automations.tags'
+function storedTags(): string[] {
+  try {
+    const stored: unknown = JSON.parse(localStorage.getItem(tagKey) ?? '[]')
+    return Array.isArray(stored) ? stored.filter((item): item is string => typeof item === 'string') : []
+  }
+  catch { return [] }
 }
-const tag = ref<string | null>(storedTag())
-const tags = computed(() => props.view ? allTags(props.view) : [])
-const filtered = computed(() => props.view ? withTag(props.view, tag.value && tags.value.includes(tag.value) ? tag.value : null) : null)
-function selectTag(value: string | null) {
-  tag.value = value; pinned.value = null; hovered.value = null
-  try { if (value) localStorage.setItem(tagKey, value); else localStorage.removeItem(tagKey) }
+const selected = ref<string[]>(storedTags())
+const counts = computed(() => props.view ? tagCounts(props.view) : new Map<string, number>())
+const tags = computed(() => props.view ? [...allTags(props.view), ...counts.value.has(untagged) ? [untagged] : []] : [])
+// Without any tag in the workspace there is nothing to opt into, so everything stays visible.
+const tagging = computed(() => tags.value.some(tag => tag !== untagged))
+const active = computed(() => selected.value.filter(tag => tags.value.includes(tag)))
+const filtered = computed(() => props.view && tagging.value ? withTags(props.view, active.value) : props.view)
+function selectTags(value: string[]) {
+  selected.value = value; pinned.value = null; hovered.value = null
+  try { localStorage.setItem(tagKey, JSON.stringify(value)) }
   catch {}
 }
-const groups = computed(() => [...new Set([...props.view?.pods.map(pod => pod.group) ?? [], ...props.view?.automations.map(automation => automation.group) ?? []].filter((name): name is string => !!name))])
+function toggleTag(tag: string) { selectTags(active.value.includes(tag) ? active.value.filter(item => item !== tag) : [...active.value, tag]) }
+const shownLayers = computed(() => Object.values(layers.value).filter(Boolean).length)
 const chips: { key: keyof Layers, label: string, color: string }[] = [{ key: 'channel', label: 'Channels', color: 'var(--accent)' }, { key: 'read', label: 'Read', color: 'var(--read)' }, { key: 'write', label: 'Write', color: 'var(--warn)' }, { key: 'auth', label: 'Approvals', color: 'var(--idp)' }, { key: 'paused', label: 'Paused', color: 'var(--muted)' }]
-function selectGroup(value: string) { group.value = value; pinned.value = null; hovered.value = null }
-function openCodex() { handoff.value = true; emit('codex', pinned.value, group.value === 'all' ? null : group.value === ungrouped ? t('without group') : group.value) }
-defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: string | null) => { detail.value = id }, group, mode, layers })
+/** Codex places the new automation next to the pinned Pod or network. */
+function pinnedGroup(): string | null {
+  const item = props.view?.pods.find(pod => pod.id === pinned.value) ?? props.view?.automations.find(automation => automation.id === pinned.value)
+  return item ? item.group ?? t('without group') : null
+}
+function openCodex() { handoff.value = true; emit('codex', pinned.value, pinnedGroup()) }
+defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: string | null) => { detail.value = id }, mode, layers })
 </script>
 
 <template>
@@ -92,32 +102,16 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
                 {{ t('List') }}
               </button>
             </div>
-            <div class="seg" role="group" :aria-label="t('Group')">
-              <button :aria-pressed="group === 'all'" @click="selectGroup('all')">
-                {{ t('All') }}
-              </button>
-              <button v-for="name in groups" :key="name" :aria-pressed="group === name" @click="selectGroup(name)">
-                {{ name }}
-              </button>
-              <button :aria-pressed="group === ungrouped" @click="selectGroup(ungrouped)">
-                {{ t('Without group') }}
-              </button>
-            </div>
-            <div v-if="tags.length" class="seg" role="group" :aria-label="t('Tags')">
-              <button :aria-pressed="!tag || !tags.includes(tag)" @click="selectTag(null)">
-                {{ t('All tags') }}
-              </button>
-              <button v-for="name in tags" :key="name" :aria-pressed="tag === name" @click="selectTag(name)">
-                #{{ name }}
-              </button>
-            </div>
           </div>
           <div class="tb-right">
-            <div class="layers" role="group" :aria-label="t('Layers')">
-              <button v-for="chip in chips" :key="chip.key" class="lay" :aria-pressed="layers[chip.key]" @click="layers[chip.key] = !layers[chip.key]">
-                <i :class="{ dash: chip.key === 'paused' }" :style="{ background: chip.color }" />{{ t(chip.label as 'Channels') }}
-              </button>
-            </div>
+            <details class="layers-menu">
+              <summary>{{ t('Layers') }} {{ shownLayers }}/{{ chips.length }}</summary>
+              <div class="layers" role="group" :aria-label="t('Layers')">
+                <button v-for="chip in chips" :key="chip.key" class="lay" :aria-pressed="layers[chip.key]" @click="layers[chip.key] = !layers[chip.key]">
+                  <i :class="{ dash: chip.key === 'paused' }" :style="{ background: chip.color }" />{{ t(chip.label as 'Channels') }}
+                </button>
+              </div>
+            </details>
             <button class="secondary" type="button" :title="t(playing ? 'Pause animation' : 'Resume animation')" @click="playing = !playing">
               {{ playing ? '❚❚' : '▶' }}
             </button>
@@ -126,16 +120,30 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
             </button>
           </div>
         </div>
-        <CodexHandoff v-if="handoff" :view="view" :pinned="pinned" :group="group === 'all' ? null : group === ungrouped ? t('without group') : group" :connected="codex === undefined ? null : codex === 'connected'" @close="handoff = false" @settings="settings = true" />
+        <div v-if="tagging" class="automations-tags" role="group" :aria-label="t('Tags')">
+          <button v-for="tag in tags" :key="tag" :aria-pressed="active.includes(tag)" @click="toggleTag(tag)">
+            {{ tag === untagged ? t('Without tag') : `#${tag}` }} <span class="count">{{ counts.get(tag) ?? 0 }}</span>
+          </button>
+          <span class="quick">
+            <button class="link" type="button" @click="selectTags(tags)">{{ t('All') }}</button> · <button class="link" type="button" @click="selectTags([])">{{ t('None') }}</button>
+          </span>
+        </div>
+        <CodexHandoff v-if="handoff" :view="view" :pinned="pinned" :group="pinnedGroup()" :connected="codex === undefined ? null : codex === 'connected'" @close="handoff = false" @settings="settings = true" />
         <div class="automations-kindrow">
           <span class="automations-stamp" :class="{ live }">{{ live ? t('Live · {time}', { time: clock(now, language) }) : t('As of {time}', { time: clock(view.at, language) }) }}</span>
-          <div class="kinds">
-            <span><i class="k-svc" />{{ t('Service, via HTTPS') }}</span><span><i class="k-app" />{{ t('Application, installed') }}</span><span><i class="k-dir" />{{ t('Folder or file') }}</span><span><i class="k-key" />{{ t('Secret') }}</span>
-          </div>
+          <details class="kinds-legend">
+            <summary>{{ t('Legend') }}</summary>
+            <div class="kinds">
+              <span><i class="k-svc" />{{ t('Service, via HTTPS') }}</span><span><i class="k-app" />{{ t('Application, installed') }}</span><span><i class="k-dir" />{{ t('Folder or file') }}</span><span><i class="k-key" />{{ t('Secret') }}</span>
+            </div>
+          </details>
         </div>
-        <AutomationsList v-if="mode === 'list'" :view="filtered!" :group="group" :layers="layers" :now="now" @open="detail = $event" />
+        <p v-if="tagging && !active.length" class="automations-empty" role="status">
+          {{ t('Activate tags to see their Pods ({count} Pods).', { count: view.pods.filter(pod => pod.lifecycle !== 'archived').length }) }}
+        </p>
+        <AutomationsList v-else-if="mode === 'list'" :view="filtered!" :layers="layers" :now="now" @open="detail = $event" />
         <div v-else class="automations-live">
-          <AutomationsMap :view="filtered!" :group="group" :layers="layers" :pinned="pinned" :playing="playing" :now="now" @hover="hovered = $event" @pin="pinned = $event" @open="detail = $event" />
+          <AutomationsMap :view="filtered!" :layers="layers" :pinned="pinned" :playing="playing" :now="now" @hover="hovered = $event" @pin="pinned = $event" @open="detail = $event" />
           <AutomationInfo :id="hovered ?? pinned" :view="view" :pinned="!!pinned && !hovered" :now="now" @open="detail = $event" />
         </div>
       </template>
@@ -172,6 +180,21 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
 .automations-toolbar .lay{font-size:13px;color:var(--muted);border-radius:6px;padding:4px 10px 4px 8px;display:inline-flex;align-items:center;gap:6px}
 .automations-toolbar .lay i{display:inline-block;width:10px;height:10px;border-radius:50%;opacity:.35}.automations-toolbar .lay i.dash{border-radius:2px;height:4px}
 .automations-toolbar .lay[aria-pressed="true"]{color:var(--text);background:var(--tint)}.automations-toolbar .lay[aria-pressed="true"] i{opacity:1}
+.automations-toolbar .layers-menu{position:relative}
+.automations-toolbar .layers-menu summary,.kinds-legend summary{list-style:none;color:var(--muted)}
+.automations-toolbar .layers-menu summary::-webkit-details-marker,.kinds-legend summary::-webkit-details-marker{display:none}
+.automations-toolbar .layers-menu summary{font-size:13px;border:1px solid var(--border);border-radius:8px;padding:5px 10px;background:var(--surface)}
+.automations-toolbar .layers-menu[open] summary{color:var(--text)}
+.automations-toolbar .layers-menu .layers{position:absolute;right:0;top:calc(100% + 4px);z-index:6;flex-direction:column;align-items:stretch;min-width:160px;box-shadow:0 6px 20px rgb(0 0 0 / .12)}
+.automations-tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:0 0 10px}
+.automations-tags>button{font-size:13px;border:1px solid var(--border);border-radius:999px;padding:3px 10px;color:var(--muted);background:var(--surface)}
+.automations-tags>button[aria-pressed="true"]{background:var(--tint);border-color:var(--accent);color:var(--accent);font-weight:600}
+.automations-tags .count{font-variant-numeric:tabular-nums;opacity:.7;margin-left:2px}
+.automations-tags .quick{font-size:12px;color:var(--muted);margin-left:4px}
+.automations-tags .link{font-size:12px;color:var(--accent);padding:0;border:0;background:none}
+.kinds-legend summary{font-size:12px;text-align:right}
+.kinds-legend[open] .kinds{margin-top:4px}
+.automations-empty{padding:48px 16px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:8px}
 .automations-toolbar .idp{border-color:var(--idp);background:var(--idp-soft);color:var(--idp);font-weight:600}
 .automations-toolbar .secondary{padding:6px 12px;font-size:14px}
 .automations-kindrow{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;align-items:center;margin:0 0 8px}

@@ -46,12 +46,11 @@ describe('Codex handoff', () => {
     expect(wrapper.find('.pill').exists()).toBe(false)
   })
 
-  it('opens from the toolbar with the pinned node and the selected group and closes again', async () => {
+  it('opens from the toolbar with the pinned node and its group and closes again', async () => {
     applyLanguage('de')
     wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: view.at, desktop: true, codex: 'disconnected' } })
     await flushPromises()
     const shell = wrapper.vm as unknown as { pin: (id: string | null) => void }
-    await wrapper.findAll('button').find(item => item.text() === 'Delta Mind')!.trigger('click')
     shell.pin(view.pods.find(pod => pod.name === 'Triage')!.id); await flushPromises()
     await wrapper.findAll('button').find(item => item.text() === 'Neue Automatisierung mit Codex')!.trigger('click'); await flushPromises()
     expect(wrapper.find('[data-testid="codex-brief"]').text()).toBe(`Lege eine neue Automatisierung an in der Gruppe Delta Mind. Wie Triage, aber mit anderer Quelle. ${order}`)
