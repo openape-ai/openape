@@ -2743,14 +2743,12 @@
   "Reads": "Liest",
   "Writes": "Schreibt",
   "Last": "Zuletzt",
-  "Nothing in this group.": "Nichts in dieser Gruppe.",
   "Areas": "Bereiche",
   "Automations": "Automatisierungen",
   "Decisions": "Entscheidungen",
   "View": "Ansicht",
   "Map": "Karte",
   "List": "Liste",
-  "Without group": "Ohne Gruppe",
   "Layers": "Ebenen",
   "Write": "Schreiben",
   "Paused": "Pausierte",
@@ -3183,7 +3181,6 @@
   "Invalid IdP grant listing": "Ungültige Freigabenliste vom IdP",
   "Approval expired unanswered; requested again automatically": "Freigabe unbeantwortet abgelaufen; automatisch neu angefragt",
   "Tags": "Tags",
-  "All tags": "Alle Tags",
   "Add tag": "Tag hinzufügen",
   "Save tags": "Tags speichern",
   "from network": "vom Netzwerk",
@@ -3197,5 +3194,9 @@
   "Invalid network name": "Ungültiger Netzwerkname",
   "Invalid workspace tags": "Ungültige Tags im Workspace",
   "Invalid map tags": "Ungültige Tags in der Übersicht",
-  "Database schema {p0} cannot be upgraded": "Datenbankschema {p0} kann nicht aktualisiert werden"
+  "Database schema {p0} cannot be upgraded": "Datenbankschema {p0} kann nicht aktualisiert werden",
+  "Nothing matches the filter.": "Nichts passt zum Filter.",
+  "Without tag": "Ohne Tag",
+  "Legend": "Legende",
+  "Activate tags to see their Pods ({count} Pods).": "Tags aktivieren, um ihre Pods zu sehen ({count} Pods)."
 }
