@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import type { MapView } from '../../contracts/map-view'
 import { language, t } from '../i18n'
 import { clock } from '../utils/cadence'
@@ -62,6 +62,11 @@ function selectTags(value: string[]) {
 }
 function toggleTag(tag: string) { selectTags(active.value.includes(tag) ? active.value.filter(item => item !== tag) : [...active.value, tag]) }
 const shownLayers = computed(() => Object.values(layers.value).filter(Boolean).length)
+const layersMenu = ref<HTMLDetailsElement | null>(null)
+function closeLayers() { if (layersMenu.value) layersMenu.value.open = false }
+function closeLayersOutside(event: PointerEvent) { if (!layersMenu.value?.contains(event.target as Node)) closeLayers() }
+onMounted(() => document.addEventListener('pointerdown', closeLayersOutside))
+onBeforeUnmount(() => document.removeEventListener('pointerdown', closeLayersOutside))
 const chips: { key: keyof Layers, label: string, color: string }[] = [{ key: 'channel', label: 'Channels', color: 'var(--accent)' }, { key: 'read', label: 'Read', color: 'var(--read)' }, { key: 'write', label: 'Write', color: 'var(--warn)' }, { key: 'auth', label: 'Approvals', color: 'var(--idp)' }, { key: 'paused', label: 'Paused', color: 'var(--muted)' }]
 /** Codex places the new automation next to the pinned Pod or network. */
 function pinnedGroup(): string | null {
@@ -104,7 +109,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
             </div>
           </div>
           <div class="tb-right">
-            <details class="layers-menu">
+            <details ref="layersMenu" class="layers-menu" @keydown.escape="closeLayers">
               <summary>{{ t('Layers') }} {{ shownLayers }}/{{ chips.length }}</summary>
               <div class="layers" role="group" :aria-label="t('Layers')">
                 <button v-for="chip in chips" :key="chip.key" class="lay" :aria-pressed="layers[chip.key]" @click="layers[chip.key] = !layers[chip.key]">
