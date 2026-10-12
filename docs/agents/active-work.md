@@ -1,5 +1,12 @@
 # Active work
 
+## Pod tag chips on the inbox item detail — issue 1463
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1463. Branch `feature/issue-1463-inbox-detail-tags` from `83bd3ab0`.
+- Change: shared `InboxTags.vue` (moved from the list card) also renders on `pages/inbox/item/[id].vue` for messages and decisions; nothing without tags. Relay UI only.
+- Checks: relay vitest (new `test/inbox-item.test.ts`), lint, typecheck; `test:e2e e2e/inbox-app.test.ts` with tagged fixtures and detail screenshots at 390/1280 px, light/dark.
+- Next: merge, relay deploy, Test Run evidence.
+
 ## Free tags for Pods and networks — issue 1459
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1459. Plan (owner "Passt Go"): https://report.openape.ai/d/01M4NC05HHAEYQ29AG60ZDJ4JX; source `.claude/plans/2026-10-11-pods-tags/plan.json`.
