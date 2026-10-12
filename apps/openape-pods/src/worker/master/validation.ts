@@ -61,7 +61,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
   const fixturePod = fixture.createPod({ name: 'Validation fixture' })
   try {
     const home = join(root, 'home'); await mkdir(home, { mode: 0o700 })
-    const input = { home, directories: [], variables, version: 1 as const, runId: randomUUID(), podId: pod.id, scriptHash: hash, assignmentRevision: pod.bindingRevision, reason: 'manual' as const, eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: epoch, workspace: join(root, 'workspace'), references: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 } }
+    const input = { home, directories: [], variables, version: 1 as const, runId: randomUUID(), podId: pod.id, scriptHash: hash, assignmentRevision: pod.bindingRevision, reason: 'manual' as const, eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: epoch, workspace: join(root, 'workspace'), references: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 }, validation: true as const }
     let work: WorkDeclaration[] | undefined
     const checked = executeScript({ ...runtime, dependencyRoot }, root, artifact, input, signal, { event: () => {}, request: async (operation, payload) => {
       if (operation === 'graph.contract') throw new Error('Network contracts (takes/gives) are retired; declare work and use shared data instead')
