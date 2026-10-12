@@ -82,6 +82,8 @@ export interface RunInput {
   workspace: string
   references: { id: string, hash: string, path: string }[]
   limits: { timeMs: number, frameBytes: number }
+  /** Set only in synthetic validation, which provides no assigned folders and stores nothing. */
+  validation?: true
 }
 export interface ScriptResult { status: 'completed' | 'completedWithGaps' | 'failed' | 'cancelled' | 'blocked', summary: string, completedInputIds: string[], gapIds: string[] }
 export function parseResult(value: unknown, input: RunInput): ScriptResult {
