@@ -74,6 +74,11 @@ describe('Automatisierungen layout', () => {
     await document.querySelector<HTMLElement>('.layers-menu summary')!.click(); await flushPromises()
     expect(document.querySelector('.layers-menu .layers')!.getBoundingClientRect().right).toBeLessThanOrEqual(1440)
     await shot('03-ebenen-menue')
+    // Choosing a layer keeps the menu open; a press anywhere else closes it.
+    document.querySelector<HTMLElement>('.layers-menu .lay')!.dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    expect(document.querySelector<HTMLDetailsElement>('.layers-menu')!.open).toBe(true)
+    canvas().dispatchEvent(new PointerEvent('pointerdown', { bubbles: true }))
+    expect(document.querySelector<HTMLDetailsElement>('.layers-menu')!.open).toBe(false)
     await button('Liste').trigger('click'); await flushPromises()
     expect(document.querySelector('.automations-list')!.getBoundingClientRect().width).toBeGreaterThan(1000)
     await shot('04-liste')
