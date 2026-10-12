@@ -65,11 +65,11 @@ async function applicationRequirement(configuration: ProgramAssignment, key: str
   return { key, application, adapter, testedVersions: [], platforms: [{ os: process.platform as 'darwin' | 'linux' | 'win32', architecture: process.arch as 'arm64' | 'x64' }], distribution: null, instructions: '' }
 }
 
-export async function mapPortablePod(root: string, source: PortablePodSource, choices: PortablePodChoices, networkFields?: Record<string, { value: unknown, kind?: string, origin?: string }>) {
+export async function mapPortablePod(root: string, source: PortablePodSource, choices: PortablePodChoices) {
   if (choices.podId !== source.pod.id) throw new Error('Portable Pod selection no longer matches its source')
   const key = portableKey(choices.key)
   const inputs = new PortableInputs(choices.defaults)
-  const pod: PortablePod = { key, title: choices.title ?? source.pod.name, description: choices.description, script: `pods/${key}/run.mjs`, packages: null, contract: source.manifest.contract ?? null, requestedCapabilities: [], access: [], inputs: [], bindings: [], applications: [], assets: [], schedule: source.schedule?.spec ?? null }
+  const pod: PortablePod = { key, title: choices.title ?? source.pod.name, description: choices.description, script: `pods/${key}/run.mjs`, packages: null, contract: null, requestedCapabilities: [], access: [], inputs: [], bindings: [], applications: [], assets: [], schedule: source.schedule?.spec ?? null }
   if (source.tags.length) pod.tags = [...source.tags]
   const payloads: PortablePayload[] = [{ path: pod.script, kind: 'script', mediaType: 'text/javascript', content: Buffer.from(portableScriptSource(source)) }]
   const applications: PortableApplication[] = []
@@ -83,8 +83,7 @@ export async function mapPortablePod(root: string, source: PortablePodSource, ch
   for (const declaration of source.definitions) {
     const name = portableKey(declaration.name)
     if (pod.bindings.some(binding => binding.alias === name)) throw new Error('Portable configuration and variable aliases must be distinct')
-    const field = networkFields?.[name] ?? { kind: String(declaration.kind), value: JSON.parse(String(declaration.value)), origin: 'definition' }
-    if (field.origin === 'composition' && choices.defaults.includes(`configuration:${name}`)) throw new Error('Choose shared configuration defaults on the composition')
+    const field = { kind: String(declaration.kind), value: JSON.parse(String(declaration.value)) }
     const kind = field.kind === 'secret-reference' ? 'secret' : typeof field.value
     if (!['secret', 'string', 'number', 'boolean'].includes(kind)) throw new Error('Portable configuration requires public scalars or secret declarations')
     pod.bindings.push({ alias: name, input: inputs.add(`configuration:${name}`, name, kind as PortableInputKind, kind === 'secret' ? undefined : field.value) })

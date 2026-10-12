@@ -128,7 +128,6 @@ export async function workerFixture(options: { pods?: string[], resources?: () =
   const receipts = new Map<string, unknown>()
   const reasons = new Map<string, string>()
   const names = new Map<string, string>()
-  const withoutRuntime = new Set<string>()
   const resources = () => ({ epoch: 1, resources: options.resources?.() ?? [program], variables: [] })
   const dispatch = vi.fn(async (command: Record<string, any>) => {
     if (command.grants) return ledger.execute(command.grants)
@@ -136,7 +135,7 @@ export async function workerFixture(options: { pods?: string[], resources?: () =
     if (command.resource?.type?.startsWith('bind')) bound.push(command.resource)
     if (command.program?.type === 'save') bound.push(command.program)
     if (command.serviceCheck?.approval) approvals.push(command.serviceCheck.approval)
-    if (command.runContext) return { name: names.get(command.runContext.scope.runId) ?? 'Synthetic Pod', reason: reasons.get(command.runContext.scope.runId) ?? 'schedule', runtime: !withoutRuntime.has(command.runContext.scope.runId) }
+    if (command.runContext) return { name: names.get(command.runContext.scope.runId) ?? 'Synthetic Pod', reason: reasons.get(command.runContext.scope.runId) ?? 'schedule' }
     if (command.credentialCheck) return 'secret-id'
     if (command.codexAdministration) {
       const { type, request, result } = command.codexAdministration
@@ -157,12 +156,7 @@ export async function workerFixture(options: { pods?: string[], resources?: () =
     const scope = { podId: id, runId, epoch: 1, assignmentRevision: 1, capabilities: [] }
     return { runId, run: call(scope, 'shell'), call: (kind: ServiceRequest['kind'], body: unknown = {}) => call(scope, kind, body) }
   }
-  // A run of a network member or decision maintenance: its service calls need no runtime grant.
-  const plainCall = (id: string, kind: ServiceRequest['kind'], body: unknown, capabilities: string[] = []) => {
-    const runId = randomUUID(); withoutRuntime.add(runId)
-    return call({ podId: id, runId, epoch: 1, assignmentRevision: 1, capabilities }, kind, body)
-  }
   // Cancels every open service call, as the worker does when a run is cancelled or times out.
   const abortAll = () => { for (const controller of (worker as unknown as { services: Map<string, AbortController> }).services.values()) controller.abort(new Error('Pod tool call cancelled')) }
-  return { worker, store, ledger, grants, connection, approvals, bound, credentials, start, plainCall, abortAll, openExternal: vi.mocked(shell.openExternal) }
+  return { worker, store, ledger, grants, connection, approvals, bound, credentials, start, abortAll, openExternal: vi.mocked(shell.openExternal) }
 }

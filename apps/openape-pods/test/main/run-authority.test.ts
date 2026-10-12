@@ -22,13 +22,13 @@ const scope = { podId, runId, epoch: 0, assignmentRevision: 1, capabilities: [] 
 let requests = 0
 const request = (kind: ServiceRequest['kind'], body: unknown = {}): ServiceRequest => ({ id: `00000000-0000-4000-8000-${String(++requests).padStart(12, '0')}`, kind, scope, body })
 
-async function fixture(runtime = true) {
+async function fixture() {
   const { FixtureWorker } = await import('../../src/main/worker')
   const worker = new FixtureWorker(() => {})
   const dispatched: Record<string, unknown>[] = []
   const dispatch = vi.fn(async (command: Record<string, unknown>) => {
     dispatched.push(command)
-    if ('runContext' in command) return { name: 'Synthetic Pod', reason: 'schedule', runtime }
+    if ('runContext' in command) return { name: 'Synthetic Pod', reason: 'schedule' }
     if ('credentialCheck' in command) return 'secret-id'
     return { resources: [], epoch: 0 }
   })
@@ -56,12 +56,6 @@ it('re-checks the runtime grant before a credential read and cancels the run onc
   expect(mocks.authorize).toHaveBeenCalledTimes(1)
   expect(f.dispatched.some(command => (command.serviceCheck as { authorityLost?: true } | undefined)?.authorityLost)).toBe(true)
   await f.service.executeService(request('shellClose'))
-})
-
-it('lets runs without a runtime (network, decision maintenance) proceed, but never starts a runtime for them', async () => {
-  const f = await fixture(false)
-  await expect(f.service.executeService(request('shell'))).rejects.toThrow('unavailable')
-  expect(mocks.authorize).not.toHaveBeenCalled()
 })
 
 it('cancels a running run within the watch interval after its runtime grant is revoked', async () => {

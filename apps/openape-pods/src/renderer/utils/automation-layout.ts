@@ -1,20 +1,20 @@
-import type { MapAutomation, MapSystemKind, MapView } from '../../contracts/map-view'
+import type { MapSystemKind, MapView } from '../../contracts/map-view'
 import { graphLayers } from './graph-layout'
 
 /**
  * The picture of the Automatisierungen map: fixed columns (systems left, Pods in the middle, pure
- * sinks right, authorities and AI on top), no force layout. Nodes glide to their targets; the
- * canvas height follows the content. All numbers are logical canvas units (width 1200).
+ * sinks right, authorities and AI on top), no force layout. Pods that share data are laid out in
+ * layers from writer to reader. Nodes glide to their targets; the canvas height follows the content.
+ * All numbers are logical canvas units (width 1200).
  */
-export type NodeKind = 'pod' | 'system' | 'sink' | 'auth' | 'ai' | 'collapsed'
-export type LinkType = 'channel' | 'read' | 'write' | 'auth'
+export type NodeKind = 'pod' | 'system' | 'sink' | 'auth' | 'ai'
+export type LinkType = 'data' | 'read' | 'write' | 'auth'
 export interface MapNode {
   id: string
   kind: NodeKind
   name: string
   sub: string
   group: string | null
-  automation: string | null
   paused: boolean
   ai: boolean
   degraded: boolean
@@ -31,56 +31,39 @@ export interface MapNode {
   ty: number
 }
 export interface MapLink { from: string, to: string, type: LinkType, label: string, flow: number }
-export interface MapCluster { id: string, name: string, kind: 'network', x: number, y: number, w: number, h: number }
-export interface MapModel { nodes: MapNode[], links: MapLink[], clusters: MapCluster[], height: number }
-export interface Layers { channel: boolean, read: boolean, write: boolean, auth: boolean, paused: boolean }
+export interface MapModel { nodes: MapNode[], links: MapLink[], height: number }
+export interface Layers { data: boolean, read: boolean, write: boolean, auth: boolean, paused: boolean }
 export const canvasWidth = 1200
-export const geometry = { systemX: 100, sinkX: 1095, topY: 56, topGap: 270, firstRow: 150, rowGap: 30, cluster: { x: 250, w: 660, h: 310 }, single: { h: 80, gap: 170 }, collapsed: { h: 70, gap: 300 }, podRadius: 18, columnStart: 200, columnStep: 90, minimumHeight: 420 } as const
-export const boxSize = (kind: NodeKind): { w: number, h: number } => kind === 'collapsed' ? { w: 220, h: 36 } : kind === 'sink' ? { w: 190, h: 40 } : kind === 'auth' || kind === 'ai' ? { w: 160, h: 40 } : kind === 'pod' ? { w: 36, h: 36 } : { w: 160, h: 40 }
+export const geometry = { systemX: 100, sinkX: 1095, topY: 56, topGap: 270, firstRow: 150, rowGap: 30, shared: { x: 250, w: 660, layerHeight: 90 }, single: { h: 80, gap: 170 }, podRadius: 18, columnStart: 200, columnStep: 90, minimumHeight: 420 } as const
+export const boxSize = (kind: NodeKind): { w: number, h: number } => kind === 'sink' ? { w: 190, h: 40 } : kind === 'auth' || kind === 'ai' ? { w: 160, h: 40 } : kind === 'pod' ? { w: 36, h: 36 } : { w: 160, h: 40 }
 export const IDP = 'auth:idp'
 export const YOU = 'auth:you'
 export const ungrouped = '__none__'
 
-const node = (id: string, kind: NodeKind, name: string, extra: Partial<MapNode> = {}): MapNode => ({ id, kind, name, sub: '', group: null, automation: null, paused: false, ai: false, degraded: false, blocked: false, running: false, rk: null, both: false, badge: 0, secrets: false, labelWidth: 150, x: 0, y: 0, tx: 0, ty: 0, ...extra })
+const node = (id: string, kind: NodeKind, name: string, extra: Partial<MapNode> = {}): MapNode => ({ id, kind, name, sub: '', group: null, paused: false, ai: false, degraded: false, blocked: false, running: false, rk: null, both: false, badge: 0, secrets: false, labelWidth: 150, x: 0, y: 0, tx: 0, ty: 0, ...extra })
 
-/** Nodes and links of the read model. Paused automations collapse into one node; gates become the owner or the identity provider. */
+/** Nodes and links of the read model; open questions link a Pod to the owner, requested approvals to the identity provider. */
 export function buildModel(view: MapView, previous?: MapModel): MapModel {
   const nodes: MapNode[] = []
   const links: MapLink[] = []
-  const collapsed = new Map<string, string>()
   const degraded = new Set(view.kpis.degraded.map(item => item.podId))
-  const gates = new Map<string, { kind: 'choose' | 'approve', title: string }>(view.automations.flatMap(automation => automation.gates.map(gate => [`gate:${gate.key}`, { kind: gate.kind, title: gate.title }])))
-  for (const automation of view.automations) {
-    if (automation.state === 'archived') continue
-    if (automation.state !== 'active') {
-      nodes.push(node(automation.id, 'collapsed', automation.name, { sub: `${automation.members.length}`, group: automation.group ?? ungrouped, paused: true }))
-      for (const member of automation.members) collapsed.set(member, automation.id)
-    }
-  }
+  const shown = new Set<string>()
   for (const pod of view.pods) {
-    if (pod.lifecycle === 'archived' || collapsed.has(pod.id)) continue
-    nodes.push(node(pod.id, 'pod', pod.name, { group: pod.group ?? ungrouped, automation: pod.automation, paused: pod.lifecycle === 'paused', ai: pod.ai, degraded: degraded.has(pod.id), blocked: pod.queue.blocked > 0, running: pod.lastRun?.state === 'running', secrets: pod.secrets.length > 0 }))
+    if (pod.lifecycle === 'archived') continue
+    shown.add(pod.id)
+    nodes.push(node(pod.id, 'pod', pod.name, { group: pod.group ?? ungrouped, paused: pod.lifecycle === 'paused', ai: pod.ai, degraded: degraded.has(pod.id), blocked: pod.queue.blocked > 0 || pod.work.held > 0, running: pod.lastRun?.state === 'running', secrets: pod.secrets.length > 0 }))
     for (const approval of pod.approvals) links.push({ from: pod.id, to: IDP, type: 'auth', label: approval.title, flow: 1 })
   }
+  for (const decision of view.kpis.decisions.filter(item => shown.has(item.podId))) links.push({ from: decision.podId, to: decision.kind === 'question' ? YOU : IDP, type: 'auth', label: decision.kind, flow: decision.count })
   const reads = new Set(view.edges.filter(edge => edge.type === 'read').map(edge => edge.from))
   const writes = new Set(view.edges.filter(edge => edge.type === 'write').map(edge => edge.to))
   for (const system of view.systems) {
     const kind: NodeKind = system.id.startsWith('ai:') ? 'ai' : reads.has(system.id) ? 'system' : 'sink'
     nodes.push(node(system.id, kind, system.name, { sub: system.how, rk: system.kind, both: reads.has(system.id) && writes.has(system.id) }))
   }
-  const target = (id: string) => collapsed.get(id) ?? id
-  for (const edge of view.edges) {
-    const gate = gates.get(edge.from) ?? gates.get(edge.to)
-    if (gate) {
-      const authority = gate.kind === 'choose' ? YOU : IDP
-      const from = gates.has(edge.from) ? authority : target(edge.from); const to = gates.has(edge.to) ? authority : target(edge.to)
-      links.push({ from, to, type: 'auth', label: edge.channel ?? gate.title, flow: edge.flow })
-      continue
-    }
-    links.push({ from: target(edge.from), to: target(edge.to), type: edge.type, label: edge.channel ?? '', flow: edge.flow })
-  }
-  const choices = view.kpis.decisions.filter(item => item.kind === 'choose').reduce((sum, item) => sum + item.count, 0)
-  if (links.some(link => link.from === YOU || link.to === YOU)) nodes.push(node(YOU, 'auth', 'you', { badge: choices }))
+  for (const edge of view.edges) links.push({ from: edge.from, to: edge.to, type: edge.type, label: edge.channel ?? '', flow: edge.flow })
+  const questions = view.kpis.decisions.filter(item => item.kind === 'question').reduce((sum, item) => sum + item.count, 0)
+  if (links.some(link => link.from === YOU || link.to === YOU)) nodes.push(node(YOU, 'auth', 'you', { badge: questions }))
   if (links.some(link => link.from === IDP || link.to === IDP)) nodes.push(node(IDP, 'auth', 'id.openape.ai', { sub: 'idp' }))
   const unique = new Map<string, MapLink>()
   for (const link of links) {
@@ -92,7 +75,7 @@ export function buildModel(view: MapView, previous?: MapModel): MapModel {
   }
   const known = new Map(previous?.nodes.map(item => [item.id, item]))
   for (const item of nodes) { const before = known.get(item.id); if (before) { item.x = before.x; item.y = before.y } }
-  return { nodes, links: [...unique.values()], clusters: [], height: geometry.minimumHeight }
+  return { nodes, links: [...unique.values()], height: geometry.minimumHeight }
 }
 
 /** A Pod is visible when its layer is selected; a system or authority when it is connected to a visible Pod. */
@@ -115,25 +98,22 @@ export function relayout(model: MapModel, view: MapView, layers: Layers): MapMod
   const row = (items: MapNode[], y: number, gap: number, cx = 600) => { const w = (items.length - 1) * gap; items.forEach((item, index) => { item.tx = cx - w / 2 + index * gap; item.ty = y }) }
   const column = (items: MapNode[], x: number, y0: number, y1: number) => items.forEach((item, index) => { item.tx = x; item.ty = items.length === 1 ? (y0 + y1) / 2 : y0 + (y1 - y0) * index / (items.length - 1) })
   row(shown.filter(item => item.kind === 'auth' || item.kind === 'ai'), g.topY, g.topGap)
-  const clusters: MapCluster[] = []
   let y = g.firstRow
-  const byAutomation = new Map<string, MapNode[]>()
-  for (const item of shown.filter(item => item.kind === 'pod' && item.automation)) (byAutomation.get(item.automation!) ?? byAutomation.set(item.automation!, []).get(item.automation!)!).push(item)
-  for (const automation of view.automations) {
-    const members = byAutomation.get(automation.id)
-    if (!members?.length) continue
-    const ids = members.map(item => item.id)
-    const layers = graphLayers(ids, view.edges.filter(edge => edge.type === 'channel' && ids.includes(edge.from) && ids.includes(edge.to)).map(edge => ({ from: edge.from, to: edge.to, channel: edge.channel ?? '' })))
-    const x0 = g.cluster.x + 50; const x1 = g.cluster.x + g.cluster.w - 50; const y0 = y + 50; const y1 = y + g.cluster.h - 50
-    for (const item of members) item.labelWidth = 110
-    layers.forEach((layer, index) => layer.forEach((id, position) => { const item = members.find(member => member.id === id)!; item.tx = layers.length === 1 ? (x0 + x1) / 2 : x0 + (x1 - x0) * index / (layers.length - 1); item.ty = layer.length === 1 ? (y0 + y1) / 2 : y0 + (y1 - y0) * position / (layer.length - 1) }))
-    clusters.push({ id: automation.id, name: automation.name, kind: 'network', x: g.cluster.x, y, w: g.cluster.w, h: g.cluster.h })
-    y += g.cluster.h + g.rowGap
+  // Pods that share data form layers from writer to reader; the others sit in one row below.
+  const pods = shown.filter(item => item.kind === 'pod')
+  const shared = view.edges.filter(edge => edge.type === 'data' && pods.some(item => item.id === edge.from) && pods.some(item => item.id === edge.to))
+  const connected = pods.filter(item => shared.some(edge => edge.from === item.id || edge.to === item.id))
+  if (connected.length) {
+    const ids = connected.map(item => item.id)
+    const layered = graphLayers(ids, shared.map(edge => ({ from: edge.from, to: edge.to, channel: edge.channel ?? '' })))
+    const x0 = g.shared.x + 50; const x1 = g.shared.x + g.shared.w - 50
+    const height = Math.max(...layered.map(layer => layer.length)) * g.shared.layerHeight
+    for (const item of connected) item.labelWidth = 110
+    layered.forEach((layer, index) => layer.forEach((id, position) => { const item = connected.find(member => member.id === id)!; item.tx = layered.length === 1 ? (x0 + x1) / 2 : x0 + (x1 - x0) * index / (layered.length - 1); item.ty = y + 40 + (layer.length === 1 ? height / 2 : height * position / (layer.length - 1)) }))
+    y += height + 80 + g.rowGap
   }
-  const singles = shown.filter(item => item.kind === 'pod' && !item.automation)
+  const singles = pods.filter(item => !connected.includes(item))
   if (singles.length) { for (const item of singles) item.labelWidth = g.single.gap - 10; row(singles, y + g.single.h / 2 - 10, g.single.gap); y += g.single.h + g.rowGap }
-  const ghosts = shown.filter(item => item.kind === 'collapsed')
-  if (ghosts.length) { row(ghosts, y + g.collapsed.h / 2 - 10, g.collapsed.gap); y += g.collapsed.h + g.rowGap }
   const systems = shown.filter(item => item.kind === 'system'); const sinks = shown.filter(item => item.kind === 'sink')
   const columns = Math.max(systems.length, sinks.length)
   const height = Math.max(g.minimumHeight, y - g.rowGap + 30, g.columnStart + (columns - 1) * g.columnStep + 60)
@@ -142,7 +122,7 @@ export function relayout(model: MapModel, view: MapView, layers: Layers): MapMod
   for (const item of model.nodes) {
     if (!item.x && !item.y) { item.x = item.tx; item.y = item.ty }
   }
-  return { ...model, clusters, height }
+  return { ...model, height }
 }
 
 /** Moves every node a step towards its target; instant under reduced motion. */
@@ -164,12 +144,12 @@ export function anchor(item: MapNode, toward: { x: number, y: number }): { x: nu
   return { x: item.x + dx * k, y: item.y + dy * k }
 }
 
-/** A quadratic curve from a to b; channels run straight, other links bend 15 % of their length (at most 60), write-backs to a left system the other way. */
+/** A quadratic curve from a to b; data links run straight, other links bend 15 % of their length (at most 60), write-backs to a left system the other way. */
 export function curve(a: MapNode, b: MapNode, type: LinkType): { p0: { x: number, y: number }, p1: { x: number, y: number }, c: { x: number, y: number } } {
   const p0 = anchor(a, b); const p1 = anchor(b, a)
   const mx = (p0.x + p1.x) / 2; const my = (p0.y + p1.y) / 2
   const dx = p1.x - p0.x; const dy = p1.y - p0.y; const d = Math.hypot(dx, dy) || 1
-  const bend = type === 'channel' ? 0 : Math.min(60, d * 0.15) * (a.id < b.id ? 1 : -1) * (type === 'write' && b.kind === 'system' ? -1.6 : 1)
+  const bend = type === 'data' ? 0 : Math.min(60, d * 0.15) * (a.id < b.id ? 1 : -1) * (type === 'write' && b.kind === 'system' ? -1.6 : 1)
   return { p0, p1, c: { x: mx - dy / d * bend, y: my + dx / d * bend } }
 }
 export const pointAt = (c: ReturnType<typeof curve>, t: number) => ({ x: (1 - t) * (1 - t) * c.p0.x + 2 * (1 - t) * t * c.c.x + t * t * c.p1.x, y: (1 - t) * (1 - t) * c.p0.y + 2 * (1 - t) * t * c.c.y + t * t * c.p1.y })
@@ -185,21 +165,15 @@ export function hitTest(model: MapModel, visible: Set<string>, x: number, y: num
   return null
 }
 
-/** The automation a cluster label belongs to when the owner clicks it. */
-export function clusterAt(model: MapModel, x: number, y: number): MapCluster | null {
-  return model.clusters.find(cluster => x > cluster.x && x < cluster.x + cluster.w && y > cluster.y && y < cluster.y + 30) ?? null
-}
-
-export const automationOf = (view: MapView, id: string): MapAutomation | undefined => view.automations.find(item => item.id === id)
-
-export interface NodeFacts { reads: { name: string, flow: number }[], writes: { name: string, flow: number }[], channels: { direction: 'gives' | 'takes', channel: string, flow: number }[] }
-/** What one node reads, writes and exchanges, with the measured flows of the window. */
+export interface NodeFacts { reads: { name: string, flow: number }[], writes: { name: string, flow: number }[], data: { direction: 'writes' | 'reads', namespace: string, flow: number }[] }
+/** What one node reads, writes and shares, with the measured flows of the window. */
 export function nodeFacts(view: MapView, id: string): NodeFacts {
   const name = (systemId: string) => view.systems.find(system => system.id === systemId)?.name ?? systemId
   return {
     reads: view.edges.filter(edge => edge.type === 'read' && edge.to === id).map(edge => ({ name: name(edge.from), flow: edge.flow })),
     writes: view.edges.filter(edge => edge.type === 'write' && edge.from === id).map(edge => ({ name: name(edge.to), flow: edge.flow })),
-    channels: view.edges.filter(edge => edge.type === 'channel' && (edge.from === id || edge.to === id)).map(edge => ({ direction: edge.from === id ? 'gives' as const : 'takes' as const, channel: edge.channel ?? '', flow: edge.flow })),
+    // A namespace with several readers is one fact for its writer.
+    data: [...new Map(view.edges.filter(edge => edge.type === 'data' && (edge.from === id || edge.to === id)).map(edge => ({ direction: edge.from === id ? 'writes' as const : 'reads' as const, namespace: edge.channel ?? '', flow: edge.flow })).map(fact => [`${fact.direction}:${fact.namespace}`, fact])).values()],
   }
 }
 

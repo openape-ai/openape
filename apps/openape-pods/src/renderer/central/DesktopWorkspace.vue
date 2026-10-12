@@ -66,9 +66,6 @@ defineExpose({ openPod })
     <template #status>
       <span class="muted">{{ status?.state === 'online' ? t('Desktop online') : t('Desktop offline') }}</span>
     </template>
-    <p v-if="status?.networkReadError" role="status" class="error-message">
-      {{ t('Network details are temporarily unavailable; desktop execution remains connected.') }} {{ diagnostic(status.networkReadError) }}
-    </p>
     <p v-if="error" role="alert" class="error-message">
       {{ diagnostic(error) }}
     </p>
@@ -77,7 +74,7 @@ defineExpose({ openPod })
     </button>
     <LocalShell v-if="page === 'Automations'" sharing @open-pod="openPod" @share="share" @advanced="page = 'App settings'" @import="importPackage" />
     <template v-if="page === 'Sharing' && sharing">
-      <SharingImport v-if="sharing.mode === 'import'" :api="sharingApi" :organization="organization" desktop :resources="podResources" @open-pod="openPod" />
+      <SharingImport v-if="sharing.mode === 'import'" :api="sharingApi" desktop :resources="podResources" @open-pod="openPod" />
       <SharingExport v-else :key="sharing.selection.id" :selection="sharing.selection" :api="sharingApi" @done="back" />
     </template>
     <AppSettings v-if="page === 'App settings'">

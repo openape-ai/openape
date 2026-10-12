@@ -1,11 +1,6 @@
 import { InboxOutbox, parseNotify } from '../inbox/outbox'
 import { RunCancellation, unresolvedOperation } from '../recovery/policy'
 import type { RecoveryFailure } from '../recovery/policy'
-import { networkArchiveMember } from '../../contracts/network-capabilities'
-import { archiveApproved, parseArchiveTarget } from '../scheduling/network-archive'
-import type { NetworkGateCoverage } from '../../contracts/network-gates'
-import { boundedStep } from '../scheduling/tick-step'
-import type { NetworkGates, NetworkGateStep, NetworkGateService } from '../scheduling/network-gates'
 import { AuthorityError, InfrastructureError, NonRetryableError, retryInfrastructure } from '../../contracts/infrastructure'
 import { assignedJev, parseJevRequest, parseJevResult } from '../../contracts/jev'
 import type { JevRequest, JevEvaluation } from '../../contracts/jev'
@@ -41,15 +36,15 @@ import { executeAgent } from '../agent/executor'
 import type { AgentRuntime } from '../agent/executor'
 import type { AgentGatewayServices } from '../agent/gateway'
 import { parseProgress } from './progress'
-import { graphEmitter, parseGraphContract } from '../../contracts/graphs'
 import { installExample } from './examples'
-import type { NetworkInvocations } from '../scheduling/network-invocations'
-import type { NetworkAuthority, NetworkEmission } from '../scheduling/network-events'
-import { canonicalNetworkJson } from '../scheduling/network-events'
-import { assertNetworkQuota } from '../scheduling/network-quota'
-import { fenceNetworkBoot } from '../scheduling/network-boot'
-
-interface NetworkExecution { invocations: NetworkInvocations, authority: NetworkAuthority, emissions: NetworkEmission[] }
+import { DomainData } from '../data/domain'
+import { WorkLedger } from '../data/work'
+import { OwnerQuestions } from '../data/questions'
+import { dataOperations, handleDataOperation } from '../data/ports'
+import { Approvals } from '../data/approvals'
+import type { ApprovalService } from '../data/approvals'
+import { archiveApproved, parseArchiveTarget } from '../data/mail-archive'
+import { parseOwner } from '@openape/pods-protocol'
 
 export interface RunServiceScope {
   podId: string
@@ -63,7 +58,6 @@ export interface RunServiceScope {
 }
 export interface RunServices {
   mailArchive?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
-  gate?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
   jev?: (request: JevRequest, signal: AbortSignal, scope: RunServiceScope) => Promise<JevEvaluation>
   shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ home: string, environment: Record<string, string>, shell?: { cli: string, environment: Record<string, string> } }>
   closeShell?: (scope: RunServiceScope) => Promise<void>
@@ -72,23 +66,33 @@ export interface RunServices {
   provider?: AgentGatewayServices['provider']
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
   mailMove?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
+  approval?: (body: Parameters<ApprovalService>[0], signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
 }
 
 const maxAgentCallsPerRun = 50
-/** Resource ports a network member uses through the standalone code path below. */
-const standalonePorts = new Set(['http.request', 'credentials.get', 'tools.invoke'])
-const networkPorts = new Set(['graph.contract', 'graph.emit', 'network.emit', 'network.gateCoverage', 'network.choices', 'data.get', 'data.put', 'data.delete', 'data.query', 'artifacts.create', 'artifacts.read', 'progress.commit'])
 
 export class RunDispatcher {
   readonly runs: RunStore
+  readonly data: DomainData
+  readonly work: WorkLedger
+  readonly questions: OwnerQuestions
+  readonly approvals: Approvals
   private active = new Map<string, { controller: AbortController, work: Promise<void> }>()
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly runtime: AgentRuntime, private readonly services?: RunServices) {
     this.runs = new RunStore(store)
+    this.data = new DomainData(store)
+    this.work = new WorkLedger(store, this.data)
+    this.questions = new OwnerQuestions(store, this.data)
+    this.approvals = new Approvals(store, () => {
+      const registration = store.db.prepare('SELECT body FROM remote_registration WHERE id=1').get()
+      if (!registration) throw new Error('Owner approvals require an initialized owner identity')
+      return parseOwner((JSON.parse(String(registration.body)) as { owner: unknown }).owner)
+    })
     store.transaction(() => {
-      fenceNetworkBoot(store)
       store.db.prepare('UPDATE runs SET state=\'interrupted\',error=\'Previous worker stopped; explicit recovery is required\',checkpoint_revision=(SELECT revision FROM checkpoints WHERE pod_id=runs.pod_id) WHERE state=\'running\' AND id IN (SELECT run_id FROM run_leases)').run()
       store.db.prepare('UPDATE run_leases SET boot_id=?').run(`fenced:${this.runs.bootId}`)
       store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE state=\'intent\'').run()
+      store.db.prepare('UPDATE effect_attempts SET state=\'unknown\' WHERE state=\'intent\'').run()
     })
   }
 
@@ -111,7 +115,6 @@ export class RunDispatcher {
   }
 
   start(podId: string, trigger: RunTrigger = { reason: 'manual', eventIds: [] }, accepted?: (runId: string) => void): string {
-    if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(podId)) throw new Error('Network instances require network intake and dispatch')
     this.store.assertStorage()
     if (unresolvedOperation(this.store, podId)) throw new Error('An operation without replay evidence requires review')
     if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE pod_id=? AND state IN (\'intent\',\'unknown\')').get(podId)) throw new Error('An HTTP delivery needs review before this pod can run again')
@@ -132,55 +135,6 @@ export class RunDispatcher {
 
   cancelPod(podId: string, message = 'Run cancelled by the owner', cause: RecoveryFailure['cause'] = 'owner-cancelled'): void { this.active.get(podId)?.controller.abort(new RunCancellation(cause, message)) }
 
-  startNetwork(invocations: NetworkInvocations, authority: NetworkAuthority): void {
-    this.store.assertStorage()
-    const { row, member } = invocations.events.authority(authority)
-    this.runs.assertLease(authority.runId)
-    if (this.active.has(member.podId)) throw new Error('Network instance already has an active process')
-    const manifest = JSON.parse(row.manifest as string) as { reason: RunTrigger['reason'], resourceEpoch: number }
-    const controller = new AbortController()
-    const execution = { invocations, authority, emissions: [] }
-    const work = this.execute(authority.runId, manifest.resourceEpoch, controller.signal, { reason: manifest.reason, eventIds: [] }, execution).catch(async (failure: unknown) => {
-      try { await invocations.failClosed(authority, failure) }
-      catch (cleanupFailure) {
-        try {
-          this.store.db.prepare('INSERT INTO network_trace_events(network_id,run_id,kind,body,created_at) VALUES(?,?,?,?,?)').run(row.network_id!, authority.runId, 'settlement-cleanup-unverified', JSON.stringify({ reason: (cleanupFailure instanceof Error ? cleanupFailure.message : 'Network cleanup failed').slice(0, 10000), explicitInspectionRequired: true }), Date.now())
-        }
-        catch { console.error('Network cleanup diagnostic could not be persisted; its retained state requires inspection') }
-        console.error('Network settlement cleanup failed; explicit inspection is required')
-      }
-    }).finally(() => { this.active.delete(member.podId) })
-    this.active.set(member.podId, { controller, work })
-  }
-
-  startGate(gates: NetworkGates, step: NetworkGateStep): void {
-    const { manifest } = gates.assertStep(step)
-    if (this.active.has(manifest.podId)) throw new Error('Network gate instance already has an active execution')
-    const controller = new AbortController()
-    // Run services authorize against the pinned script's declared capabilities, also for a gate step that launches no script.
-    const pinned = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(manifest.podId, manifest.scriptHash)
-    if (!pinned) throw new Error('Pinned service script is missing')
-    const capabilities = parseManifest(JSON.parse(pinned.manifest as string)).capabilities
-    const scope: RunServiceScope = { podId: manifest.podId, runId: step.authority.runId, epoch: manifest.resourceEpoch, assignmentRevision: manifest.assignmentRevision, capabilities, root: join(this.store.root, 'runs', step.authority.runId), assertCurrent: () => { gates.assertStep(step); controller.signal.throwIfAborted() }, registerDomain: (path, ownerPid) => this.runs.registerDomain(step.authority.runId, path, ownerPid) }
-    const service: NetworkGateService = async (body) => {
-      scope.assertCurrent()
-      if (!this.services?.gate) throw new Error('Network gate service is unavailable')
-      const deadline = Number(this.store.db.prepare('SELECT deadline FROM network_invocation_controls WHERE run_id=?').get(step.authority.runId)!.deadline)
-      const remaining = deadline - Date.now()
-      if (remaining <= 0) throw new InfrastructureError({ phase: 'read', retryAfterMs: 5000 })
-      const reply = await boundedStep(remaining, async () => { const value = await this.services!.gate!(body, controller.signal, scope); if (body.operation === 'create') gates.observeCreation(step, value); scope.assertCurrent(); return value }, () => controller.abort(new InfrastructureError({ phase: 'read', retryAfterMs: 5000 })))
-      if (reply === undefined) { controller.signal.throwIfAborted(); throw new Error('Network gate service returned no result') }
-      return reply
-    }
-    const work = gates.round(step, service, controller.signal).catch(async (failure: unknown) => {
-      console.error('Network gate maintenance requires inspection', failure instanceof Error ? failure.message : 'Maintenance failed')
-      controller.abort(failure)
-      try { await gates.failStep(step, failure) }
-      catch (cleanupFailure) { console.error('Network gate cleanup requires inspection', cleanupFailure instanceof Error ? cleanupFailure.message : 'Cleanup failed') }
-    }).finally(() => { this.active.delete(manifest.podId) })
-    this.active.set(manifest.podId, { controller, work })
-  }
-
   cancel(podId: string, id: string): void {
     if (this.runs.get(id).podId !== podId) throw new Error('Run belongs to a different pod')
     const lease = this.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(podId)
@@ -194,21 +148,10 @@ export class RunDispatcher {
     await Promise.all(active.map(run => run.work))
   }
 
-  private async execute(id: string, epoch: number, signal: AbortSignal, trigger: RunTrigger, network?: NetworkExecution): Promise<void> {
+  private async execute(id: string, epoch: number, signal: AbortSignal, trigger: RunTrigger): Promise<void> {
     const run = this.runs.get(id); const pod = this.store.getPod(run.podId)
-    const assertCurrent = () => { this.runs.assertLease(id); network?.invocations.events.authority(network.authority); this.resources.assertCurrent(pod.id, epoch); if (this.store.getPod(pod.id).bindingRevision !== pod.bindingRevision) throw new Error('Script binding changed during the run'); signal.throwIfAborted() }
-    const appendEvent = (type: string, data: unknown) => {
-      if (!network) { this.runs.append(id, type, data); return }
-      const networkId = network.invocations.events.authority(network.authority).definition.id
-      const body = canonicalNetworkJson({ data })
-      if (Buffer.byteLength(body) > 256 * 1024) throw new Error('Network trace exceeds its size limit')
-      assertNetworkQuota(this.store, Buffer.byteLength(body) + 4096)
-      this.store.transaction(() => {
-        const counted = this.store.db.prepare('UPDATE network_invocation_controls SET trace_bytes=trace_bytes+?,trace_count=trace_count+1 WHERE run_id=? AND trace_bytes+?<=2097152 AND trace_count<1000').run(Buffer.byteLength(body), id, Buffer.byteLength(body))
-        if (counted.changes !== 1) throw new Error('Network invocation trace budget exceeded')
-        this.store.db.prepare('INSERT INTO network_trace_events(network_id,run_id,kind,body,created_at) VALUES(?,?,?,?,?)').run(networkId, id, type, body, Date.now())
-      })
-    }
+    const assertCurrent = () => { this.runs.assertLease(id); this.resources.assertCurrent(pod.id, epoch); if (this.store.getPod(pod.id).bindingRevision !== pod.bindingRevision) throw new Error('Script binding changed during the run'); signal.throwIfAborted() }
+    const appendEvent = (type: string, data: unknown) => { this.runs.append(id, type, data) }
     const directory = join(this.store.root, 'runs', id)
     const pendingAgents = new Set<Promise<unknown>>()
     // Agent calls carry their own bounded timeout, so they pause the script budget up to maxAgentPauseMs.
@@ -218,7 +161,6 @@ export class RunDispatcher {
     let infrastructureWaiting = 0
     let agentCalls = 0
     let notifications = 0
-    let archiveCalls = 0
     let infrastructureFailure: RecoveryFailure | undefined
     const retryService = async <T>(operation: string, work: () => Promise<T>, signal: AbortSignal, budgetMs = 30000) => {
       let waiting = false
@@ -247,40 +189,20 @@ export class RunDispatcher {
       const assigned = this.resources.list(pod.id).filter(resource => resource.kind === 'tool' && resource.state === 'ready').map(resource => resource.configuration.capability)
       if (manifest.capabilities.filter(capability => !capability.startsWith('credential.')).some(capability => !assigned.includes(capability)) || (manifest.capabilities.includes('mail.read') && !this.services?.tool)) throw new Error('No tool assignments are available for this script')
       const artifact = join(directory, 'run.mjs'); await writeFile(artifact, this.store.readBlob(run.scriptHash), { flag: 'wx', mode: 0o400 })
-      const snapshots = network
-        ? await this.resources.capture(pod.id, this.runtime.helper, { runId: id, assertCurrent })
-        : await this.resources.capture(pod.id, this.runtime.helper)
+      const snapshots = await this.resources.capture(pod.id, this.runtime.helper)
       assertCurrent()
-      const networkInput = network?.invocations.input(network.authority)
-      const checkpoint = networkInput?.checkpoint ?? this.store.checkpoint(pod.id)
+      const checkpoint = this.store.checkpoint(pod.id)
       const folders = await podDirectories(this.store.root, pod.id)
       const directories = await assignedDirectories(this.store.root, pod.id, this.resources.list(pod.id))
       assertCurrent()
-      const input: RunInput = { home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: { ...networkInput?.variables, ...new PodVariables(this.store).values(pod.id) }, version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: scriptTimeLimitMs, frameBytes: 256 * 1024 } }
+      const input: RunInput = { home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: new PodVariables(this.store).values(pod.id), version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: scriptTimeLimitMs, frameBytes: 256 * 1024 } }
       const aliases = this.resources.aliases(pod.id)
       if (aliases.length) input.aliases = runAliases(aliases, input.references)
-      if (networkInput) { input.config = networkInput.config; input.network = networkInput.network; input.eventIds = networkInput.items.map(item => item.eventId) }
       appendEvent('snapshot', { id: snapshots.id, files: input.references })
       const dependencies = new DependencyStore(this.store); const dependencyHash = dependencies.scriptSet(pod.id, run.scriptHash)
       const dependencyRoot = dependencyHash ? await dependencies.verify(pod.id, dependencyHash) : undefined
       const runtime = { ...this.runtime, dependencyRoot, registerDomain: (path: string, ownerPid: number) => this.runs.registerDomain(id, path, ownerPid) }
       const scope: RunServiceScope = { podId: pod.id, runId: id, epoch, assignmentRevision: pod.bindingRevision, capabilities: manifest.capabilities, root: directory, assertCurrent, registerDomain: runtime.registerDomain }
-      if (network) {
-        const gates = network.invocations.gates
-        if (!gates) throw new Error('Network gate authority is unavailable')
-        const coverage = gates.coverage(network.authority)
-        for (const approval of coverage) {
-          if (!this.services?.gate) throw new Error('Network approval service is unavailable')
-          const reply = await boundedStep(30000, async () => {
-            const value = await this.services!.gate!({ operation: 'assertActive', manifest: approval.manifest, grants: approval.items.map(item => ({ key: item.deliveryId, id: item.grantId })) }, signal, scope)
-            assertCurrent()
-            gates.coverage(network.authority)
-            return value
-          }, () => this.cancelPod(pod.id, 'Network approval verification exceeded its deadline'))
-          signal.throwIfAborted()
-          if (reply !== true) throw new Error('Network approval is no longer active')
-        }
-      }
       let programWrites = 0
       const invokeTool = async (body: unknown, toolSignal: AbortSignal) => {
         assertCurrent()
@@ -294,20 +216,25 @@ export class RunDispatcher {
         try { const reply = await operation; assertCurrent(); return reply }
         finally { pendingAgents.delete(operation) }
       }
-      // The archive consumer's only application moves approved mail; the script and its agent reach it only through network.archive.
-      const membership = network?.invocations.events.authority(network.authority)
-      const archiveMember = membership ? networkArchiveMember(membership.definition, membership.member, manifest.capabilities) : false
-      const scriptTool = async (payload: unknown, toolSignal: AbortSignal) => {
-        if (archiveMember) throw new Error('The archive member moves its approved mail only through network.archive')
-        return invokeTool(payload, toolSignal)
-      }
-      if (this.services?.shell && !network) {
+      const scriptTool = async (payload: unknown, toolSignal: AbortSignal) => invokeTool(payload, toolSignal)
+      if (this.services?.shell) {
         const environment = await retryService('runtime authorization', () => this.services!.shell!(scope, signal), signal, 30000)
         Object.assign(runtime, { home: environment.home, shell: environment.shell, environment: { ...environment.environment, ...runtime.environment } })
         shellScope = scope
       }
-      const contract = manifest.contract === undefined ? undefined : parseGraphContract(manifest.contract)
-      const checkEmit = graphEmitter(contract)
+      // Approval requests and decisions are exchanged with the IdP inside the Pod's own run, after its run authority
+      // exists, and finish before the script starts; a slow exchange is aborted, never left running beside the script.
+      if (this.services?.approval && this.approvals.due(pod.id)) {
+        const service: ApprovalService = (body, serviceSignal) => this.services!.approval!(body, serviceSignal, scope)
+        const exchange = new AbortController()
+        const stop = () => exchange.abort()
+        const timer = setTimeout(stop, 30000)
+        signal.addEventListener('abort', stop, { once: true })
+        try { await this.approvals.sync(pod.id, service, exchange.signal) }
+        catch (error) { appendEvent('approvals', { error: error instanceof Error ? error.message.slice(0, 2000) : 'Approval exchange failed' }) }
+        finally { clearTimeout(timer); signal.removeEventListener('abort', stop) }
+        assertCurrent()
+      }
       let mail: MailRecipeSession | undefined
       appendEvent('environment', { script: artifact, workspace: input.workspace, values: Object.fromEntries(Object.entries(runtime.environment).filter(([key]) => ['HOME', 'TMPDIR', 'PATH', 'SHELL', 'PODS_POD_ID', 'LANG', 'TERM'].includes(key))) })
       const result = await executeScript(runtime, directory, artifact, input, signal, {
@@ -345,61 +272,26 @@ export class RunDispatcher {
             const receipt = new InboxOutbox(this.store).queue(pod, id, parseNotify(payload))
             appendEvent('notify', receipt); return receipt
           }
-          if (network && !standalonePorts.has(operation)) {
-            if (operation === 'network.archive') {
-              const { row, definition, member } = network.invocations.events.authority(network.authority)
-              if (!networkArchiveMember(definition, member, manifest.capabilities)) throw new Error('Only a member behind an approval gate with one assigned mail application can archive')
-              if (!this.services?.mailMove || !this.services.gate || !network.invocations.gates) throw new Error('Mail archive service is unavailable')
-              if (archiveCalls++) throw new Error('A run can archive its approved mail only once')
-              const target = parseArchiveTarget(payload)
-              const coverage = network.invocations.gates.coverage(network.authority)
-              const body = (argv: string[]) => ({ application: target.application, argv })
-              const tools = {
-                read: async (argv: string[]) => invokeTool(body(argv), operationSignal),
-                move: async (argv: string[]) => { appendEvent('recovery-boundary', { kind: 'effect', operation: 'network.archive' }); return this.services!.mailMove!(body(argv), operationSignal, scope) },
-                approved: async (approval: NetworkGateCoverage, deliveryId: string) => {
-                  const item = approval.items.find(entry => entry.deliveryId === deliveryId)!
-                  if (await this.services!.gate!({ operation: 'assertActive', manifest: approval.manifest, grants: [{ key: item.deliveryId, id: item.grantId }] }, operationSignal, scope) !== true) throw new Error('Network approval is no longer active')
-                },
-              }
-              // Archive work pauses the script budget like other bounded service waits, and the run waits for it.
-              infrastructureWaiting++
-              const work = archiveApproved(this.store, { networkId: definition.id, runId: id, podId: pod.id, owner: { issuer: row.owner_issuer as string, subject: row.owner_subject as string } }, coverage, target, tools, assertCurrent)
-              pendingAgents.add(work)
-              try {
-                const outcomes = await work
-                appendEvent('network-archive', { outcomes: outcomes.map(({ deliveryId, outcome, reason }) => ({ deliveryId, outcome, reason })) })
-                return outcomes
-              }
-              finally { pendingAgents.delete(work); infrastructureWaiting-- }
-            }
-            if (!networkPorts.has(operation)) throw new Error('Network operation requires a declared runtime port')
-            if (operation === 'data.get') return network.invocations.data.get(network.authority, payload)
-            if (operation === 'data.put') return network.invocations.data.put(network.authority, payload)
-            if (operation === 'data.delete') return network.invocations.data.put(network.authority, payload, true)
-            if (operation === 'data.query') return network.invocations.data.query(network.authority, payload)
-            if (operation === 'artifacts.create') return network.invocations.data.artifacts.create(network.authority, payload)
-            if (operation === 'artifacts.read') return network.invocations.data.artifacts.read(network.authority, payload)
-            if (operation === 'network.gateCoverage') return network.invocations.gates!.scriptCoverage(network.authority)
-            if (operation === 'network.choices') return network.invocations.events.ownerChoices(network.authority, payload)
-            if (operation === 'progress.commit') return network.invocations.stageProgress(network.authority, payload)
-            if (operation === 'graph.contract') {
-              const pinned = network.invocations.events.authority(network.authority).member.contract
-              if (!contract || canonicalNetworkJson(parseGraphContract(payload)) !== canonicalNetworkJson(pinned) || canonicalNetworkJson(contract) !== canonicalNetworkJson(pinned)) throw new Error('Network script contract differs from its pinned definition')
-              return network.invocations.input(network.authority).items
-            }
-            if (network.emissions.length >= 500) throw new Error('Network invocation exceeds 500 emissions')
-            if (operation === 'graph.emit') {
-              if (input.network!.source) throw new Error('Network sources must emit explicit source item versions')
-              const emit = checkEmit(payload)
-              network.emissions.push(network.invocations.events.emission(network.authority, { channel: emit.channel, key: emit.key, payload: emit.data }))
-              if (emit.reason !== undefined || emit.confidence !== undefined) appendEvent('emission-explanation', { channel: emit.channel, key: emit.key, reason: emit.reason ?? null, confidence: emit.confidence ?? null })
-              return { staged: true }
-            }
-            network.emissions.push(network.invocations.events.emission(network.authority, payload))
-            return { staged: true }
+          if (operation === 'approvals.request') { const view = this.approvals.request({ podId: pod.id, runId: id }, payload); appendEvent('approval-request', { id: view.id, state: view.state }); return view }
+          if (operation === 'approvals.get') return this.approvals.get(pod.id, String((payload as { id?: unknown } | null)?.id ?? ''))
+          if (operation === 'mail.archiveApproved') {
+            if (!this.services?.mailMove || !this.services.approval) throw new Error('Mail archive service is unavailable')
+            const target = parseArchiveTarget(payload)
+            const service: ApprovalService = (body, serviceSignal) => this.services!.approval!(body, serviceSignal, scope)
+            const body = (argv: string[]) => ({ application: target.application, argv })
+            const tools = { read: async (argv: string[]) => invokeTool(body(argv), operationSignal), move: async (argv: string[]) => { appendEvent('recovery-boundary', { kind: 'effect', operation: 'mail.archive' }); return this.services!.mailMove!(body(argv), operationSignal, scope) } }
+            // Archive work pauses the script budget like other bounded service waits, and the run waits for it.
+            infrastructureWaiting++
+            const work = archiveApproved(this.store, this.approvals, service, { podId: pod.id, runId: id }, target, tools, assertCurrent, operationSignal)
+            pendingAgents.add(work)
+            try { const outcome = await work; appendEvent('mail-archive', outcome); return outcome }
+            finally { pendingAgents.delete(work); infrastructureWaiting-- }
           }
-          if (operation === 'network.emit') throw new Error('Network emission requires a network invocation')
+          if (dataOperations.has(operation)) {
+            const reply = handleDataOperation(this, operation, payload, { podId: pod.id, runId: id }, manifest)
+            if (operation.startsWith('work.') && operation !== 'work.find' && operation !== 'work.contract') appendEvent('work', { operation, ...(reply && typeof reply === 'object' && 'key' in reply ? { key: (reply as { key: unknown }).key } : {}) })
+            return reply
+          }
           if (operation === 'mail.archive') {
             if (!this.services?.mailArchive) throw new Error('Mail archive service is unavailable')
             // Standalone archives record each move in the archive store, which holds only its own unresolved batch.
@@ -409,15 +301,8 @@ export class RunDispatcher {
             try { const result = await work; assertCurrent(); return result }
             finally { pendingAgents.delete(work) }
           }
-          // A standalone run of a network script receives no items and its emits go nowhere.
-          if (operation === 'graph.contract') {
-            if (!contract || JSON.stringify(parseGraphContract(payload)) !== JSON.stringify(contract)) throw new Error('Script contract changed since validation')
-            return []
-          }
-          if (operation === 'graph.emit') {
-            const emit = checkEmit(payload)
-            appendEvent('emit', { channel: emit.channel, key: emit.key }); return { emitted: true }
-          }
+          // Channel contracts and emits belonged to the retired network runtime (issue 1465).
+          if (operation === 'graph.contract') throw new Error('Network contracts (takes/gives) are retired; declare work and use shared data instead')
           if (operation === 'mail.next' || operation === 'mail.commit') {
             if (!manifest.capabilities.includes('mail.read')) throw new Error('Mail recipe permission is not assigned')
             if (!mail) {
@@ -473,29 +358,30 @@ export class RunDispatcher {
         if (!this.store.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(pod.id, gap)) throw new Error('Result references an uncommitted gap')
       }
       if (shellScope) { await this.services?.closeShell?.(shellScope); shellScope = undefined }
-      await this.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds, epoch, network, infrastructureFailure ?? { cause: 'failure' })
+      await this.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds, epoch, infrastructureFailure ?? { cause: 'failure' })
     }
     catch (error) {
-      if (network) network.invocations.recordConflict(network.authority, error)
       const message = (error instanceof Error ? error.message : 'Run failed').slice(0, 10000)
       await Promise.allSettled(pendingAgents)
-      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message, [], epoch, network, signal.aborted ? { cause: signal.reason instanceof RunCancellation ? signal.reason.cause : 'owner-cancelled' } : infrastructureFailure ?? { cause: error instanceof AuthorityError ? 'authority' : error instanceof InfrastructureError ? 'infrastructure' : 'failure', ...(error instanceof InfrastructureError ? { retryAfterMs: error.failure.retryAfterMs } : {}) })
+      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message, [], epoch, signal.aborted ? { cause: signal.reason instanceof RunCancellation ? signal.reason.cause : 'owner-cancelled' } : infrastructureFailure ?? { cause: error instanceof AuthorityError ? 'authority' : error instanceof InfrastructureError ? 'infrastructure' : 'failure', ...(error instanceof InfrastructureError ? { retryAfterMs: error.failure.retryAfterMs } : {}) })
     }
     finally {
       try { if (shellScope) await this.services?.closeShell?.(shellScope) }
       catch (error) { appendEvent('diagnostic', { text: error instanceof Error ? error.message : 'Pod shell cleanup failed' }) }
-      finally { if (!network) this.active.delete(pod.id) }
+      finally { this.active.delete(pod.id) }
     }
   }
 
-  private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number, network?: NetworkExecution, failure?: RecoveryFailure): Promise<void> {
-    if (network) { await network.invocations.finish(network.authority, state, summary, error, completedInputIds, network.emissions, failure ?? { cause: 'failure' }); return }
+  private async finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number, failure?: RecoveryFailure): Promise<void> {
     try { await confirmDomainsStopped(this.store, id, this.runtime.helper) }
     catch (failure) {
       this.runs.interrupt(id, failure instanceof Error ? failure.message : 'Execution cleanup is unverified')
       return
     }
-    this.runs.finish(id, state, summary, error, completedInputIds, retryEpoch, failure)
+    this.store.transaction(() => {
+      this.work.settleRun(id)
+      this.runs.finish(id, state, summary, error, completedInputIds, retryEpoch, failure)
+    })
   }
 
 }

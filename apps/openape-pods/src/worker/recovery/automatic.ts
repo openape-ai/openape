@@ -2,17 +2,19 @@ import type { PodDatabase } from '../storage/database'
 import { confirmDomainsStopped } from './domains'
 import { recoveryHold } from './policy'
 import { RunStore } from '../runs/store'
+import { DomainData } from '../data/domain'
+import { WorkLedger } from '../data/work'
 
 export async function recoverStoppedRuns(store: PodDatabase, helper: string, limit = 10): Promise<void> {
   const candidates = store.db.prepare(`SELECT r.* FROM runs r
     WHERE r.state IN ('interrupted','failed','cancelled','blocked','completedWithGaps')
-      AND NOT EXISTS(SELECT 1 FROM network_invocations n WHERE n.run_id=r.id)
       AND NOT EXISTS(SELECT 1 FROM recovery_reviews review WHERE review.run_id=r.id)
       AND NOT EXISTS(SELECT 1 FROM run_events e WHERE e.run_id=r.id AND e.type='recovery')
       AND (EXISTS(SELECT 1 FROM accepted_events e WHERE e.run_id=r.id AND e.state IN ('blocked','claimed'))
         OR EXISTS(SELECT 1 FROM run_leases l WHERE l.run_id=r.id))
     ORDER BY r.started_at DESC LIMIT ?`).all(limit)
   const runs = new RunStore(store)
+  const work = new WorkLedger(store, new DomainData(store))
   for (const run of candidates) {
     const id = String(run.id); const podId = String(run.pod_id)
     let hold = recoveryHold(store, podId, id)
@@ -44,6 +46,8 @@ export async function recoverStoppedRuns(store: PodDatabase, helper: string, lim
       store.db.prepare('UPDATE runs SET finished_at=coalesce(finished_at,?) WHERE id=?').run(Date.now(), id)
       const ownerCancelled = run.state === 'cancelled' && run.error !== 'Application is quitting'
       runs.recover(id, epoch!, { cause: ownerCancelled ? 'owner-cancelled' : 'shutdown' })
+      // The run's processes are proven stopped, so its work claims can no longer race a new claimant.
+      work.settleRun(id)
     })
   }
 }

@@ -9,7 +9,8 @@ import { nextDue } from './clock'
 
 interface Driver { start: (podId: string, trigger: RunTrigger) => string }
 export class Scheduler {
-  constructor(private readonly store: PodDatabase, private readonly driver: Driver, private readonly now: () => number = Date.now, private readonly immediateDispatch = true) {}
+  /** `idle`: a Pod whose script declares work and has none ready skips its scheduled run (issue 1465). */
+  constructor(private readonly store: PodDatabase, private readonly driver: Driver, private readonly now: () => number = Date.now, private readonly immediateDispatch = true, private readonly idle: (podId: string) => boolean = () => false) {}
 
   view(podId: string): ScheduleView {
     this.store.getPod(podId)
@@ -24,7 +25,6 @@ export class Scheduler {
     const pod = this.store.getPod(podId); const parsed = parseSchedule(spec)
     if (pod.lifecycle === 'archived') throw new Error('Archived pods cannot accept schedules')
     this.store.transaction(() => {
-      if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(podId)) throw new Error('Network members use network source schedules')
       if (this.view(podId).revision !== revision) throw new Error('Stale schedule revision')
       this.store.db.prepare('INSERT INTO schedules VALUES(?,?,?,?,?,NULL) ON CONFLICT(pod_id) DO UPDATE SET revision=excluded.revision,spec=excluded.spec,enabled=excluded.enabled,next_at=excluded.next_at,error=NULL').run(podId, revision + 1, JSON.stringify(parsed), Number(enabled), nextDue(parsed, null, this.now()))
     })
@@ -42,7 +42,6 @@ export class Scheduler {
   }
 
   acceptEvent(podId: string, source: string, key: string, payload: unknown): string {
-    if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(podId)) throw new Error('Network instances require network intake and dispatch')
     const pod = this.store.getPod(podId)
     if (pod.lifecycle === 'archived') throw new Error('Archived pods do not accept events')
     if (!/^[a-z][a-z0-9.-]{0,80}$/.test(source) || !key || key.length > 200 || /[\0\r\n]/.test(key)) throw new Error('Invalid event identity')
@@ -61,7 +60,6 @@ export class Scheduler {
   }
 
   requestManual(podId: string, expectedScript?: string): void {
-    if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(podId)) throw new Error('Network instances require network intake and dispatch')
     if (expectedScript) {
       if (this.store.getPod(podId).activeScript !== expectedScript) throw new Error('Script changed; review before running')
       if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(podId)) throw new Error('No execution slot available; try again after the active run')
@@ -81,7 +79,7 @@ export class Scheduler {
     for (const row of due) {
       try {
         this.store.transaction(() => {
-          if (!this.store.db.prepare('SELECT 1 FROM accepted_events WHERE pod_id=? AND source=\'schedule\' AND state=\'pending\'').get(row.pod_id as string)) this.acceptEvent(row.pod_id as string, 'schedule', `${row.revision}:${row.next_at}`, { dueAt: row.next_at })
+          if (!this.store.db.prepare('SELECT 1 FROM accepted_events WHERE pod_id=? AND source=\'schedule\' AND state=\'pending\'').get(row.pod_id as string) && !this.idle(row.pod_id as string)) this.acceptEvent(row.pod_id as string, 'schedule', `${row.revision}:${row.next_at}`, { dueAt: row.next_at })
           this.store.db.prepare('UPDATE schedules SET next_at=?,error=NULL WHERE pod_id=?').run(nextDue(parseSchedule(JSON.parse(row.spec as string)), row.next_at as number, this.now()), row.pod_id as string)
         })
       }
@@ -93,7 +91,7 @@ export class Scheduler {
   drain(scheduled = false): void {
     if (!scheduled && !this.immediateDispatch) return
     const available = () => occupiedRunSlots(this.store) < (this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number)
-    const ready = this.store.db.prepare('SELECT e.pod_id,min(e.sequence) AS first FROM accepted_events e JOIN pods p ON p.id=e.pod_id WHERE e.state=\'pending\' AND p.lifecycle!=\'archived\' AND (p.lifecycle=\'active\' OR e.source=\'manual\') AND NOT EXISTS(SELECT 1 FROM network_members n WHERE n.pod_id=e.pod_id) AND NOT EXISTS(SELECT 1 FROM run_leases l WHERE l.pod_id=e.pod_id) AND NOT EXISTS(SELECT 1 FROM accepted_events b WHERE b.pod_id=e.pod_id AND b.state IN (\'blocked\',\'claimed\')) GROUP BY e.pod_id ORDER BY first').all()
+    const ready = this.store.db.prepare('SELECT e.pod_id,min(e.sequence) AS first FROM accepted_events e JOIN pods p ON p.id=e.pod_id WHERE e.state=\'pending\' AND p.lifecycle!=\'archived\' AND (p.lifecycle=\'active\' OR e.source=\'manual\') AND NOT EXISTS(SELECT 1 FROM run_leases l WHERE l.pod_id=e.pod_id) AND NOT EXISTS(SELECT 1 FROM accepted_events b WHERE b.pod_id=e.pod_id AND b.state IN (\'blocked\',\'claimed\')) GROUP BY e.pod_id ORDER BY first').all()
     for (const row of ready) {
       if (!available()) break
       const podId = row.pod_id as string

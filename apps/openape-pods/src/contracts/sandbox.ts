@@ -21,15 +21,14 @@ export interface SandboxDeclaration {
   http?: HttpPermission[]
   directories?: { path: string, access: DirectoryAccess }[]
   secrets?: { alias: string, path: string }[]
-  /** Replaces the denylist of this source (the Pod or the network); an empty list clears it. */
+  /** Replaces the Pod's denylist; an empty list clears it. */
   deny?: string[]
 }
 /** `grants: 'sandbox'` grants exactly what the declaration makes reachable: each program whole and each HTTP origin with its methods. */
 export type SandboxCommand
   = | { type: 'show', target: GrantTarget }
     | { type: 'apply', target: GrantTarget, sandbox: SandboxDeclaration, grants?: GrantDeclaration | 'sandbox', approve?: boolean }
-/** `deny` is the effective denylist: the Pod's own entries and those of each network it belongs to, by source in `denySources`. */
-export interface SandboxView { level: SandboxLevel, sources: { source: string, level: SandboxLevel }[], deny: string[], denySources: { source: string, deny: string[] }[] }
+export interface SandboxView { level: SandboxLevel, deny: string[] }
 /**
  * How far a Pod's programs reach on this Mac. At `owner` level they reach what the owner reaches, except
  * `protectedPaths`: the Pods folder with every profile and its control socket (or the socket's fallback directory)
@@ -75,12 +74,8 @@ export function parseSandboxDeny(value: unknown): string[] {
 }
 
 export function parseSandboxView(value: unknown): SandboxView {
-  const view = object(value, ['level', 'sources', 'deny', 'denySources'], 'Invalid sandbox view')
-  parseSandboxLevel(view.level); parseSandboxDeny(view.deny)
-  if (!Array.isArray(view.sources) || !Array.isArray(view.denySources)) throw new Error('Invalid sandbox view')
-  for (const item of view.sources) parseSandboxLevel(object(item, ['source', 'level'], 'Invalid sandbox view').level)
-  for (const item of view.denySources) parseSandboxDeny(object(item, ['source', 'deny'], 'Invalid sandbox view').deny)
-  return value as SandboxView
+  const view = object(value, ['level', 'deny'], 'Invalid sandbox view')
+  return { level: parseSandboxLevel(view.level), deny: parseSandboxDeny(view.deny) }
 }
 
 export function parseSandboxDeclaration(value: unknown): SandboxDeclaration {
@@ -122,9 +117,4 @@ export function parseSandboxCommand(value: unknown): SandboxCommand {
   if (command.approve !== undefined && typeof command.approve !== 'boolean') throw new Error('approve must be a boolean')
   const grants = command.grants === undefined ? undefined : command.grants === 'sandbox' ? 'sandbox' as const : parseGrantDeclaration(command.grants)
   return { type: 'apply', target: parseGrantTarget(command.target), sandbox: parseSandboxDeclaration(command.sandbox), ...(grants === undefined ? {} : { grants }), ...(command.approve === undefined ? {} : { approve: command.approve }) }
-}
-
-/** The more permissive level wins: a network member inherits the network sandbox plus its own. */
-export function effectiveSandboxLevel(levels: SandboxLevel[]): SandboxLevel {
-  return levels.includes('owner') ? 'owner' : 'isolated'
 }

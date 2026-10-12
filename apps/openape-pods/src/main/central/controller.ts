@@ -1,5 +1,3 @@
-import { parseCentralNetworkRead, parseCentralNetworkResult } from '../../contracts/central-networks'
-import type { CentralNetworkRead } from '../../contracts/central-networks'
 import { AsyncLocalStorage } from 'node:async_hooks'
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm } from 'node:fs/promises'
@@ -20,7 +18,6 @@ interface Session extends State { lease: string, pending: CentralOperation[], fo
 export interface CentralGate { lastTickAt: number, tickingSince: number | null, tickPhase?: string | null, tickTimeout?: { phase: string, at: number } | null }
 export interface CentralExecutor {
   snapshot: () => Promise<CentralSnapshot>
-  networkRead?: (command: CentralNetworkRead) => Promise<unknown>
   version?: () => Promise<number>
   execute: (command: CentralCommand, operationId: string) => Promise<unknown>
   gate: (until: number) => Promise<CentralGate | void>
@@ -66,10 +63,6 @@ export function uncertainOperation(operation: CentralOperation, executing: strin
 
 export class CentralController {
   private lease = ''
-  private supportsNetworks = false
-  private networkSummary = ''
-  private networkPublishedAt = 0
-  private networkReadError: string | null = null
   private state: State = { revision: 0, hash: '' }
   private localQueue: Promise<void> = Promise.resolve()
   private online = false
@@ -97,12 +90,11 @@ export class CentralController {
   constructor(private readonly root: string, private readonly request: WorkspaceRequest, private readonly executor: CentralExecutor, private readonly helper: string, private readonly timing = { heartbeatMs: centralHeartbeatMs, publishIntervalMs: 5000 }) {}
 
   get executing(): boolean { return this.context.getStore() === true }
-  get networkReads(): boolean { return this.supportsNetworks }
   get available(): boolean { return this.online }
   offlineMessage(): string { return `Central workspace offline: ${this.error ?? 'connecting'}` }
 
   status(): CentralStatus {
-    return { networkReadError: this.networkReadError, state: centralState(this.online, this.lastOnlineAt, this.since, Date.now()), error: this.error, since: this.since, lastOnlineAt: this.lastOnlineAt, gateUntil: this.gateUntil, lastTickAt: this.worker?.lastTickAt || null, tickingSince: this.worker?.tickingSince ?? null, tickPhase: this.worker?.tickPhase ?? null, tickTimeout: this.worker?.tickTimeout ?? null, format: this.format, runtimeId: this.runtimeId, lastPublication: this.lastPublication, uncertain: this.uncertain }
+    return { state: centralState(this.online, this.lastOnlineAt, this.since, Date.now()), error: this.error, since: this.since, lastOnlineAt: this.lastOnlineAt, gateUntil: this.gateUntil, lastTickAt: this.worker?.lastTickAt || null, tickingSince: this.worker?.tickingSince ?? null, tickPhase: this.worker?.tickPhase ?? null, tickTimeout: this.worker?.tickTimeout ?? null, format: this.format, runtimeId: this.runtimeId, lastPublication: this.lastPublication, uncertain: this.uncertain }
   }
 
   start(): void {
@@ -142,8 +134,7 @@ export class CentralController {
     this.phase = 'begin'
     const session = await this.request({ type: 'begin' }) as Session
     this.lease = session.lease
-    this.supportsNetworks = !!this.executor.networkRead
-    this.networkSummary = ''; this.networkPublishedAt = 0; this.cached = null; this.publishedAt = 0
+    this.cached = null; this.publishedAt = 0
     if (session.format !== 2) throw new Error('The central service predates this desktop; update the service before connecting')
     this.format = 2
     this.manifest = session.manifest ?? {}
@@ -184,7 +175,6 @@ export class CentralController {
     }
     if (this.uncertain.length) throw new Error('A previous command has an uncertain outcome. Inspect its actual run and reconcile it before reconnecting')
     await this.synchronize()
-    await this.serviceNetworks(false)
     this.phase = 'heartbeat'
     await this.heartbeat()
   }
@@ -253,45 +243,6 @@ export class CentralController {
     finally { this.publishing = null }
   }
 
-  private async serviceNetworks(read: boolean): Promise<void> {
-    try {
-      if (read) await this.readNetwork()
-      if (await this.publishNetworks()) this.networkReadError = null
-    }
-    catch (cause) {
-      const error = cause instanceof Error ? cause.message : String(cause)
-      if (this.networkReadError !== error) console.error('Network read service unavailable', cause)
-      this.networkReadError = error
-    }
-  }
-
-  private async publishNetworks(): Promise<boolean> {
-    if (!this.supportsNetworks || !this.executor.networkRead || Date.now() - this.networkPublishedAt < this.timing.publishIntervalMs) return false
-    this.networkPublishedAt = Date.now()
-    const result = parseCentralNetworkResult(await this.executor.networkRead({ type: 'list' }))
-    const view = { networks: result.networks }
-    const encoded = JSON.stringify({ networks: view.networks.map(network => ({ ...network, health: { ...network.health, lastSchedulerProgressAt: network.health.lastSchedulerProgressAt === null ? null : Math.floor(network.health.lastSchedulerProgressAt / 60000) } })) })
-    if (encoded === this.networkSummary) return true
-    await this.call({ type: 'networks', view })
-    this.networkSummary = encoded
-    return true
-  }
-
-  private async readNetwork(): Promise<void> {
-    const query = await this.call({ type: 'readClaim' }) as { id: string, command: unknown } | null
-    if (!query) return
-    let value: unknown = null; let error: string | null = null
-    try {
-      if (!this.executor.networkRead) throw new Error('Network reads require a newer desktop')
-      value = parseCentralNetworkResult(await this.executor.networkRead(parseCentralNetworkRead(query.command)))
-    }
-    catch (cause) { error = (cause instanceof Error ? cause.message : 'Network read failed').slice(0, 2000) }
-    try { await this.call({ type: 'readComplete', id: query.id, value, error }) }
-    catch (cause) {
-      if ((cause as { status?: number, message?: string }).status !== 409 || !(cause as Error).message.includes('workspace_read_expired')) throw cause
-    }
-  }
-
   private async operate(operation: CentralOperation): Promise<void> {
     this.operating = true
     this.phase = 'worker gate'; await this.gate(0)
@@ -341,7 +292,6 @@ export class CentralController {
         })()
         while (!this.abort.signal.aborted) {
           if (!this.online) throw new ConnectionLost()
-          if (this.supportsNetworks) await this.serviceNetworks(true)
           this.phase = 'claim'
           const operation = await this.call({ type: 'claim' }) as CentralOperation | null
           if (operation) await this.operate(operation)

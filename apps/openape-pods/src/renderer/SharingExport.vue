@@ -11,9 +11,8 @@ const review = ref<PortableExportReviewView | null>(null)
 const busy = ref(false); const error = ref(''); const notice = ref('')
 const title = ref(''); const key = ref('package'); const revision = ref(1); const description = ref('')
 const podKeys = ref<Record<string, string>>({}); const included = ref<Record<string, boolean>>({}); const aliases = ref<Record<string, string>>({}); const defaults = ref<Record<string, boolean>>({})
-const compositionKeys = ref<Record<string, string>>({})
 const acknowledged = ref<Record<string, boolean>>({})
-const fileKinds = { 'script': 'Script', 'package-manifest': 'Package manifest', 'package-lock': 'Dependency lock', 'asset': 'File', 'composition': 'Composition document', 'data-schema': 'Data schema' } as const
+const fileKinds = { 'script': 'Script', 'package-manifest': 'Package manifest', 'package-lock': 'Dependency lock', 'asset': 'File' } as const
 const findingKinds = { 'local-reference': 'Local reference', 'local-path': 'Local path', 'private-key': 'Private key', 'private-value': 'Private value', 'possible-credential': 'Possible credential', 'opaque-asset': 'Unscannable file' } as const
 const key36 = (value: string) => value.toLowerCase().replace(/[^a-z0-9_-]+/g, '_').replace(/^[^a-z]+/, '').slice(0, 64) || 'item'
 // Package paths allow only word characters, dots and hyphens; equal names in different Pods stay apart through the Pod key.
@@ -30,7 +29,6 @@ function uniqueKeys(items: { id: string, name: string }[], chosen: Record<string
 const blocked = computed(() => review.value?.findings.some(finding => finding.severity === 'block') ?? false)
 const acknowledgedAll = computed(() => review.value?.findings.filter(finding => finding.severity === 'review').every(finding => acknowledged.value[finding.id]) ?? false)
 const effectivePodKeys = computed(() => uniqueKeys((source.value?.pods ?? []).map(pod => ({ id: pod.podId, name: pod.name })), podKeys.value))
-const effectiveCompositionKeys = computed(() => uniqueKeys(source.value?.compositions ?? [], compositionKeys.value))
 const choices = computed<PortableExportChoices>(() => ({
   package: { key: key.value, revision: Number(revision.value), title: title.value, description: description.value },
   pods: (source.value?.pods ?? []).map(pod => ({
@@ -40,7 +38,6 @@ const choices = computed<PortableExportChoices>(() => ({
     assets: pod.references.filter(reference => included.value[reference.id]).map((reference, _, chosen) => ({ resourceId: reference.id, path: `assets/${effectivePodKeys.value[pod.podId]}/${uniqueKeys(chosen, {}, assetName)[reference.id]}`, mediaType: 'application/octet-stream' })),
     omittedReferences: pod.references.filter(reference => !included.value[reference.id]).map(reference => reference.id),
   })),
-  compositions: (source.value?.compositions ?? []).map(item => ({ id: item.id, key: effectiveCompositionKeys.value[item.id]!, defaults: [] })),
 }))
 async function perform(action: () => Promise<void>) {
   if (busy.value) return
@@ -53,7 +50,7 @@ function load() {
   return perform(async () => {
     const state = await props.api({ scope: 'export', type: 'inspectSource', selection: props.selection })
     source.value = state.source ?? null
-    const name = source.value?.compositions[0]?.name ?? source.value?.pods[0]?.name ?? ''
+    const name = source.value?.pods[0]?.name ?? ''
     if (!title.value) { title.value = name; key.value = key36(name) }
   })
 }
@@ -116,10 +113,6 @@ onBeforeUnmount(() => { void release().catch(() => {}) })
       <label v-for="name in pod.variables" :key="`v:${name}`" class="check"><input v-model="defaults[`${pod.podId}/variable:${name}`]" type="checkbox"> {{ t('Include default for {name}', { name }) }}</label>
       <label v-for="name in pod.configuration" :key="`c:${name}`" class="check"><input v-model="defaults[`${pod.podId}/configuration:${name}`]" type="checkbox"> {{ t('Include default for {name}', { name }) }}</label>
     </fieldset>
-    <fieldset v-if="source?.compositions.length && !review" :disabled="busy">
-      <legend>{{ t('Compositions') }}</legend>
-      <label v-for="item in source.compositions" :key="item.id">{{ t('Key for {name}', { name: item.name }) }}<input :value="compositionKeys[item.id] ?? effectiveCompositionKeys[item.id]" maxlength="64" @input="compositionKeys[item.id] = ($event.target as HTMLInputElement).value"></label>
-    </fieldset>
     <div v-if="source && !review" class="sharing-actions">
       <button class="primary" :disabled="busy" @click="prepare">
         {{ t('Review package') }}
@@ -130,11 +123,11 @@ onBeforeUnmount(() => { void release().catch(() => {}) })
         {{ review.manifest.package.title }} <span class="muted">{{ t('revision {revision}', { revision: review.manifest.package.revision }) }}</span>
       </h2>
       <p class="muted">
-        {{ t('Pods: {count}', { count: review.manifest.pods.length }) }} · {{ t('Compositions: {count}', { count: review.manifest.compositions.length }) }} · {{ t('Files: {count}', { count: review.manifest.files.length }) }} · {{ t('Content digest {digest}', { digest: review.manifest.contentSha256.slice(0, 16) }) }}
+        {{ t('Pods: {count}', { count: review.manifest.pods.length }) }} · {{ t('Files: {count}', { count: review.manifest.files.length }) }} · {{ t('Content digest {digest}', { digest: review.manifest.contentSha256.slice(0, 16) }) }}
       </p>
       <ul class="sharing-files" :aria-label="t('Files')">
         <li v-for="file in review.manifest.files" :key="file.path">
-          {{ file.path }} <span class="muted">{{ t(fileKinds[file.kind]) }} · {{ t('{count} bytes', { count: file.bytes }) }}</span>
+          {{ file.path }} <span class="muted">{{ t(fileKinds[file.kind as keyof typeof fileKinds]) }} · {{ t('{count} bytes', { count: file.bytes }) }}</span>
         </li>
       </ul>
       <template v-if="review.findings.length">

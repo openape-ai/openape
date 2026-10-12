@@ -1,5 +1,3 @@
-import type { GraphGate } from '../../src/contracts/graphs'
-
 /** The 17 recorded choice events of the mock: 15 cases, two of them with a second version. */
 export const choiceEvents = [
   ['5d4814ff', '1f4a52bc', 'messaging-digest-noreply@linkedin.com', 'Samarth Patwari und Purvi Doshi haben Ihnen neue Nachrichten gesendet', 'unsure', 0.43, '2026-10-05T10:51:19Z'],
@@ -21,9 +19,7 @@ export const choiceEvents = [
   ['35d74d91', '1769d6ed', 'bestellbestaetigung@amazon.de', 'Bestellt: „HP 937 Schwarz, Cyan,…“ und 4 weitere Artikel', 'invoice', 0.32, '2026-10-06T08:35:11Z'],
 ] as const
 
-export const chooseGate: Extract<GraphGate, { kind: 'choose' }> = { key: 'uncertain-review', kind: 'choose', title: 'Review uncertain mail', takes: 'mail.unsure', options: [{ key: 'keep', title: 'Keep for review', channel: 'mail.useful' }, { key: 'newsletter', title: 'Newsletter candidate', channel: 'mail.newsletter' }, { key: 'invoice', title: 'Invoice review', channel: 'mail.invoice' }, { key: 'reply', title: 'Reply preview', channel: 'mail.reply' }] }
-export const approveGate: GraphGate = { key: 'newsletter-approval', kind: 'approve', title: 'Approve newsletter preview (no move)', takes: 'mail.batch', gives: 'mail.approved', excluded: 'mail.excluded' }
-/** The payload of one recorded event as the network stores it. */
+/** The facts of one recorded mail the classification Pod asks the owner about. */
 export function choicePayload([eventId, , sender, subject, category, confidence, date]: typeof choiceEvents[number]): Record<string, unknown> {
   return { account: 'phofmann@delta-mind.at', category, complete: false, confidence, date, evidence: eventId.repeat(8), knownContact: false, protected: false, sender, subject, urgency: sender === 'info@team-ats.at' ? 'urgent' : 'normal' }
 }

@@ -2,7 +2,7 @@
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import { diagnostic } from '../i18n'
 import type { CentralCommand } from '../../contracts/central'
-import type { NetworkCommand, NetworkView } from '../../contracts/networks'
+import type { DomainCommand, DomainOverview } from '../../contracts/domain-admin'
 import type { ScheduleCommand } from '../../contracts/scheduling'
 import type { RunCommand } from '../../contracts/runs'
 import type { WorkspaceCommand } from '../../contracts/control'
@@ -11,7 +11,6 @@ import type { SecretsCommand, SecretsView } from '../../contracts/secrets'
 import type { PortableSourceSelection } from '../../contracts/sharing'
 import AutomationsShell from './AutomationsShell.vue'
 import { kpiFacts } from '../utils/kpis'
-import type { NetworkControl } from './AutomationDetail.vue'
 
 /**
  * The shell on this desktop: the local worker answers every read and owner command through the
@@ -21,7 +20,7 @@ import type { NetworkControl } from './AutomationDetail.vue'
 defineProps<{ sharing?: boolean }>()
 const emit = defineEmits<{ openPod: [id: string], share: [selection: PortableSourceSelection], advanced: [], import: [] }>()
 const map = ref<MapView | null>(null)
-const networks = ref<NetworkView>({ networks: [] })
+const domain = ref<DomainOverview | null>(null)
 const codexConnected = ref<boolean | null>(null)
 const secrets = ref<SecretsView | null>(null)
 const tab = ref<'automations' | 'decisions'>('automations')
@@ -34,8 +33,8 @@ let timer: ReturnType<typeof setTimeout> | undefined
 let closed = false
 async function poll() {
   try {
-    const [inventory, networkView] = await Promise.all([window.pods.workspace({ type: 'map' }), window.pods.networks({ type: 'list' })])
-    map.value = inventory.map ?? null; networks.value = networkView; now.value = Date.now(); error.value = ''
+    const [inventory, overview] = await Promise.all([window.pods.workspace({ type: 'map' }), window.pods.domain({ type: 'list' })])
+    map.value = inventory.map ?? null; domain.value = overview as DomainOverview; now.value = Date.now(); error.value = ''
     // The Codex connection and secret requests change rarely; they are read every tenth poll.
     if (polls++ % 10 === 0) { codexConnected.value = (await window.pods.codex({ type: 'status' })).state === 'connected'; secrets.value = window.pods.secrets ? await window.pods.secrets({ type: 'list' }) : null }
   }
@@ -54,8 +53,7 @@ function localCommand(command: CentralCommand) {
   else if (command.channel === 'runs') void run(() => window.pods.runs(command.body as unknown as RunCommand))
   else if (command.channel === 'workspace') void run(() => window.pods.workspace(command.body as unknown as WorkspaceCommand))
 }
-const networkCommand = (command: NetworkCommand, settle?: (error: string | null) => void) => void run(() => window.pods.networks(command), settle)
-const networkControl = (control: NetworkControl) => void run(() => window.pods.networks(control))
+const domainCommand = (command: DomainCommand, settle?: (error: string | null) => void) => void run(() => window.pods.domain(command), settle)
 const openFolder = (podId: string) => void run(() => window.pods.programs({ type: 'openFolder', podId }))
 const secretsCommand = (command: SecretsCommand) => void run(async () => { secrets.value = await window.pods.secrets!(command) })
 // The typed value takes the existing credential path with the current resource epoch; the next poll shows the alias.
@@ -69,5 +67,5 @@ const secretSave = (podId: string, alias: string, value: string) => void run(asy
   <p v-if="actionError" role="alert" class="error-message" data-action-error>
     {{ diagnostic(actionError) }}
   </p>
-  <AutomationsShell :view="map" :live="true" :now="now" :decisions="map ? kpiFacts(map).decisions.count : undefined" desktop :sharing="sharing" :codex="codexConnected === null ? undefined : codexConnected ? 'connected' : 'disconnected'" :tab="tab" :inbox="{ choices: networks.choices ?? [], gates: networks.gates ?? [] }" :secrets="secrets" @update:tab="tab = $event" @network-command="networkCommand" @command="localCommand" @network="networkControl" @folder="openFolder" @secrets="secretsCommand" @secret-save="secretSave" @open-pod="emit('openPod', $event)" @share="emit('share', $event)" @advanced="emit('advanced')" @import="emit('import')" />
+  <AutomationsShell :view="map" :live="true" :now="now" :decisions="map ? kpiFacts(map).decisions.count : undefined" desktop :sharing="sharing" :codex="codexConnected === null ? undefined : codexConnected ? 'connected' : 'disconnected'" :tab="tab" :domain="domain" :secrets="secrets" @update:tab="tab = $event" @domain="domainCommand" @command="localCommand" @folder="openFolder" @secrets="secretsCommand" @secret-save="secretSave" @open-pod="emit('openPod', $event)" @share="emit('share', $event)" @advanced="emit('advanced')" @import="emit('import')" />
 </template>

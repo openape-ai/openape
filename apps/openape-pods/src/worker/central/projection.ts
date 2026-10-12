@@ -1,4 +1,4 @@
-import { podNetwork, privatePods } from './network-projection'
+import { privatePods } from './projection-policy'
 import { jevAvailability } from '../onboarding/store'
 import type { Owner } from '@openape/pods-protocol'
 import { sameOwner } from '@openape/pods-protocol'
@@ -15,7 +15,6 @@ import { WorkspaceDetails } from '../workspace/details'
 import { PodGroups } from '../workspace/groups'
 import { listedPods } from '../workspace/pod-list'
 import { mapView } from '../workspace/map-view'
-import { AutomationDescriptions } from '../workspace/automation-descriptions'
 import { PodVariables } from '../resources/variables'
 
 export class CentralProjection {
@@ -35,12 +34,11 @@ export class CentralProjection {
       const details = new WorkspaceDetails(this.store, this.resources)
       const blobs = this.store.db.prepare(`SELECT pod_id AS podId,hash FROM scripts WHERE pod_id NOT IN (${privatePods}) UNION SELECT pod_id,hash FROM sources WHERE pod_id NOT IN (${privatePods}) ORDER BY 1,2`).all() as { podId: string, hash: string }[]
       return {
-        version: 1 as const, schema: schemaVersion, workspace: { jev: jevAvailability(this.store), pods, organization: new PodGroups(this.store).view(), descriptions: new AutomationDescriptions(this.store).view(), tags: new ItemTagStore(this.store).view(), map: mapView(this.store, Date.now(), true) }, artifacts: [], blobs,
+        version: 1 as const, schema: schemaVersion, workspace: { jev: jevAvailability(this.store), pods, organization: new PodGroups(this.store).view(), tags: new ItemTagStore(this.store).view(), map: mapView(this.store, Date.now(), true) }, artifacts: [], blobs,
         pods: pods.map((pod) => {
-          const networkId = podNetwork(this.store, pod.id)
-          if (networkId) {
+          if (this.store.db.prepare('SELECT 1 FROM local_only_pods WHERE pod_id=?').get(pod.id)) {
             return {
-              id: pod.id, networkId, ready: true,
+              id: pod.id, localOnly: true as const, ready: true,
               details: { claims: [], counts: { finding: 0, question: 0, gap: 0 }, total: 0, versions: [], checkpointRevision: 0, source: null },
               scripts: { pod, resourceEpoch: this.resources.epoch(pod.id), credentialAliases: [], versions: [], drafts: [], source: null },
               resources: { resources: [], variables: [], epoch: this.resources.epoch(pod.id) },

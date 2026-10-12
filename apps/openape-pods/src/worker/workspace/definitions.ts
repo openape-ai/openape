@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import type { Owner } from '@openape/pods-protocol'
 import { parseDefinitionCommand } from '../../contracts/definitions'
 import type { DefinitionsView, DefinitionUpdateView } from '../../contracts/definitions'
-import { canonicalNetworkJson } from '../../contracts/network-json'
+import { canonicalJson } from '../../contracts/canonical-json'
 import { podDirectories } from '../../runtime/environment'
 import { assertDataIdle } from '../data/backup'
 import { DependencyStore } from '../dependencies/store'
@@ -12,8 +12,8 @@ import type { ResourceRegistry } from '../resources/registry'
 import { DefinitionCatalog } from './definition-catalog'
 import { WorkspaceDetails } from './details'
 
-// A definition change binds one Pod. The scheduler is held in maintenance meanwhile, network members are
-// settled by the network engine, and work of unrelated Pods neither reads nor changes this binding.
+// A definition change binds one Pod. The scheduler is held in maintenance meanwhile, and work of unrelated Pods
+// neither reads nor changes this binding.
 function assertPodIdle(store: PodDatabase, podId: string): void {
   if (store.db.prepare('SELECT 1 FROM dependency_domains LIMIT 1').get()) throw new Error('Finish dependency preparation before changing application data')
   const run = store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(podId)
@@ -23,7 +23,7 @@ function assertPodIdle(store: PodDatabase, podId: string): void {
 
 export class DefinitionWorkspace {
   private readonly catalog: DefinitionCatalog
-  constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, owner: Owner, private readonly updateNetworkInstance?: (podId: string, update: () => void) => void) { this.catalog = new DefinitionCatalog(store, resources, owner) }
+  constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, owner: Owner) { this.catalog = new DefinitionCatalog(store, resources, owner) }
 
   async execute(input: unknown, signal: AbortSignal): Promise<DefinitionsView> {
     const command = parseDefinitionCommand(input)
@@ -34,18 +34,10 @@ export class DefinitionWorkspace {
     if (command.type === 'adopt') this.catalog.adopt()
     if (command.type === 'publish') await this.catalog.publish(command.podId, command.expectedScript, command.name, command.defaults)
     if (command.type === 'prepareLocal') {
-      await this.catalog.publish(command.podId, command.expectedScript, command.name, command.defaults, (apply) => {
-        if (this.updateNetworkInstance) {
-          this.updateNetworkInstance(command.podId, apply)
-        }
-        else {
-          if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(command.podId)) throw new Error('Network compatibility review is unavailable; current version remains pinned')
-          apply()
-        }
-      })
+      await this.catalog.publish(command.podId, command.expectedScript, command.name, command.defaults, apply => apply())
     }
     if (command.type === 'instantiate') {
-      const requestHash = digest(canonicalNetworkJson(command))
+      const requestHash = digest(canonicalJson(command))
       const podId = this.store.transaction(() => {
         const existing = this.request(command.requestId)
         if (existing) {
@@ -134,17 +126,17 @@ export class DefinitionWorkspace {
     const row = pod.activeScript ? this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, pod.activeScript) : undefined
     const manifest = row ? parseManifest(JSON.parse(row.manifest as string)) : null
     const beforeCode = pod.activeScript ? this.store.readBlob(pod.activeScript).toString('utf8') : ''
-    const before = { ...selected, contentHash: manifest?.contentHash ?? digest(''), lockHash: manifest?.dependencyLockHash ?? digest(''), contract: manifest?.contract ?? null, capabilities: manifest?.capabilities ?? [], packages: new DependencyStore(this.store).scriptManifest(podId, pod.activeScript ?? '') }
+    const before = { ...selected, contentHash: manifest?.contentHash ?? digest(''), lockHash: manifest?.dependencyLockHash ?? digest(''), work: manifest?.work ?? null, capabilities: manifest?.capabilities ?? [], packages: new DependencyStore(this.store).scriptManifest(podId, pod.activeScript ?? '') }
     const after = this.catalog.source(id, version).view
     const afterCode = this.store.readBlob(after.contentHash).toString('utf8')
     if (beforeCode.length > 200000 || afterCode.length > 200000) throw new Error('Definition source exceeds the review limit')
     if (after.state !== 'published') throw new Error('Only published versions can be selected')
     const changed: DefinitionUpdateView['changed'] = []
     if (before.contentHash !== after.contentHash) changed.push('code')
-    if (canonicalNetworkJson(before.contract) !== canonicalNetworkJson(after.contract)) changed.push('contract')
-    if (before.lockHash !== after.lockHash || canonicalNetworkJson(before.packages) !== canonicalNetworkJson(after.packages)) changed.push('dependencies')
-    if (canonicalNetworkJson(before.defaults) !== canonicalNetworkJson(after.defaults)) changed.push('defaults')
-    if (canonicalNetworkJson(before.capabilities) !== canonicalNetworkJson(after.capabilities)) changed.push('rights')
+    if (canonicalJson(before.work) !== canonicalJson(after.work)) changed.push('work')
+    if (before.lockHash !== after.lockHash || canonicalJson(before.packages) !== canonicalJson(after.packages)) changed.push('dependencies')
+    if (canonicalJson(before.defaults) !== canonicalJson(after.defaults)) changed.push('defaults')
+    if (canonicalJson(before.capabilities) !== canonicalJson(after.capabilities)) changed.push('rights')
     return { podId, before, after, beforeCode, afterCode, changed }
   }
 
@@ -191,13 +183,7 @@ export class DefinitionWorkspace {
         this.store.db.prepare('UPDATE instance_definition_bindings SET definition_version=?,binding_revision=binding_revision+1 WHERE pod_id=?').run(draft.definition_version!, podId)
         this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\',metadata_revision=metadata_revision+1 WHERE id=?').run(podId)
       }
-      if (this.updateNetworkInstance) {
-        this.updateNetworkInstance(podId, update)
-      }
-      else {
-        if (this.store.db.prepare('SELECT 1 FROM network_members WHERE pod_id=?').get(podId)) throw new Error('Network compatibility review is unavailable; current version remains pinned')
-        update()
-      }
+      update()
     })
   }
 

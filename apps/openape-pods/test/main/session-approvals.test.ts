@@ -8,7 +8,6 @@ import { OwnerSession } from '../../src/main/connections/owner-session'
 import { invokeProgram } from '../../src/main/programs/invoke'
 import { prepareProgramAuthorization, resolveProgram } from '../../src/main/programs/session'
 import { programWrite } from '../../src/worker/runs/program-effects'
-import { PodGroups } from '../../src/worker/workspace/groups'
 import type { ProgramAssignment } from '../../src/contracts/programs'
 import { brokered, brokerRejections, closeProfiles, deniedPodId, identityProvider, issuer, owner, ownerToken, podId, podSubject, program, workerFixture } from './idp-fixture'
 
@@ -97,25 +96,14 @@ it('approves a waiting runtime grant in the session so the run continues without
   expect(idp.state.decisions).toEqual([{ action: 'approve', id: 'grant-1', bearer: ownerToken, body: { grant_type: 'always' } }])
 })
 
-it('fans a network sandbox and its grants out to every member with the network as origin', async () => {
-  const f = await workerFixture(); const owner = session(); const networkId = randomUUID()
-  Object.assign(f.worker, { networks: async () => ({ networks: [{ id: networkId, revision: 3, state: 'paused', podIds: [podId, deniedPodId] }] }) })
-  // The ledger counts a network's sandbox level only for the stored network at its current revision.
-  const groups = new PodGroups(f.store); groups.execute({ type: 'organize', action: 'create', name: 'Synthetic company', revision: groups.view().revision })
-  f.store.db.prepare('INSERT INTO network_owners VALUES(?,?)').run(issuer, 'network-owner')
-  f.store.transaction(() => {
-    f.store.db.prepare('INSERT INTO networks(id,owner_issuer,owner_subject,group_id,name,revision,restore_nonce,created_at) VALUES(?,?,?,?,?,3,?,?)').run(networkId, issuer, 'network-owner', groups.view().groups.at(-1)!.id, 'Synthetic network', randomUUID(), Date.now())
-    f.store.db.prepare('INSERT INTO network_revisions VALUES(?,3,\'{}\',?,?)').run(networkId, 'a'.repeat(64), Date.now())
-  })
-  const result = await mcp(f, { action: 'sandbox', command: { type: 'apply', target: { networkId, revision: 3 }, sandbox: { level: 'owner', http: [{ origin: 'https://chat.example.test', methods: ['POST'] }], deny: ['~/.ssh'] }, grants: 'sandbox' } }, owner) as { outcomes: { podId: string, display: string, state: string }[] }
-  // Each member gets its runtime grant and the HTTP grant, requested as itself and approved in the session.
-  expect(result.outcomes.map(item => [item.podId, item.display.split(' ')[0], item.state])).toEqual([[podId, 'Run', 'approved'], [podId, 'HTTP', 'approved'], [deniedPodId, 'Run', 'approved'], [deniedPodId, 'HTTP', 'approved']])
-  expect(idp.state.creates.map(request => request.requester)).toEqual([podSubject(podId), podSubject(podId), podSubject(deniedPodId), podSubject(deniedPodId)])
-  for (const id of [podId, deniedPodId]) {
-    expect(f.ledger.list(id)).toEqual([expect.objectContaining({ cliId: 'pod-http', origin: { networkId, revision: 3 }, approvedInSession: true }), expect.objectContaining({ cliId: 'pod-runtime', origin: { networkId, revision: 3 }, approvedInSession: true })])
-    expect(f.ledger.sandbox(id)).toEqual({ level: 'owner', sources: [{ source: `network:${networkId}`, level: 'owner' }], deny: ['~/.ssh'], denySources: [{ source: `network:${networkId}`, deny: ['~/.ssh'] }] })
-  }
-  await expect(mcp(f, { action: 'sandbox', command: { type: 'apply', target: { networkId, revision: 2 }, sandbox: {} } }, owner)).rejects.toThrow('revision 3')
+it('applies a Pod sandbox with its level and denylist and requests its grants as the Pod in the session', async () => {
+  const f = await workerFixture(); const owner = session()
+  const result = await mcp(f, { action: 'sandbox', command: { type: 'apply', target: { podId }, sandbox: { level: 'owner', http: [{ origin: 'https://chat.example.test', methods: ['POST'] }], deny: ['~/.ssh'] }, grants: 'sandbox' } }, owner) as { outcomes: { podId: string, display: string, state: string }[] }
+  expect(result.outcomes.map(item => [item.podId, item.display.split(' ')[0], item.state])).toEqual([[podId, 'Run', 'approved'], [podId, 'HTTP', 'approved']])
+  expect(idp.state.creates.map(request => request.requester)).toEqual([podSubject(podId), podSubject(podId)])
+  expect(f.ledger.list(podId)).toEqual([expect.objectContaining({ cliId: 'pod-http', approvedInSession: true }), expect.objectContaining({ cliId: 'pod-runtime', approvedInSession: true })])
+  expect(f.ledger.sandbox(podId)).toEqual({ level: 'owner', deny: ['~/.ssh'] })
+  await expect(mcp(f, { action: 'sandbox', command: { type: 'apply', target: { networkId: randomUUID(), revision: 1 }, sandbox: {} } }, owner)).rejects.toThrow('A grant target names one podId')
 })
 
 /** An application with its own executable and the reviewed gh fixture adapter, assigned in the Pod sandbox. */
@@ -183,8 +171,8 @@ it('never lets a whole-program grant or a script call move mail; only the archiv
   const move = ['workflow', 'move', '--account', 'owner@example.test', '--message', 'm1', '--expected-version', 'v1', '--source-folder', 'inbox', '--destination', 'archive']
   const lease = { capabilities: [mail.assignment.capability], signal: AbortSignal.timeout(5000), assertCurrent: () => {} }
   // A script or its agent tool call: refused by the worker before anything is recorded, and by main before any grant.
-  await expect(programWrite([mail.resource] as never, podId, lease.capabilities, { application: 'o365-cli', argv: move })).rejects.toThrow('approved archive port')
-  await expect(invokeProgram([mail.resource] as never, podId, { application: 'o365-cli', argv: move }, '/fixture/helper', root, {} as never, lease, { connection: f.connection(podId), ledger: f.grants.port(podId), reach: { level: 'isolated', protectedPaths: [] } })).rejects.toThrow('approved archive port')
+  await expect(programWrite([mail.resource] as never, podId, lease.capabilities, { application: 'o365-cli', argv: move })).rejects.toThrow('approved archive service')
+  await expect(invokeProgram([mail.resource] as never, podId, { application: 'o365-cli', argv: move }, '/fixture/helper', root, {} as never, lease, { connection: f.connection(podId), ledger: f.grants.port(podId), reach: { level: 'isolated', protectedPaths: [] } })).rejects.toThrow('approved archive service')
   expect(idp.state.tokens).toEqual([])
   // The archive port names the move explicitly and passes this check; it still needs its batch approval.
   await expect(resolveProgram(mail.assignment, move, 'move')).resolves.toMatchObject({ write: true })
@@ -211,15 +199,10 @@ it('binds an exact-command grant to its argv so that exact command can run', asy
   expect(idp.state.tokens).toEqual(['grant-1'])
 })
 
-it('keeps a Pod\'s own grant and HTTP destination when a network declares the same origin', async () => {
+it('keeps a Pod\'s own HTTP destination when a sandbox declares the same origin again', async () => {
   const own = { id: randomUUID(), podId, revision: 1, kind: 'tool', state: 'ready', name: 'https://chat.example.test', configuration: { type: 'http', origin: 'https://chat.example.test', methods: ['GET'], capability: 'tool.http_own.request', authentication: { type: 'ddisaAgent', credential: 'agent_key', subject: 'agent@example.test', issuer } } }
-  const f = await workerFixture({ resources: () => [program, own] }); const owner = session(); const networkId = randomUUID()
-  idp.state.reuse = true
-  await mcp(f, { action: 'grants', command: { type: 'request', target: { podId }, grants: { http: [{ origin: 'https://chat.example.test', methods: ['POST'] }] } } }, owner)
-  Object.assign(f.worker, { networks: async () => ({ networks: [{ id: networkId, revision: 1, state: 'paused', podIds: [podId] }] }) })
-  const result = await mcp(f, { action: 'sandbox', command: { type: 'apply', target: { networkId, revision: 1 }, sandbox: { http: [{ origin: 'https://chat.example.test', methods: ['POST'] }] }, grants: { http: [{ origin: 'https://chat.example.test', methods: ['POST'] }] } } }, owner) as { kept: { podId: string, entry: string }[] }
-  // The IdP returned the Pod's existing grant (200): it stays the Pod's own and is never revoked with the network.
-  expect(f.ledger.list(podId)).toEqual([expect.objectContaining({ id: 'grant-1', origin: null })])
+  const f = await workerFixture({ resources: () => [program, own] }); const owner = session()
+  const result = await mcp(f, { action: 'sandbox', command: { type: 'apply', target: { podId }, sandbox: { http: [{ origin: 'https://chat.example.test', methods: ['POST'] }] } } }, owner) as { kept: { podId: string, entry: string }[] }
   expect(f.bound).toEqual([])
   expect(result.kept).toEqual([{ podId, entry: 'https://chat.example.test keeps its existing methods GET' }])
 })

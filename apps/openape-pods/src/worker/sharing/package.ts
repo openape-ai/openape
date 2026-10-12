@@ -2,9 +2,12 @@ import { createHash } from 'node:crypto'
 import { zip } from 'fflate'
 import type { Zippable } from 'fflate'
 import { canonicalPortableJson, parsePortableManifest, portableContentBytes, portableFileLimits, portableTagsFeature, sharingLimits } from '@openape/pods-protocol'
-import type { PortableFile, PortableManifest } from '@openape/pods-protocol'
+import type { PortableFile, PortableManifest, PortablePod } from '@openape/pods-protocol'
 import { parsePackages } from '../../contracts/dependencies'
-import { validatePortableAccessDefaults, validatePortableCollectionDocument, validatePortableCompositionDocument } from '../../contracts/portable-composition'
+import { parseHttpPermission } from '../../contracts/http'
+import { parseJevModel } from '../../contracts/jev'
+import { parseSince } from '../../contracts/onboarding'
+import { parseSchedule } from '../../contracts/scheduling'
 import { parseImportedLock } from '../dependencies/imported-lock'
 
 export const exportFormatFeatures = ['portable_aliases_v1', portableTagsFeature] as const
@@ -23,8 +26,21 @@ export function assertPortableAsset(path: string, content: Uint8Array): void {
   if (/\.(?:js|mjs|cjs|jsx|ts|tsx|mts|cts|vbs|scr|lnk|tool|terminal|workflow|sh|bash|zsh|command|bat|cmd|ps1|py|rb|node|dylib|so|dll|exe|wasm|app|jar|class|scpt|scptd|pkg|dmg|msi|com)$/i.test(path) || ['7f454c46', 'cffaedfe', 'feedfacf', 'feedface', 'cafebabe', 'bebafeca', 'cafebabf', 'bfbafeca', 'cefaedfe', '0061736d'].includes(magic) || magic.startsWith('4d5a') || magic.startsWith('2321')) throw new Error('Portable assets cannot contain executable payloads')
 }
 
+function validatePortableAccessDefaults(pod: PortablePod): void {
+  if (pod.schedule) parseSchedule(pod.schedule)
+  const value = (key: string) => pod.inputs.find(input => input.key === key)!.default
+  for (const request of pod.access) {
+    if (request.kind === 'http' && value(request.origin) !== undefined) parseHttpPermission({ origin: value(request.origin), methods: request.methods })
+    if (request.kind === 'http' && request.authentication && value(request.authentication.issuer) !== undefined) parseHttpPermission({ origin: value(request.authentication.issuer), methods: ['POST'] })
+    if (request.kind === 'jev' && value(request.model) !== undefined) parseJevModel(value(request.model))
+    if (request.kind === 'mail' && value(request.since) !== undefined) parseSince(value(request.since) === '' ? null : value(request.since))
+  }
+}
+
 export function validatePortableFiles(value: unknown, files: ReadonlyMap<string, Uint8Array>, npmRoot: string, supportedFeatures: readonly string[]): PortableManifest {
   const manifest = parsePortableManifest(value, supportedFeatures)
+  // Networks were retired with issue 1465: Pods share data instead of being composed into a network.
+  if (manifest.compositions.length || manifest.files.some(file => file.kind === 'composition' || file.kind === 'data-schema')) throw new Error('This package contains a network. Networks were retired; Pods now share data instead, so import its Pods from single-Pod packages.')
   if (files.size !== manifest.files.length) throw new Error('Portable file inventory differs from the manifest')
   if (sha256(portableContentBytes(manifest, supportedFeatures)) !== manifest.contentSha256) throw new Error('Portable manifest content digest does not match')
   for (const file of manifest.files) {
@@ -32,7 +48,6 @@ export function validatePortableFiles(value: unknown, files: ReadonlyMap<string,
     if (!content || content.byteLength !== file.bytes || sha256(content) !== file.sha256) throw new Error('Portable file bytes differ from the reviewed manifest')
     if (file.kind === 'asset') assertPortableAsset(file.path, content)
     if (file.kind === 'script' && textFile(content).length > 200000) throw new Error('Portable script exceeds the native character limit')
-    if (file.kind === 'data-schema') validatePortableCollectionDocument(JSON.parse(textFile(content)))
   }
   for (const pod of manifest.pods) {
     validatePortableAccessDefaults(pod)
@@ -41,7 +56,6 @@ export function validatePortableFiles(value: unknown, files: ReadonlyMap<string,
       parseImportedLock(textFile(files.get(pod.packages.lock)!), packages, npmRoot)
     }
   }
-  for (const composition of manifest.compositions) validatePortableCompositionDocument(JSON.parse(textFile(files.get(composition.document)!)), composition, manifest)
   return manifest
 }
 

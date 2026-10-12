@@ -1,156 +1,151 @@
 import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
+import type { DomainOverview } from '../../src/contracts/domain-admin'
 import type { MapView } from '../../src/contracts/map-view'
 import { parseMapView } from '../../src/contracts/map-view'
-import type { NetworkGateView } from '../../src/contracts/network-gate-view'
-import type { NetworkChoiceView } from '../../src/contracts/networks'
 import AutomationsShell from '../../src/renderer/central/AutomationsShell.vue'
 import DecisionsInbox from '../../src/renderer/central/DecisionsInbox.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
-import { chooseGate, choiceEvents, choicePayload } from './choice-events'
+import { choiceEvents, choicePayload } from './choice-events'
 import fixture from './map-view.json'
 
-// The Entscheidungen surface from the 17 recorded choice events of the installed app and the fixture's rights and deliveries.
+// The Entscheidungen surface from the 17 recorded mails the classification Pod asks the owner about, plus approvals,
+// held work, uncertain actions and the fixture's rights and deliveries.
 const view = parseMapView(fixture) as MapView
-const network = view.automations[0]!
-/** The 17 events as the network engine lists them: ordered by acceptance, two cases carry a second version. */
-export const choices: NetworkChoiceView[] = [...choiceEvents].sort((a, b) => Date.parse(a[6]) - Date.parse(b[6])).map(recorded => ({ networkId: network.id, revision: network.revision, eventId: recorded[0], caseId: `${recorded[1]}-0000-4000-8000-000000000000`.slice(0, 36), gate: chooseGate.key, title: chooseGate.title, payload: JSON.stringify(choicePayload(recorded)), truncated: false, options: chooseGate.options.map(({ key, title }) => ({ key, title })) }))
-const batch: NetworkGateView = { id: '00000000-0000-4000-8000-0000000000b1', networkId: network.id, gate: 'newsletter-approval', podId: network.members[9]!, generation: 1, state: 'pending', expiresAt: view.at + 3600000, url: 'https://id.openape.ai/grant-approval?grant_id=batch-1', error: null, items: [{ deliveryId: '00000000-0000-4000-8000-0000000000d1', title: 'Nur heute: 20 % · news@shop.example', outcome: 'held' }, { deliveryId: '00000000-0000-4000-8000-0000000000d2', title: 'Neu im Oktober · hello@saas.example', outcome: 'held' }] }
+const classification = view.pods.find(pod => pod.name === 'Mail-Klassifizierung')!
+const newsletters = view.pods.find(pod => pod.name === 'Newsletter-Prüfung')!
+const options = [{ key: 'keep', title: 'Keep for review' }, { key: 'newsletter', title: 'Newsletter candidate' }, { key: 'invoice', title: 'Invoice review' }, { key: 'reply', title: 'Reply preview' }]
+/** The 17 owner questions in the order they were asked. */
+export const domain: DomainOverview = {
+  namespaces: [], operations: [],
+  questions: [...choiceEvents].sort((a, b) => Date.parse(a[6]) - Date.parse(b[6])).map(recorded => ({ id: `${recorded[0]}-0000-4000-8000-000000000000`.slice(0, 36), podId: classification.id, namespace: 'delta-mind/mail/owner-answers', key: recorded[0], title: 'Review uncertain mail', body: String(choicePayload(recorded).subject), options, data: { sender: recorded[2], category: recorded[4], confidence: recorded[5] }, createdAt: Date.parse(recorded[6]) })),
+  approvals: [
+    { id: '00000000-0000-4000-8000-0000000000a1', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n1', title: 'Archive mail from news@shop.example', state: 'requested', reason: null, batchUrl: 'https://id.openape.ai/grant-batch?id=1', updatedAt: view.at },
+    { id: '00000000-0000-4000-8000-0000000000a2', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n2', title: 'Archive mail from hello@saas.example', state: 'unknown', reason: 'Restored backup: the owner decision after the backup is unknown; request the approval again', batchUrl: null, updatedAt: view.at },
+  ],
+  held: [{ key: 'c'.repeat(64), operation: 'delta-mind/mail-classification', object: 'm3', state: 'blocked', attempt: 5, readyAt: view.at, reason: 'Model refused five times', inputRevision: 1 }],
+  unknownEffects: [{ actionKey: 'd'.repeat(64), attempt: 1, podId: newsletters.id, runId: null, operation: 'mail.archive', createdAt: view.at, intent: { mailbox: 'phofmann@delta-mind.at', messageId: 'm4' } }],
+}
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en') })
 async function mountInbox(props: Record<string, unknown> = {}) {
   applyLanguage('de')
-  wrapper = mount(DecisionsInbox, { attachTo: document.body, props: { view, choices, gates: [], desktop: true, ...props } })
+  wrapper = mount(DecisionsInbox, { attachTo: document.body, props: { view, domain, desktop: true, ...props } })
   await flushPromises()
   return wrapper
 }
+const card = (text: string) => wrapper!.findAll('[data-testid="questions"] .item').find(item => item.text().includes(text))!
 
 describe('Entscheidungen', () => {
-  it('renders the 17 events as 15 cases with versions, generic payload fields and the four ways of the gate', async () => {
+  it('renders the 17 questions with their facts and options and counts what waits for the owner', async () => {
     await mountInbox()
-    const kpis = wrapper!.findAll('.kpi').map(item => [item.find('b').text(), item.find('span').text(), item.find('small').text()])
-    expect(kpis).toEqual([
-      ['17', 'Rückfragen', 'in 15 Fällen · Delta Mind · Mail-Netzwerk'],
-      ['0', 'Freigaben', 'keine wartenden Batches'],
-      ['1', 'Rechte', '1 Laufzeit-Anfragen'],
-      ['1', 'unklare Zustellungen', '1 Zustellungen abzugleichen'],
-      ['0', 'Geheimnisse', 'keine Anfragen nach Geheimnissen'],
-    ])
-    const cards = wrapper!.findAll('[data-testid="choices"] .item')
-    expect(cards).toHaveLength(15)
-    expect(wrapper!.find('.gatehead').text()).toContain('Review uncertain mail')
-    expect(wrapper!.find('.gatehead').text()).toContain('nimmt mail.unsure · 4 Wege: Keep for review, Newsletter candidate, Invoice review, Reply preview · 15 offen')
-    const versions = cards.filter(card => card.text().includes('2 Fassungen'))
-    expect(versions).toHaveLength(2)
-    expect(versions.every(card => card.text().includes('Diesen Donnerstag: ATS Convention - jetzt noch anmelden!'))).toBe(true)
-    const github = cards.find(card => card.text().includes('Dependabot'))!
+    const kpis = wrapper!.findAll('.kpi').map(item => [item.find('b').text(), item.find('span').text()])
+    expect(kpis).toEqual([['17', 'Rückfragen'], ['2', 'Freigaben'], ['1', 'Rechte'], ['3', 'Abzugleichen'], ['0', 'Geheimnisse']])
+    const cards = wrapper!.findAll('[data-testid="questions"] .item')
+    expect(cards).toHaveLength(17)
+    expect(wrapper!.find('[data-testid="questions"] .grp').text()).toContain('Review uncertain mail')
+    expect(wrapper!.find('[data-testid="questions"] .grp').text()).toContain('Mail-Klassifizierung · 17 offen')
+    const github = card('Dependabot')
     expect(github.find('.subj').text()).toBe('[GitHub] Your Dependabot alerts for the week of Sep 29 - Oct 6')
     const facts = Object.fromEntries(github.findAll('dt').map((dt, index) => [dt.text(), github.findAll('dd')[index]!.text()]))
-    expect(facts).toMatchObject({ account: 'phofmann@delta-mind.at', category: 'useful', complete: 'nein', confidence: '0,89', knownContact: 'nein', protected: 'nein', sender: 'noreply@github.com', urgency: 'normal' })
-    expect(facts.evidence).toMatch(/^ed32bc79ed32…$/)
-    expect(facts.date).toMatch(/06\.10\., \d\d:\d\d/)
-    expect(Object.keys(facts)).not.toContain('subject')
+    expect(facts).toEqual({ sender: 'noreply@github.com', category: 'useful', confidence: '0,89' })
     expect(github.findAll('.opts button').map(item => item.text())).toEqual(['Keep for review', 'Newsletter candidate', 'Invoice review', 'Reply preview'])
-    expect(github.find('.auth').text()).toContain('Review uncertain mail')
-    expect(github.find('.auth').text()).toContain('mail.unsure · Fall 80d48713')
   })
 
-  it('emits one choose command per case and shows it as saving until the case leaves the list', async () => {
+  it('emits one answer per question and shows it as saving until the question leaves the list', async () => {
     await mountInbox()
-    const github = wrapper!.findAll('[data-testid="choices"] .item').find(card => card.text().includes('Dependabot'))!
-    await github.findAll('.opts button')[0]!.trigger('click')
-    expect(wrapper!.emitted('network')).toEqual([[{ type: 'choose', id: network.id, revision: network.revision, eventId: 'ed32bc79', gate: 'uncertain-review', option: 'keep' }, expect.any(Function)]])
-    const done = wrapper!.find('[data-testid="choices"] [data-saving]')
-    expect(done.text()).toContain('Wird gespeichert: Keep for review')
-    expect(done.text()).toContain('→ mail.useful')
+    await card('Dependabot').findAll('.opts button')[0]!.trigger('click')
+    expect(wrapper!.emitted('domain')).toEqual([[{ type: 'answer', questionId: 'ed32bc79-0000-4000-8000-000000000000'.slice(0, 36), option: 'keep' }, expect.any(Function)]])
+    expect(wrapper!.find('[data-testid="questions"] [data-saving]').text()).toContain('Wird gespeichert: Keep for review')
     expect(wrapper!.findAll('.kpi')[0]!.find('b').text()).toBe('16')
-    // The ATS case has two versions; choosing decides its latest event once.
-    const ats = wrapper!.findAll('[data-testid="choices"] .item').find(card => card.text().includes('2 Fassungen'))!
-    await ats.findAll('.opts button')[1]!.trigger('click')
-    expect(wrapper!.emitted('network')!.at(-1)).toEqual([{ type: 'choose', id: network.id, revision: network.revision, eventId: expect.stringMatching(/^(551b9282|61b04af6)$/), gate: 'uncertain-review', option: 'newsletter' }, expect.any(Function)])
-    expect(wrapper!.findAll('.kpi')[0]!.find('b').text()).toBe('14')
   })
 
-  it('returns a case with the reason when saving its choice fails', async () => {
+  it('returns a question with the reason when saving its answer fails', async () => {
     await mountInbox()
-    const github = () => wrapper!.findAll('[data-testid="choices"] .item').find(card => card.text().includes('Dependabot'))!
-    await github().findAll('.opts button')[0]!.trigger('click')
-    const settle = wrapper!.emitted('network')![0]![1] as (error: string | null) => void
+    await card('Dependabot').findAll('.opts button')[0]!.trigger('click')
+    const settle = wrapper!.emitted('domain')![0]![1] as (error: string | null) => void
     settle('Remote service returned 409: workspace_busy')
     await wrapper!.vm.$nextTick()
-    expect(wrapper!.find('[data-testid="choices"] [data-saving]').exists()).toBe(false)
-    expect(github().find('[role="alert"]').text()).toContain('Nicht gespeichert')
-    expect(github().findAll('.opts button')).toHaveLength(4)
+    expect(wrapper!.find('[data-testid="questions"] [data-saving]').exists()).toBe(false)
+    expect(card('Dependabot').find('[role="alert"]').text()).toContain('Nicht gespeichert')
     expect(wrapper!.findAll('.kpi')[0]!.find('b').text()).toBe('17')
   })
 
-  it('groups cases by a payload field and decides a whole group with single commands', async () => {
+  it('groups questions by a fact and answers a whole group with single commands', async () => {
     await mountInbox()
     const select = wrapper!.find('.ctrls select')
-    expect(select.findAll('option').map(item => item.text())).toEqual(['–', 'account', 'category', 'complete', 'confidence', 'knownContact', 'protected', 'sender', 'urgency'])
+    expect(select.findAll('option').map(item => item.text())).toEqual(['–', 'sender', 'category', 'confidence'])
     await select.setValue('sender')
-    const groups = wrapper!.findAll('.grp')
-    expect(groups[0]!.find('.pill').text()).toBe('sender = invitations@linkedin.com')
-    expect(groups[0]!.text()).toContain('4 Fälle')
-    const all = groups[0]!.findAll('.row .opts button').map(item => item.text())
-    expect(all).toEqual(['alle: Keep for review', 'alle: Newsletter candidate', 'alle: Invoice review', 'alle: Reply preview'])
-    await groups[0]!.findAll('.row .opts button')[3]!.trigger('click')
-    expect(wrapper!.emitted('network')).toHaveLength(4)
-    expect(wrapper!.emitted('network')!.every(([command]) => (command as { option: string, gate: string }).option === 'reply' && (command as { gate: string }).gate === 'uncertain-review')).toBe(true)
-    expect(wrapper!.findAll('.grp')[0]!.findAll('.row .opts button')).toHaveLength(0)
+    const group = wrapper!.findAll('.grp').find(item => item.text().includes('sender = invitations@linkedin.com'))!
+    expect(group.text()).toContain('4 offen')
+    expect(group.findAll('.row .opts button').map(item => item.text())).toEqual(['alle: Keep for review', 'alle: Newsletter candidate', 'alle: Invoice review', 'alle: Reply preview'])
+    await group.findAll('.row .opts button')[3]!.trigger('click')
+    expect(wrapper!.emitted('domain')).toHaveLength(4)
+    expect(wrapper!.emitted('domain')!.every(([command]) => (command as { option: string }).option === 'reply')).toBe(true)
     await wrapper!.find('.ctrls input[type="checkbox"]').setValue(true)
-    expect(wrapper!.find('[data-testid="choices"] .item:not(.done) .raw').text()).toContain('"gate": "uncertain-review"')
+    expect(wrapper!.find('[data-testid="questions"] .item:not(.done) .raw').text()).toContain('"namespace": "delta-mind/mail/owner-answers"')
   })
 
-  it('lists approval batches with the IdP action, rights with the approval command and unknown deliveries', async () => {
+  it('lists approvals, rights, held work, uncertain actions and deliveries with the exact owner commands', async () => {
     const monitor = view.pods.find(pod => pod.name === 'IURIO PR monitor')!
     const bot = view.pods.find(pod => pod.unknown.length)!
-    await mountInbox({ gates: [batch] })
-    const batches = wrapper!.find('[data-testid="batches"]')
-    expect(batches.text()).toContain('Freigabe-Batch · newsletter-approval')
-    expect(batches.text()).toContain('2 Items')
-    expect(batches.find('button.idp').text()).toBe('Am IdP entscheiden')
-    expect(batches.findAll('input[type="checkbox"]')).toHaveLength(0)
-    expect(batches.text()).toContain('Wähle beim IdP die freizugebenden Einträge; nicht ausgewählte werden abgelehnt.')
-    await batches.find('button.idp').trigger('click')
-    expect(wrapper!.emitted('network')).toEqual([[{ type: 'gateOpen', id: network.id, revision: network.revision, taskId: batch.id, generation: 1 }]])
+    await mountInbox()
+    const approvals = wrapper!.find('[data-testid="approvals"]')
+    expect(approvals.text()).toContain('Archive mail from news@shop.example')
+    await approvals.find('button.idp').trigger('click')
+    expect(wrapper!.emitted('domain')).toEqual([[{ type: 'openApproval', id: '00000000-0000-4000-8000-0000000000a1' }]])
+    const uncertain = approvals.findAll('.item')[1]!
+    expect(uncertain.findAll('button').every(item => item.attributes('disabled') !== undefined)).toBe(true)
+    await uncertain.find('label input').setValue('Nicht am IdP entschieden')
+    await uncertain.findAll('button')[0]!.trigger('click')
+    expect(wrapper!.emitted('domain')!.at(-1)).toEqual([{ type: 'resolveApproval', id: '00000000-0000-4000-8000-0000000000a2', decision: 'renew', evidence: 'Nicht am IdP entschieden' }])
     const rights = wrapper!.find('[data-testid="rights"]')
-    expect(rights.text()).toContain('IURIO PR monitor')
     expect(rights.text()).toContain('Execution permission for IURIO PR monitor')
     await rights.find('button').trigger('click')
     expect(wrapper!.emitted('command')).toEqual([[{ channel: 'runs', body: { type: 'openApproval', podId: monitor.id, runId: monitor.approvals[0]!.runId, grantId: 'grant-pr-monitor' } }]])
-    const deliveries = wrapper!.find('[data-testid="deliveries"]')
-    expect(deliveries.text()).toContain(bot.name)
-    expect(deliveries.find('button').attributes('disabled')).toBeDefined()
-    await deliveries.find('label input').setValue('Nachricht 245 ist im Kanal angekommen')
-    await deliveries.findAll('button')[0]!.trigger('click')
-    expect(wrapper!.emitted('command')!.at(-1)).toEqual([{ channel: 'runs', body: { type: 'resolveHttp', podId: bot.id, runId: bot.unknown[0]!.runId, key: bot.unknown[0]!.key, applied: true, evidence: 'Nachricht 245 ist im Kanal angekommen' } }])
-    expect(wrapper!.findAll('.kpi').map(item => item.find('b').text())).toEqual(['17', '1', '1', '1', '0'])
+    const reconcile = wrapper!.find('[data-testid="reconcile"]')
+    const [held, effect, delivery] = reconcile.findAll('.item')
+    expect(held!.text()).toContain('Angehaltene Arbeit · delta-mind/mail-classification')
+    await held!.find('label input').setValue('Modell wieder erreichbar')
+    await held!.find('button').trigger('click')
+    expect(wrapper!.emitted('domain')!.at(-1)).toEqual([{ type: 'release', key: 'c'.repeat(64), evidence: 'Modell wieder erreichbar' }])
+    expect(effect!.text()).toContain('messageId: m4')
+    await effect!.find('label input').setValue('Im Archiv gesehen')
+    await effect!.findAll('button')[0]!.trigger('click')
+    expect(wrapper!.emitted('domain')!.at(-1)).toEqual([{ type: 'resolveEffect', actionKey: 'd'.repeat(64), attempt: 1, applied: true, evidence: 'Im Archiv gesehen' }])
+    expect(delivery!.text()).toContain(bot.name)
+    await delivery!.find('label input').setValue('Bericht ist veröffentlicht')
+    await delivery!.findAll('button')[0]!.trigger('click')
+    expect(wrapper!.emitted('command')!.at(-1)).toEqual([{ channel: 'runs', body: { type: 'resolveHttp', podId: bot.id, runId: bot.unknown[0]!.runId, key: bot.unknown[0]!.key, applied: true, evidence: 'Bericht ist veröffentlicht' } }])
   })
 
-  it.each([true, false])('opens network approvals on the correct host (desktop: %s)', async (desktop) => {
-    await mountInbox({ desktop, gates: [batch] })
-    const actions = wrapper!.findAll('[data-testid="batches"] .opts .idp')
-    expect(actions).toHaveLength(1)
+  it.each([true, false])('opens a requested approval on the correct host (desktop: %s)', async (desktop) => {
+    await mountInbox({ desktop })
+    const action = wrapper!.find('[data-testid="approvals"] .opts .idp')
     if (!desktop) {
-      expect(actions[0]!.element.tagName).toBe('A')
-      expect(actions[0]!.attributes()).toMatchObject({ href: batch.url, target: '_blank', rel: 'noopener' })
-      expect(wrapper!.emitted('network')).toBeUndefined()
+      expect(action.element.tagName).toBe('A')
+      expect(action.attributes()).toMatchObject({ href: 'https://id.openape.ai/grant-batch?id=1', target: '_blank', rel: 'noopener' })
+      expect(wrapper!.emitted('domain')).toBeUndefined()
       return
     }
-    expect(actions[0]!.element.tagName).toBe('BUTTON'); await actions[0]!.trigger('click')
-    expect(wrapper!.emitted('network')).toEqual([[{ type: 'gateOpen', id: network.id, revision: network.revision, taskId: batch.id, generation: batch.generation }]])
+    expect(action.element.tagName).toBe('BUTTON')
+  })
+
+  it('points a browser without shared-data access to the Pods inbox for questions and approvals', async () => {
+    await mountInbox({ domain: null, desktop: false, inboxUrl: '/inbox/' })
+    expect(wrapper!.find('[data-testid="questions"]').text()).toContain('Rückfragen und Freigaben deiner Pods beantwortest du in der Pods-Inbox.')
+    expect(wrapper!.find('[data-testid="questions"] a').attributes('href')).toBe('/inbox/')
   })
 
   it('shows the inbox on the second tab of the shell with the count in the tab', async () => {
     applyLanguage('de')
-    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: true, now: view.at, desktop: true, tab: 'decisions', inbox: { choices, gates: [] } } })
+    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: true, now: view.at, desktop: true, tab: 'decisions', domain } })
     await flushPromises()
-    expect(wrapper.find('[role="tablist"]').text()).toContain('Entscheidungen 19')
+    expect(wrapper.find('[role="tablist"]').text()).toContain('Entscheidungen 23')
     expect(wrapper.find('.decisions-inbox h1').text()).toBe('Entscheidungen')
-    await wrapper.findAll('[data-testid="choices"] .opts button')[0]!.trigger('click')
-    expect(wrapper.emitted('networkCommand')).toHaveLength(1)
+    await wrapper.findAll('[data-testid="questions"] .item .opts button')[0]!.trigger('click')
+    expect(wrapper.emitted('domain')).toHaveLength(1)
   })
 
   it('lists open secret requests with the fill link, cancels them on the desktop and hides settled ones', async () => {

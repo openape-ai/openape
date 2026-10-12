@@ -41,7 +41,7 @@ export class MailBridge {
     this.timers.set(id, setTimeout(() => this.send({ serviceCancel: id }), serviceTimeoutMs))
   }
 
-  async execute(scope: ServiceScope, body: unknown, signal: AbortSignal, kind?: 'gate' | 'mailArchive' | 'mailMove' | 'credential' | 'jev' | 'http' | 'shell' | 'shellClose'): Promise<unknown> {
+  async execute(scope: ServiceScope, body: unknown, signal: AbortSignal, kind?: 'approval' | 'mailArchive' | 'mailMove' | 'credential' | 'jev' | 'http' | 'shell' | 'shellClose'): Promise<unknown> {
     signal.throwIfAborted()
     if (this.queued() >= 16) throw new Error('Mail broker queue is full')
     const id = randomUUID()

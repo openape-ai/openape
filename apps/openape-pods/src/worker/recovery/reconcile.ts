@@ -5,6 +5,8 @@ import type { PodDatabase } from '../storage/database'
 import { parseManifest } from '../storage/database'
 import type { ResourceRegistry } from '../resources/registry'
 import type { Scheduler } from '../scheduling/scheduler'
+import { DomainData } from '../data/domain'
+import { WorkLedger } from '../data/work'
 
 export class Recovery {
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly scheduler: Scheduler, private readonly helper: string) {}
@@ -33,7 +35,6 @@ export class Recovery {
   }
 
   async inspect(podId: string, runId: string): Promise<void> {
-    if (this.store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=?').get(runId)) throw new Error('Network runs require network recovery and retained effect receipts')
     const run = this.store.db.prepare('SELECT * FROM runs WHERE id=? AND pod_id=?').get(runId, podId)
     if (!run || !['interrupted', 'failed', 'cancelled', 'blocked', 'completedWithGaps'].includes(run.state as string)) throw new Error('Only stopped or interrupted runs can be recovered')
     try {
@@ -45,6 +46,8 @@ export class Recovery {
         this.store.db.prepare('DELETE FROM run_leases WHERE run_id=?').run(runId)
         this.store.db.prepare('UPDATE accepted_events SET state=\'blocked\',error=\'Interrupted input requires explicit retry\' WHERE run_id=? AND state=\'claimed\'').run(runId)
         this.store.db.prepare('UPDATE runs SET finished_at=coalesce(finished_at,?) WHERE id=?').run(Date.now(), runId)
+        // The run's processes are proven stopped, so its work claims are settled instead of held forever.
+        new WorkLedger(this.store, new DomainData(this.store)).settleRun(runId)
         this.store.db.prepare('INSERT INTO recovery_reviews VALUES(?,\'ready\',NULL,?,NULL) ON CONFLICT(run_id) DO UPDATE SET state=CASE WHEN request_event_id IS NULL THEN \'ready\' ELSE state END,error=NULL,checked_at=excluded.checked_at').run(runId, Date.now())
       })
     }

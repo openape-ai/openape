@@ -28,11 +28,11 @@ describe('Automatisierungen', () => {
     await mountShell()
     const kpis = wrapper!.findAll('.kpi').map(item => [item.find('b').text(), item.find('span').text(), item.find('small').text()])
     expect(kpis).toEqual([
-      ['5', 'aktiv', 'Pods und Netze mit laufendem Zeitplan'],
-      ['6', 'pausiert', 'davon 2 Netze, 1 Entwürfe, 1 archiviert'],
+      ['5', 'aktiv', 'Pods mit laufendem Zeitplan'],
+      ['25', 'pausiert', 'davon 1 Entwürfe, 1 archiviert'],
       ['1', 'gestört', 'IURIO PR monitor · mit Lücken abgeschlossen'],
-      // A run waiting for its grant at the IdP is a decision as well.
-      ['18', 'Entscheidungen warten auf dich', 'Review uncertain mail · Delta Mind, 1 Laufzeit-Anfragen'],
+      // A run waiting for its grant at the IdP is an approval as well.
+      ['22', 'Entscheidungen warten auf dich', '17 Rückfragen, 5 Freigaben'],
       ['1', 'unklare Zustellungen', '1 Zustellungen abzugleichen'],
     ])
     expect(wrapper!.find('.kpi.alert').text()).toContain('gestört')
@@ -54,7 +54,7 @@ describe('Automatisierungen', () => {
     // Without any tag in the workspace there is no tag bar and everything stays visible.
     expect(wrapper!.find('[aria-label="Tags"]').exists()).toBe(false)
     expect(wrapper!.find('.layers-menu summary').text()).toBe('Ebenen 5/5')
-    expect(wrapper!.find('[aria-label="Ebenen"]').findAll('button').map(item => item.text())).toEqual(['Kanäle', 'Lesen', 'Schreiben', 'Freigaben', 'Pausierte'])
+    expect(wrapper!.find('[aria-label="Ebenen"]').findAll('button').map(item => item.text())).toEqual(['Gemeinsame Daten', 'Lesen', 'Schreiben', 'Freigaben', 'Pausierte'])
     expect(wrapper!.find('[data-testid="automations-map"] canvas').attributes('aria-label')).toBe('Animierte Netzkarte aller Pods mit Datenquellen, Speichern und Entscheidungsstellen')
     await button('Pausierte').trigger('click')
     expect(button('Pausierte').attributes('aria-pressed')).toBe('false')
@@ -74,20 +74,18 @@ describe('Automatisierungen', () => {
     expect(wrapper!.emitted('codex')!.at(-1)).toEqual([monitor, 'iurio'])
   })
 
-  it('lists the same Pods as a table with group, kind, cadence, reads, writes, channels and last run', async () => {
+  it('lists the same Pods as a table with group, kind, cadence, reads, writes, shared data and last run', async () => {
     applyLanguage('de')
     await mountShell()
     await button('Liste').trigger('click')
     const rows = wrapper!.findAll('tbody tr')
-    const activeCollections = new Set(view.automations.filter(automation => automation.state === 'active').map(automation => automation.id))
-    const expected = view.pods.filter(pod => pod.lifecycle !== 'archived' && (!pod.automation || activeCollections.has(pod.automation))).length + view.automations.filter(automation => automation.state === 'paused').length
-    expect(rows).toHaveLength(expected)
-    expect(expected).toBe(23)
-    expect(wrapper!.findAll('thead th').map(item => item.text())).toEqual(['Pod', 'Gruppe', 'Art', 'Läuft', 'Liest', 'Schreibt', 'Kanäle', 'Zuletzt'])
-    const cells = (name: string) => rows.find(row => row.text().includes(name))!.findAll('td').map(cell => cell.findAll('div').length > 1 ? cell.findAll('div').map(item => item.text()).join(' ') : cell.text().replace(/\s+/g, ' '))
-    expect(cells('Triage')).toEqual(['Triage', 'Delta Mind', 'KI', 'bei Items', 'TypeSafe / Jev, delta', 'delta', '← mail.filtered → mail.triaged', 'vor 1 h · abgeschlossen'])
+    expect(rows).toHaveLength(view.pods.filter(pod => pod.lifecycle !== 'archived').length)
+    expect(rows).toHaveLength(29)
+    expect(wrapper!.findAll('thead th').map(item => item.text())).toEqual(['Pod', 'Gruppe', 'Art', 'Läuft', 'Liest', 'Schreibt', 'Gemeinsame Daten', 'Zuletzt'])
+    const cells = (name: string) => rows.find(row => row.find('b').text() === name)!.findAll('td').map(cell => cell.findAll('div').length > 1 ? cell.findAll('div').map(item => item.text()).join(' ') : cell.text().replace(/\s+/g, ' '))
+    expect(cells('Rechnungsprüfung')).toEqual(['Rechnungsprüfung', 'Delta Mind', 'Regeln', 'bei gemeinsamen Daten', '–', '–', '← delta-mind/mail/classifications', '–'])
     expect(cells('zaz Service-Agent')).toEqual(['zaz Service-Agent', 'ohne Gruppe', 'Regeln', 'alle 1 min', 'zaz.delta-mind.at', 'zaz.delta-mind.at', '–', 'vor 11 min · abgeschlossen'])
-    expect(cells('DOCPIT')).toEqual(['IURIO · DOCPIT mail management', 'iurio', 'eingeklappt', '–', 'patrick@docpit.eu', 'patrick@docpit.eu', '–', 'pausiert'])
+    expect(cells('IURIO · Mail-Synchronisierung')).toEqual(['IURIO · Mail-Synchronisierung', 'iurio', 'Regeln', '–', 'patrick@docpit.eu', 'patrick@docpit.eu', '–', 'pausiert'])
     await rows.find(row => row.text().includes('Linde · Server report'))!.trigger('click')
     expect(wrapper!.find('.automation-detail .dhead b').text()).toBe('Linde · Server report')
   })
@@ -97,25 +95,23 @@ describe('Automatisierungen', () => {
     await mountShell()
     expect(wrapper!.find('.automation-info').text()).toBe('Knoten anklicken. Doppelklick oder „Details öffnen“ zeigt die Detailseite.')
     const shell = wrapper!.vm as unknown as { pin: (id: string | null) => void }
-    shell.pin(pod('Triage').id); await flushPromises()
+    shell.pin(pod('Mail-Klassifizierung').id); await flushPromises()
     const info = wrapper!.find('.automation-info').text().replace(/\s+/g, ' ')
-    expect(info).toContain('Triage')
+    expect(info).toContain('Mail-Klassifizierung')
     expect(info).toContain('gepinnt')
-    expect(info).toContain('bei Items · 10 Läufe gesamt')
-    expect(info).toContain(`zuletzt ${stamp(pod('Triage').lastRun!.at, 'de')} · abgeschlossen: Triage completed`)
-    expect(info).toContain('Kanäle: ← mail.filtered (7), → mail.triaged (8)')
+    expect(info).toContain('bei gemeinsamen Daten · 10 Läufe gesamt')
+    expect(info).toContain(`zuletzt ${stamp(pod('Mail-Klassifizierung').lastRun!.at, 'de')} · abgeschlossen: Mail-Klassifizierung completed`)
+    expect(info).toContain('Gemeinsame Daten: → delta-mind/mail/classifications (15), ← delta-mind/mail/messages (20)')
     expect(info).toContain('liest: TypeSafe / Jev (10), delta (10)')
     expect(info).toContain('schreibt: delta (10)')
     await button('Details öffnen').trigger('click')
-    expect(wrapper!.find('.automation-detail .dhead b').text()).toBe('Triage')
+    expect(wrapper!.find('.automation-detail .dhead b').text()).toBe('Mail-Klassifizierung')
     await wrapper!.find('.automation-detail .x').trigger('click')
     expect(wrapper!.find('.automation-detail').exists()).toBe(false)
     shell.pin('app:o365-cli:phofmann@delta-mind.at'); await flushPromises()
     expect(wrapper!.find('.automation-info').text()).toContain('phofmann@delta-mind.at')
     expect(wrapper!.find('.automation-info').text()).toContain('o365-cli · installiert')
     expect(wrapper!.findAll('.automation-info button')).toHaveLength(0)
-    shell.pin(view.automations[0]!.id); await flushPromises()
-    expect(wrapper!.find('.automation-info').text()).toContain('11 Mitglieder · aktiv')
   })
 
   it('shows the loading state without a map and the decisions inbox on the second tab', async () => {
@@ -164,13 +160,11 @@ describe('Automatisierungen', () => {
 })
 
 describe('Tags (issue 1459)', () => {
-  // The Delta Mind network carries two tags; its members inherit them, one standalone Pod has its own.
+  // The Delta Mind mail Pods carry two tags, kept as their own when their network was converted; one monitor has its own.
   function tagged(): MapView {
     const copy = structuredClone(view)
-    const network = copy.automations.find(item => item.name.startsWith('Delta Mind'))!
-    network.tags = { own: ['delta-mind', 'mail'], inherited: [], revision: 1 }
-    for (const member of copy.pods.filter(item => network.members.includes(item.id))) member.tags = { own: [], inherited: ['delta-mind', 'mail'], revision: 0 }
-    copy.pods.find(item => item.name === 'IURIO PR monitor')!.tags = { own: ['iurio'], inherited: [], revision: 3 }
+    for (const member of copy.pods.filter(item => item.group === 'Delta Mind')) member.tags = { own: ['delta-mind', 'mail'], revision: 1 }
+    copy.pods.find(item => item.name === 'IURIO PR monitor')!.tags = { own: ['iurio'], revision: 3 }
     return parseMapView(copy)
   }
 
@@ -178,7 +172,7 @@ describe('Tags (issue 1459)', () => {
 
   it('starts empty, shows the Pods per tag and adds every activated tag to the list', async () => {
     const tagsView = tagged()
-    const members = tagsView.pods.filter(item => item.tags?.inherited.includes('mail')).length
+    const members = tagsView.pods.filter(item => item.tags?.own.includes('mail')).length
     const visible = tagsView.pods.filter(item => item.lifecycle !== 'archived').length
     await mountShell({ view: tagsView })
     await button('List').trigger('click')
@@ -191,9 +185,9 @@ describe('Tags (issue 1459)', () => {
     await button(`#delta-mind ${members}`).trigger('click')
     expect(rows()).toContain('IURIO PR monitor')
     expect(rows().length).toBeGreaterThan(1)
-    expect(wrapper!.findAll('.automations-list tbody tr').filter(row => row.find('.tag.inherited').exists()).length).toBe(rows().length - 1)
+    expect(rows()).toHaveLength(members + 1)
     await button('All').trigger('click')
-    expect(rows()).toHaveLength(23)
+    expect(rows()).toHaveLength(29)
     await button('None').trigger('click')
     expect(wrapper!.find('.automations-empty').exists()).toBe(true)
   })

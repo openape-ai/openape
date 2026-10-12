@@ -1,7 +1,7 @@
-import { parseGraphContract } from './graphs'
 import { parsePackages } from './dependencies'
-import { dataFields, dataIdentity, dataKey, publicConfiguration } from './network-data'
-import type { GraphContract } from './graphs'
+import { dataFields, dataIdentity, dataKey, publicConfiguration } from './fields'
+import { parseWorkDeclarations } from './work'
+import type { WorkDeclaration } from './work'
 import type { PackageManifest } from './dependencies'
 
 export type DefinitionCommand =
@@ -13,10 +13,10 @@ export type DefinitionCommand =
   | { type: 'previewUpdate' | 'prepareUpdate', podId: string, definitionId: string, version: number, expectedBinding: number }
   | { type: 'activateUpdate', draftId: string, podId: string, expectedBinding: number }
 
-export interface DefinitionVersionView { version: number, state: 'legacy' | 'published', contentHash: string, lockHash: string, contract: GraphContract | null, capabilities: string[], packages: PackageManifest, defaults: Record<string, unknown> }
+export interface DefinitionVersionView { version: number, state: 'legacy' | 'published', contentHash: string, lockHash: string, work: WorkDeclaration[] | null, capabilities: string[], packages: PackageManifest, defaults: Record<string, unknown> }
 export interface DefinitionView { id: string, name: string, versions: DefinitionVersionView[] }
 export interface DefinitionInstanceView { podId: string, definitionId: string, version: number, bindingRevision: number, diverged: boolean, groupId: string | null }
-export interface DefinitionUpdateView { podId: string, before: DefinitionVersionView, after: DefinitionVersionView, beforeCode: string, afterCode: string, changed: ('code' | 'contract' | 'dependencies' | 'defaults' | 'rights')[], draftId?: string }
+export interface DefinitionUpdateView { podId: string, before: DefinitionVersionView, after: DefinitionVersionView, beforeCode: string, afterCode: string, changed: ('code' | 'work' | 'dependencies' | 'defaults' | 'rights')[], draftId?: string }
 export interface DefinitionsView { definitions: DefinitionView[], instances: DefinitionInstanceView[], provisioning: { requestId: string, podId: string, state: 'pending' | 'ready' | 'failed', error: string | null }[], unavailableReason?: string, createdPodId?: string, update?: DefinitionUpdateView }
 
 function revision(value: unknown): number {
@@ -64,10 +64,10 @@ export function parseDefinitionsView(value: unknown): DefinitionsView {
   if (!Array.isArray(input.definitions) || !Array.isArray(input.instances) || !Array.isArray(input.provisioning)) throw new Error('Invalid definition view')
   const hash = (value: unknown) => { if (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) throw new Error('Invalid definition hash') }
   const version = (value: unknown) => {
-    const item = dataFields(value, ['version', 'state', 'contentHash', 'lockHash', 'contract', 'capabilities', 'packages', 'defaults'])
+    const item = dataFields(value, ['version', 'state', 'contentHash', 'lockHash', 'work', 'capabilities', 'packages', 'defaults'])
     revision(item.version); hash(item.contentHash); hash(item.lockHash)
     if (!['legacy', 'published'].includes(String(item.state)) || !Array.isArray(item.capabilities) || item.capabilities.some(capability => typeof capability !== 'string')) throw new Error('Invalid definition version')
-    if (item.contract !== null) parseGraphContract(item.contract)
+    if (item.work !== null) parseWorkDeclarations(item.work)
     parsePackages(item.packages); definitionDefaults(item.defaults)
   }
   for (const item of input.definitions) {
@@ -96,7 +96,7 @@ export function parseDefinitionsView(value: unknown): DefinitionsView {
       if (typeof code !== 'string' || code.length > 200000) throw new Error('Invalid definition source preview')
     }
     if (update.draftId !== undefined) dataIdentity(update.draftId)
-    if (!Array.isArray(update.changed) || update.changed.some(field => !['code', 'contract', 'dependencies', 'defaults', 'rights'].includes(String(field)))) throw new Error('Invalid definition differences')
+    if (!Array.isArray(update.changed) || update.changed.some(field => !['code', 'work', 'dependencies', 'defaults', 'rights'].includes(String(field)))) throw new Error('Invalid definition differences')
   }
   return structuredClone(input) as unknown as DefinitionsView
 }

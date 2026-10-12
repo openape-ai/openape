@@ -17,7 +17,7 @@ export class RunStore {
   readonly bootId = randomUUID()
   constructor(readonly store: PodDatabase) {}
 
-  list(podId: string): RunRecord[] { this.store.getPod(podId); return this.store.db.prepare('SELECT r.*,(SELECT data FROM run_events e WHERE e.run_id=r.id AND e.type=\'recovery\' ORDER BY sequence DESC LIMIT 1) AS automatic_recovery,EXISTS(SELECT 1 FROM accepted_events e WHERE e.run_id=r.id AND e.state=\'pending\') AS retry_pending,v.state AS recovery_state,v.error AS recovery_error FROM runs r LEFT JOIN recovery_reviews v ON v.run_id=r.id WHERE r.pod_id=? AND NOT EXISTS(SELECT 1 FROM network_invocations i WHERE i.run_id=r.id AND i.execution_kind=\'gate_maintenance\') ORDER BY r.started_at DESC,r.rowid DESC LIMIT 100').all(podId).map(fromRow) }
+  list(podId: string): RunRecord[] { this.store.getPod(podId); return this.store.db.prepare('SELECT r.*,(SELECT data FROM run_events e WHERE e.run_id=r.id AND e.type=\'recovery\' ORDER BY sequence DESC LIMIT 1) AS automatic_recovery,EXISTS(SELECT 1 FROM accepted_events e WHERE e.run_id=r.id AND e.state=\'pending\') AS retry_pending,v.state AS recovery_state,v.error AS recovery_error FROM runs r LEFT JOIN recovery_reviews v ON v.run_id=r.id WHERE r.pod_id=? ORDER BY r.started_at DESC,r.rowid DESC LIMIT 100').all(podId).map(fromRow) }
 
   get(id: string): RunRecord {
     const row = this.store.db.prepare('SELECT r.*,(SELECT data FROM run_events e WHERE e.run_id=r.id AND e.type=\'recovery\' ORDER BY sequence DESC LIMIT 1) AS automatic_recovery,EXISTS(SELECT 1 FROM accepted_events e WHERE e.run_id=r.id AND e.state=\'pending\') AS retry_pending,v.state AS recovery_state,v.error AS recovery_error FROM runs r LEFT JOIN recovery_reviews v ON v.run_id=r.id WHERE r.id=?').get(id)
@@ -106,16 +106,6 @@ export class RunStore {
   }
 
   interrupt(id: string, error: string): void {
-    if (this.store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=?').get(id)) throw new Error('Network interruption requires network recovery')
-    this.interruptOwned(id, error)
-  }
-
-  interruptNetwork(id: string, claimToken: string): void {
-    if (!this.store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=? AND claim_token=? AND boot_nonce=? AND state IN (\'running\',\'stopping\')').get(id, claimToken, this.bootId)) throw new Error('Network interruption authority is no longer current')
-    this.interruptOwned(id, 'Network execution cleanup requires inspection')
-  }
-
-  private interruptOwned(id: string, error: string): void {
     this.store.transaction(() => {
       this.assertLease(id)
       this.store.db.prepare('UPDATE runs SET state=\'interrupted\',error=?,summary=\'Execution cleanup needs review\' WHERE id=?').run(error, id)
@@ -144,23 +134,10 @@ export class RunStore {
   }
 
   finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number, failure?: RecoveryFailure): void {
-    if (this.store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=?').get(id)) throw new Error('Network completion requires atomic network settlement')
-    this.finishOwned(id, state, summary, error, completedInputIds, retryEpoch, failure)
-  }
-
-  finishNetwork(id: string, claimToken: string, state: RunState, error: string | null): void {
-    if (!this.store.db.prepare('SELECT 1 FROM network_invocations WHERE run_id=? AND claim_token=? AND boot_nonce=? AND state IN (\'completed\',\'failed\',\'blocked\',\'unknown\')').get(id, claimToken, this.bootId)) throw new Error('Network completion authority is no longer current')
-    this.finishOwned(id, state, 'Network invocation finished', error === null ? null : 'Network invocation requires inspection')
-  }
-
-  private finishOwned(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number, failure?: RecoveryFailure): void {
     this.store.transaction(() => {
       this.assertLease(id)
       const run = this.get(id)
-      const network = this.store.db.prepare('SELECT network_id FROM network_invocations WHERE run_id=?').get(id)
-      const checkpoint = network
-        ? this.store.db.prepare('SELECT revision FROM network_checkpoints WHERE pod_id=? AND network_id=?').get(run.podId, network.network_id!)
-        : this.store.db.prepare('SELECT revision FROM checkpoints WHERE pod_id=?').get(run.podId)
+      const checkpoint = this.store.db.prepare('SELECT revision FROM checkpoints WHERE pod_id=?').get(run.podId)
       if (!checkpoint) throw new Error('Run checkpoint is missing')
       const revision = checkpoint.revision as number
       this.store.db.prepare('UPDATE runs SET state=?,summary=?,error=?,finished_at=?,checkpoint_revision=? WHERE id=?').run(state, summary, error, Date.now(), revision, id)
@@ -169,7 +146,7 @@ export class RunStore {
         if (result.changes !== 1) throw new Error('Completed input is not assigned to this run')
       }
       this.store.db.prepare('UPDATE accepted_events SET state=\'blocked\',error=? WHERE run_id=? AND state=\'claimed\'').run(error ?? 'Input was not completed; explicit retry is required', id)
-      if (!network && (state !== 'completed' || this.store.db.prepare('SELECT 1 FROM accepted_events WHERE run_id=? AND state=\'blocked\'').get(id))) this.recover(id, retryEpoch ?? Number(this.store.db.prepare('SELECT epoch FROM resource_epochs WHERE pod_id=?').get(run.podId)?.epoch ?? 0), failure ?? { cause: state === 'cancelled' ? 'owner-cancelled' : retryEpoch !== undefined ? 'infrastructure' : 'failure' })
+      if ((state !== 'completed' || this.store.db.prepare('SELECT 1 FROM accepted_events WHERE run_id=? AND state=\'blocked\'').get(id))) this.recover(id, retryEpoch ?? Number(this.store.db.prepare('SELECT epoch FROM resource_epochs WHERE pod_id=?').get(run.podId)?.epoch ?? 0), failure ?? { cause: state === 'cancelled' ? 'owner-cancelled' : retryEpoch !== undefined ? 'infrastructure' : 'failure' })
       this.append(id, 'finished', { state, summary, error, checkpointRevision: revision })
       this.store.db.prepare('DELETE FROM run_leases WHERE run_id=? AND boot_id=?').run(id, this.bootId)
     })

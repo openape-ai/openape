@@ -1,12 +1,7 @@
-import { mkdtemp, realpath, rm, writeFile, access } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { randomUUID } from 'node:crypto'
-import type { GraphContract } from '../src/contracts/graphs'
-import { PodGroups } from '../src/worker/workspace/groups'
-import { podDirectories } from '../src/runtime/environment'
-import { NetworkEngine } from '../src/worker/scheduling/network-engine'
 import { digest, PodDatabase  } from '../src/worker/storage/database'
 import { ResourceRegistry } from '../src/worker/resources/registry'
 import { RunDispatcher } from '../src/worker/runs/dispatcher'
@@ -63,67 +58,39 @@ describe('scheduled native execution', () => {
   })
 })
 
-it('runs persistent source and independent consumers through the native sandbox without legacy checkpoint writes', async () => {
+it('lets two Pods share data through the native sandbox: the consumer finds its own work and never repeats an unchanged input', async () => {
   const f = await setup()
-  const owner = { issuer: 'https://identity.example.invalid', subject: 'synthetic-native-network-owner' }
-  f.store.db.prepare('INSERT INTO network_owners VALUES(?,?)').run(owner.issuer, owner.subject)
-  f.store.db.prepare('UPDATE settings SET concurrency=3 WHERE id=1').run()
-  const groups = new PodGroups(f.store)
-  groups.execute({ type: 'organize', action: 'create', name: 'Native network fixture', revision: groups.view().revision })
-  const groupId = groups.view().groups.at(-1)!.id
-  const engine = new NetworkEngine(f.store, f.dispatcher, f.resources, f.helper, () => owner)
-  async function member(name: string, contract: GraphContract, body: string): Promise<string> {
+  async function scripted(name: string, code: string, work?: unknown): Promise<string> {
     const pod = f.store.createPod({ name })
-    groups.execute({ type: 'organize', action: 'move', podId: pod.id, groupId, revision: groups.view().revision })
     await f.dispatcher.install(pod.id, 'deterministic')
     const previous = f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, f.store.getPod(pod.id).activeScript!)!
     const manifest = JSON.parse(previous.manifest as string)
-    const code = `export const contract=${JSON.stringify(contract)};\nexport async function run(context) { ${body} return {status:'completed',summary:'Synthetic native network completed',completedInputIds:context.input.eventIds,gapIds:[]}; }\n`
-    const hash = digest(code); const definitionId = randomUUID()
-    f.store.storeScript(pod.id, { ...manifest, contentHash: hash, contract }, code)
+    const hash = digest(code)
+    f.store.storeScript(pod.id, { ...manifest, contentHash: hash, ...(work ? { work } : {}) }, code)
     f.store.transaction(() => {
       f.store.db.prepare('UPDATE pods SET active_script=?,lifecycle=\'active\' WHERE id=?').run(hash, pod.id)
       f.store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(pod.id, hash, f.store.getPod(pod.id).bindingRevision, f.resources.epoch(pod.id), JSON.stringify({ synthetic: true, nativeAcceptance: true }))
-      f.store.db.prepare('INSERT INTO pod_definitions VALUES(?,?,?,?,?)').run(definitionId, owner.issuer, owner.subject, name, Date.now())
-      f.store.db.prepare('INSERT INTO pod_definition_versions VALUES(?,1,?,?,?,?)').run(definitionId, hash, manifest.dependencyLockHash, JSON.stringify(contract), Date.now())
-      f.store.db.prepare('INSERT INTO instance_definition_bindings VALUES(?,?,1,1)').run(pod.id, definitionId)
     })
     return pod.id
   }
-  const checkpoint = 'await context.progress.commit({expectedRevision:context.input.checkpointRevision,checkpoint:{count:Number(context.input.checkpoint.count??0)+1},sources:[],claims:[]});'
-  const source = await member('Source', { takes: [], gives: ['test.a', 'test.b'], summary: 'Emits metadata' }, `for(const channel of ['test.a','test.b']) await context.network.emit({channel,key:'record-1',sourceItemId:'record-1',sourceVersion:'v1',payload:{subject:'Synthetic native item'}});${checkpoint}`)
-  const a = await member('Consumer A', { takes: ['test.a'], gives: [], summary: 'Consumes A' }, checkpoint)
-  const b = await member('Consumer B', { takes: ['test.b'], gives: [], summary: 'Consumes B' }, `const fs=await import('node:fs/promises'); await fs.writeFile(context.input.home+'/held','ready'); let released=false; for(let i=0;i<500;i++){try{await fs.access(context.input.home+'/release');released=true;break;}catch(error){if(error.code!=='ENOENT')throw error;} await new Promise(resolve=>setTimeout(resolve,20));} if(!released)throw new Error('Synthetic hold was not released');${checkpoint}`)
-  const id = engine.execute({ type: 'create', draft: { name: 'Native persistent network', groupId, members: [{ podId: source, source: { schedule: null }, serialCase: false }, ...[a, b].map(podId => ({ podId, source: null, serialCase: true }))], channels: ['test.a', 'test.b'].map(name => ({ name, title: name, schemaVersion: 1, schema: { type: 'object', properties: { subject: { type: 'string' } }, required: ['subject'], additionalProperties: false } })) } }).createdId!
-  engine.execute({ type: 'activate', id, revision: 1 })
-  engine.tick()
-  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_invocations').get()!.count).toBe(0)
-  function sourceNow(): void {
-    const preview = engine.execute({ type: 'preview', id, revision: 1, podIds: [source], pausedPodIds: [], budget: 1 }).preview!
-    engine.execute({ type: 'process', id, revision: 1, previewId: preview.id })
+  const done = 'return {status:\'completed\',summary:\'Synthetic shared data\',completedInputIds:context.input.eventIds,gapIds:[]}'
+  const source = await scripted('Source', `export async function run(context) { const current = await context.data.get('native/records/one'); if (!current) await context.data.set('native/records/one', { subject: 'Synthetic native item' }, { expectedRevision: 0 }); ${done} }\n`)
+  const work = [{ operation: 'native/assessment', input: 'native/records', output: 'native/results', fields: ['subject'], filter: {}, ruleVersions: [1] }]
+  const consumer = await scripted('Consumer', `export const work = ${JSON.stringify(work)};\nexport async function run(context) { for (const item of await context.work.find({ operation: 'native/assessment' })) { const claim = await context.work.claim({ key: item.key }); await context.work.complete({ claimToken: claim.claimToken, result: { relevant: false, subject: claim.input.value.subject } }) } ${done} }\n`, work)
+  const { DomainData } = await import('../src/worker/data/domain')
+  const data = new DomainData(f.store)
+  data.define({ path: 'native/records', writer: source, mode: 'records', readers: [consumer] })
+  data.define({ path: 'native/results', writer: consumer, mode: 'results', readers: [] })
+  const run = async (podId: string) => {
+    const id = f.dispatcher.start(podId, { reason: 'manual', eventIds: [] })
+    await expect.poll(() => f.store.db.prepare('SELECT state FROM runs WHERE id=?').get(id)!.state, { timeout: 30000 }).not.toBe('running')
+    return f.dispatcher.runs.get(id)
   }
-  sourceNow()
-  await expect.poll(() => f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=?').get(source)?.state).toBe('completed')
-  engine.tick()
-  const home = (await podDirectories(f.store.root, b)).home
-  try {
-    await expect.poll(async () => {
-      try { await access(join(home, 'held')); return true }
-      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; return false }
-    }).toBe(true)
-    await expect.poll(() => f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=?').get(a)?.state).toBe('completed')
-    expect(f.store.db.prepare('SELECT state FROM network_invocations WHERE pod_id=?').get(b)!.state).toBe('running')
-    engine.execute({ type: 'pause', id, revision: 1 })
-  }
-  finally { await writeFile(join(home, 'release'), 'approved synthetic release') }
-  await expect.poll(() => f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0)
-  sourceNow()
-  await expect.poll(() => f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0)
-  engine.tick()
-  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_events').get()!.count).toBe(2)
-  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_deliveries WHERE state=\'done\'').get()!.count).toBe(2)
-  expect(f.store.db.prepare('SELECT count(*) AS count FROM network_invocations WHERE pod_id=?').get(a)!.count).toBe(1)
-  for (const podId of [source, a, b]) expect(f.store.checkpoint(podId)).toMatchObject({ revision: 0, body: {} })
-  expect(engine.view().networks[0]!.state).toBe('paused')
-  await engine.stop()
-})
+  expect(await run(source)).toMatchObject({ state: 'completed' })
+  expect(await run(consumer)).toMatchObject({ state: 'completed' })
+  expect(data.get('owner', 'native/results/one')).toMatchObject({ value: { relevant: false, subject: 'Synthetic native item' }, result: { operation: 'native/assessment' } })
+  // A negative result is a result: the unchanged input is not offered again, and a scheduled run is skipped.
+  expect(f.dispatcher.work.pending(consumer)).toBe(false)
+  expect(await run(consumer)).toMatchObject({ state: 'completed' })
+  expect(data.revision('native/results/one')).toBe(1)
+}, 60000)

@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { Socket } from 'node:net'
 import { pathToFileURL } from 'node:url'
 import type { RunInput } from '../../contracts/runs'
+import { freeze, scriptContext } from './script-context.ts'
+import type { ScriptModule } from './script-context.ts'
 
 async function main(): Promise<void> {
   const config = JSON.parse(await readFile(process.argv[2], 'utf8')) as { input: RunInput, entry: string, dependencyRoot?: string }
@@ -12,10 +14,6 @@ async function main(): Promise<void> {
   const pending = new Map<string, { resolve: (value: unknown) => void, reject: (error: Error) => void }>()
   const controller = new AbortController()
   let sequence = 0; let buffer = ''
-  function freeze<T>(value: T): T {
-    if (value && typeof value === 'object') { for (const child of Object.values(value)) freeze(child); Object.freeze(value) }
-    return value
-  }
   function send(type: string, payload: unknown, extra: Record<string, unknown> = {}): void {
     const frame = JSON.stringify({ version: 1, runId: config.input.runId, sequence: ++sequence, type, payload, ...extra })
     if (Buffer.byteLength(frame) > config.input.limits.frameBytes) throw new Error('Script frame exceeds its size limit')
@@ -54,10 +52,9 @@ async function main(): Promise<void> {
   }
   const input = freeze(config.input)
   try {
-    const script = await import(pathToFileURL(config.entry).href) as { run?: (context: unknown) => Promise<unknown>, contract?: unknown }
+    const script = await import(pathToFileURL(config.entry).href) as ScriptModule
     if (typeof script.run !== 'function') throw new Error('Script must export run(context)')
-    const items = script.contract === undefined ? [] : await request('graph.contract', script.contract)
-    const result = await script.run(Object.freeze({ config: freeze(input.config ?? {}), data: input.network ? Object.freeze({ get: (payload: unknown) => request('data.get', payload), put: (payload: unknown) => request('data.put', payload), delete: (payload: unknown) => request('data.delete', payload), query: (payload: unknown) => request('data.query', payload) }) : undefined, artifacts: input.network ? Object.freeze({ create: (payload: unknown) => request('artifacts.create', payload), read: (payload: unknown) => request('artifacts.read', payload) }) : undefined, network: input.network ? Object.freeze({ info: input.network, gateCoverage: () => request('network.gateCoverage', {}), choices: (query?: unknown) => request('network.choices', query ?? {}), emit: (payload: unknown) => request('network.emit', payload), archive: (target: unknown) => request('network.archive', target) }) : undefined, items: freeze(items), emit: async (channel: string, item: object) => { await request('graph.emit', { ...item, channel }) }, jev: Object.freeze({ evaluate: (payload: unknown) => request('jev.evaluate', payload) }), variables: Object.freeze(input.variables ?? {}), aliases: freeze(input.aliases ?? { applications: {}, http: {}, directories: {}, references: {} }), input, home: input.home ?? process.env.HOME, directories: Object.freeze((input.directories ?? []).map(item => Object.freeze(item))), workspace: input.workspace, references: input.references, signal: controller.signal, http: Object.freeze({ request: (payload: unknown) => request('http.request', payload) }), credentials: Object.freeze({ get: (alias: string) => request('credentials.get', { alias }) }), mail: Object.freeze({ archive: Object.freeze({ prepare: (proposal: unknown) => request('mail.archive', { operation: 'prepare', proposal }), process: (target?: unknown) => request('mail.archive', target === undefined ? { operation: 'process' } : { operation: 'process', target }) }), next: () => request('mail.next', {}), commit: (payload: unknown) => request('mail.commit', payload) }), tools: Object.freeze({ invoke: (payload: unknown) => request('tools.invoke', payload) }), agent: Object.freeze({ run: (payload: unknown) => request('agent.run', payload) }), progress: Object.freeze({ commit: (payload: unknown) => request('progress.commit', payload) }), notify: (payload: unknown) => request('notify', payload), log: (message: string) => send('log', { message }) }))
+    const result = await script.run(await scriptContext(script, input, request, message => send('log', { message }), controller.signal))
     if (pending.size) throw new Error('Script returned with unfinished operations')
     send('result', result)
   }

@@ -3,6 +3,8 @@
 > Historical design record of issue 1417 and its milestones. Sections on
 > workflows, sequences, bounded graphs, conversion, earlier gate formats, change review,
 > access proposals and network-only limits describe removed behavior (issue 1455).
+> Networks as a whole were retired by issue 1465; Pods share data instead
+> ([autonomous Pods](../pods-autonomous/design.md)).
 > The current model: [Pods model](../../../apps/openape-pods/docs/model.md) and
 > [networks](../../../apps/openape-pods/docs/networks.md).
 

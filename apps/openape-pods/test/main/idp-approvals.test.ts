@@ -117,7 +117,13 @@ it('parks runs waiting for an IdP decision so they do not block another Pod\'s s
   const f = await workerFixture({ pods: [podId, ...pods] })
   const waiting = pods.map(id => f.start(id).run.catch((error: unknown) => error))
   await expect.poll(() => new Set(f.approvals.filter(item => item.state === 'pending').map(item => item.grantId)).size).toBe(16)
-  await expect(f.plainCall(podId, 'credential', { alias: 'api_key' })).resolves.toBe('SYNTHETIC_SECRET')
+  // Another Pod's run gets its runtime decided and uses its services while the 16 runs stay parked.
+  const other = f.start(podId)
+  await expect.poll(() => f.approvals.filter(item => item.state === 'pending').length).toBe(17)
+  idp.decide('grant-17', 'approved')
+  await expect(other.run).resolves.toEqual({ home: '/fixture/home', environment: {} })
+  await expect(other.call('credential', { alias: 'api_key' })).resolves.toBe('SYNTHETIC_SECRET')
+  await other.call('shellClose')
   f.abortAll(); await Promise.all(waiting)
 })
 
@@ -179,7 +185,7 @@ it('adopts the grants a Pod used before schema 43 instead of asking the owner ag
   await f.worker.resources({ type: 'assignHttp', podId, epoch: 1, permission: { origin: 'https://hooks.example.test', methods: ['POST'] } })
   expect(idp.state.creates).toEqual([])
   expect(f.openExternal).not.toHaveBeenCalled()
-  expect(f.ledger.list(podId).map(grant => [grant.id, grant.state, grant.grantType, grant.origin]).sort()).toEqual([[runtimeGrant, 'approved', 'always', null], [httpGrant, 'approved', 'always', null]].sort())
+  expect(f.ledger.list(podId).map(grant => [grant.id, grant.state, grant.grantType]).sort()).toEqual([[runtimeGrant, 'approved', 'always'], [httpGrant, 'approved', 'always']].sort())
   expect(idp.state.tokens).toEqual([runtimeGrant])
   // Recorded once, a later run finds it in the ledger without reading the earlier events again.
   const next = f.start(podId)
@@ -212,7 +218,7 @@ it('requests every grant kind with an execution context the owner IdP accepts fo
     jev: await http(typesafeOrigin, ['POST']),
     program: await programSpec(program.configuration as unknown as ProgramAssignment),
   }
-  for (const spec of Object.values(specs)) await f.grants.request(podId, spec, null, AbortSignal.timeout(5000))
+  for (const spec of Object.values(specs)) await f.grants.request(podId, spec, AbortSignal.timeout(5000))
   expect(idp.state.creates).toHaveLength(6)
   expect(await brokerRejections(idp.state.creates)).toEqual([])
   // A single command carries the argv its run-time call resolves; a grant over several commands names only the program.

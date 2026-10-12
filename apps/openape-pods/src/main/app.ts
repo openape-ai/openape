@@ -10,7 +10,7 @@ import { CentralController, offlineAlert } from './central/controller'
 import { centralObject } from '../contracts/central'
 import { RemoteController, RemoteServiceError } from './remote/controller'
 import { InboxDecisions } from './inbox/decisions'
-import { parseNetworkCommand } from '../contracts/networks'
+import { parseDomainCommand } from '../contracts/domain-admin'
 import { searchPackages } from './package-catalog'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -27,6 +27,8 @@ import { verifyUpdate } from './update'
 import { selectedProfile, selectProfile } from './profile'
 import { parseDataCommand } from '../contracts/data'
 import { restoreBackup } from '../worker/data/backup'
+import { parseStorageRecoveryCommand } from '../contracts/storage'
+import { automaticBackupDirectory, automaticBackupStatus, listBackups, preserveRecoveryCopy, recoveryCopies, storageDiagnostics } from './storage-recovery'
 import { schemaVersion } from '../worker/storage/database'
 import { parseOnboardingCommand } from '../contracts/onboarding'
 import { parseMasterCommand } from '../contracts/master'
@@ -83,7 +85,7 @@ const worker = new FixtureWorker((next) => {
 })
 const remote = new RemoteController(root, worker)
 if (process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1') {
-  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: () => worker.centralSnapshot(), networkRead: command => worker.centralNetworkRead(command), version: () => worker.centralVersion(), execute: command => worker.centralExecute(command), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
+  central = new CentralController(root, body => remote.workspaceRequest(body), { snapshot: () => worker.centralSnapshot(), version: () => worker.centralVersion(), execute: command => worker.centralExecute(command), gate: until => worker.centralGate(until) }, join(__dirname, '../native/pods-helper').replace('/app.asar/', '/app.asar.unpacked/'))
   worker.central = central
   worker.inbox = new InboxDecisions(worker, t)
 }
@@ -190,6 +192,30 @@ async function start(): Promise<void> {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, args)
     return status
   })
+  ipcMain.handle(channels.storage, async (event, value: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    if (!window) throw new Error('Owner window is unavailable')
+    const command = parseStorageRecoveryCommand(value)
+    const view = async () => ({ failure: status.worker.storage ?? null, diagnostics: await storageDiagnostics(root), backups: await listBackups(automaticBackupDirectory(profileBase), true), recoveryCopies: await recoveryCopies(profileBase), lastAutomaticBackup: await automaticBackupStatus(root) })
+    if (command.type === 'view') return view()
+    if (status.worker.state !== 'recovery') throw new Error('Storage recovery is available only while storage is not ready')
+    if (command.type === 'openFolder') { await shell.openPath(root); return view() }
+    if (command.type === 'retry') { await worker.retryStorage(); return view() }
+    // The database set must be still while it is copied or replaced.
+    await worker.stopForRecovery()
+    if (command.type === 'preserve') { await preserveRecoveryCopy(root, profileBase); return view() }
+    let source = command.path
+    if (!source) {
+      const selected = await dialog.showOpenDialog(window, { title: t('Choose an OpenApe Pods backup folder'), properties: ['openDirectory'] })
+      if (selected.canceled || selected.filePaths.length !== 1) return view()
+      source = selected.filePaths[0]!
+    }
+    const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Restore and restart'), message: t('Restore this backup into a new profile?'), detail: t('The current profile is retained. Connections require reconnection, resources require review, and schedules remain disabled. Pods will restart after verification.'), buttons: [t('Cancel'), t('Restore and restart')], defaultId: 0, cancelId: 0 })
+    if (answer.response !== 1) return view()
+    const parent = join(await realpath(profileBase), 'profiles'); await mkdir(parent, { recursive: true, mode: 0o700 })
+    selectProfile(profileBase, await restoreBackup(await realpath(source), parent, schemaVersion)); app.relaunch(); app.quit()
+    return view()
+  })
   ipcMain.handle(channels.data, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     const command = parseDataCommand(value)
@@ -206,6 +232,7 @@ async function start(): Promise<void> {
       const answer = await dialog.showMessageBox(window, { type: 'question', title: t('Restore and restart'), message: t('Restore this backup into a new profile?'), detail: t('The current profile is retained. Connections require reconnection, resources require review, and schedules remain disabled. Pods will restart after verification.'), buttons: [t('Cancel'), t('Restore and restart')], defaultId: 0, cancelId: 0 })
       if (answer.response !== 1) return worker.data({ type: 'status' })
       if (status.worker.state === 'starting') throw new Error('Wait for startup to finish before restoring')
+      if (status.worker.state === 'recovery') await worker.stopForRecovery()
       const parent = join(await realpath(profileBase), 'profiles'); await mkdir(parent, { recursive: true, mode: 0o700 })
       const result = status.worker.state === 'ready' ? await worker.data({ type: 'restore', source: path, parent }) : { usedBytes: 0, freeBytes: 0, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null, result: { kind: 'restore' as const, path: await restoreBackup(path, parent, schemaVersion) } }
       if (!result.result || result.result.kind !== 'restore') throw new Error('Restored profile is missing')
@@ -350,9 +377,9 @@ async function start(): Promise<void> {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.definitions(parseDefinitionCommand(command))
   })
-  ipcMain.handle(channels.networks, (event, command: unknown, ...extra: unknown[]) => {
+  ipcMain.handle(channels.domain, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
-    return worker.networks(parseNetworkCommand(command))
+    return worker.domain(parseDomainCommand(command))
   })
   ipcMain.handle(channels.scheduling, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
@@ -447,8 +474,8 @@ async function start(): Promise<void> {
   if (central) watchCentral(central)
   // Pod notifications wait in the worker outbox until the account inbox acknowledges them.
   setInterval(() => { remote.deliverInbox().catch((error: unknown) => console.error('Could not deliver Pod notifications', error)) }, 15000).unref()
-  // Always grants of finished network approval batches would stay active at the IdP; a few batches are released per minute.
-  setInterval(() => { worker.releaseNetworkGrants(AbortSignal.timeout(50000)).catch((error: unknown) => console.error('Could not release network approval grants', error)) }, 60000).unref()
+  // Always grants of finished object approvals would stay active at the IdP; a few batches are released per minute.
+  setInterval(() => { worker.releaseApprovalGrants(AbortSignal.timeout(50000)).catch((error: unknown) => console.error('Could not release approval grants', error)) }, 60000).unref()
   // Decisions are taken through the central workspace, so they are published only while it is online.
   setInterval(() => {
     const inbox = worker.inbox

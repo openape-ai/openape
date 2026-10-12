@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { CentralCommand } from '../../contracts/central'
-import type { MapPod, MapResource, MapView } from '../../contracts/map-view'
+import type { MapResource, MapView } from '../../contracts/map-view'
 import type { SecretRequestRow } from '../../contracts/secrets'
 import type { PortableSourceSelection } from '../../contracts/sharing'
 import { diagnostic, language, t } from '../i18n'
@@ -11,39 +11,31 @@ import { allTags, tagsOf } from '../utils/tags'
 import TagEditor from './TagEditor.vue'
 
 /**
- * The detail page of one Pod, network or system: state and lifecycle, schedule, membership,
- * access grouped by kind, channels with counters, the active script and the last run. Owner
- * commands leave as the existing central commands; network controls and the editor
- * are native and only enabled where the host is the desktop.
+ * The detail page of one Pod or system: state and lifecycle, schedule, access grouped by kind,
+ * the shared data it writes and reads with counters, its declared work, the active script and the
+ * last run. Owner commands leave as the existing central commands; the editor is native and only
+ * enabled where the host is the desktop.
  */
-export interface NetworkControl { type: 'pause' | 'activate', id: string, revision: number }
 const props = defineProps<{ view: MapView, id: string, now: number, desktop: boolean, requests?: SecretRequestRow[], sharing?: boolean }>()
-const emit = defineEmits<{ close: [], open: [id: string], command: [command: CentralCommand], network: [control: NetworkControl], secret: [podId: string, alias: string | null], folder: [podId: string], editor: [podId: string], share: [selection: PortableSourceSelection] }>()
+const emit = defineEmits<{ close: [], open: [id: string], command: [command: CentralCommand], secret: [podId: string, alias: string | null], folder: [podId: string], editor: [podId: string], share: [selection: PortableSourceSelection] }>()
 const pod = computed(() => props.view.pods.find(item => item.id === props.id) ?? null)
-const automation = computed(() => props.view.automations.find(item => item.id === props.id) ?? null)
 const system = computed(() => props.view.systems.find(item => item.id === props.id) ?? null)
-const parent = computed(() => pod.value?.automation ? props.view.automations.find(item => item.id === pod.value!.automation) ?? null : null)
-const members = computed(() => (automation.value?.members ?? []).map(id => props.view.pods.find(item => item.id === id)).filter((item): item is MapPod => !!item))
 const facts = computed(() => nodeFacts(props.view, props.id))
 const degraded = computed(() => !!pod.value && props.view.kpis.degraded.some(item => item.podId === pod.value!.id))
-const paused = computed(() => automation.value ? automation.value.state !== 'active' : pod.value?.lifecycle === 'paused')
-const title = computed(() => pod.value?.name ?? automation.value?.name ?? system.value?.name ?? props.id)
-const kind = computed(() => automation.value ? t('Network') : pod.value ? t('Pod') : system.value ? t('System') : '')
-const group = computed(() => pod.value?.group ?? automation.value?.group ?? null)
+const paused = computed(() => pod.value?.lifecycle === 'paused')
+const title = computed(() => pod.value?.name ?? system.value?.name ?? props.id)
+const kind = computed(() => pod.value ? t('Pod') : system.value ? t('System') : '')
+const group = computed(() => pod.value?.group ?? null)
 const byKind = (kind: MapResource['kind']) => pod.value?.resources.filter(resource => resource.kind === kind) ?? []
 const secrets = computed(() => pod.value?.secrets ?? [])
 const openRequests = computed(() => (props.requests ?? []).filter(row => row.podId === props.id && row.status !== 'collected' && row.status !== 'expired'))
 const requestState = (status: SecretRequestRow['status']) => status === 'failed' ? t('failed') : status === 'filled' ? t('filled') : t('requested')
-const run = computed(() => pod.value?.lastRun ?? automation.value?.lastRun ?? null)
-const gates = computed(() => (automation.value?.gates ?? []).map(gate => gate.kind === 'choose' ? t('{title}: you decide ({count} open)', { title: gate.title, count: gate.open }) : t('{title}: approval at the IdP ({count} batches)', { title: gate.title, count: gate.batches.pending ?? 0 })))
-const numbers = computed(() => automation.value ? [[t('Deliveries'), String(automation.value.counts.done ?? 0)], [t('Open'), String(automation.value.counts.pending ?? 0)], ...(Object.keys(automation.value.flows).length ? [[t('Flows in 24 h'), Object.entries(automation.value.flows).map(([channel, count]) => `${channel} ${count}`).join(', ')]] : [])] : [])
+const run = computed(() => pod.value?.lastRun ?? null)
 const scriptPath = computed(() => pod.value ? `pods/${pod.value.id}/pod-script.mjs` : '')
-const canControlAutomation = computed(() => !!automation.value && props.desktop)
 const tags = computed(() => tagsOf(props.view, props.id))
 const suggestions = computed(() => allTags(props.view))
 function toggle() {
-  if (pod.value) { emit('command', { channel: 'scheduling', body: { type: 'lifecycle', podId: pod.value.id, revision: pod.value.revision, lifecycle: paused.value ? 'active' : 'paused' } }); return }
-  if (automation.value) emit('network', { type: paused.value ? 'activate' : 'pause', id: automation.value.id, revision: automation.value.revision })
+  if (pod.value) emit('command', { channel: 'scheduling', body: { type: 'lifecycle', podId: pod.value.id, revision: pod.value.revision, lifecycle: paused.value ? 'active' : 'paused' } })
 }
 function runNow() {
   if (pod.value?.script) emit('command', { channel: 'runs', body: { type: 'start', podId: pod.value.id, expectedScript: pod.value.script } })
@@ -59,8 +51,8 @@ function runNow() {
     </div>
     <div class="row">
       <span v-if="paused" class="pill off">{{ t('paused') }}</span><span v-else-if="degraded" class="pill warn">{{ t('running with gaps') }}</span><span v-else class="pill ok">{{ t('active') }}</span>
-      <span class="pill off">{{ kind }}</span><span v-if="group !== null || pod || automation" class="pill off">{{ group ?? t('without group') }}</span>
-      <button v-if="pod || automation" class="secondary" type="button" :disabled="!!automation && !canControlAutomation" :title="automation && !canControlAutomation ? t('Only on the desktop') : undefined" @click="toggle">
+      <span class="pill off">{{ kind }}</span><span v-if="group !== null || pod" class="pill off">{{ group ?? t('without group') }}</span>
+      <button v-if="pod" class="secondary" type="button" @click="toggle">
         {{ paused ? t('Resume') : t('Pause') }}
       </button>
       <button v-if="pod && !paused" class="secondary" type="button" :disabled="!pod.script" :title="!pod.script ? t('no active script') : undefined" @click="runNow">
@@ -70,67 +62,26 @@ function runNow() {
     <div v-if="pod?.description" class="sec">
       <div>{{ pod.description }}</div>
     </div>
-    <div v-if="pod || automation" class="sec" data-tags>
+    <div v-if="pod" class="sec" data-tags>
       <div class="eyebrow">
         {{ t('Tags') }}
       </div>
       <TagEditor :id="id" :key="`${id}:${tags.revision}:${tags.own.join(',')}`" :tags="tags" :suggestions="suggestions" @command="emit('command', $event)" />
-    </div>
-    <div v-if="pod?.scriptUpdate" class="sec" data-script-update>
-      <div class="eyebrow">
-        {{ t('Script changes') }}
-      </div><div>{{ t('Updated by the assistant {when}: {previous} → {script}', { when: stamp(pod.scriptUpdate.at, language), previous: pod.scriptUpdate.previous.slice(0, 8), script: pod.scriptUpdate.script.slice(0, 8) }) }}</div>
     </div>
     <div v-if="system" class="sec">
       <div class="muted">
         {{ system.kind === 'application' ? `${system.how} · ${t('installed')}` : system.kind === 'service' ? `${t('https')} · ${system.how}` : system.how }}
       </div>
     </div>
-    <div v-if="pod?.schedule || automation?.schedule" class="sec">
+    <div v-if="pod?.schedule" class="sec">
       <div class="eyebrow">
         {{ t('Schedule') }}
-      </div><div>{{ cadence(pod?.schedule ?? automation?.schedule ?? null, pod?.channels.takes) }}</div>
+      </div><div>{{ cadence(pod.schedule, pod.data.reads) }}</div>
     </div>
-    <div v-if="automation" class="sec">
+    <div v-if="pod && (pod.work.pending || pod.work.held)" class="sec" data-work>
       <div class="eyebrow">
-        {{ t('Members') }}
-      </div><div class="members">
-        <button v-for="member in members" :key="member.id" type="button" @click="emit('open', member.id)">
-          {{ member.name }}<template v-if="member.lifecycle === 'paused'">
-            · {{ t('paused') }}
-          </template>
-        </button>
-      </div>
-    </div>
-    <div v-if="gates.length" class="sec">
-      <div class="eyebrow">
-        {{ t('Decision points') }}
-      </div><div v-for="gate in gates" :key="gate">
-        {{ gate }}
-      </div>
-    </div>
-    <div v-if="numbers.length" class="sec">
-      <div class="eyebrow">
-        {{ t('Numbers') }}
-      </div><div v-for="[label, value] in numbers" :key="label">
-        <span class="muted">{{ label }}:</span> {{ value }}
-      </div>
-    </div>
-    <div v-if="automation && sharing" class="sec">
-      <div class="opts">
-        <button class="secondary" type="button" @click="emit('share', { kind: 'network', id: automation.id })">
-          {{ t('Export…') }}
-        </button>
-      </div>
-    </div>
-    <div v-if="parent" class="sec">
-      <div class="eyebrow">
-        {{ t('Part of') }}
-      </div><div class="members">
-        <button type="button" @click="emit('open', parent.id)">
-          {{ parent.name }}
-        </button>
-      </div>
+        {{ t('Declared work') }}
+      </div><div>{{ t('{pending} waiting · {held} held for you', { pending: pod.work.pending, held: pod.work.held }) }}</div>
     </div>
     <template v-if="pod">
       <div v-if="byKind('service').length" class="sec">
@@ -177,11 +128,15 @@ function runNow() {
         <slot name="secret" />
       </div>
     </template>
-    <div v-if="facts.channels.length" class="sec">
+    <div v-if="pod && (pod.data.writes.length || pod.data.reads.length)" class="sec" data-shared>
       <div class="eyebrow">
-        {{ t('Channels') }}
-      </div><div v-for="channel in facts.channels" :key="channel.direction + channel.channel" class="mono">
-        {{ channel.direction === 'gives' ? t('gives') : t('takes') }} {{ channel.channel }} ({{ channel.flow }})
+        {{ t('Shared data') }}
+      </div><div v-for="path in pod.data.writes" :key="`w:${path}`" class="mono">
+        {{ t('writes') }} {{ path }}<template v-for="link in facts.data.filter(item => item.direction === 'writes' && item.namespace === path).slice(0, 1)" :key="link.namespace">
+          ({{ link.flow }})
+        </template>
+      </div><div v-for="path in pod.data.reads" :key="`r:${path}`" class="mono">
+        {{ t('reads') }} {{ path }}
       </div>
     </div>
     <div v-if="pod" class="sec">

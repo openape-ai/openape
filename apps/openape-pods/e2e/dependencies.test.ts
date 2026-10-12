@@ -93,7 +93,7 @@ it('managed dependencies: imports an exact registry lock and rejects altered int
     const validated = await validateDraft(store, new ResourceRegistry(store, () => {}), runtime, draftId, 1, signal)
     store.db.prepare('UPDATE pods SET active_script=? WHERE id=?').run(validated.hash, source.id)
     const exporter = new PortableExporter(store, { issuer: 'https://identity.example.invalid', subject: 'synthetic-export-owner' }, resolve('dist/vendor/npm'), (snapshot, choices: PortableExportChoices) => mapPortableSource(root, snapshot, choices))
-    const review = await exporter.review({ kind: 'pod', id: source.id }, { package: { key: 'dependency-fixture', revision: 1, title: 'Dependency fixture', description: '' }, pods: [{ podId: source.id, key: 'source', description: '', defaults: [], aliases: [], assets: [] }], compositions: [] })
+    const review = await exporter.review({ kind: 'pod', id: source.id }, { package: { key: 'dependency-fixture', revision: 1, title: 'Dependency fixture', description: '' }, pods: [{ podId: source.id, key: 'source', description: '', defaults: [], aliases: [], assets: [] }] })
     expect(review.findings).toEqual([])
     const exported = await exporter.commit(review.id, [])
     expect(JSON.parse(Buffer.from(unzipSync(exported.archive)['pods/source/package-lock.json']!).toString())).toEqual(JSON.parse(lock))

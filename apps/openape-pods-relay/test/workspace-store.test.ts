@@ -1,4 +1,3 @@
-import { recoveryFixture } from '../../openape-pods/test/layout/network-fixture'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -298,99 +297,33 @@ it('purges table rows that an older server stored and keeps their hashes', () =>
   expect(reopened.db.prepare('SELECT hash,value FROM parts WHERE key=\'table/resources/0\'').get()).toEqual({ hash: 'a'.repeat(64), value: 'null' })
 })
 
-it('keeps network reads owner scoped, ephemeral, bounded and separate from owner operations', () => {
-  const f = setup()
-  f.store.publishNetworks(f.actor, f.lease, { networks: [] })
-  const revision = f.store.inventory(f.actor.owner)[0]!.revision
-  expect(() => f.store.requestNetworkRead(f.other, f.actor.id, { type: 'list' })).toThrow('workspace_not_found')
-  expect(() => f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'activate', id: randomUUID(), revision: 1 })).toThrow('local desktop')
-  const id = f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })
-  expect(() => f.store.networkReadResult(f.other, f.actor.id, id)).toThrow('workspace_not_found')
-  expect(f.store.claimNetworkRead(f.actor, f.lease)).toEqual({ id, command: { type: 'list' } })
-  expect(f.store.claimNetworkRead(f.actor, f.lease)).toBeNull()
-  expect(() => f.store.completeNetworkRead({ ...f.actor, owner: f.other }, f.lease, id, { networks: [] }, null)).toThrow()
-  f.store.completeNetworkRead(f.actor, f.lease, id, { networks: [] }, null)
-  expect(f.store.networkReadResult(f.actor.owner, f.actor.id, id)).toEqual({ value: { networks: [] }, error: null })
-  expect(() => f.store.networkReadResult(f.actor.owner, f.actor.id, id)).toThrow('workspace_read_expired')
-  expect(f.store.inventory(f.actor.owner)[0]!.revision).toBe(revision)
-  expect(f.store.db.prepare('SELECT count(*) AS n FROM operations').get()!.n).toBe(0)
-  for (let i = 0; i < 16; i++) f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })
-  expect(() => f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })).toThrow('workspace_read_busy')
-  f.advance(21000)
-  expect(f.store.claimNetworkRead(f.actor, f.lease)).toBeNull()
-  f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })
-  f.store.disconnect(f.actor, f.lease)
-  expect(() => f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })).toThrow('workspace_runtime_offline')
+it('refuses browser changes to a local-only Pod but still creates new Pods', () => {
+  const { store, actor, state, lease } = setup()
+  const local = { ...state, pods: state.pods.map((pod, index) => index ? pod : { ...pod, localOnly: true as const }) }
+  publishV2(store, actor, lease, {}, local, 1)
+  const podId = state.pods[0]!.id
+  expect(() => store.submit(actor.owner, actor.id, 2, { channel: 'runs', body: { type: 'start', podId } }, randomUUID())).toThrow('local_pod_requires_desktop')
+  // Creating a Pod touches no local-only Pod.
+  expect(store.submit(actor.owner, actor.id, 2, { channel: 'workspace', body: { type: 'create', name: 'New' } }, randomUUID())).toMatchObject({ state: 'accepted' })
 })
 
-it('retains legacy format negotiation and rejects detailed network publication', () => {
-  const f = setup()
-  expect(f.store.inventory(f.actor.owner)[0]!.networks).toBeUndefined()
-  expect(() => f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })).toThrow('workspace_network_reads_unavailable')
-  expect(() => f.store.publishNetworks(f.actor, f.lease, { networks: [], trace: { events: [], before: null } })).toThrow('invalid_network_publication')
-  f.store.publishNetworks(f.actor, f.lease, { networks: [] })
-  f.store.disconnect(f.actor, f.lease)
-  expect(f.store.begin(f.actor)).toMatchObject({ format: 2, networkReads: 1 })
-})
-
-it('fences expired leases and cancelled reads, rejects oversized results and clears old summaries', () => {
-  const f = setup(); f.store.publishNetworks(f.actor, f.lease, { networks: [] })
-  const cancelled = f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })
-  f.store.cancelNetworkRead(f.actor.owner, f.actor.id, cancelled)
-  expect(f.store.claimNetworkRead(f.actor, f.lease)).toBeNull()
-  const id = f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'list' })
-  f.store.claimNetworkRead(f.actor, f.lease)
-  expect(() => f.store.completeNetworkRead(f.actor, f.lease, id, { networks: [], payload: 'x'.repeat(2 * 1024 * 1024) }, null)).toThrow('read limit')
-  f.advance(31000)
-  expect(() => f.store.networkReadResult(f.actor.owner, f.actor.id, id)).toThrow('workspace_runtime_offline')
-  const next = f.store.begin(f.actor)
-  expect(f.store.inventory(f.actor.owner)[0]!.networks).toBeUndefined()
-  expect(() => f.store.completeNetworkRead(f.actor, f.lease, id, { networks: [] }, null)).toThrow()
-  expect(f.store.claimNetworkRead(f.actor, next.lease)).toBeNull()
-})
-
-it('persists only redacted network health, bounds change history and strips approval links from ephemeral reads', () => {
-  const f = setup(); const network = recoveryFixture()
-  network.view.networks[0]!.podIds = [f.state.pods[0]!.id]
-  network.view.networks[0]!.health.intakeError = 'private-business-diagnostic'
-  network.view.networks[0]!.health.lastSchedulerError = 'private-business-diagnostic'
-  network.view.networks[0]!.health.lastFailure = { runId: randomUUID(), generation: 1, kind: 'invalid', reason: 'private-business-diagnostic' }
-  for (let index = 0; index < 1010; index++) {
-    network.view.networks[0]!.counts.pending = index
-    f.store.publishNetworks(f.actor, f.lease, { networks: network.view.networks })
-  }
-  const saved = f.store.db.prepare('SELECT networks FROM runtimes WHERE id=?').get(f.actor.id)!.networks as string
-  expect(saved).not.toContain('private-business-diagnostic')
-  expect(saved).toContain('Runtime needs attention')
-  expect(f.store.db.prepare('SELECT count(*) AS count FROM changes').get()!.count).toBeLessThanOrEqual(1001)
-  expect(f.store.cursor(f.actor.owner)).toBeGreaterThan(1000)
-  const id = f.store.requestNetworkRead(f.actor.owner, f.actor.id, { type: 'detail', id: network.networkId, revision: 1 })
-  f.store.claimNetworkRead(f.actor, f.lease)
-  f.store.completeNetworkRead(f.actor, f.lease, id, network.view, null)
-  const result = f.store.networkReadResult(f.actor.owner, f.actor.id, id)!.value!
-  expect(result.gates!.every(gate => gate.url === null)).toBe(true)
-  expect(result.networks[0]!.health.intakeError).toBe('private-business-diagnostic')
+it('keeps the runtime commands of the desktop for a local-only Pod', () => {
+  const { store, actor, state, lease } = setup()
+  publishV2(store, actor, lease, {}, { ...state, pods: state.pods.map((pod, index) => index ? pod : { ...pod, localOnly: true as const }) }, 1)
+  expect(store.submit(actor.owner, actor.id, 2, { channel: 'runs', body: { type: 'start', podId: state.pods[0]!.id } }, randomUUID(), true)).toMatchObject({ state: 'accepted' })
 })
 
 it('serves the published map read model through view=map without naming a Pod', () => {
   const { store, actor, other, state, lease } = setup()
   expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toEqual({ revision: 1, map: null })
-  const map = { at: 1791284700000, window: { from: 1791198300000, to: 1791284700000 }, kpis: { active: 1, paused: 0, degraded: [], decisions: [], unknownDeliveries: 0 }, systems: [], pods: [{ id: state.pods[0]!.id, name: 'Monitor', description: null, group: null, groupId: null, lifecycle: 'paused', draft: true, kind: 'code', ai: false, channels: { takes: [], gives: [] }, resources: [], secrets: ['token_alias'], schedule: null, lastRun: null, runs: 0, automation: null, queue: { blocked: 0, error: null }, approvals: [] }], automations: [], edges: [] }
+  const map = { at: 1791284700000, window: { from: 1791198300000, to: 1791284700000 }, kpis: { active: 1, paused: 0, degraded: [], decisions: [], unknownDeliveries: 0 }, systems: [], pods: [{ id: state.pods[0]!.id, name: 'Monitor', description: null, group: null, groupId: null, lifecycle: 'paused', draft: true, kind: 'code', ai: false, data: { writes: [], reads: [] }, work: { pending: 0, held: 0 }, resources: [], secrets: ['token_alias'], schedule: null, lastRun: null, runs: 0, queue: { blocked: 0, error: null }, approvals: [], unknown: [] }], edges: [] }
   const published = { ...state, workspace: { ...state.workspace, map } }
   publishV2(store, actor, lease, {}, published, 1)
   expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toEqual({ revision: 2, map })
   expect(store.inventory(actor.owner)[0]!.workspace.map).toEqual(map)
-  // A desktop before issue 1455 (M5) still publishes `collections`; it is accepted and read back with current names.
-  const { automations, pods, ...rest } = map
-  const legacy = { ...rest, collections: automations, pods: pods.map(({ automation, ...pod }) => ({ ...pod, collection: automation })) }
-  publishV2(store, actor, lease, {}, { ...state, workspace: { ...state.workspace, map: legacy as never } }, 2)
-  expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toEqual({ revision: 3, map })
-  expect(store.inventory(actor.owner)[0]!.workspace.map).toEqual(map)
-  // Before M4 it also publishes workflows as chains and bounded networks; the relay shows its persistent networks only.
-  const chain = { id: randomUUID(), revision: 1, kind: 'chain', bounded: false, name: 'Morning review', group: null, groupId: null, state: 'active', members: [state.pods[0]!.id], schedule: null, counts: {}, flows: {}, gates: [{ key: 'review', kind: 'choose', title: 'Review', takes: 'mail.open', options: [], open: 1, batches: {} }], lastRun: null }
-  const workflows = { ...map, pods: map.pods.map(pod => ({ ...pod, automation: chain.id })), automations: [chain], edges: [{ from: 'gate:review', to: state.pods[0]!.id, type: 'channel', channel: 'mail.open', flow: 1 }] }
-  publishV2(store, actor, lease, {}, { ...state, workspace: { ...state.workspace, map: workflows as never } }, 3)
-  expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toEqual({ revision: 4, map })
+  // The network read model of desktops before issue 1465 is no longer accepted.
+  expect(() => publishV2(store, actor, lease, {}, { ...state, workspace: { ...state.workspace, map: { ...map, automations: [] } as never } }, 2)).toThrow()
+  expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toEqual({ revision: 2, map })
   expect(() => store.view(other, actor.id, null, { view: 'map' })).toThrow()
   expect(() => store.view(actor.owner, actor.id, null, { view: 'summary' })).toThrow('invalid_workspace_request')
 })

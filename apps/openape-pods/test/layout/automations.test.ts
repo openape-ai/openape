@@ -8,22 +8,18 @@ import AutomationsShell from '../../src/renderer/central/AutomationsShell.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
 import { colorResolver, geometry } from '../../src/renderer/utils/automation-layout'
 import fixture from '../renderer/map-view.json'
-import { choices } from '../renderer/decisions-inbox.test'
+import { domain } from '../renderer/decisions-inbox.test'
 import { screenshotPath } from './evidence'
 
 // Geometry of the Automatisierungen surface with the production stylesheet: the canvas height
 // follows the content, the info panel moves below the map under 1000 px, dark mode uses tokens.
 // Text and commands are asserted in test/renderer/automations-shell.test.ts.
 const view = parseMapView(fixture) as MapView
-// Every group becomes a tag; network members inherit their network's tags.
+// Every group becomes a tag of its Pods.
 function tagged(): MapView {
   const copy = structuredClone(view)
-  const tag = (group: string | null) => (group ?? 'privat').toLowerCase().replace(/\s+/g, '-')
-  for (const automation of copy.automations) automation.tags = { own: [tag(automation.group)], inherited: [], revision: 1 }
-  for (const pod of copy.pods) {
-    const network = copy.automations.find(automation => automation.members.includes(pod.id))
-    pod.tags = network ? { own: [], inherited: network.tags!.own, revision: 0 } : pod.group ? { own: [tag(pod.group)], inherited: [], revision: 1 } : undefined
-  }
+  const tag = (group: string) => group.toLowerCase().replace(/\s+/g, '-')
+  for (const pod of copy.pods) pod.tags = pod.group ? { own: [tag(pod.group)], revision: 1 } : undefined
   return parseMapView(copy)
 }
 const NOW = view.at + 11 * 60000
@@ -47,7 +43,7 @@ describe('Automatisierungen layout', () => {
   it('sizes the canvas from its content and places the info panel beside it', async () => {
     await mountShell(1440, 1000)
     const full = canvas().height
-    expect(full).toBeGreaterThan(geometry.firstRow + geometry.cluster.h + geometry.single.h + geometry.collapsed.h)
+    expect(full).toBeGreaterThan(geometry.firstRow + geometry.single.h + 2 * geometry.shared.layerHeight)
     expect(canvas().getBoundingClientRect().width).toBeGreaterThan(700)
     const info = document.querySelector('.automation-info')!.getBoundingClientRect()
     expect(info.width).toBe(300)
@@ -65,8 +61,6 @@ describe('Automatisierungen layout', () => {
     const full = canvas().height
     await button('Keine').trigger('click'); await flushPromises()
     await wrapper!.findAll('button').find(item => item.text().startsWith('#iurio'))!.trigger('click'); await flushPromises(); await frames()
-    // Only IURIO Pods remain, so Telegram is written and no longer read: four rows in the side columns.
-    expect(canvas().height).toBe(geometry.columnStart + 3 * geometry.columnStep + 60)
     expect(canvas().height).toBeLessThan(full)
     await shot('03-tag-iurio')
     await wrapper!.findAll('button').find(item => item.text().startsWith('#linde'))!.trigger('click'); await flushPromises(); await frames()
@@ -84,19 +78,17 @@ describe('Automatisierungen layout', () => {
     await shot('04-liste')
   })
 
-  it('opens the detail drawer 520 px wide at the right edge and a network with its members', async () => {
+  it('opens the detail drawer 520 px wide at the right edge with the shared data of a Pod', async () => {
     await mountShell(1440, 1000)
     const shell = wrapper!.vm as unknown as { open: (id: string | null) => void, pin: (id: string | null) => void }
-    const triage = view.pods.find(pod => pod.name === 'Triage')!
-    shell.pin(triage.id); shell.open(triage.id); await flushPromises(); await frames(5)
+    const classification = view.pods.find(pod => pod.name === 'Mail-Klassifizierung')!
+    shell.pin(classification.id); shell.open(classification.id); await flushPromises(); await frames(5)
     const drawer = document.querySelector('.automation-detail')!.getBoundingClientRect()
     expect(drawer.width).toBe(520)
     expect(drawer.right).toBe(1440 - 16)
     expect(drawer.bottom).toBeLessThanOrEqual(1000)
-    await shot('05-pod-detail-triage')
-    shell.open(triage.automation!); await flushPromises(); await frames(5)
-    expect(document.querySelectorAll('.automation-detail .members button')).toHaveLength(11)
-    await shot('06-netz-detail')
+    expect(document.querySelector('.automation-detail [data-shared]')!.textContent).toContain('delta-mind/mail/classifications')
+    await shot('05-pod-detail-klassifizierung')
   })
 
   it('shows the Codex handoff with the brief above the map', async () => {
@@ -138,18 +130,18 @@ describe('Automatisierungen layout', () => {
     await mountShell(1440, 1000)
     wrapper!.unmount()
     applyLanguage('de')
-    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', inbox: { choices, gates: [] } } })
+    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', domain } })
     await flushPromises(); await frames(2)
-    const card = document.querySelector('[data-testid="choices"] .item')!.getBoundingClientRect()
+    const card = document.querySelector('[data-testid="questions"] .item')!.getBoundingClientRect()
     expect(card.width).toBeGreaterThan(1200)
-    const facts = getComputedStyle(document.querySelector('[data-testid="choices"] .facts')!).gridTemplateColumns.split(' ')
+    const facts = getComputedStyle(document.querySelector('[data-testid="questions"] .facts')!).gridTemplateColumns.split(' ')
     expect(facts).toHaveLength(4)
     await shot('10-entscheidungen')
     await (wrapper.find('.ctrls select') as unknown as { setValue: (value: string) => Promise<void> }).setValue('sender'); await flushPromises(); await frames(2)
     expect(document.querySelectorAll('.grp').length).toBeGreaterThan(5)
     await shot('11-entscheidungen-buendeln')
     await page.viewport(390, 844); await frames(2)
-    expect(getComputedStyle(document.querySelector('[data-testid="choices"] .facts')!).gridTemplateColumns.split(' ')).toHaveLength(2)
+    expect(getComputedStyle(document.querySelector('[data-testid="questions"] .facts')!).gridTemplateColumns.split(' ')).toHaveLength(2)
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390)
     await shot('13-mobil-entscheidungen')
   })
