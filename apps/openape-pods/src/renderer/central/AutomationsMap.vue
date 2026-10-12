@@ -10,11 +10,11 @@ import type { Layers, MapModel, MapNode } from '../utils/automation-layout'
  * The animated map. Geometry comes from `utils/automation-layout`; this component only draws,
  * animates and reports hits. Hover and pin are reported to the owner of the info panel.
  */
-const props = defineProps<{ view: MapView, group: string, layers: Layers, pinned: string | null, playing: boolean, now: number }>()
+const props = defineProps<{ view: MapView, layers: Layers, pinned: string | null, playing: boolean, now: number }>()
 const emit = defineEmits<{ hover: [id: string | null], pin: [id: string | null], open: [id: string] }>()
 const canvas = ref<HTMLCanvasElement | null>(null)
-const model = shallowRef<MapModel>(relayout(buildModel(props.view), props.view, props.group, props.layers))
-const visible = shallowRef(visibleNodes(model.value, props.group, props.layers))
+const model = shallowRef<MapModel>(relayout(buildModel(props.view), props.view, props.layers))
+const visible = shallowRef(visibleNodes(model.value, props.layers))
 const height = ref(model.value.height)
 let hover: string | null = null
 let frame = 0
@@ -23,14 +23,14 @@ const particles: { link: number, t: number, s: number }[] = []
 const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches
 
 function rebuild(keepPositions = true) {
-  model.value = relayout(buildModel(props.view, keepPositions ? model.value : undefined), props.view, props.group, props.layers)
-  visible.value = visibleNodes(model.value, props.group, props.layers)
+  model.value = relayout(buildModel(props.view, keepPositions ? model.value : undefined), props.view, props.layers)
+  visible.value = visibleNodes(model.value, props.layers)
   height.value = model.value.height
   particles.length = 0
   model.value.links.forEach((link, index) => { const count = particleCount(link.flow); for (let k = 0; k < count; k++) particles.push({ link: index, t: (k / count + index * 0.07) % 1, s: 0.0001 + ((index * 7) % 5) * 0.00002 }) })
 }
 watch(() => props.view, () => rebuild())
-watch(() => [props.group, props.layers.channel, props.layers.read, props.layers.write, props.layers.auth, props.layers.paused], () => rebuild())
+watch(() => [props.layers.channel, props.layers.read, props.layers.write, props.layers.auth, props.layers.paused], () => rebuild())
 
 let resolve: ((token: string) => string) | null = null
 let scheme = ''
