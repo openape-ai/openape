@@ -63,7 +63,7 @@ function settle(store: PodDatabase, key: string, attempt: number, state: Settled
 export async function archiveApproved(store: PodDatabase, approvals: Approvals, service: ApprovalService, scope: { podId: string, runId: string }, target: ArchiveTarget, tools: ArchiveTools, assertCurrent: () => void, signal: AbortSignal): Promise<ArchiveOutcome> {
   const approval = approvals.get(scope.podId, target.approval)
   const payload = approval.payload as { mailbox?: unknown, messageId?: unknown, version?: unknown, sender?: unknown, subject?: unknown }
-  if (approval.action !== 'mail.archive' || typeof payload.messageId !== 'string' || typeof payload.version !== 'string' || String(payload.mailbox).toLowerCase() !== target.mailbox.toLowerCase()) throw new Error('The approval does not name a message of this mailbox')
+  if (approval.action !== 'mail.archive' || typeof payload.messageId !== 'string' || typeof payload.version !== 'string' || typeof payload.subject !== 'string' || typeof payload.sender !== 'string' || String(payload.mailbox).toLowerCase() !== target.mailbox.toLowerCase() || approval.object !== `${target.mailbox.toLowerCase()}:${payload.messageId}`) throw new Error('The approval does not name a message of this mailbox')
   const messageId = payload.messageId; const version = payload.version
   const key = digest(canonicalJson(['mail.archive', target.mailbox.toLowerCase(), messageId, version]))
   const skipped = (reason: string): ArchiveOutcome => ({ approval: approval.id, messageId, outcome: 'skipped', reason })
@@ -95,7 +95,7 @@ async function archiveOne(messageId: string, version: string, approved: { sender
   if (read.outcome !== 'confirmed' || items?.length !== 1 || !mail || mail.id !== messageId || typeof mail.changeKey !== 'string' || !mail.changeKey || typeof mail.parentFolderId !== 'string' || !mail.parentFolderId) throw new Error('Mail preflight read did not return the approved message')
   if (mailContentVersion(mail) !== version) return { state: 'confirmed_not_applied', reason: 'Message changed after approval; it stays in place', receipt: null }
   // The owner approved what the request showed; a message that now names something else must not move.
-  if ((typeof approved.subject === 'string' && approved.subject !== clean(mail.subject, 160)) || (typeof approved.sender === 'string' && approved.sender !== clean(address(mail.from), 120))) return { state: 'confirmed_not_applied', reason: 'Message does not match the approved sender and subject', receipt: null }
+  if (approved.subject !== clean(mail.subject, 160) || approved.sender !== clean(address(mail.from), 120)) return { state: 'confirmed_not_applied', reason: 'Message does not match the approved sender and subject', receipt: null }
   await authorize()
   progress.dispatched = true
   const moved = workflowReply(await tools.move(['workflow', 'move', '--account', target.mailbox, '--message', messageId, '--expected-version', mail.changeKey, '--source-folder', mail.parentFolderId, '--destination', 'archive']), target.mailbox, 'move')
