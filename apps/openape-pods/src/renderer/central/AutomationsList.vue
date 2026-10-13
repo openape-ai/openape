@@ -9,12 +9,13 @@ import type { PodState } from '../utils/pod-status'
 import { tagsOf } from '../utils/tags'
 
 /** One row per Pod: what it does, how it is doing, its last result, its next run and what it waits for. */
-const props = defineProps<{ view: MapView, layers: Layers, now: number }>()
+const props = defineProps<{ view: MapView, layers: Layers, now: number, archived?: boolean }>()
 const emit = defineEmits<{ open: [id: string] }>()
 const stateLabels: Record<PodState, string> = { failing: 'Error', waiting: 'Waits for you', running: 'Running', paused: 'paused', ok: 'OK' }
 const rows = computed(() => {
   const visible = visibleNodes(buildModel(props.view), props.layers)
-  return props.view.pods.filter(pod => visible.has(pod.id)).map(pod => ({
+  const shown = props.archived ? props.view.pods.filter(pod => pod.lifecycle === 'archived') : props.view.pods.filter(pod => visible.has(pod.id))
+  return shown.map(pod => ({
     id: pod.id, name: pod.name, purpose: pod.description ?? '', tags: tagsOf(props.view, pod.id),
     state: podState(pod, props.view), result: lastResult(pod, props.now), failures: failureCount(pod), next: nextRun(pod, props.now), waits: waitsFor(pod, props.view),
   }))

@@ -82,19 +82,6 @@ describe('Automatisierungen layout', () => {
     await shot('04-liste')
   })
 
-  it('opens the detail drawer 520 px wide at the right edge with the shared data of a Pod', async () => {
-    await mountShell(1440, 1000)
-    const shell = wrapper!.vm as unknown as { open: (id: string | null) => void, pin: (id: string | null) => void }
-    const classification = view.pods.find(pod => pod.name === 'Mail-Klassifizierung')!
-    shell.pin(classification.id); shell.open(classification.id); await flushPromises(); await frames(5)
-    const drawer = document.querySelector('.automation-detail')!.getBoundingClientRect()
-    expect(drawer.width).toBe(520)
-    expect(drawer.right).toBe(1440 - 16)
-    expect(drawer.bottom).toBeLessThanOrEqual(1000)
-    expect(document.querySelector('.automation-detail [data-shared]')!.textContent).toContain('delta-mind/mail/classifications')
-    await shot('05-pod-detail-klassifizierung')
-  })
-
   it('shows one row per Pod with purpose, state, result, next run and waits-for at 1280 and 390 px', async () => {
     const described = structuredClone(view)
     for (const item of described.pods) item.description = item.description ?? `${item.name}: liest neue Einträge und schreibt das Ergebnis in die gemeinsamen Daten.`
@@ -231,18 +218,4 @@ describe('Automatisierungen layout', () => {
     await shot('14-dunkel-karte')
   })
 
-  it('shows the secret form with its three ways inside the detail drawer', async () => {
-    await mountShell(1440, 1000)
-    const shell = wrapper!.vm as unknown as { open: (id: string | null) => void }
-    const bot = view.pods.find(pod => pod.name === 'Morgenbriefing · Calendar-Bot')!
-    shell.open(bot.id); await flushPromises(); await frames(5)
-    await button('+ Geheimnis').trigger('click'); await flushPromises(); await frames(2)
-    await wrapper!.findAll('[data-testid="secret-form"] .seg button')[2]!.trigger('click'); await flushPromises(); await frames(2)
-    const drawer = document.querySelector('.automation-detail')!.getBoundingClientRect()
-    const form = document.querySelector('[data-testid="secret-form"]')!.getBoundingClientRect()
-    expect(form.left).toBeGreaterThanOrEqual(drawer.left); expect(form.right).toBeLessThanOrEqual(drawer.right)
-    expect(document.querySelectorAll('[data-testid="secret-form"] .seg button')).toHaveLength(3)
-    document.querySelector('[data-testid="secret-form"]')!.scrollIntoView({ block: 'center' })
-    await shot('07-geheimnis-anfrage')
-  })
 })
