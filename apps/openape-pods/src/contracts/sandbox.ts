@@ -1,3 +1,4 @@
+import { unexpectedFields } from './fields'
 import { parseCredentialAlias } from './credentials'
 import { parseGrantDeclaration, parseGrantTarget } from './grants'
 import type { GrantDeclaration, GrantTarget } from './grants'
@@ -44,7 +45,9 @@ export interface SandboxReach { level: SandboxLevel, protectedPaths: string[], d
 const limit = 16
 const denyLimit = 32
 function object(value: unknown, keys: string[], message: string): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !keys.includes(key))) throw new Error(message)
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(message)
+  const unexpected = Object.keys(value).filter(key => !keys.includes(key))
+  if (unexpected.length) throw new Error(unexpectedFields(message, unexpected))
   return value as Record<string, unknown>
 }
 function path(value: unknown): string {

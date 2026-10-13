@@ -30,3 +30,9 @@ export function publicConfiguration(value: unknown): string | number | boolean |
   if (value === null || typeof value === 'boolean' || (typeof value === 'number' && Number.isFinite(value)) || (typeof value === 'string' && value.length <= 1024)) return value
   throw new Error('Configuration values are bounded scalars')
 }
+
+/** Names the fields an MCP caller sent in the wrong place, so a refusal says what to move. */
+export function unexpectedFields(message: string, fields: string[]): string {
+  const hint = fields.includes('requestId') ? '; requestId belongs next to action, not inside command' : ''
+  return `${message}: unexpected ${fields.join(', ')}${hint}`
+}

@@ -41,7 +41,7 @@ export default defineComponent({
     <p v-if="readOnly" class="muted">
       {{ t('Assign SSH targets on the desktop that holds the SSH keys.') }}
     </p>
-    <form v-else @submit.prevent="assign">
+    <form v-else class="ssh-form" @submit.prevent="assign">
       <label>{{ t('SSH configuration alias') }}<input v-model="alias" name="ssh-alias" required :disabled="busy"></label>
       <label>{{ t('Jump aliases, outermost first (comma separated)') }}<input v-model="jumps" name="ssh-jumps" :disabled="busy"></label>
       <button :disabled="busy">
@@ -53,3 +53,7 @@ export default defineComponent({
     </p>
   </section>
 </template>
+
+<style scoped>
+.ssh-form{display:grid;gap:12px;max-width:560px}.ssh-form label{display:grid;gap:6px}.ssh-form button{justify-self:start}
+</style>

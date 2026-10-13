@@ -49,14 +49,13 @@ function draw(now: number) {
   const element = canvas.value; const ctx = element?.getContext('2d')
   if (!element || !ctx) return
   if (element.height !== height.value) element.height = height.value
-  const g = css(); const text = g('--text'); const muted = g('--muted'); const surface = g('--surface'); const border = g('--border')
+  const g = css(); const text = g('--text'); const muted = g('--muted'); const surface = g('--surface')
   const colors = { data: g('--accent'), read: g('--read'), write: g('--warn'), auth: g('--idp') }
   const dt = props.playing ? now - last : 0; last = now
   step(model.value, reduced ? 1 : 0.14)
   const nodes = new Map(model.value.nodes.map(item => [item.id, item]))
   const shown = (id: string) => visible.value.has(id)
   ctx.clearRect(0, 0, element.width, element.height)
-  const labels: { x: number, y: number, text: string }[] = []
   const focus = hover ?? props.pinned
   model.value.links.forEach((link) => {
     const a = nodes.get(link.from); const b = nodes.get(link.to)
@@ -68,7 +67,6 @@ function draw(now: number) {
     ctx.beginPath(); ctx.moveTo(c.p0.x, c.p0.y); ctx.quadraticCurveTo(c.c.x, c.c.y, c.p1.x, c.p1.y); ctx.stroke()
     const q = pointAt(c, 0.97); const q2 = pointAt(c, 1); const angle = Math.atan2(q2.y - q.y, q2.x - q.x)
     ctx.setLineDash([]); ctx.fillStyle = colors[link.type]; ctx.beginPath(); ctx.moveTo(q2.x, q2.y); ctx.lineTo(q2.x - 8 * Math.cos(angle - 0.4), q2.y - 8 * Math.sin(angle - 0.4)); ctx.lineTo(q2.x - 8 * Math.cos(angle + 0.4), q2.y - 8 * Math.sin(angle + 0.4)); ctx.fill()
-    if (focus === a.id || focus === b.id) { const m = pointAt(c, focus === a.id ? 0.28 : 0.72); labels.push({ x: m.x, y: m.y, text: `${link.label || t('access')} · ${link.flow} · 24 h` }) }
   })
   ctx.globalAlpha = 1; ctx.setLineDash([])
   for (const particle of particles) {
@@ -119,8 +117,7 @@ function draw(now: number) {
     if (sub) { ctx.fillStyle = muted; ctx.font = font(11); ctx.fillText(fit(ctx, sub, tw), tx, item.y + 13) }
     if (item.badge) { ctx.fillStyle = g('--bad'); ctx.beginPath(); ctx.arc(x + w - 4, y + 4, 11, 0, 7); ctx.fill(); ctx.fillStyle = '#fff'; ctx.font = font(11, 600); ctx.textAlign = 'center'; ctx.fillText(String(item.badge), x + w - 4, y + 8) }
   }
-  ctx.globalAlpha = 1; ctx.font = `11px ui-monospace, Menlo, monospace`; ctx.textAlign = 'center'
-  for (const label of labels) { const w = ctx.measureText(label.text).width + 10; ctx.fillStyle = surface; ctx.strokeStyle = border; ctx.lineWidth = 1; ctx.beginPath(); ctx.roundRect(label.x - w / 2, label.y - 9, w, 18, 4); ctx.fill(); ctx.stroke(); ctx.fillStyle = text; ctx.fillText(label.text, label.x, label.y + 4) }
+  ctx.globalAlpha = 1
 }
 function loop(now: number) { draw(now); frame = requestAnimationFrame(loop) }
 onMounted(() => { rebuild(false); if (canvas.value?.getContext('2d')) frame = requestAnimationFrame(loop) })

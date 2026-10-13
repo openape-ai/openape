@@ -392,6 +392,8 @@ h2 {
   font-weight:550;
   margin:10px 0;
 }
+/* Shown only while the desktop is offline; online needs no indicator. */
+.connection-notice{font-size:12px;font-weight:600;color:var(--bad);background:var(--bad-soft);border-radius:999px;padding:3px 10px;max-width:420px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .error-message {
   color:var(--warn);
   font-size:12px;

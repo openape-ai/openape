@@ -13,7 +13,8 @@ export const administrationActions = ['resources', 'scripts', 'recovery', 'progr
 export function parseAdministration(action: Record<string, unknown>) {
   const { action: kind, command, revision, path, adapterPath, commandName, runtimePath } = action
   if (kind === 'grants' || kind === 'sandbox') {
-    if (Object.keys(action).some(key => !['action', 'command'].includes(key))) throw new Error(`Invalid ${kind} action fields; send action and command only`)
+    const extra = Object.keys(action).filter(key => !['action', 'command'].includes(key))
+    if (extra.length) throw new Error(`Invalid ${kind} action fields; send action and command only: unexpected ${extra.join(', ')}`)
     return kind === 'grants' ? { kind, command: parseGrantsCommand(command) } as const : { kind, command: parseSandboxCommand(command) } as const
   }
   if (!administrationActions.includes(String(kind)) || Object.keys(action).some(key => !['action', 'command', 'revision', 'path', 'adapterPath', 'commandName', 'runtimePath'].includes(key))) throw new Error('Invalid administration action')
