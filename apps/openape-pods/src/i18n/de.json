@@ -3065,5 +3065,8 @@
   "{count} failed runs in 24 h": "{count} fehlgeschlagene Läufe in 24 h",
   "Requested grant: {title}": "Angefragtes Recht: {title}",
   "Held work and uncertain actions are settled in the Pods inbox.": "Angehaltene Arbeit und unsichere Aktionen gleichst du in der Pods-Inbox ab.",
-  "This grant no longer waits for your decision; refresh the view": "Dieses Recht wartet nicht mehr auf deine Entscheidung; aktualisiere die Ansicht"
+  "This grant no longer waits for your decision; refresh the view": "Dieses Recht wartet nicht mehr auf deine Entscheidung; aktualisiere die Ansicht",
+  "Access": "Zugriffe",
+  "Archived ({count})": "Archivierte ({count})",
+  "Request sent to OpenApe Secrets.": "Anfrage an OpenApe Secrets gesendet."
 }
