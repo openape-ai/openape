@@ -1,8 +1,9 @@
 import { fixtureShellIdentity } from './fixtures/shell-identity'
 import { failOnKeychainDialog } from './fixtures/keychain'
 import { _electron as electron } from 'playwright'
-import type { Page } from 'playwright'
-import { mkdtemp, realpath, rm, readFile, readdir } from 'node:fs/promises'
+import { openPod } from './fixtures/navigation'
+import { removeProfile, startupBackup } from './fixtures/startup'
+import { mkdtemp, realpath, readFile, readdir } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
@@ -28,15 +29,11 @@ it('credentials: packaged owner flow retains assigned secrets across runs and re
     console.info(`Credential flow: ${realKeychain ? 'real macOS login keychain' : 'Chromium mock keychain; macOS login keychain is NOT verified'}`)
     return running
   }
-  const openPod = async (page: Page) => {
-    await page.getByRole('button', { name: 'List', exact: true }).click()
-    await page.getByRole('row', { name: /Customer review/ }).click()
-    await page.getByRole('button', { name: 'Open details', exact: true }).click()
-  }
   let app = await launch()
   try {
     let page = await app.firstWindow(); page.setDefaultTimeout(7000); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
-    await openPod(page)
+    await startupBackup(page, root)
+    await openPod(page, 'Customer review')
     await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
     console.info('Credential flow: rendered resources, saving synthetic encrypted value')
     await page.getByLabel('Credential alias', { exact: true }).fill('crm')
@@ -88,7 +85,7 @@ export async function run(context) {
     const result = await page.evaluate(podId => window.pods.runs({ type: 'start', podId }), pod.id)
     await expect.poll(async () => (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), pod.id)).runs[0]?.state).toBe('completed')
     expect(result.runs.length).toBeGreaterThan(0)
-    await openPod(page)
+    await openPod(page, 'Customer review')
     await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
     const rotated = await page.evaluate(({ podId, epoch }) => window.pods.resources({ type: 'saveCredential', podId, alias: 'crm', value: 'ROTATED_SYNTHETIC_VALUE', epoch }), { podId: pod.id, epoch: resources.epoch })
     const current = rotated.resources.find(item => item.state === 'ready')!
@@ -109,6 +106,6 @@ export async function run(context) {
     const process = app.process()
     const cleanup = setTimeout(() => { process.kill('SIGKILL') }, 3000)
     try { await app.close() }
-    finally { clearTimeout(cleanup) }; await shellIdentity.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+    finally { clearTimeout(cleanup) }; await shellIdentity.close(); await removeProfile(root)
   }
 })

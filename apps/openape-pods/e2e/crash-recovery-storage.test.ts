@@ -14,9 +14,10 @@ describe('checkpoint recovery in Electron', () => {
     expect((await page.evaluate(() => window.pods.data({ type: 'status' }))).busy).toBe(true)
     await delay(2200)
     const path = join(root, 'pods', podId, 'workspace', 'synthetic-sparse-file'); await writeFile(path, ''); await truncate(path, 1024 ** 3)
-    await expect.poll(async () => (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs[0]?.state, { timeout: 15000 }).toBe('cancelled')
+    // The worker takes the full storage inventory once a minute (issue 1387), so crossing the limit stops the run within about 60 s.
+    await expect.poll(async () => (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs[0]?.state, { timeout: 75000 }).toBe('cancelled')
     expect((await page.evaluate(podId => window.pods.details({ type: 'list', podId }), podId)).checkpointRevision).toBe(1)
     expect((await page.evaluate(() => window.pods.data({ type: 'status' }))).error).toContain('limit reached')
     await rm(path); expect((await page.evaluate(() => window.pods.data({ type: 'status' }))).error).toBeNull()
-  })
+  }, 120000)
 })
