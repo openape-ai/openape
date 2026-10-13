@@ -40,7 +40,7 @@ describe('extended git adapter', () => {
   })
 
   const commandRunningOptions = [['--upload-pack=x'], ['--upload-pack', 'x'], ['-u', 'x'], ['--receive-pack=x'], ['--exec=x'], ['--exec', 'x'], ['-c', 'core.sshCommand=x'], ['--config', 'core.sshCommand=x'], ['-x', 'x'], ['--output=/tmp/x']]
-  const commands = [['status'], ['log'], ['diff'], ['branch'], ['remote'], ['fetch'], ['fetch', 'origin'], ['pull'], ['add', 'file'], ['commit', '-m', 'msg'], ['push'], ['clone', 'https://example.test/r.git'], ['checkout', 'main'], ['switch', 'main'], ['merge', 'topic'], ['stash'], ['tag', 'v1'], ['worktree', 'list'], ['merge-base', 'A', 'B'], ['merge-tree', 'A', 'B'], ['rev-parse', 'HEAD'], ['rebase', 'origin/main'], ['push', 'origin', 'main']]
+  const commands = [['status'], ['log'], ['diff'], ['branch'], ['remote'], ['fetch'], ['fetch', 'origin'], ['pull'], ['add', 'file'], ['commit', '-m', 'msg'], ['push'], ['clone', 'https://example.test/r.git'], ['checkout', 'main'], ['switch', 'main'], ['merge', 'topic'], ['stash'], ['tag', 'v1'], ['worktree', 'list'], ['merge-base', 'A', 'B'], ['merge-tree', 'A', 'B'], ['rev-parse', 'HEAD'], ['rebase', 'origin/main'], ['push', 'origin', 'main'], ['replay', '--ref-action=print', '--onto', 'A', 'A..B']]
   const attempts = commands.flatMap(command => commandRunningOptions.flatMap(option => [
     [...command, ...option],
     [command[0]!, ...option, ...command.slice(1)],
@@ -68,6 +68,9 @@ describe('extended git adapter', () => {
     await expect(resolve(['-C', '/work/repo', 'rev-parse', '--abbrev-ref', 'HEAD'])).resolves.toMatchObject({ operation_id: 'git.rev-parse', bindings: { ref: 'HEAD' } })
     await expect(resolve(['-C', '/work/repo', 'status', '--porcelain'])).resolves.toMatchObject({ operation_id: 'git.status', permission: 'git.repo[*]#read' })
     await expect(resolve(['-C', '/work/repo', 'fetch', 'origin'])).resolves.toMatchObject({ operation_id: 'git.fetch.remote', permission: 'git.repo[*].remote[*]#read' })
+    // Issue 1468 follow-up: the IURIO rebase Pod replays a remote branch without a worktree; the ref mode is part of the permission.
+    await expect(resolve(['-C', '/work/repo', 'replay', '--ref-action=print', '--onto', 'origin/development', '--ref', 'refs/remotes/origin/feature', 'origin/development..origin/feature'])).resolves.toMatchObject({ operation_id: 'git.replay.print', permission: 'git.repo[*].ref-action[mode=print]#read', bindings: { range: 'origin/development..origin/feature', onto: 'origin/development' } })
+    await expect(resolve(['-C', '/work/repo', 'replay', '--onto', 'A', 'A..B'])).rejects.toThrow(/No adapter operation matched/)
   })
 
   it('binds rebase and push with a refspec to the exact command under their own actions', async () => {
