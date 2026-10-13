@@ -20,7 +20,7 @@ const frames = (count = 40) => new Promise<void>((done) => { const tick = (left:
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en') })
 async function capture(desktop: boolean) {
-  applyLanguage('de'); await page.viewport(1440, 1000)
+  applyLanguage('de'); await page.viewport(1440, 1000); localStorage.setItem('pods.automations.mode', 'map')
   wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: true, now: NOW, decisions: 17, desktop, sharing: true, ...(desktop ? {} : { subject: 'owner@example.invalid' }) } })
   await flushPromises(); await frames()
   const shell = wrapper.vm as unknown as { open: (id: string | null) => void }

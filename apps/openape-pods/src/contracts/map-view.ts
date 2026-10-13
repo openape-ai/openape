@@ -12,8 +12,10 @@ export type MapSystemKind = 'service' | 'application' | 'directory' | 'ssh'
 export type MapResourceKind = MapSystemKind | 'secret' | 'reference'
 export interface MapSystem { id: string, kind: MapSystemKind, name: string, how: string }
 export interface MapResource { kind: MapResourceKind, name: string, how: string, system: string | null }
-export interface MapRun { at: number, state: string, summary: string }
-export interface MapSchedule { spec: ScheduleSpec | null, enabled: boolean }
+/** `error` is the stored failure cause of the run; older publishers omit it. */
+export interface MapRun { at: number, state: string, summary: string, error?: string | null }
+/** `nextAt` is the next scheduled start; older publishers omit it. */
+export interface MapSchedule { spec: ScheduleSpec | null, enabled: boolean, nextAt?: number | null }
 export interface MapApproval { grantId: string, title: string, runId: string }
 /** Owner tags of a Pod (issue 1459) with their revision. */
 export interface MapTags { own: string[], revision: number }
