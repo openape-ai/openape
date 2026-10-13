@@ -2887,6 +2887,7 @@
   "A question offers 2 to 16 options": "Eine Frage bietet 2 bis 16 Optionen",
   "Duplicate question option": "Doppelte Antwortoption",
   "Invalid owner question": "Ungültige Frage an den Owner",
+  "Invalid question withdrawal": "Ungültiges Zurückziehen einer Frage",
   "Invalid question option": "Ungültige Antwortoption",
   "Invalid question {p0}": "Ungültige Frage: {p0}",
   "Owner answers go to a namespace the owner writes": "Antworten des Owners gehen in einen Namensraum, den der Owner schreibt",

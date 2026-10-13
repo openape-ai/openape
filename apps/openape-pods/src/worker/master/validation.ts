@@ -83,6 +83,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       if (operation === 'data.list') return { entries: [], cursor: null }
       if (operation === 'data.set' || operation === 'data.delete') return { revision: 1 }
       if (operation === 'decisions.ask') return { id: randomUUID(), state: 'pending', option: null }
+      if (operation === 'decisions.withdraw') return { withdrawn: 0 }
       if (operation === 'approvals.request') return { id: randomUUID(), state: 'collecting' }
       if (operation === 'notify') { parseNotify(payload); return { eventId: `${pod.id}:synthetic`, queued: false } }
       if (operation === 'credentials.get') {

@@ -62,7 +62,8 @@ await context.work.claim({ key, expectedInputFingerprint })     // one winner; r
 await context.work.complete({ claimToken, result })             // result entry + completion marker, one transaction
 await context.work.defer({ claimToken, reason, until })         // waiting for a prerequisite; no model call
 await context.work.fail({ claimToken, reason, retryable })
-await context.decisions.ask({ namespace, key, fingerprint, title, body, options, data })
+await context.decisions.ask({ namespace, key, fingerprint, title, body, options, data })  // asking again refreshes a waiting question
+await context.decisions.withdraw({ namespace, key })              // the object no longer needs the owner
 await context.approvals.request({ action: 'mail.archive', object, payload })  // title derived from the payload
 await context.approvals.get(id)
 await context.mail.archiveApproved({ application, mailbox, approval })  // the authorized mail effect service

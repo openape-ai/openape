@@ -28,7 +28,8 @@ to shared data and other Pods find their own work there (issue 1465):
   an unchanged input is never processed again, also when its result was negative.
   Claims are tied to the run; a result is refused when the input changed meanwhile.
 - **Owner questions** (`context.decisions.ask`) become owner-written answers the
-  asking Pod reads; **approvals** (`context.approvals.request`) bind one action to
+  asking Pod reads; asking again refreshes a waiting question and
+  `context.decisions.withdraw` removes one that no longer needs the owner; **approvals** (`context.approvals.request`) bind one action to
   one object and are decided at the identity provider.
 - Private Pod state stays in checkpoints and the Pod workspace. Large files stay
   in assigned folders; records name their path and digest.
