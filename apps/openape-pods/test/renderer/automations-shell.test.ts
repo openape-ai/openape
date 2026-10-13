@@ -4,10 +4,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { MapView } from '../../src/contracts/map-view'
 import { parseMapView } from '../../src/contracts/map-view'
 import AutomationsShell from '../../src/renderer/central/AutomationsShell.vue'
+import TagEditor from '../../src/renderer/central/TagEditor.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
 import { clock, stamp } from '../../src/renderer/utils/cadence'
 import fixture from './map-view.json'
-import type { SecretsView } from '../../src/contracts/secrets'
 
 // Visible text and emitted commands of the Automatisierungen surface; geometry lives in test/layout/automations.test.ts.
 const view = parseMapView(fixture) as MapView
@@ -15,7 +15,7 @@ const NOW = view.at + 11 * 60000
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en'); localStorage.clear() })
 async function mountShell(props: Record<string, unknown> = {}) {
-  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, decisions: 17, ...props } })
+  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, ...props } })
   await flushPromises()
   return wrapper
 }
@@ -30,19 +30,20 @@ describe('Automatisierungen', () => {
     expect(kpis).toEqual([
       ['5', 'aktiv', 'Pods mit laufendem Zeitplan'],
       ['25', 'pausiert', 'davon 1 Entwürfe, 1 archiviert'],
-      ['1', 'gestört', 'IURIO PR monitor · mit Lücken abgeschlossen'],
-      // A run waiting for its grant at the IdP is an approval as well.
-      ['22', 'Entscheidungen warten auf dich', '17 Rückfragen, 5 Freigaben'],
+      // Every failed run of the window counts, also for a Pod whose last run succeeded.
+      ['140', 'Fehler 24 h', 'IURIO PR monitor 137, zaz Service-Agent 3'],
+      // The same sections as Entscheidungen: a run waiting for its grant and a grant requested at the IdP are rights.
+      ['24', 'Entscheidungen warten auf dich', '17 Rückfragen, 4 Freigaben, 2 Rechte, 1 abzugleichen'],
       ['1', 'unklare Zustellungen', '1 Zustellungen abzugleichen'],
     ])
-    expect(wrapper!.find('.kpi.alert').text()).toContain('gestört')
+    expect(wrapper!.find('.kpi.alert').text()).toContain('Fehler 24 h')
     expect(wrapper!.find('[role="tablist"]').text()).toContain('Automatisierungen')
-    expect(wrapper!.find('[role="tablist"]').text()).toContain('Entscheidungen 17')
+    expect(wrapper!.find('[role="tablist"]').text()).toContain('Entscheidungen 24')
     expect(wrapper!.find('.automations-stamp').text()).toBe(`Stand ${clock(view.at, 'de')}`)
     expect(wrapper!.find('.kinds').text()).toContain('Service, per HTTPS')
     wrapper!.unmount(); applyLanguage('en')
     await mountShell({ live: true })
-    expect(wrapper!.findAll('.kpi span').map(item => item.text())).toEqual(['active', 'paused', 'degraded', 'decisions waiting for you', 'unknown deliveries'])
+    expect(wrapper!.findAll('.kpi span').map(item => item.text())).toEqual(['active', 'paused', 'errors in 24 h', 'decisions waiting for you', 'unknown deliveries'])
     expect(wrapper!.find('.automations-stamp').text()).toBe(`Live · ${clock(NOW, 'en')}`)
   })
 
@@ -66,7 +67,7 @@ describe('Automatisierungen', () => {
     expect(wrapper!.find('.app-settings-menu').exists()).toBe(true)
     await button('⚙ Einstellungen').trigger('click'); await flushPromises()
     expect(wrapper!.find('.app-settings-menu').exists()).toBe(false)
-    await button('Entscheidungen 17').trigger('click')
+    await button('Entscheidungen 24').trigger('click')
     expect(wrapper!.emitted('update:tab')).toEqual([['decisions']])
     await button('Neue Automatisierung mit Codex').trigger('click')
     expect(wrapper!.emitted('codex')).toEqual([[null, null]])
@@ -87,11 +88,16 @@ describe('Automatisierungen', () => {
     // The fixture has no descriptions; a missing purpose is named, not left blank.
     expect(rows.every(row => row.find('.automations-list-purpose').text() === 'Zweck fehlt')).toBe(true)
     expect(cells('Rechnungsprüfung')).toEqual(['OK', 'noch kein Lauf', 'bei neuen gemeinsamen Daten', '–'])
-    expect(cells('zaz Service-Agent')).toEqual(['OK', 'vor 11 min · zaz queue empty; no model call', 'alle 1 min', '–'])
+    // Failed runs of the last 24 hours stay visible below a successful last result.
+    expect(cells('zaz Service-Agent')).toEqual(['OK', 'vor 11 min · zaz queue empty; no model call 3 fehlgeschlagene Läufe in 24 h', 'alle 1 min', '–'])
+    expect(rows.find(row => row.find('b').text() === 'zaz Service-Agent')!.find('.result-cell .failures').text()).toBe('3 fehlgeschlagene Läufe in 24 h')
+    // A grant the Pod requested at the IdP without a waiting run still waits for the owner.
+    expect(cells('IURIO Task monitor')).toEqual(['Wartet auf dich', 'vor 13 min · Unchanged: 204 tasks. No model call or Telegram message.', 'alle 5 min', 'deine Freigabe am IdP'])
     expect(cells('IURIO · Mail-Synchronisierung')).toEqual(['pausiert', 'noch kein Lauf', 'pausiert', '–'])
-    expect(cells('IURIO PR monitor')).toEqual(['Fehler', 'läuft gerade', 'alle 15 min', 'deine Freigabe am IdP'])
+    expect(cells('IURIO PR monitor')).toEqual(['Fehler', 'läuft gerade 137 fehlgeschlagene Läufe in 24 h', 'alle 15 min', 'deine Freigabe am IdP'])
+    // One click opens the Pod page; there is no detail dialog in between.
     await rows.find(row => row.text().includes('Linde · Server report'))!.trigger('click')
-    expect(wrapper!.find('.automation-detail .dhead b').text()).toBe('Linde · Server report')
+    expect(wrapper!.emitted('openPod')).toEqual([[pod('Linde · Server report').id]])
   })
 
   it('describes a pinned node in the info panel and opens its details', async () => {
@@ -110,9 +116,7 @@ describe('Automatisierungen', () => {
     expect(info).toContain('liest: TypeSafe / Jev (10), delta (10)')
     expect(info).toContain('schreibt: delta (10)')
     await button('Details öffnen').trigger('click')
-    expect(wrapper!.find('.automation-detail .dhead b').text()).toBe('Mail-Klassifizierung')
-    await wrapper!.find('.automation-detail .x').trigger('click')
-    expect(wrapper!.find('.automation-detail').exists()).toBe(false)
+    expect(wrapper!.emitted('openPod')).toEqual([[pod('Mail-Klassifizierung').id]])
     shell.pin('app:o365-cli:phofmann@delta-mind.at'); await flushPromises()
     expect(wrapper!.find('.automation-info').text()).toContain('phofmann@delta-mind.at')
     expect(wrapper!.find('.automation-info').text()).toContain('o365-cli · installiert')
@@ -120,7 +124,7 @@ describe('Automatisierungen', () => {
   })
 
   it('shows the loading state without a map and the decisions inbox on the second tab', async () => {
-    await mountShell({ view: null, decisions: 0 })
+    await mountShell({ view: null })
     expect(wrapper!.find('[role="status"]').text()).toBe('Loading workspace…')
     expect(wrapper!.find('[role="tablist"]').text()).not.toContain('0')
     wrapper!.unmount()
@@ -129,38 +133,6 @@ describe('Automatisierungen', () => {
     expect(wrapper.find('.decisions-inbox').exists()).toBe(true)
     expect(wrapper.findAll('.kpi')).toHaveLength(5)
     expect(wrapper.find('[role="tablist"]').text()).toContain('Decisions 2')
-  })
-
-  it('opens the secret form from the detail and hands typed values, files and requests to the host', async () => {
-    const bot = pod('Morgenbriefing · Calendar-Bot')
-    const secrets: SecretsView = { origin: 'https://secrets.openape.ai', consumer: { id: '01CONSUMER0', registeredAt: NOW }, requests: [{ id: '01REQ0', podId: bot.id, alias: 'calendar_bot_token', purpose: 'Calendar access', status: 'requested', expiresAt: NOW + 86400000, createdAt: NOW, updatedAt: NOW, error: null }] }
-    await mountShell({ desktop: true, secrets })
-    ;(wrapper!.vm as unknown as { open: (id: string) => void }).open(bot.id); await flushPromises()
-    expect(wrapper!.find('[data-testid="secret-form"]').exists()).toBe(false)
-    expect(wrapper!.find('[data-testid="secret-request"]').text()).toContain('calendar_bot_token')
-    expect(wrapper!.find('[data-testid="secret-request"]').text()).toContain('requested')
-    await button('+ Secret').trigger('click')
-    expect(wrapper!.find('[data-testid="secret-form"]').exists()).toBe(true)
-    await wrapper!.find('[data-testid="secret-form"] input').setValue('reports_publisher_key')
-    await wrapper!.find('[data-testid="secret-form"] input[type="password"]').setValue('value-1')
-    await button('Save').trigger('click')
-    expect(wrapper!.emitted('secretSave')).toEqual([[bot.id, 'reports_publisher_key', 'value-1']])
-    expect(wrapper!.find('[data-testid="secret-form"]').exists()).toBe(false)
-    await button('Replace').trigger('click')
-    expect((wrapper!.find('[data-testid="secret-form"] input').element as HTMLInputElement).value).toBe('calendar_bot_token')
-    await wrapper!.findAll('[data-testid="secret-form"] .seg button')[2]!.trigger('click')
-    await wrapper!.findAll('[data-testid="secret-form"] input')[1]!.setValue('Calendar of both accounts')
-    await button('Request').trigger('click')
-    expect(wrapper!.emitted('secrets')).toEqual([[{ type: 'request', podId: bot.id, alias: 'calendar_bot_token', purpose: 'Calendar of both accounts' }]])
-    await button('+ Secret').trigger('click')
-    await wrapper!.findAll('[data-testid="secret-form"] .seg button')[1]!.trigger('click')
-    await wrapper!.find('[data-testid="secret-form"] input').setValue('pem_key')
-    await button('Choose file…').trigger('click')
-    expect(wrapper!.emitted('secrets')!.at(-1)).toEqual([{ type: 'importFile', podId: bot.id, alias: 'pem_key' }])
-    await button('⚙ Settings').trigger('click'); await flushPromises()
-    expect(wrapper!.find('[data-consumer]').text()).toContain('01CONSUMER0')
-    await button('Revoke').trigger('click')
-    expect(wrapper!.emitted('secrets')!.at(-1)).toEqual([{ type: 'revokeConsumer' }])
   })
 })
 
@@ -213,17 +185,14 @@ describe('Tags (issue 1459)', () => {
   })
 
   it('saves edited own tags as one workspace command with the current revision', async () => {
-    await mountShell({ view: tagged() })
     const id = pod('IURIO PR monitor').id
-    ;(wrapper!.vm as unknown as { open: (id: string) => void }).open(id)
-    await flushPromises()
-    const editor = wrapper!.find('[data-tags]')
-    await editor.find('input').setValue('  Entwicklung ')
-    await editor.find('form').trigger('submit')
-    await editor.find('input').setValue('a/b')
-    await editor.find('form').trigger('submit')
-    expect(editor.find('[role="alert"]').exists()).toBe(true)
-    await editor.findAll('button').find(item => item.text() === 'Save tags')!.trigger('click')
-    expect(wrapper!.emitted('command')!.at(-1)).toEqual([{ channel: 'workspace', body: { type: 'tag', id, revision: 3, tags: ['iurio', 'entwicklung'] } }])
+    wrapper = mount(TagEditor, { attachTo: document.body, props: { id, tags: { own: ['iurio'], revision: 3 }, suggestions: ['iurio'] } })
+    await wrapper.find('input').setValue('  Entwicklung ')
+    await wrapper.find('form').trigger('submit')
+    await wrapper.find('input').setValue('a/b')
+    await wrapper.find('form').trigger('submit')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    await wrapper.findAll('button').find(item => item.text() === 'Save tags')!.trigger('click')
+    expect(wrapper.emitted('command')!.at(-1)).toEqual([{ channel: 'workspace', body: { type: 'tag', id, revision: 3, tags: ['iurio', 'entwicklung'] } }])
   })
 })

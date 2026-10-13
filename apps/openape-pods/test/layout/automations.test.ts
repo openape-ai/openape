@@ -32,7 +32,7 @@ async function mountShell(width: number, height: number, dark = false, shown = v
   localStorage.setItem('pods.automations.mode', mode)
   document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
   applyLanguage('de')
-  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view: shown, live: false, now: NOW, decisions: 17 } })
+  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view: shown, live: false, now: NOW } })
   await flushPromises(); await frames()
   return wrapper
 }
@@ -82,19 +82,6 @@ describe('Automatisierungen layout', () => {
     await shot('04-liste')
   })
 
-  it('opens the detail drawer 520 px wide at the right edge with the shared data of a Pod', async () => {
-    await mountShell(1440, 1000)
-    const shell = wrapper!.vm as unknown as { open: (id: string | null) => void, pin: (id: string | null) => void }
-    const classification = view.pods.find(pod => pod.name === 'Mail-Klassifizierung')!
-    shell.pin(classification.id); shell.open(classification.id); await flushPromises(); await frames(5)
-    const drawer = document.querySelector('.automation-detail')!.getBoundingClientRect()
-    expect(drawer.width).toBe(520)
-    expect(drawer.right).toBe(1440 - 16)
-    expect(drawer.bottom).toBeLessThanOrEqual(1000)
-    expect(document.querySelector('.automation-detail [data-shared]')!.textContent).toContain('delta-mind/mail/classifications')
-    await shot('05-pod-detail-klassifizierung')
-  })
-
   it('shows one row per Pod with purpose, state, result, next run and waits-for at 1280 and 390 px', async () => {
     const described = structuredClone(view)
     for (const item of described.pods) item.description = item.description ?? `${item.name}: liest neue Einträge und schreibt das Ergebnis in die gemeinsamen Daten.`
@@ -106,6 +93,43 @@ describe('Automatisierungen layout', () => {
       expect(document.documentElement.scrollWidth, `${width}: page overflow`).toBeLessThanOrEqual(width)
       await shot(`15-zeilen-${width}`)
       await page.screenshot({ path: screenshotPath(`redesign-15-zeile-${width}.png`), element: document.querySelector<HTMLElement>('.automations-list tbody tr:nth-child(2)')! })
+      wrapper!.unmount(); wrapper = undefined
+    }
+  })
+
+  it('shows failed runs and a requested grant where the owner looks first, with one count in KPI, tab and Rechte', async () => {
+    for (const [width, height] of [[1280, 900], [390, 844]] as const) {
+      await mountShell(width, height, false, view, 'list')
+      const errors = document.querySelector<HTMLElement>('[data-kpi="errors"]')!
+      expect(errors.classList.contains('alert')).toBe(true)
+      expect(errors.querySelector('b')!.textContent).toBe('140')
+      const decisions = document.querySelector<HTMLElement>('[data-kpi="decisions"] b')!.textContent
+      expect(document.querySelector('[role="tablist"] .n')!.textContent).toBe(decisions)
+      // The failure count sits inside the result cell, below the last result, and wraps instead of widening the page.
+      const row = Array.from(document.querySelectorAll<HTMLElement>('.automations-list tbody tr')).find(item => item.querySelector('b')!.textContent === 'IURIO PR monitor')!
+      const cell = row.querySelector<HTMLElement>('.result-cell')!.getBoundingClientRect()
+      const failures = row.querySelector<HTMLElement>('.result-cell .failures')!.getBoundingClientRect()
+      expect(failures.height).toBeGreaterThan(0)
+      expect(failures.top).toBeGreaterThanOrEqual(cell.top); expect(failures.bottom).toBeLessThanOrEqual(cell.bottom + 0.5)
+      expect(getComputedStyle(row.querySelector('.result-cell .failures')!).color).toBe(getComputedStyle(document.querySelector('.state-chip[data-state="failing"]')!).color)
+      await shot(`16-fehler-und-freigaben-${width}`)
+      await page.screenshot({ path: screenshotPath(`redesign-16-kpi-${width}.png`), element: document.querySelector<HTMLElement>('.kpi-row')! })
+      const task = Array.from(document.querySelectorAll<HTMLElement>('.automations-list tbody tr')).find(item => item.querySelector('b')!.textContent === 'IURIO Task monitor')!
+      for (const [name, element] of [['pr-monitor', row], ['task-monitor', task]] as const) {
+        element.scrollIntoView({ block: 'center' })
+        await page.screenshot({ path: screenshotPath(`redesign-16-zeile-${name}-${width}.png`), element })
+      }
+      wrapper!.unmount()
+      wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', domain } })
+      await flushPromises(); await frames(2)
+      expect(document.querySelector('[role="tablist"] .n')!.textContent).toBe(decisions)
+      const rights = document.querySelector<HTMLElement>('[data-testid="rights"]')!
+      const grant = rights.querySelector<HTMLElement>('[data-right="grant"]')!
+      expect(grant.getBoundingClientRect().right).toBeLessThanOrEqual(width)
+      expect(grant.querySelector('button.idp')!.getBoundingClientRect().height).toBeGreaterThan(20)
+      expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+      rights.scrollIntoView({ block: 'center' })
+      await page.screenshot({ path: screenshotPath(`redesign-17-rechte-${width}.png`), element: rights })
       wrapper!.unmount(); wrapper = undefined
     }
   })
@@ -194,18 +218,4 @@ describe('Automatisierungen layout', () => {
     await shot('14-dunkel-karte')
   })
 
-  it('shows the secret form with its three ways inside the detail drawer', async () => {
-    await mountShell(1440, 1000)
-    const shell = wrapper!.vm as unknown as { open: (id: string | null) => void }
-    const bot = view.pods.find(pod => pod.name === 'Morgenbriefing · Calendar-Bot')!
-    shell.open(bot.id); await flushPromises(); await frames(5)
-    await button('+ Geheimnis').trigger('click'); await flushPromises(); await frames(2)
-    await wrapper!.findAll('[data-testid="secret-form"] .seg button')[2]!.trigger('click'); await flushPromises(); await frames(2)
-    const drawer = document.querySelector('.automation-detail')!.getBoundingClientRect()
-    const form = document.querySelector('[data-testid="secret-form"]')!.getBoundingClientRect()
-    expect(form.left).toBeGreaterThanOrEqual(drawer.left); expect(form.right).toBeLessThanOrEqual(drawer.right)
-    expect(document.querySelectorAll('[data-testid="secret-form"] .seg button')).toHaveLength(3)
-    document.querySelector('[data-testid="secret-form"]')!.scrollIntoView({ block: 'center' })
-    await shot('07-geheimnis-anfrage')
-  })
 })

@@ -86,6 +86,41 @@ it('keeps the rights, runs and systems of local-only Pods out of the published v
   expect(view.kpis).toMatchObject({ active: 5, decisions: [expect.objectContaining({ count: 17 }), expect.objectContaining({ count: 4 })] })
 })
 
+it('counts the failed runs of the window per Pod and lists pending IdP grants that no waiting run shows', () => {
+  const f = mapFixture()
+  const monitor = f.store.listPods().find(pod => pod.name === 'IURIO Task monitor')!.id
+  const pr = f.store.listPods().find(pod => pod.name === 'IURIO PR monitor')!.id
+  const sync = f.pods['Mail-Synchronisierung']!
+  const run = (podId: string, state: string, at: number) => f.store.db.prepare('INSERT INTO runs VALUES(?,?,?,?,?,?,\'Run failed\',\'Invalid program arguments\',0,1)').run(crypto.randomUUID(), podId, 'a'.repeat(64), state, at, at + 1000)
+  for (const state of ['failed', 'interrupted', 'blocked', 'cancelled', 'completedWithGaps']) run(monitor, state, NOW - 2 * 3600000)
+  run(monitor, 'failed', NOW - 25 * 3600000)
+  run(sync, 'failed', NOW - 3600000)
+  const grant = (id: string, podId: string, state: string, display: string) => f.store.db.prepare('INSERT INTO pod_grants VALUES(?,?,\'https://id.openape.ai\',\'pod@id.openape.ai\',\'pods-push\',\'[]\',?,\'always\',?,0,?,?)').run(id, podId, display, state, NOW, NOW)
+  grant('grant-push', monitor, 'pending', 'Send push messages')
+  grant('grant-old', monitor, 'approved', 'Read tasks')
+  // The run of the PR monitor already waits for this grant; it appears once, as the run's approval.
+  grant('grant-pr-monitor', pr, 'pending', 'Execution permission for IURIO PR monitor')
+  grant('grant-sync', sync, 'pending', 'Read the mailbox')
+  // An approval still being collected is not yet at the IdP and waits for nobody.
+  f.store.db.prepare('INSERT INTO action_approvals(id,pod_id,action,object,payload,payload_hash,title,authority,batch_id,state,created_at,updated_at) VALUES(?,?,\'mail.archive\',\'x\',\'{}\',?,\'Collecting\',\'{}\',NULL,\'collecting\',?,?)').run(crypto.randomUUID(), monitor, 'b'.repeat(64), NOW, NOW)
+
+  const view = parseMapView(mapView(f.store, NOW))
+  const pod = (id: string) => view.pods.find(item => item.id === id)!
+  // Failed, interrupted and blocked runs of the last 24 hours count; cancelled runs, gaps and older failures do not.
+  expect(pod(monitor)).toMatchObject({ failures: 3, lastRun: { state: 'completed' }, grants: [{ grantId: 'grant-push', title: 'Send push messages', url: 'https://id.openape.ai/grant-approval?grant_id=grant-push' }] })
+  expect(pod(pr)).toMatchObject({ failures: 0, grants: [], approvals: [{ grantId: 'grant-pr-monitor' }] })
+  expect(pod(sync)).toMatchObject({ failures: 1, grants: [{ grantId: 'grant-sync' }] })
+  expect(view.kpis.decisions.filter(item => item.kind === 'approval')).toEqual([{ podId: f.pods['Newsletter-Prüfung'], kind: 'approval', title: 'Newsletter-Prüfung', count: 4 }])
+  // Local-only Pods keep their runs and grants on this Mac.
+  const published = parseMapView(mapView(f.store, NOW, true))
+  expect(published.pods.find(item => item.id === sync)).toMatchObject({ failures: 0, grants: [] })
+  expect(published.pods.find(item => item.id === monitor)).toMatchObject({ failures: 3, grants: [{ grantId: 'grant-push' }] })
+  expect(() => parseMapView({ ...view, edges: [], pods: [{ ...pod(monitor), grants: [{ grantId: 'grant-push', title: 'Push', url: 'javascript:alert(1)' }] }] })).toThrow('Invalid map grant')
+  // A publisher before this change omits both fields; the parser still accepts its view.
+  const { grants: _grants, failures: _failures, ...older } = pod(monitor)
+  expect(parseMapView({ ...view, edges: [], pods: [older] }).pods[0]).not.toHaveProperty('failures')
+})
+
 it('reads the map through the workspace query without a Pod and keeps the other views unchanged', () => {
   const runtimeId = '00000000-0000-4000-8000-000000000138'
   expect(parseWorkspaceAction({ action: 'workspace', query: { type: 'read', runtimeId, view: 'map' } })).toEqual({ type: 'read', runtimeId, view: 'map' })
