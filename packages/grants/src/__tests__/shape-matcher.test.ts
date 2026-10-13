@@ -67,6 +67,58 @@ describe('matchArgvToOperation', () => {
   })
 })
 
+describe('declared value options', () => {
+  const mergeBase: ShapeMatchOperation = { id: 'merge-base', command: ['merge-base'], positionals: ['commit', 'other'], display: '{commit} {other}', action: 'read', risk: 'low', resource_chain: ['repo:*'] }
+
+  it('keeps the legacy rule without value_options: an undeclared long option swallows the next token', () => {
+    expect(matchArgvToOperation([mergeBase], ['merge-base', '--is-ancestor', 'A', 'B'])).toBeNull()
+    expect(matchArgvToOperation([{ ...mergeBase, positionals: ['other'] }], ['merge-base', '--is-ancestor', 'A', 'B'])?.bindings)
+      .toEqual({ 'is-ancestor': 'A', 'other': 'B' })
+  })
+
+  it('treats undeclared options as flags once value_options is declared', () => {
+    const match = matchArgvToOperation([{ ...mergeBase, value_options: [] }], ['merge-base', '--is-ancestor', 'A', 'B'])
+    expect(match?.bindings).toEqual({ 'is-ancestor': 'true', 'commit': 'A', 'other': 'B' })
+  })
+
+  it('binds values for value_options and required_options only', () => {
+    const operation: ShapeMatchOperation = { ...mergeBase, value_options: ['onto'], required_options: ['m'] }
+    expect(matchArgvToOperation([operation], ['merge-base', '--onto', 'X', '-m', 'msg', '--quiet', 'A', 'B'])?.bindings)
+      .toEqual({ onto: 'X', m: 'msg', quiet: 'true', commit: 'A', other: 'B' })
+    expect(matchArgvToOperation([operation], ['merge-base', '--onto=X', '-m', 'msg', 'A', 'B'])?.bindings.onto).toBe('X')
+  })
+})
+
+describe('global options', () => {
+  const status: ShapeMatchOperation = { id: 'status', command: ['status'], global_options: ['C=repo'], display: 'Status', action: 'read', risk: 'low', resource_chain: ['repo:path={repo}'] }
+
+  it('consumes declared global options before the command prefix and binds them', () => {
+    const match = matchArgvToOperation([status], ['-C', '/work/repo', 'status'])
+    expect(match?.bindings).toEqual({ repo: '/work/repo' })
+    expect(buildCliAuthDetail('git', match!.operation, match!.bindings).permission).toBe('git.repo[path=/work/repo]#read')
+  })
+
+  it('keeps matching without the global option', () => {
+    expect(matchArgvToOperation([status], ['status'])?.operation.id).toBe('status')
+  })
+
+  it('rejects undeclared leading options and a global option without value', () => {
+    expect(matchArgvToOperation([status], ['-c', 'core.sshCommand=x', 'status'])).toBeNull()
+    expect(matchArgvToOperation([status], ['-C', '--', 'status'])).toBeNull()
+    expect(matchArgvToOperation([status], ['-C'])).toBeNull()
+  })
+
+  it('never lets an operation option or positional replace a global binding', () => {
+    expect(matchArgvToOperation([{ ...status, positionals: ['repo'] }], ['-C', '/secret', 'status', '/allowed'])).toBeNull()
+    expect(matchArgvToOperation([status], ['-C', '/secret', 'status', '--repo', '/allowed'])).toBeNull()
+  })
+
+  it('uses the option name as binding when no binding is given', () => {
+    expect(matchArgvToOperation([{ ...status, global_options: ['git-dir'] }], ['--git-dir=/x/.git', 'status'])?.bindings)
+      .toEqual({ 'git-dir': '/x/.git' })
+  })
+})
+
 describe('buildCliAuthDetail', () => {
   it('builds a detail with rendered display, resource chain, and a canonical permission', () => {
     const m = matchArgvToOperation(ops, ['repo', 'list', 'openape'])!

@@ -11,6 +11,17 @@ export interface ShapeMatchOperation {
   command: string[]
   positionals?: string[]
   required_options?: string[]
+  /**
+   * Options that take a value. When present (even empty), only these and
+   * `required_options` bind the following token; all other options are flags.
+   */
+  value_options?: string[]
+  /**
+   * Adapter-wide options accepted before the command prefix, as `name` or
+   * `name=binding` (e.g. `C=repo` for git `-C <path>`). Each takes a value.
+   * Adapter parsers copy `[cli] global_options` onto every operation.
+   */
+  global_options?: string[]
   display: string
   action: string
   risk: ScopeRiskLevel
@@ -18,52 +29,100 @@ export interface ShapeMatchOperation {
   exact_command?: boolean
 }
 
+function optionName(token: string): string | null {
+  if (token.startsWith('--')) return token.slice(2)
+  if (token.startsWith('-') && token.length > 1 && !/^-\d/.test(token)) return token.slice(1)
+  return null
+}
+
+function splitInlineValue(token: string, name: string): { key: string, value?: string } {
+  const eqIndex = token.startsWith('--') ? name.indexOf('=') : -1
+  if (eqIndex < 0) return { key: name }
+  return { key: name.slice(0, eqIndex), value: name.slice(eqIndex + 1) }
+}
+
+/**
+ * Splits option tokens from positionals.
+ *
+ * Operations without `value_options` keep the original rule, so permissions
+ * derived for existing adapters stay identical: `--name` and multi-letter
+ * `-name` consume the next non-dash token, single-letter `-x` only when listed
+ * in `required_options`.
+ *
+ * Operations that declare `value_options` (even an empty list) bind a value
+ * only for declared options (`value_options` plus `required_options`). Every
+ * other option is a flag, so `merge-base --is-ancestor A B` keeps `A` and `B`
+ * as positionals.
+ */
 function parseOptionArgs(
   tokens: string[],
-  valueOptions?: string[],
+  operation: Pick<ShapeMatchOperation, 'required_options' | 'value_options'>,
 ): { options: Record<string, string>, positionals: string[] } {
   const options: Record<string, string> = {}
   const positionals: string[] = []
-  const takesValue = new Set(valueOptions ?? [])
+  const declaredOnly = operation.value_options !== undefined
+  const takesValue = new Set([...(operation.required_options ?? []), ...(operation.value_options ?? [])])
 
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]!
-    if (token.startsWith('--')) {
-      const stripped = token.slice(2)
-      const eqIndex = stripped.indexOf('=')
-      if (eqIndex >= 0) {
-        options[stripped.slice(0, eqIndex)] = stripped.slice(eqIndex + 1)
-        continue
-      }
-      const next = tokens[index + 1]
-      if (next && !next.startsWith('-')) {
-        options[stripped] = next
-        index += 1
-        continue
-      }
-      options[stripped] = 'true'
-    }
-    else if (token.startsWith('-') && token.length > 1 && !/^-\d/.test(token)) {
-      const key = token.slice(1)
-      if (key.length === 1 && !takesValue.has(key)) {
-        options[key] = 'true'
-      }
-      else {
-        const next = tokens[index + 1]
-        if (next && !next.startsWith('-')) {
-          options[key] = next
-          index += 1
-        }
-        else {
-          options[key] = 'true'
-        }
-      }
-    }
-    else {
+    const name = optionName(token)
+    if (name === null) {
       positionals.push(token)
+      continue
     }
+    const { key, value } = splitInlineValue(token, name)
+    if (value !== undefined) {
+      options[key] = value
+      continue
+    }
+    const shortOption = !token.startsWith('--') && key.length === 1
+    const consumes = declaredOnly || shortOption ? takesValue.has(key) : true
+    const next = tokens[index + 1]
+    if (consumes && next && !next.startsWith('-')) {
+      options[key] = next
+      index += 1
+      continue
+    }
+    options[key] = 'true'
   }
   return { options, positionals }
+}
+
+/**
+ * Consumes leading global options (declared adapter-wide, e.g. git
+ * `-C <path>`) before the command prefix. Entries are `name` or
+ * `name=binding`; every global option takes a value. Stops at the first token
+ * that is not a declared global option. Returns null when a declared global
+ * option lacks its value.
+ */
+function parseGlobalOptions(
+  argv: string[],
+  globalOptions: string[],
+): { bindings: Record<string, string>, rest: string[] } | null {
+  const bindingFor = new Map(globalOptions.map((entry) => {
+    const [name, binding] = entry.split('=', 2)
+    return [name!, binding || name!]
+  }))
+  const bindings: Record<string, string> = {}
+  let index = 0
+  while (index < argv.length) {
+    const token = argv[index]!
+    const name = optionName(token)
+    if (name === null) break
+    const { key, value } = splitInlineValue(token, name)
+    const binding = bindingFor.get(key)
+    if (!binding) break
+    if (value !== undefined) {
+      bindings[binding] = value
+      index += 1
+      continue
+    }
+    const next = argv[index + 1]
+    if (!next || next.startsWith('-')) return null
+    bindings[binding] = next
+    index += 2
+  }
+  return { bindings, rest: argv.slice(index) }
 }
 
 function resolveBindingToken(binding: string, bindings: Record<string, string>): string {
@@ -105,11 +164,16 @@ function matchOperation(
   operation: ShapeMatchOperation,
   argv: string[],
 ): Record<string, string> | null {
-  if (argv.length < operation.command.length) return null
-  const prefix = argv.slice(0, operation.command.length)
+  const global = operation.global_options?.length
+    ? parseGlobalOptions(argv, operation.global_options)
+    : { bindings: {}, rest: argv }
+  if (!global) return null
+  const commandArgv = global.rest
+  if (commandArgv.length < operation.command.length) return null
+  const prefix = commandArgv.slice(0, operation.command.length)
   if (prefix.join('\0') !== operation.command.join('\0')) return null
-  const remainder = argv.slice(operation.command.length)
-  const { options, positionals } = parseOptionArgs(remainder, operation.required_options)
+  const remainder = commandArgv.slice(operation.command.length)
+  const { options, positionals } = parseOptionArgs(remainder, operation)
   const expectedPositionals = operation.positionals ?? []
   if (positionals.length !== expectedPositionals.length) return null
   for (const option of operation.required_options ?? []) {
@@ -123,6 +187,12 @@ function matchOperation(
       if (value !== name.slice(1)) return null
       continue
     }
+    bindings[name] = value
+  }
+  // A global binding (e.g. the repository of `git -C`) must never be replaced
+  // by an operation option or positional of the same name.
+  for (const [name, value] of Object.entries(global.bindings)) {
+    if (name in bindings) return null
     bindings[name] = value
   }
   return bindings

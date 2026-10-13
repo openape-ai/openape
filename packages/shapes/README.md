@@ -66,6 +66,30 @@ console.log(resolved.permission)
 
 The resolved result includes the matched adapter, the parsed bindings, the authorization detail, the execution context, and the canonical permission string.
 
+### Option values and global options
+
+By default an operation keeps the original rule: `--name value` and multi-letter `-name value` bind the following token as the option value, and single-letter `-x` takes a value only when listed in `required_options`. An operation that declares `value_options` (even an empty list) binds values only for the options listed there and in `required_options`; every other option is a flag. Declare it so flags such as `--is-ancestor` do not swallow positionals:
+
+```toml
+[cli]
+id = "git"
+executable = "git"
+# git -C <path> … before the subcommand, bound as {repo}
+global_options = ["C=repo"]
+
+[[operation]]
+id = "git.merge-base"
+command = ["merge-base"]
+positionals = ["commit", "other"]
+value_options = []
+display = "Find the merge base of {commit} and {other}"
+action = "read"
+risk = "low"
+resource_chain = ["repo:*"]
+```
+
+`global_options` entries are `name` or `name=binding`. They always take a value, are accepted only before the command prefix and apply to every operation; any other leading option prevents a match. An operation option or positional with the same binding name as a global option prevents a match, so a global binding is never replaced.
+
 ## Resolve capability requests
 
 Use `resolveCapabilityRequest` when you want to request permissions by resource chain and action instead of by a full command line.

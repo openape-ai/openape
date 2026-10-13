@@ -22,6 +22,17 @@ export interface ShapesOperation {
    */
   positionals?: string[]
   required_options?: string[]
+  /**
+   * Options that take a value. When present (even empty), only these and
+   * `required_options` consume the following argv token; every other option
+   * is a flag. Without it the legacy rule applies (`--name value` binds).
+   */
+  value_options?: string[]
+  /**
+   * Copied from `[cli] global_options`: options such as git `-C <path>`
+   * accepted before the command prefix, as `name` or `name=binding`.
+   */
+  global_options?: string[]
   display: string
   action: string
   risk: ScopeRiskLevel
