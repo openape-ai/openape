@@ -58,7 +58,8 @@ function store(key: string, value: string) {
   catch {}
 }
 const untaggedOff = ref(stored(untaggedKey) === '1')
-const mode = ref<'map' | 'list'>(stored(modeKey) === 'list' ? 'list' : 'map')
+// Rows answer what each Pod does and how it is doing; the map shows connections and stays one click away.
+const mode = ref<'map' | 'list'>(stored(modeKey) === 'map' ? 'map' : 'list')
 watch(mode, value => store(modeKey, value))
 const counts = computed(() => props.view ? tagCounts(props.view) : new Map<string, number>())
 const tags = computed(() => props.view ? [...allTags(props.view), ...counts.value.has(untagged) ? [untagged] : []] : [])
@@ -131,7 +132,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
                 </button>
               </div>
             </details>
-            <button class="secondary" type="button" :title="t(playing ? 'Pause animation' : 'Resume animation')" @click="playing = !playing">
+            <button v-if="mode === 'map'" class="secondary" type="button" :title="t(playing ? 'Pause animation' : 'Resume animation')" @click="playing = !playing">
               {{ playing ? '❚❚' : '▶' }}
             </button>
             <button class="secondary idp" type="button" @click="openCodex">

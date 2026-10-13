@@ -50,6 +50,9 @@ describe('Automatisierungen', () => {
     applyLanguage('de')
     await mountShell()
     expect(wrapper!.find('[aria-label="Ansicht"]').findAll('button').map(item => item.text())).toEqual(['Karte', 'Liste'])
+    // Rows are the default; the map is one click away.
+    expect(wrapper!.find('.automations-list').exists()).toBe(true)
+    await button('Karte').trigger('click')
     expect(wrapper!.find('[aria-label="Gruppe"]').exists()).toBe(false)
     // Without any tag in the workspace there is no tag bar and everything stays visible.
     expect(wrapper!.find('[aria-label="Tags"]').exists()).toBe(false)
@@ -74,18 +77,19 @@ describe('Automatisierungen', () => {
     expect(wrapper!.emitted('codex')!.at(-1)).toEqual([monitor, 'iurio'])
   })
 
-  it('lists the same Pods as a table with group, kind, cadence, reads, writes, shared data and last run', async () => {
+  it('lists every Pod with purpose, state, last result, next run and what it waits for', async () => {
     applyLanguage('de')
     await mountShell()
-    await button('Liste').trigger('click')
     const rows = wrapper!.findAll('tbody tr')
     expect(rows).toHaveLength(view.pods.filter(pod => pod.lifecycle !== 'archived').length)
-    expect(rows).toHaveLength(29)
-    expect(wrapper!.findAll('thead th').map(item => item.text())).toEqual(['Pod', 'Gruppe', 'Art', 'Läuft', 'Liest', 'Schreibt', 'Gemeinsame Daten', 'Zuletzt'])
-    const cells = (name: string) => rows.find(row => row.find('b').text() === name)!.findAll('td').map(cell => cell.findAll('div').length > 1 ? cell.findAll('div').map(item => item.text()).join(' ') : cell.text().replace(/\s+/g, ' '))
-    expect(cells('Rechnungsprüfung')).toEqual(['Rechnungsprüfung', 'Delta Mind', 'Regeln', 'bei gemeinsamen Daten', '–', '–', '← delta-mind/mail/classifications', '–'])
-    expect(cells('zaz Service-Agent')).toEqual(['zaz Service-Agent', 'ohne Gruppe', 'Regeln', 'alle 1 min', 'zaz.delta-mind.at', 'zaz.delta-mind.at', '–', 'vor 11 min · abgeschlossen'])
-    expect(cells('IURIO · Mail-Synchronisierung')).toEqual(['IURIO · Mail-Synchronisierung', 'iurio', 'Regeln', '–', 'patrick@docpit.eu', 'patrick@docpit.eu', '–', 'pausiert'])
+    expect(wrapper!.findAll('thead th').map(item => item.text())).toEqual(['Pod', 'Zustand', 'Letztes Ergebnis', 'Nächster Lauf', 'Wartet auf'])
+    const cells = (name: string) => rows.find(row => row.find('b').text() === name)!.findAll('td').slice(1).map(cell => cell.text().replace(/\s+/g, ' ').trim())
+    // The fixture has no descriptions; a missing purpose is named, not left blank.
+    expect(rows.every(row => row.find('.automations-list-purpose').text() === 'Zweck fehlt')).toBe(true)
+    expect(cells('Rechnungsprüfung')).toEqual(['OK', 'noch kein Lauf', 'bei neuen gemeinsamen Daten', '–'])
+    expect(cells('zaz Service-Agent')).toEqual(['OK', 'vor 11 min · zaz queue empty; no model call', 'alle 1 min', '–'])
+    expect(cells('IURIO · Mail-Synchronisierung')).toEqual(['pausiert', 'noch kein Lauf', 'pausiert', '–'])
+    expect(cells('IURIO PR monitor')).toEqual(['Fehler', 'läuft gerade', 'alle 15 min', 'deine Freigabe am IdP'])
     await rows.find(row => row.text().includes('Linde · Server report'))!.trigger('click')
     expect(wrapper!.find('.automation-detail .dhead b').text()).toBe('Linde · Server report')
   })
@@ -93,6 +97,7 @@ describe('Automatisierungen', () => {
   it('describes a pinned node in the info panel and opens its details', async () => {
     applyLanguage('de')
     await mountShell()
+    await button('Karte').trigger('click')
     expect(wrapper!.find('.automation-info').text()).toBe('Knoten anklicken. Doppelklick oder „Details öffnen“ zeigt die Detailseite.')
     const shell = wrapper!.vm as unknown as { pin: (id: string | null) => void }
     shell.pin(pod('Mail-Klassifizierung').id); await flushPromises()

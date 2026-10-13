@@ -33,13 +33,13 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
   const runTotals = counter(db.prepare('SELECT pod_id,count(*) AS count FROM runs GROUP BY pod_id').all(), 'pod_id')
   const writesInWindow = counter(db.prepare('SELECT e.pod_id,count(*) AS count FROM effect_ledger e JOIN runs r ON r.id=e.run_id WHERE r.started_at>=? GROUP BY e.pod_id').all(from), 'pod_id')
   // Ascending order lets the most recently started run win for each Pod.
-  const lastRuns = new Map(db.prepare('SELECT pod_id,state,started_at,finished_at,summary FROM runs ORDER BY started_at,rowid').all().map(row => [row.pod_id as string, run(row)]))
+  const lastRuns = new Map(db.prepare('SELECT pod_id,state,started_at,finished_at,summary,error FROM runs ORDER BY started_at,rowid').all().map(row => [row.pod_id as string, run(row)]))
   // A Pod that is running again is still degraded while its last settled run failed or left gaps.
   const settled = new Map(db.prepare('SELECT pod_id,state FROM runs WHERE finished_at IS NOT NULL ORDER BY started_at,rowid').all().map(row => [row.pod_id as string, String(row.state)]))
   const unknownEffects = db.prepare('SELECT pod_id,effect_key,run_id FROM effect_ledger WHERE operation IN (\'http.request\',\'program.call\') AND state=\'unknown\'').all()
   const blocked = db.prepare('SELECT pod_id,count(*) AS count,min(error) AS error FROM accepted_events WHERE state=\'blocked\' GROUP BY pod_id').all()
   const approvals = db.prepare('SELECT r.pod_id,e.run_id,e.data FROM run_events e JOIN runs r ON r.id=e.run_id WHERE r.state=\'running\' AND e.type=\'approval\' AND e.sequence=(SELECT max(newer.sequence) FROM run_events newer WHERE newer.run_id=e.run_id AND newer.type=\'approval\' AND json_extract(newer.data,\'$.grantId\')=json_extract(e.data,\'$.grantId\')) AND json_extract(e.data,\'$.state\')=\'pending\' ORDER BY e.at').all()
-  const schedules = new Map(db.prepare('SELECT pod_id,spec,enabled FROM schedules').all().map(row => [row.pod_id as string, { spec: JSON.parse(row.spec as string), enabled: row.enabled === 1 } satisfies MapSchedule]))
+  const schedules = new Map(db.prepare('SELECT pod_id,spec,enabled,next_at FROM schedules').all().map(row => [row.pod_id as string, { spec: JSON.parse(row.spec as string), enabled: row.enabled === 1, nextAt: row.next_at === null ? null : Number(row.next_at) } satisfies MapSchedule]))
   const manifests = new Map(db.prepare('SELECT p.id,s.manifest FROM pods p JOIN scripts s ON s.pod_id=p.id AND s.hash=p.active_script').all().map(row => [row.id as string, parseManifest(JSON.parse(row.manifest as string))]))
 
   const systems = new Map<string, MapSystem & { methods?: Set<string> }>()
@@ -141,7 +141,7 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
 }
 
 function run(row: Row): MapRun {
-  return { at: Number(row.finished_at ?? row.started_at), state: String(row.state), summary: String(row.summary ?? '') }
+  return { at: Number(row.finished_at ?? row.started_at), state: String(row.state), summary: String(row.summary ?? ''), error: row.error === null || row.error === undefined ? null : String(row.error) }
 }
 
 /** The same origin, program and account, folder or host used by several Pods is one node. */
