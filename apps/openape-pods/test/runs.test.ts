@@ -1,7 +1,8 @@
+import { readFileSync } from 'node:fs'
 import { flushPromises, mount } from '@vue/test-utils'
 import { describe, expect, it, vi } from 'vitest'
 import PodRuns from '../src/renderer/PodRuns.vue'
-import { parseRunCommand, parseRunView } from '../src/contracts/runs'
+import { parseFrame, parseRunCommand, parseRunView } from '../src/contracts/runs'
 
 const podId = '00000000-0000-4000-8000-000000000001'
 describe('manual runs view', () => {
@@ -75,4 +76,12 @@ it('summarizes repeated work without approval noise and explains the Codex stora
   expect(failure?.action).toBeUndefined()
   expect(runFailure('Permission revoked')?.action).toBe('permissions')
   expect(runFailure('OpenApe rejected this Pod identity')?.action).toBe('identity')
+})
+
+describe('script frames', () => {
+  it('accepts every request the script context can send', () => {
+    const operations = [...new Set(Array.from(readFileSync('src/worker/runs/script-context.ts', 'utf8').matchAll(/request\('([\w.]+)'/g), match => match[1]!))]
+    expect(operations).toContain('decisions.withdraw')
+    for (const operation of operations) expect(() => parseFrame({ version: 1, runId: 'r', sequence: 1, type: 'request', id: 'a', operation, payload: {} }, 'r', 1), operation).not.toThrow()
+  })
 })
