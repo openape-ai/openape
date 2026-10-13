@@ -34,6 +34,12 @@ vi.mock('../../src/worker/master/control', async (importOriginal) => {
   } }
 })
 
+const backupGate = vi.hoisted(() => ({ started: false, hold: Promise.resolve() }))
+vi.mock('../../src/worker/data/automatic-backup', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../src/worker/data/automatic-backup')>()
+  return { ...original, runAutomaticBackup: async (...args: Parameters<typeof original.runAutomaticBackup>) => { backupGate.started = true; await backupGate.hold; return original.runAutomaticBackup(...args) } }
+})
+
 // Loads the real worker process entry (src/worker/entry.ts) with Electron's
 // parentPort replaced by an in-memory port and the scheduler interval driven by
 // fake timers. Formerly the packaged `crash-recovery` suspend case: a suspend
@@ -233,4 +239,25 @@ it('routes validated portable import commands through the real worker only after
     expect(store.listPods().slice(before)).toMatchObject([{ name: 'Imported through entry', lifecycle: 'paused', activeScript: null }])
   }
   finally { store.db.exec('DELETE FROM remote_registration'); store.close() }
+})
+
+it('lets owner commands wait for a running automatic backup instead of refusing them', async () => {
+  const backups = await realpath(await mkdtemp(join(tmpdir(), 'pods-worker-entry-backups-')))
+  let release = () => {}
+  backupGate.hold = new Promise<void>((resolve) => { release = resolve })
+  vi.stubEnv('PODS_BACKUP_DIRECTORY', backups)
+  try {
+    await send('resume')
+    // An earlier case closed the central scheduler gate; automatic work runs only while it is open.
+    await send({ id: 'gate-open', command: { central: { type: 'gate', until: Date.now() + 30000 } } })
+    // The worker skips intervals while an earlier tick still runs.
+    for (let attempt = 0; attempt < 10 && !backupGate.started; attempt++) await tick()
+    expect(backupGate.started).toBe(true)
+    const waiting = send({ id: 'during-backup', command: { type: 'list' } })
+    await new Promise(resolve => setTimeout(resolve, 100))
+    expect(replies).not.toHaveBeenCalledWith(expect.objectContaining({ id: 'during-backup' }))
+    release(); await waiting
+    expect(replies).toHaveBeenCalledWith({ id: 'during-backup', state: expect.objectContaining({ pods: expect.any(Array) }) })
+  }
+  finally { release(); vi.unstubAllEnvs(); vi.stubEnv('PODS_RUNTIME_EXECUTABLE', process.execPath); await rm(backups, { recursive: true, force: true }) }
 })

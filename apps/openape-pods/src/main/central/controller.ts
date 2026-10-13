@@ -7,7 +7,7 @@ import type { CentralClient, CentralCommand, CentralOperation, CentralSnapshot, 
 import { centralHeartbeatMs, parseCentralSnapshot } from '../../contracts/central'
 import { encodeParts, manifestDigest, splitSnapshot } from '../../contracts/central-parts'
 import type { CentralManifest } from '../../contracts/central-parts'
-import { durableJSON, syncDirectory } from '../../worker/data/files'
+import { durableJSON, syncPath } from '../../worker/data/files'
 import type { ArtifactCache } from './artifacts'
 import { managedArtifacts } from './artifacts'
 
@@ -118,7 +118,7 @@ export class CentralController {
     try {
       await durableJSON(staging, value)
       await rename(staging, join(directory, name))
-      await syncDirectory(directory)
+      await syncPath(directory)
     }
     finally { await rm(staging, { force: true }) }
   }

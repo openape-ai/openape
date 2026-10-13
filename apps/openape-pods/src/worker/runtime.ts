@@ -147,6 +147,8 @@ let storageAt = 0
 let backupCheckAt = 0
 let updateFrozen = false
 let maintenance = false
+// Owner commands wait for the short automatic backup instead of failing; nobody asked for it, so nobody should see it.
+let automaticBackup: Promise<void> | null = null
 let sharing: SharingService | null = null
 let preparing: Promise<unknown> | null = null
 let suspended = false
@@ -196,11 +198,14 @@ const timer = setInterval(() => {
       const backups = process.env.PODS_BACKUP_DIRECTORY
       if (backups && Date.now() >= backupCheckAt) {
         backupCheckAt = Date.now() + 60000
-        if (await automaticBackupDue(store.root)) {
+        // A data operation that started during this tick keeps its fence; the backup waits for the next check.
+        if (await automaticBackupDue(store.root) && !maintenance) {
           maintenance = true
-          try { await tickStep('automatic backup', 600000, () => runAutomaticBackup(store, backups)) }
+          const backup = tickStep('automatic backup', 600000, () => runAutomaticBackup(store, backups))
+          automaticBackup = backup.then(() => undefined, () => undefined)
+          try { await backup }
           catch (error) { console.error('Automatic backup failed; the previous verified generation is kept', error) }
-          finally { maintenance = false }
+          finally { maintenance = false; automaticBackup = null }
         }
       }
       const error = store.db.prepare('SELECT error FROM data_settings WHERE id=1').get()?.error
@@ -240,6 +245,7 @@ port.on('message', async (event) => {
       if (command.type !== 'snapshot') throw new Error('Unsupported central worker command')
       port.postMessage({ id: request.id, state: new CentralProjection(store, registry, scripts, dispatcher, scheduler).snapshot(parseOwner(command.owner)) }); return
     }
+    await automaticBackup
     if (request.command && typeof request.command === 'object' && 'data' in request.command) {
       const command = request.command.data as DataInternal
       if (command.type === 'releaseUpdate') { if (updateFrozen) { updateFrozen = false; maintenance = false }; port.postMessage({ id: request.id, state: true }); return }
@@ -257,6 +263,8 @@ port.on('message', async (event) => {
         finally { if (!updateFrozen) maintenance = false }
         return
       }
+      // Listing pending deletions only reads; main asks at every start, which must not fence other commands.
+      if (command.type === 'jobs') { port.postMessage({ id: request.id, state: await data.execute(command) }); return }
       if (maintenance && command.type !== 'status') throw new Error('Another data operation is in progress')
       if (command.type === 'status') { const view = await data.execute(command) as import('../contracts/data').DataView; port.postMessage({ id: request.id, state: { ...view, busy: view.busy || maintenance } }); return }
       maintenance = true

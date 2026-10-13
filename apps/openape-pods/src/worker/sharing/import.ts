@@ -8,7 +8,7 @@ import type { PackageManifest } from '../../contracts/dependencies'
 import type { PortableImportCommand, PortableImportRequirement, PortableImportState, PortableImportValues, PortableImportView, PortableValue } from '../../contracts/sharing'
 import type { PodResource } from '../../contracts/resources'
 import { podDirectories } from '../../runtime/environment'
-import { syncDirectory, syncTree } from '../data/files'
+import { syncPath, syncTree } from '../data/files'
 import { DependencyStore } from '../dependencies/store'
 import type { ResourceRegistry } from '../resources/registry'
 import { PodVariables } from '../resources/variables'
@@ -249,7 +249,7 @@ export class PortableImporter {
         }
         await syncTree(join(this.store.root, 'pods', ids.get(pod.key)!))
       }
-      await syncDirectory(join(this.store.root, 'pods'))
+      await syncPath(join(this.store.root, 'pods'))
       observe('staged')
       this.store.transaction(() => {
         this.required(id, expectedRevision)
