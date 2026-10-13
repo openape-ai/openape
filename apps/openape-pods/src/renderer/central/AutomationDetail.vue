@@ -144,7 +144,7 @@ function runNow() {
         {{ t('For developers') }}
       </div><div class="opts">
         <button class="secondary" type="button" @click="emit('editor', pod.id)">
-          {{ t('Open details') }}
+          {{ t('Open page') }}
         </button><button class="secondary" type="button" :disabled="!desktop" :title="desktop ? undefined : t('Only on the desktop')" @click="emit('folder', pod.id)">
           {{ t('Open in editor') }}
         </button><button v-if="sharing" class="secondary" type="button" @click="emit('share', { kind: 'pod', id: pod.id })">

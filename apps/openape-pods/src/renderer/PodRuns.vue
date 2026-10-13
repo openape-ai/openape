@@ -13,7 +13,7 @@ export default defineComponent({
   emits: ['selected', 'navigate'],
   setup() { return { access: usePodAccess() } },
   data() {
-    return { now: Date.now(), pods: [] as StoredPod[], podId: '', runId: '', observations: {} as Record<string, string>, view: { runs: [], events: [] } as RunView, busy: false, error: '', scheduleError: '', pending: 0, blocked: 0, timer: null as ReturnType<typeof setTimeout> | null, closed: false }
+    return { now: Date.now(), pods: [] as StoredPod[], podId: '', runId: '', observations: {} as Record<string, string>, view: { runs: [], events: [] } as RunView, busy: false, error: '', scheduleError: '', pending: 0, blocked: 0, timer: null as ReturnType<typeof setTimeout> | null, closed: false, loaded: false }
   },
   computed: {
     selectedRun() { return this.view.runs.find(run => run.id === this.runId) ?? this.view.runs[0] },
@@ -29,6 +29,7 @@ export default defineComponent({
   async mounted() {
     try { this.pods = (await this.access.api.workspace({ type: 'list' })).pods; this.runId = this.selectedRunId; this.podId = this.selectedPodId || this.pods[0]?.id || ''; if (this.podId) await this.load() }
     catch (error) { this.error = error instanceof Error ? error.message : 'Could not load runs' }
+    this.loaded = true
     this.scheduleRefresh()
   },
   beforeUnmount() { this.closed = true; if (this.timer) clearTimeout(this.timer) },
@@ -67,7 +68,10 @@ export default defineComponent({
         {{ t('Run now') }}
       </button>
     </div>
-    <p v-if="!pods.length" class="muted">
+    <p v-if="!loaded" class="muted" role="status">
+      {{ t('Loading…') }}
+    </p>
+    <p v-else-if="!pods.length" class="muted">
       {{ t('Create a pod in Settings to run its first script.') }}
     </p>
     <template v-else>
@@ -82,6 +86,9 @@ export default defineComponent({
         </p>
         <div :class="failure || needsRecovery ? 'run-problem' : 'run-outcome'" role="status">
           <h3>{{ diagnostic(runHeadline(selectedRun)) }}</h3>
+          <p v-if="failure && selectedRun.error" class="run-cause">
+            <strong>{{ t('Cause') }}:</strong> {{ diagnostic(selectedRun.error) }}
+          </p>
           <p v-if="failure && (!selectedRun.automaticRecovery || selectedRun.automaticRecovery.disposition === 'hold')">
             {{ diagnostic(failure.help) }}
           </p>

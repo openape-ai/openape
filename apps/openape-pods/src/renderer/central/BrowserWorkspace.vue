@@ -10,7 +10,7 @@ import AccountStatus from '../AccountStatus.vue'
 import CentralWorkspace from './CentralWorkspace.vue'
 import AutomationsShell from './AutomationsShell.vue'
 import { kpiFacts } from '../utils/kpis'
-import { t, diagnostic } from '../i18n'
+import { t, diagnostic, time } from '../i18n'
 
 /**
  * The browser renders the same shell from the published snapshot of the selected desktop; owner
@@ -69,7 +69,8 @@ defineExpose({ openPod })
       <AccountStatus v-if="subject" :subject="subject" />
     </template>
     <template #status>
-      <span class="muted" role="status">{{ !loaded ? t('Loading workspace…') : runtime?.online ? t('Desktop online') : t('Desktop offline') }}</span>
+      <span v-if="!loaded" class="muted" role="status">{{ t('Loading workspace…') }}</span>
+      <span v-else-if="runtime && !runtime.online" class="connection-notice" role="status">{{ runtime.lastSeenAt ? t('Desktop offline since {time}', { time: time(runtime.lastSeenAt) }) : t('Desktop offline') }}</span>
       <label v-if="runtimes.length > 1" class="runtime-picker">{{ t('Desktop') }}<select v-model="runtimeId"><option v-for="host in runtimes" :key="host.id" :value="host.id">{{ host.id }} · {{ host.online ? t('online') : t('offline') }}</option></select></label>
     </template>
     <p v-if="error" class="error-message" role="alert">

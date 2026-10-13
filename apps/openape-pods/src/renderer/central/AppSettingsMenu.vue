@@ -21,6 +21,9 @@ const codex = ref<'connected' | 'disconnected' | 'foreign' | 'edited' | null>(nu
 const mcp = ref<McpSessionView | null>(null)
 const busy = ref(false)
 const error = ref('')
+// Until the first status arrives, the accounts are unknown, not disconnected.
+const loaded = ref(!native)
+const status = (ready: boolean, yes: string, no: string) => !loaded.value ? t('loading…') : ready ? yes : no
 const grants = 'https://id.openape.ai/grants'
 let closed = false
 async function load() {
@@ -33,6 +36,7 @@ async function load() {
     codex.value = connection.state; mcp.value = access; error.value = ''
   }
   catch (cause) { error.value = cause instanceof Error ? cause.message : String(cause) }
+  loaded.value = true
 }
 async function act(action: () => Promise<void>) {
   busy.value = true; error.value = ''
@@ -59,13 +63,13 @@ defineExpose({ load })
       {{ t('Accounts') }}
     </div>
     <div class="acct" data-account="ddisa">
-      <span>{{ t('DDISA account') }}</span><span class="pill" :class="subject || owner?.state === 'ready' ? 'ok' : 'off'">{{ subject || owner?.state === 'ready' ? t('signed in') : t('not signed in') }}</span><span class="meta">{{ subject || owner?.account || '–' }} · {{ t('decides every right') }}<button v-if="browser" class="secondary small" type="button" @click="emit('logout')">{{ t('Sign out') }}</button></span>
+      <span>{{ t('DDISA account') }}</span><span class="pill" :class="subject || owner?.state === 'ready' ? 'ok' : 'off'">{{ subject ? t('signed in') : status(owner?.state === 'ready', t('signed in'), t('not signed in')) }}</span><span class="meta">{{ subject || owner?.account || '–' }} · {{ t('decides every right') }}<button v-if="browser" class="secondary small" type="button" @click="emit('logout')">{{ t('Sign out') }}</button></span>
     </div>
     <div class="acct" data-account="codex">
-      <span>{{ 'Codex / GPT' }}</span><span class="pill" :class="codex === 'connected' ? 'ok' : 'off'">{{ browser ? t('on the desktop') : codex === 'connected' ? t('connected') : t('not connected') }}</span><span class="meta">{{ t('creates automations, writes scripts') }}</span>
+      <span>{{ 'Codex / GPT' }}</span><span class="pill" :class="codex === 'connected' ? 'ok' : 'off'">{{ browser ? t('on the desktop') : status(codex === 'connected', t('connected'), t('not connected')) }}</span><span class="meta">{{ t('creates automations, writes scripts') }}</span>
     </div>
     <div class="acct" data-account="jev">
-      <span>{{ 'TypeSafe Jev' }}</span><span class="pill" :class="jev?.state === 'ready' ? 'ok' : 'off'">{{ browser ? t('on the desktop') : jev?.state === 'ready' ? t('connected') : t('not connected') }}</span><span class="meta">{{ t('decisions in scripts') }}</span>
+      <span>{{ 'TypeSafe Jev' }}</span><span class="pill" :class="jev?.state === 'ready' ? 'ok' : 'off'">{{ browser ? t('on the desktop') : status(jev?.state === 'ready', t('connected'), t('not connected')) }}</span><span class="meta">{{ t('decisions in scripts') }}</span>
     </div>
     <div class="acct" data-consumer>
       <span>{{ 'OpenApe Secrets' }}</span><span class="pill" :class="consumer ? 'ok' : 'off'">{{ browser ? t('on the desktop') : consumer ? t('this Mac is registered') : t('not registered') }}</span><span class="meta">{{ t('receives sealed secrets, collected once') }}<template v-if="consumer && !browser"> · {{ consumer.id }}<button class="secondary small" type="button" :disabled="busy" @click="emit('revoke')">{{ t('Revoke') }}</button></template></span>
@@ -74,7 +78,7 @@ defineExpose({ load })
       {{ t('Execution') }}
     </div>
     <div class="acct" data-mcp>
-      <span>{{ t('MCP session') }}</span><span class="pill" :class="mcp?.expiresAt ? 'ok' : 'off'">{{ browser ? t('on the desktop') : mcp?.expiresAt ? t('Codex signed in until {time}', { time: time(mcp.expiresAt) }) : t('Codex not signed in') }}</span><span class="meta">{{ t('one hour after your DDISA sign-in and confirmation') }}<button v-if="!browser && (mcp?.expiresAt || mcp?.pending)" class="secondary small" type="button" :disabled="busy" @click="endMcp">{{ t('End session') }}</button></span>
+      <span>{{ t('MCP session') }}</span><span class="pill" :class="mcp?.expiresAt ? 'ok' : 'off'">{{ browser ? t('on the desktop') : status(!!mcp?.expiresAt, mcp?.expiresAt ? t('Codex signed in until {time}', { time: time(mcp.expiresAt) }) : '', t('Codex not signed in')) }}</span><span class="meta">{{ t('one hour after your DDISA sign-in and confirmation') }}<button v-if="!browser && (mcp?.expiresAt || mcp?.pending)" class="secondary small" type="button" :disabled="busy" @click="endMcp">{{ t('End session') }}</button></span>
     </div>
     <p v-if="browser" class="meta">
       {{ t('Manage execution on the desktop.') }}

@@ -5,8 +5,8 @@ import { t, diagnostic } from './i18n'
 
 export default defineComponent({
   props: { compact: Boolean },
-  data() { return { expanded: false, disconnecting: false, key: '', busy: false, error: '', connection: undefined as ConnectionView | undefined } },
-  async mounted() { await this.execute({ type: 'list' }) },
+  data() { return { expanded: false, disconnecting: false, key: '', busy: false, error: '', connection: undefined as ConnectionView | undefined, loaded: false } },
+  async mounted() { await this.execute({ type: 'list' }); this.loaded = true },
   methods: {
     t, diagnostic,
     async execute(command: OnboardingCommand) {
@@ -26,7 +26,7 @@ export default defineComponent({
     <div v-if="compact" class="jev-account-row">
       <div>
         <strong>{{ 'TypeSafe (Jev)' }}</strong><p class="muted">
-          {{ connection?.state === 'ready' ? t('Connected') : t('Not connected.') }}
+          {{ connection?.state === 'ready' ? t('Connected') : loaded ? t('Not connected.') : t('loading…') }}
         </p>
       </div><button class="secondary" :aria-expanded="expanded" @click="expanded = !expanded">
         {{ t('Manage account') }}

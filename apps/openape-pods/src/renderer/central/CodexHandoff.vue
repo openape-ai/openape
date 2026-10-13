@@ -34,7 +34,7 @@ async function handOver() {
     <pre ref="text" data-testid="codex-brief">{{ brief }}</pre>
     <div class="opts">
       <button class="primary" type="button" @click="handOver">
-        {{ copied === 'copied' ? t('Copied, paste into Codex') : copied === 'selected' ? t('Selected, copy and paste into Codex') : t('Open in Codex') }}
+        {{ copied === 'copied' ? t('Copied, paste into Codex') : copied === 'selected' ? t('Selected, copy and paste into Codex') : t('Copy brief') }}
       </button>
       <button class="secondary" type="button" @click="emit('close')">
         {{ t('Close') }}

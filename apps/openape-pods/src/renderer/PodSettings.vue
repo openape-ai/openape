@@ -15,7 +15,7 @@ export default defineComponent({
   emits: ['selected', 'accounts'],
   setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
   data() { return { newGroup: '', confirmReload: false, initialized: false, organization: { revision: 1, groups: [] } as Organization, pods: [] as StoredPod[], selectedId: '', name: '', revision: 0, error: '', message: '', busy: false } },
-  computed: { selectedGroup(): string { return this.organization.groups.find(group => group.podIds.includes(this.selectedId))?.id ?? '' }, selectedPod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.selectedId) } },
+  computed: { selectedGroup(): string { return this.organization.groups.find(group => group.podIds.includes(this.selectedId))?.id ?? '' }, selectedPod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.selectedId) }, central(): boolean { return typeof window !== 'undefined' && !!window.pods?.central } },
   watch: { async remoteRevision() { if (this.busy || this.error || this.name !== this.selectedPod?.name || this.newGroup) return; await this.reload(); const pod = this.selectedPod; if (pod) { this.name = pod.name; this.revision = pod.revision } }, async selectedPodId(id: string) { if (id === this.selectedId) return; await this.reload(); const pod = this.pods.find(pod => pod.id === id); if (pod) this.select(pod); else this.newPod() } },
   async mounted() {
     trackPodEdits(this.access, 'settings', () => this.initialized && (this.name !== (this.selectedPod?.name ?? '') || !!this.newGroup))
@@ -129,7 +129,7 @@ export default defineComponent({
         {{ diagnostic(message) }}
       </p>
       <button class="primary" type="submit" :disabled="busy || !name.trim()">
-        {{ busy ? t("Saving…") : t("Save pod") }}
+        {{ !initialized ? t("loading…") : busy ? t("Saving…") : t("Save pod") }}
       </button>
     </form>
   </article>
@@ -161,10 +161,13 @@ export default defineComponent({
       {{ t("Archiving stops intake and preserves knowledge. Run history follows the 50-run retention policy.") }}
     </p><button class="secondary" :disabled="busy || selectedPod.lifecycle === 'archived'" @click="archive">
       {{ t("Archive pod") }}
-    </button><button v-if="selectedPod.lifecycle === 'archived'" class="secondary" :disabled="busy" @click="remove">
+    </button><button v-if="selectedPod.lifecycle === 'archived' && !central" class="secondary" :disabled="busy" @click="remove">
       {{ t("Delete local pod…") }}
     </button>
-    <p v-if="selectedPod.lifecycle === 'archived'" class="muted">
+    <p v-if="selectedPod.lifecycle === 'archived' && central" class="muted">
+      {{ t("This desktop belongs to a central workspace; delete archived Pods through the central workspace (for example with Codex).") }}
+    </p>
+    <p v-else-if="selectedPod.lifecycle === 'archived'" class="muted">
       {{ t("Deletion permanently removes this pod’s local data and key. Export a backup first. A separate confirmation follows.") }}
     </p>
   </details>
