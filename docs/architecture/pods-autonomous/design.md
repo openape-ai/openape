@@ -148,7 +148,11 @@ Categories `Rechnung`, `Newsletter`, `Antwort nötig`, `Prüfen`, `Behalten`: Ma
 the single category writer; it merges with the latest provider set, keeps unrelated
 categories, records each intent and verified result, and treats an unexplained change as
 an owner override (`mail/category-overrides`). A removed managed category is suppressed;
-`Behalten` blocks archive candidacy.
+`Behalten` blocks archive candidacy. The owner's label policy (`mail/label-policy`) adds
+content categories and project labels. The new Outlook shows a message category only when
+its name is in the mailbox category list, so Mail Sync completes that list once per change
+of the managed names (`o365-cli workflow ensure-categories`, Graph scope
+`MailboxSettings.ReadWrite` granted by `o365-cli auth login --categories`).
 
 ## Morgenbriefing
 
