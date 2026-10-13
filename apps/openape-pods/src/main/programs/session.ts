@@ -1,6 +1,6 @@
 import { programLaunch, verifyProgramRuntime } from './runtime'
 import type { DirectoryPolicy } from '../../runtime/directories'
-import { mkdir } from 'node:fs/promises'
+import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -8,7 +8,7 @@ import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { ProgramAssignment, TerminalView } from '../../contracts/programs'
 import type { SandboxReach } from '../../contracts/sandbox'
 import { launchTerminal } from '../../worker/runtime/terminal'
-import { verifyExecutable } from '../../worker/runtime/sandbox'
+import { programHome, verifyExecutable } from '../../worker/runtime/sandbox'
 import type { AgentConnection, GrantObserver, GrantLedgerPort, RunGrantTokens } from '../broker/authorization'
 import { AgentAuthority } from '../broker/authorization'
 import type { CredentialCache } from '../connections/cache'
@@ -131,7 +131,8 @@ export class ProgramSession {
   private async run(applicationId: string, assignment: ProgramAssignment, argv: string[], helper: string, root: string, credentials: CredentialCache, check: () => Promise<void>, release: () => Promise<void>, podWorkspace: string, directories: DirectoryPolicy, access: ProgramAccess): Promise<void> {
     const signal = this.controller.signal
     const deadline = setTimeout(() => this.controller.abort(new Error('Terminal session expired')), 15 * 60 * 1000)
-    const directory = join(root, this.id); let verifiedClosed = true
+    // At the owner level the terminal gets the owner's HOME and this temporary folder, so neither lands in the saved application state.
+    const directory = join(root, this.id); const ownerTemporary = join(directory, 'tmp'); let verifiedClosed = true
     try {
       await mkdir(directory, { recursive: true, mode: 0o700 })
       const { authority, authorization } = await prepareProgramAuthorization(assignment, await access.connection(), argv, undefined, access.ledger)
@@ -144,7 +145,9 @@ export class ProgramSession {
           const launch = programLaunch(assignment)
           const args = [...launch.prefix, ...argv, ...(assignment.cacheArgument ? [assignment.cacheArgument, workspace] : [])]
           const reach = await access.reach()
-          const domain = await launchTerminal(helper, directory, { reach, executable: launch.executable, workspace: podWorkspace, readDirectories: directories.readDirectories, writeDirectories: [workspace, ...directories.writeDirectories], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: launch.runtimeDirectories, networkPorts: proxy ? [proxy.port] : [], systemTrust: Boolean(proxy) }, args, { ...launch.environment, ...proxy?.environment, HOME: workspace, TMPDIR: workspace }, (path, ownerPid) => registerAuthDomain(root, path, ownerPid))
+          const temporary = reach.level === 'owner' ? ownerTemporary : workspace
+          if (temporary === ownerTemporary) await mkdir(temporary, { mode: 0o700 })
+          const domain = await launchTerminal(helper, directory, { reach, executable: launch.executable, workspace: podWorkspace, readDirectories: directories.readDirectories, writeDirectories: [...new Set([workspace, temporary]), ...directories.writeDirectories], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: launch.runtimeDirectories, networkPorts: proxy ? [proxy.port] : [], systemTrust: Boolean(proxy) }, args, { ...launch.environment, ...proxy?.environment, HOME: programHome(reach, workspace), TMPDIR: temporary }, (path, ownerPid) => registerAuthDomain(root, path, ownerPid))
           this.domain = domain; verifiedClosed = false
           const decoder = new StringDecoder('utf8')
           domain.stdout.on('data', (bytes: Buffer) => this.append(decoder.write(bytes)))
@@ -164,7 +167,7 @@ export class ProgramSession {
           }
         }, signal)
       }
-      finally { await proxy?.close() }
+      finally { await proxy?.close(); await rm(ownerTemporary, { recursive: true, force: true }) }
     }
     catch (error) { this.error = error instanceof Error ? error.message : 'Application terminal failed' }
     finally {

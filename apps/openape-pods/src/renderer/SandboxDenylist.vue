@@ -25,7 +25,7 @@ function add(): void {
   <section>
     <h3>{{ t('Sandbox') }}</h3>
     <p class="muted">
-      {{ sandbox.level === 'owner' ? t('Owner level: programs reach what you reach on this Mac, except the Pods data and your apes login.') : t('Isolated level: programs reach only this pod and what is assigned to it.') }}
+      {{ sandbox.level === 'owner' ? t('Owner level: programs run with your home folder and reach what you reach on this Mac, except the Pods data and your apes login. Codex can switch this pod to the isolated level.') : t('Isolated level: programs reach only this pod and what is assigned to it.') }}
     </p>
     <p v-if="sandbox.level === 'owner'" class="trust-note">
       <strong>{{ t('Running as owner means full trust in this pod\'s code, including the possibility to act as you. The remaining protections only prevent direct access.') }}</strong>

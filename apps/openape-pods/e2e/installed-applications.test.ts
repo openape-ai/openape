@@ -80,7 +80,7 @@ int main(int argc, char **argv) {
   const connections = { podConnection: async () => ({ issuer: origin, subject: 'pod@example.test', accessToken: async () => 'synthetic-token' }) } as unknown as ConnectionManager
   let released = 0
   const runtime = { executable: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), cli: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/Resources/apes/ape-shell.mjs'), client: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/Resources/app.asar.unpacked/dist/runtime/shell-client.mjs') }
-  const shell = new ExternalShell(podId, root, runtime, resources, credentials, connections, async () => {}, async () => { released++ }, 'Synthetic GUI', applicationId)
+  const shell = new ExternalShell(podId, root, runtime, resources, credentials, connections, async () => {}, async () => { released++ }, 'isolated', 'Synthetic GUI', applicationId)
   const launch = new ApplicationLaunch(randomUUID(), podId, shell)
   try {
     await launch.completed

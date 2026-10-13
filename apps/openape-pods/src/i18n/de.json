@@ -2731,7 +2731,7 @@
   "Declare at most 32 denied paths": "Deklariere höchstens 32 gesperrte Pfade",
   "Invalid sandbox view": "Ungültige Sandbox-Ansicht",
   "Sandbox": "Sandbox",
-  "Owner level: programs reach what you reach on this Mac, except the Pods data and your apes login.": "Stufe Owner: Programme erreichen, was du auf diesem Mac erreichst, außer den Pods-Daten und deinem apes-Login.",
+  "Owner level: programs run with your home folder and reach what you reach on this Mac, except the Pods data and your apes login. Codex can switch this pod to the isolated level.": "Stufe Owner: Programme laufen mit deinem Home-Ordner und erreichen, was du auf diesem Mac erreichst, außer den Pods-Daten und deinem apes-Login. Codex kann diesen Pod auf die isolierte Stufe umstellen.",
   "Running as owner means full trust in this pod's code, including the possibility to act as you. The remaining protections only prevent direct access.": "Als Owner ausführen bedeutet volles Vertrauen in den Code dieses Pods, einschließlich der Möglichkeit, als du zu handeln. Die verbleibenden Schutzmaßnahmen verhindern nur den direkten Zugriff.",
   "Isolated level: programs reach only this pod and what is assigned to it.": "Stufe isoliert: Programme erreichen nur diesen Pod und was ihm zugewiesen ist.",
   "Denied paths": "Gesperrte Pfade",

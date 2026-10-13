@@ -5,6 +5,7 @@ import { restoreReviewGate } from './restore-fence.ts'
 import { StorageError } from './errors.ts'
 import { parseWorkDeclarations } from '../../contracts/work.ts'
 import type { WorkDeclaration } from '../../contracts/work.ts'
+import type { SandboxLevel } from '../../contracts/sandbox.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -176,11 +177,17 @@ export class PodDatabase {
     return podFromRow(row)
   }
 
-  createPod(input: unknown, id: string = randomUUID()): Pod {
+  /**
+   * A new Pod runs its programs at the owner level with the owner's HOME unless the caller chooses `isolated`; the owner
+   * decided this default for every Pod they create (issue 1468). Existing Pods keep their stored level.
+   */
+  createPod(input: unknown, id: string = randomUUID(), level: SandboxLevel = 'owner'): Pod {
     record(input, ['name']); text(input.name, 'name', 100)
     const { name } = input
     this.transaction(() => {
       this.db.prepare('INSERT INTO pods(id,name) VALUES(?,?)').run(id, name)
+      // The table's CHECK constraint refuses any other level.
+      this.db.prepare('INSERT INTO pod_sandbox VALUES(?,?)').run(id, level)
       this.db.prepare('INSERT INTO checkpoints VALUES(?,?,?)').run(id, 0, '{}')
     })
     return this.getPod(id)
