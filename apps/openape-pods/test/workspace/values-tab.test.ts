@@ -44,15 +44,13 @@ it('shows unset values and the missing secret in German, and keeps the secret fo
     scripts: async () => ({ resourceEpoch: 1, credentialAliases: ['notification_token'], pod: { id: podId, name: 'Mail knowledge', revision: 2, lifecycle: 'paused', activeScript: null }, versions: [], drafts: [], source: { kind: 'draft', id: crypto.randomUUID(), code: 'export async function run() {}', capabilities: ['credential.notification_token'], revision: 1, assignmentRevision: 1, hash: null, validated: false, evidence: null, credentialAccessApproved: false } }),
   })
   const wrapper = mount(App, { attachTo: document.body, props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
-  const tab = (name: string) => wrapper.findAll('[role="tab"]').find(item => item.text() === name)!
-  await tab('Variablen und Geheimnisse').trigger('click'); await flushPromises()
   expect(wrapper.findAll('.value-row')).toHaveLength(2)
   expect(wrapper.findAll('.value-row').map(row => row.text()).join(' ')).toContain('Nicht hinterlegt')
   const secret = wrapper.findAll('.resource-row').find(row => row.text().includes('notification_token'))!
   await secret.findAll('button').find(button => button.text() === 'Geheimnis hinterlegen')!.trigger('click'); await flushPromises()
   expect(wrapper.get<HTMLInputElement>('[name="credential-alias"]').element.value).toBe('notification_token')
   expect(wrapper.get<HTMLInputElement>('[name="credential-value"]').element.value).toBe('')
-  await tab('Einstellungen').trigger('click'); await flushPromises()
-  expect(wrapper.find('.credential-form').exists()).toBe(false)
+  expect(wrapper.find('#section-settings .credential-form').exists()).toBe(false)
+  expect(wrapper.findAll('.credential-form')).toHaveLength(1)
   wrapper.unmount()
 })
