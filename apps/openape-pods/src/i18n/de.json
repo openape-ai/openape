@@ -3053,5 +3053,7 @@
   "Access": "Zugriffe",
   "Archived ({count})": "Archivierte ({count})",
   "Request sent to OpenApe Secrets.": "Anfrage an OpenApe Secrets gesendet.",
-  "The baseline lacks a schema-50 approval check": "Dem Basisschema fehlt eine Freigabeprüfung von Schema 50"
+  "The baseline lacks a schema-50 approval check": "Dem Basisschema fehlt eine Freigabeprüfung von Schema 50",
+  "A program approval headline is printable ASCII of at most {p0} characters": "Die Überschrift einer Programmfreigabe besteht aus höchstens {p0} druckbaren ASCII-Zeichen",
+  "The headline and the complete command do not fit one approval; shorten the headline": "Überschrift und vollständiger Befehl passen nicht in eine Freigabe; kürze die Überschrift"
 }
