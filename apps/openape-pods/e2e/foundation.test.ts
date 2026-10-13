@@ -10,7 +10,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { fixtureShellIdentity } from './fixtures/shell-identity'
 import { openPod } from './fixtures/navigation'
-import { removeProfile, startupBackup } from './fixtures/startup'
+import { removeProfile } from './fixtures/startup'
 
 const identities: Awaited<ReturnType<typeof fixtureShellIdentity>>[] = []
 const require = createRequire(import.meta.url)
@@ -28,7 +28,6 @@ async function launch(packaged = false) {
   const page = await app.firstWindow()
   await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 20000 }).toBe('ready')
   expect((await page.evaluate(() => window.pods.getStatus())).worker).toMatchObject({ state: 'ready', error: null })
-  await startupBackup(page, root)
   return { app, page, root, binary }
 }
 afterEach(async () => {

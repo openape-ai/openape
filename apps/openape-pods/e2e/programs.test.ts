@@ -1,7 +1,7 @@
 import { fixtureShellIdentity } from './fixtures/shell-identity'
 import { failOnKeychainDialog } from './fixtures/keychain'
 import { openPod } from './fixtures/navigation'
-import { removeProfile, startupBackup } from './fixtures/startup'
+import { removeProfile } from './fixtures/startup'
 import { executeHttp } from '../src/main/programs/http-service'
 import { _electron as electron } from 'playwright'
 import { fixtureDirectory } from '../src/main/fixture'
@@ -182,7 +182,6 @@ it('packaged program UI: exposes the external terminal and reuses application se
     console.info('Program UI: synthetic records encrypted using safeStorage with the mock keychain')
     const page = await app.firstWindow(); page.setDefaultTimeout(7000)
     await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
-    await startupBackup(page, f.root)
     console.info('Program UI: worker ready')
     await openPod(page, 'Application setup')
     await page.getByRole('tab', { name: 'Permissions', exact: true }).click()

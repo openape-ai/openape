@@ -2,7 +2,7 @@ import { fixtureShellIdentity } from './fixtures/shell-identity'
 import { failOnKeychainDialog } from './fixtures/keychain'
 import { _electron as electron } from 'playwright'
 import { openPod } from './fixtures/navigation'
-import { removeProfile, startupBackup } from './fixtures/startup'
+import { removeProfile } from './fixtures/startup'
 import { mkdtemp, realpath, readFile, readdir } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -32,7 +32,6 @@ it('credentials: packaged owner flow retains assigned secrets across runs and re
   let app = await launch()
   try {
     let page = await app.firstWindow(); page.setDefaultTimeout(7000); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
-    await startupBackup(page, root)
     await openPod(page, 'Customer review')
     await page.getByRole('tab', { name: 'Variables and secrets', exact: true }).click()
     console.info('Credential flow: rendered resources, saving synthetic encrypted value')

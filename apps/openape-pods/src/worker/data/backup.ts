@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import type { PodDatabase } from '../storage/database'
 import { digest, schemaVersion } from '../storage/database'
-import { copyVerified, durableJSON, files, privateTarget, relativePath, syncDirectory, syncTree } from './files'
+import { copyVerified, durableJSON, files, privateTarget, relativePath, syncPath, syncTree } from './files'
 import type { FileRecord } from './files'
 
 export interface BackupManifest { format: 'openape-pods-backup', version: 1, schema: number, createdAt: string, sourceRoot: string, files: FileRecord[] }
@@ -104,7 +104,7 @@ export async function createBackup(store: PodDatabase, parent: string, observe: 
     records.push({ path: 'control.sqlite', size: bytes.length, hash: digest(bytes) })
     const manifest = parseBackupManifest({ format: 'openape-pods-backup', version: 1, schema, createdAt: new Date().toISOString(), sourceRoot, files: records })
     await durableJSON(join(stage, 'backup.json'), manifest)
-    await syncTree(stage); observe('publish'); await rename(stage, target); await syncDirectory(destination)
+    await syncTree(stage); observe('publish'); await rename(stage, target); await syncPath(destination)
     return target
   }
   catch (error) { await removePackageTree(stage); throw error }
@@ -170,7 +170,7 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
       database.exec('COMMIT;')
     }
     finally { database.close() }
-    await syncTree(stage); await rename(stage, target); await syncDirectory(await realpath(parent)); return target
+    await syncTree(stage); await rename(stage, target); await syncPath(await realpath(parent)); return target
   }
   catch (error) { await removePackageTree(stage); throw error }
 }

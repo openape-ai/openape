@@ -1,9 +1,9 @@
 import { fixtureShellIdentity } from './shell-identity'
 import { openPod } from './navigation'
-import { removeProfile, startupBackup } from './startup'
+import { removeProfile } from './startup'
 import { _electron as electron } from 'playwright'
 import type { ElectronApplication } from 'playwright'
-import { access, mkdtemp, realpath, readFile, mkdir } from 'node:fs/promises'
+import { mkdtemp, realpath, readFile, mkdir } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
@@ -32,7 +32,6 @@ export async function launch(root: string, packaged: boolean, suppliedIdentity?:
     if (shellIdentities.has(root)) throw new Error('Crash fixture identity was already registered')
     shellIdentities.set(root, suppliedIdentity)
   }
-  const fresh = await access(join(root, 'automatic-backup.json')).then(() => false, () => true)
   let identity = shellIdentities.get(root)
   if (!identity) { identity = await fixtureShellIdentity(root); shellIdentities.set(root, identity) }
   const app = await electron.launch({ executablePath: packaged ? resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture') : require('electron'), args: packaged ? [] : ['.'], cwd: resolve('.'), env: { HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
@@ -40,7 +39,6 @@ export async function launch(root: string, packaged: boolean, suppliedIdentity?:
   await identity.encrypt(app, true)
   const page = await app.firstWindow()
   await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 20000 }).toBe('ready')
-  if (fresh) await startupBackup(page, root)
   return { app, page }
 }
 export async function seed() {

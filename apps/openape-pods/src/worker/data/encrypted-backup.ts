@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { lstat, mkdir, readdir, realpath, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { syncDirectory } from './files'
+import { syncPath } from './files'
 
 async function stagingPath(localProfileRoot: string): Promise<string> {
   const profile = await realpath(localProfileRoot)
@@ -30,6 +30,6 @@ export async function cleanupEncryptedBackupStaging(localProfileRoot: string): P
     if (!/^\.(?:seal-source|unseal)-[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(name) || !info.isDirectory() || info.isSymbolicLink()) { unsupported = true; continue }
     await rm(path, { recursive: true, force: true })
   }
-  await syncDirectory(staging)
+  await syncPath(staging)
   if (unsupported) throw new Error('Unsupported encrypted backup staging entry')
 }
