@@ -4,7 +4,7 @@ import type { PodResource } from '../../contracts/resources'
 import { parseProgramArgv } from '../../contracts/programs'
 import type { ProgramAssignment } from '../../contracts/programs'
 import type { SandboxReach } from '../../contracts/sandbox'
-import { prepareProgramAuthorization } from './session'
+import { approvableCommand, prepareProgramAuthorization } from './session'
 import type { CredentialCache } from '../connections/cache'
 import { PodToolBroker } from '../broker/tools'
 import type { BrokerLease } from '../broker/tools'
@@ -33,8 +33,9 @@ export async function invokeProgram(resources: PodResource[], podId: string, bod
   const { id, assignment, argv } = programRequest(resources, podId, lease.capabilities, body)
   // Authorization runs before any process starts; for the archive port a refusal here is evidence that nothing moved.
   const prepared = await prepareProgramAuthorization(assignment, access.connection, argv, access.observe, access.ledger, action, access.tokens).catch((error: unknown) => { throw action ? archiveRefusal(error) : error })
+  // An approved command is checked like at its request: a declared operation with only declared options.
+  if (access.approval) await approvableCommand(assignment, argv)
   const { authorization } = prepared
-  if (access.approval && authorization.command.coverage.some(detail => detail.operation_id === '_generic.exec')) throw new Error('An approved command must match an operation of the application adapter')
   const authority = access.approval ? { authorize: access.approval } : prepared.authority
   // At the owner level the program has the owner's network reach; its network hosts and their proxy apply only when isolated.
   const proxy = assignment.networkHosts.length && access.reach.level === 'isolated' ? await startMailProxy(lease.signal, undefined, assignment.networkHosts) : undefined

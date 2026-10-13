@@ -204,8 +204,8 @@ describe('program approvals (issue 1468)', () => {
 
   it('derives the object from the exact command and shows the adapter display with the argv', async () => {
     const f = await approvedPush()
-    expect(f.asked).toMatchObject({ action: 'program.run', object: programObject('git', push(lease)), title: `Push to remote: push --force-with-lease=feature/x:${lease} origin ${lease}:refs/heads/feature/x`.slice(0, 120) })
-    expect(f.asked.object.startsWith(`git push --force-with-lease=feature/x:${lease}`)).toBe(true)
+    expect(f.asked).toMatchObject({ action: 'program.run', object: programObject('git', push(lease)), title: `Push to remote: git push --force-with-lease=feature/x:${lease} origin ${lease}:refs/heads/feature/x` })
+    expect(f.asked.object).toMatch(new RegExp(`^git push --force-with-lease=feature/x:${lease} origin ${lease}:refs/heads/feature/x #[a-f0-9]{16}$`))
     // The authority the owner approves at the IdP carries the action and the exact command object.
     expect(JSON.parse(f.server.calls[0]!.commands[0]![2]!)).toMatchObject({ action: 'program.run', object: f.asked.object })
     // A new lease SHA is a different object and needs its own approval.
@@ -216,6 +216,21 @@ describe('program approvals (issue 1468)', () => {
     expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease) } })).toThrow('adapter description')
     expect(() => f.approvals.request(f.run, { action: 'program.run', object: 'git status', payload: { application: 'git', argv: push(lease) } }, 'Push to remote')).toThrow('exact command')
     expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease), note: 'x' } }, 'Push to remote')).toThrow('application and its exact argv')
+  })
+
+  it('shows the owner the complete command and refuses one that does not fit instead of shortening it', () => {
+    const f = fixture()
+    const ask = (argv: string[]) => () => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv } }, 'Push to remote')
+    // The decisive part at the end of a long command can never be cut off.
+    const long = ['push', `--force-with-lease=feature/x:${lease}`, 'origin', `${'x'.repeat(420)}:refs/heads/feature/x`, '--upload-pack=/tmp/evil']
+    expect(ask(long)).toThrow('too long for a program approval')
+    expect(ask(['push', 'origin', 'x'.repeat(470)])).toThrow('too long for a program approval')
+    expect(f.store.db.prepare('SELECT count(*) AS count FROM action_approvals').get()).toEqual({ count: 0 })
+    // Arguments stay unambiguous; hidden characters are refused rather than replaced.
+    const spaced = f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: ['commit', '-m', 'two words', ''] } }, 'Commit')
+    expect(spaced.title).toBe('Commit: git commit -m "two words" ""')
+    expect(ask(['push', 'origin', 'feature/x\u202Egnp.exe'])).toThrow('direction characters')
+    expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease) } }, 'x'.repeat(201))).toThrow('cannot be shown complete')
   })
 
   it('consumes an approved request and runs the exact command once, refusing a second use', async () => {
@@ -265,11 +280,15 @@ describe('program approvals (issue 1468)', () => {
   it('describes a command with the application adapter and refuses mail moves and unknown operations', async () => {
     const f = fixture()
     const adapter = join(f.root, 'git.toml')
-    writeFileSync(adapter, ['schema = "openape-shapes/v1"', '[cli]', 'id = "git"', 'executable = "git"', 'audience = "shapes"', 'version = "1"', '[[operation]]', 'id = "git.push"', 'command = ["push"]', 'positionals = ["remote", "refspec"]', 'display = "Push {refspec} to {remote}"', 'action = "edit"', 'risk = "high"', 'resource_chain = ["repo:*", "remote:*"]', '[[operation]]', 'id = "git.move"', 'command = ["move"]', 'display = "Move"', 'action = "move"', 'risk = "high"', 'resource_chain = ["repo:*"]', ''].join('\n'))
+    writeFileSync(adapter, ['schema = "openape-shapes/v1"', '[cli]', 'id = "git"', 'executable = "git"', 'audience = "shapes"', 'version = "1"', '[[operation]]', 'id = "git.push"', 'command = ["push"]', 'positionals = ["remote", "refspec"]', 'required_options = ["force-with-lease"]', 'display = "Push {refspec} to {remote}"', 'action = "edit"', 'risk = "high"', 'resource_chain = ["repo:*", "remote:*"]', '[[operation]]', 'id = "git.move"', 'command = ["move"]', 'display = "Move"', 'action = "move"', 'risk = "high"', 'resource_chain = ["repo:*"]', ''].join('\n'))
     const configuration = { type: 'program', name: 'git', cliId: 'git', adapterPath: adapter, adapterHash: createHash('sha256').update(readFileSync(adapter)).digest('hex'), capability: 'tool.app_git.invoke' }
     const resources = [{ id: randomUUID(), podId: f.podId, revision: 1, kind: 'tool', state: 'ready', name: 'git', configuration }] as never
     expect(await describeProgram(resources, f.podId, ['tool.app_git.invoke'], { application: 'git', argv: push(lease) })).toBe(`Push ${lease}:refs/heads/feature/x to origin`)
     await expect(describeProgram(resources, f.podId, ['tool.app_git.invoke'], { application: 'git', argv: ['fetch'] })).rejects.toThrow('No adapter operation matched')
+    // Fail closed: an option the push operation does not declare is refused, wherever it stands.
+    for (const argv of [[...push(lease), '--upload-pack=/tmp/evil'], ['push', '--receive-pack=/tmp/evil', `--force-with-lease=feature/x:${lease}`, 'origin', 'main'], [...push(lease), '--'], ['-c', 'core.sshCommand=evil', ...push(lease)]]) {
+      await expect(describeProgram(resources, f.podId, ['tool.app_git.invoke'], { application: 'git', argv })).rejects.toThrow(/does not declare|No adapter operation matched/)
+    }
     await expect(describeProgram(resources, f.podId, ['tool.app_git.invoke'], { application: 'git', argv: ['move'] })).rejects.toThrow('approved archive service')
     await expect(describeProgram(resources, f.podId, [], { application: 'git', argv: push(lease) })).rejects.toThrow('not declared and assigned')
   })
