@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { PodDatabase, digest, schemaVersion } from '../../src/worker/storage/database'
 import { createBackup, restoreBackup } from '../../src/worker/data/backup'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
-import { PodGroups } from '../../src/worker/workspace/groups'
+import { ItemTagStore } from '../../src/worker/workspace/item-tags'
 import { storageBytes } from '../../src/worker/data/files'
 import { ChatRegistry } from '../../src/worker/master/chat-registry'
 import { MasterConversations } from '../../src/worker/master/conversations'
@@ -43,7 +43,7 @@ async function fixture() {
 }
 it('restores settings, checkpoint, knowledge, citations, script, workspace and run history into a fresh paused profile', async () => {
   const { store, exports, pod, runId } = await fixture()
-  const groups = new PodGroups(store); groups.execute({ type: 'organize', action: 'create', revision: 1, name: 'Clients' }); groups.execute({ type: 'organize', action: 'move', revision: 2, podId: pod.id, groupId: groups.view().groups[0]!.id })
+  new ItemTagStore(store).execute({ type: 'tag', id: pod.id, revision: 0, tags: ['clients'] })
   new ResourceRegistry(store, () => {}).assignCredential(pod.id, 'crm', randomUUID(), 0)
   store.db.prepare('INSERT INTO script_credential_approvals VALUES(?,?,?,?)').run(pod.id, store.getPod(pod.id).activeScript!, 1, 1)
   store.db.prepare('INSERT INTO pod_variables VALUES(?,?,?,?)').run(pod.id, 'topic', 'Orders', 1)
@@ -52,7 +52,7 @@ it('restores settings, checkpoint, knowledge, citations, script, workspace and r
   const restored = new PodDatabase(target); stores.push(restored)
   expect(restored.db.prepare('SELECT value FROM pod_variables WHERE pod_id=?').get(pod.id)?.value).toBe('Orders')
   expect(restored.db.prepare('SELECT thread_id,state FROM master_contexts WHERE scope=?').get(pod.id)).toMatchObject({ thread_id: null, state: 'interrupted' })
-  expect(new PodGroups(restored).view()).toEqual(groups.view())
+  expect(new ItemTagStore(restored).view()).toEqual(new ItemTagStore(store).view())
   expect(restored.db.prepare('SELECT * FROM script_credential_approvals').all()).toEqual([])
   expect(new ResourceRegistry(restored, () => {}).list(pod.id)[0]?.state).toBe('refreshRequired')
   expect(restored.getPod(pod.id)).toMatchObject({ name: 'Orders', lifecycle: 'paused', activeScript: store.getPod(pod.id).activeScript })

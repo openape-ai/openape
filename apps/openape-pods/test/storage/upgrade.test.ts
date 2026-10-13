@@ -66,6 +66,59 @@ function profile47(root: string, change = '', version = 47) {
   return ids
 }
 
+// The exact schema 48 the October 2026 releases since issue 1465 wrote, with its owner groups.
+const schema48 = readFileSync(join(import.meta.dirname, 'fixtures/schema-48.sql'), 'utf8')
+
+/** A schema-48 profile whose groups meet own tags, the tag limit and a name without letters. */
+function profile48(root: string) {
+  const ids = { tagged: randomUUID(), full: randomUUID(), plain: randomUUID(), symbols: randomUUID(), alone: randomUUID(), company: randomUUID(), mail: randomUUID(), odd: randomUUID() }
+  const database = new DatabaseSync(join(root, 'control.sqlite'), { enableForeignKeyConstraints: false })
+  database.exec(schema48)
+  const run = (sql: string, ...values: (string | number | null)[]) => database.prepare(sql).run(...values)
+  database.exec('BEGIN')
+  database.exec('INSERT INTO settings VALUES(1,1,2); INSERT INTO data_settings VALUES(1,10737418240,0,NULL); INSERT INTO onboarding VALUES(1,0,NULL); INSERT INTO pod_organization VALUES(1,7); INSERT INTO data_sequence VALUES(1,0);')
+  for (const [id, name] of [[ids.tagged, 'Invoices'], [ids.full, 'Busy'], [ids.plain, 'Plain'], [ids.symbols, 'Symbols'], [ids.alone, 'Alone']] as const) run('INSERT INTO pods VALUES(?,?,1,\'active\',NULL,1)', id, name)
+  run('INSERT INTO pod_groups VALUES(?,\'Delta Mind GmbH\',0)', ids.company)
+  run('INSERT INTO pod_groups VALUES(?,\'Mail\',1)', ids.mail)
+  run('INSERT INTO pod_groups VALUES(?,\'★ ★\',0)', ids.odd)
+  for (const [pod, group] of [[ids.tagged, ids.company], [ids.full, ids.company], [ids.plain, ids.mail], [ids.symbols, ids.odd]] as const) run('INSERT INTO pod_memberships VALUES(?,?)', pod, group)
+  run('INSERT INTO item_tags VALUES(?,\'["finance"]\',3,1)', ids.tagged)
+  run('INSERT INTO item_tags VALUES(?,?,1,1)', ids.full, JSON.stringify(['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']))
+  database.exec('COMMIT; PRAGMA user_version=48;')
+  database.close()
+  return ids
+}
+
+it('turns the groups of a schema-48 profile into tags after a verified backup', () => {
+  const fresh = directory(); open(fresh).close(); stores.pop()
+  const root = directory(); const ids = profile48(root)
+  const store = open(root)
+  expect(readdirSync(root).filter(file => file.startsWith('before-v48-'))).toHaveLength(1)
+  const tags = Object.fromEntries((store.db.prepare('SELECT id,tags,revision FROM item_tags').all()).map(row => [row.id, [JSON.parse(String(row.tags)), row.revision]]))
+  expect(tags).toEqual({
+    [ids.tagged]: [['finance', 'delta-mind-gmbh'], 4],
+    [ids.full]: [['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'], 1],
+    [ids.plain]: [['mail'], 1],
+  })
+  // Nothing of the groups is lost: every row stays as history, the receipt names what could not become a tag.
+  expect(store.db.prepare('SELECT source,count(*) AS rows FROM legacy_records GROUP BY source ORDER BY source').all()).toEqual([
+    { source: 'pod_groups', rows: 3 }, { source: 'pod_memberships', rows: 4 }, { source: 'pod_organization', rows: 1 },
+  ])
+  const receipt = JSON.parse(String(store.db.prepare('SELECT body FROM storage_receipts WHERE kind=\'conversion\'').get()!.body)) as { from: number, tags: Record<string, number>, skipped: unknown[] }
+  expect(receipt).toMatchObject({ from: 48, tags: { 'delta-mind-gmbh': 1, 'mail': 1 } })
+  expect(receipt.skipped).toEqual([{ podId: ids.full, group: 'Delta Mind GmbH', reason: 'tag-limit' }, { podId: ids.symbols, group: '★ ★', reason: 'no-tag' }])
+  store.close(); stores.pop()
+  expect(objects(join(root, 'control.sqlite'))).toEqual(objects(join(fresh, 'control.sqlite')))
+})
+
+it('refuses a schema-48 database with a foreign object and changes nothing', () => {
+  const root = directory(); profile48(root)
+  const database = new DatabaseSync(join(root, 'control.sqlite')); database.exec('CREATE VIEW v AS SELECT 1;'); database.close()
+  expect(() => open(root)).toThrow('schema 48')
+  expect(readdirSync(root).filter(file => file.startsWith('before-v48-'))).toEqual([])
+  expect(read(root, 'SELECT user_version, (SELECT count(*) FROM pod_memberships) AS members FROM pragma_user_version')).toEqual([{ user_version: 48, members: 4 }])
+})
+
 it('creates a fresh profile whose schema equals a converted schema-47 profile', () => {
   const fresh = directory(); open(fresh).close(); stores.pop()
   const converted = directory(); profile47(converted); open(converted).close(); stores.pop()
@@ -108,7 +161,7 @@ it('converts the network runtime into standalone Pods, keeping history, effects,
   expect(store.db.prepare('SELECT id FROM pod_grants').all()).toEqual([{ id: ids.ownGrant }])
   // Members keep their mail-derived runs out of the central workspace.
   expect(store.db.prepare('SELECT pod_id FROM local_only_pods').all()).toEqual([{ pod_id: ids.member }])
-  const receipt = JSON.parse(String(store.db.prepare('SELECT body FROM storage_receipts WHERE kind=\'conversion\'').get()!.body)) as { from: number, effects: number, archived: Record<string, { rows: number }> }
+  const receipt = JSON.parse(String(store.db.prepare('SELECT body FROM storage_receipts WHERE kind=\'conversion\' AND json_extract(body,\'$.from\')=47').get()!.body)) as { from: number, effects: number, archived: Record<string, { rows: number }> }
   expect(receipt).toMatchObject({ from: 47, effects: 1, archived: { networks: { rows: 1 } } })
   // Shared data works right after the conversion.
   const data = new DomainData(store)
@@ -149,7 +202,7 @@ it('refuses a profile older than schema 46 without changing its bytes', () => {
   expect(readdirSync(root)).toEqual(['control.sqlite'])
 })
 
-it('restores a schema-47 backup as schema 48 with every Pod paused and refuses an older one', async () => {
+it('restores a schema-47 backup as the current schema with every Pod paused and refuses an older one', async () => {
   const exports = directory(); const source = directory()
   const backup = await createBackup(open(source), exports)
   const legacy = directory(); const ids = profile47(legacy)

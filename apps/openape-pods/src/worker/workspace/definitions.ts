@@ -46,11 +46,8 @@ export class DefinitionWorkspace {
         }
         const source = this.catalog.source(command.definitionId, command.version)
         if (source.view.state !== 'published') throw new Error('Publish this definition before creating an instance')
-        if (!this.store.db.prepare('SELECT 1 FROM pod_groups WHERE id=?').get(command.groupId)) throw new Error('Company group no longer exists')
         if (this.store.listPods().length >= 100) throw new Error('Local pod limit reached')
         const pod = this.store.createPod({ name: command.name })
-        this.store.db.prepare('INSERT INTO pod_memberships VALUES(?,?)').run(pod.id, command.groupId)
-        this.store.db.prepare('UPDATE pod_organization SET revision=revision+1 WHERE id=1').run()
         this.store.db.prepare('INSERT INTO instance_definition_bindings VALUES(?,?,?,1)').run(pod.id, command.definitionId, command.version)
         const owner = this.catalog.owner
         this.store.db.prepare('INSERT INTO definition_instance_requests VALUES(?,?,?,?,?,?,?,\'pending\',NULL,?)').run(command.requestId, requestHash, pod.id, command.definitionId, command.version, owner.issuer, owner.subject, Date.now())
@@ -189,7 +186,7 @@ export class DefinitionWorkspace {
 
   view(): DefinitionsView {
     const owner = this.catalog.owner
-    const instances = this.store.db.prepare(`SELECT b.*,p.group_id FROM instance_definition_bindings b JOIN pod_definitions d ON d.id=b.definition_id LEFT JOIN pod_memberships p ON p.pod_id=b.pod_id WHERE d.owner_issuer=? AND d.owner_subject=?`).all(owner.issuer, owner.subject).map(row => ({ podId: row.pod_id as string, definitionId: row.definition_id as string, version: row.definition_version as number, bindingRevision: row.binding_revision as number, diverged: (this.store.getPod(row.pod_id as string).activeScript ?? digest('')) !== this.catalog.source(row.definition_id as string, row.definition_version as number).view.contentHash, groupId: row.group_id as string | null }))
+    const instances = this.store.db.prepare(`SELECT b.* FROM instance_definition_bindings b JOIN pod_definitions d ON d.id=b.definition_id WHERE d.owner_issuer=? AND d.owner_subject=?`).all(owner.issuer, owner.subject).map(row => ({ podId: row.pod_id as string, definitionId: row.definition_id as string, version: row.definition_version as number, bindingRevision: row.binding_revision as number, diverged: (this.store.getPod(row.pod_id as string).activeScript ?? digest('')) !== this.catalog.source(row.definition_id as string, row.definition_version as number).view.contentHash }))
     const provisioning = this.store.db.prepare('SELECT * FROM definition_instance_requests WHERE owner_issuer=? AND owner_subject=? ORDER BY created_at,id').all(owner.issuer, owner.subject).map(row => ({ requestId: row.id as string, podId: row.pod_id as string, state: row.state as 'pending' | 'ready' | 'failed', error: row.error as string | null }))
     return { definitions: this.catalog.list(), instances, provisioning }
   }

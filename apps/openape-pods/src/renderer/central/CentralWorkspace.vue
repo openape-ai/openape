@@ -44,9 +44,7 @@ const scheduleEnabled = ref(false)
 const pendingNavigation = ref<'inventory' | { runtimeId: string, podId: string } | null>(null)
 const archived = ref(false)
 const search = ref('')
-const newGroup = ref('')
 const runId = ref('')
-const groupId = ref('')
 const operationId = ref('')
 const abort = new AbortController()
 let refreshing: Promise<void> | null = null
@@ -60,7 +58,7 @@ const localEditor = computed(() => props.desktop && !!props.desktopStatus?.runti
 function visiblePods(host: CentralRuntime) { return host.workspace.pods.filter(pod => (pod.lifecycle === 'archived') === archived.value && pod.name.toLowerCase().includes(search.value.toLowerCase())) }
 
 function editorState() {
-  return JSON.stringify([name.value, description.value, source.value?.id, code.value, variableName.value, variableValue.value, scheduleKind.value, interval.value, dailyTime.value, timezone.value, scheduleEnabled.value, groupId.value])
+  return JSON.stringify([name.value, description.value, source.value?.id, code.value, variableName.value, variableValue.value, scheduleKind.value, interval.value, dailyTime.value, timezone.value, scheduleEnabled.value])
 }
 function resetEditor() {
   const pod = current.value?.pod
@@ -73,7 +71,6 @@ function resetEditor() {
   if (pod.scheduling.spec?.kind === 'interval') interval.value = pod.scheduling.spec.seconds
   if (pod.scheduling.spec?.kind === 'daily') { dailyTime.value = pod.scheduling.spec.time; timezone.value = pod.scheduling.spec.timezone }
   scheduleEnabled.value = pod.scheduling.enabled
-  groupId.value = runtime.value?.workspace.organization.groups.find(group => group.podIds.includes(pod.id))?.id ?? ''
   savedEditor = editorState()
 }
 function selectSource(value: ScriptSource | null) { source.value = value ? structuredClone(value) : null; code.value = value?.code ?? '' }
@@ -295,7 +292,7 @@ onBeforeUnmount(() => { generation++; abort.abort() })
             {{ host.online ? t('Desktop online') : host.lastSeenAt ? t('Desktop offline since {time}', { time: time(host.lastSeenAt) }) : t('Desktop offline') }}<span v-if="runtimes.length > 1"> · {{ host.id }}</span>
           </p>
           <button v-for="pod in visiblePods(host)" :key="pod.id" class="inventory-row central-pod" :disabled="busy" @click="select(host.id, pod.id)">
-            <span><strong>{{ pod.name }}</strong><small v-if="pod.description" class="inventory-purpose">{{ pod.description }}</small><small>{{ host.workspace.organization.groups.find(group => group.podIds.includes(pod.id))?.name || t('Ungrouped') }}</small></span><small v-if="pod.queue?.blocked" class="central-blocked">{{ t('Schedule blocked') }}</small><span class="badge">{{ pod.online ? label(pod.lifecycle) : t('Offline') }}</span><span aria-hidden="true">›</span>
+            <span><strong>{{ pod.name }}</strong><small v-if="pod.description" class="inventory-purpose">{{ pod.description }}</small></span><small v-if="pod.queue?.blocked" class="central-blocked">{{ t('Schedule blocked') }}</small><span class="badge">{{ pod.online ? label(pod.lifecycle) : t('Offline') }}</span><span aria-hidden="true">›</span>
           </button>
           <p v-if="!visiblePods(host).length" class="central-muted">
             {{ archived ? t('No archived Pods') : t('No matching Pods') }}
@@ -423,11 +420,6 @@ onBeforeUnmount(() => { generation++; abort.abort() })
               <PodLifecycle :key="`${current.pod.id}:${current.pod.scripts.pod.revision}`" :pod="current.pod.scripts.pod" @command="send($event.channel, $event.body)" />
               <h2>{{ t('Pod settings') }}</h2><label>{{ t('Name') }}<input v-model="name" maxlength="100"></label><button @click="send('workspace', { type: 'update', id: current.pod.id, revision: baseline.scripts.pod.revision, name, lifecycle: baseline.scripts.pod.lifecycle })">
                 {{ t('Save name') }}
-              </button>
-              <h2>{{ t('Group') }}</h2><label>{{ t('Group') }}<select v-model="groupId"><option value="">{{ t('Ungrouped') }}</option><option v-for="group in runtime?.workspace.organization.groups" :key="group.id" :value="group.id">{{ group.id ? group.name : t('Ungrouped') }}</option></select></label><button @click="send('workspace', { type: 'organize', action: 'move', revision: runtime?.workspace.organization.revision, podId: current.pod.id, groupId: groupId || null })">
-                {{ t('Move Pod') }}
-              </button><label>{{ t('New group') }}<input v-model="newGroup" maxlength="100"></label><button :disabled="!newGroup.trim()" @click="send('workspace', { type: 'organize', action: 'create', revision: runtime?.workspace.organization.revision, name: newGroup })">
-                {{ t('Create group') }}
               </button>
               <h2>{{ t('Schedule') }}</h2><label>{{ t('Frequency') }}<select v-model="scheduleKind"><option value="interval">{{ t('Interval') }}</option><option value="daily">{{ t('Daily') }}</option></select></label><label v-if="scheduleKind === 'interval'">{{ t('Every (seconds)') }}<input v-model.number="interval" type="number" min="60" max="2592000"></label><template v-else>
                 <label>{{ t('Time') }}<input v-model="dailyTime" type="time"></label><label>{{ t('Timezone') }}<input v-model="timezone"></label>
