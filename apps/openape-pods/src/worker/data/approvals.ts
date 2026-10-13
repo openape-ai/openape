@@ -24,7 +24,7 @@ function row(value: unknown): Row { return value as Row }
 const line = (value: unknown, limit: number) => String(value).replace(/[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069]+/g, ' ').trim().slice(0, limit)
 
 /** Program approvals show the complete command; one that does not fit is refused, never shortened. */
-export const programApprovalLimits = { object: 500, display: 200, title: 720 } as const
+export const programApprovalLimits = { object: 500, display: 200, headline: 120, title: 720 } as const
 /** Only printable ASCII is shown to the owner as is; anything else could hide or reorder text, so it is refused. */
 const printable = /^[\x20-\x7E]*$/
 
@@ -50,9 +50,10 @@ export const approvalEffectKey = (id: string) => `approval:${id}`
 
 /**
  * Each action fixes its payload fields, its object identity and the title the owner reads at the IdP. A program title
- * starts with `display`, the application adapter's description of the command, never text the script chose.
+ * starts with `display`, the application adapter's description of the command. A script may put a short headline in
+ * front (owner decision October 13, 2026): it is marked as the Pod's statement and the complete command still follows.
  */
-export function actionTitle(action: ApprovalAction, object: string, payload: Record<string, unknown>, display?: string): string {
+export function actionTitle(action: ApprovalAction, object: string, payload: Record<string, unknown>, display?: string, headline?: string): string {
   if (action === 'program.run') {
     if (Object.keys(payload).some(key => !['application', 'argv'].includes(key)) || typeof payload.application !== 'string' || !payload.application.trim() || payload.application.length > 200) throw new Error('A program approval names the application and its exact argv')
     const argv = parseProgramArgv(payload.argv)
@@ -60,7 +61,12 @@ export function actionTitle(action: ApprovalAction, object: string, payload: Rec
     if (!display?.trim()) throw new Error('A program approval needs the adapter description of its command')
     if (!printable.test(display) || display.length > programApprovalLimits.display) throw new Error('The adapter description of this command cannot be shown complete; it runs only with a grant')
     // The complete command follows the adapter's description; the digest suffix of the object is left out.
-    return `${display.trim()}: ${object.slice(0, object.lastIndexOf(' #'))}`
+    const command = `${display.trim()}: ${object.slice(0, object.lastIndexOf(' #'))}`
+    if (headline === undefined) return command
+    if (!headline.trim() || !printable.test(headline) || headline.length > programApprovalLimits.headline) throw new Error(`A program approval headline is printable ASCII of at most ${programApprovalLimits.headline} characters`)
+    const title = `${headline.trim()} (Pod) · ${command}`
+    if (title.length > programApprovalLimits.title) throw new Error('The headline and the complete command do not fit one approval; shorten the headline')
+    return title
   }
   if (action === 'mail.archive') {
     const fields = ['mailbox', 'messageId', 'version', 'subject', 'sender']
@@ -96,8 +102,9 @@ export class Approvals {
     if (!payload || typeof payload !== 'object' || Array.isArray(payload) || canonicalJson(payload).length > approvalLimits.payloadBytes) throw new Error('Approval payload is limited to 16 KiB')
     if (input.action === 'program.run' && input.object === undefined && typeof payload.application === 'string') input.object = programObject(payload.application, parseProgramArgv(payload.argv))
     if (!approvalActions.includes(input.action as ApprovalAction) || typeof input.object !== 'string' || !input.object || input.object.length > 500 || (input.title !== undefined && typeof input.title !== 'string')) throw new Error('An approval names an action and its object')
-    // What the owner sees at the IdP is derived from the bound payload, never from text the script chose.
-    const title = actionTitle(input.action as ApprovalAction, input.object as string, payload, display)
+    // What the owner sees at the IdP is derived from the bound payload; a program headline is marked as the Pod's.
+    // A mail title stays derived from the message; the script's title only heads a program approval.
+    const title = actionTitle(input.action as ApprovalAction, input.object as string, payload, display, input.action === 'program.run' ? input.title as string | undefined : undefined)
     const hash = digest(canonicalJson(payload))
     return this.store.transaction(() => {
       this.assertRun(principal)
