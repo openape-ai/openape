@@ -3,7 +3,6 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { MapView } from '../../contracts/map-view'
 import { language, t } from '../i18n'
 import { clock } from '../utils/cadence'
-import AutomationDetail from './AutomationDetail.vue'
 import AutomationInfo from './AutomationInfo.vue'
 import DecisionsInbox from './DecisionsInbox.vue'
 import type { DomainCommand, DomainOverview } from '../../contracts/domain-admin'
@@ -13,28 +12,28 @@ import AutomationsMap from './AutomationsMap.vue'
 import AppSettingsMenu from './AppSettingsMenu.vue'
 import CodexHandoff from './CodexHandoff.vue'
 import KpiRow from './KpiRow.vue'
-import SecretForm from './SecretForm.vue'
 import type { SecretsCommand, SecretsView } from '../../contracts/secrets'
-import type { PortableSourceSelection } from '../../contracts/sharing'
 import type { Layers } from '../utils/automation-layout'
+import { decisionCounts } from '../utils/kpis'
 import { allTags, tagCounts, untagged, withTags } from '../utils/tags'
 
 /**
  * The two product surfaces behind one tab bar: Automatisierungen (this file) and Entscheidungen
  * (the `decisions` slot). Settings open from the gear; creation hands a brief to Codex.
  */
-const props = defineProps<{ view: MapView | null, live: boolean, now: number, decisions?: number, tab?: 'automations' | 'decisions', desktop?: boolean, subject?: string, codex?: 'connected' | 'disconnected', domain?: DomainOverview | null, inboxUrl?: string, secrets?: SecretsView | null, sharing?: boolean }>()
-const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'logout': [], 'codex': [pinned: string | null, group: string | null], 'command': [command: CentralCommand], 'secretSave': [podId: string, alias: string, value: string], 'secrets': [command: SecretsCommand], 'folder': [podId: string], 'openPod': [id: string], 'share': [selection: PortableSourceSelection], 'advanced': [], 'import': [], 'domain': [command: DomainCommand, settle?: (error: string | null) => void] }>()
+const props = defineProps<{ view: MapView | null, live: boolean, now: number, tab?: 'automations' | 'decisions', desktop?: boolean, subject?: string, codex?: 'connected' | 'disconnected', domain?: DomainOverview | null, inboxUrl?: string, secrets?: SecretsView | null, sharing?: boolean }>()
+const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'logout': [], 'codex': [pinned: string | null, group: string | null], 'command': [command: CentralCommand], 'secrets': [command: SecretsCommand], 'openPod': [id: string], 'advanced': [], 'import': [], 'domain': [command: DomainCommand, settle?: (error: string | null) => void] }>()
 const layers = ref<Layers>({ data: true, read: true, write: true, auth: true, paused: true })
 const playing = ref(true)
+// Archived Pods are listed on request; they have no other place in the app.
+const archived = ref(false)
+const archivedCount = computed(() => props.view?.pods.filter(pod => pod.lifecycle === 'archived').length ?? 0)
 const pinned = ref<string | null>(null)
 const hovered = ref<string | null>(null)
-const detail = ref<string | null>(null)
 const handoff = ref(false)
 const settings = ref(false)
-const secretForm = ref<{ podId: string, alias: string | null } | null>(null)
-const inboxView = ref<InstanceType<typeof DecisionsInbox> | null>(null)
-const waiting = computed(() => props.decisions ?? inboxView.value?.total ?? 0)
+// The tab badge, the KPI and the Entscheidungen counters share one computation.
+const waiting = computed(() => props.view ? decisionCounts(props.view, props.secrets?.requests ?? []).count : 0)
 const current = computed(() => props.tab ?? 'automations')
 // The tag selection is a per-device preference; private windows or blocked storage start without one.
 const tagKey = 'pods.automations.tags'
@@ -89,7 +88,7 @@ function pinnedGroup(): string | null {
   return item ? item.group ?? t('without group') : null
 }
 function openCodex() { handoff.value = true; emit('codex', pinned.value, pinnedGroup()) }
-defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: string | null) => { detail.value = id }, mode, layers })
+defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: string | null) => { if (id) emit('openPod', id) }, mode, layers })
 </script>
 
 <template>
@@ -112,7 +111,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
         {{ t('Loading workspace…') }}
       </p>
       <template v-else>
-        <KpiRow :view="view" />
+        <KpiRow :view="view" :requests="secrets?.requests ?? []" />
         <div class="automations-toolbar">
           <div class="tb-left">
             <div class="seg" role="group" :aria-label="t('View')">
@@ -122,6 +121,9 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
                 {{ t('List') }}
               </button>
             </div>
+            <button v-if="mode === 'list' && archivedCount" class="secondary archived-toggle" type="button" :aria-pressed="archived" @click="archived = !archived">
+              {{ t('Archived ({count})', { count: archivedCount }) }}
+            </button>
           </div>
           <div class="tb-right">
             <details ref="layersMenu" class="layers-menu" @keydown.escape="closeLayers">
@@ -158,13 +160,13 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
             </div>
           </details>
         </div>
-        <p v-if="tagging && !active.length" class="automations-empty" role="status">
+        <p v-if="tagging && !active.length && !archived" class="automations-empty" role="status">
           {{ t('Activate tags to see their Pods ({count} Pods).', { count: view.pods.filter(pod => pod.lifecycle !== 'archived').length }) }}
         </p>
-        <AutomationsList v-else-if="mode === 'list'" :view="filtered!" :layers="layers" :now="now" @open="detail = $event" />
+        <AutomationsList v-else-if="mode === 'list'" :view="archived ? view : filtered!" :layers="layers" :now="now" :archived="archived" @open="emit('openPod', $event)" />
         <div v-else class="automations-live">
-          <AutomationsMap :view="filtered!" :layers="layers" :pinned="pinned" :playing="playing" :now="now" @hover="hovered = $event" @pin="pinned = $event" @open="detail = $event" />
-          <AutomationInfo :id="hovered ?? pinned" :view="view" :pinned="!!pinned && !hovered" :now="now" @open="detail = $event" />
+          <AutomationsMap :view="filtered!" :layers="layers" :pinned="pinned" :playing="playing" :now="now" @hover="hovered = $event" @pin="pinned = $event" @open="emit('openPod', $event)" />
+          <AutomationInfo :id="hovered ?? pinned" :view="view" :pinned="!!pinned && !hovered" :now="now" @open="emit('openPod', $event)" />
         </div>
       </template>
     </section>
@@ -172,14 +174,9 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
       <p v-if="!view" class="muted" role="status">
         {{ t('Loading workspace…') }}
       </p>
-      <DecisionsInbox v-else ref="inboxView" :view="view" :domain="domain ?? null" :inbox-url="inboxUrl" :requests="secrets?.requests ?? []" :secrets-origin="secrets?.origin" :desktop="!!desktop" @secrets="emit('secrets', $event)" @domain="(command, settle) => emit('domain', command, settle)" @command="emit('command', $event)" />
+      <DecisionsInbox v-else :view="view" :domain="domain ?? null" :inbox-url="inboxUrl" :requests="secrets?.requests ?? []" :secrets-origin="secrets?.origin" :desktop="!!desktop" @secrets="emit('secrets', $event)" @domain="(command, settle) => emit('domain', command, settle)" @command="emit('command', $event)" />
     </section>
     <AppSettingsMenu v-if="settings" :browser="!desktop" :subject="subject" :consumer="secrets?.consumer ?? null" :sharing="!!sharing" @revoke="emit('secrets', { type: 'revokeConsumer' })" @advanced="emit('advanced')" @import="emit('import')" @close="settings = false" @logout="emit('logout')" @keydown.escape="settings = false" />
-    <AutomationDetail v-if="view && detail" :id="detail" :key="detail" :view="view" :now="now" :desktop="!!desktop" :requests="secrets?.requests ?? []" :sharing="!!sharing" @editor="emit('openPod', $event)" @share="emit('share', $event)" @close="detail = null; secretForm = null" @open="(id) => { detail = id; pinned = id }" @command="emit('command', $event)" @secret="(podId, alias) => { secretForm = { podId, alias } }" @folder="emit('folder', $event)">
-      <template #secret>
-        <SecretForm v-if="secretForm && secretForm.podId === detail" :key="secretForm.alias ?? ''" :pod-id="secretForm.podId" :alias="secretForm.alias" :desktop="!!desktop" @save="(podId, alias, value) => { secretForm = null; emit('secretSave', podId, alias, value) }" @file="(podId, alias) => { secretForm = null; emit('secrets', { type: 'importFile', podId, alias }) }" @request="(podId, alias, purpose) => { secretForm = null; emit('secrets', { type: 'request', podId, alias, purpose }) }" @cancel="secretForm = null" />
-      </template>
-    </AutomationDetail>
   </div>
 </template>
 

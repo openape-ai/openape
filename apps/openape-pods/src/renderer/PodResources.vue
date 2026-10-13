@@ -4,6 +4,7 @@ import SshPermissions from './SshPermissions.vue'
 import ProgramPermissions from './ProgramPermissions.vue'
 import DirectoryPermissions from './DirectoryPermissions.vue'
 import SandboxDenylist from './SandboxDenylist.vue'
+import SecretForm from './central/SecretForm.vue'
 import { t, diagnostic, label } from './i18n'
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
@@ -12,11 +13,11 @@ import type { ResourceCommand, ResourceState } from '../contracts/resources'
 import type { SandboxView } from '../contracts/sandbox'
 
 export default defineComponent({
-  components: { ProgramPermissions, DirectoryPermissions, SshPermissions, SandboxDenylist },
+  components: { ProgramPermissions, DirectoryPermissions, SshPermissions, SandboxDenylist, SecretForm },
   props: { requestedSecret: { type: String, default: '' }, requiredAliases: { type: Array as PropType<string[]>, default: () => [] }, mode: { type: String, default: 'permissions' }, selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'discuss'],
   setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
-  data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, sandbox: null as SandboxView | null, busy: false, error: '', credentialAlias: this.requestedSecret, credentialValue: '' } },
+  data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, sandbox: null as SandboxView | null, busy: false, error: '', credentialAlias: this.requestedSecret, message: '' } },
   computed: { missingAliases(): string[] { return this.requiredAliases.filter(alias => !this.visibleResources.some(resource => resource.name === alias && resource.state === 'ready')) }, visibleResources() { return this.state.resources.filter(resource => this.mode === 'values' ? resource.kind === 'credential' : this.access.remote && !['reference', 'directory', 'credential'].includes(resource.kind) && !['program', 'http', 'jev', 'sshInventory'].includes(String(resource.configuration.type))) } },
   watch: { remoteRevision() { if (!this.busy && !this.error && this.podId) void this.load() } },
   async mounted() {
@@ -31,11 +32,17 @@ export default defineComponent({
       catch (error) { this.error = error instanceof Error ? error.message : 'Resource operation failed' }
       finally { this.busy = false }
     },
-    async saveCredential() {
-      const value = this.credentialValue; this.credentialValue = ''
-      await this.act({ type: 'saveCredential', podId: this.podId, alias: this.credentialAlias, value, epoch: this.state.epoch })
+    async saveCredential(_podId: string, alias: string, value: string) {
+      await this.act({ type: 'saveCredential', podId: this.podId, alias, value, epoch: this.state.epoch })
     },
-    async load() { this.credentialValue = ''; this.sandbox = null; await this.act({ type: this.mode !== 'values' && !this.access.remote ? 'sandbox' : 'list', podId: this.podId }) },
+    /** File import and OpenApe Secrets requests go through the desktop's secrets channel, like the inbox does. */
+    async secrets(command: { type: 'importFile', podId: string, alias: string } | { type: 'request', podId: string, alias: string, purpose: string }) {
+      this.busy = true; this.error = ''; this.message = ''
+      try { await window.pods.secrets!(command); this.message = command.type === 'request' ? t('Request sent to OpenApe Secrets.') : ''; await this.load() }
+      catch (error) { this.error = error instanceof Error ? error.message : 'Secret operation failed' }
+      finally { this.busy = false }
+    },
+    async load() { this.sandbox = null; await this.act({ type: this.mode !== 'values' && !this.access.remote ? 'sandbox' : 'list', podId: this.podId }) },
   },
 })
 </script>
@@ -70,17 +77,16 @@ export default defineComponent({
           </button>
         </article>
       </template>
-      <form v-if="mode === 'values' && !access.remote" class="credential-form" @submit.prevent="saveCredential">
+      <div v-if="mode === 'values' && !access.remote" class="credential-form">
         <h3>{{ t('Script credentials') }}</h3>
         <p class="muted">
           {{ t('Store an encrypted value for this pod. Its scripts can use every assigned secret. Saving or replacing pauses the pod and requires script validation again.') }}
         </p>
-        <label>{{ t('Credential alias') }}<input v-model="credentialAlias" name="credential-alias" pattern="[a-z][a-z0-9_-]{0,63}" maxlength="64" required :disabled="busy" autocomplete="off"></label>
-        <label>{{ t('Credential value') }}<input v-model="credentialValue" name="credential-value" type="password" maxlength="16384" required :disabled="busy" autocomplete="new-password"></label>
-        <button class="secondary" :disabled="busy || !credentialAlias || !credentialValue">
-          {{ t('Save or replace credential') }}
-        </button>
-      </form>
+        <SecretForm :key="credentialAlias" :pod-id="podId" :alias="credentialAlias || null" desktop @save="saveCredential" @file="(podId, alias) => secrets({ type: 'importFile', podId, alias })" @request="(podId, alias, purpose) => secrets({ type: 'request', podId, alias, purpose })" @cancel="credentialAlias = ''" />
+        <p v-if="message" role="status">
+          {{ message }}
+        </p>
+      </div>
       <p v-if="mode === 'values' && !visibleResources.length && !missingAliases.length" class="muted">
         {{ t('No secrets assigned.') }}
       </p>
