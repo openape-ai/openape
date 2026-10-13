@@ -68,9 +68,11 @@ describe('extended git adapter', () => {
     await expect(resolve(['-C', '/work/repo', 'rev-parse', '--abbrev-ref', 'HEAD'])).resolves.toMatchObject({ operation_id: 'git.rev-parse', bindings: { ref: 'HEAD' } })
     await expect(resolve(['-C', '/work/repo', 'status', '--porcelain'])).resolves.toMatchObject({ operation_id: 'git.status', permission: 'git.repo[*]#read' })
     await expect(resolve(['-C', '/work/repo', 'fetch', 'origin'])).resolves.toMatchObject({ operation_id: 'git.fetch.remote', permission: 'git.repo[*].remote[*]#read' })
-    // Issue 1468 follow-up: the IURIO rebase Pod replays a remote branch without a worktree; the ref mode is part of the permission.
-    await expect(resolve(['-C', '/work/repo', 'replay', '--ref-action=print', '--onto', 'origin/development', '--ref', 'refs/remotes/origin/feature', 'origin/development..origin/feature'])).resolves.toMatchObject({ operation_id: 'git.replay.print', permission: 'git.repo[*].ref-action[mode=print]#read', bindings: { range: 'origin/development..origin/feature', onto: 'origin/development' } })
-    await expect(resolve(['-C', '/work/repo', 'replay', '--onto', 'A', 'A..B'])).rejects.toThrow(/No adapter operation matched/)
+    // Issue 1468 follow-up: the IURIO rebase Pod replays a remote branch without a worktree. Only printed results are a read;
+    // git's default and every other mode update refs and must never match it.
+    await expect(resolve(['-C', '/work/repo', 'replay', '--ref-action=print', '--onto', 'origin/development', '--ref', 'refs/remotes/origin/feature', 'origin/development..origin/feature'])).resolves.toMatchObject({ operation_id: 'git.replay.print', permission: 'git.repo[*]#read', bindings: { range: 'origin/development..origin/feature', onto: 'origin/development' } })
+    for (const argv of [['replay', '--onto', 'A', 'A..B'], ['replay', '--ref-action=update', '--onto', 'A', 'A..B'], ['replay', '--ref-action=print', '--ref-action=update', '--onto', 'A', 'A..B'], ['replay', '--ref-action=print', '--onto', 'A', '--ref-action', 'update', 'A..B'], ['replay', '--onto', 'A', '--ref-action=print', 'A..B']])
+      await expect(resolve(['-C', '/work/repo', ...argv])).rejects.toThrow(/No adapter operation matched/)
   })
 
   it('binds rebase and push with a refspec to the exact command under their own actions', async () => {
