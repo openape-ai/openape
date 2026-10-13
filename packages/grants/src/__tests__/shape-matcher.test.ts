@@ -98,6 +98,37 @@ describe('declared value options', () => {
     }
   })
 
+  it('matches the exact dash form of declared options only', () => {
+    const status: ShapeMatchOperation = { id: 'status', command: ['status'], value_options: ['n'], flag_options: ['porcelain', 'prune', 's', 'b', 'C'], display: 'Status', action: 'read', risk: 'low', resource_chain: ['repo:*'] }
+    expect(matchArgvToOperation([status], ['status', '--porcelain', '-s', '-n', '5'])?.bindings).toEqual({ porcelain: 'true', s: 'true', n: '5' })
+    expect(matchArgvToOperation([status], ['status', '--porcelain=v2'])?.bindings.porcelain).toBe('v2')
+    for (const argv of [
+      ['status', '-porcelain'],
+      ['status', '-prune'],
+      ['status', '--C'],
+      ['status', '--s'],
+      ['status', '-Cfoo'],
+      ['status', '-n5'],
+      ['status', '--n=5'],
+      ['status', '-5'],
+      ['status', '-n'],
+      ['status', '-n', '-s'],
+      ['status', '--'],
+    ]) {
+      expect(matchArgvToOperation([status], argv), argv.join(' ')).toBeNull()
+    }
+  })
+
+  it('accepts a single-dash bundle only when every letter is a declared flag', () => {
+    const operation: ShapeMatchOperation = { id: 'status', command: ['status'], value_options: ['n'], flag_options: ['s', 'b'], display: 'Status', action: 'read', risk: 'low', resource_chain: ['repo:*'] }
+    expect(matchArgvToOperation([operation], ['status', '-sb'])?.bindings).toEqual({ s: 'true', b: 'true' })
+    expect(matchArgvToOperation([operation], ['status', '-sn', '5'])).toBeNull()
+    expect(matchArgvToOperation([operation], ['status', '-sx'])).toBeNull()
+    const commit: ShapeMatchOperation = { id: 'commit', command: ['commit'], required_options: ['m'], flag_options: ['a'], display: '{m}', action: 'create', risk: 'low', resource_chain: ['commit:*'] }
+    expect(matchArgvToOperation([commit], ['commit', '-a', '-m', 'msg'])?.bindings.m).toBe('msg')
+    expect(matchArgvToOperation([commit], ['commit', '-am', 'msg'])).toBeNull()
+  })
+
   it('also declares options with flag_options alone', () => {
     const operation: ShapeMatchOperation = { ...mergeBase, flag_options: ['is-ancestor'] }
     expect(matchArgvToOperation([operation], ['merge-base', '--is-ancestor', 'A', 'B'])?.bindings.commit).toBe('A')
@@ -129,6 +160,13 @@ describe('global options', () => {
     expect(matchArgvToOperation([status], ['-c', 'core.sshCommand=x', 'status'])).toBeNull()
     expect(matchArgvToOperation([status], ['-C', '--', 'status'])).toBeNull()
     expect(matchArgvToOperation([status], ['-C'])).toBeNull()
+  })
+
+  it('binds a global option only in its exact dash form', () => {
+    for (const argv of [['--C', '/repo', 'status'], ['-C/repo', 'status'], ['-Crepo', 'status'], ['--C=/repo', 'status']]) {
+      expect(matchArgvToOperation([status], argv), argv.join(' ')).toBeNull()
+    }
+    expect(matchArgvToOperation([{ ...status, global_options: ['git-dir'] }], ['-git-dir', '/x', 'status'])).toBeNull()
   })
 
   it('rejects a repeated global option', () => {

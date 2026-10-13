@@ -50,6 +50,67 @@ function declaresOptions(operation: Pick<ShapeMatchOperation, 'value_options' | 
 }
 
 /**
+ * Reads one option token in its exact dash form: `--name` or `--name=value`
+ * for names longer than one character, exactly `-x` for one-letter names.
+ * Returns null for any other spelling (`--C`, `-Cfoo`, `-porcelain`, `-n5`).
+ */
+function exactOption(token: string): { key: string, value?: string } | null {
+  if (token.startsWith('--')) {
+    const { key, value } = splitInlineValue(token, token.slice(2))
+    return key.length > 1 ? { key, ...(value === undefined ? {} : { value }) } : null
+  }
+  return token.length === 2 ? { key: token[1]! } : null
+}
+
+/**
+ * Declared-only parsing: every option must be declared and spelled in its
+ * exact dash form, and a single-dash bundle such as `-ab` is accepted only
+ * when every letter is a declared one-letter flag. Fails closed otherwise, so
+ * an option the real CLI reads as a command (git `--upload-pack`, `-c`,
+ * `--exec`) never passes as a flag.
+ */
+function parseDeclaredOptionArgs(
+  tokens: string[],
+  operation: Pick<ShapeMatchOperation, 'required_options' | 'value_options' | 'flag_options'>,
+): { options: Record<string, string>, positionals: string[] } | null {
+  const options: Record<string, string> = {}
+  const positionals: string[] = []
+  const takesValue = new Set([...(operation.required_options ?? []), ...(operation.value_options ?? [])])
+  const flags = new Set(operation.flag_options ?? [])
+
+  for (let index = 0; index < tokens.length; index += 1) {
+    const token = tokens[index]!
+    if (!token.startsWith('-') || token === '-') {
+      positionals.push(token)
+      continue
+    }
+    const bundle = !token.startsWith('--') && token.length > 2 ? Array.from(token.slice(1)) : null
+    if (bundle) {
+      if (!bundle.every(letter => flags.has(letter))) return null
+      for (const letter of bundle) options[letter] = 'true'
+      continue
+    }
+    const option = exactOption(token)
+    if (!option) return null
+    const { key, value } = option
+    if (takesValue.has(key)) {
+      if (value !== undefined) {
+        options[key] = value
+        continue
+      }
+      const next = tokens[index + 1]
+      if (!next || next.startsWith('-')) return null
+      options[key] = next
+      index += 1
+      continue
+    }
+    if (!flags.has(key)) return null
+    options[key] = value ?? 'true'
+  }
+  return { options, positionals }
+}
+
+/**
  * Splits option tokens from positionals. Returns null when an option is not
  * allowed for the operation.
  *
@@ -59,21 +120,19 @@ function declaresOptions(operation: Pick<ShapeMatchOperation, 'value_options' | 
  * only when listed in `required_options`.
  *
  * Operations that declare `value_options` or `flag_options` (even empty
- * lists) accept only declared options and fail closed otherwise: an option
- * the real CLI reads as a command (git `--upload-pack`, `-c`, `--exec`) must
- * never pass as a flag. `value_options` and `required_options` bind the next
- * token, `flag_options` are flags, so `merge-base --is-ancestor A B` keeps
- * `A` and `B` as positionals.
+ * lists) accept only declared options (see `parseDeclaredOptionArgs`):
+ * `value_options` and `required_options` bind the next token, `flag_options`
+ * are flags, so `merge-base --is-ancestor A B` keeps `A` and `B` as
+ * positionals.
  */
 function parseOptionArgs(
   tokens: string[],
   operation: Pick<ShapeMatchOperation, 'required_options' | 'value_options' | 'flag_options'>,
 ): { options: Record<string, string>, positionals: string[] } | null {
+  if (declaresOptions(operation)) return parseDeclaredOptionArgs(tokens, operation)
   const options: Record<string, string> = {}
   const positionals: string[] = []
-  const declaredOnly = declaresOptions(operation)
-  const takesValue = new Set([...(operation.required_options ?? []), ...(operation.value_options ?? [])])
-  const flags = new Set(operation.flag_options ?? [])
+  const takesValue = new Set(operation.required_options ?? [])
 
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]!
@@ -83,13 +142,12 @@ function parseOptionArgs(
       continue
     }
     const { key, value } = splitInlineValue(token, name)
-    if (declaredOnly && !takesValue.has(key) && !flags.has(key)) return null
     if (value !== undefined) {
       options[key] = value
       continue
     }
     const shortOption = !token.startsWith('--') && key.length === 1
-    const consumes = declaredOnly || shortOption ? takesValue.has(key) : true
+    const consumes = shortOption ? takesValue.has(key) : true
     const next = tokens[index + 1]
     if (consumes && next && !next.startsWith('-')) {
       options[key] = next
@@ -120,9 +178,11 @@ function parseGlobalOptions(
   let index = 0
   while (index < argv.length) {
     const token = argv[index]!
-    const name = optionName(token)
-    if (name === null) break
-    const { key, value } = splitInlineValue(token, name)
+    if (!token.startsWith('-')) break
+    // Exact dash form only: `--C repo` or `-Crepo` never bind as `-C repo`.
+    const option = exactOption(token)
+    if (!option) break
+    const { key, value } = option
     const binding = bindingFor.get(key)
     if (!binding) break
     // The CLI may combine repeated values (git `-C a -C b` → `a/b`); one
@@ -242,7 +302,9 @@ function tryMatch<T extends ShapeMatchOperation>(
 
 /**
  * Match a command argv (executable already stripped) against a list of shape
- * operations. Pass 1 exact; pass 2 with combined single-letter flags expanded.
+ * operations. Pass 1 exact; pass 2 with combined single-letter flags expanded
+ * for operations without declared options (declared operations read bundles
+ * themselves and accept them only from declared one-letter flags).
  * On multiple matches, prefers the most specific (longest command prefix).
  * Returns null when nothing matches — callers decide the consequence.
  */
@@ -254,7 +316,7 @@ export function matchArgvToOperation<T extends ShapeMatchOperation>(
   if (matches.length === 0) {
     const expanded = expandCombinedFlags(commandArgv)
     if (expanded.length !== commandArgv.length) {
-      matches = tryMatch(operations, expanded)
+      matches = tryMatch(operations.filter(operation => !declaresOptions(operation)), expanded)
     }
   }
   if (matches.length === 0) return null
