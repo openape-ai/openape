@@ -3,9 +3,11 @@
 "@openape/shapes": minor
 ---
 
-Shapes adapters can declare option values and global options. An operation with
-`value_options` binds a value only for declared options (`value_options` and
-`required_options`); other options are flags, so `merge-base --is-ancestor A B`
-keeps both positionals. `[cli] global_options` (for example `["C=repo"]` for
-`git -C <path>`) are accepted before the command prefix and bound for every
-operation. Operations without `value_options` derive the same permissions as before.
+Shapes adapters can declare their options and global options. An operation with
+`value_options` or `flag_options` accepts only declared options: value options
+bind the next token, flag options are flags, and any other option makes the
+operation not match (fail closed for options such as git `--upload-pack`), so
+`merge-base --is-ancestor A B` keeps both positionals. `[cli] global_options`
+(for example `["C=repo"]` for `git -C <path>`) are accepted once before the
+command prefix and bound for every operation. Operations without these fields
+derive the same permissions as before.

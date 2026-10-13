@@ -34,10 +34,14 @@ export interface ServerShapeOperation {
   required_options?: string[]
 
   /**
-   * Options that take a value. When present (even empty), only these and
-   * `required_options` consume the following token; others are flags.
+   * Options that take a value. When this or `flag_options` is present (even
+   * empty), only declared options are accepted; any other option makes the
+   * operation not match.
    */
   value_options?: string[]
+
+  /** Options accepted as flags once options are declared. */
+  flag_options?: string[]
 
   /**
    * Adapter-wide options accepted before the command prefix (`name` or

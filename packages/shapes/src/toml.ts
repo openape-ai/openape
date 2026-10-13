@@ -129,12 +129,14 @@ export function parseAdapterToml(content: string): ShapesAdapter {
         throw new TypeError('Operation must define id, display, and action')
       }
       const valueOptions = optionalOptionList(operation.value_options, 'value_options', `Operation ${operation.id}`, OPTION_NAME)
+      const flagOptions = optionalOptionList(operation.flag_options, 'flag_options', `Operation ${operation.id}`, OPTION_NAME)
       return {
         id: operation.id,
         command: operation.command as string[],
         ...(Array.isArray(operation.positionals) ? { positionals: operation.positionals as string[] } : {}),
         ...(Array.isArray(operation.required_options) ? { required_options: operation.required_options as string[] } : {}),
         ...(valueOptions ? { value_options: valueOptions } : {}),
+        ...(flagOptions ? { flag_options: flagOptions } : {}),
         // Global options are declared once on [cli] and apply to every operation.
         ...(globalOptions?.length ? { global_options: globalOptions } : {}),
         display: operation.display,

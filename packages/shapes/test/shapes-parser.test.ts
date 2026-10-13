@@ -146,14 +146,14 @@ ${operation}
 `
 
   it('copies [cli] global_options onto every operation and keeps value_options', () => {
-    const parsed = parseAdapterToml(adapter('global_options = ["C=repo"]', 'value_options = []'))
+    const parsed = parseAdapterToml(adapter('global_options = ["C=repo"]', 'value_options = []\nflag_options = ["is-ancestor"]'))
 
-    expect(parsed.operations[0]).toMatchObject({ global_options: ['C=repo'], value_options: [] })
+    expect(parsed.operations[0]).toMatchObject({ global_options: ['C=repo'], value_options: [], flag_options: ['is-ancestor'] })
   })
 
   it('resolves git -C <repo> merge-base --is-ancestor A B', async () => {
     const file = join(mkdtempSync(join(tmpdir(), 'shapes-options-')), 'git.toml')
-    writeFileSync(file, adapter('global_options = ["C=repo"]', 'value_options = []'))
+    writeFileSync(file, adapter('global_options = ["C=repo"]', 'flag_options = ["is-ancestor"]'))
 
     const resolved = await resolveCommand(loadAdapter('git', file), ['git', '-C', '/work/repo', 'merge-base', '--is-ancestor', 'A', 'B'])
 
@@ -165,5 +165,6 @@ ${operation}
   it('rejects malformed option declarations', () => {
     expect(() => parseAdapterToml(adapter('global_options = ["C=re po"]', ''))).toThrow(/invalid global_options/)
     expect(() => parseAdapterToml(adapter('', 'value_options = ["onto=x"]'))).toThrow(/invalid value_options/)
+    expect(() => parseAdapterToml(adapter('', 'flag_options = ["a b"]'))).toThrow(/invalid flag_options/)
   })
 })
