@@ -6,7 +6,7 @@
 - Owner decisions: owner context with the owner HOME is the creation default, the isolated sandbox is optional when the user wants it; one approval per push through per-object approvals; UI is verified in Vitest browser mode with screenshots, never by E2E.
 - PR 384 (`feature/issue-1468-pods-ux-quick-wins`, head `cb0472a8`): quick wins Q1–Q9. Checks: typecheck, lint, affected unit suite, test:browser 54/54. Evidence: https://report.openape.ai/d/01M4TRK1G63J3SWS48WD2YMD3A
 - Next: merge PR 384, then M1 (Pod rows with purpose, last result, next run, waits-for) on a new branch.
-- M5 first step (`feature/issue-1468-shapes-options`): Shapes `value_options` (opt-in declared option values) and `[cli] global_options` (git `-C`), extended git adapter `apps/openape-pods/examples/git-shapes.toml`. Golden regression: 296 argv over the Shapes fixtures and 76 previously matched git argv derive unchanged permissions. Next: after release, replace shapes-registry `adapters/git/adapter.toml` with this adapter and reinstall it.
+- M5 first step, PR 386 (`feature/issue-1468-shapes-options`): Shapes `value_options` (opt-in declared option values) and `[cli] global_options` (git `-C`), extended git adapter `apps/openape-pods/examples/git-shapes.toml`. Golden regression: 296 argv over the Shapes fixtures and 76 previously matched git argv derive unchanged permissions. Next: after release, replace shapes-registry `adapters/git/adapter.toml` with this adapter and reinstall it.
 
 ## Autonomous Pods: shared data replaces networks — issue 1465
 
