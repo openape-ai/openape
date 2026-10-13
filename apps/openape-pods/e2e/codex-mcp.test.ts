@@ -31,8 +31,11 @@ function mcp(launcher: string) {
 it('serves the packaged MCP outside the checkout and reports a stopped app (packaged)', async () => {
   root = await mkdtemp(join(tmpdir(), 'pods codex \'mcp\'-'))
   const socket = join(root, 'codex', 'control.sock'); const launcher = join(root, 'codex', 'openape-pods-mcp')
+  // The second argument is the session's owner identity; the synthetic browser sign-in has none.
   const execute = vi.fn(async (request: { action: unknown }) => ({ pods: [], received: request.action }))
-  const confirm = vi.fn(async () => true)
+  // The owner confirms in the app only after the refused call returned, as a person would.
+  let approve = (_accepted: boolean) => {}
+  const confirm = vi.fn(() => new Promise<boolean>((resolve) => { approve = resolve }))
   server = new CodexControlServer(socket, execute, new McpOwnerSessions({ login: async () => null, confirm })); await server.start()
   const script = join(root, 'codex-mcp.mjs')
   await copyFile(join(bundle, 'Resources/app.asar.unpacked/dist/runtime/codex-mcp.mjs'), script)
@@ -45,17 +48,22 @@ it('serves the packaged MCP outside the checkout and reports a stopped app (pack
     expect(tool.name).toBe('pods_control'); expect(tool.inputSchema.properties.action.enum).toEqual(expect.arrayContaining(['select', 'activate', 'run', 'domain']))
     const refused = await client.request('tools/call', { name: 'pods_control', arguments: { action: 'list' } })
     expect(refused.result.isError).toBe(true)
-    expect(JSON.parse(refused.result.content[0].text)).toMatchObject({ error: 'login_required', message: expect.stringContaining('then retry this call') })
+    expect(JSON.parse(refused.result.content[0].text)).toMatchObject({ error: 'login_required', message: expect.stringMatching(/Then call pods_control with \{"action":"session"\}.*retry this call/) })
     expect(execute).not.toHaveBeenCalled()
     await vi.waitFor(() => expect(confirm).toHaveBeenCalledOnce())
+    // As the login_required message instructs: poll the session until the confirmed sign-in is signed_in, then retry.
+    const session = async () => JSON.parse((await client.request('tools/call', { name: 'pods_control', arguments: { action: 'session' } })).result.content[0].text).state
+    expect(await session()).toBe('pending')
+    approve(true)
+    await expect.poll(session).toBe('signed_in')
     const called = await client.request('tools/call', { name: 'pods_control', arguments: { action: 'list' } })
     expect(JSON.parse(called.result.content[0].text)).toEqual({ pods: [], received: { action: 'list' } })
-    expect(execute).toHaveBeenCalledWith({ id: expect.stringMatching(/^[a-f0-9-]{36}$/), action: { action: 'list' } })
+    expect(execute).toHaveBeenCalledWith({ id: expect.stringMatching(/^[a-f0-9-]{36}$/), action: { action: 'list' } }, null)
     const requestId = '00000000-0000-4000-8000-000000000138'
     const parameters = { name: 'pods_control', arguments: { action: 'workspace', query: { type: 'inventory' }, requestId } }
     await client.request('tools/call', parameters)
     await client.request('tools/call', parameters)
-    expect(execute).toHaveBeenLastCalledWith({ id: requestId, action: { action: 'workspace', query: { type: 'inventory' } } })
+    expect(execute).toHaveBeenLastCalledWith({ id: requestId, action: { action: 'workspace', query: { type: 'inventory' } } }, null)
     expect(execute.mock.calls.slice(-2)).toEqual([execute.mock.calls.at(-1), execute.mock.calls.at(-1)])
     await server.stop(); server = undefined
     expect((await client.request('tools/call', { name: 'pods_control', arguments: { action: 'list' } })).result).toEqual({ isError: true, content: [{ type: 'text', text: 'OpenApe Pods is not running. Open the app and retry.' }] })
