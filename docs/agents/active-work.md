@@ -10,6 +10,7 @@
 - Branch `feature/issue-1468-validation-retries` from `5f0cca9e` (M5 steps 2–3): validation accepts any well-formed result unless an unsuccessful one follows a refused service request; MCP workspace submits retry `workspace_busy`/`workspace_revision_conflict` up to 10 times at the current runtime revision; Codex `inspect` needs no selection and archived Pods are never selected. Checks: Pods lint, typecheck, unit suite 897/897.
 - Next: merge PR 384, then M1 (Pod rows with purpose, last result, next run, waits-for) on a new branch.
 - M6 (`feature/issue-1468-owner-context-home`): owner-level programs, the application terminal and Pod terminal applications run with the owner HOME; new Pods default to owner, imported Pods start isolated, existing Pods keep their level. Open acceptance: `az repos pr list` in a new Pod with the host login after a signed build.
+- M7 (`feature/issue-1468-object-approvals`): object approvals `program.run` for one exact command, `tools.invoke({application,argv,approval})` consumes it and runs once without a continuing grant; PR 389; schema 50 (49 → 50 rebuilds `action_approvals`; 46–48 go through 49). No DDISA change (grants.md §3.4 request batches, §4.8 consume). Checks: typecheck, lint, Pods unit suite. Next: review/merge, then acceptance on a disposable repository (first push and a push to a new SHA each wait for their own approval).
 
 ## Autonomous Pods: shared data replaces networks — issue 1465
 

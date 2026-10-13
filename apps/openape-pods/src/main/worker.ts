@@ -58,7 +58,8 @@ import type { SandboxReach, SandboxView } from '../contracts/sandbox'
 import { deniedPaths, ownerProtectedPaths } from '../worker/runtime/sandbox'
 import { controlSocketProtection } from './codex/socket-path'
 import { homedir } from 'node:os'
-import type { ProgramDefinition, ProgramCommand } from '../contracts/programs'
+import type { ApprovedInvocation, ProgramDefinition, ProgramCommand } from '../contracts/programs'
+import { parseApprovedInvocation } from '../contracts/programs'
 import type { ProgramInternal } from '../worker/resources/programs'
 import { parseHttpPermission, parseHttpRequest } from '../contracts/http'
 import { grantView } from '../contracts/grants'
@@ -871,7 +872,7 @@ export class FixtureWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { approvalRelease: { type: 'list' } | { type: 'released', keys: string[] } } | { approvalCheck: { scope: ServiceScope, manifest: ApprovalManifest, operation: string, grants: { key: string, id: string }[] } } | { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { domain: DomainCommand } | { central: { type: 'snapshot', owner: Owner } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { approvalRelease: { type: 'list' } | { type: 'released', keys: string[] } } | { approvalCheck: { scope: ServiceScope, manifest: ApprovalManifest, operation: string, grants: { key: string, id: string }[] } } | { approvalExecution: { scope: ServiceScope, invocation: ApprovedInvocation } } | { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { domain: DomainCommand } | { central: { type: 'snapshot', owner: Owner } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     if (this.updateFrozen && !('data' in command && ['prepareUpdate', 'releaseUpdate'].includes(command.data.type))) return Promise.reject(new Error('Pods is preparing an update; retry after restart'))
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
@@ -907,7 +908,7 @@ export class FixtureWorker {
 
   private async executeService(request: ServiceRequest): Promise<unknown> {
     if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size - this.parked.size >= 16) throw new Error('Invalid or excessive broker request')
-    if (request.kind !== undefined && request.kind !== 'approval' && request.kind !== 'mailArchive' && request.kind !== 'mailMove' && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
+    if (request.kind !== undefined && request.kind !== 'approval' && request.kind !== 'mailArchive' && request.kind !== 'mailMove' && request.kind !== 'approvedProgram' && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
     const scope = parseServiceScope(request.scope)
     const controller = new AbortController(); this.services.set(request.id, controller)
     const check = async (domain?: { path: string, ownerPid: number }) => parseResourceState(await this.dispatch({ serviceCheck: { scope, ...(domain ? { domain } : {}) } }))
@@ -1033,20 +1034,24 @@ export class FixtureWorker {
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
         return await invokeSsh({ resources: state.resources, scope, body: request.body, dist, root: join(this.root, 'runs', scope.runId), credentials: this.credentials, signal: controller.signal, check, observe, ledger, tokens })
       }
-      if (request.kind === 'mailMove' || (request.body && typeof request.body === 'object' && ('applicationId' in request.body || 'application' in request.body))) {
+      if (request.kind === 'mailMove' || request.kind === 'approvedProgram' || (request.body && typeof request.body === 'object' && ('applicationId' in request.body || 'application' in request.body))) {
         if (!this.credentials || !this.connections) throw new Error('Credential store is unavailable')
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
         const notStarted = (error: unknown) => request.kind === 'mailMove' ? archiveRefusal(error) : error
+        // An approved command runs with its consumed program approval instead of a continuing grant (issue 1468).
+        const approved = request.kind === 'approvedProgram' ? parseApprovedInvocation(request.body) : undefined
+        const body = approved ? { application: approved.application, argv: approved.argv } : request.body
         let requested: ReturnType<typeof programRequest>
         try {
-          requested = programRequest(state.resources, scope.podId, scope.capabilities, request.body)
+          requested = programRequest(state.resources, scope.podId, scope.capabilities, body)
           if (request.kind === 'mailMove') assertArchiveMove(requested.argv)
         }
         catch (error) { throw notStarted(error) }
         const connection = await this.connections.podConnection(scope.podId).catch((error: unknown) => { throw notStarted(error) })
         const workspace = await podWorkspace(this.root, scope.podId)
         const directories = directoryPolicy(await assignedDirectories(this.root, scope.podId, state.resources))
-        const result = await invokeProgram(state.resources, scope.podId, request.body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { ...directories, workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } }, { connection, ledger, reach: await this.sandboxReach(scope.podId), observe, tokens }, request.kind === 'mailMove' ? 'move' : undefined)
+        const approval = approved ? async () => { await this.dispatch({ approvalExecution: { scope, invocation: approved } }) } : undefined
+        const result = await invokeProgram(state.resources, scope.podId, body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { ...directories, workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } }, { connection, ledger, reach: await this.sandboxReach(scope.podId), observe, tokens, approval }, request.kind === 'mailMove' ? 'move' : undefined)
         await check(); controller.signal.throwIfAborted(); return result
       }
       const assignment = assignedMail(state.resources)
