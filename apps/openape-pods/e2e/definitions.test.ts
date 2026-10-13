@@ -3,6 +3,7 @@ import { resolve, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { expect, it } from 'vitest'
 import { cleanupAfterEach, launch, seed } from './fixtures/crash'
+import { openPod } from './fixtures/navigation'
 import { fixtureShellIdentity } from './fixtures/shell-identity'
 import { PodDatabase } from '../src/worker/storage/database'
 import { ResourceRegistry } from '../src/worker/resources/registry'
@@ -86,8 +87,7 @@ it('definition native boundary: isolates identities and validates exact versions
   })
   expect(evidence.attempts).toHaveLength(3)
   expect(evidence.attempts[0]).toEqual(evidence.attempts[1])
-  await page.getByRole('button', { name: 'Pods', exact: true }).click()
-  await page.getByRole('button', { name: /Company B instance/ }).click()
+  await openPod(page, 'Company B instance')
   await page.getByRole('tab', { name: 'Script', exact: true }).click()
   await page.locator('.definition-panel summary').click()
   await page.getByRole('button', { name: 'Review update for this instance', exact: true }).click()
@@ -100,8 +100,7 @@ it('definition native boundary: isolates identities and validates exact versions
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(430, 900))
   await page.evaluate(() => window.pods.language({ type: 'set', language: 'de' }))
   await page.reload()
-  await page.getByRole('button', { name: 'Pods', exact: true }).click()
-  await page.getByRole('button', { name: /Company B instance/ }).click()
+  await openPod(page, 'Company B instance', 'de')
   await page.getByRole('tab', { name: 'Skript', exact: true }).click()
   await page.locator('.definition-panel summary').click()
   await page.getByRole('button', { name: 'Update für diese Instanz prüfen', exact: true }).click()
