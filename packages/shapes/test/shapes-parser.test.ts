@@ -1,7 +1,10 @@
+import { mkdtempSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { loadAdapter } from '../src/adapters.js'
 import { resolveCommand } from '../src/parser.js'
+import { parseAdapterToml } from '../src/toml.js'
 
 const fixturesDir = join(import.meta.dirname, 'fixtures')
 
@@ -122,5 +125,46 @@ describe('@openape/shapes adapters', () => {
       expect(resolved.detail.operation_id).toBe('workspaces.list')
       expect(resolved.bindings).toEqual({ project_id: '42' })
     })
+  })
+})
+
+describe('declared options in adapter TOML', () => {
+  const adapter = (cli: string, operation: string) => `schema = "openape-shapes/v1"
+[cli]
+id = "git"
+executable = "git"
+${cli}
+[[operation]]
+id = "git.merge-base"
+command = ["merge-base"]
+positionals = ["commit", "other"]
+display = "Merge base of {commit} and {other} in {repo}"
+action = "read"
+risk = "low"
+resource_chain = ["repo:path={repo}"]
+${operation}
+`
+
+  it('copies [cli] global_options onto every operation and keeps value_options', () => {
+    const parsed = parseAdapterToml(adapter('global_options = ["C=repo"]', 'value_options = []\nflag_options = ["is-ancestor"]'))
+
+    expect(parsed.operations[0]).toMatchObject({ global_options: ['C=repo'], value_options: [], flag_options: ['is-ancestor'] })
+  })
+
+  it('resolves git -C <repo> merge-base --is-ancestor A B', async () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'shapes-options-')), 'git.toml')
+    writeFileSync(file, adapter('global_options = ["C=repo"]', 'flag_options = ["is-ancestor"]'))
+
+    const resolved = await resolveCommand(loadAdapter('git', file), ['git', '-C', '/work/repo', 'merge-base', '--is-ancestor', 'A', 'B'])
+
+    expect(resolved.bindings).toEqual({ 'is-ancestor': 'true', 'commit': 'A', 'other': 'B', 'repo': '/work/repo' })
+    expect(resolved.permission).toBe('git.repo[path=/work/repo]#read')
+    expect(resolved.detail.display).toBe('Merge base of A and B in /work/repo')
+  })
+
+  it('rejects malformed option declarations', () => {
+    expect(() => parseAdapterToml(adapter('global_options = ["C=re po"]', ''))).toThrow(/invalid global_options/)
+    expect(() => parseAdapterToml(adapter('', 'value_options = ["onto=x"]'))).toThrow(/invalid value_options/)
+    expect(() => parseAdapterToml(adapter('', 'flag_options = ["a b"]'))).toThrow(/invalid flag_options/)
   })
 })
