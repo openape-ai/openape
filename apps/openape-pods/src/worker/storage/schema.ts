@@ -1,10 +1,11 @@
 /**
- * The complete control database of schema 48 (issue 1465): Pods, scripts, runs and grants, and the shared domain data,
- * work ledger, owner questions, object approvals and external effects of autonomous Pods. A fresh profile is created
+ * The complete control database of schema 49: Pods, scripts, runs and grants, and the shared domain data, work ledger,
+ * owner questions, object approvals and external effects of autonomous Pods (issue 1465). A fresh profile is created
  * from it; convert.ts converts schema-46 and schema-47 profiles and backups, archiving every row of the retired network
- * runtime in legacy_records. Older profiles and backups are refused.
+ * runtime in legacy_records, and gives schema-48 profiles the program approvals of issue 1468. Older profiles and
+ * backups are refused.
  */
-export const schemaVersion = 48
+export const schemaVersion = 49
 
 export const baselineSchema = `
 -- Pods, scripts and knowledge
@@ -641,7 +642,7 @@ CREATE TABLE approval_batches(
 CREATE TABLE action_approvals(
   id TEXT PRIMARY KEY,
   pod_id TEXT NOT NULL REFERENCES pods(id),
-  action TEXT NOT NULL CHECK(action IN ('mail.archive')),
+  action TEXT NOT NULL CHECK(action IN ('mail.archive','program.run')),
   object TEXT NOT NULL CHECK(length(object) BETWEEN 1 AND 500),
   payload TEXT NOT NULL CHECK(json_valid(payload) AND json_type(payload)='object'),
   payload_hash TEXT NOT NULL CHECK(length(payload_hash)=64),

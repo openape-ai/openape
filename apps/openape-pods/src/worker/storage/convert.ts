@@ -2,10 +2,10 @@ import { createHash, randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { tagLimits } from '@openape/pods-protocol'
 import { StorageError } from './errors.ts'
-import { baselineSchema } from './schema.ts'
+import { baselineSchema, schemaVersion } from './schema.ts'
 
 /**
- * One-way conversion of a schema-47 profile into schema 48 (issue 1465). It refuses before any change while legacy
+ * One-way conversion of a schema-47 profile into the current schema (issue 1465). It refuses before any change while legacy
  * network work is open, archives every row of the retired network runtime unchanged in legacy_records (verified by
  * count and digest), carries archive effects into the generalized effect ledger and member checkpoints into each
  * Pod's private state, rebuilds the tables whose definition changed and records a conversion receipt.
@@ -15,10 +15,11 @@ import { baselineSchema } from './schema.ts'
 /** Every table of schema 47 that schema 48 no longer has; their rows survive only as inert history. */
 export const retiredTables = ['network_sandbox_resources', 'automation_descriptions', 'networks', 'network_revisions', 'network_members', 'network_subscriptions', 'composition_config', 'network_checkpoints', 'network_source_clocks', 'network_scheduler_state', 'network_runtime_status', 'network_maintenance_status', 'network_process_previews', 'network_trace_events', 'network_cases', 'network_case_revisions', 'network_case_sources', 'network_events', 'network_event_identities', 'network_deliveries', 'network_queue_counts', 'network_joins', 'network_join_inputs', 'network_choices', 'network_invocations', 'network_invocation_controls', 'network_effect_attempts', 'network_effect_receipts', 'network_gate_tasks', 'network_gate_task_attempts', 'network_gate_attempt_controls', 'network_gate_controls', 'network_gate_items', 'network_gate_item_grants', 'data_collections', 'data_collection_versions', 'data_permissions', 'data_records', 'data_record_revisions', 'data_record_provenance', 'data_index_values', 'network_data_staging', 'artifact_scopes', 'artifacts', 'artifact_permissions', 'artifact_references', 'network_artifact_staging'] as const
 
-/** Digests of the exact schema-46 and schema-47 objects; a converted database must be one of them. */
+/** Digests of the exact schema-46, schema-47 and schema-48 objects; a converted database must be one of them. */
 const knownSchemas: Record<number, { objects: number, digest: string }> = {
   46: { objects: 147, digest: '4e022a881674f2f188a0a8397e0068e2d4e49147593ece1b813f61d855c41d1f' },
   47: { objects: 148, digest: '220a37d6c30b66ccf0ca88302791f006b3cd38e1290635b5f1ad448d3218901c' },
+  48: { objects: 104, digest: '48af432be41c9c98cf89ea081c326ea156775bde3e73c1dd06fadda60ed1e7d9' },
 }
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
 
@@ -151,12 +152,39 @@ export function convert47(database: DatabaseSync): ConversionReceipt {
     database.exec(`DROP TABLE "conversion_${name}"`)
   }
   for (const table of [...retiredTables].reverse()) database.exec(`DROP TABLE "${table}"`)
-  const remaining = objects(database).filter(item => !target.some(statement => statement.name === item.name && statement.sql === item.sql))
-  if (remaining.length || objects(database).length !== target.length) throw new StorageError('invalid-data', `The converted schema differs from schema 48: ${remaining.map(item => item.name).join(', ') || 'missing objects'}`)
-  if (database.prepare('PRAGMA foreign_key_check').get()) throw new StorageError('invalid-data', 'The conversion found an inconsistent reference')
+  assertBaseline(database)
   const receipt: ConversionReceipt = { from: 47, archived, effects, checkpoints: Number(checkpoints), rebuilt, at: new Date().toISOString() }
   database.prepare('INSERT INTO storage_receipts VALUES(?,\'conversion\',?,?)').run(randomUUID(), JSON.stringify(receipt), Date.now())
   return receipt
+}
+
+/** A converted database has exactly the baseline's objects and consistent references. */
+function assertBaseline(database: DatabaseSync): void {
+  const target = statements()
+  const remaining = objects(database).filter(item => !target.some(statement => statement.name === item.name && statement.sql === item.sql))
+  if (remaining.length || objects(database).length !== target.length) throw new StorageError('invalid-data', `The converted schema differs from schema ${schemaVersion}: ${remaining.map(item => item.name).join(', ') || 'missing objects'}`)
+  if (database.prepare('PRAGMA foreign_key_check').get()) throw new StorageError('invalid-data', 'The conversion found an inconsistent reference')
+}
+
+/**
+ * Schema 48 to 49 (issue 1468): object approvals also name exact program commands. Only the CHECK of
+ * action_approvals changed, so that table is rebuilt from the baseline with its rows and rowids unchanged.
+ * It runs inside the caller's transaction with foreign keys off, after the verified pre-upgrade backup.
+ */
+export function convert48(database: DatabaseSync): void {
+  assertKnownSchema(database, 48)
+  const rows = count(database, 'SELECT count(*) FROM action_approvals')
+  database.exec('DROP INDEX action_approvals_state')
+  database.exec('PRAGMA legacy_alter_table=ON')
+  database.exec('ALTER TABLE action_approvals RENAME TO conversion_action_approvals')
+  database.exec('PRAGMA legacy_alter_table=OFF')
+  for (const statement of statements().filter(item => item.table === 'action_approvals')) database.exec(statement.sql)
+  const list = ['rowid', ...columns(database, 'action_approvals').map(column => `"${column}"`)].join(',')
+  database.exec(`INSERT INTO action_approvals(${list}) SELECT ${list} FROM conversion_action_approvals ORDER BY rowid`)
+  if (count(database, 'SELECT count(*) FROM action_approvals') !== rows) throw new StorageError('invalid-data', 'Rebuilding action_approvals lost rows')
+  database.exec('DROP TABLE conversion_action_approvals')
+  assertBaseline(database)
+  database.prepare('INSERT INTO storage_receipts VALUES(?,\'conversion\',?,?)').run(randomUUID(), JSON.stringify({ from: 48, rebuilt: ['action_approvals'], rows, at: new Date().toISOString() }), Date.now())
 }
 
 /** The tag table of schema 47, added to a schema-46 database before its conversion. */

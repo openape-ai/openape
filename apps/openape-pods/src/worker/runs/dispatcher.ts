@@ -13,7 +13,9 @@ import type { HttpRequest, HttpReply } from '../../contracts/http'
 import { assignedHttp } from '../../main/programs/http-service'
 import { EffectLedger } from '../recovery/effects'
 import { executeHttpEffect } from './http'
-import { executeProgramEffect, programWrite } from './program-effects'
+import { describeProgram, executeProgramEffect, invokeApproved, programWrite } from './program-effects'
+import { parseApprovedInvocation } from '../../contracts/programs'
+import type { ApprovedInvocation } from '../../contracts/programs'
 import { PodVariables } from '../resources/variables'
 import { parseCredentialRead } from '../../contracts/credentials'
 import { ScriptCredentials } from '../resources/script-credentials'
@@ -66,6 +68,8 @@ export interface RunServices {
   provider?: AgentGatewayServices['provider']
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
   mailMove?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
+  /** One exact command whose program approval the worker consumed; it runs without a continuing grant. */
+  approvedProgram?: (body: ApprovedInvocation, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
   approval?: (body: Parameters<ApprovalService>[0], signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
 }
 
@@ -272,7 +276,13 @@ export class RunDispatcher {
             const receipt = new InboxOutbox(this.store).queue(pod, id, parseNotify(payload))
             appendEvent('notify', receipt); return receipt
           }
-          if (operation === 'approvals.request') { const view = this.approvals.request({ podId: pod.id, runId: id }, payload); appendEvent('approval-request', { id: view.id, state: view.state }); return view }
+          if (operation === 'approvals.request') {
+            const asked = payload as { action?: unknown, payload?: { application?: unknown, argv?: unknown } } | null
+            // A program approval shows the owner what its application adapter says the command does.
+            const display = asked?.action === 'program.run' ? await describeProgram(this.resources.list(pod.id), pod.id, scope.capabilities, { application: String(asked.payload?.application ?? ''), argv: asked.payload?.argv }) : undefined
+            assertCurrent()
+            const view = this.approvals.request({ podId: pod.id, runId: id }, payload, display); appendEvent('approval-request', { id: view.id, state: view.state }); return view
+          }
           if (operation === 'approvals.get') return this.approvals.get(pod.id, String((payload as { id?: unknown } | null)?.id ?? ''))
           if (operation === 'mail.archiveApproved') {
             if (!this.services?.mailMove || !this.services.approval) throw new Error('Mail archive service is unavailable')
@@ -347,6 +357,20 @@ export class RunDispatcher {
             const request = this.services.credential(alias, operationSignal, scope); pendingAgents.add(request)
             try { const value = await request; assertCurrent(); operationSignal.throwIfAborted(); return value }
             finally { pendingAgents.delete(request) }
+          }
+          if (operation === 'tools.invoke' && payload && typeof payload === 'object' && 'approval' in payload) {
+            if (!this.services?.approvedProgram || !this.services.approval) throw new Error('Approved program service is unavailable')
+            const request = parseApprovedInvocation(payload)
+            // The command must still be assigned and match its adapter before the approval is used up.
+            await describeProgram(this.resources.list(pod.id), pod.id, scope.capabilities, { application: request.application, argv: request.argv })
+            assertCurrent()
+            const service: ApprovalService = (body, serviceSignal) => this.services!.approval!(body, serviceSignal, scope)
+            // The IdP exchange and the command pause the script budget like other bounded service waits.
+            infrastructureWaiting++
+            const work = invokeApproved(this.store, this.approvals, service, { podId: pod.id, runId: id }, request, command => this.services!.approvedProgram!({ ...command, approval: request.approval }, operationSignal, scope), assertCurrent, operationSignal)
+            pendingAgents.add(work)
+            try { const reply = await work; assertCurrent(); appendEvent('approved-command', { approval: request.approval, exitCode: (reply as { exitCode?: unknown } | null)?.exitCode ?? null }); return reply }
+            finally { pendingAgents.delete(work); infrastructureWaiting-- }
           }
           if (operation === 'tools.invoke') return scriptTool(payload, operationSignal)
           throw new Error('Unsupported script operation')

@@ -152,6 +152,24 @@ it('runs a program only when the sandbox allows it and a grant covers it', async
   expect(idp.state.tokens).toEqual([])
 })
 
+it('runs an exact command with its consumed program approval instead of a grant, and nothing without either (issue 1468)', async () => {
+  const gh = ghApplication()
+  const f = await workerFixture({ resources: () => [program, gh.resource] })
+  const lease = { capabilities: [gh.assignment.capability], signal: AbortSignal.timeout(5000), assertCurrent: () => {} }
+  const call = (approval?: () => Promise<void>) => invokeProgram([gh.resource] as never, podId, { application: 'gh', argv: ['repo', 'create', 'openape/new'] }, '/fixture/helper', root, {} as never, lease, { connection: f.connection(podId), ledger: f.grants.port(podId), reach: { level: 'isolated', protectedPaths: [] }, ...(approval ? { approval } : {}) })
+  // Neither a grant nor an approval: unchanged, the Pod requests a grant and is refused while nobody approves.
+  await expect(call()).rejects.toThrow('owner approval')
+  const requested = idp.state.creates.length
+  // The worker's check of the consumed approval refuses: nothing starts.
+  await expect(call(async () => { throw new Error('No consumed approval of this Pod names this exact command') })).rejects.toThrow('No consumed approval')
+  // A confirmed approval replaces the grant: no grant request and no grant token; the call proceeds to the sandbox.
+  const confirmed = vi.fn(async () => {})
+  await expect(call(confirmed)).rejects.not.toThrow(/approval|grant/i)
+  expect(confirmed).toHaveBeenCalledTimes(1)
+  expect(idp.state.creates).toHaveLength(requested)
+  expect(idp.state.tokens).toEqual([])
+})
+
 it('approves the runtime grant ahead of the first run, so the run starts without any approval wait', async () => {
   const f = await workerFixture()
   await mcp(f, { action: 'grants', command: { type: 'request', target: { podId }, grants: { runtime: true } } }, session())

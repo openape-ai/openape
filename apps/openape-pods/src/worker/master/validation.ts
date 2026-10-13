@@ -105,6 +105,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
         parseAgentRequest(payload)
         return { threadId: 'synthetic-validation', response: '{"claims":[]}' }
       }
+      if (operation === 'tools.invoke' && payload && typeof payload === 'object' && 'approval' in payload) throw new Error('Approved commands need a live owner approval; synthetic validation never consumes approvals or runs them')
       if (operation === 'tools.invoke' && payload && typeof payload === 'object' && 'sshInventory' in payload) {
         assignedSsh(resources.list(pod.id), pod.id, capabilities, payload)
         throw new Error('Synthetic validation has no SSH host observations; handle collection failures explicitly')

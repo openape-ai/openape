@@ -6,6 +6,7 @@
 - Owner decisions: owner context with the owner HOME is the creation default, the isolated sandbox is optional when the user wants it; one approval per push through per-object approvals; UI is verified in Vitest browser mode with screenshots, never by E2E.
 - PR 384 (`feature/issue-1468-pods-ux-quick-wins`, head `cb0472a8`): quick wins Q1–Q9. Checks: typecheck, lint, affected unit suite, test:browser 54/54. Evidence: https://report.openape.ai/d/01M4TRK1G63J3SWS48WD2YMD3A
 - Next: merge PR 384, then M1 (Pod rows with purpose, last result, next run, waits-for) on a new branch.
+- M7 (`feature/issue-1468-object-approvals`): object approvals `program.run` for one exact command, `tools.invoke({application,argv,approval})` consumes it and runs once without a continuing grant; schema 49 (48 → 49 rebuilds `action_approvals`). No DDISA change (grants.md §3.4 request batches, §4.8 consume). Checks: typecheck, lint, Pods unit suite. Next: review/merge, then acceptance on a disposable repository (first push and a push to a new SHA each wait for their own approval).
 
 ## Autonomous Pods: shared data replaces networks — issue 1465
 

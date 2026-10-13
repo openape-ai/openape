@@ -14,6 +14,8 @@ const roots: string[] = []; const stores: PodDatabase[] = []
 afterEach(() => { for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 // The exact schema the October 2026 releases wrote (desktop 7fab4b84), as read from a real profile.
 const schema47 = readFileSync(join(import.meta.dirname, 'fixtures/schema-47.sql'), 'utf8')
+// The exact schema 48 of the releases since issue 1465 (desktop 74ed11d0).
+const schema48 = readFileSync(join(import.meta.dirname, 'fixtures/schema-48.sql'), 'utf8')
 function directory(): string {
   const root = mkdtempSync(join(tmpdir(), 'pods-upgrade-')); roots.push(root); return root
 }
@@ -79,6 +81,28 @@ it('converts a schema-46 profile through the tag table of schema 47', () => {
   expect(store.db.prepare('PRAGMA user_version').get()!.user_version).toBe(schemaVersion)
   expect(readdirSync(root).filter(file => file.startsWith('before-v46-'))).toHaveLength(1)
   store.close(); stores.pop()
+  expect(objects(join(root, 'control.sqlite'))).toEqual(objects(join(fresh, 'control.sqlite')))
+})
+
+it('lets a schema-48 profile hold program approvals and keeps its approvals unchanged (issue 1468)', () => {
+  const fresh = directory(); open(fresh).close(); stores.pop()
+  const root = directory(); const ids = { pod: randomUUID(), batch: randomUUID(), approval: randomUUID() }
+  const database = new DatabaseSync(join(root, 'control.sqlite'))
+  database.exec(schema48)
+  database.exec('INSERT INTO settings VALUES(1,1,2); INSERT INTO data_settings VALUES(1,10737418240,0,NULL); INSERT INTO onboarding VALUES(1,0,NULL); INSERT INTO pod_organization VALUES(1,1); INSERT INTO data_sequence VALUES(1,0);')
+  database.prepare('INSERT INTO pods VALUES(?,\'Newsletter\',1,\'active\',NULL,1)').run(ids.pod)
+  database.prepare('INSERT INTO approval_batches(id,pod_id,title,expires_at,next_poll_at,created_at) VALUES(?,?,\'Archive newsletters\',2,1,1)').run(ids.batch, ids.pod)
+  database.prepare('INSERT INTO action_approvals VALUES(?,?,\'mail.archive\',\'owner@example.invalid:m1\',\'{}\',?,\'Weekly news\',\'{}\',?,\'grant-1\',\'approved\',NULL,NULL,1,1)').run(ids.approval, ids.pod, 'a'.repeat(64), ids.batch)
+  expect(() => database.prepare('INSERT INTO action_approvals VALUES(?,?,\'program.run\',\'git push\',\'{}\',?,\'Push\',\'{}\',NULL,NULL,\'collecting\',NULL,NULL,1,1)').run(randomUUID(), ids.pod, 'b'.repeat(64))).toThrow('CHECK')
+  database.exec('PRAGMA user_version=48'); database.close()
+  const store = open(root)
+  expect(store.db.prepare('PRAGMA user_version').get()!.user_version).toBe(schemaVersion)
+  expect(readdirSync(root).filter(file => file.startsWith('before-v48-'))).toHaveLength(1)
+  expect(store.db.prepare('SELECT id,action,state,grant_id FROM action_approvals').all()).toEqual([{ id: ids.approval, action: 'mail.archive', state: 'approved', grant_id: 'grant-1' }])
+  store.db.prepare('INSERT INTO action_approvals VALUES(?,?,\'program.run\',\'git push\',\'{}\',?,\'Push\',\'{}\',NULL,NULL,\'collecting\',NULL,NULL,1,1)').run(randomUUID(), ids.pod, 'b'.repeat(64))
+  expect(JSON.parse(String(store.db.prepare('SELECT body FROM storage_receipts WHERE kind=\'conversion\'').get()!.body))).toMatchObject({ from: 48, rebuilt: ['action_approvals'], rows: 1 })
+  store.close(); stores.pop()
+  // The upgraded schema is exactly the fresh one.
   expect(objects(join(root, 'control.sqlite'))).toEqual(objects(join(fresh, 'control.sqlite')))
 })
 
@@ -149,7 +173,7 @@ it('refuses a profile older than schema 46 without changing its bytes', () => {
   expect(readdirSync(root)).toEqual(['control.sqlite'])
 })
 
-it('restores a schema-47 backup as schema 48 with every Pod paused and refuses an older one', async () => {
+it('restores a schema-47 backup as the current schema with every Pod paused and refuses an older one', async () => {
   const exports = directory(); const source = directory()
   const backup = await createBackup(open(source), exports)
   const legacy = directory(); const ids = profile47(legacy)
