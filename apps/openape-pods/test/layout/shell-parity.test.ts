@@ -20,15 +20,12 @@ const frames = (count = 40) => new Promise<void>((done) => { const tick = (left:
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en') })
 async function capture(desktop: boolean) {
-  applyLanguage('de'); await page.viewport(1440, 1000)
-  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: true, now: NOW, decisions: 17, desktop, sharing: true, ...(desktop ? {} : { subject: 'owner@example.invalid' }) } })
+  applyLanguage('de'); await page.viewport(1440, 1000); localStorage.setItem('pods.automations.mode', 'map')
+  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: true, now: NOW, desktop, sharing: true, ...(desktop ? {} : { subject: 'owner@example.invalid' }) } })
   await flushPromises(); await frames()
-  const shell = wrapper.vm as unknown as { open: (id: string | null) => void }
-  const bot = view.pods.find(pod => pod.name === 'Morgenbriefing · Calendar-Bot')!
-  shell.open(bot.id); await flushPromises(); await frames(5)
   const text = wrapper.text()
   const native = wrapper.findAll('button[title="Nur am Desktop"]').map(button => button.text().trim())
-  const layout = ['.kpi-row', '.automations-toolbar', '[data-testid="automations-map"] canvas', '.automation-detail'].map((selector) => { const box = document.querySelector(selector)!.getBoundingClientRect(); return [selector, Math.round(box.left), Math.round(box.top), Math.round(box.width)] })
+  const layout = ['.kpi-row', '.automations-toolbar', '[data-testid="automations-map"] canvas', '.automation-info'].map((selector) => { const box = document.querySelector(selector)!.getBoundingClientRect(); return [selector, Math.round(box.left), Math.round(box.top), Math.round(box.width)] })
   await page.screenshot({ path: screenshotPath(`redesign-parity-${desktop ? 'desktop' : 'browser'}.png`) })
   wrapper.unmount(); wrapper = undefined
   return { text, native, layout }
@@ -38,7 +35,8 @@ it('renders the same shell on the desktop and in the browser, differing only in 
   const desktop = await capture(true)
   const browser = await capture(false)
   expect(desktop.native).toEqual([])
-  expect(browser.native).toEqual(['Im Editor öffnen'])
+  // Native-only actions moved to the Pod page; the shell itself has none left.
+  expect(browser.native).toEqual([])
   expect(browser.layout).toEqual(desktop.layout)
   expect(browser.text).toBe(desktop.text)
 })

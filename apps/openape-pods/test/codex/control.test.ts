@@ -58,7 +58,7 @@ it('administers shared data as the owner: namespaces, owner records, questions a
 
 it('applies variables directly, preserves scope and validation checks, and creates no reviews', async () => {
   const { store, pod, send } = fixture()
-  await expect(send({ action: 'inspect', podId: pod.id, revision: pod.revision })).rejects.toThrow('context_required')
+  await expect(send({ action: 'setVariable', podId: pod.id, revision: pod.revision, name: 'mode', value: 'unselected', variableRevision: 0 })).rejects.toThrow('context_required')
   await send({ action: 'select', podIds: [pod.id] })
   await send({ action: 'setVariable', podId: pod.id, revision: pod.revision, name: 'mode', value: injected, variableRevision: 0 })
   expect(store.db.prepare('SELECT value FROM pod_variables WHERE pod_id=?').get(pod.id)?.value).toBe(injected)
@@ -67,12 +67,12 @@ it('applies variables directly, preserves scope and validation checks, and creat
   await expect(send({ action: 'resume', podId: pod.id, revision: pod.revision })).rejects.toThrow('Validate')
 })
 
-it('applies grouping and enabled schedules with revision checks, without changing other Pods', async () => {
+it('applies enabled schedules with revision checks, without changing other Pods or accepting retired groups', async () => {
   const { store, pod, send, current } = fixture()
   const other = store.createPod({ name: 'Other' })
   await send({ action: 'select', podIds: [pod.id] })
   await send({ action: 'revise', podId: pod.id, revision: pod.revision, name: 'Renamed' })
-  await send({ action: 'setGroup', podId: pod.id, revision: current().revision, name: 'Finance', organizationRevision: 1 })
+  await expect(send({ action: 'setGroup', podId: pod.id, revision: current().revision, name: 'Finance', organizationRevision: 1 })).rejects.toThrow('not allowed')
   const action = { action: 'setSchedule', podId: pod.id, revision: current().revision, spec: { kind: 'interval', seconds: 900 }, scheduleRevision: 0, enabled: true }
   expect(await send(action)).toMatchObject({ schedule: { enabled: true, revision: 1 } })
   await expect(send(action)).rejects.toThrow('Stale schedule')
@@ -233,4 +233,17 @@ it('describes shared data as the only way Pods compose and offers no network, wo
   await expect(send({ action: 'networks', command: { type: 'list' } })).rejects.toThrow()
   expect(Object.keys(reference.actions).filter(action => /workflow|graph|gate|approve/i.test(action))).toEqual([])
   await expect(send({ action: 'saveWorkflow', definition: {} })).rejects.toThrow()
+})
+
+it('inspects any listed Pod without selecting it and never selects archived Pods', async () => {
+  const { store, pod, send } = fixture()
+  const archived = store.createPod({ name: 'Retired' })
+  await send({ action: 'select', podIds: [archived.id] })
+  store.updatePod(archived.id, archived.revision, { name: archived.name, lifecycle: 'archived' })
+  expect(await send({ action: 'inspect', podId: pod.id, revision: pod.revision })).toMatchObject({ pod: { id: pod.id } })
+  expect(await send({ action: 'inspect', podId: archived.id, revision: store.getPod(archived.id).revision })).toMatchObject({ pod: { id: archived.id, lifecycle: 'archived' } })
+  expect(await send({ action: 'list' })).toMatchObject({ pods: [{ id: pod.id, selected: false }, { id: archived.id, selected: false }] })
+  await expect(send({ action: 'select', podIds: [pod.id, archived.id] })).rejects.toThrow(`Archived Pods cannot be selected: ${archived.id}`)
+  expect(await send({ action: 'select', podIds: [pod.id] })).toMatchObject({ pods: [{ id: pod.id }] })
+  await expect(send({ action: 'setVariable', podId: archived.id, revision: store.getPod(archived.id).revision, name: 'mode', value: 'x', variableRevision: 0 })).rejects.toThrow('context_required')
 })
