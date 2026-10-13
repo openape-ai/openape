@@ -71,7 +71,7 @@
   {"argv":["fetch","--prune","origin"],"expected":{"operation_id":"git.fetch","permission":"git.repo[*].remote[*]#read","display":"Fetch from remote","exact_command":false},"reclassified":{"operation_id":"git.fetch.remote","display":"Fetch from remote origin"}},
   {"argv":["push","--force","origin"],"expected":{"operation_id":"git.push","permission":"git.repo[*].remote[*]#edit","display":"Push to remote","exact_command":false},"narrowed":true},
   {"argv":["commit","-m","msg"],"expected":{"operation_id":"git.commit","permission":"git.repo[*].commit[*]#create","display":"Commit: msg","exact_command":false}},
-  {"argv":["commit","-am","msg"],"expected":{"operation_id":"git.commit","permission":"git.repo[*].commit[*]#create","display":"Commit: msg","exact_command":false}},
+  {"argv":["commit","-am","msg"],"expected":{"operation_id":"git.commit","permission":"git.repo[*].commit[*]#create","display":"Commit: msg","exact_command":false},"narrowed":true},
   {"argv":["checkout","-b","feat"],"expected":{"operation_id":"git.checkout","permission":"git.repo[*].ref[name=feat]#edit","display":"Checkout feat","exact_command":false}},
   {"argv":["rebase","--abort"],"expected":{"operation_id":"git.rebase","permission":"git.repo[*]#edit","display":"Rebase current branch","exact_command":true}},
   {"argv":["reset","--hard","HEAD"],"expected":{"operation_id":"git.reset","permission":"git.repo[*]#delete","display":"Reset current HEAD","exact_command":true}}
