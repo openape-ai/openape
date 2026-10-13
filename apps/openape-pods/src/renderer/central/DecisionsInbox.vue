@@ -56,6 +56,24 @@ function answer(item: DomainQuestionView, option: string) {
 function answerAll(items: DomainQuestionView[], option: string) { for (const item of open(items)) answer(item, option) }
 
 const approvals = computed(() => props.domain?.approvals ?? [])
+type ApprovalItem = (typeof approvals.value)[number]
+/** One card per IdP batch request with one decision link; approvals still collecting group per Pod until sent. */
+const batches = computed(() => {
+  const map = new Map<string, { key: string, podId: string, items: ApprovalItem[] }>()
+  for (const item of approvals.value.filter(entry => entry.state !== 'unknown')) {
+    const key = item.batchId ?? `collecting:${item.podId}`
+    ;(map.get(key) ?? map.set(key, { key, podId: item.podId, items: [] }).get(key)!).items.push(item)
+  }
+  return Array.from(map.values(), batch => ({
+    ...batch,
+    requested: batch.items.find(item => item.state === 'requested' && item.batchUrl),
+    counts: Array.from(new Set(batch.items.map(item => item.state)), state => ({ state, count: batch.items.filter(item => item.state === state).length })),
+    updatedAt: Math.max(...batch.items.map(item => item.updatedAt)),
+  }))
+})
+const uncertain = computed(() => approvals.value.filter(item => item.state === 'unknown'))
+/** Only requested and uncertain approvals wait for the owner; collecting and approved ones need nothing from them. */
+const waitingApprovals = computed(() => approvals.value.filter(item => item.state === 'requested' || item.state === 'unknown').length)
 const held = computed(() => props.domain?.held ?? [])
 const effects = computed(() => props.domain?.unknownEffects ?? [])
 const rights = computed(() => props.view.pods.flatMap(pod => [...pod.approvals.map(approval => ({ pod, approval, error: null as string | null })), ...(pod.queue.blocked && !pod.approvals.length ? [{ pod, approval: null, error: pod.queue.error }] : [])]))
@@ -63,7 +81,7 @@ const unknown = computed(() => props.view.pods.flatMap(pod => pod.unknown.map(it
 const requests = computed(() => (props.requests ?? []).filter(row => row.status !== 'collected' && row.status !== 'expired'))
 const requestState = (status: SecretRequestRow['status']) => status === 'failed' ? t('failed') : status === 'filled' ? t('filled') : t('requested')
 const intent = (value: unknown) => Object.entries(value && typeof value === 'object' ? value : {}).map(([key, item]) => `${key}: ${format(item)}`).join(' · ')
-const total = computed(() => open(questions.value).length + approvals.value.length + rights.value.length + held.value.length + effects.value.length + unknown.value.length + requests.value.length)
+const total = computed(() => open(questions.value).length + waitingApprovals.value + rights.value.length + held.value.length + effects.value.length + unknown.value.length + requests.value.length)
 defineExpose({ total })
 </script>
 
@@ -75,7 +93,7 @@ defineExpose({ total })
         <b>{{ open(questions).length }}</b><span>{{ t('Questions') }}</span><small>{{ questions.length ? [...new Set(questions.map(item => podName(item.podId)))].join(', ') : t('no questions') }}</small>
       </div>
       <div class="kpi" role="listitem">
-        <b>{{ approvals.length }}</b><span>{{ t('Approvals waiting') }}</span><small>{{ approvals.length ? t('decided at the IdP') : t('no waiting approvals') }}</small>
+        <b>{{ waitingApprovals }}</b><span>{{ t('Approvals waiting') }}</span><small>{{ waitingApprovals ? t('decided at the IdP') : t('no waiting approvals') }}</small>
       </div>
       <div class="kpi" role="listitem">
         <b>{{ rights.length }}</b><span>{{ t('Rights') }}</span><small>{{ rights.length ? t('{count} runtime requests', { count: rights.length }) : t('no open runtime request') }}</small>
@@ -141,29 +159,45 @@ defineExpose({ total })
           <span class="pill off">{{ t('none') }}</span><span class="meta">{{ t('no waiting approvals') }}</span>
         </div>
       </div>
-      <div v-for="approval in approvals" :key="approval.id" class="item">
+      <div v-for="batch in batches" :key="batch.key" class="item" data-batch>
         <div class="row">
-          <span class="pill" :class="approval.state === 'unknown' ? 'warn' : 'idp'">{{ label(approval.state) }}</span><span class="subj">{{ approval.title }}</span><span class="meta">{{ podName(approval.podId) }} · {{ stamp(approval.updatedAt, language) }}</span>
+          <span class="subj">{{ batch.key.startsWith('collecting:') ? t('{count} objects are being collected for one request', { count: batch.items.length }) : t('{count} objects in one batch request', { count: batch.items.length }) }}</span><span class="meta">{{ podName(batch.podId) }} · {{ stamp(batch.updatedAt, language) }}</span>
+        </div>
+        <div class="row">
+          <span v-for="entry in batch.counts" :key="entry.state" class="pill" :class="entry.state === 'requested' ? 'idp' : entry.state === 'approved' ? 'ok' : 'off'">{{ entry.count }} {{ label(entry.state) }}</span>
+        </div>
+        <div v-if="batch.requested" class="opts">
+          <button v-if="desktop" class="secondary idp" type="button" @click="emit('domain', { type: 'openApproval', id: batch.requested.id })">
+            {{ t('Decide at the IdP') }}
+          </button>
+          <a v-else class="secondary idp" :href="batch.requested.batchUrl!" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
+        </div>
+        <details :open="batch.items.length <= 5">
+          <summary class="meta">
+            {{ t('Show objects') }}
+          </summary>
+          <ul class="plainlist">
+            <li v-for="item in batch.items" :key="item.id">
+              {{ item.title }} <span class="meta">· {{ label(item.state) }}</span>
+            </li>
+          </ul>
+        </details>
+      </div>
+      <div v-for="approval in uncertain" :key="approval.id" class="item">
+        <div class="row">
+          <span class="pill warn">{{ label(approval.state) }}</span><span class="subj">{{ approval.title }}</span><span class="meta">{{ podName(approval.podId) }} · {{ stamp(approval.updatedAt, language) }}</span>
         </div>
         <p v-if="approval.reason" class="meta">
           {{ diagnostic(approval.reason) }}
         </p>
-        <template v-if="approval.state === 'unknown'">
-          <label class="meta">{{ t('Observation') }} <input v-model="evidence[approval.id]" maxlength="2000"></label>
-          <div class="opts">
-            <button class="secondary" type="button" :disabled="!evidence[approval.id]?.trim()" @click="emit('domain', { type: 'resolveApproval', id: approval.id, decision: 'renew', evidence: evidence[approval.id] ?? '' })">
-              {{ t('Ask again') }}
-            </button>
-            <button class="secondary" type="button" :disabled="!evidence[approval.id]?.trim()" @click="emit('domain', { type: 'resolveApproval', id: approval.id, decision: 'withdraw', evidence: evidence[approval.id] ?? '' })">
-              {{ t('Withdraw') }}
-            </button>
-          </div>
-        </template>
-        <div v-else-if="approval.state === 'requested' && approval.batchUrl" class="opts">
-          <button v-if="desktop" class="secondary idp" type="button" @click="emit('domain', { type: 'openApproval', id: approval.id })">
-            {{ t('Decide at the IdP') }}
+        <label class="meta">{{ t('Observation') }} <input v-model="evidence[approval.id]" maxlength="2000"></label>
+        <div class="opts">
+          <button class="secondary" type="button" :disabled="!evidence[approval.id]?.trim()" @click="emit('domain', { type: 'resolveApproval', id: approval.id, decision: 'renew', evidence: evidence[approval.id] ?? '' })">
+            {{ t('Ask again') }}
           </button>
-          <a v-else class="secondary idp" :href="approval.batchUrl" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
+          <button class="secondary" type="button" :disabled="!evidence[approval.id]?.trim()" @click="emit('domain', { type: 'resolveApproval', id: approval.id, decision: 'withdraw', evidence: evidence[approval.id] ?? '' })">
+            {{ t('Withdraw') }}
+          </button>
         </div>
       </div>
     </div>
