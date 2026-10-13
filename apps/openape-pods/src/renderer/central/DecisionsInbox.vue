@@ -112,9 +112,9 @@ defineExpose({ total })
             </div>
           </div>
           <div v-else class="item" :data-question="item.id">
-            <div class="row">
-              <span class="subj">{{ item.body || item.key }}</span>
-            </div>
+            <p class="question-body">
+              {{ item.body || item.key }}
+            </p>
             <dl class="facts">
               <template v-for="(value, key) in item.data" :key="key">
                 <dt>{{ key }}</dt><dd>{{ format(value) }}</dd>
@@ -275,6 +275,7 @@ defineExpose({ total })
 .decisions-inbox .item{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 16px;display:grid;gap:8px;min-width:0}
 .decisions-inbox .item.done{border-color:var(--ok);background:var(--ok-soft)}.decisions-inbox .item.done .subj{color:var(--ok)}
 .decisions-inbox .row{display:flex;flex-wrap:wrap;gap:6px 12px;align-items:center}.decisions-inbox .subj{font-weight:600}
+.decisions-inbox .question-body{margin:0;white-space:pre-line;line-height:1.45;overflow-wrap:anywhere}
 .decisions-inbox .facts{display:grid;grid-template-columns:auto 1fr auto 1fr;gap:2px 12px;font-size:12px;margin:0}.decisions-inbox .facts dt{color:var(--muted)}.decisions-inbox .facts dd{margin:0;min-width:0;overflow-wrap:anywhere}
 @media (max-width:700px){.decisions-inbox .facts{grid-template-columns:auto 1fr}}
 .decisions-inbox .opts{display:flex;flex-wrap:wrap;gap:6px}.decisions-inbox .secondary{padding:6px 12px;font-size:14px;text-decoration:none}

@@ -47,7 +47,7 @@ describe('Entscheidungen', () => {
     expect(wrapper!.find('[data-testid="questions"] .grp').text()).toContain('Review uncertain mail')
     expect(wrapper!.find('[data-testid="questions"] .grp').text()).toContain('Mail-Klassifizierung · 17 offen')
     const github = card('Dependabot')
-    expect(github.find('.subj').text()).toBe('[GitHub] Your Dependabot alerts for the week of Sep 29 - Oct 6')
+    expect(github.find('.question-body').text()).toBe('[GitHub] Your Dependabot alerts for the week of Sep 29 - Oct 6')
     const facts = Object.fromEntries(github.findAll('dt').map((dt, index) => [dt.text(), github.findAll('dd')[index]!.text()]))
     expect(facts).toEqual({ sender: 'noreply@github.com', category: 'useful', confidence: '0,89' })
     expect(github.findAll('.opts button').map(item => item.text())).toEqual(['Keep for review', 'Newsletter candidate', 'Invoice review', 'Reply preview'])
