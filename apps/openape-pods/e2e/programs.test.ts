@@ -1,5 +1,7 @@
 import { fixtureShellIdentity } from './fixtures/shell-identity'
 import { failOnKeychainDialog } from './fixtures/keychain'
+import { openPod } from './fixtures/navigation'
+import { removeProfile, startupBackup } from './fixtures/startup'
 import { executeHttp } from '../src/main/programs/http-service'
 import { _electron as electron } from 'playwright'
 import { fixtureDirectory } from '../src/main/fixture'
@@ -103,7 +105,7 @@ int main(int argc, char **argv) {
   const terminal = () => new ProgramSession(randomUUID(), podId, applicationId, assignment, ['setup'], helper, privateRoot, cache, async () => {}, async () => { releases++ }, workspace, { readDirectories: [], writeDirectories: [] }, { connection: async () => connection, ledger, reach: async () => ({ level: 'isolated', protectedPaths: [] }) })
   const lease = { signal: new AbortController().signal, capabilities: [assignment.capability], assertCurrent: () => {} }
   const invoke = (argv: string[], capabilities = lease.capabilities) => invokeProgram([resource], podId, { application: assignment.name, argv }, helper, privateRoot, cache, { ...lease, capabilities }, { connection, ledger, reach: { level: 'isolated', protectedPaths: [] } })
-  return { root, privateRoot, cache, assignment, resource, podId, applicationId, state, identity, connection, ledger, terminal, invoke, releases: () => releases, close: async () => { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) } }
+  return { root, privateRoot, cache, assignment, resource, podId, applicationId, state, identity, connection, ledger, terminal, invoke, releases: () => releases, close: async () => { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await removeProfile(root) } }
 }
 
 it('program boundary: owner terminal state is reused by the assigned read tool and the agent sees only its result', async () => {
@@ -160,13 +162,11 @@ it('packaged program UI: exposes the external terminal and reuses application se
   setup.input('SYNTHETIC_CONFIGURATION\n'); await setup.completed
   const folder = await realpath(await mkdtemp(join(tmpdir(), 'pods-assigned-folder-')))
   await writeFile(join(folder, 'input.txt'), 'DIRECT_READ')
-  const shellIdentity = await fixtureShellIdentity(f.root)
+  // The Pod acts as the shell identity's Pod; its IdP approves the application's commands as the owner would.
+  const shellIdentity = await fixtureShellIdentity(f.root, ['fixture'])
   const store = new PodDatabase(f.root)
   store.db.prepare('INSERT INTO resources VALUES(?,?,1,\'tool\',\'ready\',?,?)').run(f.applicationId, f.podId, f.assignment.name, JSON.stringify(f.assignment))
   store.db.prepare('INSERT INTO resources VALUES(?,?,1,\'tool\',\'ready\',?,?)').run(randomUUID(), f.podId, 'https://api.example.com', JSON.stringify({ type: 'http', origin: 'https://api.example.com', methods: ['GET', 'POST'], capability: 'tool.http_fixture.request' }))
-  // The app matches calls to recorded Pod grants by coverage; the read command grant is the one the script uses.
-  const read = await resolveCommand(loadAdapter('fixture', f.assignment.adapterPath), ['fixture', 'read'])
-  store.db.prepare('INSERT INTO pod_grants VALUES(?,?,?,?,?,?,?,\'always\',\'approved\',0,?,?)').run('read', f.podId, f.identity.issuer, f.identity.subject, 'fixture', JSON.stringify([read.detail]), read.detail.display, Date.now(), Date.now())
   store.close()
   const app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: f.root, NODE_ENV: 'test' } })
   failOnKeychainDialog(app)
@@ -182,9 +182,9 @@ it('packaged program UI: exposes the external terminal and reuses application se
     console.info('Program UI: synthetic records encrypted using safeStorage with the mock keychain')
     const page = await app.firstWindow(); page.setDefaultTimeout(7000)
     await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
+    await startupBackup(page, f.root)
     console.info('Program UI: worker ready')
-    await page.getByRole('button', { name: 'Pods', exact: true }).click()
-    await page.getByRole('button', { name: /^Application setup/ }).click()
+    await openPod(page, 'Application setup')
     await page.getByRole('tab', { name: 'Permissions', exact: true }).click()
     await page.getByRole('button', { name: 'Open Terminal.app', exact: true }).waitFor()
     expect(await page.getByRole('button', { name: 'Open Terminal.app', exact: true }).count()).toBe(1)
@@ -232,16 +232,16 @@ it('HTTP grant boundary: verifies the signed origin and method before transport 
   const request = { url: 'https://api.example.com/send', method: 'POST', headers: {}, key: 'synthetic' }
   const signal = new AbortController().signal
   try {
-    expect(await executeHttp(resources, scope, request, vendor, f.connection, signal)).toMatchObject({ status: 200 })
+    expect(await executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, f.ledger)).toMatchObject({ status: 200 })
     expect(sendHttp).toHaveBeenCalledTimes(1); expect(f.state.consumed).toBe(1)
-    await expect(executeHttp(resources, scope, { ...request, method: 'DELETE' }, vendor, f.connection, signal)).rejects.toThrow('assigned origin or methods')
-    await expect(executeHttp(resources, { ...scope, podId: randomUUID() }, request, vendor, f.connection, signal)).rejects.toThrow('not assigned')
+    await expect(executeHttp(resources, scope, { ...request, method: 'DELETE' }, vendor, f.connection, signal, undefined, f.ledger)).rejects.toThrow('assigned origin or methods')
+    await expect(executeHttp(resources, { ...scope, podId: randomUUID() }, request, vendor, f.connection, signal, undefined, f.ledger)).rejects.toThrow('not assigned')
     f.state.signedCommand = await resolveCommand(adapter, ['pod-http', 'request', '--origin', 'https://foreign.example.com', '--method', 'POST'])
-    await expect(executeHttp(resources, scope, request, vendor, f.connection, signal)).rejects.toThrow('does not cover')
+    await expect(executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, f.ledger)).rejects.toThrow('does not cover')
     expect(sendHttp).toHaveBeenCalledTimes(1)
     f.state.signedCommand = await resolveCommand(adapter, ['pod-http', 'request', '--origin', 'https://api.example.com', '--method', 'POST'])
     f.state.active = false
-    await expect(executeHttp(resources, scope, request, vendor, f.connection, signal)).rejects.toThrow('Permission revoked')
+    await expect(executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, f.ledger)).rejects.toThrow('Permission revoked')
     expect(sendHttp).toHaveBeenCalledTimes(1)
   }
   finally { await f.close() }
@@ -259,18 +259,18 @@ it('HTTP agent authentication: the runtime adds the DDISA bearer, refuses script
   const bearer = { token: vi.fn(async () => 'SYNTHETIC_AGENT_TOKEN'), reject: vi.fn() }
   const signal = new AbortController().signal
   try {
-    await expect(executeHttp(resources, scope, { ...request, headers: { Authorization: 'Bearer script' } }, vendor, f.connection, signal, undefined, undefined, bearer)).rejects.toThrow('remove the Authorization header')
-    await expect(executeHttp(resources, scope, request, vendor, f.connection, signal)).rejects.toThrow('authentication is unavailable')
+    await expect(executeHttp(resources, scope, { ...request, headers: { Authorization: 'Bearer script' } }, vendor, f.connection, signal, undefined, f.ledger, bearer)).rejects.toThrow('remove the Authorization header')
+    await expect(executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, f.ledger)).rejects.toThrow('authentication is unavailable')
     expect(sendHttp).not.toHaveBeenCalled()
-    expect(await executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, undefined, bearer)).toMatchObject({ status: 200 })
-    expect(bearer.token).toHaveBeenCalledWith(authentication)
+    expect(await executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, f.ledger, bearer)).toMatchObject({ status: 200 })
+    expect(bearer.token).toHaveBeenCalledWith(authentication, 'https://api.example.com')
     expect(sendHttp.mock.calls[0]![0]).toMatchObject({ headers: { authorization: 'Bearer SYNTHETIC_AGENT_TOKEN' } })
     expect(request.headers).toEqual({})
     sendHttp.mockResolvedValueOnce({ status: 200, headers: { 'x-echo': 'Bearer SYNTHETIC_AGENT_TOKEN' }, body: 'authorization: Bearer SYNTHETIC_AGENT_TOKEN' })
-    const echoed = await executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, undefined, bearer)
+    const echoed = await executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, f.ledger, bearer)
     expect(JSON.stringify(echoed)).not.toContain('SYNTHETIC_AGENT_TOKEN')
     sendHttp.mockResolvedValueOnce({ status: 401, headers: {}, body: '' })
-    expect(await executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, undefined, bearer)).toMatchObject({ status: 401 })
+    expect(await executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, f.ledger, bearer)).toMatchObject({ status: 401 })
     expect(bearer.reject).toHaveBeenCalledWith(authentication)
   }
   finally { await f.close() }

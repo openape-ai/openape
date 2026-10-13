@@ -2,13 +2,15 @@ import { _electron as electron } from 'playwright'
 import type { ElectronApplication } from 'playwright'
 import { spawn, execFileSync } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
-import { mkdtemp, mkdir, rm, writeFile, readFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { afterEach, describe, expect, it } from 'vitest'
 
 import { fixtureShellIdentity } from './fixtures/shell-identity'
+import { openPod } from './fixtures/navigation'
+import { removeProfile, startupBackup } from './fixtures/startup'
 
 const identities: Awaited<ReturnType<typeof fixtureShellIdentity>>[] = []
 const require = createRequire(import.meta.url)
@@ -26,11 +28,12 @@ async function launch(packaged = false) {
   const page = await app.firstWindow()
   await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 20000 }).toBe('ready')
   expect((await page.evaluate(() => window.pods.getStatus())).worker).toMatchObject({ state: 'ready', error: null })
+  await startupBackup(page, root)
   return { app, page, root, binary }
 }
 afterEach(async () => {
   for (const identity of identities.splice(0)) await identity.close()
-  for (const { app, root, process: child } of active.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close(); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
+  for (const { app, root, process: child } of active.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close(); await removeProfile(root) }
 })
 // Native menus, problem reporting and German dialogs are tested against the
 // unchanged main process in test/main/app.test.ts.
@@ -49,6 +52,7 @@ describe('foundation', () => {
       dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [path] })
       dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false })
     }, source)
+    await openPod(page, 'Reference pod')
     await page.getByRole('tab', { name: 'Permissions', exact: true }).click()
     await page.evaluate(podId => window.pods.resources({ type: 'pickReference', podId }), pod.id)
     await page.getByRole('tab', { name: 'Overview', exact: true }).click()
@@ -75,6 +79,7 @@ describe('foundation', () => {
     const { app, page, root } = await launch(true)
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Local example' }))).pods[0]!
     const identity = await fixtureShellIdentity(root); identities.push(identity); await identity.encrypt(app, true)
+    await openPod(page, 'Local example')
     await page.getByRole('tab', { name: 'History', exact: true }).click()
     await page.evaluate(podId => window.pods.runs({ type: 'installExample', podId, variant: 'deterministic' }), pod.id)
     await page.getByRole('button', { name: 'Run now', exact: true }).click()
@@ -87,7 +92,7 @@ describe('foundation', () => {
   })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {
     const { app, page } = await launch()
-    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['central', 'codex', 'data', 'details', 'getStatus', 'language', 'master', 'onStatus', 'onboarding', 'packages', 'programs', 'resources', 'runs', 'scheduling', 'scripts', 'workspace'] })
+    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['central', 'codex', 'data', 'definitions', 'details', 'domain', 'getStatus', 'language', 'master', 'mcpSession', 'onStatus', 'onboarding', 'packages', 'programs', 'resources', 'runs', 'scheduling', 'scripts', 'secrets', 'sharing', 'storage', 'updates', 'workspace'] })
     expect(await page.evaluate(async () => {
       try { await fetch('https://unassigned.invalid/'); return 'allowed' }
       catch { return 'denied' }
@@ -99,7 +104,7 @@ describe('foundation', () => {
       const other = new BrowserWindow({ show: false, webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false, preload: `${app.getAppPath()}/dist/preload/index.cjs` } })
       try {
         await other.loadURL('pods://app/index.html')
-        return await other.webContents.executeJavaScript('(async () => { const results = []; for (const request of [() => window.pods.central({type:"status"}), () => window.pods.master({type:"list"}), () => window.pods.language({type:"set", language:"de"}), () => window.pods.networks({type:"list"})]) { try { await request(); results.push("allowed") } catch { results.push("denied") } } return results })()')
+        return await other.webContents.executeJavaScript('(async () => { const results = []; for (const request of [() => window.pods.central({type:"status"}), () => window.pods.master({type:"list"}), () => window.pods.language({type:"set", language:"de"}), () => window.pods.secrets({type:"list"})]) { try { await request(); results.push("allowed") } catch { results.push("denied") } } return results })()')
       }
       finally { other.destroy() }
     })
@@ -139,7 +144,7 @@ describe('foundation', () => {
     const status = await page.evaluate(() => window.pods.getStatus())
     process.kill(status.worker.pid as number, 'SIGKILL')
     await page.getByRole('alert').filter({ hasText: 'Quit and reopen Pods' }).waitFor()
-    expect(await page.getByRole('status').textContent()).toBe('Needs attention')
+    expect(await page.getByRole('banner').getByRole('status').textContent()).toBe('Needs attention')
     await page.screenshot({ path: join(artifacts, 'foundation-worker-error.png') })
   })
   it('packaged: starts from the app bundle without system Node and preserves the renderer boundary', async () => {
@@ -148,6 +153,8 @@ describe('foundation', () => {
     const status = await page.evaluate(() => window.pods.getStatus())
     expect(status.runtime).toEqual({ electron: '40.9.3', node: '24.14.1' })
     expect(await page.evaluate(() => typeof (globalThis as Record<string, unknown>).require)).toBe('undefined')
-    expect(await page.getByRole('heading', { name: 'No pods yet' }).isVisible()).toBe(true)
+    // The renderer lands on the Automatisierungen shell and draws the worker's (empty) workspace map.
+    expect(await page.getByRole('tab', { name: 'Automations', exact: true }).getAttribute('aria-selected')).toBe('true')
+    await page.getByRole('img', { name: 'Animated map of all Pods with their data sources, stores and decision points' }).waitFor()
   })
 })

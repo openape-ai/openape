@@ -1,8 +1,12 @@
 import { chromium } from 'playwright'
 import { execFileSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { expect, it } from 'vitest'
+
+// The offline edition renders every section and screenshot of its source.
+const source = (locale: string) => JSON.parse(readFileSync(resolve('docs', `handbook${locale === 'de' ? '.de' : ''}.json`), 'utf8')) as { sections: { image?: string }[] }
 
 for (const locale of ['en', 'de']) {
   it(`handbook: renders complete ${locale} offline edition with working navigation and narrow dark layout`, async () => {
@@ -15,7 +19,8 @@ for (const locale of ['en', 'de']) {
       await page.locator('img').evaluateAll(images => images.forEach(image => (image as HTMLImageElement).loading = 'eager'))
       await page.waitForFunction(() => Array.from(document.images).every(image => image.complete && image.naturalWidth > 0))
       expect(await page.locator('html').getAttribute('lang')).toBe(locale)
-      expect(await page.locator('section').count()).toBe(26); expect(await page.locator('img').count()).toBe(11)
+      const { sections } = source(locale)
+      expect(await page.locator('section').count()).toBe(sections.length); expect(await page.locator('img').count()).toBe(sections.filter(section => section.image).length)
       expect(await page.locator('nav a[href^="#"]').evaluateAll(links => links.every(link => document.querySelector(link.getAttribute('href')!)))).toBe(true)
       await page.addStyleTag({ content: 'html { scroll-behavior: auto; }' })
       await page.locator('nav a[href="#credentials"]').click(); expect(new URL(page.url()).hash).toBe('#credentials')
@@ -29,7 +34,7 @@ for (const locale of ['en', 'de']) {
       await page.screenshot({ path: resolve(`.artifacts/handbook-credential-chapter-${locale}-dark.png`) })
       await page.locator('nav a').first().click(); await page.waitForLoadState()
       expect(await page.locator('html').getAttribute('lang')).toBe(locale === 'de' ? 'en' : 'de')
-      expect(await page.locator('section').count()).toBe(26)
+      expect(await page.locator('section').count()).toBe(source(locale === 'de' ? 'en' : 'de').sections.length)
     }
     finally { await browser.close() }
   })
