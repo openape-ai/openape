@@ -24,7 +24,7 @@ beforeEach(async () => {
   podId = store.createPod({ name: 'Synthetic digest' }).id
   const dispatcher = new RunDispatcher(store, new ResourceRegistry(store, () => {}), {} as AgentRuntime)
   window.pods = {
-    workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: store.listPods() }),
+    workspace: async () => ({ pods: store.listPods() }),
     runs: async (command: RunCommand) => parseRunView(structuredClone(dispatcher.view(command.podId, 'runId' in command ? command.runId : undefined, command.type === 'list' ? command.after : undefined))),
     scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }),
   } as unknown as typeof window.pods

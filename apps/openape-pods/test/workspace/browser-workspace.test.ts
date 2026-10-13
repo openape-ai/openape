@@ -15,7 +15,7 @@ async function open() {
   wrapper = mount(BrowserWorkspace, { props: { client: fixture.client }, attachTo: document.body }); await flushPromises()
   return fixture
 }
-// The editor opens from the shell's detail page; here the host method is called directly.
+// The Pod page opens from a row of the shell; here the host method is called directly.
 async function pod() { await (wrapper!.vm as unknown as { openPod: (id: string) => Promise<void> }).openPod(current!.host.workspace.pods[0]!.id); await flushPromises() }
 
 it('uses the desktop shell and every Pod section without a native bridge', async () => {
@@ -23,8 +23,9 @@ it('uses the desktop shell and every Pod section without a native bridge', async
   expect(wrapper!.get('[role="tablist"]').text()).toContain('Automations')
   expect(wrapper!.get('.account-status').text()).toContain('owner@example.invalid')
   await pod()
-  for (const tab of ['Script', 'Variables and secrets', 'Permissions', 'Settings', 'History', 'Overview']) {
-    await click(tab)
+  // The Pod page shows every section at once; jumping between them raises no error.
+  for (const section of ['Runs', 'Variables and secrets', 'Access', 'Settings', 'Code']) {
+    await click(section)
     expect(wrapper!.findAll('[role="alert"]').map(item => item.text()).join(' ')).toBe('')
   }
   await wrapper!.get('[data-testid="back-to-automations"]').trigger('click'); await flushPromises()
@@ -35,7 +36,7 @@ it('uses the desktop shell and every Pod section without a native bridge', async
 it('preserves descriptions across tabs and guards sidebar navigation until discard', async () => {
   await open(); await pod()
   await wrapper!.get('#pod-description').setValue('Unsaved browser draft')
-  await click('History'); await click('Overview')
+  await click('Runs'); await click('Code')
   expect((wrapper!.get('#pod-description').element as HTMLTextAreaElement).value).toBe('Unsaved browser draft')
   await wrapper!.get('[data-testid="back-to-automations"]').trigger('click'); await flushPromises()
   expect(wrapper!.get('[aria-label="Unsaved changes"]').isVisible()).toBe(true)

@@ -29,9 +29,7 @@ function fixture() {
   installExample(store, resources, pod.id, 'deterministic', 'a'.repeat(64))
   const workspace = new DefinitionWorkspace(store, resources, owner)
   const execute = async (command: unknown) => parseDefinitionsView(await workspace.execute(command, new AbortController().signal))
-  const groups = [randomUUID(), randomUUID()]
-  for (const [index, id] of groups.entries()) store.db.prepare('INSERT INTO pod_groups VALUES(?,?,0)').run(id!, `Company ${index + 1}`)
-  return { store, pod, resources, workspace, execute, groups }
+  return { store, pod, resources, workspace, execute }
 }
 async function published(f: ReturnType<typeof fixture>) {
   const view = await f.execute({ type: 'publish', podId: f.pod.id, expectedScript: f.store.getPod(f.pod.id).activeScript, name: 'Reusable example', defaults: { label: 'Public default' } })
@@ -47,15 +45,15 @@ it('adopts existing instances without changing script history, state or schedule
   expect(f.store.getPod(f.pod.id)).toEqual(before)
   expect(f.store.checkpoint(f.pod.id)).toEqual(checkpoint)
   expect(f.store.db.prepare('SELECT * FROM scripts WHERE pod_id=?').all(f.pod.id)).toEqual(script)
-  await expect(f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: first.definitions[0]!.id, version: 1, name: 'Unpublished', groupId: f.groups[0] })).rejects.toThrow('Publish')
+  await expect(f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: first.definitions[0]!.id, version: 1, name: 'Unpublished' })).rejects.toThrow('Publish')
 })
-it('creates separate paused instances, homes, state and companies without validations or resources', async () => {
+it('creates separate paused instances, homes and state without validations or resources', async () => {
   const f = fixture(); const definition = await published(f)
   const sourceHome = (await podDirectories(f.store.root, f.pod.id)).home
   await writeFile(join(sourceHome, 'private-token.txt'), 'synthetic source secret')
   const created: string[] = []
-  for (const [index, groupId] of f.groups.entries()) {
-    const view = await f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: 2, name: `Instance ${index}`, groupId })
+  for (const index of [0, 1]) {
+    const view = await f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: 2, name: `Instance ${index}` })
     created.push(view.createdPodId!)
     const pod = f.store.getPod(view.createdPodId!)
     expect(pod.lifecycle).toBe('paused'); expect(pod.activeScript).toBeNull()
@@ -63,14 +61,14 @@ it('creates separate paused instances, homes, state and companies without valida
     expect(f.store.db.prepare('SELECT * FROM validations WHERE pod_id=?').all(pod.id)).toEqual([])
     expect(f.store.checkpoint(pod.id)).toEqual({ revision: 0, body: {} })
     expect(await readdir((await podDirectories(f.store.root, pod.id)).home)).toEqual([])
-    expect(view.instances.find(item => item.podId === pod.id)?.groupId).toBe(groupId)
+    expect(view.instances.find(item => item.podId === pod.id)).toMatchObject({ definitionId: definition.id, version: 2 })
   }
   expect(new Set(created).size).toBe(2)
   expect(created).not.toContain(f.pod.id)
 })
 it('reuses a failed pending instance and rejects changed request IDs and foreign owners', async () => {
   const f = fixture(); const definition = await published(f)
-  const command = { type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: 2, name: 'Retry instance', groupId: f.groups[0] }
+  const command = { type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: 2, name: 'Retry instance' }
   const first = await f.execute(command)
   f.workspace.provisioned(command.requestId, 'Synthetic identity provider unavailable')
   const retry = await f.execute({ type: 'retryProvision', requestId: command.requestId })
@@ -87,7 +85,7 @@ it('reuses a failed pending instance and rejects changed request IDs and foreign
 })
 it('requires current validation for publication and shows explicit update differences', async () => {
   const f = fixture(); const definition = await published(f)
-  const first = await f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: 2, name: 'Pinned', groupId: f.groups[0] })
+  const first = await f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: 2, name: 'Pinned' })
   installExample(f.store, f.resources, f.pod.id, 'agent', 'a'.repeat(64))
   await f.execute({ type: 'publish', podId: f.pod.id, expectedScript: f.store.getPod(f.pod.id).activeScript, name: definition.name, defaults: { label: 'New default' } })
   const update = await f.execute({ type: 'prepareUpdate', podId: first.createdPodId, definitionId: definition.id, version: 3, expectedBinding: 1 })
@@ -107,8 +105,8 @@ it('validates each exact artifact separately and changes only the explicitly sel
   await writeFile(manifest, JSON.stringify({ dependencyLockHash: 'a'.repeat(64) }))
   const runtime = { manifest, helper: '/unused', environment: {} } as unknown as AgentRuntime
   vi.mocked(executeScript).mockImplementation(async (_runtime, _root, _artifact, input) => ({ status: 'completed', summary: 'Synthetic contract fixture', completedInputIds: input.eventIds, gapIds: [] }))
-  for (const groupId of f.groups) {
-    const created = await f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: 2, name: 'Independent', groupId })
+  for (const name of ['Independent one', 'Independent two']) {
+    const created = await f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: 2, name })
     const podId = created.createdPodId!; instances.push(podId)
     const draft = f.store.db.prepare('SELECT id FROM script_drafts WHERE pod_id=?').get(podId)!.id as string
     const result = await validateDraft(f.store, f.resources, runtime, draft, 1, new AbortController().signal)
@@ -143,7 +141,7 @@ it('validates each exact artifact separately and changes only the explicitly sel
 })
 it('rejects edits to a pinned draft before executing its synthetic validation', async () => {
   const f = fixture(); const definition = await published(f)
-  const created = await f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: 2, name: 'Changed draft', groupId: f.groups[0] })
+  const created = await f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: 2, name: 'Changed draft' })
   const draftId = f.store.db.prepare('SELECT id FROM script_drafts WHERE pod_id=?').get(created.createdPodId!)!.id as string
   const manifest = join(f.store.root, 'runtime.json'); await writeFile(manifest, JSON.stringify({ dependencyLockHash: 'a'.repeat(64) }))
   f.store.db.prepare('UPDATE script_drafts SET code=? WHERE id=?').run('changed', draftId)
@@ -177,7 +175,7 @@ it('backs up adopted empty scripts and restores the same instance identity as re
   const f = fixture(); const empty = f.store.createPod({ name: 'No script yet' })
   await f.execute({ type: 'adopt' }); const definition = await published(f)
   const requestId = randomUUID()
-  const created = await f.execute({ type: 'instantiate', requestId, definitionId: definition.id, version: 2, name: 'Restorable instance', groupId: f.groups[0] })
+  const created = await f.execute({ type: 'instantiate', requestId, definitionId: definition.id, version: 2, name: 'Restorable instance' })
   const podId = created.createdPodId!
   f.store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(podId, JSON.stringify(owner), 'runtime', 'generation', 'ready', JSON.stringify({ podId, subject: 'synthetic' }))
   f.workspace.provisioned(requestId, null)
@@ -219,12 +217,12 @@ it.each(['http', 'ssh', 'app'])('refuses publication of instance-specific %s cap
   expect(f.store.getPod(f.pod.id)).toEqual(before)
   expect(f.store.checkpoint(f.pod.id)).toEqual(checkpoint)
   expect(f.resources.list(f.pod.id)).toEqual(rights)
-  await expect(f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: instance.version, name: 'Forbidden copy', groupId: f.groups[0] })).rejects.toThrow('Publish')
+  await expect(f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: instance.version, name: 'Forbidden copy' })).rejects.toThrow('Publish')
   await expect(published(f)).rejects.toThrow('instance-specific')
 })
 it('enforces the existing instance limit without duplicating a retry at capacity', async () => {
   const f = fixture(); const definition = await published(f)
-  const command = { type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: 2, name: 'Last accepted', groupId: f.groups[0] }
+  const command = { type: 'instantiate', requestId: randomUUID(), definitionId: definition.id, version: 2, name: 'Last accepted' }
   const first = await f.execute(command)
   while (f.store.listPods().length < 100) f.store.createPod({ name: 'Existing fixture' })
   expect((await f.execute(command)).createdPodId).toBe(first.createdPodId)
@@ -234,7 +232,7 @@ it('enforces the existing instance limit without duplicating a retry at capacity
 
 it('prepares a local definition without renaming or changing the shared published definition', async () => {
   const f = fixture(); const publishedDefinition = await published(f)
-  await f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: publishedDefinition.id, version: 2, name: 'Independent copy', groupId: f.groups[0] })
+  await f.execute({ type: 'instantiate', requestId: randomUUID(), definitionId: publishedDefinition.id, version: 2, name: 'Independent copy' })
   const prepared = await f.execute({ type: 'prepareLocal', podId: f.pod.id, expectedScript: f.store.getPod(f.pod.id).activeScript, name: 'Local only', defaults: { label: 'Private instance configuration' } })
   expect(prepared.definitions.find(item => item.id === publishedDefinition.id)).toEqual(publishedDefinition)
   const local = prepared.instances.find(item => item.podId === f.pod.id)!
