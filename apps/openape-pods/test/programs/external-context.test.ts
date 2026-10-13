@@ -1,14 +1,16 @@
 // @vitest-environment node
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, readdir, rm, symlink, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { ExternalShell } from '../../src/main/shell/session'
-import { podEnvironment } from '../../src/runtime/environment'
+import { podEnvironment, quoteShell } from '../../src/runtime/environment'
 import { CredentialCache } from '../../src/main/connections/cache'
 import type { ConnectionManager } from '../../src/main/connections/manager'
 import type { ResourceState } from '../../src/contracts/resources'
+import type { SandboxLevel } from '../../src/contracts/sandbox'
+import { ProgramState } from '../../src/main/programs/state'
 
 it('keeps generated adapters inside the pod HOME and cleans up a refused setup', async () => {
   const root = await mkdtemp(join(tmpdir(), 'pods-shell-path-')); const podId = randomUUID()
@@ -21,7 +23,7 @@ it('keeps generated adapters inside the pod HOME and cleans up a refused setup',
     const credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: bytes => bytes.toString() })
     const connections = { podConnection: async () => ({ issuer: 'https://unused.example.test', subject: 'fixture@example.test', accessToken: async () => 'synthetic' }) } as unknown as ConnectionManager
     let released = false
-    const session = new ExternalShell(podId, root, runtime, resources, credentials, connections, async () => {}, async () => { released = true })
+    const session = new ExternalShell(podId, root, runtime, resources, credentials, connections, async () => {}, async () => { released = true }, 'isolated')
     try { await expect(session.ready).rejects.toThrow('symbolic') }
     finally { session.close(); await session.completed }
     expect(released).toBe(true)
@@ -29,4 +31,38 @@ it('keeps generated adapters inside the pod HOME and cleans up a refused setup',
     expect(await readdir(join(root, 'credentials/temporary'))).toEqual([])
   }
   finally { await rm(root, { recursive: true, force: true }) }
+})
+
+// Owner decision October 13, 2026 (issue 1468): at the owner level a login made in the Pod terminal must be the one the
+// Pod's programs use, so the terminal's application wrappers get the owner's HOME there as well.
+async function wrapper(level: SandboxLevel): Promise<{ text: string, podHome: string }> {
+  const root = await mkdtemp(join(tmpdir(), 'pods-shell-home-')); const podId = randomUUID(); const applicationId = randomUUID()
+  try {
+    const runtime = { executable: process.execPath, cli: '/fixture/cli', client: '/fixture/client' }
+    const credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: bytes => bytes.toString() })
+    const connections = { podConnection: async () => ({ issuer: 'https://unused.example.test', subject: 'fixture@example.test', accessToken: async () => 'synthetic' }) } as unknown as ConnectionManager
+    const executable = join(root, 'az'); await writeFile(executable, '#!/bin/sh\nexit 0\n', { mode: 0o700 })
+    const adapter = join(root, 'az.toml'); await writeFile(adapter, 'synthetic')
+    const digest = async (path: string) => createHash('sha256').update(await readFile(path)).digest('hex')
+    const stateId = await new ProgramState(credentials).create({ podId, applicationId })
+    const configuration = { type: 'program', name: 'az', cliId: 'az', executable, executableHash: await digest(executable), adapterPath: adapter, adapterHash: await digest(adapter), stateId, capability: 'tool.az.invoke', networkHosts: [], entryFiles: [], environment: {} }
+    const resources = { epoch: 1, resources: [{ id: applicationId, podId, revision: 1, kind: 'tool', state: 'ready', name: 'az', configuration }] } as unknown as ResourceState
+    const session = new ExternalShell(podId, root, runtime, resources, credentials, connections, async () => {}, async () => {}, level)
+    try {
+      await session.ready
+      const context = await podEnvironment(root, podId, runtime)
+      return { text: await readFile(join(context.bin, 'az'), 'utf8'), podHome: context.home }
+    }
+    finally { session.close(); await session.completed }
+  }
+  finally { await rm(root, { recursive: true, force: true }) }
+}
+
+it('gives Pod terminal applications the owner HOME at the owner level and their private state when isolated', async () => {
+  const owner = await wrapper('owner')
+  expect(owner.text).toContain(quoteShell(`HOME=${homedir()}`))
+  expect(owner.text).toContain(quoteShell(`TMPDIR=${join(owner.podHome, 'tmp')}`))
+  const isolated = await wrapper('isolated')
+  expect(isolated.text).not.toContain(quoteShell(`HOME=${homedir()}`))
+  expect(isolated.text).toMatch(/'HOME=[^']*\/credentials\/temporary\/[^']*\/application'/)
 })

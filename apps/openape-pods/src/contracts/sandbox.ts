@@ -8,8 +8,9 @@ import type { DirectoryAccess } from './resources'
 
 /**
  * The sandbox decides what a Pod CAN execute and reach; grants decide what it MAY do. `owner` runs the Pod's
- * programs with the owner's OS reach instead of the isolated profile; that equals full trust in the Pod's code,
- * including the possibility to act as the owner. It never changes the Pod's DDISA identity: requests and grants stay
+ * programs with the owner's OS reach and HOME instead of the isolated profile; that equals full trust in the Pod's code,
+ * including the possibility to act as the owner. It is the level of every Pod the owner creates; `isolated` is chosen
+ * per Pod when the owner wants it (issue 1468). It never changes the Pod's DDISA identity: requests and grants stay
  * those of the Pod.
  */
 export type SandboxLevel = 'isolated' | 'owner'

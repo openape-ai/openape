@@ -8,11 +8,12 @@ import { createServer } from 'node:net'
 import type { Socket } from 'node:net'
 import type { ProgramAssignment } from '../../contracts/programs'
 import type { ResourceState } from '../../contracts/resources'
+import type { SandboxLevel } from '../../contracts/sandbox'
 import type { CredentialCache } from '../connections/cache'
 import type { ConnectionManager } from '../connections/manager'
 import { launchDescriptor, verifyApplicationBundle } from '../programs/application'
 import { ProgramState } from '../programs/state'
-import { verifyExecutable } from '../../worker/runtime/sandbox'
+import { programHome, verifyExecutable } from '../../worker/runtime/sandbox'
 import { podDirectory, podEnvironment, quoteShell } from '../../runtime/environment'
 import type { ShellRuntime } from '../../runtime/environment'
 import { shellIdentity } from './identity'
@@ -27,7 +28,7 @@ export class ExternalShell {
   error: string | null = null
   closed = false
 
-  constructor(readonly podId: string, root: string, runtime: ShellRuntime, resources: ResourceState, credentials: CredentialCache, connections: ConnectionManager, check: () => Promise<void>, release: () => Promise<void>, name = podId, private readonly launchApplication?: string) {
+  constructor(readonly podId: string, root: string, runtime: ShellRuntime, resources: ResourceState, credentials: CredentialCache, connections: ConnectionManager, check: () => Promise<void>, release: () => Promise<void>, private readonly level: SandboxLevel, name = podId, private readonly launchApplication?: string) {
     let ready!: (file: string) => void; let failed!: (error: unknown) => void
     this.ready = new Promise((resolve, reject) => { ready = resolve; failed = reject })
     this.completed = this.run(root, runtime, resources, credentials, connections, check, release, ready, name).catch((error: unknown) => { this.error = error instanceof Error ? error.message : 'Pod terminal failed'; failed(error) })
@@ -130,7 +131,8 @@ export class ExternalShell {
           await state.use(assignment.stateId, { podId: this.podId, applicationId: resource.id }, async (home) => {
             const launch = programLaunch(assignment)
             const invocation = [launch.executable, ...launch.prefix].map(quoteShell).join(' ')
-            const environment = Object.entries({ ...launch.environment, HOME: home, TMPDIR: home }).map(([key, value]) => quoteShell(`${key}=${value}`)).join(' ')
+            // At the owner level an application uses the owner's HOME, so a login made here is the one its Pod programs use.
+            const environment = Object.entries({ ...launch.environment, HOME: programHome({ level: this.level }, home), TMPDIR: this.level === 'owner' ? join(context.home, 'tmp') : home }).map(([key, value]) => quoteShell(`${key}=${value}`)).join(' ')
             const suffix = assignment.cacheArgument ? ` ${quoteShell(assignment.cacheArgument)} ${quoteShell(home)}` : ''
             const wrapper = join(context.bin, assignment.cliId); wrappers.push(wrapper)
             await writeFile(wrapper, `#!/bin/sh\nexec /usr/bin/env -u ELECTRON_RUN_AS_NODE ${environment} ${invocation} "$@"${suffix}\n`, { mode: 0o700 })

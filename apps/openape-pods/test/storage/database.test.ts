@@ -4,7 +4,9 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
+import { randomUUID } from 'node:crypto'
 import { digest, parseManifest, PodDatabase } from '../../src/worker/storage/database'
+import { GrantLedger } from '../../src/worker/resources/grants'
 import type { CommitPoint, ProgressInput, ScriptManifest } from '../../src/worker/storage/database'
 
 const roots: string[] = []; const stores: PodDatabase[] = []
@@ -43,6 +45,22 @@ describe('durable pod state', () => {
     expect(() => store.updatePod(pod.id, 1, { name: 'Stale', lifecycle: 'active' })).toThrow('Stale')
     store = reopen(store)
     expect(store.getPod(pod.id)).toMatchObject({ name: 'Knowledge', revision: 2 })
+  })
+
+  // Owner decision October 13, 2026 (issue 1468): every Pod the owner creates runs in owner context; isolated is chosen.
+  it('creates a Pod at the owner level unless isolated is chosen, and keeps the level of an existing Pod', () => {
+    const store = fixture(); const ledger = new GrantLedger(store)
+    const created = store.createPod({ name: 'Rebase' })
+    expect(ledger.sandbox(created.id)).toEqual({ level: 'owner', deny: [] })
+    const isolated = store.createPod({ name: 'Imported' }, randomUUID(), 'isolated')
+    expect(ledger.sandbox(isolated.id)).toEqual({ level: 'isolated', deny: [] })
+    expect(() => store.createPod({ name: 'Invalid' }, randomUUID(), 'root' as never)).toThrow('CHECK constraint failed')
+    expect(store.listPods().map(pod => pod.name)).toEqual(['Rebase', 'Imported'])
+    // A Pod created before this default has no stored level and stays isolated; switching levels still works both ways.
+    store.db.prepare('DELETE FROM pod_sandbox WHERE pod_id=?').run(created.id)
+    expect(ledger.sandbox(created.id).level).toBe('isolated')
+    ledger.level(isolated.id, 'owner')
+    expect(ledger.sandbox(isolated.id).level).toBe('owner')
   })
   it('pins artifact bytes and immutable manifests without activating drafts', () => {
     const store = fixture(); const pod = store.createPod({ name: 'Pod' })
