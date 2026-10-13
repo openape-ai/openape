@@ -218,6 +218,24 @@ describe('program approvals (issue 1468)', () => {
     expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease), note: 'x' } }, 'Push to remote')).toThrow('application and its exact argv')
   })
 
+  // Owner decision October 13, 2026: a script may name what the command does; the IdP still shows the whole command.
+  it('puts a marked Pod headline in front of the complete command and keeps the approval bound to the command', () => {
+    const f = fixture()
+    const asked = f.approvals.request(f.run, { action: 'program.run', title: 'Rebase feature/x onto development', payload: { application: 'git', argv: push(lease) } }, 'Push to remote')
+    expect(asked.title).toBe(`Rebase feature/x onto development (Pod) · Push to remote: git push --force-with-lease=feature/x:${lease} origin ${lease}:refs/heads/feature/x`)
+    expect(asked.object).toBe(programObject('git', push(lease)))
+    // Another headline for the same command is the same approval.
+    expect(f.approvals.request(f.run, { action: 'program.run', title: 'Something else', payload: { application: 'git', argv: push(lease) } }, 'Push to remote').id).toBe(asked.id)
+    const ask = (title: string) => () => f.approvals.request(f.run, { action: 'program.run', title, payload: { application: 'git', argv: push('c'.repeat(40)) } }, 'Push to remote')
+    expect(ask('x'.repeat(121))).toThrow('at most 120 characters')
+    expect(ask('Rebase\u202Eevil')).toThrow('printable ASCII')
+    expect(ask('two\nlines')).toThrow('printable ASCII')
+    expect(ask('  ')).toThrow('printable ASCII')
+    // The command is never shortened to make room for a headline.
+    const long = ['push', `--force-with-lease=feature/x:${lease}`, 'origin', `${'y'.repeat(340)}:refs/heads/feature/x`]
+    expect(() => f.approvals.request(f.run, { action: 'program.run', title: 'h'.repeat(120), payload: { application: 'git', argv: long } }, 'D'.repeat(200))).toThrow('shorten the headline')
+  })
+
   it('shows the owner the complete command and refuses one that does not fit instead of shortening it', () => {
     const f = fixture()
     const ask = (argv: string[]) => () => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv } }, 'Push to remote')
