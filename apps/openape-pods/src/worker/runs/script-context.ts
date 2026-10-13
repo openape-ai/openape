@@ -1,7 +1,7 @@
 import type { RunInput } from '../../contracts/runs'
 
 type Request = (operation: string, payload: unknown) => Promise<unknown>
-export interface ScriptModule { run?: (context: unknown) => Promise<unknown>, contract?: unknown, work?: unknown }
+export interface ScriptModule { run?: (context: unknown) => Promise<unknown>, contract?: unknown, work?: unknown, polls?: unknown }
 
 function freeze<T>(value: T): T {
   if (value && typeof value === 'object') { for (const child of Object.values(value)) freeze(child); Object.freeze(value) }
@@ -17,6 +17,7 @@ export async function scriptContext(script: ScriptModule, input: RunInput, reque
   // A retired network contract is refused by the dispatcher, so such a script fails before it acts.
   if (script.contract !== undefined) await request('graph.contract', script.contract)
   if (script.work !== undefined) await request('work.contract', script.work)
+  if (script.polls !== undefined) await request('work.polls', script.polls)
   const data = Object.freeze({ get: (key: unknown) => request('data.get', { key }), set: (key: unknown, value: unknown, settings?: unknown) => request('data.set', { ...options(settings), key, value }), delete: (key: unknown, settings?: unknown) => request('data.delete', { ...options(settings), key }), list: (prefix: unknown, settings?: unknown) => request('data.list', { ...options(settings), prefix }) })
   const work = Object.freeze({ find: (query: unknown) => request('work.find', query ?? {}), claim: (query: unknown) => request('work.claim', query), complete: (query: unknown) => request('work.complete', query), defer: (query: unknown) => request('work.defer', query), fail: (query: unknown) => request('work.fail', query) })
   return Object.freeze({

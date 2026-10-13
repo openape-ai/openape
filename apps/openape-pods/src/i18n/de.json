@@ -3021,5 +3021,8 @@
   "The input or rule changed while the work ran; the stale result was discarded": "Eingabe oder Regel haben sich während der Arbeit geändert; das veraltete Ergebnis wurde verworfen",
   "{p0} differs from its selected contract; select the new contract with the domain command selectRule": "{p0} weicht von seinem gewählten Vertrag ab; wähle den neuen Vertrag mit dem domain-Befehl selectRule",
   "Another Pod already asks the owner about this key": "Ein anderer Pod fragt den Owner bereits zu diesem Schlüssel",
-  "This key holds the answer to another Pod's question": "Dieser Schlüssel enthält die Antwort auf die Frage eines anderen Pods"
+  "This key holds the answer to another Pod's question": "Dieser Schlüssel enthält die Antwort auf die Frage eines anderen Pods",
+  "Script polls declaration changed since validation": "Die polls-Angabe des Skripts hat sich seit der Validierung geändert",
+  "Declare export const polls = true": "Deklariere export const polls = true",
+  "Invalid polls declaration": "Ungültige polls-Angabe"
 }

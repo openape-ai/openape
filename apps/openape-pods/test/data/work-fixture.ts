@@ -24,10 +24,10 @@ export function workFixture(root = mkdtempSync(join(tmpdir(), 'pods-work-'))) {
   const work = new WorkLedger(store, data)
   const questions = new OwnerQuestions(store, data)
   /** Activates a script that declares `declarations`; scripts with equal declarations share a hash per Pod only. */
-  const activate = (podId: string, declarations?: WorkDeclaration[]) => {
+  const activate = (podId: string, declarations?: WorkDeclaration[], polls = false) => {
     const pod = store.getPod(podId)
     const artifact = `export async function run(context) { return { status: 'completed', summary: 'ok', completedInputIds: context.input.eventIds, gapIds: [] } }\n// ${JSON.stringify(declarations ?? null)} ${Math.random()}`
-    const manifest = store.storeScript(podId, { schemaVersion: 1, contentHash: digest(artifact), entrypoint: 'run.mjs', dependencyLockHash: 'a'.repeat(64), runtimeVersion: 'node24', capabilities: [], triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.bindingRevision, effects: 'readOnly', ...(declarations ? { work: declarations } : {}) }, artifact)
+    const manifest = store.storeScript(podId, { schemaVersion: 1, contentHash: digest(artifact), entrypoint: 'run.mjs', dependencyLockHash: 'a'.repeat(64), runtimeVersion: 'node24', capabilities: [], triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.bindingRevision, effects: 'readOnly', ...(declarations ? { work: declarations } : {}), ...(polls ? { polls: true as const } : {}) }, artifact)
     store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(podId, manifest.contentHash, pod.bindingRevision, resources.epoch(podId), '{}')
     store.db.prepare('UPDATE pods SET active_script=?,lifecycle=\'active\' WHERE id=?').run(manifest.contentHash, podId)
   }
