@@ -25,6 +25,7 @@ import { SharingService } from './sharing/service'
 import { parseSharingCommand } from '../contracts/sharing'
 import { DependencyStore } from './dependencies/store'
 import { programRequest } from '../main/programs/invoke'
+import { parseApprovedInvocation } from '../contracts/programs'
 import { archiveRefusal } from '../contracts/mail-archive-port'
 import { podDirectories } from '../runtime/environment'
 import { ProgramControl } from './resources/programs'
@@ -102,6 +103,9 @@ const runServices: RunServices = { approval: async (body, signal, scope) => mail
   try { programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, body); signal.throwIfAborted() }
   catch (error) { throw archiveRefusal(error) }
   return mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'mailMove')
+}, approvedProgram: async (body, signal, scope) => {
+  programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, { application: body.application, argv: body.argv })
+  return mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'approvedProgram')
 }, tool: async (body, signal, scope) => {
   if (body && typeof body === 'object' && 'sshInventory' in body) {
     assignedSsh(registry.list(scope.podId), scope.podId, scope.capabilities, body)
@@ -386,6 +390,13 @@ port.on('message', async (event) => {
       const check = request.command.approvalCheck as ServiceCheck & { manifest: unknown, operation: string, grants?: { key: string, id: string }[] }
       authorizeRunService(store, registry, dispatcher.runs, check)
       dispatcher.approvals.authorize(check.scope.podId, parseApprovalManifest(check.manifest), check.operation, check.grants)
+      port.postMessage({ id: request.id, state: true }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'approvalExecution' in request.command) {
+      const check = request.command.approvalExecution as ServiceCheck & { invocation: unknown }
+      authorizeRunService(store, registry, dispatcher.runs, check)
+      const invocation = parseApprovedInvocation(check.invocation)
+      dispatcher.approvals.assertExecution(check.scope, invocation.approval, { application: invocation.application, argv: invocation.argv })
       port.postMessage({ id: request.id, state: true }); return
     }
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {

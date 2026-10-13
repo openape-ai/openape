@@ -4,11 +4,12 @@ import { canonicalJson } from './canonical-json'
 
 /**
  * Owner approvals of single object actions (issue 1465), decided at the owner's IdP. Each item is one once-or-always
- * grant bound to exactly this Pod, action, object and payload hash; items of one Pod join one open IdP batch.
- * The audience stays the one of the former approve routes, so the IdP shows them alike.
+ * grant bound to exactly this Pod, action, object and payload hash; items of one Pod and action join one open IdP batch.
+ * The audience stays the one of the former approve routes, so the IdP shows them alike. `program.run` approves one
+ * exact application command (issue 1468): the approval is consumed by that one execution.
  */
 export const approvalAudience = 'pods-graph-gate'
-export const approvalActions = ['mail.archive'] as const
+export const approvalActions = ['mail.archive', 'program.run'] as const
 export type ApprovalAction = typeof approvalActions[number]
 export type ApprovalState = 'collecting' | 'requested' | 'approved' | 'denied' | 'expired' | 'consumed' | 'withdrawn' | 'unknown'
 /** The frozen binding of one item; its canonical JSON is the IdP command, so it never changes after the request. */
