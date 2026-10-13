@@ -3054,5 +3054,8 @@
   "Error": "Fehler",
   "Waits for you": "Wartet auf dich",
   "Running": "Läuft",
-  "OK": "OK"
+  "OK": "OK",
+  "Access": "Zugriffe",
+  "Archived ({count})": "Archivierte ({count})",
+  "Request sent to OpenApe Secrets.": "Anfrage an OpenApe Secrets gesendet."
 }

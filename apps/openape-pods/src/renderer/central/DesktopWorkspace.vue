@@ -11,8 +11,7 @@ import WorkspaceFrame from '../WorkspaceFrame.vue'
 import AppSettings from '../AppSettings.vue'
 import AccountStatus from '../AccountStatus.vue'
 import SharingImport from '../SharingImport.vue'
-import SharingExport from '../SharingExport.vue'
-import type { PortableSourceSelection, SharingCommand } from '../../contracts/sharing'
+import type { SharingCommand } from '../../contracts/sharing'
 
 /**
  * The registered desktop: the shell is the landing page; the Pod editor, portable packages and the
@@ -23,7 +22,7 @@ const client = desktopWorkspaceClient(invoke)
 const page = ref<'Automations' | 'Pods' | 'App settings' | 'Sharing'>('Automations')
 const workspace = ref<InstanceType<typeof CentralWorkspace> | null>(null)
 const organization = ref<Organization>({ revision: 1, groups: [] })
-const sharing = ref<{ mode: 'import' } | { mode: 'export', selection: PortableSourceSelection } | null>(null)
+const sharing = ref<{ mode: 'import' } | null>(null)
 const sharingApi = (command: SharingCommand) => window.pods.sharing!(command)
 const podResources = (podId: string) => window.pods.resources({ type: 'list', podId })
 const error = ref('')
@@ -53,7 +52,6 @@ async function openPod(id: string) {
   page.value = 'Pods'
   if (status.value?.runtimeId) await workspace.value?.select(status.value.runtimeId, id)
 }
-function share(selection: PortableSourceSelection) { sharing.value = { mode: 'export', selection }; page.value = 'Sharing' }
 function importPackage() { sharing.value = { mode: 'import' }; page.value = 'Sharing' }
 defineExpose({ openPod })
 </script>
@@ -72,10 +70,9 @@ defineExpose({ openPod })
     <button v-if="page !== 'Automations'" class="text-button" data-testid="back-to-automations" @click="back">
       ‹ {{ t('Automations') }}
     </button>
-    <LocalShell v-if="page === 'Automations'" sharing @open-pod="openPod" @share="share" @advanced="page = 'App settings'" @import="importPackage" />
+    <LocalShell v-if="page === 'Automations'" sharing @open-pod="openPod" @advanced="page = 'App settings'" @import="importPackage" />
     <template v-if="page === 'Sharing' && sharing">
-      <SharingImport v-if="sharing.mode === 'import'" :api="sharingApi" desktop :resources="podResources" @open-pod="openPod" />
-      <SharingExport v-else :key="sharing.selection.id" :selection="sharing.selection" :api="sharingApi" @done="back" />
+      <SharingImport :api="sharingApi" desktop :resources="podResources" @open-pod="openPod" />
     </template>
     <AppSettings v-if="page === 'App settings'">
       <template v-if="!status?.runtimeId" #connection>
