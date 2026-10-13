@@ -14,13 +14,14 @@ import CodexHandoff from './CodexHandoff.vue'
 import KpiRow from './KpiRow.vue'
 import type { SecretsCommand, SecretsView } from '../../contracts/secrets'
 import type { Layers } from '../utils/automation-layout'
+import { decisionCounts } from '../utils/kpis'
 import { allTags, tagCounts, untagged, withTags } from '../utils/tags'
 
 /**
  * The two product surfaces behind one tab bar: Automatisierungen (this file) and Entscheidungen
  * (the `decisions` slot). Settings open from the gear; creation hands a brief to Codex.
  */
-const props = defineProps<{ view: MapView | null, live: boolean, now: number, decisions?: number, tab?: 'automations' | 'decisions', desktop?: boolean, subject?: string, codex?: 'connected' | 'disconnected', domain?: DomainOverview | null, inboxUrl?: string, secrets?: SecretsView | null, sharing?: boolean }>()
+const props = defineProps<{ view: MapView | null, live: boolean, now: number, tab?: 'automations' | 'decisions', desktop?: boolean, subject?: string, codex?: 'connected' | 'disconnected', domain?: DomainOverview | null, inboxUrl?: string, secrets?: SecretsView | null, sharing?: boolean }>()
 const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'logout': [], 'codex': [pinned: string | null, group: string | null], 'command': [command: CentralCommand], 'secrets': [command: SecretsCommand], 'openPod': [id: string], 'advanced': [], 'import': [], 'domain': [command: DomainCommand, settle?: (error: string | null) => void] }>()
 const layers = ref<Layers>({ data: true, read: true, write: true, auth: true, paused: true })
 const playing = ref(true)
@@ -31,8 +32,8 @@ const pinned = ref<string | null>(null)
 const hovered = ref<string | null>(null)
 const handoff = ref(false)
 const settings = ref(false)
-const inboxView = ref<InstanceType<typeof DecisionsInbox> | null>(null)
-const waiting = computed(() => props.decisions ?? inboxView.value?.total ?? 0)
+// The tab badge, the KPI and the Entscheidungen counters share one computation.
+const waiting = computed(() => props.view ? decisionCounts(props.view, props.secrets?.requests ?? []).count : 0)
 const current = computed(() => props.tab ?? 'automations')
 // The tag selection is a per-device preference; private windows or blocked storage start without one.
 const tagKey = 'pods.automations.tags'
@@ -110,7 +111,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
         {{ t('Loading workspace…') }}
       </p>
       <template v-else>
-        <KpiRow :view="view" />
+        <KpiRow :view="view" :requests="secrets?.requests ?? []" />
         <div class="automations-toolbar">
           <div class="tb-left">
             <div class="seg" role="group" :aria-label="t('View')">
@@ -173,7 +174,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
       <p v-if="!view" class="muted" role="status">
         {{ t('Loading workspace…') }}
       </p>
-      <DecisionsInbox v-else ref="inboxView" :view="view" :domain="domain ?? null" :inbox-url="inboxUrl" :requests="secrets?.requests ?? []" :secrets-origin="secrets?.origin" :desktop="!!desktop" @secrets="emit('secrets', $event)" @domain="(command, settle) => emit('domain', command, settle)" @command="emit('command', $event)" />
+      <DecisionsInbox v-else :view="view" :domain="domain ?? null" :inbox-url="inboxUrl" :requests="secrets?.requests ?? []" :secrets-origin="secrets?.origin" :desktop="!!desktop" @secrets="emit('secrets', $event)" @domain="(command, settle) => emit('domain', command, settle)" @command="emit('command', $event)" />
     </section>
     <AppSettingsMenu v-if="settings" :browser="!desktop" :subject="subject" :consumer="secrets?.consumer ?? null" :sharing="!!sharing" @revoke="emit('secrets', { type: 'revokeConsumer' })" @advanced="emit('advanced')" @import="emit('import')" @close="settings = false" @logout="emit('logout')" @keydown.escape="settings = false" />
   </div>

@@ -5,6 +5,7 @@
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1468. Plan revision 5 (owner "Alles klar. Dann können wir so loslegen.", October 13): https://report.openape.ai/d/01M4TMF0QVFME0772ECFK9HZ4J; source `.claude/plans/2026-10-13-pods-ux-creation.json`. Audit evidence: https://report.openape.ai/d/01M4TMAJ72QHHYG876ZDH347P1
 - Owner decisions: owner context with the owner HOME is the creation default, the isolated sandbox is optional when the user wants it; one approval per push through per-object approvals; UI is verified in Vitest browser mode with screenshots, never by E2E.
 - PR 384 (`feature/issue-1468-pods-ux-quick-wins`, head `cb0472a8`): quick wins Q1–Q9. Checks: typecheck, lint, affected unit suite, test:browser 54/54. Evidence: https://report.openape.ai/d/01M4TRK1G63J3SWS48WD2YMD3A
+- M3 problems (`feature/issue-1468-problems-visible`): KPI "Fehler 24 h" with per-Pod failed runs, pending IdP grants under Entscheidungen → Rechte, one counter computation for KPI, tab badge and Entscheidungen. Relay before desktop is not required (additive optional Pod fields). Checks: lint, typecheck, unit suite, test:browser.
 - Next: merge PR 384, then M1 (Pod rows with purpose, last result, next run, waits-for) on a new branch.
 
 ## Autonomous Pods: shared data replaces networks — issue 1465

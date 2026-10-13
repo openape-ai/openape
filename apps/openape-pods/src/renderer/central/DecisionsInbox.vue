@@ -6,6 +6,7 @@ import type { MapView } from '../../contracts/map-view'
 import type { SecretRequestRow, SecretsCommand } from '../../contracts/secrets'
 import { diagnostic, label, language, t } from '../i18n'
 import { clock, stamp } from '../utils/cadence'
+import { decisionCounts, openSecretRequests, rightsRows } from '../utils/kpis'
 
 /**
  * Everything that waits for the owner: questions of Pods, object approvals decided at the identity
@@ -72,16 +73,16 @@ const batches = computed(() => {
   }))
 })
 const uncertain = computed(() => approvals.value.filter(item => item.state === 'unknown'))
-/** Only requested and uncertain approvals wait for the owner; collecting and approved ones need nothing from them. */
-const waitingApprovals = computed(() => approvals.value.filter(item => item.state === 'requested' || item.state === 'unknown').length)
 const held = computed(() => props.domain?.held ?? [])
 const effects = computed(() => props.domain?.unknownEffects ?? [])
-const rights = computed(() => props.view.pods.flatMap(pod => [...pod.approvals.map(approval => ({ pod, approval, error: null as string | null })), ...(pod.queue.blocked && !pod.approvals.length ? [{ pod, approval: null, error: pod.queue.error }] : [])]))
+const rights = computed(() => rightsRows(props.view))
 const unknown = computed(() => props.view.pods.flatMap(pod => pod.unknown.map(item => ({ pod, ...item }))))
-const requests = computed(() => (props.requests ?? []).filter(row => row.status !== 'collected' && row.status !== 'expired'))
+const requests = computed(() => openSecretRequests(props.requests ?? []))
 const requestState = (status: SecretRequestRow['status']) => status === 'failed' ? t('failed') : status === 'filled' ? t('filled') : t('requested')
 const intent = (value: unknown) => Object.entries(value && typeof value === 'object' ? value : {}).map(([key, item]) => `${key}: ${format(item)}`).join(' · ')
-const total = computed(() => open(questions.value).length + waitingApprovals.value + rights.value.length + held.value.length + effects.value.length + unknown.value.length + requests.value.length)
+// The section counters are the KPI's own computation, so Automatisierungen and Entscheidungen show the same numbers.
+const counts = computed(() => decisionCounts(props.view, props.requests ?? []))
+const total = computed(() => counts.value.count)
 defineExpose({ total })
 </script>
 
@@ -90,19 +91,19 @@ defineExpose({ total })
     <h1>{{ t('Decisions') }}</h1>
     <div class="kpi-row" role="list">
       <div class="kpi" role="listitem">
-        <b>{{ open(questions).length }}</b><span>{{ t('Questions') }}</span><small>{{ questions.length ? [...new Set(questions.map(item => podName(item.podId)))].join(', ') : t('no questions') }}</small>
+        <b>{{ counts.questions }}</b><span>{{ t('Questions') }}</span><small>{{ questions.length ? [...new Set(questions.map(item => podName(item.podId)))].join(', ') : t('no questions') }}</small>
       </div>
       <div class="kpi" role="listitem">
-        <b>{{ waitingApprovals }}</b><span>{{ t('Approvals waiting') }}</span><small>{{ waitingApprovals ? t('decided at the IdP') : t('no waiting approvals') }}</small>
+        <b>{{ counts.approvals }}</b><span>{{ t('Approvals waiting') }}</span><small>{{ counts.approvals ? t('decided at the IdP') : t('no waiting approvals') }}</small>
       </div>
       <div class="kpi" role="listitem">
-        <b>{{ rights.length }}</b><span>{{ t('Rights') }}</span><small>{{ rights.length ? t('{count} runtime requests', { count: rights.length }) : t('no open runtime request') }}</small>
+        <b>{{ counts.rights }}</b><span>{{ t('Rights') }}</span><small>{{ counts.rights ? t('{count} runtime requests', { count: counts.rights }) : t('no open runtime request') }}</small>
       </div>
       <div class="kpi" role="listitem">
-        <b>{{ held.length + effects.length + unknown.length }}</b><span>{{ t('To reconcile') }}</span><small>{{ held.length + effects.length + unknown.length ? t('held work and uncertain actions') : t('nothing to reconcile') }}</small>
+        <b>{{ counts.reconcile }}</b><span>{{ t('To reconcile') }}</span><small>{{ counts.reconcile ? t('held work and uncertain actions') : t('nothing to reconcile') }}</small>
       </div>
       <div class="kpi" role="listitem">
-        <b>{{ requests.length }}</b><span>{{ t('Secrets') }}</span><small>{{ requests.length ? t('{count} secret requests', { count: requests.length }) : t('no secret requests') }}</small>
+        <b>{{ counts.secrets }}</b><span>{{ t('Secrets') }}</span><small>{{ counts.secrets ? t('{count} secret requests', { count: counts.secrets }) : t('no secret requests') }}</small>
       </div>
     </div>
 
@@ -154,7 +155,10 @@ defineExpose({ total })
 
     <h2>{{ t('Approvals waiting') }} <span class="meta">· {{ t('each action on one object, decided at the IdP') }}</span></h2>
     <div class="inbox" data-testid="approvals">
-      <div v-if="!approvals.length" class="item">
+      <p v-if="!domain && inboxUrl && counts.approvals" class="muted">
+        {{ t('Questions and approvals of your Pods are answered in the Pods inbox.') }} <a :href="inboxUrl">{{ t('Open the Pods inbox') }}</a>
+      </p>
+      <div v-else-if="!approvals.length" class="item">
         <div class="row">
           <span class="pill off">{{ t('none') }}</span><span class="meta">{{ t('no waiting approvals') }}</span>
         </div>
@@ -209,21 +213,30 @@ defineExpose({ total })
           <span class="pill off">{{ t('none open') }}</span>
         </div>
       </div>
-      <div v-for="row in rights" :key="row.pod.id + (row.approval?.grantId ?? 'queue')" class="item">
+      <div v-for="row in rights" :key="row.pod.id + (row.kind === 'approval' ? row.approval.grantId : row.kind === 'grant' ? row.grant.grantId : 'queue')" class="item" :data-right="row.kind">
         <div class="row">
-          <span class="pill" :class="row.approval ? 'idp' : 'warn'">{{ row.approval ? t('Open approval') : t('blocked') }}</span><span class="subj">{{ row.pod.name }}</span><span class="meta">{{ row.approval ? row.approval.title : diagnostic(row.error) }}</span>
+          <span class="pill" :class="row.kind === 'blocked' ? 'warn' : 'idp'">{{ row.kind === 'blocked' ? t('blocked') : t('Open approval') }}</span><span class="subj">{{ row.pod.name }}</span><span class="meta">{{ row.kind === 'approval' ? row.approval.title : row.kind === 'grant' ? t('Requested grant: {title}', { title: row.grant.title }) : diagnostic(row.error) }}</span>
         </div>
-        <div v-if="row.approval" class="opts">
+        <div v-if="row.kind === 'approval'" class="opts">
           <button class="secondary idp" type="button" @click="emit('command', { channel: 'runs', body: { type: 'openApproval', podId: row.pod.id, runId: row.approval.runId, grantId: row.approval.grantId } })">
             {{ t('Decide at the IdP') }}
           </button>
+        </div>
+        <div v-else-if="row.kind === 'grant'" class="opts">
+          <button v-if="desktop" class="secondary idp" type="button" @click="emit('command', { channel: 'runs', body: { type: 'openGrant', podId: row.pod.id, grantId: row.grant.grantId } })">
+            {{ t('Decide at the IdP') }}
+          </button>
+          <a v-else class="secondary idp" :href="row.grant.url" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
         </div>
       </div>
     </div>
 
     <h2>{{ t('To reconcile') }} <span class="meta">· {{ t('you confirm what happened outside') }}</span></h2>
     <div class="inbox" data-testid="reconcile">
-      <div v-if="!held.length && !effects.length && !unknown.length" class="item">
+      <p v-if="!domain && inboxUrl && counts.reconcile > unknown.length" class="muted">
+        {{ t('Held work and uncertain actions are settled in the Pods inbox.') }} <a :href="inboxUrl">{{ t('Open the Pods inbox') }}</a>
+      </p>
+      <div v-else-if="!held.length && !effects.length && !unknown.length" class="item">
         <div class="row">
           <span class="pill off">{{ t('none') }}</span><span class="meta">{{ t('Appears when a Pod could not finish safely or did not get an answer; nothing runs again until you state what happened.') }}</span>
         </div>

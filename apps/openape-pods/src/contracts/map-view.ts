@@ -17,6 +17,8 @@ export interface MapRun { at: number, state: string, summary: string, error?: st
 /** `nextAt` is the next scheduled start; older publishers omit it. */
 export interface MapSchedule { spec: ScheduleSpec | null, enabled: boolean, nextAt?: number | null }
 export interface MapApproval { grantId: string, title: string, runId: string }
+/** A grant this Pod requested at the IdP that waits for the owner there, with its IdP page; older publishers omit it. */
+export interface MapGrant { grantId: string, title: string, url: string }
 /** Owner tags of a Pod (issue 1459) with their revision. */
 export interface MapTags { own: string[], revision: number }
 export interface MapPod {
@@ -42,6 +44,10 @@ export interface MapPod {
   runs: number
   queue: { blocked: number, error: string | null }
   approvals: MapApproval[]
+  /** Pending IdP grants of this Pod that no waiting run already shows; older publishers omit it. */
+  grants?: MapGrant[]
+  /** Failed, interrupted and blocked runs started in the window; older publishers omit it. */
+  failures?: number
   unknown: { key: string, runId: string }[]
   tags?: MapTags
 }
@@ -80,6 +86,15 @@ function tags(value: unknown): void {
   if (Object.keys(item).some(key => !['own', 'revision'].includes(key)) || !Number.isSafeInteger(item.revision) || Number(item.revision) < 0 || JSON.stringify(normalizeTags(item.own)) !== JSON.stringify(item.own)) throw new Error('Invalid map tags')
 }
 
+function grants(value: unknown): void {
+  for (const item of list(value, 64)) {
+    const grant = object(item); text(grant.title, 4096)
+    // The same issuers a run approval accepts: HTTPS, or the loopback IdP of a local test stack.
+    const url = URL.parse(text(grant.url, 4096))
+    if (typeof grant.grantId !== 'string' || !/^[\w-]{1,128}$/.test(grant.grantId) || !url || !(url.protocol === 'https:' || (url.protocol === 'http:' && url.hostname === '127.0.0.1'))) throw new Error('Invalid map grant')
+  }
+}
+
 /** Shape check for what crosses the relay and MCP; the content stays the worker's. */
 export function parseMapView(value: unknown): MapView {
   const view = object(value)
@@ -107,6 +122,8 @@ export function parseMapView(value: unknown): MapView {
     }
     for (const alias of list(pod.secrets, 64)) text(alias, 200)
     tags(pod.tags)
+    if (pod.failures !== undefined) integer(pod.failures)
+    if (pod.grants !== undefined) grants(pod.grants)
     const data = object(pod.data)
     for (const path of [...list(data.writes, mapLimits.namespaces), ...list(data.reads, mapLimits.namespaces)]) text(path, 200)
     const work = object(pod.work); integer(work.pending); integer(work.held)
