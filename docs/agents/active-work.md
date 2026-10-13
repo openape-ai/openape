@@ -6,6 +6,7 @@
 - Owner decisions: owner context with the owner HOME is the creation default, the isolated sandbox is optional when the user wants it; one approval per push through per-object approvals; UI is verified in Vitest browser mode with screenshots, never by E2E.
 - PR 384 (`feature/issue-1468-pods-ux-quick-wins`, head `cb0472a8`): quick wins Q1–Q9. Checks: typecheck, lint, affected unit suite, test:browser 54/54. Evidence: https://report.openape.ai/d/01M4TRK1G63J3SWS48WD2YMD3A
 - Next: merge PR 384, then M1 (Pod rows with purpose, last result, next run, waits-for) on a new branch.
+- M6 (`feature/issue-1468-owner-context-home`): owner-level programs, the application terminal and Pod terminal applications run with the owner HOME; new Pods default to owner, imported Pods start isolated, existing Pods keep their level. Open acceptance: `az repos pr list` in a new Pod with the host login after a signed build.
 
 ## Autonomous Pods: shared data replaces networks — issue 1465
 

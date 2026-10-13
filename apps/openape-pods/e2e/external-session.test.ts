@@ -36,7 +36,7 @@ it('external shell: opens the real client and persists harmless application setu
   const connections = { podConnection: async () => ({ issuer: origin, subject: 'pod@example.test', accessToken: async () => 'synthetic-token' }) } as unknown as ConnectionManager
   let released = 0
   const runtime = { executable: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), cli: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/Resources/apes/ape-shell.mjs'), client: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/Resources/app.asar.unpacked/dist/runtime/shell-client.mjs') }
-  const session = new ExternalShell(podId, root, runtime, state, credentials, connections, async () => {}, async () => { released++ })
+  const session = new ExternalShell(podId, root, runtime, state, credentials, connections, async () => {}, async () => { released++ }, 'isolated')
   try {
     const launcher = await session.ready
     const require = createRequire(resolve('../../packages/apes/package.json'))

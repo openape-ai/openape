@@ -182,8 +182,14 @@ it('offers no legacy change review actions', async () => {
 it('offers CLI setup help and resolves only metadata for assigned commands', async () => {
   const { parseAdministration } = await import('../../src/contracts/codex-admin')
   const { pod, send } = fixture()
-  const help = await send({ action: 'runtime' }) as { programHelp: { steps: string[], secrets: string } }
+  const help = await send({ action: 'runtime' }) as { programHelp: { purpose: string, steps: string[], secrets: string }, sandbox: string }
   expect(help.programHelp.steps.join(' ')).toContain('Exit and reopen')
+  // Issue 1468: agents learn that new Pods use the owner HOME and its host logins, and that isolated stays optional.
+  expect(help.programHelp.purpose).toContain('owner\'s host login')
+  expect(help.sandbox).toContain('level owner is the default for every new Pod')
+  expect(help.sandbox).toContain('with the owner\'s HOME')
+  expect(help.sandbox).toContain('can leave code that later runs unsandboxed as the owner')
+  expect(help.sandbox).toContain('level isolated is optional per Pod')
   expect(help.programHelp.secrets).toContain('No credential.* declaration')
   expect(parseAdministration({ action: 'program', revision: 1, command: { type: 'prepare', podId: pod.id, line: 'az --help' } })).toMatchObject({ command: { type: 'prepare' } })
   expect(parseAdministration({ action: 'program', revision: 1, command: { type: 'add', podId: pod.id, epoch: 0 }, path: '/fixture/az', runtimePath: '/fixture/runtime.json' })).toMatchObject({ runtimePath: '/fixture/runtime.json' })

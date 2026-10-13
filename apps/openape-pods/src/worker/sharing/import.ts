@@ -255,7 +255,8 @@ export class PortableImporter {
         this.required(id, expectedRevision)
         if (this.store.listPods().length + manifest.pods.length > 100) throw new Error('Local pod limit reached')
         for (const pod of manifest.pods) {
-          const created = this.store.createPod({ name: clip(pod.title) }, ids.get(pod.key)!)
+          // Imported code was written by someone else: it starts isolated until the owner chooses the owner level.
+          const created = this.store.createPod({ name: clip(pod.title) }, ids.get(pod.key)!, 'isolated')
           if (pod.tags) new ItemTagStore(this.store).execute({ type: 'tag', id: created.id, revision: 0, tags: pod.tags })
           const draftId = drafts[pod.key] = randomUUID()
           // Tool capabilities name local resources and are added when the recipient binds them.
