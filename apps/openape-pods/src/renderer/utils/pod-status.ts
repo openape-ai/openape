@@ -35,9 +35,14 @@ export function nextRun(pod: MapPod, now: number): string {
   return `${rhythm} · ${minutes < 1 ? t('due now') : minutes < 60 ? t('in {count} min', { count: minutes }) : t('in {count} h', { count: Math.round(minutes / 60) })}`
 }
 
+/** Failed, interrupted and blocked runs of the last 24 hours; empty when there were none. */
+export function failureCount(pod: MapPod): string {
+  return pod.failures ? t('{count} failed runs in 24 h', { count: pod.failures }) : ''
+}
+
 /** The first thing that holds the Pod, in the order the owner can resolve it; empty when nothing does. */
 export function waitsFor(pod: MapPod, view: MapView): string {
-  if (pod.approvals.length) return t('your approval at the IdP')
+  if (pod.approvals.length || pod.grants?.length) return t('your approval at the IdP')
   if (view.kpis.decisions.some(item => item.podId === pod.id && item.kind === 'question')) return t('your answer')
   if (pod.work.held) return t('{count} held items for you', { count: pod.work.held })
   if (pod.unknown.length) return t('your check of an uncertain delivery')

@@ -2794,6 +2794,7 @@
   "Tags changed; reload before saving": "Die Tags wurden inzwischen geändert; bitte neu laden und erneut speichern",
   "Invalid workspace tags": "Ungültige Tags im Workspace",
   "Invalid map tags": "Ungültige Tags in der Übersicht",
+  "Invalid map grant": "Ungültiges Recht in der Übersicht",
   "Database schema {p0} cannot be upgraded": "Datenbankschema {p0} kann nicht aktualisiert werden",
   "Nothing matches the filter.": "Nichts passt zum Filter.",
   "Without tag": "Ohne Tag",
@@ -3054,5 +3055,15 @@
   "Error": "Fehler",
   "Waits for you": "Wartet auf dich",
   "Running": "Läuft",
-  "OK": "OK"
+  "OK": "OK",
+  "errors in 24 h": "Fehler 24 h",
+  "no errors in 24 h": "keine Fehler in 24 h",
+  "{count} more": "{count} weitere",
+  "now: {name} · {reason}": "jetzt: {name} · {reason}",
+  "{count} rights": "{count} Rechte",
+  "{count} to reconcile": "{count} abzugleichen",
+  "{count} failed runs in 24 h": "{count} fehlgeschlagene Läufe in 24 h",
+  "Requested grant: {title}": "Angefragtes Recht: {title}",
+  "Held work and uncertain actions are settled in the Pods inbox.": "Angehaltene Arbeit und unsichere Aktionen gleichst du in der Pods-Inbox ab.",
+  "This grant no longer waits for your decision; refresh the view": "Dieses Recht wartet nicht mehr auf deine Entscheidung; aktualisiere die Ansicht"
 }

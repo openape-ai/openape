@@ -744,7 +744,8 @@
           "title": "Execution permission for IURIO PR monitor",
           "runId": "8ee7aea1-a579-4a18-baf0-2f31ddafbf24"
         }
-      ]
+      ],
+      "failures": 137
     },
     {
       "id": "1294ba5c-f913-42c4-bbd4-e49a5897644e",
@@ -807,7 +808,14 @@
         "error": null
       },
       "unknown": [],
-      "approvals": []
+      "approvals": [],
+      "grants": [
+        {
+          "grantId": "grant-task-push",
+          "title": "Send Telegram messages to the IURIO channel",
+          "url": "https://id.openape.ai/grant-approval?grant_id=grant-task-push"
+        }
+      ]
     },
     {
       "id": "25f4899e-23c0-429d-aec1-18c39855a8cd",
@@ -864,7 +872,8 @@
         "error": null
       },
       "unknown": [],
-      "approvals": []
+      "approvals": [],
+      "failures": 3
     },
     {
       "id": "d04b6b1b-eb59-4ed9-9c31-1eb26c7a4596",

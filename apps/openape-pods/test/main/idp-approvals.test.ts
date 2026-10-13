@@ -226,3 +226,17 @@ it('requests every grant kind with an execution context the owner IdP accepts fo
   expect(specs.jev.executionContext.argv).toEqual(httpArgv(typesafeOrigin, 'POST'))
   expect([specs.methods, specs.origin, specs.program].map(spec => spec.executionContext.argv)).toEqual([['pod-http'], ['pod-http'], ['pod-http']])
 })
+
+it('opens the IdP page of a pending Pod grant for the owner and reads pending grants again until the IdP decided them', async () => {
+  const f = await fixture()
+  await f.worker.resources({ type: 'assignHttp', podId, epoch: 1, permission: { origin: 'https://hooks.example.test', methods: ['POST'] } })
+  await f.worker.resources({ type: 'assignHttp', podId: deniedPodId, epoch: 1, permission: { origin: 'https://hooks.example.test', methods: ['GET'] } })
+  // Entscheidungen opens the page only for a grant that this Pod requested and that still waits.
+  await expect(f.grants.approvalPage(podId, 'grant-1')).resolves.toBe(`${issuer}/grant-approval?grant_id=grant-1`)
+  await expect(f.grants.approvalPage(podId, 'grant-2')).rejects.toThrow('This grant no longer waits for your decision; refresh the view')
+  // The owner decides on the IdP page; only the refresh tells the ledger, never an approve call of Pods.
+  idp.decide('grant-1', 'approved'); idp.decide('grant-2', 'expired')
+  await f.grants.refreshPending(AbortSignal.timeout(5000))
+  expect([...f.ledger.list(podId), ...f.ledger.list(deniedPodId)].map(grant => [grant.id, grant.state])).toEqual([['grant-1', 'approved'], ['grant-2', 'expired']])
+  await expect(f.grants.approvalPage(podId, 'grant-1')).rejects.toThrow('This grant no longer waits for your decision; refresh the view')
+})

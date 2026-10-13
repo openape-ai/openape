@@ -15,7 +15,7 @@ const NOW = view.at + 11 * 60000
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en'); localStorage.clear() })
 async function mountShell(props: Record<string, unknown> = {}) {
-  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, decisions: 17, ...props } })
+  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, ...props } })
   await flushPromises()
   return wrapper
 }
@@ -30,19 +30,20 @@ describe('Automatisierungen', () => {
     expect(kpis).toEqual([
       ['5', 'aktiv', 'Pods mit laufendem Zeitplan'],
       ['25', 'pausiert', 'davon 1 Entwürfe, 1 archiviert'],
-      ['1', 'gestört', 'IURIO PR monitor · mit Lücken abgeschlossen'],
-      // A run waiting for its grant at the IdP is an approval as well.
-      ['22', 'Entscheidungen warten auf dich', '17 Rückfragen, 5 Freigaben'],
+      // Every failed run of the window counts, also for a Pod whose last run succeeded.
+      ['140', 'Fehler 24 h', 'IURIO PR monitor 137, zaz Service-Agent 3'],
+      // The same sections as Entscheidungen: a run waiting for its grant and a grant requested at the IdP are rights.
+      ['24', 'Entscheidungen warten auf dich', '17 Rückfragen, 4 Freigaben, 2 Rechte, 1 abzugleichen'],
       ['1', 'unklare Zustellungen', '1 Zustellungen abzugleichen'],
     ])
-    expect(wrapper!.find('.kpi.alert').text()).toContain('gestört')
+    expect(wrapper!.find('.kpi.alert').text()).toContain('Fehler 24 h')
     expect(wrapper!.find('[role="tablist"]').text()).toContain('Automatisierungen')
-    expect(wrapper!.find('[role="tablist"]').text()).toContain('Entscheidungen 17')
+    expect(wrapper!.find('[role="tablist"]').text()).toContain('Entscheidungen 24')
     expect(wrapper!.find('.automations-stamp').text()).toBe(`Stand ${clock(view.at, 'de')}`)
     expect(wrapper!.find('.kinds').text()).toContain('Service, per HTTPS')
     wrapper!.unmount(); applyLanguage('en')
     await mountShell({ live: true })
-    expect(wrapper!.findAll('.kpi span').map(item => item.text())).toEqual(['active', 'paused', 'degraded', 'decisions waiting for you', 'unknown deliveries'])
+    expect(wrapper!.findAll('.kpi span').map(item => item.text())).toEqual(['active', 'paused', 'errors in 24 h', 'decisions waiting for you', 'unknown deliveries'])
     expect(wrapper!.find('.automations-stamp').text()).toBe(`Live · ${clock(NOW, 'en')}`)
   })
 
@@ -66,7 +67,7 @@ describe('Automatisierungen', () => {
     expect(wrapper!.find('.app-settings-menu').exists()).toBe(true)
     await button('⚙ Einstellungen').trigger('click'); await flushPromises()
     expect(wrapper!.find('.app-settings-menu').exists()).toBe(false)
-    await button('Entscheidungen 17').trigger('click')
+    await button('Entscheidungen 24').trigger('click')
     expect(wrapper!.emitted('update:tab')).toEqual([['decisions']])
     await button('Neue Automatisierung mit Codex').trigger('click')
     expect(wrapper!.emitted('codex')).toEqual([[null, null]])
@@ -87,9 +88,13 @@ describe('Automatisierungen', () => {
     // The fixture has no descriptions; a missing purpose is named, not left blank.
     expect(rows.every(row => row.find('.automations-list-purpose').text() === 'Zweck fehlt')).toBe(true)
     expect(cells('Rechnungsprüfung')).toEqual(['OK', 'noch kein Lauf', 'bei neuen gemeinsamen Daten', '–'])
-    expect(cells('zaz Service-Agent')).toEqual(['OK', 'vor 11 min · zaz queue empty; no model call', 'alle 1 min', '–'])
+    // Failed runs of the last 24 hours stay visible below a successful last result.
+    expect(cells('zaz Service-Agent')).toEqual(['OK', 'vor 11 min · zaz queue empty; no model call 3 fehlgeschlagene Läufe in 24 h', 'alle 1 min', '–'])
+    expect(rows.find(row => row.find('b').text() === 'zaz Service-Agent')!.find('.result-cell .failures').text()).toBe('3 fehlgeschlagene Läufe in 24 h')
+    // A grant the Pod requested at the IdP without a waiting run still waits for the owner.
+    expect(cells('IURIO Task monitor')).toEqual(['Wartet auf dich', 'vor 13 min · Unchanged: 204 tasks. No model call or Telegram message.', 'alle 5 min', 'deine Freigabe am IdP'])
     expect(cells('IURIO · Mail-Synchronisierung')).toEqual(['pausiert', 'noch kein Lauf', 'pausiert', '–'])
-    expect(cells('IURIO PR monitor')).toEqual(['Fehler', 'läuft gerade', 'alle 15 min', 'deine Freigabe am IdP'])
+    expect(cells('IURIO PR monitor')).toEqual(['Fehler', 'läuft gerade 137 fehlgeschlagene Läufe in 24 h', 'alle 15 min', 'deine Freigabe am IdP'])
     await rows.find(row => row.text().includes('Linde · Server report'))!.trigger('click')
     expect(wrapper!.find('.automation-detail .dhead b').text()).toBe('Linde · Server report')
   })
@@ -120,7 +125,7 @@ describe('Automatisierungen', () => {
   })
 
   it('shows the loading state without a map and the decisions inbox on the second tab', async () => {
-    await mountShell({ view: null, decisions: 0 })
+    await mountShell({ view: null })
     expect(wrapper!.find('[role="status"]').text()).toBe('Loading workspace…')
     expect(wrapper!.find('[role="tablist"]').text()).not.toContain('0')
     wrapper!.unmount()
