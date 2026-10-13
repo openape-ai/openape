@@ -7,7 +7,8 @@
 - Merged on main `77ee1047`: PR 384 quick wins, 385 M1 rows, 388 M2 one Pod page, 387 M3 problems, 391 M4 settings + tags (schema 49), 390 M5b validation/MCP retries, 386 M5a Shapes declared options + example git adapter, 389 M7 `program.run` approvals (schema 50), 393 global-option value fix, 392 M6 owner HOME.
 - Installed October 13, 17:29: relay `prod-77ee1047` (rollback `prod-cd777449`), signed-local desktop `77ee1047` schema 50 (rollback `~/Library/Application Support/OpenApe Pods Rollback/20261013-172945-ux-1468`).
 - Evidence: integration https://report.openape.ai/d/01M4TXFRQPD1RDTZECQJV0BC3H, live acceptance https://report.openape.ai/d/01M4TZ4913QGM0DNP20VGYZ8PR (test Pod deleted, grants revoked, push denied and not run).
-- Open: issue 1469 (approval request fails with a one-time run grant; validation misses the application capability). Before the example git adapter replaces shapes-registry `adapters/git/adapter.toml`, bind the `-C` path into the resource chain. Two implementations of the declared-option dash rule (grants matcher, Pods approval check) should become one.
+- Issue 1469 (approval request failed with a one-time run grant; validation missed the application capability) fixed in PR 395 and installed as signed-local desktop `68f32de5` (rollback `20261013-182719-fix-1469`); live evidence https://report.openape.ai/d/01M4V1X0YB4WZ7A3A7A9NHJQ25.
+- Open: before the example git adapter replaces shapes-registry `adapters/git/adapter.toml`, bind the `-C` path into the resource chain. Two implementations of the declared-option dash rule (grants matcher, Pods approval check) should become one.
 
 ## Autonomous Pods: shared data replaces networks — issue 1465
 
