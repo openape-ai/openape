@@ -22,7 +22,7 @@ export async function scriptContext(script: ScriptModule, input: RunInput, reque
   const work = Object.freeze({ find: (query: unknown) => request('work.find', query ?? {}), claim: (query: unknown) => request('work.claim', query), complete: (query: unknown) => request('work.complete', query), defer: (query: unknown) => request('work.defer', query), fail: (query: unknown) => request('work.fail', query) })
   return Object.freeze({
     data, work,
-    decisions: Object.freeze({ ask: (question: unknown) => request('decisions.ask', question) }),
+    decisions: Object.freeze({ ask: (question: unknown) => request('decisions.ask', question), withdraw: (question: unknown) => request('decisions.withdraw', question) }),
     approvals: Object.freeze({ request: (approval: unknown) => request('approvals.request', approval), get: (id: unknown) => request('approvals.get', { id }) }),
     jev: Object.freeze({ evaluate: (payload: unknown) => request('jev.evaluate', payload) }),
     variables: Object.freeze(input.variables ?? {}), aliases: freeze(input.aliases ?? { applications: {}, http: {}, directories: {}, references: {} }), input,

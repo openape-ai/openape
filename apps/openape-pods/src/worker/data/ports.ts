@@ -6,7 +6,7 @@ import type { OwnerQuestions } from './questions'
 import type { WorkLedger } from './work'
 
 /** Script operations on shared data, work and owner questions (issue 1465). */
-export const dataOperations = new Set(['work.contract', 'work.polls', 'data.get', 'data.set', 'data.delete', 'data.list', 'work.find', 'work.claim', 'work.complete', 'work.defer', 'work.fail', 'decisions.ask'])
+export const dataOperations = new Set(['work.contract', 'work.polls', 'data.get', 'data.set', 'data.delete', 'data.list', 'work.find', 'work.claim', 'work.complete', 'work.defer', 'work.fail', 'decisions.ask', 'decisions.withdraw'])
 
 export function fields(value: unknown, required: string[], optional: string[] = []): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid operation payload')
@@ -65,6 +65,7 @@ export function handleDataOperation(services: { data: DomainData, work: WorkLedg
       return { state: services.work.fail(principal, { claimToken: text(input.claimToken, 'claim'), reason: text(input.reason, 'reason'), retryable: input.retryable === true }) }
     }
     case 'decisions.ask': return services.questions.ask(principal, payload)
+    case 'decisions.withdraw': return services.questions.withdraw(principal, payload)
   }
   throw new Error('Unsupported data operation')
 }
