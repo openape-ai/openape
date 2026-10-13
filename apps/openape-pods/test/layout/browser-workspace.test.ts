@@ -37,7 +37,9 @@ it.each([{ width: 1280, language: 'en', theme: 'light' }, { width: 390, language
     await (wrapper.vm as unknown as { openPod: (id: string) => Promise<void> }).openPod(fixture.host.workspace.pods[0]!.id); await flushPromises(); await frame()
     await capture(`parity-${surface}-${width}-pods.png`)
     for (const tab of ['Overview', 'Script', 'Variables and secrets', 'Permissions', 'Settings', 'History'] as const) {
-      await click(t(tab))
+      // One-page Pod view: former tabs are reached through the section links (issue 1468).
+      const link = ({ Overview: '', Script: 'Code', Permissions: 'Access', History: 'Runs' } as Record<string, string>)[tab] ?? tab
+      if (link) await click(t(link as 'Code'))
       const selector = tab === 'Script' ? '.script-panel' : tab === 'Variables and secrets' ? '#pod-values .card' : tab === 'Permissions' ? '.resource-panel' : tab === 'Settings' ? '.pod-settings' : tab === 'History' ? '.runs-panel' : '#pod-description'
       const key = tab
       if (surface === 'desktop') metrics.set(key, metric(selector))

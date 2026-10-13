@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { MapPod, MapView } from '../../src/contracts/map-view'
 import { parseMapView } from '../../src/contracts/map-view'
 import { applyLanguage } from '../../src/renderer/i18n'
-import { lastResult, nextRun, podState, waitsFor } from '../../src/renderer/utils/pod-status'
+import { failureCount, lastResult, nextRun, podState, waitsFor } from '../../src/renderer/utils/pod-status'
 import fixture from './map-view.json'
 
 const view = parseMapView(fixture) as MapView
@@ -31,5 +31,15 @@ describe('Pod row status', () => {
     expect(waitsFor(blocked, view)).toBe('blockiert: Ungültige Programmargumente')
     expect(podState(blocked, view)).toBe('waiting')
     expect(waitsFor(pod({}), view)).toBe('')
+    const requested = pod({ grants: [{ grantId: 'grant-push', title: 'Send push messages', url: 'https://id.openape.ai/grant-approval?grant_id=grant-push' }] })
+    expect(waitsFor(requested, view)).toBe('deine Freigabe am IdP')
+    expect(podState(requested, view)).toBe('waiting')
+  })
+
+  it('counts the failed runs of the last 24 hours, also after a successful last run', () => {
+    applyLanguage('de')
+    expect(failureCount(pod({ failures: 137 }))).toBe('137 fehlgeschlagene Läufe in 24 h')
+    expect(failureCount(pod({ failures: 0 }))).toBe('')
+    expect(failureCount(pod({ failures: undefined }))).toBe('')
   })
 })
