@@ -39,7 +39,7 @@ export class Approvals {
 
   private view(item: Row): ApprovalView {
     const url = item.batch_id ? this.store.db.prepare('SELECT url FROM approval_batches WHERE id=?').get(item.batch_id)?.url as string | null ?? null : null
-    return { id: item.id, action: item.action, object: item.object, title: item.title, state: item.state, reason: item.reason, batchUrl: url, updatedAt: item.updated_at }
+    return { id: item.id, action: item.action, object: item.object, title: item.title, state: item.state, reason: item.reason, batchId: item.batch_id, batchUrl: url, updatedAt: item.updated_at }
   }
 
   private assertRun(principal: { podId: string, runId: string }): void {
