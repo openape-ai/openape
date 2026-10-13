@@ -28,7 +28,7 @@ export const diagnosticPatterns = [
   'Work item is {p0}',
   'A run holds at most {p0} claims',
   'Unexpected grant type {p0}',
-  'Invalid {p0} action fields; send action and command only',
+  'Invalid {p0} action fields; send action and command only: unexpected {p1}',
   'Declare at most {p0} program grants',
   'Declare at most {p0} HTTP grants',
   'Declare at most {p0} sandbox {p1}',

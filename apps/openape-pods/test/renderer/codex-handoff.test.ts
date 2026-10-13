@@ -34,7 +34,7 @@ describe('Codex handoff', () => {
     wrapper = mount(CodexHandoff, { attachTo: document.body, props: { view, pinned: null, group: 'iurio', connected: true } })
     expect(wrapper.find('[data-testid="codex-brief"]').text()).toBe(`Lege eine neue Automatisierung an in der Gruppe iurio. ${order}`)
     expect(wrapper.find('.pill').text()).toBe('Codex verbunden')
-    await wrapper.findAll('button').find(item => item.text() === 'In Codex öffnen')!.trigger('click'); await flushPromises()
+    await wrapper.findAll('button').find(item => item.text() === 'Auftrag kopieren')!.trigger('click'); await flushPromises()
     expect(writeText).toHaveBeenCalledWith(`Lege eine neue Automatisierung an in der Gruppe iurio. ${order}`)
     expect(wrapper.findAll('button').map(item => item.text())).toContain('Kopiert, in Codex einfügen')
     await wrapper.findAll('button').find(item => item.text() === 'Einstellungen')!.trigger('click')

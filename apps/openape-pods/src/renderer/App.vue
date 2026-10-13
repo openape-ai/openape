@@ -43,7 +43,7 @@ export default defineComponent({
     attention(): boolean { return !!this.connectionError || this.status?.worker.state === 'error' },
     currentRun(): RunRecord | undefined { return this.runs.find(run => run.state === 'running') },
     needsRecovery(): boolean { const run = this.runs[0]; return !this.schedule?.retry && !!run && ['interrupted', 'failed', 'cancelled', 'blocked'].includes(run.state) && run.recovery?.state !== 'retryQueued' },
-    nextRun(): string { if (!this.pod || this.pod.lifecycle !== 'active' || !this.schedule?.enabled) return t('Manual only'); return this.schedule.nextAt ? dateTime(this.schedule.nextAt) : t('No scheduled time') },
+    nextRun(): string { if (!this.pod || this.pod.lifecycle !== 'active' || !this.schedule?.enabled) return t('Manual only'); return this.schedule.nextAt ? t('Next run: {time}', { time: dateTime(this.schedule.nextAt) }) : t('No scheduled time') },
   },
   watch: { refreshToken() { void this.refresh() } },
   async mounted() {

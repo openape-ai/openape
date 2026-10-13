@@ -170,21 +170,23 @@ describe('Tags (issue 1459)', () => {
 
   const rows = () => wrapper!.findAll('.automations-list tbody tr').map(row => row.find('b').text())
 
-  it('starts empty, shows the Pods per tag and adds every activated tag to the list', async () => {
+  it('starts with the Pods without a tag, shows the Pods per tag and adds every activated tag to the list', async () => {
     const tagsView = tagged()
     const members = tagsView.pods.filter(item => item.tags?.own.includes('mail')).length
     const visible = tagsView.pods.filter(item => item.lifecycle !== 'archived').length
+    const untaggedCount = visible - members - 1
     await mountShell({ view: tagsView })
     await button('List').trigger('click')
+    expect(wrapper!.find('[aria-label="Tags"]').findAll('button[aria-pressed]').map(item => item.text())).toEqual([`#delta-mind ${members}`, '#iurio 1', `#mail ${members}`, `Without tag ${untaggedCount}`])
+    expect(button(`Without tag ${untaggedCount}`).attributes('aria-pressed')).toBe('true')
+    expect(rows()).toHaveLength(untaggedCount)
+    await button(`Without tag ${untaggedCount}`).trigger('click')
     expect(wrapper!.find('.automations-empty').text()).toBe(`Activate tags to see their Pods (${visible} Pods).`)
-    expect(wrapper!.find('.automations-list').exists()).toBe(false)
-    expect(wrapper!.find('[aria-label="Tags"]').findAll('button[aria-pressed]').map(item => item.text())).toEqual([`#delta-mind ${members}`, '#iurio 1', `#mail ${members}`, `Without tag ${visible - members - 1}`])
     await button('#iurio 1').trigger('click')
     expect(rows()).toEqual(['IURIO PR monitor'])
     expect(wrapper!.find('.automations-list .tag-chips').text()).toBe('iurio')
     await button(`#delta-mind ${members}`).trigger('click')
     expect(rows()).toContain('IURIO PR monitor')
-    expect(rows().length).toBeGreaterThan(1)
     expect(rows()).toHaveLength(members + 1)
     await button('All').trigger('click')
     expect(rows()).toHaveLength(29)
@@ -192,12 +194,16 @@ describe('Tags (issue 1459)', () => {
     expect(wrapper!.find('.automations-empty').exists()).toBe(true)
   })
 
-  it('remembers the activated tags on this device', async () => {
-    await mountShell({ view: tagged() })
+  it('remembers the activated tags, the deselected Pods without a tag and the view on this device', async () => {
+    const tagsView = tagged()
+    const untaggedCount = tagsView.pods.filter(item => item.lifecycle !== 'archived' && !item.tags).length
+    await mountShell({ view: tagsView })
+    await button('List').trigger('click')
+    await button(`Without tag ${untaggedCount}`).trigger('click')
     await button('#iurio 1').trigger('click')
     wrapper!.unmount()
     await mountShell({ view: tagged() })
-    await button('List').trigger('click')
+    expect(wrapper!.find('.automations-list').exists()).toBe(true)
     expect(rows()).toEqual(['IURIO PR monitor'])
   })
 

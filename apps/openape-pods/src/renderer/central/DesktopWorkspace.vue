@@ -64,7 +64,7 @@ defineExpose({ openPod })
       <AccountStatus @open="page = 'App settings'" />
     </template>
     <template #status>
-      <span class="muted">{{ status?.state === 'online' ? t('Desktop online') : t('Desktop offline') }}</span>
+      <span v-if="status && status.state !== 'online'" class="connection-notice" role="status">{{ t('Desktop offline') }}<template v-if="status.error"> · {{ diagnostic(status.error) }}</template></span>
     </template>
     <p v-if="error" role="alert" class="error-message">
       {{ diagnostic(error) }}
@@ -78,7 +78,7 @@ defineExpose({ openPod })
       <SharingExport v-else :key="sharing.selection.id" :selection="sharing.selection" :api="sharingApi" @done="back" />
     </template>
     <AppSettings v-if="page === 'App settings'">
-      <template #connection>
+      <template v-if="!status?.runtimeId" #connection>
         <section class="desktop-connection">
           <h3>{{ t('Desktop connection') }}</h3><p class="muted">
             {{ t('Connect this desktop to make its Pods available in your central workspace. The desktop executes your runs.') }}

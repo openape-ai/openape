@@ -52,7 +52,7 @@ export default defineComponent({
       <section v-for="item in accounts" :key="item.provider" class="setup-connection" :aria-label="item.title">
         <strong>{{ item.title }}</strong>
         <span v-if="item.connection?.account">{{ item.connection.account }} · {{ signedIn(item.connection) ? t('Signed in') : label(item.connection.state) }}</span>
-        <span v-else>{{ t('Not signed in') }}</span>
+        <span v-else>{{ view ? t('Not signed in') : t('loading…') }}</span>
         <p v-if="item.connection?.error" role="alert">
           {{ diagnostic(item.connection.error) }}
         </p>

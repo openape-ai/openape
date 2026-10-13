@@ -52,8 +52,11 @@ describe('Automatisierungen layout', () => {
     await shot('02-automatisierungen-karte-voll')
   })
 
-  it('starts empty with tags, shows activated tags and relays out the map', async () => {
+  it('starts with the Pods without a tag, shows activated tags and relays out the map', async () => {
     await mountShell(1440, 1000, false, tagged())
+    expect(canvas()).not.toBeNull()
+    await shot('03-tags-ohne-tag')
+    await wrapper!.findAll('button').find(item => item.text().startsWith('Ohne Tag'))!.trigger('click'); await flushPromises()
     expect(document.querySelector('.automations-empty')!.getBoundingClientRect().height).toBeGreaterThan(80)
     expect(canvas()).toBeNull()
     await shot('03-tags-leer')
@@ -89,6 +92,22 @@ describe('Automatisierungen layout', () => {
     expect(drawer.bottom).toBeLessThanOrEqual(1000)
     expect(document.querySelector('.automation-detail [data-shared]')!.textContent).toContain('delta-mind/mail/classifications')
     await shot('05-pod-detail-klassifizierung')
+  })
+
+  it('pins a Pod without drawing access labels over the map', async () => {
+    const texts: string[] = []
+    const original = CanvasRenderingContext2D.prototype.fillText
+    CanvasRenderingContext2D.prototype.fillText = function (text: string, x: number, y: number, maxWidth?: number) { texts.push(text); return original.call(this, text, x, y, maxWidth) }
+    try {
+      await mountShell(1440, 1000)
+      const shell = wrapper!.vm as unknown as { pin: (id: string | null) => void }
+      shell.pin(view.pods.find(pod => pod.name === 'Mail-Klassifizierung')!.id); await flushPromises()
+      texts.length = 0; await frames(3)
+      expect(texts.some(text => text.startsWith('Mail-Klass'))).toBe(true)
+      expect(texts.filter(text => text.includes('24 h'))).toEqual([])
+      await shot('06-karte-gepinnt-ohne-zugriffslabels')
+    }
+    finally { CanvasRenderingContext2D.prototype.fillText = original }
   })
 
   it('shows the Codex handoff with the brief above the map', async () => {

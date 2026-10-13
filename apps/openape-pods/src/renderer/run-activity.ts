@@ -38,7 +38,7 @@ export function runFailure(error: string | null): { title: string, help: string,
   if (/fetch failed|network|ECONN|ENOTFOUND/i.test(error)) return { title: 'The service could not be reached', help: 'Check the network connection. Inspect any uncertain delivery before retrying.' }
   if (/OpenApe authentication expired/.test(error)) return { title: 'OpenApe sign-in needs attention', help: 'Reconnect the Pod owner in App settings.', action: 'settings' }
   if (/HTTP delivery|external effect|External effect|outcome.*unknown/.test(error)) return { title: 'Delivery needs review', help: 'Check the destination before retrying to avoid sending the same notification twice.' }
-  return { title: 'This run could not finish', help: 'Review the technical details for the cause. For a stopped run, prepare a retry in History to check saved progress and possible deliveries.' }
+  return { title: 'This run could not finish', help: 'For a stopped run, prepare a retry in History to check saved progress and possible deliveries.' }
 }
 
 export function runHeadline(run: RunRecord): string {
