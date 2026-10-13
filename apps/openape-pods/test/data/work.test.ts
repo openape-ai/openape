@@ -147,6 +147,16 @@ describe('self-discovered work on shared domain data', () => {
     finally { f.finish(run) }
   })
 
+  it('skips idle scheduled runs of a work Pod but never those of a polling source', () => {
+    const f = mail()
+    f.classify(() => ({}))
+    // Nothing is ready for the classifier, so its scheduled run is skipped.
+    expect(f.work.pending(f.classifier)).toBe(false)
+    // The same declaration on a source that polls an external system keeps its scheduled runs.
+    f.activate(f.classifier, [classification()], true)
+    expect(f.work.pending(f.classifier)).toBe(true)
+  })
+
   it('waits for a missing prerequisite without new attempts and blocks repeated failures', () => {
     const f = mail()
     f.write('m1', { contentRevision: 'c1' })

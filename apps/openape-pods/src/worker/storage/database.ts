@@ -34,6 +34,8 @@ export interface ScriptManifest {
   /** Retired network contract (takes/gives) kept only on archived script history; never executed (issue 1465). */
   contract?: unknown
   work?: WorkDeclaration[]
+  /** The Pod also reads an external source on its schedule, so its scheduled runs are never skipped as idle. */
+  polls?: true
 }
 export interface SourceInput { id: string, locator: string, version: string, content: string }
 export interface ClaimInput { id: string, matter: string, kind: 'finding' | 'question' | 'gap', text: string, sourceIds: string[], supersedes?: string }
@@ -61,7 +63,7 @@ function hash(value: unknown): asserts value is string {
   if (typeof value !== 'string' || !/^[a-f0-9]{64}$/.test(value)) throw new Error('Invalid content hash')
 }
 export function parseManifest(value: unknown): ScriptManifest {
-  record(value, ['schemaVersion', 'contentHash', 'entrypoint', 'dependencyLockHash', 'runtimeVersion', 'capabilities', 'triggers', 'inputSchemaHash', 'outputSchemaHash', 'checkpointSchemaVersion', 'assignmentRevision', 'effects', 'contract', 'work'])
+  record(value, ['schemaVersion', 'contentHash', 'entrypoint', 'dependencyLockHash', 'runtimeVersion', 'capabilities', 'triggers', 'inputSchemaHash', 'outputSchemaHash', 'checkpointSchemaVersion', 'assignmentRevision', 'effects', 'contract', 'work', 'polls'])
   if (value.schemaVersion !== 1 || value.entrypoint !== 'run.mjs' || !['readOnly', 'reconciledEffects'].includes(value.effects as string)) throw new Error('Unsupported script contract')
   for (const key of ['contentHash', 'dependencyLockHash', 'inputSchemaHash', 'outputSchemaHash']) hash(value[key])
   text(value.runtimeVersion, 'runtime', 100); integer(value.checkpointSchemaVersion); integer(value.assignmentRevision)
@@ -69,6 +71,7 @@ export function parseManifest(value: unknown): ScriptManifest {
   if (!Array.isArray(value.triggers) || !value.triggers.length || value.triggers.some(trigger => !['manual', 'schedule', 'event'].includes(trigger))) throw new Error('Invalid triggers')
   const manifest = structuredClone(value) as unknown as ScriptManifest
   if (value.work !== undefined) manifest.work = parseWorkDeclarations(value.work)
+  if (value.polls !== undefined && value.polls !== true) throw new Error('Invalid polls declaration')
   return manifest
 }
 function syncDirectory(path: string): void {
