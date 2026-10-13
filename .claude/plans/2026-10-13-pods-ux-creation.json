@@ -1,765 +1,783 @@
 {
- "schema": "openape.plan/2",
- "language": "en",
- "project": "OpenApe Pods (apps/openape-pods)",
- "owner": "Patrick Hofmann",
- "date": "2026-10-13",
- "status": "active",
- "revision": 5,
- "title": "Pods: show what each Pod does, flatten navigation, make small Pods quick to create",
- "goal": "The owner sees purpose, last result, next run and problems of every Pod on the first surface, reaches every Pod setting in at most two clicks, and creates a small owner-tool Pod in under 15 minutes without workarounds.",
- "summary": "Replace the map-first, six-level Pod navigation with one row and one page per Pod, surface failures and pending approvals, and remove the creation obstacles measured on 13 October. New Pods run in owner context with the owner's HOME by default; the isolated sandbox is optional if the user wants it. Per-object push approvals still need an owner decision.",
- "problem": {
-  "statement": "The main surface hides what Pods do and whether they fail; one Pod is spread over six levels; small Pods need workarounds to create.",
-  "impact": "Simple questions take up to five clicks, 137 failed PR-monitor runs look green, and new Pods take hours or bypass the sandbox.",
-  "approach": "One row and one page per Pod with purpose, result, next run and problems; visible pending decisions; fix logins, Shapes parsing and validation in the creation path.",
-  "outcome": "Every frequent owner task takes at most two clicks, and a Pod like the IURIO rebase Pod is created in under 15 minutes without workarounds."
- },
- "context": "Evidence: the Test Run https://report.openape.ai/d/01M4TMAJ72QHHYG876ZDH347P1 (45 inspected screenshots, navigation map, creation measurement 11:47 min with conditions). Confirmed owner observations: nesting without benefit, access overlays in the way, \"Desktop online\" without use, purpose not visible on the map, bumpy creation. Tags work because they are owner words, flat, on the first surface and one model everywhere; this plan applies that principle to purpose, state, settings and access. Quick wins Q1–Q9 of the report are independent of this plan.",
- "scope": [
-  "Desktop and browser shell of apps/openape-pods (central/*): rows, Pod page, decisions, settings.",
-  "Map read model fields for next run, waits-for, last result and failure counts.",
-  "Creation path: Shapes option parsing and git adapter, synthetic validation contract, MCP error messages, workspace command retries.",
-  "Owner context with the owner HOME as creation default, isolated sandbox optional if the user wants it; after owner decision: per-object approvals for program effects."
- ],
- "nonGoals": [
-  "No change to the DDISA protocol; approvals stay at the IdP and Pods never approve themselves.",
-  "No removal of the isolated sandbox.",
-  "No phone inbox redesign; no in-app Pod creation."
- ],
- "decisions": [
-  {
-   "title": "Rows first, map second",
-   "description": "The list of Pods with purpose, last result, next run and state becomes the default; the map stays as \"Verbindungen\" without edge labels.",
-   "status": "proposed"
-  },
-  {
-   "title": "One Pod page replaces dialog, developer block and tabs",
-   "description": "A row click opens the page directly with sections Zweck, Läufe, Plan, Variablen, Zugriffe and a collapsed Code section. The hidden Pods inventory and the second back link are removed.",
-   "status": "proposed"
-  },
-  {
-   "title": "Groups become tags",
-   "description": "Groups and tags classify the same Pods; existing groups migrate to tags and the group concept is removed.",
-   "status": "proposed"
-  },
-  {
-   "title": "Owner context with the owner HOME is the creation default; the sandbox is optional if the user wants it",
-   "description": "Every new Pod runs in owner context: its programs and the Pod terminal get the owner HOME, so host CLI logins work without tool-specific setup (today HOME is always the Pod state directory: main/broker/tools.ts:80, main/programs/session.ts:93). The isolated sandbox is optional, if the user wants it: it can be chosen per Pod, at creation or later, because it sometimes makes sense from the start, but not always. Grants per command at the IdP are unchanged.",
-   "status": "accepted",
-   "by": "Patrick Hofmann",
-   "date": "2026-10-13",
-   "reference": "Owner in chat, 2026-10-13: \"Passt jetzt alles, aber owner Kontext soll jedenfalls beim erstellen eines pods Standard sein. Die sandbox Einschränkung ist das sicherheitshalber-Addon wenn die home implementation funktioniert und der User das will\". Clarified the same day: \"optional wenn der Usr das will\". Denn manchmal macht das von Anfang an Sinn, aber eben nicht immer"
-  },
-  {
-   "title": "One approval per push through per-object approvals",
-   "description": "The approvals batch used for mail.archive accepts program actions such as git.push with the object branch@sha. Each approval is consumed by one push and expires when the object changes. Continuing grants stay for reads and other lasting permissions; they are not used to express one approval per push.",
-   "status": "accepted",
-   "by": "Patrick Hofmann",
-   "date": "2026-10-13",
-   "reference": "Owner in chat, 2026-10-13, answering \"Ist das so in deinem Sinn, also Entscheidung 4 = Objekt-Freigaben?\": \"Alles klar. Dann können wir so loslegen.\""
-  }
- ],
- "milestones": [
-  {
-   "id": "m0-decisions",
-   "title": "Owner decisions",
-   "goal": "Decide decision 4 before M7 starts; decision 3 is accepted.",
-   "status": "done",
-   "steps": [
-    "Present per-object approvals against verified exact command grants."
-   ],
-   "acceptance": [
-    "Decision 4 is recorded with the owner's wording in this plan."
-   ],
-   "rollback": "No code change; nothing to roll back."
-  },
-  {
-   "id": "m1-rows",
-   "title": "Pod rows with purpose, result, next run",
-   "goal": "The first surface answers what each Pod does and whether it is fine.",
-   "status": "planned",
-   "steps": [
-    "Add nextAt, waitsFor and lastResult to the map read model (worker/workspace/map-view.ts, contracts/map-view.ts).",
-    "Render rows in AutomationsList with purpose, result sentence, next run, waits-for, tags and a state chip; make it the default view.",
-    "Map: purpose as node tooltip, no edge labels; untagged Pods included unless deselected."
-   ],
-   "acceptance": [
-    "Every active Pod row shows purpose, last result sentence, next run and waits-for; a Pod without purpose shows \"Zweck fehlt\".",
-    "Vitest browser-mode tests cover row content, states and geometry at 1280 px and 390 px and save screenshots as visual evidence."
-   ],
-   "rollback": "Revert the PR; the read-model fields are additive."
-  },
-  {
-   "id": "m2-page",
-   "title": "One Pod page",
-   "goal": "Every Pod setting is at most two clicks from the main surface.",
-   "status": "planned",
-   "steps": [
-    "Row click opens the page; remove AutomationDetail dialog, \"Für Entwickler\" and the CentralWorkspace inventory.",
-    "Sections Zweck, Läufe, Plan, Variablen, Zugriffe (sandbox and IdP grants of this Pod), Code collapsed; one back link.",
-    "Adapt scripts/verify-distribution.mjs and existing Electron specs that reference removed navigation; no new E2E tests for UI."
-   ],
-   "acceptance": [
-    "Vitest browser-mode tests click through tasks 3, 5, 7 and 8 of the navigation map with at most two clicks each and save screenshots.",
-    "No surface contains a second \"Details öffnen\" or a second Pod list."
-   ],
-   "rollback": "Revert the PR; no data migration."
-  },
-  {
-   "id": "m3-problems",
-   "title": "Problems and pending decisions visible",
-   "goal": "Failures and waiting approvals show where the owner looks first.",
-   "status": "planned",
-   "steps": [
-    "Error line in the run box and the row; KPI \"Fehler 24 h\" with per-Pod counts.",
-    "List pending IdP grants per Pod under Rechte with their IdP link, including grants requested through MCP.",
-    "One counter source for the KPI row and the Entscheidungen tab."
-   ],
-   "acceptance": [
-    "A failed run shows its cause without expanding anything.",
-    "A pending push grant appears under Rechte and in the KPI; both tabs show the same number."
-   ],
-   "rollback": "Revert the PR."
-  },
-  {
-   "id": "m4-settings",
-   "title": "One settings page, tags instead of groups, honest loading",
-   "goal": "Settings and classification exist once; loading never looks like a fact.",
-   "status": "planned",
-   "steps": [
-    "Merge the ⚙ popover into one App-Einstellungen page; remove \"Desktop online\" (offline banner only).",
-    "Migrate groups to tags (schema change with backup), then remove groups.",
-    "Explicit loading states; keep the workspace in memory across navigation."
-   ],
-   "acceptance": [
-    "Each account, session and backup control exists on exactly one surface.",
-    "Returning from a Pod page shows the list without a reload message."
-   ],
-   "rollback": "Restore the pre-migration backup; revert the PR."
-  },
-  {
-   "id": "m5-creation",
-   "title": "Creation path without rituals",
-   "goal": "A small Pod reaches its first real dry run without adapter or validation workarounds.",
-   "status": "planned",
-   "steps": [
-    "Shapes: bind option values only for declared options; support global options such as -C; ship a git adapter with worktree, merge-base and merge-tree.",
-    "Validation accepts a failed result with a reason, or is replaced by a real read-only dry run in the owner session.",
-    "MCP refusals name the field and its place; idempotent workspace commands retry on revision conflicts."
-   ],
-   "acceptance": [
-    "The IURIO rebase test Pod is rebuilt from scratch in under 15 minutes with the shipped git adapter and no validation-only code, measured with timestamps.",
-    "Existing grants still match after the parser change (regression test on stored grants)."
-   ],
-   "rollback": "Revert the PR; adapters are versioned files."
-  },
-  {
-   "id": "m6-owner-context",
-   "title": "Owner context as creation default, sandbox optional",
-   "goal": "Every new Pod uses host CLI logins; isolation is optional per Pod, if the user wants it.",
-   "status": "planned",
-   "steps": [
-    "Set HOME to the owner home when reach is owner in main/broker/tools.ts and main/programs/session.ts; keep ~/.config/apes and the Pods folder protected; drop the per-program state directory for owner-context programs.",
-    "Make owner the default level for newly created Pods (MCP create and sandbox apply); existing Pods keep their current level.",
-    "Offer the isolated sandbox as an optional per-Pod choice, at creation and on the Pod page, whenever the user wants it."
-   ],
-   "acceptance": [
-    "A newly created Pod runs in owner context without any sandbox setting, and az repos pr list works in it with the host login.",
-    "A Pod can be created directly in the isolated sandbox when the user chooses it.",
-    "Switching a Pod to isolated still blocks ~/.azure and keeps its grants unchanged."
-   ],
-   "rollback": "Revert the PR; new Pods fall back to isolated with the Pod HOME."
-  },
-  {
-   "id": "m7-object-approvals",
-   "title": "One approval per push",
-   "goal": "Each program effect on one object needs its own IdP approval.",
-   "status": "planned",
-   "steps": [
-    "Check the DDISA grants specification for object approvals of program actions; record any deviation for the owner.",
-    "Extend the approvals batch beyond mail.archive to git.push with object branch@sha."
-   ],
-   "acceptance": [
-    "On a disposable test repository, a first push waits for one IdP approval and a second push to a new SHA waits for a new approval."
-   ],
-   "rollback": "Revert the PR; exact command grants remain the fallback."
-  }
- ],
- "risks": [
-  {
-   "title": "Owner HOME widens what a Pod can do",
-   "mitigation": "Owner decision (decision 3); IdP grant per command unchanged; isolated sandbox available per Pod; repository hooks and persistence named on the Pod page."
-  },
-  {
-   "title": "Navigation change breaks Electron E2E and distribution checks",
-   "mitigation": "Adapt verify-distribution.mjs and affected existing Electron specs in the same PR; UI is verified with pnpm test:fast (unit plus Vitest browser mode), not with E2E."
-  },
-  {
-   "title": "Group migration loses structure",
-   "mitigation": "Migrate each group to a tag of the same name before removal; automatic backup; verify counts per tag."
-  },
-  {
-   "title": "Shared shell changes affect the browser workspace",
-   "mitigation": "Relay deploy first, layout tests at phone and desktop width, then signed desktop build."
-  }
- ],
- "verification": [
-  "All UI behaviour and geometry is verified with Vitest browser mode (test/layout, pnpm test:browser), including screenshots as visual evidence; UI needs no Electron E2E test.",
-  "Publish the browser-mode screenshots, after personal inspection, as a Test Run per milestone.",
-  "Re-measure the creation of the IURIO rebase test Pod with timestamps per phase; delete the test Pod afterwards."
- ],
- "handoff": "Implementation approved. Next action: development issue and branch, then quick wins Q1–Q9 and M1 first. Decisions 3 and 4 are accepted.",
- "links": [
-  {
-   "title": "Test Run: UX inventory and creation measurement",
-   "url": "https://report.openape.ai/d/01M4TMAJ72QHHYG876ZDH347P1"
-  }
- ],
- "changelog": [
-  {
-   "date": "2026-10-13",
-   "text": "Draft created from the UX audit and creation measurement."
-  },
-  {
-   "date": "2026-10-13",
-   "text": "Revision 2: az failed in the Pod because HOME is always the Pod state directory, not because of the keychain (follow-up check). Decision 3 now means owner context = owner HOME; tool-specific PAT workarounds are out of scope."
-  },
-  {
-   "date": "2026-10-13",
-   "text": "Revision 3: owner accepted decision 3: owner context with the owner HOME is the default for every new Pod; the isolated sandbox is an opt-in add-on. M6 is no longer blocked."
-  },
-  {
-   "date": "2026-10-13",
-   "text": "Revision 4: wording per owner: the sandbox is optional if the user wants it, also at creation, not only after the HOME implementation works."
-  },
-  {
-   "date": "2026-10-13",
-   "text": "Revision 5: owner accepted decision 4 (per-object approvals) and approved implementation; UI is verified with Vitest browser mode and screenshots, not with E2E."
-  }
- ],
- "approval": {
-  "by": "Patrick Hofmann",
+  "schema": "openape.plan/2",
+  "language": "en",
+  "project": "OpenApe Pods (apps/openape-pods)",
+  "owner": "Patrick Hofmann",
   "date": "2026-10-13",
-  "reference": "Owner in chat, 2026-10-13, after reviewing revision 4: \"Alles klar. Dann können wir so loslegen. Bzgl der implementation: alles was UI Ist sollte durch Browser-vitest prüfbar sein und muss definitiv nicht durch einen e2e Test. So sollten wir viel schneller prüfen können, selbst wenn wir visuellen Nachweis brauchen\"",
-  "scope": "Start of implementation of this plan. Decision 4 = per-object approvals and the UI test rule from the same message are incorporated in revision 5.",
-  "target": {
-   "revision": 4
+  "status": "done",
+  "revision": 6,
+  "title": "Pods: show what each Pod does, flatten navigation, make small Pods quick to create",
+  "goal": "The owner sees purpose, last result, next run and problems of every Pod on the first surface, reaches every Pod setting in at most two clicks, and creates a small owner-tool Pod in under 15 minutes without workarounds.",
+  "summary": "Replace the map-first, six-level Pod navigation with one row and one page per Pod, surface failures and pending approvals, and remove the creation obstacles measured on 13 October. New Pods run in owner context with the owner's HOME by default; the isolated sandbox is optional if the user wants it. Per-object push approvals still need an owner decision.",
+  "problem": {
+    "statement": "The main surface hides what Pods do and whether they fail; one Pod is spread over six levels; small Pods need workarounds to create.",
+    "impact": "Simple questions take up to five clicks, 137 failed PR-monitor runs look green, and new Pods take hours or bypass the sandbox.",
+    "approach": "One row and one page per Pod with purpose, result, next run and problems; visible pending decisions; fix logins, Shapes parsing and validation in the creation path.",
+    "outcome": "Every frequent owner task takes at most two clicks, and a Pod like the IURIO rebase Pod is created in under 15 minutes without workarounds."
+  },
+  "context": "Evidence: the Test Run https://report.openape.ai/d/01M4TMAJ72QHHYG876ZDH347P1 (45 inspected screenshots, navigation map, creation measurement 11:47 min with conditions). Confirmed owner observations: nesting without benefit, access overlays in the way, \"Desktop online\" without use, purpose not visible on the map, bumpy creation. Tags work because they are owner words, flat, on the first surface and one model everywhere; this plan applies that principle to purpose, state, settings and access. Quick wins Q1–Q9 of the report are independent of this plan.",
+  "scope": [
+    "Desktop and browser shell of apps/openape-pods (central/*): rows, Pod page, decisions, settings.",
+    "Map read model fields for next run, waits-for, last result and failure counts.",
+    "Creation path: Shapes option parsing and git adapter, synthetic validation contract, MCP error messages, workspace command retries.",
+    "Owner context with the owner HOME as creation default, isolated sandbox optional if the user wants it; after owner decision: per-object approvals for program effects."
+  ],
+  "nonGoals": [
+    "No change to the DDISA protocol; approvals stay at the IdP and Pods never approve themselves.",
+    "No removal of the isolated sandbox.",
+    "No phone inbox redesign; no in-app Pod creation."
+  ],
+  "decisions": [
+    {
+      "title": "Rows first, map second",
+      "description": "The list of Pods with purpose, last result, next run and state becomes the default; the map stays as \"Verbindungen\" without edge labels.",
+      "status": "proposed"
+    },
+    {
+      "title": "One Pod page replaces dialog, developer block and tabs",
+      "description": "A row click opens the page directly with sections Zweck, Läufe, Plan, Variablen, Zugriffe and a collapsed Code section. The hidden Pods inventory and the second back link are removed.",
+      "status": "proposed"
+    },
+    {
+      "title": "Groups become tags",
+      "description": "Groups and tags classify the same Pods; existing groups migrate to tags and the group concept is removed.",
+      "status": "proposed"
+    },
+    {
+      "title": "Owner context with the owner HOME is the creation default; the sandbox is optional if the user wants it",
+      "description": "Every new Pod runs in owner context: its programs and the Pod terminal get the owner HOME, so host CLI logins work without tool-specific setup (today HOME is always the Pod state directory: main/broker/tools.ts:80, main/programs/session.ts:93). The isolated sandbox is optional, if the user wants it: it can be chosen per Pod, at creation or later, because it sometimes makes sense from the start, but not always. Grants per command at the IdP are unchanged.",
+      "status": "accepted",
+      "by": "Patrick Hofmann",
+      "date": "2026-10-13",
+      "reference": "Owner in chat, 2026-10-13: \"Passt jetzt alles, aber owner Kontext soll jedenfalls beim erstellen eines pods Standard sein. Die sandbox Einschränkung ist das sicherheitshalber-Addon wenn die home implementation funktioniert und der User das will\". Clarified the same day: \"optional wenn der Usr das will\". Denn manchmal macht das von Anfang an Sinn, aber eben nicht immer"
+    },
+    {
+      "title": "One approval per push through per-object approvals",
+      "description": "The approvals batch used for mail.archive accepts program actions such as git.push with the object branch@sha. Each approval is consumed by one push and expires when the object changes. Continuing grants stay for reads and other lasting permissions; they are not used to express one approval per push.",
+      "status": "accepted",
+      "by": "Patrick Hofmann",
+      "date": "2026-10-13",
+      "reference": "Owner in chat, 2026-10-13, answering \"Ist das so in deinem Sinn, also Entscheidung 4 = Objekt-Freigaben?\": \"Alles klar. Dann können wir so loslegen.\""
+    }
+  ],
+  "milestones": [
+    {
+      "id": "m0-decisions",
+      "title": "Owner decisions",
+      "goal": "Decide decision 4 before M7 starts; decision 3 is accepted.",
+      "status": "done",
+      "steps": [
+        "Present per-object approvals against verified exact command grants."
+      ],
+      "acceptance": [
+        "Decision 4 is recorded with the owner's wording in this plan."
+      ],
+      "rollback": "No code change; nothing to roll back."
+    },
+    {
+      "id": "m1-rows",
+      "title": "Pod rows with purpose, result, next run",
+      "goal": "The first surface answers what each Pod does and whether it is fine.",
+      "status": "done",
+      "steps": [
+        "Add nextAt, waitsFor and lastResult to the map read model (worker/workspace/map-view.ts, contracts/map-view.ts).",
+        "Render rows in AutomationsList with purpose, result sentence, next run, waits-for, tags and a state chip; make it the default view.",
+        "Map: purpose as node tooltip, no edge labels; untagged Pods included unless deselected."
+      ],
+      "acceptance": [
+        "Every active Pod row shows purpose, last result sentence, next run and waits-for; a Pod without purpose shows \"Zweck fehlt\".",
+        "Vitest browser-mode tests cover row content, states and geometry at 1280 px and 390 px and save screenshots as visual evidence."
+      ],
+      "rollback": "Revert the PR; the read-model fields are additive."
+    },
+    {
+      "id": "m2-page",
+      "title": "One Pod page",
+      "goal": "Every Pod setting is at most two clicks from the main surface.",
+      "status": "done",
+      "steps": [
+        "Row click opens the page; remove AutomationDetail dialog, \"Für Entwickler\" and the CentralWorkspace inventory.",
+        "Sections Zweck, Läufe, Plan, Variablen, Zugriffe (sandbox and IdP grants of this Pod), Code collapsed; one back link.",
+        "Adapt scripts/verify-distribution.mjs and existing Electron specs that reference removed navigation; no new E2E tests for UI."
+      ],
+      "acceptance": [
+        "Vitest browser-mode tests click through tasks 3, 5, 7 and 8 of the navigation map with at most two clicks each and save screenshots.",
+        "No surface contains a second \"Details öffnen\" or a second Pod list."
+      ],
+      "rollback": "Revert the PR; no data migration."
+    },
+    {
+      "id": "m3-problems",
+      "title": "Problems and pending decisions visible",
+      "goal": "Failures and waiting approvals show where the owner looks first.",
+      "status": "done",
+      "steps": [
+        "Error line in the run box and the row; KPI \"Fehler 24 h\" with per-Pod counts.",
+        "List pending IdP grants per Pod under Rechte with their IdP link, including grants requested through MCP.",
+        "One counter source for the KPI row and the Entscheidungen tab."
+      ],
+      "acceptance": [
+        "A failed run shows its cause without expanding anything.",
+        "A pending push grant appears under Rechte and in the KPI; both tabs show the same number."
+      ],
+      "rollback": "Revert the PR."
+    },
+    {
+      "id": "m4-settings",
+      "title": "One settings page, tags instead of groups, honest loading",
+      "goal": "Settings and classification exist once; loading never looks like a fact.",
+      "status": "done",
+      "steps": [
+        "Merge the ⚙ popover into one App-Einstellungen page; remove \"Desktop online\" (offline banner only).",
+        "Migrate groups to tags (schema change with backup), then remove groups.",
+        "Explicit loading states; keep the workspace in memory across navigation."
+      ],
+      "acceptance": [
+        "Each account, session and backup control exists on exactly one surface.",
+        "Returning from a Pod page shows the list without a reload message."
+      ],
+      "rollback": "Restore the pre-migration backup; revert the PR."
+    },
+    {
+      "id": "m5-creation",
+      "title": "Creation path without rituals",
+      "goal": "A small Pod reaches its first real dry run without adapter or validation workarounds.",
+      "status": "done",
+      "steps": [
+        "Shapes: bind option values only for declared options; support global options such as -C; ship a git adapter with worktree, merge-base and merge-tree.",
+        "Validation accepts a failed result with a reason, or is replaced by a real read-only dry run in the owner session.",
+        "MCP refusals name the field and its place; idempotent workspace commands retry on revision conflicts."
+      ],
+      "acceptance": [
+        "The IURIO rebase test Pod is rebuilt from scratch in under 15 minutes with the shipped git adapter and no validation-only code, measured with timestamps.",
+        "Existing grants still match after the parser change (regression test on stored grants)."
+      ],
+      "rollback": "Revert the PR; adapters are versioned files."
+    },
+    {
+      "id": "m6-owner-context",
+      "title": "Owner context as creation default, sandbox optional",
+      "goal": "Every new Pod uses host CLI logins; isolation is optional per Pod, if the user wants it.",
+      "status": "done",
+      "steps": [
+        "Set HOME to the owner home when reach is owner in main/broker/tools.ts and main/programs/session.ts; keep ~/.config/apes and the Pods folder protected; drop the per-program state directory for owner-context programs.",
+        "Make owner the default level for newly created Pods (MCP create and sandbox apply); existing Pods keep their current level.",
+        "Offer the isolated sandbox as an optional per-Pod choice, at creation and on the Pod page, whenever the user wants it."
+      ],
+      "acceptance": [
+        "A newly created Pod runs in owner context without any sandbox setting, and az repos pr list works in it with the host login.",
+        "A Pod can be created directly in the isolated sandbox when the user chooses it.",
+        "Switching a Pod to isolated still blocks ~/.azure and keeps its grants unchanged."
+      ],
+      "rollback": "Revert the PR; new Pods fall back to isolated with the Pod HOME."
+    },
+    {
+      "id": "m7-object-approvals",
+      "title": "One approval per push",
+      "goal": "Each program effect on one object needs its own IdP approval.",
+      "status": "done",
+      "steps": [
+        "Check the DDISA grants specification for object approvals of program actions; record any deviation for the owner.",
+        "Extend the approvals batch beyond mail.archive to git.push with object branch@sha."
+      ],
+      "acceptance": [
+        "On a disposable test repository, a first push waits for one IdP approval and a second push to a new SHA waits for a new approval."
+      ],
+      "rollback": "Revert the PR; exact command grants remain the fallback."
+    }
+  ],
+  "risks": [
+    {
+      "title": "Owner HOME widens what a Pod can do",
+      "mitigation": "Owner decision (decision 3); IdP grant per command unchanged; isolated sandbox available per Pod; repository hooks and persistence named on the Pod page."
+    },
+    {
+      "title": "Navigation change breaks Electron E2E and distribution checks",
+      "mitigation": "Adapt verify-distribution.mjs and affected existing Electron specs in the same PR; UI is verified with pnpm test:fast (unit plus Vitest browser mode), not with E2E."
+    },
+    {
+      "title": "Group migration loses structure",
+      "mitigation": "Migrate each group to a tag of the same name before removal; automatic backup; verify counts per tag."
+    },
+    {
+      "title": "Shared shell changes affect the browser workspace",
+      "mitigation": "Relay deploy first, layout tests at phone and desktop width, then signed desktop build."
+    }
+  ],
+  "verification": [
+    "All UI behaviour and geometry is verified with Vitest browser mode (test/layout, pnpm test:browser), including screenshots as visual evidence; UI needs no Electron E2E test.",
+    "Publish the browser-mode screenshots, after personal inspection, as a Test Run per milestone.",
+    "Re-measure the creation of the IURIO rebase test Pod with timestamps per phase; delete the test Pod afterwards."
+  ],
+  "handoff": "Implementation approved. Next action: development issue and branch, then quick wins Q1–Q9 and M1 first. Decisions 3 and 4 are accepted.",
+  "links": [
+    {
+      "title": "Test Run: UX inventory and creation measurement",
+      "url": "https://report.openape.ai/d/01M4TMAJ72QHHYG876ZDH347P1"
+    }
+  ],
+  "changelog": [
+    {
+      "date": "2026-10-13",
+      "text": "Draft created from the UX audit and creation measurement."
+    },
+    {
+      "date": "2026-10-13",
+      "text": "Revision 2: az failed in the Pod because HOME is always the Pod state directory, not because of the keychain (follow-up check). Decision 3 now means owner context = owner HOME; tool-specific PAT workarounds are out of scope."
+    },
+    {
+      "date": "2026-10-13",
+      "text": "Revision 3: owner accepted decision 3: owner context with the owner HOME is the default for every new Pod; the isolated sandbox is an opt-in add-on. M6 is no longer blocked."
+    },
+    {
+      "date": "2026-10-13",
+      "text": "Revision 4: wording per owner: the sandbox is optional if the user wants it, also at creation, not only after the HOME implementation works."
+    },
+    {
+      "date": "2026-10-13",
+      "text": "Revision 5: owner accepted decision 4 (per-object approvals) and approved implementation; UI is verified with Vitest browser mode and screenshots, not with E2E."
+    },
+    {
+      "date": "2026-10-13",
+      "text": "Revision 6: all milestones delivered and installed; live acceptance passed with two follow-up defects (issue 1469)."
+    }
+  ],
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-13",
+    "reference": "Owner in chat, 2026-10-13, after reviewing revision 4: \"Alles klar. Dann können wir so loslegen. Bzgl der implementation: alles was UI Ist sollte durch Browser-vitest prüfbar sein und muss definitiv nicht durch einen e2e Test. So sollten wir viel schneller prüfen können, selbst wenn wir visuellen Nachweis brauchen\"",
+    "scope": "Start of implementation of this plan. Decision 4 = per-object approvals and the UI test rule from the same message are incorporated in revision 5.",
+    "target": {
+      "revision": 4
+    }
+  },
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "Pods: show what each Pod does, flatten navigation, make small Pods quick to create",
+        "text": "Pods: zeigen, was jeder Pod tut, Navigation abflachen, kleine Pods schnell anlegen"
+      },
+      {
+        "path": "goal",
+        "source": "The owner sees purpose, last result, next run and problems of every Pod on the first surface, reaches every Pod setting in at most two clicks, and creates a small owner-tool Pod in under 15 minutes without workarounds.",
+        "text": "Der Owner sieht Zweck, letztes Ergebnis, nächsten Lauf und Probleme jedes Pods auf der ersten Oberfläche, erreicht jede Pod-Einstellung mit höchstens zwei Klicks und legt einen kleinen Owner-Tool-Pod in unter 15 Minuten ohne Umwege an."
+      },
+      {
+        "path": "summary",
+        "source": "Replace the map-first, six-level Pod navigation with one row and one page per Pod, surface failures and pending approvals, and remove the creation obstacles measured on 13 October. New Pods run in owner context with the owner's HOME by default; the isolated sandbox is optional if the user wants it. Per-object push approvals still need an owner decision.",
+        "text": "Die kartenzentrierte Pod-Navigation mit bis zu sechs Ebenen wird durch eine Zeile und eine Seite pro Pod ersetzt. Fehler und wartende Freigaben werden sichtbar, und die am 13. Oktober gemessenen Hürden beim Anlegen fallen weg. Neue Pods laufen standardmäßig im Owner-Kontext mit deinem HOME; die isolierte Sandbox ist optional, wenn der User das will. Freigaben pro Objekt für Pushes brauchen noch deine Entscheidung."
+      },
+      {
+        "path": "problem.statement",
+        "source": "The main surface hides what Pods do and whether they fail; one Pod is spread over six levels; small Pods need workarounds to create.",
+        "text": "Die Hauptansicht verbirgt, was Pods tun und ob sie scheitern; ein Pod verteilt sich über sechs Ebenen; kleine Pods brauchen Umwege beim Anlegen."
+      },
+      {
+        "path": "problem.impact",
+        "source": "Simple questions take up to five clicks, 137 failed PR-monitor runs look green, and new Pods take hours or bypass the sandbox.",
+        "text": "Einfache Fragen brauchen bis zu fünf Klicks, 137 gescheiterte Läufe des PR-Monitors wirken grün, und neue Pods kosten Stunden oder umgehen die Sandbox."
+      },
+      {
+        "path": "problem.approach",
+        "source": "One row and one page per Pod with purpose, result, next run and problems; visible pending decisions; fix logins, Shapes parsing and validation in the creation path.",
+        "text": "Eine Zeile und eine Seite pro Pod mit Zweck, Ergebnis, nächstem Lauf und Problemen; sichtbare offene Entscheidungen; Logins, Shapes-Parser und Validierung im Anlegeweg reparieren."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "Every frequent owner task takes at most two clicks, and a Pod like the IURIO rebase Pod is created in under 15 minutes without workarounds.",
+        "text": "Jede häufige Owner-Aufgabe braucht höchstens zwei Klicks, und ein Pod wie der IURIO-Rebase-Pod entsteht in unter 15 Minuten ohne Umwege."
+      },
+      {
+        "path": "context",
+        "source": "Evidence: the Test Run https://report.openape.ai/d/01M4TMAJ72QHHYG876ZDH347P1 (45 inspected screenshots, navigation map, creation measurement 11:47 min with conditions). Confirmed owner observations: nesting without benefit, access overlays in the way, \"Desktop online\" without use, purpose not visible on the map, bumpy creation. Tags work because they are owner words, flat, on the first surface and one model everywhere; this plan applies that principle to purpose, state, settings and access. Quick wins Q1–Q9 of the report are independent of this plan.",
+        "text": "Nachweis: der Test Run https://report.openape.ai/d/01M4TMAJ72QHHYG876ZDH347P1 (45 geprüfte Screenshots, Navigationskarte, Messung des Anlegens 11:47 min mit Bedingungen). Bestätigte Beobachtungen: Verschachtelung ohne Nutzen, störende Zugriffs-Overlays, „Desktop online“ ohne Nutzen, Zweck auf der Karte nicht sichtbar, holpriges Anlegen. Tags funktionieren, weil sie Owner-Wörter sind, flach, auf der ersten Oberfläche und überall dasselbe Modell; dieser Plan überträgt das Prinzip auf Zweck, Zustand, Einstellungen und Zugriffe. Die Quick Wins Q1–Q9 des Berichts sind unabhängig von diesem Plan."
+      },
+      {
+        "path": "scope.0",
+        "source": "Desktop and browser shell of apps/openape-pods (central/*): rows, Pod page, decisions, settings.",
+        "text": "Desktop- und Browser-Shell von apps/openape-pods (central/*): Zeilen, Pod-Seite, Entscheidungen, Einstellungen."
+      },
+      {
+        "path": "scope.1",
+        "source": "Map read model fields for next run, waits-for, last result and failure counts.",
+        "text": "Felder im Karten-Lesemodell für nächsten Lauf, Wartet-auf, letztes Ergebnis und Fehlerzahlen."
+      },
+      {
+        "path": "scope.2",
+        "source": "Creation path: Shapes option parsing and git adapter, synthetic validation contract, MCP error messages, workspace command retries.",
+        "text": "Anlegeweg: Optionsparser und git-Adapter von Shapes, Vertrag der synthetischen Validierung, MCP-Fehlermeldungen, Wiederholung von Workspace-Befehlen."
+      },
+      {
+        "path": "scope.3",
+        "source": "Owner context with the owner HOME as creation default, isolated sandbox optional if the user wants it; after owner decision: per-object approvals for program effects.",
+        "text": "Owner-Kontext mit deinem HOME als Standard beim Anlegen, isolierte Sandbox optional, wenn der User das will; nach deiner Entscheidung: Freigaben pro Objekt für Programmwirkungen."
+      },
+      {
+        "path": "nonGoals.0",
+        "source": "No change to the DDISA protocol; approvals stay at the IdP and Pods never approve themselves.",
+        "text": "Keine Änderung am DDISA-Protokoll; Freigaben bleiben beim IdP, Pods geben sich nie selbst frei."
+      },
+      {
+        "path": "nonGoals.1",
+        "source": "No removal of the isolated sandbox.",
+        "text": "Die isolierte Sandbox wird nicht entfernt."
+      },
+      {
+        "path": "nonGoals.2",
+        "source": "No phone inbox redesign; no in-app Pod creation.",
+        "text": "Kein Umbau der Handy-Inbox; kein Anlegen von Pods in der App."
+      },
+      {
+        "path": "decisions.0.title",
+        "source": "Rows first, map second",
+        "text": "Zeilen zuerst, Karte danach"
+      },
+      {
+        "path": "decisions.0.description",
+        "source": "The list of Pods with purpose, last result, next run and state becomes the default; the map stays as \"Verbindungen\" without edge labels.",
+        "text": "Die Pod-Liste mit Zweck, letztem Ergebnis, nächstem Lauf und Zustand wird Standard; die Karte bleibt als „Verbindungen“ ohne Kantenbeschriftungen."
+      },
+      {
+        "path": "decisions.1.title",
+        "source": "One Pod page replaces dialog, developer block and tabs",
+        "text": "Eine Pod-Seite ersetzt Dialog, Entwicklerblock und Tabs"
+      },
+      {
+        "path": "decisions.1.description",
+        "source": "A row click opens the page directly with sections Zweck, Läufe, Plan, Variablen, Zugriffe and a collapsed Code section. The hidden Pods inventory and the second back link are removed.",
+        "text": "Ein Klick auf die Zeile öffnet direkt die Seite mit den Abschnitten Zweck, Läufe, Plan, Variablen, Zugriffe und eingeklapptem Code. Das versteckte Pod-Inventar und der zweite Zurück-Link entfallen."
+      },
+      {
+        "path": "decisions.2.title",
+        "source": "Groups become tags",
+        "text": "Gruppen werden zu Tags"
+      },
+      {
+        "path": "decisions.2.description",
+        "source": "Groups and tags classify the same Pods; existing groups migrate to tags and the group concept is removed.",
+        "text": "Gruppen und Tags ordnen dieselben Pods ein; bestehende Gruppen werden zu Tags, das Gruppenkonzept entfällt."
+      },
+      {
+        "path": "decisions.3.title",
+        "source": "Owner context with the owner HOME is the creation default; the sandbox is optional if the user wants it",
+        "text": "Owner-Kontext mit deinem HOME ist Standard beim Anlegen; die Sandbox ist optional, wenn der User das will"
+      },
+      {
+        "path": "decisions.3.description",
+        "source": "Every new Pod runs in owner context: its programs and the Pod terminal get the owner HOME, so host CLI logins work without tool-specific setup (today HOME is always the Pod state directory: main/broker/tools.ts:80, main/programs/session.ts:93). The isolated sandbox is optional, if the user wants it: it can be chosen per Pod, at creation or later, because it sometimes makes sense from the start, but not always. Grants per command at the IdP are unchanged.",
+        "text": "Jeder neue Pod läuft im Owner-Kontext: Seine Programme und das Pod-Terminal bekommen dein HOME, damit Host-CLI-Logins ohne tool-spezifische Einrichtung funktionieren (heute ist HOME immer das Pod-Speicherverzeichnis: main/broker/tools.ts:80, main/programs/session.ts:93). Die isolierte Sandbox ist optional, wenn der User das will: Sie lässt sich pro Pod wählen, beim Anlegen oder später, weil sie manchmal von Anfang an Sinn ergibt, aber eben nicht immer. Grants pro Befehl beim IdP bleiben unverändert."
+      },
+      {
+        "path": "decisions.4.title",
+        "source": "One approval per push through per-object approvals",
+        "text": "Eine Freigabe pro Push über Objekt-Freigaben"
+      },
+      {
+        "path": "decisions.4.description",
+        "source": "The approvals batch used for mail.archive accepts program actions such as git.push with the object branch@sha. Each approval is consumed by one push and expires when the object changes. Continuing grants stay for reads and other lasting permissions; they are not used to express one approval per push.",
+        "text": "Die Freigabe-Sammlung, die heute mail.archive nutzt, nimmt Programmaktionen wie git.push mit dem Objekt branch@sha an. Jede Freigabe wird von genau einem Push verbraucht und verfällt, wenn sich das Objekt ändert. Dauerhafte Grants bleiben für Lesen und andere bleibende Rechte; „eine Freigabe pro Push“ wird nicht über sie abgebildet."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Owner decisions",
+        "text": "Entscheidungen des Owners"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Decide decision 4 before M7 starts; decision 3 is accepted.",
+        "text": "Entscheidung 4 vor M7 treffen; Entscheidung 3 ist getroffen."
+      },
+      {
+        "path": "milestones.0.steps.0",
+        "source": "Present per-object approvals against verified exact command grants.",
+        "text": "Freigaben pro Objekt gegen geprüfte exakte Befehlsgrants vorlegen."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "Decision 4 is recorded with the owner's wording in this plan.",
+        "text": "Entscheidung 4 steht mit deinem Wortlaut in diesem Plan."
+      },
+      {
+        "path": "milestones.0.rollback",
+        "source": "No code change; nothing to roll back.",
+        "text": "Keine Codeänderung; nichts zurückzunehmen."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "Pod rows with purpose, result, next run",
+        "text": "Pod-Zeilen mit Zweck, Ergebnis, nächstem Lauf"
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "The first surface answers what each Pod does and whether it is fine.",
+        "text": "Die erste Oberfläche beantwortet, was jeder Pod tut und ob alles in Ordnung ist."
+      },
+      {
+        "path": "milestones.1.steps.0",
+        "source": "Add nextAt, waitsFor and lastResult to the map read model (worker/workspace/map-view.ts, contracts/map-view.ts).",
+        "text": "nextAt, waitsFor und lastResult zum Karten-Lesemodell hinzufügen (worker/workspace/map-view.ts, contracts/map-view.ts)."
+      },
+      {
+        "path": "milestones.1.steps.1",
+        "source": "Render rows in AutomationsList with purpose, result sentence, next run, waits-for, tags and a state chip; make it the default view.",
+        "text": "Zeilen in AutomationsList mit Zweck, Ergebnissatz, nächstem Lauf, Wartet-auf, Tags und Zustands-Chip; als Standardansicht."
+      },
+      {
+        "path": "milestones.1.steps.2",
+        "source": "Map: purpose as node tooltip, no edge labels; untagged Pods included unless deselected.",
+        "text": "Karte: Zweck als Knoten-Tooltip, keine Kantenbeschriftungen; Pods ohne Tag sichtbar, solange nicht abgewählt."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "Every active Pod row shows purpose, last result sentence, next run and waits-for; a Pod without purpose shows \"Zweck fehlt\".",
+        "text": "Jede aktive Pod-Zeile zeigt Zweck, letzten Ergebnissatz, nächsten Lauf und Wartet-auf; ein Pod ohne Zweck zeigt „Zweck fehlt“."
+      },
+      {
+        "path": "milestones.1.acceptance.1",
+        "source": "Vitest browser-mode tests cover row content, states and geometry at 1280 px and 390 px and save screenshots as visual evidence.",
+        "text": "Vitest-Tests im Browser-Modus prüfen Inhalt, Zustände und Geometrie der Zeilen bei 1280 px und 390 px und speichern Screenshots als visuellen Nachweis."
+      },
+      {
+        "path": "milestones.1.rollback",
+        "source": "Revert the PR; the read-model fields are additive.",
+        "text": "PR zurücknehmen; die Lesemodell-Felder sind additiv."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "One Pod page",
+        "text": "Eine Pod-Seite"
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "Every Pod setting is at most two clicks from the main surface.",
+        "text": "Jede Pod-Einstellung ist höchstens zwei Klicks von der Hauptansicht entfernt."
+      },
+      {
+        "path": "milestones.2.steps.0",
+        "source": "Row click opens the page; remove AutomationDetail dialog, \"Für Entwickler\" and the CentralWorkspace inventory.",
+        "text": "Klick auf die Zeile öffnet die Seite; AutomationDetail-Dialog, „Für Entwickler“ und das CentralWorkspace-Inventar entfallen."
+      },
+      {
+        "path": "milestones.2.steps.1",
+        "source": "Sections Zweck, Läufe, Plan, Variablen, Zugriffe (sandbox and IdP grants of this Pod), Code collapsed; one back link.",
+        "text": "Abschnitte Zweck, Läufe, Plan, Variablen, Zugriffe (Sandbox und IdP-Grants dieses Pods), Code eingeklappt; ein Zurück-Link."
+      },
+      {
+        "path": "milestones.2.steps.2",
+        "source": "Adapt scripts/verify-distribution.mjs and existing Electron specs that reference removed navigation; no new E2E tests for UI.",
+        "text": "scripts/verify-distribution.mjs und bestehende Electron-Specs, die entfernte Navigation nutzen, anpassen; keine neuen E2E-Tests für UI."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "Vitest browser-mode tests click through tasks 3, 5, 7 and 8 of the navigation map with at most two clicks each and save screenshots.",
+        "text": "Vitest-Tests im Browser-Modus klicken die Aufgaben 3, 5, 7 und 8 der Navigationskarte mit je höchstens zwei Klicks durch und speichern Screenshots."
+      },
+      {
+        "path": "milestones.2.acceptance.1",
+        "source": "No surface contains a second \"Details öffnen\" or a second Pod list.",
+        "text": "Keine Oberfläche enthält ein zweites „Details öffnen“ oder eine zweite Pod-Liste."
+      },
+      {
+        "path": "milestones.2.rollback",
+        "source": "Revert the PR; no data migration.",
+        "text": "PR zurücknehmen; keine Datenmigration."
+      },
+      {
+        "path": "milestones.3.title",
+        "source": "Problems and pending decisions visible",
+        "text": "Probleme und offene Entscheidungen sichtbar"
+      },
+      {
+        "path": "milestones.3.goal",
+        "source": "Failures and waiting approvals show where the owner looks first.",
+        "text": "Fehler und wartende Freigaben erscheinen dort, wo du zuerst hinsiehst."
+      },
+      {
+        "path": "milestones.3.steps.0",
+        "source": "Error line in the run box and the row; KPI \"Fehler 24 h\" with per-Pod counts.",
+        "text": "Fehlerzeile im Laufkasten und in der Zeile; KPI „Fehler 24 h“ mit Zahlen pro Pod."
+      },
+      {
+        "path": "milestones.3.steps.1",
+        "source": "List pending IdP grants per Pod under Rechte with their IdP link, including grants requested through MCP.",
+        "text": "Wartende IdP-Grants pro Pod unter Rechte mit IdP-Link auflisten, auch über MCP angeforderte."
+      },
+      {
+        "path": "milestones.3.steps.2",
+        "source": "One counter source for the KPI row and the Entscheidungen tab.",
+        "text": "Eine Zählquelle für KPI-Zeile und Entscheidungen-Tab."
+      },
+      {
+        "path": "milestones.3.acceptance.0",
+        "source": "A failed run shows its cause without expanding anything.",
+        "text": "Ein gescheiterter Lauf zeigt seine Ursache ohne Aufklappen."
+      },
+      {
+        "path": "milestones.3.acceptance.1",
+        "source": "A pending push grant appears under Rechte and in the KPI; both tabs show the same number.",
+        "text": "Ein wartender Push-Grant erscheint unter Rechte und im KPI; beide Tabs zeigen dieselbe Zahl."
+      },
+      {
+        "path": "milestones.3.rollback",
+        "source": "Revert the PR.",
+        "text": "PR zurücknehmen."
+      },
+      {
+        "path": "milestones.4.title",
+        "source": "One settings page, tags instead of groups, honest loading",
+        "text": "Eine Einstellungsseite, Tags statt Gruppen, ehrliches Laden"
+      },
+      {
+        "path": "milestones.4.goal",
+        "source": "Settings and classification exist once; loading never looks like a fact.",
+        "text": "Einstellungen und Einordnung gibt es einmal; Laden sieht nie wie eine Tatsache aus."
+      },
+      {
+        "path": "milestones.4.steps.0",
+        "source": "Merge the ⚙ popover into one App-Einstellungen page; remove \"Desktop online\" (offline banner only).",
+        "text": "Das ⚙-Popover in eine App-Einstellungsseite zusammenführen; „Desktop online“ entfernen (nur Offline-Banner)."
+      },
+      {
+        "path": "milestones.4.steps.1",
+        "source": "Migrate groups to tags (schema change with backup), then remove groups.",
+        "text": "Gruppen zu Tags migrieren (Schemaänderung mit Sicherung), danach Gruppen entfernen."
+      },
+      {
+        "path": "milestones.4.steps.2",
+        "source": "Explicit loading states; keep the workspace in memory across navigation.",
+        "text": "Ausdrückliche Ladezustände; Arbeitsbereich beim Navigieren im Speicher halten."
+      },
+      {
+        "path": "milestones.4.acceptance.0",
+        "source": "Each account, session and backup control exists on exactly one surface.",
+        "text": "Jedes Konto-, Sitzungs- und Sicherungselement gibt es auf genau einer Oberfläche."
+      },
+      {
+        "path": "milestones.4.acceptance.1",
+        "source": "Returning from a Pod page shows the list without a reload message.",
+        "text": "Die Rückkehr von einer Pod-Seite zeigt die Liste ohne Lademeldung."
+      },
+      {
+        "path": "milestones.4.rollback",
+        "source": "Restore the pre-migration backup; revert the PR.",
+        "text": "Sicherung vor der Migration wiederherstellen; PR zurücknehmen."
+      },
+      {
+        "path": "milestones.5.title",
+        "source": "Creation path without rituals",
+        "text": "Anlegeweg ohne Rituale"
+      },
+      {
+        "path": "milestones.5.goal",
+        "source": "A small Pod reaches its first real dry run without adapter or validation workarounds.",
+        "text": "Ein kleiner Pod erreicht seinen ersten echten Trockenlauf ohne Adapter- oder Validierungs-Umwege."
+      },
+      {
+        "path": "milestones.5.steps.0",
+        "source": "Shapes: bind option values only for declared options; support global options such as -C; ship a git adapter with worktree, merge-base and merge-tree.",
+        "text": "Shapes: Optionswerte nur für deklarierte Optionen binden; globale Optionen wie -C unterstützen; git-Adapter mit worktree, merge-base und merge-tree ausliefern."
+      },
+      {
+        "path": "milestones.5.steps.1",
+        "source": "Validation accepts a failed result with a reason, or is replaced by a real read-only dry run in the owner session.",
+        "text": "Die Validierung akzeptiert ein gescheitertes Ergebnis mit Begründung oder wird durch einen echten Nur-Lese-Trockenlauf in der Owner-Sitzung ersetzt."
+      },
+      {
+        "path": "milestones.5.steps.2",
+        "source": "MCP refusals name the field and its place; idempotent workspace commands retry on revision conflicts.",
+        "text": "MCP-Ablehnungen nennen Feld und Ort; idempotente Workspace-Befehle wiederholen bei Revisionskonflikten."
+      },
+      {
+        "path": "milestones.5.acceptance.0",
+        "source": "The IURIO rebase test Pod is rebuilt from scratch in under 15 minutes with the shipped git adapter and no validation-only code, measured with timestamps.",
+        "text": "Der IURIO-Rebase-Test-Pod wird mit dem mitgelieferten git-Adapter und ohne reinen Validierungscode in unter 15 Minuten neu angelegt, gemessen mit Zeitstempeln."
+      },
+      {
+        "path": "milestones.5.acceptance.1",
+        "source": "Existing grants still match after the parser change (regression test on stored grants).",
+        "text": "Bestehende Grants passen nach der Parser-Änderung weiterhin (Regressionstest gegen gespeicherte Grants)."
+      },
+      {
+        "path": "milestones.5.rollback",
+        "source": "Revert the PR; adapters are versioned files.",
+        "text": "PR zurücknehmen; Adapter sind versionierte Dateien."
+      },
+      {
+        "path": "milestones.6.title",
+        "source": "Owner context as creation default, sandbox optional",
+        "text": "Owner-Kontext als Standard, Sandbox optional"
+      },
+      {
+        "path": "milestones.6.goal",
+        "source": "Every new Pod uses host CLI logins; isolation is optional per Pod, if the user wants it.",
+        "text": "Jeder neue Pod nutzt Host-CLI-Logins; Isolation ist pro Pod optional, wenn der User das will."
+      },
+      {
+        "path": "milestones.6.steps.0",
+        "source": "Set HOME to the owner home when reach is owner in main/broker/tools.ts and main/programs/session.ts; keep ~/.config/apes and the Pods folder protected; drop the per-program state directory for owner-context programs.",
+        "text": "HOME auf dein Home setzen, wenn reach owner ist, in main/broker/tools.ts und main/programs/session.ts; ~/.config/apes und den Pods-Ordner geschützt halten; das programmeigene Speicherverzeichnis für Owner-Kontext-Programme entfällt."
+      },
+      {
+        "path": "milestones.6.steps.1",
+        "source": "Make owner the default level for newly created Pods (MCP create and sandbox apply); existing Pods keep their current level.",
+        "text": "Owner als Standardstufe für neu angelegte Pods (MCP create und sandbox apply); bestehende Pods behalten ihre Stufe."
+      },
+      {
+        "path": "milestones.6.steps.2",
+        "source": "Offer the isolated sandbox as an optional per-Pod choice, at creation and on the Pod page, whenever the user wants it.",
+        "text": "Die isolierte Sandbox als optionale Wahl pro Pod anbieten, beim Anlegen und auf der Pod-Seite, wann immer der User das will."
+      },
+      {
+        "path": "milestones.6.acceptance.0",
+        "source": "A newly created Pod runs in owner context without any sandbox setting, and az repos pr list works in it with the host login.",
+        "text": "Ein neu angelegter Pod läuft ohne Sandbox-Einstellung im Owner-Kontext, und az repos pr list funktioniert darin mit dem Host-Login."
+      },
+      {
+        "path": "milestones.6.acceptance.1",
+        "source": "A Pod can be created directly in the isolated sandbox when the user chooses it.",
+        "text": "Ein Pod lässt sich direkt in der isolierten Sandbox anlegen, wenn der User das wählt."
+      },
+      {
+        "path": "milestones.6.acceptance.2",
+        "source": "Switching a Pod to isolated still blocks ~/.azure and keeps its grants unchanged.",
+        "text": "Wird ein Pod auf isoliert umgestellt, bleibt ~/.azure gesperrt und seine Grants bleiben unverändert."
+      },
+      {
+        "path": "milestones.6.rollback",
+        "source": "Revert the PR; new Pods fall back to isolated with the Pod HOME.",
+        "text": "PR zurücknehmen; neue Pods fallen auf isoliert mit Pod-HOME zurück."
+      },
+      {
+        "path": "milestones.7.title",
+        "source": "One approval per push",
+        "text": "Eine Freigabe pro Push"
+      },
+      {
+        "path": "milestones.7.goal",
+        "source": "Each program effect on one object needs its own IdP approval.",
+        "text": "Jede Programmwirkung auf ein Objekt braucht eine eigene IdP-Freigabe."
+      },
+      {
+        "path": "milestones.7.steps.0",
+        "source": "Check the DDISA grants specification for object approvals of program actions; record any deviation for the owner.",
+        "text": "Die DDISA-Grant-Spezifikation für Objektfreigaben von Programmaktionen prüfen; Abweichungen dir vorlegen."
+      },
+      {
+        "path": "milestones.7.steps.1",
+        "source": "Extend the approvals batch beyond mail.archive to git.push with object branch@sha.",
+        "text": "Die Freigabe-Sammlung über mail.archive hinaus auf git.push mit Objekt branch@sha erweitern."
+      },
+      {
+        "path": "milestones.7.acceptance.0",
+        "source": "On a disposable test repository, a first push waits for one IdP approval and a second push to a new SHA waits for a new approval.",
+        "text": "Auf einem Wegwerf-Test-Repository wartet ein erster Push auf eine IdP-Freigabe und ein zweiter Push auf einen neuen SHA auf eine neue Freigabe."
+      },
+      {
+        "path": "milestones.7.rollback",
+        "source": "Revert the PR; exact command grants remain the fallback.",
+        "text": "PR zurücknehmen; exakte Befehlsgrants bleiben die Rückfallebene."
+      },
+      {
+        "path": "risks.0.title",
+        "source": "Owner HOME widens what a Pod can do",
+        "text": "Dein HOME erweitert, was ein Pod kann"
+      },
+      {
+        "path": "risks.0.mitigation",
+        "source": "Owner decision (decision 3); IdP grant per command unchanged; isolated sandbox available per Pod; repository hooks and persistence named on the Pod page.",
+        "text": "Deine Entscheidung (Entscheidung 3); IdP-Grant pro Befehl unverändert; isolierte Sandbox pro Pod verfügbar; Repository-Hooks und Persistenz auf der Pod-Seite benannt."
+      },
+      {
+        "path": "risks.1.title",
+        "source": "Navigation change breaks Electron E2E and distribution checks",
+        "text": "Navigationsänderung bricht Electron-E2E und Distributionsprüfung"
+      },
+      {
+        "path": "risks.1.mitigation",
+        "source": "Adapt verify-distribution.mjs and affected existing Electron specs in the same PR; UI is verified with pnpm test:fast (unit plus Vitest browser mode), not with E2E.",
+        "text": "verify-distribution.mjs und betroffene bestehende Electron-Specs im selben PR anpassen; UI wird mit pnpm test:fast (Unit plus Vitest-Browser-Modus) geprüft, nicht mit E2E."
+      },
+      {
+        "path": "risks.2.title",
+        "source": "Group migration loses structure",
+        "text": "Gruppenmigration verliert Struktur"
+      },
+      {
+        "path": "risks.2.mitigation",
+        "source": "Migrate each group to a tag of the same name before removal; automatic backup; verify counts per tag.",
+        "text": "Jede Gruppe vor dem Entfernen in einen gleichnamigen Tag überführen; automatische Sicherung; Anzahl pro Tag prüfen."
+      },
+      {
+        "path": "risks.3.title",
+        "source": "Shared shell changes affect the browser workspace",
+        "text": "Änderungen an der gemeinsamen Shell betreffen den Browser-Arbeitsbereich"
+      },
+      {
+        "path": "risks.3.mitigation",
+        "source": "Relay deploy first, layout tests at phone and desktop width, then signed desktop build.",
+        "text": "Zuerst das Relay ausrollen, Layouttests in Handy- und Desktopbreite, dann signierter Desktop-Build."
+      },
+      {
+        "path": "verification.0",
+        "source": "All UI behaviour and geometry is verified with Vitest browser mode (test/layout, pnpm test:browser), including screenshots as visual evidence; UI needs no Electron E2E test.",
+        "text": "Alles Sichtbare und seine Geometrie wird mit Vitest im Browser-Modus geprüft (test/layout, pnpm test:browser), inklusive Screenshots als visueller Nachweis; UI braucht keinen Electron-E2E-Test."
+      },
+      {
+        "path": "verification.1",
+        "source": "Publish the browser-mode screenshots, after personal inspection, as a Test Run per milestone.",
+        "text": "Die Screenshots aus dem Browser-Modus nach eigener Prüfung pro Meilenstein als Test Run veröffentlichen."
+      },
+      {
+        "path": "verification.2",
+        "source": "Re-measure the creation of the IURIO rebase test Pod with timestamps per phase; delete the test Pod afterwards.",
+        "text": "Das Anlegen des IURIO-Rebase-Test-Pods mit Zeitstempeln pro Phase neu messen; Test-Pod danach löschen."
+      },
+      {
+        "path": "handoff",
+        "source": "Implementation approved. Next action: development issue and branch, then quick wins Q1–Q9 and M1 first. Decisions 3 and 4 are accepted.",
+        "text": "Umsetzung freigegeben. Nächster Schritt: Entwicklungs-Issue und Branch, dann zuerst Quick Wins Q1–Q9 und M1. Entscheidungen 3 und 4 sind getroffen."
+      },
+      {
+        "path": "changelog.0.text",
+        "source": "Draft created from the UX audit and creation measurement.",
+        "text": "Entwurf aus UX-Audit und Messung des Anlegens erstellt."
+      },
+      {
+        "path": "changelog.1.text",
+        "source": "Revision 2: az failed in the Pod because HOME is always the Pod state directory, not because of the keychain (follow-up check). Decision 3 now means owner context = owner HOME; tool-specific PAT workarounds are out of scope.",
+        "text": "Revision 2: az scheiterte im Pod, weil HOME immer das Pod-Speicherverzeichnis ist, nicht wegen des Schlüsselbunds (Nachprüfung). Entscheidung 3 heißt jetzt Owner-Kontext = dein HOME; tool-spezifische PAT-Umwege gehören nicht in den Plan."
+      },
+      {
+        "path": "changelog.2.text",
+        "source": "Revision 3: owner accepted decision 3: owner context with the owner HOME is the default for every new Pod; the isolated sandbox is an opt-in add-on. M6 is no longer blocked.",
+        "text": "Revision 3: Entscheidung 3 getroffen: Owner-Kontext mit deinem HOME ist Standard für jeden neuen Pod; die isolierte Sandbox ist ein optionaler Zusatz. M6 ist nicht mehr blockiert."
+      },
+      {
+        "path": "changelog.3.text",
+        "source": "Revision 4: wording per owner: the sandbox is optional if the user wants it, also at creation, not only after the HOME implementation works.",
+        "text": "Revision 4: Wortlaut nach deiner Vorgabe: Die Sandbox ist optional, wenn der User das will, auch schon beim Anlegen, nicht erst nach funktionierender HOME-Umsetzung."
+      },
+      {
+        "path": "changelog.4.text",
+        "source": "Revision 5: owner accepted decision 4 (per-object approvals) and approved implementation; UI is verified with Vitest browser mode and screenshots, not with E2E.",
+        "text": "Revision 5: Entscheidung 4 (Objekt-Freigaben) getroffen und Umsetzung freigegeben; UI wird mit Vitest im Browser-Modus und Screenshots geprüft, nicht mit E2E."
+      },
+      {
+        "path": "completion.summary",
+        "source": "All milestones M1–M7 are merged on main 77ee1047 (PRs 384–393), the relay runs prod-77ee1047 and the signed-local desktop build is installed with rollback. Live acceptance on the real Mac passed: new Pods default to owner context and use the owner's az login; the git adapter resolves merge-base and refuses --upload-pack; a push approval reached the IdP with the exact command, was denied and nothing was pushed. Partial because the acceptance found two defects in the approval path, tracked in issue 1469: an approval request fails when the run grant was one-time, and validation does not require the application capability for program.run.",
+        "text": "Alle Meilensteine M1–M7 sind auf main 77ee1047 gemergt (PRs 384–393), das Relay läuft als prod-77ee1047 und der signierte lokale Desktop-Build ist mit Rollback installiert. Die Live-Abnahme auf dem echten Mac ist bestanden: Neue Pods starten im Owner-Kontext und nutzen den az-Login des Owners; der git-Adapter erkennt merge-base und verweigert --upload-pack; eine Push-Freigabe kam mit dem exakten Befehl beim IdP an, wurde abgelehnt, und es wurde nichts gepusht. Teilweise, weil die Abnahme zwei Fehler im Freigabeweg gefunden hat, erfasst in Issue 1469: Eine Freigabeanfrage scheitert, wenn der Lauf-Grant einmalig war, und die Validierung verlangt für program.run nicht die Capability der Anwendung."
+      },
+      {
+        "path": "changelog.5.text",
+        "source": "Revision 6: all milestones delivered and installed; live acceptance passed with two follow-up defects (issue 1469).",
+        "text": "Revision 6: Alle Meilensteine geliefert und installiert; Live-Abnahme bestanden, mit zwei Folgefehlern (Issue 1469)."
+      }
+    ]
+  },
+  "completion": {
+    "result": "partial",
+    "summary": "All milestones M1–M7 are merged on main 77ee1047 (PRs 384–393), the relay runs prod-77ee1047 and the signed-local desktop build is installed with rollback. Live acceptance on the real Mac passed: new Pods default to owner context and use the owner's az login; the git adapter resolves merge-base and refuses --upload-pack; a push approval reached the IdP with the exact command, was denied and nothing was pushed. Partial because the acceptance found two defects in the approval path, tracked in issue 1469: an approval request fails when the run grant was one-time, and validation does not require the application capability for program.run."
   }
- },
- "translations": {
-  "defaultLanguage": "de",
-  "entries": [
-   {
-    "path": "title",
-    "source": "Pods: show what each Pod does, flatten navigation, make small Pods quick to create",
-    "text": "Pods: zeigen, was jeder Pod tut, Navigation abflachen, kleine Pods schnell anlegen"
-   },
-   {
-    "path": "goal",
-    "source": "The owner sees purpose, last result, next run and problems of every Pod on the first surface, reaches every Pod setting in at most two clicks, and creates a small owner-tool Pod in under 15 minutes without workarounds.",
-    "text": "Der Owner sieht Zweck, letztes Ergebnis, nächsten Lauf und Probleme jedes Pods auf der ersten Oberfläche, erreicht jede Pod-Einstellung mit höchstens zwei Klicks und legt einen kleinen Owner-Tool-Pod in unter 15 Minuten ohne Umwege an."
-   },
-   {
-    "path": "summary",
-    "source": "Replace the map-first, six-level Pod navigation with one row and one page per Pod, surface failures and pending approvals, and remove the creation obstacles measured on 13 October. New Pods run in owner context with the owner's HOME by default; the isolated sandbox is optional if the user wants it. Per-object push approvals still need an owner decision.",
-    "text": "Die kartenzentrierte Pod-Navigation mit bis zu sechs Ebenen wird durch eine Zeile und eine Seite pro Pod ersetzt. Fehler und wartende Freigaben werden sichtbar, und die am 13. Oktober gemessenen Hürden beim Anlegen fallen weg. Neue Pods laufen standardmäßig im Owner-Kontext mit deinem HOME; die isolierte Sandbox ist optional, wenn der User das will. Freigaben pro Objekt für Pushes brauchen noch deine Entscheidung."
-   },
-   {
-    "path": "problem.statement",
-    "source": "The main surface hides what Pods do and whether they fail; one Pod is spread over six levels; small Pods need workarounds to create.",
-    "text": "Die Hauptansicht verbirgt, was Pods tun und ob sie scheitern; ein Pod verteilt sich über sechs Ebenen; kleine Pods brauchen Umwege beim Anlegen."
-   },
-   {
-    "path": "problem.impact",
-    "source": "Simple questions take up to five clicks, 137 failed PR-monitor runs look green, and new Pods take hours or bypass the sandbox.",
-    "text": "Einfache Fragen brauchen bis zu fünf Klicks, 137 gescheiterte Läufe des PR-Monitors wirken grün, und neue Pods kosten Stunden oder umgehen die Sandbox."
-   },
-   {
-    "path": "problem.approach",
-    "source": "One row and one page per Pod with purpose, result, next run and problems; visible pending decisions; fix logins, Shapes parsing and validation in the creation path.",
-    "text": "Eine Zeile und eine Seite pro Pod mit Zweck, Ergebnis, nächstem Lauf und Problemen; sichtbare offene Entscheidungen; Logins, Shapes-Parser und Validierung im Anlegeweg reparieren."
-   },
-   {
-    "path": "problem.outcome",
-    "source": "Every frequent owner task takes at most two clicks, and a Pod like the IURIO rebase Pod is created in under 15 minutes without workarounds.",
-    "text": "Jede häufige Owner-Aufgabe braucht höchstens zwei Klicks, und ein Pod wie der IURIO-Rebase-Pod entsteht in unter 15 Minuten ohne Umwege."
-   },
-   {
-    "path": "context",
-    "source": "Evidence: the Test Run https://report.openape.ai/d/01M4TMAJ72QHHYG876ZDH347P1 (45 inspected screenshots, navigation map, creation measurement 11:47 min with conditions). Confirmed owner observations: nesting without benefit, access overlays in the way, \"Desktop online\" without use, purpose not visible on the map, bumpy creation. Tags work because they are owner words, flat, on the first surface and one model everywhere; this plan applies that principle to purpose, state, settings and access. Quick wins Q1–Q9 of the report are independent of this plan.",
-    "text": "Nachweis: der Test Run https://report.openape.ai/d/01M4TMAJ72QHHYG876ZDH347P1 (45 geprüfte Screenshots, Navigationskarte, Messung des Anlegens 11:47 min mit Bedingungen). Bestätigte Beobachtungen: Verschachtelung ohne Nutzen, störende Zugriffs-Overlays, „Desktop online“ ohne Nutzen, Zweck auf der Karte nicht sichtbar, holpriges Anlegen. Tags funktionieren, weil sie Owner-Wörter sind, flach, auf der ersten Oberfläche und überall dasselbe Modell; dieser Plan überträgt das Prinzip auf Zweck, Zustand, Einstellungen und Zugriffe. Die Quick Wins Q1–Q9 des Berichts sind unabhängig von diesem Plan."
-   },
-   {
-    "path": "scope.0",
-    "source": "Desktop and browser shell of apps/openape-pods (central/*): rows, Pod page, decisions, settings.",
-    "text": "Desktop- und Browser-Shell von apps/openape-pods (central/*): Zeilen, Pod-Seite, Entscheidungen, Einstellungen."
-   },
-   {
-    "path": "scope.1",
-    "source": "Map read model fields for next run, waits-for, last result and failure counts.",
-    "text": "Felder im Karten-Lesemodell für nächsten Lauf, Wartet-auf, letztes Ergebnis und Fehlerzahlen."
-   },
-   {
-    "path": "scope.2",
-    "source": "Creation path: Shapes option parsing and git adapter, synthetic validation contract, MCP error messages, workspace command retries.",
-    "text": "Anlegeweg: Optionsparser und git-Adapter von Shapes, Vertrag der synthetischen Validierung, MCP-Fehlermeldungen, Wiederholung von Workspace-Befehlen."
-   },
-   {
-    "path": "scope.3",
-    "source": "Owner context with the owner HOME as creation default, isolated sandbox optional if the user wants it; after owner decision: per-object approvals for program effects.",
-    "text": "Owner-Kontext mit deinem HOME als Standard beim Anlegen, isolierte Sandbox optional, wenn der User das will; nach deiner Entscheidung: Freigaben pro Objekt für Programmwirkungen."
-   },
-   {
-    "path": "nonGoals.0",
-    "source": "No change to the DDISA protocol; approvals stay at the IdP and Pods never approve themselves.",
-    "text": "Keine Änderung am DDISA-Protokoll; Freigaben bleiben beim IdP, Pods geben sich nie selbst frei."
-   },
-   {
-    "path": "nonGoals.1",
-    "source": "No removal of the isolated sandbox.",
-    "text": "Die isolierte Sandbox wird nicht entfernt."
-   },
-   {
-    "path": "nonGoals.2",
-    "source": "No phone inbox redesign; no in-app Pod creation.",
-    "text": "Kein Umbau der Handy-Inbox; kein Anlegen von Pods in der App."
-   },
-   {
-    "path": "decisions.0.title",
-    "source": "Rows first, map second",
-    "text": "Zeilen zuerst, Karte danach"
-   },
-   {
-    "path": "decisions.0.description",
-    "source": "The list of Pods with purpose, last result, next run and state becomes the default; the map stays as \"Verbindungen\" without edge labels.",
-    "text": "Die Pod-Liste mit Zweck, letztem Ergebnis, nächstem Lauf und Zustand wird Standard; die Karte bleibt als „Verbindungen“ ohne Kantenbeschriftungen."
-   },
-   {
-    "path": "decisions.1.title",
-    "source": "One Pod page replaces dialog, developer block and tabs",
-    "text": "Eine Pod-Seite ersetzt Dialog, Entwicklerblock und Tabs"
-   },
-   {
-    "path": "decisions.1.description",
-    "source": "A row click opens the page directly with sections Zweck, Läufe, Plan, Variablen, Zugriffe and a collapsed Code section. The hidden Pods inventory and the second back link are removed.",
-    "text": "Ein Klick auf die Zeile öffnet direkt die Seite mit den Abschnitten Zweck, Läufe, Plan, Variablen, Zugriffe und eingeklapptem Code. Das versteckte Pod-Inventar und der zweite Zurück-Link entfallen."
-   },
-   {
-    "path": "decisions.2.title",
-    "source": "Groups become tags",
-    "text": "Gruppen werden zu Tags"
-   },
-   {
-    "path": "decisions.2.description",
-    "source": "Groups and tags classify the same Pods; existing groups migrate to tags and the group concept is removed.",
-    "text": "Gruppen und Tags ordnen dieselben Pods ein; bestehende Gruppen werden zu Tags, das Gruppenkonzept entfällt."
-   },
-   {
-    "path": "decisions.3.title",
-    "source": "Owner context with the owner HOME is the creation default; the sandbox is optional if the user wants it",
-    "text": "Owner-Kontext mit deinem HOME ist Standard beim Anlegen; die Sandbox ist optional, wenn der User das will"
-   },
-   {
-    "path": "decisions.3.description",
-    "source": "Every new Pod runs in owner context: its programs and the Pod terminal get the owner HOME, so host CLI logins work without tool-specific setup (today HOME is always the Pod state directory: main/broker/tools.ts:80, main/programs/session.ts:93). The isolated sandbox is optional, if the user wants it: it can be chosen per Pod, at creation or later, because it sometimes makes sense from the start, but not always. Grants per command at the IdP are unchanged.",
-    "text": "Jeder neue Pod läuft im Owner-Kontext: Seine Programme und das Pod-Terminal bekommen dein HOME, damit Host-CLI-Logins ohne tool-spezifische Einrichtung funktionieren (heute ist HOME immer das Pod-Speicherverzeichnis: main/broker/tools.ts:80, main/programs/session.ts:93). Die isolierte Sandbox ist optional, wenn der User das will: Sie lässt sich pro Pod wählen, beim Anlegen oder später, weil sie manchmal von Anfang an Sinn ergibt, aber eben nicht immer. Grants pro Befehl beim IdP bleiben unverändert."
-   },
-   {
-    "path": "decisions.4.title",
-    "source": "One approval per push through per-object approvals",
-    "text": "Eine Freigabe pro Push über Objekt-Freigaben"
-   },
-   {
-    "path": "decisions.4.description",
-    "source": "The approvals batch used for mail.archive accepts program actions such as git.push with the object branch@sha. Each approval is consumed by one push and expires when the object changes. Continuing grants stay for reads and other lasting permissions; they are not used to express one approval per push.",
-    "text": "Die Freigabe-Sammlung, die heute mail.archive nutzt, nimmt Programmaktionen wie git.push mit dem Objekt branch@sha an. Jede Freigabe wird von genau einem Push verbraucht und verfällt, wenn sich das Objekt ändert. Dauerhafte Grants bleiben für Lesen und andere bleibende Rechte; „eine Freigabe pro Push“ wird nicht über sie abgebildet."
-   },
-   {
-    "path": "milestones.0.title",
-    "source": "Owner decisions",
-    "text": "Entscheidungen des Owners"
-   },
-   {
-    "path": "milestones.0.goal",
-    "source": "Decide decision 4 before M7 starts; decision 3 is accepted.",
-    "text": "Entscheidung 4 vor M7 treffen; Entscheidung 3 ist getroffen."
-   },
-   {
-    "path": "milestones.0.steps.0",
-    "source": "Present per-object approvals against verified exact command grants.",
-    "text": "Freigaben pro Objekt gegen geprüfte exakte Befehlsgrants vorlegen."
-   },
-   {
-    "path": "milestones.0.acceptance.0",
-    "source": "Decision 4 is recorded with the owner's wording in this plan.",
-    "text": "Entscheidung 4 steht mit deinem Wortlaut in diesem Plan."
-   },
-   {
-    "path": "milestones.0.rollback",
-    "source": "No code change; nothing to roll back.",
-    "text": "Keine Codeänderung; nichts zurückzunehmen."
-   },
-   {
-    "path": "milestones.1.title",
-    "source": "Pod rows with purpose, result, next run",
-    "text": "Pod-Zeilen mit Zweck, Ergebnis, nächstem Lauf"
-   },
-   {
-    "path": "milestones.1.goal",
-    "source": "The first surface answers what each Pod does and whether it is fine.",
-    "text": "Die erste Oberfläche beantwortet, was jeder Pod tut und ob alles in Ordnung ist."
-   },
-   {
-    "path": "milestones.1.steps.0",
-    "source": "Add nextAt, waitsFor and lastResult to the map read model (worker/workspace/map-view.ts, contracts/map-view.ts).",
-    "text": "nextAt, waitsFor und lastResult zum Karten-Lesemodell hinzufügen (worker/workspace/map-view.ts, contracts/map-view.ts)."
-   },
-   {
-    "path": "milestones.1.steps.1",
-    "source": "Render rows in AutomationsList with purpose, result sentence, next run, waits-for, tags and a state chip; make it the default view.",
-    "text": "Zeilen in AutomationsList mit Zweck, Ergebnissatz, nächstem Lauf, Wartet-auf, Tags und Zustands-Chip; als Standardansicht."
-   },
-   {
-    "path": "milestones.1.steps.2",
-    "source": "Map: purpose as node tooltip, no edge labels; untagged Pods included unless deselected.",
-    "text": "Karte: Zweck als Knoten-Tooltip, keine Kantenbeschriftungen; Pods ohne Tag sichtbar, solange nicht abgewählt."
-   },
-   {
-    "path": "milestones.1.acceptance.0",
-    "source": "Every active Pod row shows purpose, last result sentence, next run and waits-for; a Pod without purpose shows \"Zweck fehlt\".",
-    "text": "Jede aktive Pod-Zeile zeigt Zweck, letzten Ergebnissatz, nächsten Lauf und Wartet-auf; ein Pod ohne Zweck zeigt „Zweck fehlt“."
-   },
-   {
-    "path": "milestones.1.acceptance.1",
-    "source": "Vitest browser-mode tests cover row content, states and geometry at 1280 px and 390 px and save screenshots as visual evidence.",
-    "text": "Vitest-Tests im Browser-Modus prüfen Inhalt, Zustände und Geometrie der Zeilen bei 1280 px und 390 px und speichern Screenshots als visuellen Nachweis."
-   },
-   {
-    "path": "milestones.1.rollback",
-    "source": "Revert the PR; the read-model fields are additive.",
-    "text": "PR zurücknehmen; die Lesemodell-Felder sind additiv."
-   },
-   {
-    "path": "milestones.2.title",
-    "source": "One Pod page",
-    "text": "Eine Pod-Seite"
-   },
-   {
-    "path": "milestones.2.goal",
-    "source": "Every Pod setting is at most two clicks from the main surface.",
-    "text": "Jede Pod-Einstellung ist höchstens zwei Klicks von der Hauptansicht entfernt."
-   },
-   {
-    "path": "milestones.2.steps.0",
-    "source": "Row click opens the page; remove AutomationDetail dialog, \"Für Entwickler\" and the CentralWorkspace inventory.",
-    "text": "Klick auf die Zeile öffnet die Seite; AutomationDetail-Dialog, „Für Entwickler“ und das CentralWorkspace-Inventar entfallen."
-   },
-   {
-    "path": "milestones.2.steps.1",
-    "source": "Sections Zweck, Läufe, Plan, Variablen, Zugriffe (sandbox and IdP grants of this Pod), Code collapsed; one back link.",
-    "text": "Abschnitte Zweck, Läufe, Plan, Variablen, Zugriffe (Sandbox und IdP-Grants dieses Pods), Code eingeklappt; ein Zurück-Link."
-   },
-   {
-    "path": "milestones.2.steps.2",
-    "source": "Adapt scripts/verify-distribution.mjs and existing Electron specs that reference removed navigation; no new E2E tests for UI.",
-    "text": "scripts/verify-distribution.mjs und bestehende Electron-Specs, die entfernte Navigation nutzen, anpassen; keine neuen E2E-Tests für UI."
-   },
-   {
-    "path": "milestones.2.acceptance.0",
-    "source": "Vitest browser-mode tests click through tasks 3, 5, 7 and 8 of the navigation map with at most two clicks each and save screenshots.",
-    "text": "Vitest-Tests im Browser-Modus klicken die Aufgaben 3, 5, 7 und 8 der Navigationskarte mit je höchstens zwei Klicks durch und speichern Screenshots."
-   },
-   {
-    "path": "milestones.2.acceptance.1",
-    "source": "No surface contains a second \"Details öffnen\" or a second Pod list.",
-    "text": "Keine Oberfläche enthält ein zweites „Details öffnen“ oder eine zweite Pod-Liste."
-   },
-   {
-    "path": "milestones.2.rollback",
-    "source": "Revert the PR; no data migration.",
-    "text": "PR zurücknehmen; keine Datenmigration."
-   },
-   {
-    "path": "milestones.3.title",
-    "source": "Problems and pending decisions visible",
-    "text": "Probleme und offene Entscheidungen sichtbar"
-   },
-   {
-    "path": "milestones.3.goal",
-    "source": "Failures and waiting approvals show where the owner looks first.",
-    "text": "Fehler und wartende Freigaben erscheinen dort, wo du zuerst hinsiehst."
-   },
-   {
-    "path": "milestones.3.steps.0",
-    "source": "Error line in the run box and the row; KPI \"Fehler 24 h\" with per-Pod counts.",
-    "text": "Fehlerzeile im Laufkasten und in der Zeile; KPI „Fehler 24 h“ mit Zahlen pro Pod."
-   },
-   {
-    "path": "milestones.3.steps.1",
-    "source": "List pending IdP grants per Pod under Rechte with their IdP link, including grants requested through MCP.",
-    "text": "Wartende IdP-Grants pro Pod unter Rechte mit IdP-Link auflisten, auch über MCP angeforderte."
-   },
-   {
-    "path": "milestones.3.steps.2",
-    "source": "One counter source for the KPI row and the Entscheidungen tab.",
-    "text": "Eine Zählquelle für KPI-Zeile und Entscheidungen-Tab."
-   },
-   {
-    "path": "milestones.3.acceptance.0",
-    "source": "A failed run shows its cause without expanding anything.",
-    "text": "Ein gescheiterter Lauf zeigt seine Ursache ohne Aufklappen."
-   },
-   {
-    "path": "milestones.3.acceptance.1",
-    "source": "A pending push grant appears under Rechte and in the KPI; both tabs show the same number.",
-    "text": "Ein wartender Push-Grant erscheint unter Rechte und im KPI; beide Tabs zeigen dieselbe Zahl."
-   },
-   {
-    "path": "milestones.3.rollback",
-    "source": "Revert the PR.",
-    "text": "PR zurücknehmen."
-   },
-   {
-    "path": "milestones.4.title",
-    "source": "One settings page, tags instead of groups, honest loading",
-    "text": "Eine Einstellungsseite, Tags statt Gruppen, ehrliches Laden"
-   },
-   {
-    "path": "milestones.4.goal",
-    "source": "Settings and classification exist once; loading never looks like a fact.",
-    "text": "Einstellungen und Einordnung gibt es einmal; Laden sieht nie wie eine Tatsache aus."
-   },
-   {
-    "path": "milestones.4.steps.0",
-    "source": "Merge the ⚙ popover into one App-Einstellungen page; remove \"Desktop online\" (offline banner only).",
-    "text": "Das ⚙-Popover in eine App-Einstellungsseite zusammenführen; „Desktop online“ entfernen (nur Offline-Banner)."
-   },
-   {
-    "path": "milestones.4.steps.1",
-    "source": "Migrate groups to tags (schema change with backup), then remove groups.",
-    "text": "Gruppen zu Tags migrieren (Schemaänderung mit Sicherung), danach Gruppen entfernen."
-   },
-   {
-    "path": "milestones.4.steps.2",
-    "source": "Explicit loading states; keep the workspace in memory across navigation.",
-    "text": "Ausdrückliche Ladezustände; Arbeitsbereich beim Navigieren im Speicher halten."
-   },
-   {
-    "path": "milestones.4.acceptance.0",
-    "source": "Each account, session and backup control exists on exactly one surface.",
-    "text": "Jedes Konto-, Sitzungs- und Sicherungselement gibt es auf genau einer Oberfläche."
-   },
-   {
-    "path": "milestones.4.acceptance.1",
-    "source": "Returning from a Pod page shows the list without a reload message.",
-    "text": "Die Rückkehr von einer Pod-Seite zeigt die Liste ohne Lademeldung."
-   },
-   {
-    "path": "milestones.4.rollback",
-    "source": "Restore the pre-migration backup; revert the PR.",
-    "text": "Sicherung vor der Migration wiederherstellen; PR zurücknehmen."
-   },
-   {
-    "path": "milestones.5.title",
-    "source": "Creation path without rituals",
-    "text": "Anlegeweg ohne Rituale"
-   },
-   {
-    "path": "milestones.5.goal",
-    "source": "A small Pod reaches its first real dry run without adapter or validation workarounds.",
-    "text": "Ein kleiner Pod erreicht seinen ersten echten Trockenlauf ohne Adapter- oder Validierungs-Umwege."
-   },
-   {
-    "path": "milestones.5.steps.0",
-    "source": "Shapes: bind option values only for declared options; support global options such as -C; ship a git adapter with worktree, merge-base and merge-tree.",
-    "text": "Shapes: Optionswerte nur für deklarierte Optionen binden; globale Optionen wie -C unterstützen; git-Adapter mit worktree, merge-base und merge-tree ausliefern."
-   },
-   {
-    "path": "milestones.5.steps.1",
-    "source": "Validation accepts a failed result with a reason, or is replaced by a real read-only dry run in the owner session.",
-    "text": "Die Validierung akzeptiert ein gescheitertes Ergebnis mit Begründung oder wird durch einen echten Nur-Lese-Trockenlauf in der Owner-Sitzung ersetzt."
-   },
-   {
-    "path": "milestones.5.steps.2",
-    "source": "MCP refusals name the field and its place; idempotent workspace commands retry on revision conflicts.",
-    "text": "MCP-Ablehnungen nennen Feld und Ort; idempotente Workspace-Befehle wiederholen bei Revisionskonflikten."
-   },
-   {
-    "path": "milestones.5.acceptance.0",
-    "source": "The IURIO rebase test Pod is rebuilt from scratch in under 15 minutes with the shipped git adapter and no validation-only code, measured with timestamps.",
-    "text": "Der IURIO-Rebase-Test-Pod wird mit dem mitgelieferten git-Adapter und ohne reinen Validierungscode in unter 15 Minuten neu angelegt, gemessen mit Zeitstempeln."
-   },
-   {
-    "path": "milestones.5.acceptance.1",
-    "source": "Existing grants still match after the parser change (regression test on stored grants).",
-    "text": "Bestehende Grants passen nach der Parser-Änderung weiterhin (Regressionstest gegen gespeicherte Grants)."
-   },
-   {
-    "path": "milestones.5.rollback",
-    "source": "Revert the PR; adapters are versioned files.",
-    "text": "PR zurücknehmen; Adapter sind versionierte Dateien."
-   },
-   {
-    "path": "milestones.6.title",
-    "source": "Owner context as creation default, sandbox optional",
-    "text": "Owner-Kontext als Standard, Sandbox optional"
-   },
-   {
-    "path": "milestones.6.goal",
-    "source": "Every new Pod uses host CLI logins; isolation is optional per Pod, if the user wants it.",
-    "text": "Jeder neue Pod nutzt Host-CLI-Logins; Isolation ist pro Pod optional, wenn der User das will."
-   },
-   {
-    "path": "milestones.6.steps.0",
-    "source": "Set HOME to the owner home when reach is owner in main/broker/tools.ts and main/programs/session.ts; keep ~/.config/apes and the Pods folder protected; drop the per-program state directory for owner-context programs.",
-    "text": "HOME auf dein Home setzen, wenn reach owner ist, in main/broker/tools.ts und main/programs/session.ts; ~/.config/apes und den Pods-Ordner geschützt halten; das programmeigene Speicherverzeichnis für Owner-Kontext-Programme entfällt."
-   },
-   {
-    "path": "milestones.6.steps.1",
-    "source": "Make owner the default level for newly created Pods (MCP create and sandbox apply); existing Pods keep their current level.",
-    "text": "Owner als Standardstufe für neu angelegte Pods (MCP create und sandbox apply); bestehende Pods behalten ihre Stufe."
-   },
-   {
-    "path": "milestones.6.steps.2",
-    "source": "Offer the isolated sandbox as an optional per-Pod choice, at creation and on the Pod page, whenever the user wants it.",
-    "text": "Die isolierte Sandbox als optionale Wahl pro Pod anbieten, beim Anlegen und auf der Pod-Seite, wann immer der User das will."
-   },
-   {
-    "path": "milestones.6.acceptance.0",
-    "source": "A newly created Pod runs in owner context without any sandbox setting, and az repos pr list works in it with the host login.",
-    "text": "Ein neu angelegter Pod läuft ohne Sandbox-Einstellung im Owner-Kontext, und az repos pr list funktioniert darin mit dem Host-Login."
-   },
-   {
-    "path": "milestones.6.acceptance.1",
-    "source": "A Pod can be created directly in the isolated sandbox when the user chooses it.",
-    "text": "Ein Pod lässt sich direkt in der isolierten Sandbox anlegen, wenn der User das wählt."
-   },
-   {
-    "path": "milestones.6.acceptance.2",
-    "source": "Switching a Pod to isolated still blocks ~/.azure and keeps its grants unchanged.",
-    "text": "Wird ein Pod auf isoliert umgestellt, bleibt ~/.azure gesperrt und seine Grants bleiben unverändert."
-   },
-   {
-    "path": "milestones.6.rollback",
-    "source": "Revert the PR; new Pods fall back to isolated with the Pod HOME.",
-    "text": "PR zurücknehmen; neue Pods fallen auf isoliert mit Pod-HOME zurück."
-   },
-   {
-    "path": "milestones.7.title",
-    "source": "One approval per push",
-    "text": "Eine Freigabe pro Push"
-   },
-   {
-    "path": "milestones.7.goal",
-    "source": "Each program effect on one object needs its own IdP approval.",
-    "text": "Jede Programmwirkung auf ein Objekt braucht eine eigene IdP-Freigabe."
-   },
-   {
-    "path": "milestones.7.steps.0",
-    "source": "Check the DDISA grants specification for object approvals of program actions; record any deviation for the owner.",
-    "text": "Die DDISA-Grant-Spezifikation für Objektfreigaben von Programmaktionen prüfen; Abweichungen dir vorlegen."
-   },
-   {
-    "path": "milestones.7.steps.1",
-    "source": "Extend the approvals batch beyond mail.archive to git.push with object branch@sha.",
-    "text": "Die Freigabe-Sammlung über mail.archive hinaus auf git.push mit Objekt branch@sha erweitern."
-   },
-   {
-    "path": "milestones.7.acceptance.0",
-    "source": "On a disposable test repository, a first push waits for one IdP approval and a second push to a new SHA waits for a new approval.",
-    "text": "Auf einem Wegwerf-Test-Repository wartet ein erster Push auf eine IdP-Freigabe und ein zweiter Push auf einen neuen SHA auf eine neue Freigabe."
-   },
-   {
-    "path": "milestones.7.rollback",
-    "source": "Revert the PR; exact command grants remain the fallback.",
-    "text": "PR zurücknehmen; exakte Befehlsgrants bleiben die Rückfallebene."
-   },
-   {
-    "path": "risks.0.title",
-    "source": "Owner HOME widens what a Pod can do",
-    "text": "Dein HOME erweitert, was ein Pod kann"
-   },
-   {
-    "path": "risks.0.mitigation",
-    "source": "Owner decision (decision 3); IdP grant per command unchanged; isolated sandbox available per Pod; repository hooks and persistence named on the Pod page.",
-    "text": "Deine Entscheidung (Entscheidung 3); IdP-Grant pro Befehl unverändert; isolierte Sandbox pro Pod verfügbar; Repository-Hooks und Persistenz auf der Pod-Seite benannt."
-   },
-   {
-    "path": "risks.1.title",
-    "source": "Navigation change breaks Electron E2E and distribution checks",
-    "text": "Navigationsänderung bricht Electron-E2E und Distributionsprüfung"
-   },
-   {
-    "path": "risks.1.mitigation",
-    "source": "Adapt verify-distribution.mjs and affected existing Electron specs in the same PR; UI is verified with pnpm test:fast (unit plus Vitest browser mode), not with E2E.",
-    "text": "verify-distribution.mjs und betroffene bestehende Electron-Specs im selben PR anpassen; UI wird mit pnpm test:fast (Unit plus Vitest-Browser-Modus) geprüft, nicht mit E2E."
-   },
-   {
-    "path": "risks.2.title",
-    "source": "Group migration loses structure",
-    "text": "Gruppenmigration verliert Struktur"
-   },
-   {
-    "path": "risks.2.mitigation",
-    "source": "Migrate each group to a tag of the same name before removal; automatic backup; verify counts per tag.",
-    "text": "Jede Gruppe vor dem Entfernen in einen gleichnamigen Tag überführen; automatische Sicherung; Anzahl pro Tag prüfen."
-   },
-   {
-    "path": "risks.3.title",
-    "source": "Shared shell changes affect the browser workspace",
-    "text": "Änderungen an der gemeinsamen Shell betreffen den Browser-Arbeitsbereich"
-   },
-   {
-    "path": "risks.3.mitigation",
-    "source": "Relay deploy first, layout tests at phone and desktop width, then signed desktop build.",
-    "text": "Zuerst das Relay ausrollen, Layouttests in Handy- und Desktopbreite, dann signierter Desktop-Build."
-   },
-   {
-    "path": "verification.0",
-    "source": "All UI behaviour and geometry is verified with Vitest browser mode (test/layout, pnpm test:browser), including screenshots as visual evidence; UI needs no Electron E2E test.",
-    "text": "Alles Sichtbare und seine Geometrie wird mit Vitest im Browser-Modus geprüft (test/layout, pnpm test:browser), inklusive Screenshots als visueller Nachweis; UI braucht keinen Electron-E2E-Test."
-   },
-   {
-    "path": "verification.1",
-    "source": "Publish the browser-mode screenshots, after personal inspection, as a Test Run per milestone.",
-    "text": "Die Screenshots aus dem Browser-Modus nach eigener Prüfung pro Meilenstein als Test Run veröffentlichen."
-   },
-   {
-    "path": "verification.2",
-    "source": "Re-measure the creation of the IURIO rebase test Pod with timestamps per phase; delete the test Pod afterwards.",
-    "text": "Das Anlegen des IURIO-Rebase-Test-Pods mit Zeitstempeln pro Phase neu messen; Test-Pod danach löschen."
-   },
-   {
-    "path": "handoff",
-    "source": "Implementation approved. Next action: development issue and branch, then quick wins Q1–Q9 and M1 first. Decisions 3 and 4 are accepted.",
-    "text": "Umsetzung freigegeben. Nächster Schritt: Entwicklungs-Issue und Branch, dann zuerst Quick Wins Q1–Q9 und M1. Entscheidungen 3 und 4 sind getroffen."
-   },
-   {
-    "path": "changelog.0.text",
-    "source": "Draft created from the UX audit and creation measurement.",
-    "text": "Entwurf aus UX-Audit und Messung des Anlegens erstellt."
-   },
-   {
-    "path": "changelog.1.text",
-    "source": "Revision 2: az failed in the Pod because HOME is always the Pod state directory, not because of the keychain (follow-up check). Decision 3 now means owner context = owner HOME; tool-specific PAT workarounds are out of scope.",
-    "text": "Revision 2: az scheiterte im Pod, weil HOME immer das Pod-Speicherverzeichnis ist, nicht wegen des Schlüsselbunds (Nachprüfung). Entscheidung 3 heißt jetzt Owner-Kontext = dein HOME; tool-spezifische PAT-Umwege gehören nicht in den Plan."
-   },
-   {
-    "path": "changelog.2.text",
-    "source": "Revision 3: owner accepted decision 3: owner context with the owner HOME is the default for every new Pod; the isolated sandbox is an opt-in add-on. M6 is no longer blocked.",
-    "text": "Revision 3: Entscheidung 3 getroffen: Owner-Kontext mit deinem HOME ist Standard für jeden neuen Pod; die isolierte Sandbox ist ein optionaler Zusatz. M6 ist nicht mehr blockiert."
-   },
-   {
-    "path": "changelog.3.text",
-    "source": "Revision 4: wording per owner: the sandbox is optional if the user wants it, also at creation, not only after the HOME implementation works.",
-    "text": "Revision 4: Wortlaut nach deiner Vorgabe: Die Sandbox ist optional, wenn der User das will, auch schon beim Anlegen, nicht erst nach funktionierender HOME-Umsetzung."
-   },
-   {
-    "path": "changelog.4.text",
-    "source": "Revision 5: owner accepted decision 4 (per-object approvals) and approved implementation; UI is verified with Vitest browser mode and screenshots, not with E2E.",
-    "text": "Revision 5: Entscheidung 4 (Objekt-Freigaben) getroffen und Umsetzung freigegeben; UI wird mit Vitest im Browser-Modus und Screenshots geprüft, nicht mit E2E."
-   }
-  ]
- }
 }
