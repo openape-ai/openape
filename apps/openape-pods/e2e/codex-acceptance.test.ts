@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { spawn } from 'node:child_process'
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createInterface } from 'node:readline'
@@ -10,6 +10,7 @@ import { afterEach, expect, it } from 'vitest'
 import { PodDatabase } from '../src/worker/storage/database'
 import { fixtureDirectory } from '../src/main/fixture'
 import { fixtureShellIdentity } from './fixtures/shell-identity'
+import { removeProfile } from './fixtures/startup'
 
 // Issue 1375 acceptance: the bundled Codex CLI, with an isolated CODEX_HOME,
 // reaches the packaged app through the registration the owner made in App
@@ -34,7 +35,7 @@ function appServer(home: string) {
 
 it('lets connected Codex configure and run a Pod and administer shared data (packaged)', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-codex-'))); fixtureDirectory(root)
-  cleanups.push(() => rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }))
+  cleanups.push(() => removeProfile(root))
   const store = new PodDatabase(root); store.createPod({ name: 'Invoices' }); store.close()
   const home = join(root, 'owner-codex'); await mkdir(home, { mode: 0o700 }); await writeFile(join(home, 'config.toml'), ownerConfig)
   const identity = await fixtureShellIdentity(root, ['fixture.read']); cleanups.push(() => identity.close())

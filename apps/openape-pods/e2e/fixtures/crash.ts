@@ -1,7 +1,9 @@
 import { fixtureShellIdentity } from './shell-identity'
+import { openPod } from './navigation'
+import { removeProfile, startupBackup } from './startup'
 import { _electron as electron } from 'playwright'
-import type { ElectronApplication, Page } from 'playwright'
-import { mkdtemp, realpath, rm, readFile, mkdir } from 'node:fs/promises'
+import type { ElectronApplication } from 'playwright'
+import { access, mkdtemp, realpath, readFile, mkdir } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import type { ChildProcess } from 'node:child_process'
@@ -22,7 +24,7 @@ export function cleanupAfterEach() {
     for (const { app, child } of applications.splice(0)) { if (child.exitCode === null && child.signalCode === null) await app.close() }
     for (const identity of shellIdentities.values()) await identity.close()
     shellIdentities.clear()
-    for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 })
+    for (const root of roots.splice(0)) await removeProfile(root)
   })
 }
 export async function launch(root: string, packaged: boolean, suppliedIdentity?: Awaited<ReturnType<typeof fixtureShellIdentity>>) {
@@ -30,6 +32,7 @@ export async function launch(root: string, packaged: boolean, suppliedIdentity?:
     if (shellIdentities.has(root)) throw new Error('Crash fixture identity was already registered')
     shellIdentities.set(root, suppliedIdentity)
   }
+  const fresh = await access(join(root, 'automatic-backup.json')).then(() => false, () => true)
   let identity = shellIdentities.get(root)
   if (!identity) { identity = await fixtureShellIdentity(root); shellIdentities.set(root, identity) }
   const app = await electron.launch({ executablePath: packaged ? resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture') : require('electron'), args: packaged ? [] : ['.'], cwd: resolve('.'), env: { HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
@@ -37,6 +40,7 @@ export async function launch(root: string, packaged: boolean, suppliedIdentity?:
   await identity.encrypt(app, true)
   const page = await app.firstWindow()
   await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 20000 }).toBe('ready')
+  if (fresh) await startupBackup(page, root)
   return { app, page }
 }
 export async function seed() {
@@ -61,12 +65,6 @@ export async function seed() {
     return { root, podId: pod.id }
   }
   finally { store.close() }
-}
-// The desktop opens on the Automatisierungen landing; a Pod's own pages open from its detail panel.
-export async function openPod(page: Page, name: string) {
-  await page.getByRole('button', { name: 'List', exact: true }).click()
-  await page.getByRole('row').filter({ hasText: name }).first().click()
-  await page.getByRole('button', { name: 'Open details', exact: true }).click()
 }
 export type Termination = 'worker' | 'app' | 'quit' | 'script'
 
