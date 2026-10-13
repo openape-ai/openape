@@ -327,6 +327,23 @@ it('refreshes a runtime grant mid-run only while it stays approved and never cre
   expect(f.state.creates).toBe(1); expect(f.state.approvals).toEqual([]); expect(f.state.tokens).toHaveLength(2)
 })
 
+// Issue 1469: services of a run started on a once grant failed with "Pod execution permission is used".
+it('keeps a used once runtime grant as the authority of the run that used it, until the IdP reports it inactive', async () => {
+  const f = await fixture('used', 'approved')
+  const run = new AgentAuthority(f.connection, undefined, { find: async () => undefined, adopt: async () => undefined, record: async () => {} }, new RunGrantTokens())
+  const assignment = { command: f.command, grantId: '' }
+  await run.authorize(assignment, signal())
+  expect(f.state.grants.get('fresh-1')).toBe('used')
+  await run.refresh(assignment, signal())
+  expect(f.state.tokens).toEqual(['fresh-1']); expect(f.state.creates).toBe(1)
+  f.state.active = false
+  await expect(run.refresh(assignment, signal())).rejects.toThrow(AuthorityError)
+  // Another run never inherits it.
+  const other = new AgentAuthority(f.connection, undefined, { find: async () => undefined, adopt: async () => undefined, record: async () => {} }, new RunGrantTokens())
+  f.state.active = true
+  await expect(other.refresh({ command: f.command, grantId: 'fresh-1' }, signal())).rejects.toThrow(AuthorityError)
+})
+
 it('never lets a second application run on the token of another application with the same permission', async () => {
   const f = await fixture('approved'); f.state.grantType = 'always'; f.state.lifetime = 3600
   f.state.grants.set('other-app', 'denied')
