@@ -113,6 +113,8 @@ function stateOf(status: string): GrantState {
 export class PodGrants {
   // Earlier grant ids already read at the IdP that this process did not adopt; they are not read again.
   private readonly checked = new Set<string>()
+  // Pending grants whose refresh failed are reported once; they are read again on every refresh.
+  private readonly unreadable = new Set<string>()
   constructor(private readonly dependencies: { connection: (podId: string) => Promise<PodConnection>, ledger: (command: GrantLedgerCommand) => Promise<unknown> }) {}
 
   /** The ledger as one Pod's authority uses it. */
@@ -126,6 +128,34 @@ export class PodGrants {
 
   async list(filter: { podId?: string }): Promise<PodGrant[]> {
     return await this.dependencies.ledger({ type: 'list', ...filter }) as PodGrant[]
+  }
+
+  /** The IdP page of a pending grant this Pod requested, checked against the Pod's own identity before it opens. */
+  async approvalPage(podId: string, grantId: string): Promise<string> {
+    const grant = (await this.list({ podId })).find(item => item.id === grantId && item.state === 'pending')
+    if (!grant) throw new Error('This grant no longer waits for your decision; refresh the view')
+    const connection = await this.dependencies.connection(podId)
+    if (grant.issuer !== (connection.decisionIssuer ?? connection.issuer) || grant.subject !== connection.subject) throw new Error('Approval belongs to a different Pod identity')
+    return this.result(grant).approval!
+  }
+
+  /**
+   * Reads the pending ledger grants at the IdP again, so a grant the owner decided on the IdP page, or that the IdP
+   * expired, leaves the owner's open decisions. At most `limit` grants are read per call.
+   */
+  async refreshPending(signal: AbortSignal, limit = 16): Promise<void> {
+    for (const grant of (await this.list({})).filter(item => item.state === 'pending').slice(0, limit)) {
+      try {
+        const connection = await this.dependencies.connection(grant.podId)
+        await this.record(grant.podId, connection, await this.read(connection, grant.id, signal), grant.approvedInSession)
+        this.unreadable.delete(grant.id)
+      }
+      catch (error) {
+        if (this.unreadable.has(grant.id)) continue
+        this.unreadable.add(grant.id)
+        console.error(`Could not refresh the pending Pod grant ${grant.id}`, error)
+      }
+    }
   }
 
   /** Requests one continuing grant as the Pod; an equal pending or approved request is reused, so retries never ask twice. */

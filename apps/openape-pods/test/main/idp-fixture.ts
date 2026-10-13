@@ -131,7 +131,7 @@ export async function workerFixture(options: { pods?: string[], resources?: () =
   const resources = () => ({ epoch: 1, resources: options.resources?.() ?? [program], variables: [] })
   const dispatch = vi.fn(async (command: Record<string, any>) => {
     if (command.grants) return ledger.execute(command.grants)
-    if (command.type === 'list' && Object.keys(command).length === 1) return { pods: store.listPods().map(pod => ({ id: pod.id, revision: pod.revision, name: pod.name, lifecycle: pod.lifecycle, activeScript: null })), organization: { revision: 1, groups: [] } }
+    if (command.type === 'list' && Object.keys(command).length === 1) return { pods: store.listPods().map(pod => ({ id: pod.id, revision: pod.revision, name: pod.name, lifecycle: pod.lifecycle, activeScript: null })) }
     if (command.resource?.type?.startsWith('bind')) bound.push(command.resource)
     if (command.program?.type === 'save') bound.push(command.program)
     if (command.serviceCheck?.approval) approvals.push(command.serviceCheck.approval)

@@ -10,16 +10,14 @@ describe('pod workspace shell', () => {
   it('shows actual worker updates, contextual navigation and manual execution navigation', async () => {
     let listener = (_status: PodStatus) => {}
     const unsubscribe = vi.fn()
-    window.pods = { mcpSession: async () => ({ expiresAt: null, pending: false }), codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), definitions: async () => ({ definitions: [], instances: [], provisioning: [] }), domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }), packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: [] }), getStatus: async () => ready, onStatus: (callback) => { listener = callback; return unsubscribe } }
+    window.pods = { mcpSession: async () => ({ expiresAt: null, pending: false }), codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), definitions: async () => ({ definitions: [], instances: [], provisioning: [] }), domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }), packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace: async () => ({ pods: [] }), getStatus: async () => ready, onStatus: (callback) => { listener = callback; return unsubscribe } }
     const wrapper = mount(App, { props: { initialPodId: '00000000-0000-4000-8000-000000000001' } })
     await flushPromises()
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
-    expect(wrapper.findAll('[role="tab"]').map(tab => tab.text())).toEqual(['Overview', 'Script', 'Variables and secrets', 'Permissions', 'Settings', 'History'])
+    // Without a Pod there is no page and no section links.
+    expect(wrapper.find('.section-links').exists()).toBe(false)
     expect(wrapper.text()).toContain('No pods yet')
     expect(wrapper.findAll('.pod-button')).toHaveLength(0)
-    await wrapper.get('#tab-Permissions').trigger('click'); await flushPromises()
-    expect(wrapper.get('[role="tabpanel"]').text()).toContain('Create a local pod')
-    await wrapper.get('#tab-Overview').trigger('click'); await flushPromises()
     listener({ ...ready, worker: { state: 'error', pid: null, error: 'Worker stopped. Reopen Pods.' } })
     await flushPromises()
     expect(wrapper.get('[role="alert"]').text()).toContain('Reopen Pods')
@@ -33,7 +31,7 @@ describe('pod workspace shell', () => {
       codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }),
       definitions: async () => ({ definitions: [], instances: [], provisioning: [] }), domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }),
       runs, getStatus: async () => ready, onStatus: () => () => {},
-      workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: [{ id: podId, name: 'Fixture', revision: 1, lifecycle: 'paused', activeScript: run.scriptHash }] }),
+      workspace: async () => ({ pods: [{ id: podId, name: 'Fixture', revision: 1, lifecycle: 'paused', activeScript: run.scriptHash }] }),
       details: async () => ({ counts: {}, claims: [], versions: [] }), resources: async () => ({ resources: [] }),
       scheduling: async () => ({ enabled: false, pending: 0, blocked: 0 }),
       onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }),
@@ -41,11 +39,11 @@ describe('pod workspace shell', () => {
     } as unknown as typeof window.pods
     const wrapper = mount(App, { props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
     await wrapper.findAll('button').find(button => button.text() === 'Prepare retry')!.trigger('click'); await flushPromises()
-    expect(wrapper.get('[role="tabpanel"]').text()).toContain('Check whether this run can be retried safely')
+    expect(wrapper.get('#section-runs').text()).toContain('Check whether this run can be retried safely')
     expect(runs.mock.calls.every(([command]) => command.type === 'list')).toBe(true)
     await wrapper.findAll('button').find(button => button.text() === 'Open App settings')!.trigger('click'); await flushPromises()
     expect(wrapper.text()).toContain('App settings')
-    expect(wrapper.find('#panel-History').exists()).toBe(false)
+    expect(wrapper.find('#section-runs').exists()).toBe(false)
     wrapper.unmount()
   })
   it('tells on Overview what the last run did, unless the script only repeated the outcome', async () => {
@@ -56,21 +54,21 @@ describe('pod workspace shell', () => {
         codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }),
         definitions: async () => ({ definitions: [], instances: [], provisioning: [] }), domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }),
         runs: async () => ({ runs: [run], events: [] }), getStatus: async () => ready, onStatus: () => () => {},
-        workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: [{ id: podId, name: 'Fixture', revision: 1, lifecycle: 'active', activeScript: run.scriptHash }] }),
+        workspace: async () => ({ pods: [{ id: podId, name: 'Fixture', revision: 1, lifecycle: 'active', activeScript: run.scriptHash }] }),
         details: async () => ({ counts: {}, claims: [], versions: [] }), resources: async () => ({ resources: [] }),
         scheduling: async () => ({ enabled: false, pending: 0, blocked: 0 }),
         onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }),
         data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }),
       } as unknown as typeof window.pods
       const wrapper = mount(App, { props: { initialPodId: podId } }); await flushPromises()
-      const text = wrapper.get('#panel-Overview').text(); wrapper.unmount()
+      const text = wrapper.get('#section-runs .run-outcome').text(); wrapper.unmount()
       return text
     }
     expect(await overview('Unchanged: 204 tasks. No Telegram message.')).toContain('Run completedUnchanged: 204 tasks. No Telegram message.')
     expect((await overview('Run completed')).match(/Run completed/g)).toHaveLength(1)
   })
   it('surfaces IPC connection failure instead of claiming readiness', async () => {
-    window.pods = { mcpSession: async () => ({ expiresAt: null, pending: false }), codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), definitions: async () => ({ definitions: [], instances: [], provisioning: [] }), domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }), packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: [] }), getStatus: async () => { throw new Error('Connection rejected') }, onStatus: () => () => {} }
+    window.pods = { mcpSession: async () => ({ expiresAt: null, pending: false }), codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), definitions: async () => ({ definitions: [], instances: [], provisioning: [] }), domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }), packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace: async () => ({ pods: [] }), getStatus: async () => { throw new Error('Connection rejected') }, onStatus: () => () => {} }
     const wrapper = mount(App, { props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
     expect(wrapper.get('[role="status"]').text()).toBe('Unavailable')
     expect(wrapper.get('[role="alert"]').text()).toBe('Connection rejected')
@@ -87,9 +85,8 @@ it('shows automatic recovery in the shared Overview and schedule settings withou
   const wrapper = mount(App, { props: { initialPodId: '00000000-0000-4000-8000-000000000001' } })
   await flushPromises()
   expect(wrapper.text()).toContain('Waiting for service recovery. Next attempt:')
-  expect(wrapper.text()).not.toContain('Prepare retry')
+  expect(wrapper.get('#section-overview').text()).not.toContain('Prepare retry')
   expect(wrapper.findAll('button').find(button => button.text() === 'Run now')!.attributes('disabled')).toBeDefined()
-  await wrapper.get('#tab-Settings').trigger('click'); await flushPromises()
   expect(wrapper.get('.schedule-panel [role="status"]').text()).toContain('Waiting for service recovery. Next attempt:')
   wrapper.unmount()
 })

@@ -58,11 +58,16 @@ export interface CentralPod {
 export interface CentralSnapshot {
   version: 1
   schema: number
-  workspace: WorkspaceState
+  workspace: WorkspaceState & { organization: typeof legacyOrganization }
   pods: CentralPod[]
   artifacts: { podId: string, path: string, hash: string, size: number }[]
   blobs: { podId: string, hash: string }[]
 }
+/**
+ * Relays before issue 1468 require a group organization in the published workspace. Groups became tags, so the desktop
+ * publishes this empty one until those relays are gone; current readers ignore it.
+ */
+export const legacyOrganization = { revision: 1, groups: [] as never[] }
 export type CentralState = 'connecting' | 'online' | 'reconnecting' | 'offline'
 export interface CentralStatus {
   state: CentralState
@@ -127,7 +132,7 @@ export function parseCentralCommand(value: unknown): CentralCommand {
   const body = centralObject(item.body)
   const parsers = { workspace: parseCommand, details: parseDetailsCommand, scripts: parseScriptCommand, scheduling: parseScheduleCommand, runs: parseRunCommand, resources: parseResourceCommand, data: parseDataCommand, sharing: parseSharingCommand }
   const allowed: Record<Exclude<CentralChannel, 'local' | 'inbox'>, string[]> = {
-    data: ['deletePod'], workspace: ['create', 'update', 'organize', 'tag'], details: ['describe', 'activate'],
+    data: ['deletePod'], workspace: ['create', 'update', 'tag'], details: ['describe', 'activate'],
     scripts: ['save', 'validate', 'activate', 'prepareDependencies'], scheduling: ['save', 'lifecycle'],
     runs: ['start', 'cancel', 'recover', 'retryQueue', 'resolveHttp'], resources: ['saveVariable', 'removeVariable', 'revoke'],
     // Package files travel only through the desktop; a browser reviews and configures an import. Export stays on the desktop.

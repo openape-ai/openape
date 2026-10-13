@@ -7,6 +7,7 @@ import { parseMapView } from '../../src/contracts/map-view'
 import AutomationsShell from '../../src/renderer/central/AutomationsShell.vue'
 import DecisionsInbox from '../../src/renderer/central/DecisionsInbox.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
+import { decisionCounts } from '../../src/renderer/utils/kpis'
 import { choiceEvents, choicePayload } from './choice-events'
 import fixture from './map-view.json'
 
@@ -43,7 +44,9 @@ describe('Entscheidungen', () => {
   it('renders the 17 questions with their facts and options and counts what waits for the owner', async () => {
     await mountInbox()
     const kpis = wrapper!.findAll('.kpi').map(item => [item.find('b').text(), item.find('span').text()])
-    expect(kpis).toEqual([['17', 'Rückfragen'], ['3', 'Freigaben'], ['1', 'Rechte'], ['3', 'Abzugleichen'], ['0', 'Geheimnisse']])
+    // The counters are the read model's, the same computation as the KPI and the tab badge.
+    expect(kpis).toEqual([['17', 'Rückfragen'], ['4', 'Freigaben'], ['2', 'Rechte'], ['1', 'Abzugleichen'], ['0', 'Geheimnisse']])
+    expect((wrapper!.vm as unknown as { total: number }).total).toBe(decisionCounts(view).count)
     const cards = wrapper!.findAll('[data-testid="questions"] .item')
     expect(cards).toHaveLength(17)
     expect(wrapper!.find('[data-testid="questions"] .grp').text()).toContain('Review uncertain mail')
@@ -60,6 +63,9 @@ describe('Entscheidungen', () => {
     await card('Dependabot').findAll('.opts button')[0]!.trigger('click')
     expect(wrapper!.emitted('domain')).toEqual([[{ type: 'answer', questionId: 'ed32bc79-0000-4000-8000-000000000000'.slice(0, 36), option: 'keep' }, expect.any(Function)]])
     expect(wrapper!.find('[data-testid="questions"] [data-saving]').text()).toContain('Wird gespeichert: Keep for review')
+    // The counter follows the read model, so it drops together with the KPI once the answer is stored.
+    expect(wrapper!.findAll('.kpi')[0]!.find('b').text()).toBe('17')
+    await wrapper!.setProps({ view: { ...view, kpis: { ...view.kpis, decisions: view.kpis.decisions.map(item => item.kind === 'question' ? { ...item, count: 16 } : item) } } })
     expect(wrapper!.findAll('.kpi')[0]!.find('b').text()).toBe('16')
   })
 
@@ -91,6 +97,7 @@ describe('Entscheidungen', () => {
 
   it('lists approvals, rights, held work, uncertain actions and deliveries with the exact owner commands', async () => {
     const monitor = view.pods.find(pod => pod.name === 'IURIO PR monitor')!
+    const taskMonitor = view.pods.find(pod => pod.name === 'IURIO Task monitor')!
     const bot = view.pods.find(pod => pod.unknown.length)!
     await mountInbox()
     const approvals = wrapper!.find('[data-testid="approvals"]')
@@ -113,6 +120,13 @@ describe('Entscheidungen', () => {
     expect(rights.text()).toContain('Execution permission for IURIO PR monitor')
     await rights.find('button').trigger('click')
     expect(wrapper!.emitted('command')).toEqual([[{ channel: 'runs', body: { type: 'openApproval', podId: monitor.id, runId: monitor.approvals[0]!.runId, grantId: 'grant-pr-monitor' } }]])
+    // A grant the Pod requested at the IdP (for example through MCP) without a waiting run: title only, opened on this Mac.
+    const grant = rights.find('[data-right="grant"]')
+    expect(grant.text()).toContain('IURIO Task monitor')
+    expect(grant.text()).toContain('Angefragtes Recht: Send Telegram messages to the IURIO channel')
+    expect(grant.text()).not.toContain('grant-task-push')
+    await grant.find('button.idp').trigger('click')
+    expect(wrapper!.emitted('command')!.at(-1)).toEqual([{ channel: 'runs', body: { type: 'openGrant', podId: taskMonitor.id, grantId: 'grant-task-push' } }])
     const reconcile = wrapper!.find('[data-testid="reconcile"]')
     const [held, effect, delivery] = reconcile.findAll('.item')
     expect(held!.text()).toContain('Angehaltene Arbeit · delta-mind/mail-classification')
@@ -139,6 +153,15 @@ describe('Entscheidungen', () => {
       return
     }
     expect(action.element.tagName).toBe('BUTTON')
+  })
+
+  it('links a requested Pod grant to its IdP page in the browser', async () => {
+    await mountInbox({ domain: null, desktop: false, inboxUrl: '/inbox/' })
+    const link = wrapper!.find('[data-testid="rights"] [data-right="grant"] a.idp')
+    expect(link.attributes()).toMatchObject({ href: 'https://id.openape.ai/grant-approval?grant_id=grant-task-push', target: '_blank', rel: 'noopener' })
+    // Without shared-data access the approvals and held work live in the Pods inbox; the counters still show them.
+    expect(wrapper!.find('[data-testid="approvals"]').text()).toContain('Rückfragen und Freigaben deiner Pods beantwortest du in der Pods-Inbox.')
+    expect(wrapper!.findAll('.kpi')[1]!.find('b').text()).toBe('4')
   })
 
   it('points a browser without shared-data access to the Pods inbox for questions and approvals', async () => {

@@ -58,7 +58,7 @@ it('answers a claimed task once and a retried run replays its claim receipt with
   expect(queue.agentCalls()).toBe(1)
 })
 
-it('reports an invalid pending response as a committed gap, as synthetic validation requires', async () => {
+it('reports an invalid pending response as a committed gap', async () => {
   const { run } = await loaded
   const result = await run(service([], '{}').context())
   expect(result).toMatchObject({ status: 'completedWithGaps', gapIds: ['pending-run-1'] })
