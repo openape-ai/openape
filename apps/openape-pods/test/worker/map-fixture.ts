@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { choiceEvents, choicePayload } from '../renderer/choice-events'
 import type { ScheduleSpec } from '../../src/contracts/scheduling'
 import { installExample } from '../../src/worker/runs/examples'
-import { PodGroups } from '../../src/worker/workspace/groups'
+import { ItemTagStore } from '../../src/worker/workspace/item-tags'
 import { DomainData } from '../../src/worker/data/domain'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { digest, PodDatabase } from '../../src/worker/storage/database'
@@ -13,8 +13,8 @@ import { digest, PodDatabase } from '../../src/worker/storage/database'
 export { choiceEvents }
 
 /**
- * A synthetic profile shaped like the installed one after the conversion of issue 1465: 30 Pods in
- * the groups Delta Mind, iurio and Linde plus Pods without a group; seven autonomous mail Pods and
+ * A synthetic profile shaped like the installed one after the conversions of issues 1465 and 1468: 30 Pods
+ * tagged delta-mind, iurio and linde (the former groups) plus Pods without a tag; seven autonomous mail Pods and
  * the four Morgenbriefing Pods that share data through namespaces, open owner questions and
  * approvals, and standalone monitors. No row carries a secret value. `NOW` is the snapshot time.
  */
@@ -43,9 +43,8 @@ export function mapFixture() {
   const root = mkdtempSync(join(tmpdir(), 'pods-map-')); roots.push(root)
   const store = new PodDatabase(root); stores.push(store)
   const resources = new ResourceRegistry(store, () => {})
-  const groups = new PodGroups(store)
-  const group = (name: string) => { groups.execute({ type: 'organize', action: 'create', name, revision: groups.view().revision }); return groups.view().groups.at(-1)!.id }
-  const deltaMind = group('Delta Mind'); const iurio = group('iurio'); const linde = group('Linde')
+  const tags = new ItemTagStore(store)
+  const deltaMind = 'delta-mind'; const iurio = 'iurio'; const linde = 'linde'
   const pods: Record<string, string> = {}
 
   // Program grants are Pod grants in the ledger, apart from the sandbox entry of the application.
@@ -53,9 +52,9 @@ export function mapFixture() {
     store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,\'ready\',?,?)').run(uuid(), podId, kind, name, JSON.stringify(configuration))
     for (const grant of (grants ?? []) as { permission: string, display: string }[]) store.db.prepare('INSERT INTO pod_grants VALUES(?,?,?,?,?,?,?,\'always\',\'approved\',0,?,?)').run(uuid(), podId, 'https://id.example.invalid', `pod-${podId}`, String(configuration.cliId), JSON.stringify([{ type: 'openape_cli', cli_id: configuration.cliId, operation_id: '*', resource_chain: [], action: grant.permission.split('#')[1], permission: grant.permission, display: grant.display, risk: 'low' }]), grant.display, NOW, NOW)
   }
-  const scripted = (name: string, groupId: string | null, options: { work?: unknown[], capabilities?: string[], lifecycle?: 'active' | 'paused' | 'archived', draft?: boolean } = {}) => {
+  const scripted = (name: string, tag: string | null, options: { work?: unknown[], capabilities?: string[], lifecycle?: 'active' | 'paused' | 'archived', draft?: boolean } = {}) => {
     const pod = store.createPod({ name })
-    if (groupId) groups.execute({ type: 'organize', action: 'move', podId: pod.id, groupId, revision: groups.view().revision })
+    if (tag) tags.execute({ type: 'tag', id: pod.id, revision: 0, tags: [tag] })
     if (!options.draft) {
       installExample(store, resources, pod.id, 'deterministic', hash)
       const manifest = JSON.parse(store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=?').get(pod.id)!.manifest as string)
@@ -118,7 +117,7 @@ export function mapFixture() {
   }
   store.db.prepare('UPDATE runs SET summary=\'Read 6 changed messages. No mailbox writes.\' WHERE pod_id=? AND started_at=(SELECT max(started_at) FROM runs WHERE pod_id=?)').run(sync, sync)
 
-  // Morgenbriefing: four Pods without a group that share the briefing data.
+  // Morgenbriefing: four Pods without a tag that share the briefing data.
   const mp = scripted('Mail-Prüfung · Morgenbriefing', null, { capabilities: ['jev.evaluate'] })
   resource(mp, 'tool', 'pods-mail', program('pods-mail', [{ permission: 'pods-mail.account[email=phofmann@delta-mind.at].mail[*]#list', display: 'List mail for phofmann@delta-mind.at' }, { permission: 'pods-mail.account[email=patrick@docpit.eu].mail[*]#list', display: 'List mail for patrick@docpit.eu' }]))
   resource(mp, 'directory', 'mail', directory('/Users/fixture/Briefing Evidence/mail', 'readWrite'))
@@ -143,7 +142,7 @@ export function mapFixture() {
   // One delivery of the bot never got its answer: the owner reconciles it in Entscheidungen.
   store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE pod_id=? AND rowid=(SELECT min(rowid) FROM effect_ledger WHERE pod_id=?)').run(bot, bot)
 
-  // Standalone monitors in iurio and without a group.
+  // Standalone monitors tagged iurio and without a tag.
   const pr = scripted('IURIO PR monitor', iurio)
   resource(pr, 'tool', 'az', program('az', [{ permission: 'az.organization[url=https://dev.azure.com/iurio].project[name=iurioServer].repo[name=iurioServer].pull-request[*]#list', display: 'List pull requests for repository iurioServer' }]))
   resource(pr, 'tool', 'https://dev.azure.com', http('https://dev.azure.com', ['GET']))
@@ -179,5 +178,5 @@ export function mapFixture() {
   resource(report, 'tool', 'https://api.telegram.org', http('https://api.telegram.org', ['POST']))
   for (const name of ['Portal · Issues', 'Portal · Triage', 'Portal · Report', 'Portal · Deploy check', 'Portal · Deploy report']) scripted(name, linde, { lifecycle: 'paused' })
 
-  return { store, resources, pods, groups: { deltaMind, iurio, linde } }
+  return { store, resources, pods, tags: { deltaMind, iurio, linde } }
 }

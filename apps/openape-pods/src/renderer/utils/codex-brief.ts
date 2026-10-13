@@ -2,13 +2,13 @@ import type { MapView } from '../../contracts/map-view'
 import { t } from '../i18n'
 
 /**
- * The brief Codex receives for a new automation, as the mock's `codexPrompt` builds it: the group,
+ * The brief Codex receives for a new automation, as the mock's `codexPrompt` builds it: the tags,
  * the pinned system or Pod as starting point, and the order to show shape, map, access and the
  * example checks first, create afterwards, activate only as a preview and request rights only
  * through Permissions and the identity provider.
  */
-export function codexBrief(view: MapView, pinned: string | null, group: string | null): string {
-  const parts = [group ? t('Create a new automation in the group {group}.', { group }) : t('Create a new automation.')]
+export function codexBrief(view: MapView, pinned: string | null, tags: string[]): string {
+  const parts = [tags.length ? t('Create a new automation with the tags {tags}.', { tags: tags.map(tag => `#${tag}`).join(', ') }) : t('Create a new automation.')]
   const system = pinned ? view.systems.find(item => item.id === pinned) : null
   const pod = pinned ? view.pods.find(item => item.id === pinned) : null
   if (system) {

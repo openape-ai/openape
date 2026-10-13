@@ -5,13 +5,13 @@ import { t } from '../i18n'
 import { codexBrief } from '../utils/codex-brief'
 
 /**
- * Creation happens in Codex. This panel builds the brief from the selected group and the pinned
+ * Creation happens in Codex. This panel builds the brief from the tags and the pinned
  * node, shows whether Codex is connected to this desktop, and hands the text over: the clipboard
  * on every host, because Codex has no deep link that carries a prompt.
  */
-const props = defineProps<{ view: MapView, pinned: string | null, group: string | null, connected: boolean | null }>()
+const props = defineProps<{ view: MapView, pinned: string | null, tags: string[], connected: boolean | null }>()
 const emit = defineEmits<{ close: [], settings: [] }>()
-const brief = computed(() => codexBrief(props.view, props.pinned, props.group))
+const brief = computed(() => codexBrief(props.view, props.pinned, props.tags))
 const copied = ref<'copied' | 'selected' | null>(null)
 const text = ref<HTMLElement | null>(null)
 async function handOver() {

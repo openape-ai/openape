@@ -125,7 +125,7 @@ it('lists each Pod with the summary of its saved description', () => {
 
 it('accepts a listed summary and rejects an oversized or non-text one', () => {
   const pod = { id: crypto.randomUUID(), name: 'Listed', revision: 1, lifecycle: 'active' as const, activeScript: null }
-  const state = (description: unknown) => ({ pods: [{ ...pod, description }], organization: { revision: 1, groups: [] } })
+  const state = (description: unknown) => ({ pods: [{ ...pod, description }] })
   expect(parseWorkspace(state('Watches the board.')).pods[0]!.description).toBe('Watches the board.')
   expect(() => parseWorkspace(state('x'.repeat(161)))).toThrow('Invalid pod description')
   expect(() => parseWorkspace(state(7))).toThrow('Invalid pod description')

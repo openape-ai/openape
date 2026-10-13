@@ -21,7 +21,7 @@ import { installMailRecipe } from '../mail/install'
 import { validateDraft } from './validation'
 import { runtimeReference } from './reference'
 import { PodVariables } from '../resources/variables'
-import { PodGroups } from '../workspace/groups'
+import { ItemTagStore } from '../workspace/item-tags'
 import { modelResources } from './resources'
 
 export class MasterControl {
@@ -83,11 +83,6 @@ export class MasterControl {
     })
   }
 
-  private organization(podId: string) {
-    const state = new PodGroups(this.store).view()
-    return { revision: state.revision, groups: state.groups.map(({ id, name, podIds }) => ({ id, name, selected: podIds.includes(podId) })) }
-  }
-
   private assertPod(id: string, revision: number, inspect = false): void {
     const pod = this.store.getPod(id)
     if (pod.revision !== revision) throw new Error('Pod settings changed; reload its current revision')
@@ -111,7 +106,7 @@ export class MasterControl {
     const pod = this.store.getPod(action.podId)
     if (action.action === 'inspect') {
       const scripts = new ScriptWorkspace(this.store, this.resources, this).view(pod.id)
-      return { jev: jevAvailability(this.store), pod, script: scripts.source, resources: modelResources(this.resources.list(pod.id), true), variables: new PodVariables(this.store).list(pod.id), schedule: this.scheduler.view(pod.id), organization: this.organization(pod.id), versions: scripts.versions, runs: this.dispatcher.view(pod.id).runs, checkpoint: this.store.checkpoint(pod.id) }
+      return { jev: jevAvailability(this.store), pod, script: scripts.source, resources: modelResources(this.resources.list(pod.id), true), variables: new PodVariables(this.store).list(pod.id), schedule: this.scheduler.view(pod.id), tags: new ItemTagStore(this.store).own(pod.id), versions: scripts.versions, runs: this.dispatcher.view(pod.id).runs, checkpoint: this.store.checkpoint(pod.id) }
     }
     if (action.action === 'setVariable') {
       new PodVariables(this.store).save(pod.id, action.name, action.value, action.variableRevision)
@@ -125,17 +120,6 @@ export class MasterControl {
       this.scheduler.save(pod.id, action.scheduleRevision, action.spec, false)
       this.scheduler.lifecycle(pod.id, pod.revision, 'paused')
       return { schedule: this.scheduler.view(pod.id), lifecycle: 'paused', activation: 'owner-only-in-settings' }
-    }
-    if (action.action === 'setGroup') {
-      const groups = new PodGroups(this.store); let state = groups.view()
-      if (state.revision !== action.organizationRevision) throw new Error('Groups changed. Refresh and try again.')
-      let group = state.groups.find(item => item.name.toLowerCase() === action.name?.toLowerCase())
-      if (action.name && !group) {
-        groups.execute({ type: 'organize', action: 'create', name: action.name, revision: state.revision })
-        state = groups.view(); group = state.groups.find(item => item.name === action.name)
-      }
-      groups.execute({ type: 'organize', action: 'move', podId: pod.id, groupId: group?.id ?? null, revision: state.revision })
-      return this.organization(pod.id)
     }
     if (action.action === 'revise') { this.store.updatePod(pod.id, action.revision, { name: action.name, lifecycle: pod.lifecycle }); return this.store.getPod(pod.id) }
     if (action.action === 'resume') {

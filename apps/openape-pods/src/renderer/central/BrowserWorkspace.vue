@@ -9,19 +9,20 @@ import WorkspaceFrame from '../WorkspaceFrame.vue'
 import AccountStatus from '../AccountStatus.vue'
 import CentralWorkspace from './CentralWorkspace.vue'
 import AutomationsShell from './AutomationsShell.vue'
+import AppSettings from '../AppSettings.vue'
 import { kpiFacts } from '../utils/kpis'
 import { t, diagnostic, time } from '../i18n'
 
 /**
  * The browser renders the same shell from the published snapshot of the selected desktop; owner
- * commands travel through the relay. The remote Pod editor and the package import open from it.
+ * commands travel through the relay. The remote Pod editor, the package import and the settings page open from it.
  */
 const props = defineProps<{ client: BrowserWorkspaceClient }>()
 const emit = defineEmits<{ login: [], logout: [] }>()
 const subject = ref('')
 const error = ref('')
 const connectionError = ref('')
-const page = ref<'Automations' | 'Pods' | 'Import'>('Automations')
+const page = ref<'Automations' | 'Pods' | 'Import' | 'App settings'>('Automations')
 const now = ref(Date.now())
 const tab = ref<'automations' | 'decisions'>('automations')
 const runtimes = ref<CentralRuntime[]>([])
@@ -66,7 +67,7 @@ defineExpose({ openPod })
 <template>
   <WorkspaceFrame browser>
     <template #account>
-      <AccountStatus v-if="subject" :subject="subject" />
+      <AccountStatus v-if="subject" :subject="subject" @open="page = 'App settings'" />
     </template>
     <template #status>
       <span v-if="!loaded" class="muted" role="status">{{ t('Loading workspace…') }}</span>
@@ -89,7 +90,8 @@ defineExpose({ openPod })
     <p v-if="subject && loaded && !runtime && page === 'Automations'" class="muted">
       {{ t('Connect your desktop to bring your Pods online.') }}
     </p>
-    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :decisions="runtime?.workspace.map ? kpiFacts(runtime.workspace.map).decisions.count : undefined" :tab="tab" inbox-url="/inbox/" :subject="subject" :sharing="!!runtime?.online" @update:tab="tab = $event" @logout="logout" @command="remoteCommand" @open-pod="openPod" @import="page = 'Import'" />
+    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :decisions="runtime?.workspace.map ? kpiFacts(runtime.workspace.map).decisions.count : undefined" :tab="tab" inbox-url="/inbox/" :sharing="!!runtime?.online" @update:tab="tab = $event" @settings="page = 'App settings'" @command="remoteCommand" @open-pod="openPod" />
+    <AppSettings v-if="subject && page === 'App settings'" browser :subject="subject" :sharing="!!runtime?.online" @logout="logout" @import="page = 'Import'" />
     <SharingImport v-if="subject && page === 'Import' && runtime" :api="sharingApi" :desktop="false" @open-pod="openPod" />
     <CentralWorkspace v-if="subject" v-show="page === 'Pods'" ref="workspace" :client="client" embedded shared-editor @inventory="inventory" @connection="connectionError = $event" @login="expired" @logout="logout" />
   </WorkspaceFrame>

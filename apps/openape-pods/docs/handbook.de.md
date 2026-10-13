@@ -27,7 +27,7 @@ Wähle einen Knoten, um seine Fakten im Infofeld zu lesen. Details öffnen führ
 Stand HH:MM kennzeichnet im Browser einen veröffentlichten Schnappschuss; Live · HH:MM bedeutet, der Desktop antwortet direkt. Der Browser zeigt denselben Tab aus dem Schnappschuss des gewählten Desktops. Native Bedienelemente wie das Öffnen des Script-Ordners oder die Wahl einer privaten Datei bleiben am Desktop und sind im Browser deaktiviert.
 
 1. Öffne Pods; Automatisierungen ist die Startseite.
-2. Wechsle zwischen Karte und Liste, wähle eine Gruppe und schalte die Ebenen um.
+2. Wechsle zwischen Karte und Liste, wähle Tags und schalte die Ebenen um.
 3. Wähle einen Pod und wähle Details öffnen.
 4. Nutze Pausieren, Fortsetzen oder Jetzt ausführen auf der Detailseite. Details öffnen im Entwicklerabschnitt öffnet den Pod-Editor für Berechtigungen, Variablen und Geheimnisse, Historie und Identität.
 
@@ -50,7 +50,7 @@ Pods entscheidet nie für dich: kein Modell und kein Zeitplan wählt, genehmigt,
 
 ## Persönliche Konten verbinden
 
-Wähle oben rechts dein Konto oder öffne das Zahnradmenü → Weitere Einstellungen → Desktop-Einstellungen öffnen und gehe zu Deine Konten. Verbinde dein DDISA-Konto für Berechtigungen und dein Codex-/GPT-Konto für LLM-Aufrufe. Die optionale Einrichtung von TypeSafe / Jev findest du auf derselben Seite.
+Wähle oben rechts dein Konto oder ⚙ Einstellungen; beide öffnen die App-Einstellungen mit Deine Konten. Verbinde dein DDISA-Konto für Berechtigungen und dein Codex-/GPT-Konto für LLM-Aufrufe. Die optionale Einrichtung von TypeSafe / Jev findest du auf derselben Seite.
 
 Pods findet deinen Identitätsanbieter über den DDISA-Eintrag der Domain deiner E-Mail-Adresse. Alle Pods und Berechtigungen verwenden dieses eine DDISA-Konto; es gibt nichts auszuwählen. Pod-Agenten sind nicht deine Konten und erscheinen hier nie. Ein Wechsel zu einem anderen DDISA-Konto gibt deinen Pods neue Agenten, deren Berechtigungen neu erteilt werden müssen.
 
@@ -59,13 +59,13 @@ Weitere Dienste richtest du pro Pod ein: Programmanmeldungen unter Berechtigunge
 1. Gib unter Dein DDISA-Konto deine E-Mail-Adresse ein und wähle Anmelden. Schließe den Vorgang im Browser ab und kehre zu Pods zurück; das Konto zeigt Angemeldet.
 2. Wähle unter Codex-/GPT-Konto Anmelden. Schließe die angebotene Browseranmeldung ab und prüfe vor KI-gestützten Skripten den Status Angemeldet.
 3. Zeigt ein Konto später Abgelaufen oder einen Fehler, wähle Erneut anmelden am selben Konto. Gib eine andere E-Mail-Adresse nur ein, wenn du das Konto wechseln willst, und prüfe Wechsel bestätigen.
-4. Wähle Weiter zum Arbeitsbereich. Die Oberflächensprache änderst du im Zahnradmenü → Sprache.
+4. Wähle Weiter zum Arbeitsbereich. Die Oberflächensprache änderst du unter ⚙ Einstellungen → Sprache.
 
 ![Persönliche Konten verbinden](images/handbook-setup-de.png)
 
 ## Strukturierte Entscheidungen mit Jev
 
-Verbinde TypeSafe mit einem API-Schlüssel in den Desktop-Einstellungen (Konto oben rechts oder Zahnradmenü → Weitere Einstellungen). Der Schlüssel wird geprüft und verschlüsselt auf diesem Mac gespeichert. Skripte und Codex erhalten ihn nicht. Beim Ersetzen bleibt die Verbindung erhalten. Codex richtet die Pod-Zuweisung über die Ressourcen-API ein.
+Verbinde TypeSafe mit einem API-Schlüssel in den Desktop-Einstellungen (Konto oben rechts oder ⚙ Einstellungen). Der Schlüssel wird geprüft und verschlüsselt auf diesem Mac gespeichert. Skripte und Codex erhalten ihn nicht. Beim Ersetzen bleibt die Verbindung erhalten. Codex richtet die Pod-Zuweisung über die Ressourcen-API ein.
 
 Codex schreibt das Skript; Jev beantwortet darin begrenzte semantische Fragen. Nutze normalen Code für genaue Regeln, Jev für Choice-, Score- oder Noul-Entscheidungen und einen ausdrücklichen agent.run-Aufruf für generierten Text. Ein reines Jev-Skript benötigt kein aktives Codex-Konto. Synthetische Validierung belegt den Skriptvertrag, nicht die Entscheidungsqualität.
 
@@ -85,9 +85,9 @@ const relevance = result.answers.relevant.noul
 
 ## Den ersten Pod erstellen
 
-Pods werden nur von Codex angelegt. Wähle Neue Automatisierung mit Codex im Tab Automatisierungen: Pods schreibt einen Auftrag aus der gewählten Gruppe oder dem gewählten Knoten, kopiert ihn und öffnet Codex, wenn es verbunden ist. Beschreibe Quelle, gewünschtes Ergebnis und Erfolgskriterien.
+Pods werden nur von Codex angelegt. Wähle Neue Automatisierung mit Codex im Tab Automatisierungen: Pods schreibt einen Auftrag mit den Tags des angehefteten Pods oder Knotens, kopiert ihn und öffnet Codex, wenn es verbunden ist. Beschreibe Quelle, gewünschtes Ergebnis und Erfolgskriterien.
 
-Verbinde Codex einmal unter Desktop-Einstellungen → Work from Codex und starte Codex neu; das Zahnradmenü zeigt, ob Codex verbunden ist. Pods enthält Karte, Entscheidungen und den Pod-Editor; Gespräche bleiben in Codex.
+Verbinde Codex einmal unter Desktop-Einstellungen → Work from Codex und starte Codex neu; dieselbe Seite zeigt, ob Codex verbunden ist. Pods enthält Karte, Entscheidungen und den Pod-Editor; Gespräche bleiben in Codex.
 
 Der verbundene Codex kann Zugriffe konfigurieren, Skripte speichern und validieren, sie aktivieren und auf Wunsch Zeitpläne einschalten. Rückfragen richten sich nach Codex. Eine Fertigmeldung beweist noch keinen erfolgreichen Lauf.
 
@@ -133,7 +133,7 @@ Nutze Variablen und Geheimnisse des jeweiligen Pods. Normale Variablen sind für
 
 Codex kann nach Name und Zweck eines Geheimnisses fragen, aber den gespeicherten Wert nicht lesen. Wähle auf der Detailseite unter Geheimnisse + Geheimnis: Eintippen, eine private Datei auf diesem Mac lesen oder über OpenApe Secrets anfragen. Füge den Wert nie in Gespräche, Quelltext, Screenshots oder Supportnachrichten ein.
 
-Eine Anfrage über OpenApe Secrets registriert diesen Mac einmalig als Consumer mit eigenem Schlüssel und listet die Anfrage unter Entscheidungen → Geheimnisse. Du füllst sie auf secrets.openape.ai im Browser aus; der Wert wird gegen den Schlüssel dieses Macs versiegelt, Pods holt ihn einmalig ab und die Anfrage wird gelöscht. Das Zahnradmenü zeigt die Registrierung mit Widerrufen. Codex kann dieselbe Anfrage mit requestSecret stellen; es sieht nur den Alias.
+Eine Anfrage über OpenApe Secrets registriert diesen Mac einmalig als Consumer mit eigenem Schlüssel und listet die Anfrage unter Entscheidungen → Geheimnisse. Du füllst sie auf secrets.openape.ai im Browser aus; der Wert wird gegen den Schlüssel dieses Macs versiegelt, Pods holt ihn einmalig ab und die Anfrage wird gelöscht. Die App-Einstellungen (⚙ Einstellungen) zeigen die Registrierung mit Widerrufen. Codex kann dieselbe Anfrage mit requestSecret stellen; es sieht nur den Alias.
 
 Die Zuweisung erlaubt den validierten Skripten dieses Pods, den Alias zu lesen. Prüfe den Quelltext: Ein Skript kann ein Geheimnis absichtlich in einen Prompt, eine Datei oder ein Protokoll kopieren. Sichere Speicherung macht beliebigen Code nicht sicher. Verwaltete Geheimnisse werden lokal verschlüsselt und nicht in Sicherungen exportiert.
 
@@ -207,7 +207,7 @@ Das Trennen eines DDISA-Kontos unter Deine Konten widerruft damit verbundene Ber
 
 ## Sichern und wiederherstellen
 
-Wähle oben rechts dein Konto → Daten & Sicherungen oder wähle Sicherung exportieren… im Zahnradmenü. Normale App-Daten liegen unter ~/Library/Application Support/OpenApe Pods. Verwende Export und Wiederherstellung, statt eine laufende Datenbank zu kopieren.
+Wähle oben rechts dein Konto oder ⚙ Einstellungen, dann Daten & Sicherungen. Normale App-Daten liegen unter ~/Library/Application Support/OpenApe Pods. Verwende Export und Wiederherstellung, statt eine laufende Datenbank zu kopieren.
 
 Der Export enthält Einstellungen, Skripte, Arbeitsbereiche, Wissen, Quellen und Historie. Verwaltete Kontozugangsdaten, Geheimniswerte, geschützter Programmzustand sowie Shell-HOME und dessen Historie sind ausgeschlossen. Persönliche Inhalte oder Geheimnisse, die du selbst in Quelltext oder Arbeitsdateien geschrieben hast, können dennoch enthalten sein. Bewahre Sicherungen vertraulich auf.
 
@@ -224,21 +224,21 @@ Update prüfen und sichern prüft einen freigegebenen signierten Update-Kandidat
 
 ## Sprache wählen
 
-Öffne das Zahnradmenü oben rechts und wechsle mit Sprache zwischen Deutsch und English. Die Wahl wird je lokalem Profil gespeichert und gilt für Oberfläche, native Menüs und App-Dialoge. Ungespeicherter Editorinhalt bleibt beim Navigieren erhalten.
+Öffne ⚙ Einstellungen oben rechts und wechsle mit Sprache zwischen Deutsch und English. Die Wahl wird je lokalem Profil gespeichert und gilt für Oberfläche, native Menüs und App-Dialoge. Ungespeicherter Editorinhalt bleibt beim Navigieren erhalten.
 
-Pod- und Gruppennamen, Wissen, Quellen, Gesprächsnachrichten, Skriptcode und technische Protokolldaten bleiben in ihrer Originalsprache. Der Wechsel übersetzt deine Inhalte nicht und ändert keine Modellanweisungen. Bekannte App-Meldungen werden übersetzt; unbekannte externe Diagnosen werden gekennzeichnet und unverändert beibehalten. Datum und Zahlen folgen der Anzeigesprache. Gespeicherte Zeitpunkte, Zeitplanzeitzonen und Skriptverträge bleiben unverändert.
+Pod-Namen, Tags, Wissen, Quellen, Gesprächsnachrichten, Skriptcode und technische Protokolldaten bleiben in ihrer Originalsprache. Der Wechsel übersetzt deine Inhalte nicht und ändert keine Modellanweisungen. Bekannte App-Meldungen werden übersetzt; unbekannte externe Diagnosen werden gekennzeichnet und unverändert beibehalten. Datum und Zahlen folgen der Anzeigesprache. Gespeicherte Zeitpunkte, Zeitplanzeitzonen und Skriptverträge bleiben unverändert.
 
 Das Handbuch liegt als vollständige deutsche und englische Offline-Fassung mit passenden App-Abbildungen vor. Nutze den Link zur anderen Ausgabe in der Handbuchnavigation. Bewahre beide HTML-Dateien zusammen auf, damit diese Links funktionieren. Die Sprache ist eine lokale Anzeigeeinstellung. Ein wiederhergestelltes Profil beginnt mit der Systemvorgabe, bis du erneut eine Sprache wählst.
 
-## Pods in Gruppen organisieren
+## Pods mit Tags organisieren
 
-Gruppen ordnen zusammengehörige Pods; Liste und Detailseite zeigen die Gruppe jedes Pods, die Karte wird über Tags gefiltert. Jeder Pod gehört zu genau einer flachen Gruppe oder zu Nicht gruppiert. Gruppennamen und Zuordnungen werden auf diesem Mac gespeichert und in Sicherungen aufgenommen.
+Tags ordnen zusammengehörige Pods: bis zu acht je Pod, jeweils 1–32 Buchstaben, Ziffern oder Bindestriche, kleingeschrieben gespeichert. Liste und Karte filtern nach Tags, Ohne Tag zeigt den Rest. Tags werden auf diesem Mac gespeichert und in Sicherungen aufgenommen. Gruppen früherer Versionen wurden beim Aktualisieren der Daten zu gleichnamigen Tags.
 
-Gruppieren teilt keine Ressourcen oder Berechtigungen, macht kein Skript ungültig und beeinflusst keinen laufenden Auftrag. Neue Pods beginnen unter Nicht gruppiert. Das Entfernen einer Gruppe behält alle Pods. Einen Pod zu löschen ist eine separate Aktion mit Bestätigung.
+Tags teilen keine Ressourcen oder Berechtigungen, machen kein Skript ungültig und beeinflussen keinen laufenden Auftrag. Neue Pods beginnen ohne Tag. Das Entfernen eines Tags behält alle Pods. Einen Pod zu löschen ist eine separate Aktion mit Bestätigung.
 
-1. Bitte Codex, die Gruppe eines Pods zu setzen, oder öffne den Pod-Editor mit Details öffnen und wähle unter Einstellungen die Gruppe; ein neuer Name legt die Gruppe an. Namen enthalten 1–100 Zeichen; bis zu fünfzig Gruppen werden unterstützt.
-2. Vergib Tags nach Bereich, etwa mit dem Gruppennamen, um eine Gruppe im Tab Automatisierungen allein zu zeigen.
-3. Benenne eine Gruppe über Codex um oder entferne sie; das Entfernen behält alle Pods und verschiebt sie nach Nicht gruppiert.
+1. Öffne einen Pod im Tab Automatisierungen und bearbeite Tags, oder bitte Codex, ihn zu taggen.
+2. Vergib Tags nach Bereich, etwa mit einem Firmennamen, und wähle diesen Tag im Tab Automatisierungen, um diese Pods allein zu zeigen.
+3. Entferne einen Tag von seinen Pods, um ihn aufzugeben; die Pods bleiben.
 
 ## Übersicht
 
@@ -356,7 +356,7 @@ Wähle eine Anwendung aus, um ihre HTTPS-Hostnamen hinzuzufügen oder zu entfern
 
 ## Einstellungen
 
-Einstellungen enthält Name, Gruppe, Pod-Identität, Zeitplan und Limits sowie Weitere Optionen. Die Beschreibung bearbeitest du direkt in Übersicht. Umbenennen erhält Arbeit und Berechtigungen.
+Einstellungen enthält Name, Pod-Identität, Zeitplan und Limits sowie Weitere Optionen. Die Beschreibung bearbeitest du direkt in Übersicht. Umbenennen erhält Arbeit und Berechtigungen.
 
 Weitere Optionen kann einen Pod archivieren oder einen archivierten Pod nach nativer Bestätigung löschen. Lokale Daten und Variablen werden entfernt. Gemeinsame Konten und ursprüngliche Referenzdateien bleiben; gespeicherte Gesprächshistorie folgt den bestehenden Aufbewahrungsregeln.
 
@@ -453,7 +453,7 @@ Frühere Versionen verbanden Pods über Netze. Netze wurden abgelöst; ihre Hist
 
 Der verbundene Codex auf diesem Mac verwaltet Pods direkt: Variablen und Ressourcen, Skriptvalidierung und Aktivierung, Zeitpläne, Start und Wiederherstellung von Läufen sowie Namensräume gemeinsamer Daten mit ihrem Schreiber und ihren Lesern. Eine globale Node-Installation ist nicht nötig; Pods liefert seine Laufzeit mit.
 
-Neue Automatisierung mit Codex im Tab Automatisierungen schreibt einen Auftrag mit der gewählten Gruppe oder dem gewählten Knoten und den Pods, die es schon kennt; der Desktop öffnet Codex, der Browser kopiert den Auftrag zum Einfügen.
+Neue Automatisierung mit Codex im Tab Automatisierungen schreibt einen Auftrag mit den Tags des angehefteten Pods oder Knotens und den Pods, die es schon kennt; der Desktop öffnet Codex, der Browser kopiert den Auftrag zum Einfügen.
 
 Jede Codex-Sitzung braucht zuerst deine Anmeldung. Solange du auf diesem Mac mit apes login angemeldet bist, öffnet Pods die Sitzung beim ersten Aufruf ohne Rückfrage. Andernfalls öffnet Pods die DDISA-Anmeldung im Browser und fragt danach in der Pods-App, ob Codex für eine Stunde vollen Zugriff auf Pods erhält; bestätige nur eine Anfrage, die du gerade selbst gestellt hast. Codex wiederholt dann den Aufruf. Nach der Stunde oder nach Sitzung beenden in den Einstellungen fragt Pods erneut, ohne dass Codex neu starten muss. Innerhalb der Sitzung richten sich Rückfragen nach den Einstellungen des Codex-Clients; Pods hat keine zusätzliche Freigabewarteschlange. Codex handelt mit deiner Identität: Es kann die Rückfrage eines Pods beantworten, eine Freigabe beim Identity Provider öffnen, Rechte, die deine Pods anfragen, genehmigen oder ablehnen (auch eine wartende Lauffreigabe) und sie widerrufen. Es kann nur Rechte entscheiden, die ein Pod von dir für sich selbst angefragt hat; nach dem Ende der Sitzung warten Freigaben wieder auf den Identity Provider. Voller Zugriff hebt Skriptvalidierung, Revisionsprüfungen und echte Anmeldungen bei Anbietern nicht auf.
 
@@ -461,7 +461,7 @@ Codex erhält Ressourcenmetadaten und Laufstatus, keine Kontotokens, Pod-Schlüs
 
 Pods muss laufen. Öffne es nach Verschieben oder Neuinstallation einmal, damit der Launcher aktualisiert wird.
 
-Trenne die Verbindung unter Desktop-Einstellungen → Work from Codex (Zahnradmenü → Weitere Einstellungen). Selbst bearbeitete Codex-Einträge lässt Pods unverändert; entferne sie mit codex mcp remove openape-pods.
+Trenne die Verbindung unter ⚙ Einstellungen → Work from Codex. Selbst bearbeitete Codex-Einträge lässt Pods unverändert; entferne sie mit codex mcp remove openape-pods.
 
 1. Verbinde Codex unter Desktop-Einstellungen → Work from Codex.
 2. Starte Codex einmal neu.
@@ -481,6 +481,6 @@ Im Browser kannst du einen Import auf dem verbundenen Desktop prüfen und einric
 
 1. Öffne die Detailseite eines Pods und wähle Exportieren…; lege Pakettitel, Schlüssel, Aliase, aufgenommene Dateien und öffentliche Vorgaben fest.
 2. Prüfe das exakte Paket und seine Datenschutzfunde, bestätige, was du geprüft hast, und speichere die .openape-Datei.
-3. Öffne auf dem empfangenden Gerät das Zahnradmenü → Portable Pods → Importieren… und öffne die Paketdatei.
+3. Öffne auf dem empfangenden Gerät ⚙ Einstellungen → Portable Pods → Importieren… und öffne die Paketdatei.
 4. Gib die erforderlichen Werte ein, erstelle die pausierte Kopie, binde dann auf jedem Pod Ordner, Ziele und Anwendungen und lege Geheimnisse an.
 5. Schließe die Einrichtung ab, validiere und aktiviere den Pod; aktiviere seinen Zeitplan erst, wenn du bereit bist.

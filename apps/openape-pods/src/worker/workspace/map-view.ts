@@ -24,10 +24,8 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
   const from = at - mapWindowMs
   const db = store.db
   const hidden = new Set(published ? db.prepare(privatePods).all().map(row => row.pod_id as string) : [])
-  const groups = db.prepare('SELECT g.id,g.name,m.pod_id FROM pod_groups g JOIN pod_memberships m ON m.group_id=g.id').all()
   const tagged = new Map(new ItemTagStore(store).view().map(item => [item.id, { own: item.tags, revision: item.revision }]))
   const tagsOf = (id: string) => tagged.has(id) ? { tags: tagged.get(id)! } : {}
-  const groupOf = (podId: string) => groups.find(row => row.pod_id === podId)
   const descriptions = new Map(db.prepare('SELECT pod_id,body FROM pod_descriptions').all().map(row => [row.pod_id as string, descriptionSummary(row.body as string)]))
   const runsInWindow = counter(db.prepare('SELECT pod_id,count(*) AS count FROM runs WHERE started_at>=? GROUP BY pod_id').all(from), 'pod_id')
   const runTotals = counter(db.prepare('SELECT pod_id,count(*) AS count FROM runs GROUP BY pod_id').all(), 'pod_id')
@@ -112,9 +110,8 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
     const readsData = readers.filter(row => row.pod_id === pod.id).map(row => String(row.path))
     const kind = writesData.length && !manifests.get(pod.id)?.work?.length ? 'source' : ai ? 'decision' : effect ? 'effect' : 'code'
     const queue = blocked.find(row => row.pod_id === pod.id)
-    const membership = groupOf(pod.id)
     pods.push({
-      id: pod.id, name: pod.name, revision: pod.revision, script: pod.activeScript, description: descriptions.get(pod.id) || null, group: membership?.name as string ?? null, groupId: membership?.id as string ?? null, lifecycle: pod.lifecycle, draft: pod.activeScript === null,
+      id: pod.id, name: pod.name, revision: pod.revision, script: pod.activeScript, description: descriptions.get(pod.id) || null, lifecycle: pod.lifecycle, draft: pod.activeScript === null,
       kind, ai, data: { writes: writesData, reads: readsData }, work: { pending: pending[pod.id] ?? 0, held: held[pod.id] ?? 0 }, resources: mapped, secrets,
       schedule: schedules.get(pod.id) ?? null, lastRun: local ? lastRuns.get(pod.id) ?? null : null, runs: local ? runTotals[pod.id] ?? 0 : 0,
       queue: local ? { blocked: Number(queue?.count ?? 0), error: (queue?.error as string | null) ?? null } : { blocked: 0, error: null },

@@ -2,7 +2,7 @@
 import { expect, it } from 'vitest'
 import type { MapView } from '../../src/contracts/map-view'
 import { parseMapView } from '../../src/contracts/map-view'
-import { IDP, YOU, buildModel, curve, edgeWidth, geometry, hitTest, particleCount, relayout, step, ungrouped, visibleNodes } from '../../src/renderer/utils/automation-layout'
+import { IDP, YOU, buildModel, curve, edgeWidth, geometry, hitTest, particleCount, relayout, step, visibleNodes } from '../../src/renderer/utils/automation-layout'
 import { kpiFacts } from '../../src/renderer/utils/kpis'
 import { withTags } from '../../src/renderer/utils/tags'
 import fixture from './map-view.json'
@@ -23,7 +23,7 @@ it('turns the read model into columns: systems, pods, sinks, authorities; questi
   expect(kind(YOU)).toBe('auth'); expect(kind(IDP)).toBe('auth')
   expect(model.nodes.find(node => node.id === YOU)!.badge).toBe(17)
   expect(model.nodes.some(node => node.name === 'Archived research')).toBe(false)
-  expect(model.nodes.find(node => node.name === 'zaz Service-Agent')!.group).toBe(ungrouped)
+  expect(model.nodes.find(node => node.name === 'zaz Service-Agent')!.kind).toBe('pod')
   const classification = byName('Mail-Klassifizierung').id
   expect(model.links.find(link => link.from === classification && link.to === YOU)).toMatchObject({ type: 'auth', label: 'question', flow: 17 })
   expect(model.links.find(link => link.from === byName('Newsletter-Prüfung').id && link.to === IDP)).toMatchObject({ type: 'auth', label: 'approval', flow: 4 })
@@ -48,7 +48,7 @@ it('lays Pods that share data out in layers, the others in a row, and lets the c
   expect(systems.every(item => item.tx === geometry.systemX)).toBe(true)
   expect(Math.max(...systems.map(item => item.ty))).toBeLessThanOrEqual(full.height - 60)
   const tagged = structuredClone(view)
-  for (const item of tagged.pods.filter(item => item.group === 'iurio')) item.tags = { own: ['iurio'], revision: 1 }
+  for (const item of tagged.pods.filter(item => item.name.startsWith('IURIO'))) item.tags = { own: ['iurio'], revision: 1 }
   const filtered = withTags(tagged, ['iurio'])
   const iurio = relayout(buildModel(filtered), filtered, all)
   const visible = visibleNodes(iurio, all)

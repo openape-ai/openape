@@ -76,7 +76,7 @@ describe('workspace shell with the production stylesheet', () => {
   })
 
   it('shows the empty workspace in light, dark and the minimum compact window', async () => {
-    await mountWorkspace({ workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: [] }) })
+    await mountWorkspace({ workspace: async () => ({ pods: [] }) })
     expect(wrapper!.text()).toContain('No pods yet')
     for (const scheme of ['light', 'dark'] as const) {
       await show(1060, 850, scheme)

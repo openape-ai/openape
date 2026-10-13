@@ -2,7 +2,6 @@
 import { t, diagnostic } from '../i18n'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { CentralStatus } from '../../contracts/central'
-import type { Organization } from '../../contracts/groups'
 import CentralWorkspace from './CentralWorkspace.vue'
 import LocalShell from './LocalShell.vue'
 import { desktopWorkspaceClient } from './client'
@@ -16,13 +15,13 @@ import type { PortableSourceSelection, SharingCommand } from '../../contracts/sh
 
 /**
  * The registered desktop: the shell is the landing page; the Pod editor, portable packages and the
- * advanced native settings open from it and return with one button.
+ * settings page open from it and return with one button. The shell stays mounted behind those pages,
+ * so returning shows the last map at once instead of loading the workspace again.
  */
 const invoke = window.pods.central!
 const client = desktopWorkspaceClient(invoke)
 const page = ref<'Automations' | 'Pods' | 'App settings' | 'Sharing'>('Automations')
 const workspace = ref<InstanceType<typeof CentralWorkspace> | null>(null)
-const organization = ref<Organization>({ revision: 1, groups: [] })
 const sharing = ref<{ mode: 'import' } | { mode: 'export', selection: PortableSourceSelection } | null>(null)
 const sharingApi = (command: SharingCommand) => window.pods.sharing!(command)
 const podResources = (podId: string) => window.pods.resources({ type: 'list', podId })
@@ -33,9 +32,8 @@ let timer: ReturnType<typeof setTimeout> | undefined
 let closed = false
 async function poll() {
   try {
-    const [value, state] = await Promise.all([invoke({ type: 'status' }), window.pods.workspace({ type: 'list' })])
+    const value = await invoke({ type: 'status' })
     status.value = (value as CentralStatus & { enabled?: boolean }).enabled === false ? null : value as CentralStatus; error.value = ''
-    if (state.organization.revision >= organization.value.revision) organization.value = state.organization
   }
   catch (cause) { error.value = String(cause) }
   if (!closed) timer = setTimeout(() => { void poll() }, 1000)
@@ -72,12 +70,14 @@ defineExpose({ openPod })
     <button v-if="page !== 'Automations'" class="text-button" data-testid="back-to-automations" @click="back">
       ‹ {{ t('Automations') }}
     </button>
-    <LocalShell v-if="page === 'Automations'" sharing @open-pod="openPod" @share="share" @advanced="page = 'App settings'" @import="importPackage" />
+    <div v-show="page === 'Automations'">
+      <LocalShell sharing :paused="page !== 'Automations'" @open-pod="openPod" @share="share" @settings="page = 'App settings'" />
+    </div>
     <template v-if="page === 'Sharing' && sharing">
       <SharingImport v-if="sharing.mode === 'import'" :api="sharingApi" desktop :resources="podResources" @open-pod="openPod" />
       <SharingExport v-else :key="sharing.selection.id" :selection="sharing.selection" :api="sharingApi" @done="back" />
     </template>
-    <AppSettings v-if="page === 'App settings'">
+    <AppSettings v-if="page === 'App settings'" sharing @import="importPackage">
       <template v-if="!status?.runtimeId" #connection>
         <section class="desktop-connection">
           <h3>{{ t('Desktop connection') }}</h3><p class="muted">
