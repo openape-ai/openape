@@ -229,7 +229,10 @@ describe('program approvals (issue 1468)', () => {
     // Arguments stay unambiguous; hidden characters are refused rather than replaced.
     const spaced = f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: ['commit', '-m', 'two words', ''] } }, 'Commit')
     expect(spaced.title).toBe('Commit: git commit -m "two words" ""')
-    expect(ask(['push', 'origin', 'feature/x\u202Egnp.exe'])).toThrow('direction characters')
+    // Only printable ASCII is shown; any other code point (direction isolates, variation selectors, letters) is refused.
+    for (const hidden of ['feature/x\u202Egnp.exe', 'feature/\u2066x', 'main\uFE0F', 'caf\u00E9', 'tab\tx']) expect(ask(['push', 'origin', hidden])).toThrow('only printable ASCII')
+    expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'g\u2066it', argv: ['push'] } }, 'Push')).toThrow('only printable ASCII')
+    expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: ['push', 'origin', 'main'] } }, 'Push \u2066main')).toThrow('cannot be shown complete')
     expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease) } }, 'x'.repeat(201))).toThrow('cannot be shown complete')
   })
 
