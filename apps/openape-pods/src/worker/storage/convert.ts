@@ -2,10 +2,11 @@ import { createHash, randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { normalizeTag, tagLimits } from '@openape/pods-protocol'
 import { StorageError } from './errors.ts'
-import { baselineSchema } from './schema.ts'
+import { baselineSchema, schemaVersion } from './schema.ts'
 
 /**
- * One-way conversion of a schema-47 profile into schema 48 (issue 1465); convertGroups continues to schema 49. It refuses before any change while legacy
+ * One-way conversion of a schema-47 profile into schema 48 (issue 1465); convertGroups continues to schema 49 and
+ * convertApprovals to schema 50. It refuses before any change while legacy
  * network work is open, archives every row of the retired network runtime unchanged in legacy_records (verified by
  * count and digest), carries archive effects into the generalized effect ledger and member checkpoints into each
  * Pod's private state, rebuilds the tables whose definition changed and records a conversion receipt.
@@ -20,7 +21,19 @@ const knownSchemas: Record<number, { objects: number, digest: string }> = {
   46: { objects: 147, digest: '4e022a881674f2f188a0a8397e0068e2d4e49147593ece1b813f61d855c41d1f' },
   47: { objects: 148, digest: '220a37d6c30b66ccf0ca88302791f006b3cd38e1290635b5f1ad448d3218901c' },
   48: { objects: 104, digest: '48af432be41c9c98cf89ea081c326ea156775bde3e73c1dd06fadda60ed1e7d9' },
+  49: { objects: 100, digest: '601fc34efb6fd577153621c2c2555cb858225ba6e647b9252e63f5dd9c83b82a' },
 }
+
+/** Schema 49 differs from the current baseline only in two CHECKs of action_approvals (issue 1468). */
+const schema50Approvals: [current: string, previous: string][] = [
+  ['action TEXT NOT NULL CHECK(action IN (\'mail.archive\',\'program.run\')),', 'action TEXT NOT NULL CHECK(action IN (\'mail.archive\')),'],
+  ['title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 720),', 'title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 120),'],
+]
+/** The complete schema 49, the target of the older conversions before the approvals step. */
+export const schema49 = schema50Approvals.reduce((schema, [current, previous]) => {
+  if (schema.split(current).length !== 2) throw new Error('The baseline lacks a schema-50 approval check')
+  return schema.replace(current, previous)
+}, baselineSchema)
 
 /** The owner groups of schemas 46 to 48; schema 49 keeps them as tags (issue 1468). */
 export const schema48Groups = `CREATE TABLE pod_organization(id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL);
@@ -101,7 +114,7 @@ export function convert47(database: DatabaseSync): ConversionReceipt {
   assertKnownSchema(database, 47)
   assertNoOpenNetworkWork(database)
   // Schema 48 still had the owner groups; convertGroups retires them afterwards.
-  const target = statements(`${baselineSchema};${schema48Groups}`)
+  const target = statements(`${schema49};${schema48Groups}`)
   const existing = new Set((database.prepare('SELECT name FROM sqlite_schema WHERE type=\'table\'').all() as { name: string }[]).map(row => row.name))
   const renamed: Record<string, string> = { owners: 'network_owners' }
   // New tables first: history, effects and the shared data model.
@@ -218,13 +231,39 @@ export function convertGroups(database: DatabaseSync): GroupsReceipt {
   const tagged = database.prepare('SELECT 1 FROM item_tags t, json_each(t.tags) j WHERE t.id=? AND j.value=?')
   if (migrated.some(([podId, tag]) => !tagged.get(podId, tag))) throw new StorageError('invalid-data', 'A group membership did not become a tag')
   for (const table of groupTables) database.exec(`DROP TABLE "${table}"`)
-  const target = statements(baselineSchema)
-  const remaining = objects(database).filter(item => !target.some(statement => statement.name === item.name && statement.sql === item.sql))
-  if (remaining.length || objects(database).length !== target.length) throw new StorageError('invalid-data', `The converted schema differs from schema 49: ${remaining.map(item => item.name).join(', ') || 'missing objects'}`)
-  if (database.prepare('PRAGMA foreign_key_check').get()) throw new StorageError('invalid-data', 'The conversion found an inconsistent reference')
+  assertSchema(database, schema49, 49)
   const receipt: GroupsReceipt = { from: 48, archived, tags, skipped, at: new Date().toISOString() }
   database.prepare('INSERT INTO storage_receipts VALUES(?,\'conversion\',?,?)').run(randomUUID(), JSON.stringify(receipt), Date.now())
   return receipt
+}
+
+/** A converted database has exactly the objects of `schema` and consistent references. */
+function assertSchema(database: DatabaseSync, schema: string, version: number): void {
+  const target = statements(schema)
+  const remaining = objects(database).filter(item => !target.some(statement => statement.name === item.name && statement.sql === item.sql))
+  if (remaining.length || objects(database).length !== target.length) throw new StorageError('invalid-data', `The converted schema differs from schema ${version}: ${remaining.map(item => item.name).join(', ') || 'missing objects'}`)
+  if (database.prepare('PRAGMA foreign_key_check').get()) throw new StorageError('invalid-data', 'The conversion found an inconsistent reference')
+}
+
+/**
+ * Schema 49 to 50 (issue 1468): object approvals also name exact program commands, whose titles show the complete
+ * command. Only the CHECKs of action_approvals changed, so that table is rebuilt from the baseline with its rows and
+ * rowids unchanged. It runs inside the caller's transaction with foreign keys off, after the verified pre-upgrade backup.
+ */
+export function convertApprovals(database: DatabaseSync): void {
+  assertKnownSchema(database, 49)
+  const rows = count(database, 'SELECT count(*) FROM action_approvals')
+  database.exec('DROP INDEX action_approvals_state')
+  database.exec('PRAGMA legacy_alter_table=ON')
+  database.exec('ALTER TABLE action_approvals RENAME TO conversion_action_approvals')
+  database.exec('PRAGMA legacy_alter_table=OFF')
+  for (const statement of statements(baselineSchema).filter(item => item.table === 'action_approvals')) database.exec(statement.sql)
+  const list = ['rowid', ...columns(database, 'action_approvals').map(column => `"${column}"`)].join(',')
+  database.exec(`INSERT INTO action_approvals(${list}) SELECT ${list} FROM conversion_action_approvals ORDER BY rowid`)
+  if (count(database, 'SELECT count(*) FROM action_approvals') !== rows) throw new StorageError('invalid-data', 'Rebuilding action_approvals lost rows')
+  database.exec('DROP TABLE conversion_action_approvals')
+  assertSchema(database, baselineSchema, schemaVersion)
+  database.prepare('INSERT INTO storage_receipts VALUES(?,\'conversion\',?,?)').run(randomUUID(), JSON.stringify({ from: 49, rebuilt: ['action_approvals'], rows, at: new Date().toISOString() }), Date.now())
 }
 
 /** The tag table of schema 47, added to a schema-46 database before its conversion. */

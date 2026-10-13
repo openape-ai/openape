@@ -77,6 +77,15 @@ export function parseProgramArgv(value: unknown): string[] {
   if (!Array.isArray(value) || value.length < 1 || value.length > 64 || value.some(item => typeof item !== 'string' || item.length > 4096 || /[\0\r\n]/.test(item)) || JSON.stringify(value).length > 16000) throw new Error('Invalid program arguments')
   return [...value]
 }
+/** One exact application command and the program approval it runs with (issue 1468). */
+export interface ApprovedInvocation { application: string, argv: string[], approval: string }
+
+/** A script's tools.invoke with an `approval`, and the same call from the worker to the desktop. */
+export function parseApprovedInvocation(value: unknown): ApprovedInvocation {
+  const input = value as Record<string, unknown> | null
+  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['application', 'argv', 'approval'].includes(key)) || typeof input.application !== 'string' || !input.application || typeof input.approval !== 'string' || !/^[\w-]{1,64}$/.test(input.approval)) throw new Error('An approved command names its application, exact argv and approval')
+  return { application: input.application, argv: parseProgramArgv(input.argv), approval: input.approval }
+}
 export function parseCommandLine(line: string): string[] {
   const args: string[] = []; let word = ''; let quote = ''; let started = false; let escape = false
   for (const character of line) {
