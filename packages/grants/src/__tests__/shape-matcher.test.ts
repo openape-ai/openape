@@ -67,6 +67,124 @@ describe('matchArgvToOperation', () => {
   })
 })
 
+describe('declared value options', () => {
+  const mergeBase: ShapeMatchOperation = { id: 'merge-base', command: ['merge-base'], positionals: ['commit', 'other'], display: '{commit} {other}', action: 'read', risk: 'low', resource_chain: ['repo:*'] }
+
+  it('keeps the legacy rule without value_options: an undeclared long option swallows the next token', () => {
+    expect(matchArgvToOperation([mergeBase], ['merge-base', '--is-ancestor', 'A', 'B'])).toBeNull()
+    expect(matchArgvToOperation([{ ...mergeBase, positionals: ['other'] }], ['merge-base', '--is-ancestor', 'A', 'B'])?.bindings)
+      .toEqual({ 'is-ancestor': 'A', 'other': 'B' })
+  })
+
+  it('keeps declared flag_options as flags so positionals stay positionals', () => {
+    const match = matchArgvToOperation([{ ...mergeBase, value_options: [], flag_options: ['is-ancestor'] }], ['merge-base', '--is-ancestor', 'A', 'B'])
+    expect(match?.bindings).toEqual({ 'is-ancestor': 'true', 'commit': 'A', 'other': 'B' })
+  })
+
+  it('fails closed on any undeclared option once options are declared', () => {
+    const fetch: ShapeMatchOperation = { id: 'fetch', command: ['fetch'], positionals: ['remote'], value_options: [], flag_options: ['prune'], display: 'Fetch', action: 'read', risk: 'low', resource_chain: ['repo:*'] }
+    expect(matchArgvToOperation([fetch], ['fetch', '--prune', 'origin'])?.operation.id).toBe('fetch')
+    for (const argv of [
+      ['fetch', '--upload-pack=x', 'origin'],
+      ['fetch', '--upload-pack', 'x', 'origin'],
+      ['fetch', 'origin', '--upload-pack', 'x'],
+      ['fetch', '-u', 'x', 'origin'],
+      ['fetch', '-c', 'core.sshCommand=x', 'origin'],
+      ['fetch', '--exec=x', 'origin'],
+      ['fetch', '-pu', 'origin'],
+      ['fetch', '--', 'origin'],
+    ]) {
+      expect(matchArgvToOperation([fetch], argv), argv.join(' ')).toBeNull()
+    }
+  })
+
+  it('matches the exact dash form of declared options only', () => {
+    const status: ShapeMatchOperation = { id: 'status', command: ['status'], value_options: ['n'], flag_options: ['porcelain', 'prune', 's', 'b', 'C'], display: 'Status', action: 'read', risk: 'low', resource_chain: ['repo:*'] }
+    expect(matchArgvToOperation([status], ['status', '--porcelain', '-s', '-n', '5'])?.bindings).toEqual({ porcelain: 'true', s: 'true', n: '5' })
+    expect(matchArgvToOperation([status], ['status', '--porcelain=v2'])?.bindings.porcelain).toBe('v2')
+    for (const argv of [
+      ['status', '-porcelain'],
+      ['status', '-prune'],
+      ['status', '--C'],
+      ['status', '--s'],
+      ['status', '-Cfoo'],
+      ['status', '-n5'],
+      ['status', '--n=5'],
+      ['status', '-5'],
+      ['status', '-n'],
+      ['status', '-n', '-s'],
+      ['status', '--'],
+    ]) {
+      expect(matchArgvToOperation([status], argv), argv.join(' ')).toBeNull()
+    }
+  })
+
+  it('accepts a single-dash bundle only when every letter is a declared flag', () => {
+    const operation: ShapeMatchOperation = { id: 'status', command: ['status'], value_options: ['n'], flag_options: ['s', 'b'], display: 'Status', action: 'read', risk: 'low', resource_chain: ['repo:*'] }
+    expect(matchArgvToOperation([operation], ['status', '-sb'])?.bindings).toEqual({ s: 'true', b: 'true' })
+    expect(matchArgvToOperation([operation], ['status', '-sn', '5'])).toBeNull()
+    expect(matchArgvToOperation([operation], ['status', '-sx'])).toBeNull()
+    const commit: ShapeMatchOperation = { id: 'commit', command: ['commit'], required_options: ['m'], flag_options: ['a'], display: '{m}', action: 'create', risk: 'low', resource_chain: ['commit:*'] }
+    expect(matchArgvToOperation([commit], ['commit', '-a', '-m', 'msg'])?.bindings.m).toBe('msg')
+    expect(matchArgvToOperation([commit], ['commit', '-am', 'msg'])).toBeNull()
+  })
+
+  it('also declares options with flag_options alone', () => {
+    const operation: ShapeMatchOperation = { ...mergeBase, flag_options: ['is-ancestor'] }
+    expect(matchArgvToOperation([operation], ['merge-base', '--is-ancestor', 'A', 'B'])?.bindings.commit).toBe('A')
+    expect(matchArgvToOperation([operation], ['merge-base', '--upload-pack', 'A', 'B'])).toBeNull()
+  })
+
+  it('binds values for value_options and required_options only', () => {
+    const operation: ShapeMatchOperation = { ...mergeBase, value_options: ['onto'], required_options: ['m'], flag_options: ['quiet'] }
+    expect(matchArgvToOperation([operation], ['merge-base', '--onto', 'X', '-m', 'msg', '--quiet', 'A', 'B'])?.bindings)
+      .toEqual({ onto: 'X', m: 'msg', quiet: 'true', commit: 'A', other: 'B' })
+    expect(matchArgvToOperation([operation], ['merge-base', '--onto=X', '-m', 'msg', 'A', 'B'])?.bindings.onto).toBe('X')
+  })
+})
+
+describe('global options', () => {
+  const status: ShapeMatchOperation = { id: 'status', command: ['status'], global_options: ['C=repo'], display: 'Status', action: 'read', risk: 'low', resource_chain: ['repo:path={repo}'] }
+
+  it('consumes declared global options before the command prefix and binds them', () => {
+    const match = matchArgvToOperation([status], ['-C', '/work/repo', 'status'])
+    expect(match?.bindings).toEqual({ repo: '/work/repo' })
+    expect(buildCliAuthDetail('git', match!.operation, match!.bindings).permission).toBe('git.repo[path=/work/repo]#read')
+  })
+
+  it('keeps matching without the global option', () => {
+    expect(matchArgvToOperation([status], ['status'])?.operation.id).toBe('status')
+  })
+
+  it('rejects undeclared leading options and a global option without value', () => {
+    expect(matchArgvToOperation([status], ['-c', 'core.sshCommand=x', 'status'])).toBeNull()
+    expect(matchArgvToOperation([status], ['-C', '--', 'status'])).toBeNull()
+    expect(matchArgvToOperation([status], ['-C'])).toBeNull()
+  })
+
+  it('binds a global option only in its exact dash form', () => {
+    for (const argv of [['--C', '/repo', 'status'], ['-C/repo', 'status'], ['-Crepo', 'status'], ['--C=/repo', 'status']]) {
+      expect(matchArgvToOperation([status], argv), argv.join(' ')).toBeNull()
+    }
+    expect(matchArgvToOperation([{ ...status, global_options: ['git-dir'] }], ['-git-dir', '/x', 'status'])).toBeNull()
+  })
+
+  it('rejects a repeated global option', () => {
+    expect(matchArgvToOperation([status], ['-C', '/work', '-C', 'repo', 'status'])).toBeNull()
+    expect(matchArgvToOperation([{ ...status, global_options: ['git-dir'] }], ['--git-dir=/a', '--git-dir', '/b', 'status'])).toBeNull()
+  })
+
+  it('never lets an operation option or positional replace a global binding', () => {
+    expect(matchArgvToOperation([{ ...status, positionals: ['repo'] }], ['-C', '/secret', 'status', '/allowed'])).toBeNull()
+    expect(matchArgvToOperation([status], ['-C', '/secret', 'status', '--repo', '/allowed'])).toBeNull()
+  })
+
+  it('uses the option name as binding when no binding is given', () => {
+    expect(matchArgvToOperation([{ ...status, global_options: ['git-dir'] }], ['--git-dir=/x/.git', 'status'])?.bindings)
+      .toEqual({ 'git-dir': '/x/.git' })
+  })
+})
+
 describe('buildCliAuthDetail', () => {
   it('builds a detail with rendered display, resource chain, and a canonical permission', () => {
     const m = matchArgvToOperation(ops, ['repo', 'list', 'openape'])!

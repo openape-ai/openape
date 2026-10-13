@@ -1,0 +1,324 @@
+schema = "openape-shapes/v1"
+
+# Extended standard git adapter (issue 1468). Operation ids, commands,
+# positionals, actions and resource chains up to "tag" equal
+# shapes-registry adapters/git/adapter.toml, so an argv that still matches
+# derives the same permission.
+#
+# Every operation that is not bound to the exact command declares its options:
+# value_options take a value, flag_options are flags, and any other option
+# makes the operation not match. git reads some options as commands to run
+# (`--upload-pack`, `--receive-pack`, `--exec`, `-c`, `--config`), so an
+# undeclared option must never pass a non-exact grant. Such an argv needs its
+# own exact-command grant.
+#
+# New write operations use their own action (rebase, push) so existing
+# repo-wide "edit" grants never cover them. `git rebase --abort` keeps matching
+# the exact-command operation git.rebase.
+
+[cli]
+id = "git"
+executable = "git"
+audience = "shapes"
+version = "2"
+# `git -C <path> …` before the subcommand, bound as {repo}. Repeating it never matches.
+global_options = ["C=repo"]
+
+# ══════════════════════════════════════════════════════
+# READ Operations
+# ══════════════════════════════════════════════════════
+
+[[operation]]
+id = "git.status"
+command = ["status"]
+value_options = []
+flag_options = ["porcelain", "short", "s", "branch", "b", "untracked-files", "ignored", "z"]
+display = "Show working tree status"
+action = "read"
+risk = "low"
+resource_chain = ["repo:*"]
+
+[[operation]]
+id = "git.log"
+command = ["log"]
+value_options = ["max-count", "n", "format", "pretty", "since", "until", "author", "grep"]
+flag_options = ["oneline", "graph", "decorate", "all", "stat", "name-only", "name-status", "no-merges", "first-parent", "reverse"]
+display = "Show commit log"
+action = "read"
+risk = "low"
+resource_chain = ["repo:*"]
+
+[[operation]]
+id = "git.diff"
+command = ["diff"]
+value_options = []
+flag_options = ["stat", "shortstat", "cached", "staged", "name-only", "name-status", "quiet", "exit-code", "no-color", "no-ext-diff", "no-textconv"]
+display = "Show changes"
+action = "read"
+risk = "low"
+resource_chain = ["repo:*"]
+
+[[operation]]
+id = "git.branch"
+command = ["branch"]
+value_options = []
+flag_options = ["list", "a", "all", "r", "remotes", "v", "vv", "show-current", "merged", "no-merged"]
+display = "List or manage branches"
+action = "read"
+risk = "low"
+resource_chain = ["repo:*"]
+
+[[operation]]
+id = "git.remote"
+command = ["remote"]
+value_options = []
+flag_options = ["v", "verbose"]
+display = "Show remotes"
+action = "read"
+risk = "low"
+resource_chain = ["repo:*"]
+
+# ══════════════════════════════════════════════════════
+# FETCH / PULL
+# ══════════════════════════════════════════════════════
+
+[[operation]]
+id = "git.fetch"
+command = ["fetch"]
+value_options = []
+flag_options = ["prune", "p", "tags", "no-tags", "all", "quiet", "q"]
+display = "Fetch from remote"
+action = "read"
+risk = "low"
+resource_chain = ["repo:*", "remote:*"]
+
+[[operation]]
+id = "git.pull"
+command = ["pull"]
+value_options = []
+flag_options = ["rebase", "no-rebase", "ff-only", "prune", "p", "quiet", "q"]
+display = "Pull from remote"
+action = "edit"
+risk = "medium"
+resource_chain = ["repo:*", "remote:*"]
+
+# ══════════════════════════════════════════════════════
+# STAGING
+# ══════════════════════════════════════════════════════
+
+[[operation]]
+id = "git.add"
+command = ["add"]
+positionals = ["path"]
+value_options = []
+flag_options = ["A", "all", "u", "update", "N", "intent-to-add"]
+display = "Stage changes: {path}"
+action = "edit"
+risk = "low"
+resource_chain = ["repo:*", "file:path={path}"]
+
+# ══════════════════════════════════════════════════════
+# COMMIT
+# ══════════════════════════════════════════════════════
+
+[[operation]]
+id = "git.commit"
+command = ["commit"]
+required_options = ["m"]
+value_options = []
+flag_options = ["a", "all", "s", "signoff", "quiet", "q"]
+display = "Commit: {m}"
+action = "create"
+risk = "medium"
+resource_chain = ["repo:*", "commit:*"]
+
+# ══════════════════════════════════════════════════════
+# PUSH
+# ══════════════════════════════════════════════════════
+
+[[operation]]
+id = "git.push"
+command = ["push"]
+value_options = []
+flag_options = ["tags", "follow-tags", "set-upstream", "u", "quiet", "q"]
+display = "Push to remote"
+action = "edit"
+risk = "high"
+resource_chain = ["repo:*", "remote:*"]
+
+# ══════════════════════════════════════════════════════
+# CLONE
+# ══════════════════════════════════════════════════════
+
+[[operation]]
+id = "git.clone"
+command = ["clone"]
+positionals = ["url"]
+value_options = ["depth", "branch", "b"]
+flag_options = ["bare", "single-branch", "no-tags", "quiet", "q"]
+display = "Clone repository {url}"
+action = "create"
+risk = "low"
+resource_chain = ["repo:url={url}"]
+
+# ══════════════════════════════════════════════════════
+# BRANCH MANAGEMENT
+# ══════════════════════════════════════════════════════
+
+[[operation]]
+id = "git.checkout"
+command = ["checkout"]
+positionals = ["ref"]
+value_options = []
+flag_options = ["b", "B", "detach", "track", "t", "quiet", "q"]
+display = "Checkout {ref}"
+action = "edit"
+risk = "medium"
+resource_chain = ["repo:*", "ref:name={ref}"]
+
+[[operation]]
+id = "git.switch"
+command = ["switch"]
+positionals = ["branch"]
+value_options = []
+flag_options = ["c", "create", "C", "force-create", "detach", "quiet", "q"]
+display = "Switch to branch {branch}"
+action = "edit"
+risk = "medium"
+resource_chain = ["repo:*", "branch:name={branch}"]
+
+[[operation]]
+id = "git.merge"
+command = ["merge"]
+positionals = ["branch"]
+value_options = ["m"]
+flag_options = ["no-ff", "ff-only", "squash", "no-edit", "quiet", "q"]
+display = "Merge branch {branch}"
+action = "edit"
+risk = "high"
+resource_chain = ["repo:*", "branch:name={branch}"]
+
+# ══════════════════════════════════════════════════════
+# DESTRUCTIVE (bound to the exact command)
+# ══════════════════════════════════════════════════════
+
+[[operation]]
+id = "git.reset"
+command = ["reset"]
+display = "Reset current HEAD"
+action = "delete"
+risk = "high"
+exact_command = true
+resource_chain = ["repo:*"]
+
+[[operation]]
+id = "git.rebase"
+command = ["rebase"]
+display = "Rebase current branch"
+action = "edit"
+risk = "high"
+exact_command = true
+resource_chain = ["repo:*"]
+
+[[operation]]
+id = "git.stash"
+command = ["stash"]
+value_options = []
+flag_options = ["include-untracked", "u", "keep-index", "k", "quiet", "q"]
+display = "Stash changes"
+action = "edit"
+risk = "medium"
+resource_chain = ["repo:*"]
+
+[[operation]]
+id = "git.tag"
+command = ["tag"]
+positionals = ["name"]
+value_options = ["m"]
+flag_options = ["a", "annotate"]
+display = "Create tag {name}"
+action = "create"
+risk = "medium"
+resource_chain = ["repo:*", "tag:name={name}"]
+
+# ══════════════════════════════════════════════════════
+# WORKTREES AND MERGE CHECKS
+# ══════════════════════════════════════════════════════
+
+[[operation]]
+id = "git.worktree.list"
+command = ["worktree", "list"]
+value_options = []
+flag_options = ["porcelain", "v", "verbose", "z"]
+display = "List worktrees"
+action = "read"
+risk = "low"
+resource_chain = ["repo:*"]
+
+[[operation]]
+id = "git.fetch.remote"
+command = ["fetch"]
+positionals = ["remote"]
+value_options = []
+flag_options = ["prune", "p", "tags", "no-tags", "quiet", "q"]
+display = "Fetch from remote {remote}"
+action = "read"
+risk = "low"
+resource_chain = ["repo:*", "remote:*"]
+
+[[operation]]
+id = "git.merge-base"
+command = ["merge-base"]
+positionals = ["commit", "other"]
+value_options = []
+flag_options = ["is-ancestor", "all"]
+display = "Find the merge base of {commit} and {other}"
+action = "read"
+risk = "low"
+resource_chain = ["repo:*"]
+
+[[operation]]
+id = "git.merge-tree"
+command = ["merge-tree"]
+positionals = ["branch", "other"]
+value_options = ["merge-base"]
+flag_options = ["write-tree", "name-only", "no-messages", "messages", "quiet", "z"]
+display = "Test-merge {branch} with {other} without touching the worktree"
+action = "read"
+risk = "low"
+resource_chain = ["repo:*"]
+
+[[operation]]
+id = "git.rev-parse"
+command = ["rev-parse"]
+positionals = ["ref"]
+value_options = []
+flag_options = ["abbrev-ref", "symbolic-full-name", "verify", "short", "quiet", "q"]
+display = "Resolve {ref}"
+action = "read"
+risk = "low"
+resource_chain = ["repo:*"]
+
+[[operation]]
+id = "git.rebase.upstream"
+command = ["rebase"]
+positionals = ["upstream"]
+value_options = ["onto"]
+flag_options = ["autostash", "no-autostash", "update-refs", "quiet", "q"]
+display = "Rebase the current branch onto {upstream}"
+action = "rebase"
+risk = "high"
+exact_command = true
+resource_chain = ["repo:*"]
+
+[[operation]]
+id = "git.push.refspec"
+command = ["push"]
+positionals = ["remote", "refspec"]
+value_options = []
+flag_options = ["force-with-lease", "force", "f", "set-upstream", "u", "atomic", "quiet", "q"]
+display = "Push {refspec} to {remote}"
+action = "push"
+risk = "high"
+exact_command = true
+resource_chain = ["repo:*", "remote:name={remote}"]

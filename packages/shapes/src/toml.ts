@@ -36,6 +36,17 @@ function parseTomlValue(raw: string): unknown {
   return trimmed
 }
 
+const OPTION_NAME = /^[\w-]+$/
+const GLOBAL_OPTION = /^[\w-]+(?:=[\w-]+)?$/
+
+function optionalOptionList(value: unknown, field: string, owner: string, pattern: RegExp): string[] | undefined {
+  if (value === undefined)
+    return undefined
+  if (!Array.isArray(value) || value.some(entry => typeof entry !== 'string' || !pattern.test(entry)))
+    throw new Error(`${owner} has an invalid ${field}[]`)
+  return value as string[]
+}
+
 export function parseAdapterToml(content: string): ShapesAdapter {
   const result: AdapterTomlFile = {}
   const operations: ShapesOperation[] = []
@@ -97,6 +108,8 @@ export function parseAdapterToml(content: string): ShapesAdapter {
     throw new Error('Adapter must define at least one [[operation]] entry')
   }
 
+  const globalOptions = optionalOptionList((result.cli as Record<string, unknown>).global_options, 'global_options', 'Adapter cli', GLOBAL_OPTION)
+
   return {
     schema: result.schema,
     cli: {
@@ -115,11 +128,17 @@ export function parseAdapterToml(content: string): ShapesAdapter {
       if (typeof operation.id !== 'string' || typeof operation.display !== 'string' || typeof operation.action !== 'string') {
         throw new TypeError('Operation must define id, display, and action')
       }
+      const valueOptions = optionalOptionList(operation.value_options, 'value_options', `Operation ${operation.id}`, OPTION_NAME)
+      const flagOptions = optionalOptionList(operation.flag_options, 'flag_options', `Operation ${operation.id}`, OPTION_NAME)
       return {
         id: operation.id,
         command: operation.command as string[],
         ...(Array.isArray(operation.positionals) ? { positionals: operation.positionals as string[] } : {}),
         ...(Array.isArray(operation.required_options) ? { required_options: operation.required_options as string[] } : {}),
+        ...(valueOptions ? { value_options: valueOptions } : {}),
+        ...(flagOptions ? { flag_options: flagOptions } : {}),
+        // Global options are declared once on [cli] and apply to every operation.
+        ...(globalOptions?.length ? { global_options: globalOptions } : {}),
         display: operation.display,
         action: operation.action,
         risk: (operation.risk as ShapesOperation['risk']) || 'low',

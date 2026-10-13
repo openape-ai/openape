@@ -29,6 +29,8 @@ interface AdapterTomlOperation {
   command?: string[]
   positionals?: string[]
   required_options?: string[]
+  value_options?: string[]
+  flag_options?: string[]
   display: string
   action: string
   risk: 'low' | 'medium' | 'high' | 'critical'
@@ -38,7 +40,7 @@ interface AdapterTomlOperation {
 
 interface AdapterToml {
   schema: string
-  cli: { id: string, executable: string, audience?: string, version?: string }
+  cli: { id: string, executable: string, audience?: string, version?: string, global_options?: string[] }
   operation?: AdapterTomlOperation[]
 }
 
@@ -71,6 +73,10 @@ function loadShape(dir: string): ServerShape | null {
     command: op.command ?? [],
     positionals: op.positionals,
     required_options: op.required_options,
+    value_options: op.value_options,
+    flag_options: op.flag_options,
+    // Global options are declared once on [cli] and apply to every operation.
+    global_options: adapter.cli.global_options?.length ? adapter.cli.global_options : undefined,
     display: op.display,
     action: op.action,
     risk: op.risk,

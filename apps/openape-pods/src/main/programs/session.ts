@@ -66,7 +66,11 @@ export function assertDeclaredOptions(operation: DeclaredOptions, argv: string[]
   while (index < argv.length && !operation.command.every((word, offset) => argv[index + offset] === word)) {
     const token = argv[index]!
     if (!token.startsWith('-') || !passesDeclared(token, globals)) throw undeclared(token)
-    index += token.startsWith('--') && token.includes('=') ? 1 : 2
+    if (token.startsWith('--') && token.includes('=')) { index += 1; continue }
+    // Every global option takes a value; a missing or dash-led value would hide the next option from this check.
+    const value = argv[index + 1]
+    if (value === undefined || value.startsWith('-')) throw undeclared(token)
+    index += 2
   }
   const declared = new Set([...operation.required_options ?? [], ...operation.value_options ?? [], ...operation.flag_options ?? []])
   for (const token of argv.slice(index + operation.command.length)) {
