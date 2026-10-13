@@ -245,6 +245,11 @@ describe('owner questions', () => {
     const ask = (key: string, fingerprint: string) => f.questions.ask(run, { namespace: 'acme/mail/owner-answers', key, fingerprint, title: 'Newsletter?', body: '', options: [{ key: 'newsletter', title: 'Newsletter' }, { key: 'keep', title: 'Keep' }], data: { sender: 'a@example.com' } })
     const first = ask('m1', 'c1')
     expect(ask('m1', 'c1').id).toBe(first.id)
+    // Asking again while it waits refreshes the presentation of the same question.
+    expect(f.questions.ask(run, { namespace: 'acme/mail/owner-answers', key: 'm1', fingerprint: 'c1', title: 'Clearer?', body: 'Readable', options: [{ key: 'newsletter', title: 'Newsletter' }, { key: 'keep', title: 'Keep' }], data: { sender: 'a@example.com' } })).toMatchObject({ id: first.id, title: 'Clearer?', body: 'Readable', state: 'pending' })
+    ask('m9', 'c1')
+    expect(f.questions.withdraw(run, { namespace: 'acme/mail/owner-answers', key: 'm9' })).toEqual({ withdrawn: 1 })
+    expect(f.questions.pending().map(item => item.key)).toEqual(['m1'])
     expect(() => ask('policy', 'c1')).toThrow('not an answer')
     f.questions.answer(first.id, 'keep')
     expect(f.data.get(run, 'acme/mail/owner-answers/m1')!.value).toMatchObject({ option: 'keep', fingerprint: 'c1', question: { podId: f.classifier, data: { sender: 'a@example.com' } } })

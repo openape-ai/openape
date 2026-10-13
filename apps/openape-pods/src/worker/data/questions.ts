@@ -45,7 +45,12 @@ export class OwnerQuestions {
       if (!view.readers.includes(principal.podId)) throw new Error(`This Pod may not read ${namespace}`)
       if (!this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=? AND run_id=? AND boot_id NOT LIKE \'fenced:%\'').get(principal.podId, principal.runId)) throw new Error('Questions require the Pod\'s active run')
       const existing = this.store.db.prepare('SELECT * FROM owner_questions WHERE pod_id=? AND namespace=? AND key=? AND fingerprint=?').get(principal.podId, namespace, key, fingerprint)
-      if (existing) return question(existing)
+      if (existing && existing.state !== 'pending') return question(existing)
+      // Asking again about the same input refreshes how a waiting question is presented; it stays one question.
+      if (existing) {
+        this.store.db.prepare('UPDATE owner_questions SET title=?,body=?,options=?,data=? WHERE id=? AND state=\'pending\'').run(title, body, JSON.stringify(options), canonicalJson(data), existing.id)
+        return this.get(String(existing.id))
+      }
       // One answer slot belongs to the Pod that asked about it; another Pod neither replaces nor overwrites it.
       if (this.store.db.prepare('SELECT 1 FROM owner_questions WHERE namespace=? AND key=? AND pod_id<>? AND state=\'pending\'').get(namespace, key, principal.podId)) throw new Error('Another Pod already asks the owner about this key')
       this.assertAnswerSlot(`${namespace}/${key}`, principal.podId)
@@ -54,6 +59,18 @@ export class OwnerQuestions {
       const id = randomUUID()
       this.store.db.prepare('INSERT INTO owner_questions VALUES(?,?,?,?,?,?,?,?,?,\'pending\',NULL,NULL,?)').run(id, principal.podId, namespace, key, fingerprint, title, body, JSON.stringify(options), canonicalJson(data), Date.now())
       return this.get(id)
+    })
+  }
+
+  /** A Pod withdraws its waiting question about an object that no longer needs the owner. */
+  withdraw(principal: { podId: string, runId: string }, value: unknown): { withdrawn: number } {
+    const input = plainJson(value) as Record<string, unknown>
+    if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['namespace', 'key'].includes(key))) throw new Error('Invalid question withdrawal')
+    const namespace = namespacePath(input.namespace); const key = recordKey(input.key)
+    return this.store.transaction(() => {
+      if (!this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=? AND run_id=? AND boot_id NOT LIKE \'fenced:%\'').get(principal.podId, principal.runId)) throw new Error('Questions require the Pod\'s active run')
+      const changes = this.store.db.prepare('UPDATE owner_questions SET state=\'withdrawn\' WHERE pod_id=? AND namespace=? AND key=? AND state=\'pending\'').run(principal.podId, namespace, key).changes
+      return { withdrawn: Number(changes) }
     })
   }
 
