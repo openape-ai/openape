@@ -78,6 +78,20 @@ describe('self-discovered work on shared domain data', () => {
     expect(f.data.get('owner', 'acme/mail/classifications/m1')!.value).toEqual({ isInvoice: false, contentRevision: 'c1' })
   })
 
+  it('analyzes an input again when it returns to a version whose result was replaced meanwhile', () => {
+    const f = mail()
+    f.write('m1', { contentRevision: 'c1' })
+    expect(f.classify(() => ({ isInvoice: true }))).toBe(1)
+    f.write('m1', { contentRevision: 'c2' })
+    expect(f.classify(() => ({ isInvoice: false }))).toBe(1)
+    f.write('m1', { contentRevision: 'c1' })
+    expect(f.classify(() => ({ isInvoice: true }))).toBe(1)
+    expect(f.data.get('owner', 'acme/mail/classifications/m1')!.value).toEqual({ isInvoice: true, contentRevision: 'c1' })
+    // Unchanged input finds nothing more to do.
+    f.write('m1', { contentRevision: 'c1', categories: ['Rechnung'] })
+    expect(f.classify(() => { throw new Error('no model call expected') })).toBe(0)
+  })
+
   it('lets exactly one claimant win and fences the claim of an ended run', () => {
     const f = mail()
     f.write('m1', { contentRevision: 'c1' })
