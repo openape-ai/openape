@@ -1,6 +1,10 @@
 // @vitest-environment node
+import { createHash, randomUUID } from 'node:crypto'
+import { readFileSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { Approvals } from '../../src/worker/data/approvals'
+import { Approvals, programObject } from '../../src/worker/data/approvals'
+import { describeProgram, invokeApproved } from '../../src/worker/runs/program-effects'
 import type { ApprovalService } from '../../src/worker/data/approvals'
 import { archiveApproved, mailContentVersion } from '../../src/worker/data/mail-archive'
 import { approvalCommand } from '../../src/contracts/approvals'
@@ -178,5 +182,117 @@ describe('authorized mail archive', () => {
     expect(await archiveApproved(f.store, f.approvals, server.service, f.run, { application: 'mail', mailbox, approval: asked.id }, { read: moves, move: moves }, () => {}, new AbortController().signal)).toMatchObject({ outcome: 'skipped', reason: 'The approval is collecting' })
     expect(moves).not.toHaveBeenCalled()
     expect(f.store.db.prepare('SELECT count(*) AS count FROM effect_attempts').get()!.count).toBe(0)
+  })
+})
+
+describe('program approvals (issue 1468)', () => {
+  const push = (sha: string) => ['push', `--force-with-lease=feature/x:${sha}`, 'origin', `${sha}:refs/heads/feature/x`]
+  const lease = 'a'.repeat(40)
+
+  async function approvedPush(argv = push(lease)) {
+    const f = fixture(); const server = idp()
+    const asked = f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv } }, 'Push to remote')
+    await f.approvals.sync(f.podId, server.service, new AbortController().signal)
+    server.decisions.set(asked.id, 'approved')
+    f.store.db.prepare('UPDATE approval_batches SET next_poll_at=0').run()
+    await f.approvals.sync(f.podId, server.service, new AbortController().signal)
+    const runs: { application: string, argv: string[] }[] = []
+    const execute = vi.fn(async (command: { application: string, argv: string[] }) => { runs.push(command); return { exitCode: 0, stdout: '', stderr: '' } })
+    const invoke = (request: { application: string, argv: string[], approval: string }) => invokeApproved(f.store, f.approvals, server.service, f.run, request, execute, () => {}, new AbortController().signal)
+    return { ...f, server, asked, runs, execute, invoke }
+  }
+
+  it('derives the object from the exact command and shows the adapter display with the argv', async () => {
+    const f = await approvedPush()
+    expect(f.asked).toMatchObject({ action: 'program.run', object: programObject('git', push(lease)), title: `Push to remote: git push --force-with-lease=feature/x:${lease} origin ${lease}:refs/heads/feature/x` })
+    expect(f.asked.object).toMatch(new RegExp(`^git push --force-with-lease=feature/x:${lease} origin ${lease}:refs/heads/feature/x #[a-f0-9]{16}$`))
+    // The authority the owner approves at the IdP carries the action and the exact command object.
+    expect(JSON.parse(f.server.calls[0]!.commands[0]![2]!)).toMatchObject({ action: 'program.run', object: f.asked.object })
+    // A new lease SHA is a different object and needs its own approval.
+    const next = f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push('b'.repeat(40)) } }, 'Push to remote')
+    expect(next.id).not.toBe(f.asked.id)
+    expect(next.state).toBe('collecting')
+    // The title never comes from the script, and the object cannot name another command.
+    expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease) } })).toThrow('adapter description')
+    expect(() => f.approvals.request(f.run, { action: 'program.run', object: 'git status', payload: { application: 'git', argv: push(lease) } }, 'Push to remote')).toThrow('exact command')
+    expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease), note: 'x' } }, 'Push to remote')).toThrow('application and its exact argv')
+  })
+
+  it('shows the owner the complete command and refuses one that does not fit instead of shortening it', () => {
+    const f = fixture()
+    const ask = (argv: string[]) => () => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv } }, 'Push to remote')
+    // The decisive part at the end of a long command can never be cut off.
+    const long = ['push', `--force-with-lease=feature/x:${lease}`, 'origin', `${'x'.repeat(420)}:refs/heads/feature/x`, '--upload-pack=/tmp/evil']
+    expect(ask(long)).toThrow('too long for a program approval')
+    expect(ask(['push', 'origin', 'x'.repeat(470)])).toThrow('too long for a program approval')
+    expect(f.store.db.prepare('SELECT count(*) AS count FROM action_approvals').get()).toEqual({ count: 0 })
+    // Arguments stay unambiguous; hidden characters are refused rather than replaced.
+    const spaced = f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: ['commit', '-m', 'two words', ''] } }, 'Commit')
+    expect(spaced.title).toBe('Commit: git commit -m "two words" ""')
+    // Only printable ASCII is shown; any other code point (direction isolates, variation selectors, letters) is refused.
+    for (const hidden of ['feature/x\u202Egnp.exe', 'feature/\u2066x', 'main\uFE0F', 'caf\u00E9', 'tab\tx']) expect(ask(['push', 'origin', hidden])).toThrow('only printable ASCII')
+    expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'g\u2066it', argv: ['push'] } }, 'Push')).toThrow('only printable ASCII')
+    expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: ['push', 'origin', 'main'] } }, 'Push \u2066main')).toThrow('cannot be shown complete')
+    expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease) } }, 'x'.repeat(201))).toThrow('cannot be shown complete')
+  })
+
+  it('consumes an approved request and runs the exact command once, refusing a second use', async () => {
+    const f = await approvedPush()
+    expect(await f.invoke({ application: 'git', argv: push(lease), approval: f.asked.id })).toEqual({ exitCode: 0, stdout: '', stderr: '' })
+    expect(f.runs).toEqual([{ application: 'git', argv: push(lease) }])
+    expect(f.approvals.get(f.podId, f.asked.id).state).toBe('consumed')
+    expect(f.server.calls.filter(call => call.operation === 'consume')).toHaveLength(1)
+    expect(f.store.db.prepare('SELECT effect_key,operation,state FROM effect_ledger').all()).toEqual([{ effect_key: `approval:${f.asked.id}`, operation: 'program.call', state: 'completed' }])
+    await expect(f.invoke({ application: 'git', argv: push(lease), approval: f.asked.id })).rejects.toThrow('The approval is consumed')
+    expect(f.runs).toHaveLength(1)
+    expect(f.server.calls.filter(call => call.operation === 'consume')).toHaveLength(1)
+  })
+
+  it('refuses a different command, a foreign Pod and an undecided or denied approval before anything runs', async () => {
+    const f = await approvedPush()
+    await expect(f.invoke({ application: 'git', argv: push('b'.repeat(40)), approval: f.asked.id })).rejects.toThrow('different command')
+    await expect(f.invoke({ application: 'other', argv: push(lease), approval: f.asked.id })).rejects.toThrow('different command')
+    const other = { podId: f.pod('Other'), runId: f.run.runId }
+    await expect(invokeApproved(f.store, f.approvals, f.server.service, other, { application: 'git', argv: push(lease), approval: f.asked.id }, f.execute, () => {}, new AbortController().signal)).rejects.toThrow('not found for this Pod')
+    const pending = f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push('c'.repeat(40)) } }, 'Push to remote')
+    await expect(f.invoke({ application: 'git', argv: push('c'.repeat(40)), approval: pending.id })).rejects.toThrow('The approval is collecting')
+    const mail = f.ask()
+    await expect(f.invoke({ application: 'git', argv: push(lease), approval: mail.id })).rejects.toThrow('does not name a program command')
+    expect(f.execute).not.toHaveBeenCalled()
+    expect(f.approvals.get(f.podId, f.asked.id).state).toBe('approved')
+    expect(f.store.db.prepare('SELECT count(*) AS count FROM effect_ledger').get()).toEqual({ count: 0 })
+  })
+
+  it('lets the desktop run a command without a grant only for the consumed approval of its open effect', async () => {
+    const f = await approvedPush()
+    const command = { application: 'git', argv: push(lease) }
+    expect(() => f.approvals.assertExecution(f.run, f.asked.id, command)).toThrow('No consumed approval')
+    let checked = false
+    f.execute.mockImplementation(async () => {
+      f.approvals.assertExecution(f.run, f.asked.id, command)
+      expect(() => f.approvals.assertExecution(f.run, f.asked.id, { ...command, argv: push('b'.repeat(40)) })).toThrow('No consumed approval')
+      expect(() => f.approvals.assertExecution({ ...f.run, runId: randomUUID() }, f.asked.id, command)).toThrow('another run')
+      checked = true
+      return { exitCode: 0, stdout: '', stderr: '' }
+    })
+    await f.invoke({ ...command, approval: f.asked.id })
+    expect(checked).toBe(true)
+    expect(() => f.approvals.assertExecution(f.run, f.asked.id, command)).toThrow('already ran')
+  })
+
+  it('describes a command with the application adapter and refuses mail moves and unknown operations', async () => {
+    const f = fixture()
+    const adapter = join(f.root, 'git.toml')
+    writeFileSync(adapter, ['schema = "openape-shapes/v1"', '[cli]', 'id = "git"', 'executable = "git"', 'audience = "shapes"', 'version = "1"', '[[operation]]', 'id = "git.push"', 'command = ["push"]', 'positionals = ["remote", "refspec"]', 'required_options = ["force-with-lease"]', 'display = "Push {refspec} to {remote}"', 'action = "edit"', 'risk = "high"', 'resource_chain = ["repo:*", "remote:*"]', '[[operation]]', 'id = "git.move"', 'command = ["move"]', 'display = "Move"', 'action = "move"', 'risk = "high"', 'resource_chain = ["repo:*"]', ''].join('\n'))
+    const configuration = { type: 'program', name: 'git', cliId: 'git', adapterPath: adapter, adapterHash: createHash('sha256').update(readFileSync(adapter)).digest('hex'), capability: 'tool.app_git.invoke' }
+    const resources = [{ id: randomUUID(), podId: f.podId, revision: 1, kind: 'tool', state: 'ready', name: 'git', configuration }] as never
+    expect(await describeProgram(resources, f.podId, ['tool.app_git.invoke'], { application: 'git', argv: push(lease) })).toBe(`Push ${lease}:refs/heads/feature/x to origin`)
+    await expect(describeProgram(resources, f.podId, ['tool.app_git.invoke'], { application: 'git', argv: ['fetch'] })).rejects.toThrow('No adapter operation matched')
+    // Fail closed: an option the push operation does not declare is refused, wherever it stands.
+    for (const argv of [[...push(lease), '--upload-pack=/tmp/evil'], ['push', '--receive-pack=/tmp/evil', `--force-with-lease=feature/x:${lease}`, 'origin', 'main'], [...push(lease), '--'], ['-c', 'core.sshCommand=evil', ...push(lease)]]) {
+      await expect(describeProgram(resources, f.podId, ['tool.app_git.invoke'], { application: 'git', argv })).rejects.toThrow(/does not declare|No adapter operation matched/)
+    }
+    await expect(describeProgram(resources, f.podId, ['tool.app_git.invoke'], { application: 'git', argv: ['move'] })).rejects.toThrow('approved archive service')
+    await expect(describeProgram(resources, f.podId, [], { application: 'git', argv: push(lease) })).rejects.toThrow('not declared and assigned')
   })
 })
