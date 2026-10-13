@@ -289,6 +289,20 @@ risk = "low"
 resource_chain = ["repo:*"]
 
 [[operation]]
+id = "git.replay.print"
+command = ["replay"]
+positionals = ["range"]
+required_options = ["onto", "ref-action"]
+value_options = ["ref"]
+flag_options = []
+display = "Replay {range} onto {onto} without touching the worktree (refs: {ref-action})"
+action = "read"
+risk = "low"
+# With printed results no ref changes and only unreferenced objects are written. The mode is part of the
+# permission, so a grant for printed results never covers ref updates.
+resource_chain = ["repo:*", "ref-action:mode={ref-action}"]
+
+[[operation]]
 id = "git.rev-parse"
 command = ["rev-parse"]
 positionals = ["ref"]
