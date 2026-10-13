@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import type { MapView } from '../../contracts/map-view'
 import { language, t } from '../i18n'
 import { clock } from '../utils/cadence'
@@ -25,7 +25,6 @@ import { allTags, tagCounts, untagged, withTags } from '../utils/tags'
  */
 const props = defineProps<{ view: MapView | null, live: boolean, now: number, decisions?: number, tab?: 'automations' | 'decisions', desktop?: boolean, subject?: string, codex?: 'connected' | 'disconnected', domain?: DomainOverview | null, inboxUrl?: string, secrets?: SecretsView | null, sharing?: boolean }>()
 const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'logout': [], 'codex': [pinned: string | null, group: string | null], 'command': [command: CentralCommand], 'secretSave': [podId: string, alias: string, value: string], 'secrets': [command: SecretsCommand], 'folder': [podId: string], 'openPod': [id: string], 'share': [selection: PortableSourceSelection], 'advanced': [], 'import': [], 'domain': [command: DomainCommand, settle?: (error: string | null) => void] }>()
-const mode = ref<'map' | 'list'>('map')
 const layers = ref<Layers>({ data: true, read: true, write: true, auth: true, paused: true })
 const playing = ref(true)
 const pinned = ref<string | null>(null)
@@ -47,16 +46,33 @@ function storedTags(): string[] {
   catch { return [] }
 }
 const selected = ref<string[]>(storedTags())
+// Pods without a tag stay visible until the owner deselects them, so a new Pod never hides behind a filter.
+const untaggedKey = 'pods.automations.untagged-off'
+const modeKey = 'pods.automations.mode'
+function stored(key: string): string | null {
+  try { return localStorage.getItem(key) }
+  catch { return null }
+}
+function store(key: string, value: string) {
+  try { localStorage.setItem(key, value) }
+  catch {}
+}
+const untaggedOff = ref(stored(untaggedKey) === '1')
+const mode = ref<'map' | 'list'>(stored(modeKey) === 'list' ? 'list' : 'map')
+watch(mode, value => store(modeKey, value))
 const counts = computed(() => props.view ? tagCounts(props.view) : new Map<string, number>())
 const tags = computed(() => props.view ? [...allTags(props.view), ...counts.value.has(untagged) ? [untagged] : []] : [])
 // Without any tag in the workspace there is nothing to opt into, so everything stays visible.
 const tagging = computed(() => tags.value.some(tag => tag !== untagged))
-const active = computed(() => selected.value.filter(tag => tags.value.includes(tag)))
+const active = computed(() => {
+  const chosen = selected.value.filter(tag => tags.value.includes(tag))
+  return tags.value.includes(untagged) && !untaggedOff.value && !chosen.includes(untagged) ? [...chosen, untagged] : chosen
+})
 const filtered = computed(() => props.view && tagging.value ? withTags(props.view, active.value) : props.view)
 function selectTags(value: string[]) {
   selected.value = value; pinned.value = null; hovered.value = null
-  try { localStorage.setItem(tagKey, JSON.stringify(value)) }
-  catch {}
+  untaggedOff.value = !value.includes(untagged)
+  store(tagKey, JSON.stringify(value)); store(untaggedKey, untaggedOff.value ? '1' : '0')
 }
 function toggleTag(tag: string) { selectTags(active.value.includes(tag) ? active.value.filter(item => item !== tag) : [...active.value, tag]) }
 const shownLayers = computed(() => Object.values(layers.value).filter(Boolean).length)
@@ -168,7 +184,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
 
 <style>
 .automations-shell{min-width:0}
-.automations-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px;padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:12px;position:sticky;top:0;background:var(--bg);z-index:5}
+.automations-top{display:flex;flex-wrap:wrap;align-items:center;gap:8px 20px;padding:10px 0;border-bottom:1px solid var(--border);margin-bottom:12px;position:sticky;top:0;background:var(--bg);z-index:5;box-shadow:0 -16px 0 var(--bg)}
 .automations-top nav{display:flex;gap:4px;flex-wrap:wrap}
 .automations-top nav button{font-weight:500;border:1px solid transparent;border-radius:6px;color:var(--muted);padding:6px 12px}
 .automations-top nav button[aria-selected="true"]{background:var(--surface);border-color:var(--border);color:var(--text)}

@@ -1,3 +1,4 @@
+import { unexpectedFields } from './fields'
 import type { OpenApeCliAuthorizationDetail } from '@openape/core'
 import { parseHttpPermission } from './http'
 import { parseProgramArgv } from './programs'
@@ -47,7 +48,9 @@ const grantId = /^[\w-]{1,128}$/
 export const grantLimits = { programs: 16, http: 16, details: 64 } as const
 
 function object(value: unknown, keys: string[], message: string): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !keys.includes(key))) throw new Error(message)
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(message)
+  const unexpected = Object.keys(value).filter(key => !keys.includes(key))
+  if (unexpected.length) throw new Error(unexpectedFields(message, unexpected))
   return value as Record<string, unknown>
 }
 

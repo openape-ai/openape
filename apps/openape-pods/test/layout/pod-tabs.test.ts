@@ -77,6 +77,17 @@ describe('pod tabs with the production stylesheet', () => {
     }
   })
 
+  it('names the cause of a failed run inside its problem box', async () => {
+    const view = { runs: [{ id: '00000000-0000-4000-8000-000000000043', podId, scriptHash: hash, state: 'failed', startedAt: 1_790_000_000_000, finishedAt: 1_790_000_065_000, summary: 'Run failed', error: 'Invalid program arguments', checkpointRevision: 0, recovery: null }], events: [] } as unknown as RunView
+    applyLanguage('de')
+    await openTab('Historie', { runs: async () => structuredClone(view) })
+    await show(1060, 850)
+    const box = document.querySelector('.run-problem')!
+    expect(box.querySelector('.run-cause')!.textContent).toContain('Ursache: Ungültige Programmargumente')
+    expect(box.textContent).not.toContain('technischen Details zeigen')
+    await page.screenshot({ path: artifact('run-failure-cause.png') })
+  })
+
   it('keeps a long script inside a bounded editor and the Script tab inside a narrow dark window', async () => {
     const script: ScriptView = { resourceEpoch: 0, credentialAliases: [], pod: pods[0]!, versions: [], drafts: [], source: { kind: 'version', id: hash, code: '// long script line\n'.repeat(1000), capabilities: [], revision: 1, assignmentRevision: 1, hash, validated: true, evidence: null, credentialAccessApproved: true } }
     await openTab('Script', { scripts: async () => structuredClone(script) })
