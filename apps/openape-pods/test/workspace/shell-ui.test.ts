@@ -15,20 +15,17 @@ async function mountApp() {
   await flushPromises()
   return wrapper
 }
-const tab = (name: string) => wrapper!.findAll('[role="tab"]').find(item => item.text() === name)!
 const button = (name: string) => wrapper!.findAll('button').find(item => item.text().trim() === name)!
 
 describe('workspace shell', () => {
-  it('moves between tabs with the arrow keys and keeps only the selected tab in the tab order', async () => {
+  it('shows every Pod section on one page with jump links instead of tabs', async () => {
     installWorkspace()
     await mountApp()
-    expect(tab('Overview').attributes('tabindex')).toBe('0')
-    await tab('Overview').trigger('keydown', { key: 'ArrowRight' }); await flushPromises()
-    expect(tab('Script').attributes('aria-selected')).toBe('true')
-    expect(tab('Script').attributes('tabindex')).toBe('0')
-    expect(tab('Overview').attributes('tabindex')).toBe('-1')
-    await tab('Script').trigger('keydown', { key: 'ArrowLeft' }); await flushPromises()
-    expect(tab('Overview').attributes('aria-selected')).toBe('true')
+    expect(wrapper!.findAll('[role="tab"]')).toHaveLength(0)
+    expect(wrapper!.findAll('.section-links button').map(item => item.text())).toEqual(['Runs', 'Variables and secrets', 'Access', 'Settings', 'Code'])
+    for (const id of ['overview', 'runs', 'values', 'access', 'settings', 'code']) expect(wrapper!.find(`#section-${id}`).exists()).toBe(true)
+    // The script editor loads only when the Code section is opened.
+    expect(wrapper!.find('#section-code .code-editor').exists()).toBe(false)
   })
 
   it('disables Run now for an archived pod even though it still has an active script', async () => {
@@ -54,13 +51,12 @@ describe('workspace shell', () => {
   it('lists assigned directories and references in Permissions but never account connections', async () => {
     installWorkspace()
     await mountApp()
-    await tab('Permissions').trigger('click'); await flushPromises()
-    const panel = wrapper!.get('[role="tabpanel"]').text()
+    const panel = wrapper!.get('#section-access').text()
     expect(panel).toContain('Orders')
     expect(panel).toContain('Reference')
     expect(panel).not.toContain('Microsoft fixture')
     expect(panel).not.toContain('Jev')
-    await tab('Script').trigger('click'); await flushPromises()
+    await button('Code').trigger('click'); await flushPromises()
     expect(wrapper!.text()).not.toContain('Jev script reference')
   })
 })
@@ -73,7 +69,6 @@ describe('pod groups', () => {
     const workspace = vi.fn(async () => organized())
     installWorkspace({ workspace })
     await mountApp()
-    await tab('Settings').trigger('click'); await flushPromises()
     const select = wrapper!.findAll('select').find(item => item.findAll('option').some(option => option.text() === 'Work'))!
     await select.setValue(groupId); await flushPromises()
     expect(workspace).toHaveBeenCalledWith({ type: 'organize', revision: 3, action: 'move', podId, groupId })
@@ -85,7 +80,6 @@ describe('schedule limits', () => {
     const scheduling = vi.fn(async () => ({ spec: null, enabled: false, revision: 1, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }))
     installWorkspace({ scheduling })
     await mountApp()
-    await tab('Settings').trigger('click'); await flushPromises()
     const input = wrapper!.findAll('label').find(item => item.text().includes('Concurrent pods on this Mac'))!.get('input')
     await input.setValue(3)
     await wrapper!.get('.limit-form').trigger('submit'); await flushPromises()

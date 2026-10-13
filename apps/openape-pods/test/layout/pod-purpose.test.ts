@@ -33,13 +33,13 @@ it('puts the purpose under the Pod name in the central inventory at desktop and 
   }
 })
 
-it('shows the last result under the headline on the Pod overview', async () => {
+it('shows the last result under the headline in the runs section of the Pod page', async () => {
   installWorkspace()
   wrapper = mount(App, { attachTo: document.body, props: { initialPodId: podId } }); await flushPromises()
   await page.viewport(1060, 850); await frame()
   fits()
-  const result = wrapper.findAll('#panel-Overview p').find(item => item.text() === 'Local example completed (1)')!
-  const headline = wrapper.findAll('#panel-Overview p').find(item => item.text() === 'Run completed')!
+  const result = wrapper.findAll('#section-runs .run-outcome p').find(item => item.text() === 'Local example completed (1)')!
+  const headline = wrapper.get('#section-runs .run-outcome h3')
   expect(result.element.getBoundingClientRect().top).toBeGreaterThanOrEqual(headline.element.getBoundingClientRect().bottom)
   expect(wrapper.get('label[for="pod-description"]').text()).toBe('What this Pod does')
   await page.screenshot({ path: screenshotPath('purpose-pod-overview.png') })
