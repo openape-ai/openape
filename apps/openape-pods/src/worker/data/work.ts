@@ -3,8 +3,8 @@ import { ownerWriter, recordKey } from '../../contracts/domain-data'
 import { canonicalJson } from '../../contracts/canonical-json'
 import { workLimits } from '../../contracts/work'
 import type { WorkDeclaration, WorkState } from '../../contracts/work'
-import type { PodDatabase } from '../storage/database'
 import { digest, parseManifest } from '../storage/database'
+import type { PodDatabase, ScriptManifest } from '../storage/database'
 import type { DataEntryView, DataResultBinding, DomainData } from './domain'
 
 export interface WorkPrincipal { podId: string, runId: string }
@@ -22,12 +22,16 @@ export class StaleWork extends Error {}
 export class WorkLedger {
   constructor(private readonly store: PodDatabase, private readonly data: DomainData) {}
 
+  private manifest(podId: string): ScriptManifest | null {
+    const pod = this.store.getPod(podId)
+    if (!pod.activeScript) return null
+    const row = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, pod.activeScript)
+    return row ? parseManifest(JSON.parse(String(row.manifest))) : null
+  }
+
   /** The operations the Pod's active script declares. */
   declarations(podId: string): WorkDeclaration[] {
-    const pod = this.store.getPod(podId)
-    if (!pod.activeScript) return []
-    const row = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, pod.activeScript)
-    return row ? parseManifest(JSON.parse(String(row.manifest))).work ?? [] : []
+    return this.manifest(podId)?.work ?? []
   }
 
   private operation(name: string): OperationRow {
@@ -220,7 +224,11 @@ export class WorkLedger {
   /** Whether a scheduled run of this Pod has something to do; discovery runs first, so new inputs count. */
   pending(podId: string): boolean {
     let names: string[]
-    try { names = this.declarations(podId).map(item => item.operation) }
+    try {
+      // A polling source reads an external system on its schedule; only that run can tell whether something changed.
+      if (this.manifest(podId)?.polls) return true
+      names = this.declarations(podId).map(item => item.operation)
+    }
     catch { return true }
     if (!names.length) return true
     return this.store.transaction(() => { this.settleOrphans(); return names }).some(name => this.store.transaction(() => {

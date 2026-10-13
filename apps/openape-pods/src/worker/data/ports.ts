@@ -6,7 +6,7 @@ import type { OwnerQuestions } from './questions'
 import type { WorkLedger } from './work'
 
 /** Script operations on shared data, work and owner questions (issue 1465). */
-export const dataOperations = new Set(['work.contract', 'data.get', 'data.set', 'data.delete', 'data.list', 'work.find', 'work.claim', 'work.complete', 'work.defer', 'work.fail', 'decisions.ask'])
+export const dataOperations = new Set(['work.contract', 'work.polls', 'data.get', 'data.set', 'data.delete', 'data.list', 'work.find', 'work.claim', 'work.complete', 'work.defer', 'work.fail', 'decisions.ask'])
 
 export function fields(value: unknown, required: string[], optional: string[] = []): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid operation payload')
@@ -26,6 +26,9 @@ export function handleDataOperation(services: { data: DomainData, work: WorkLedg
   switch (operation) {
     case 'work.contract':
       if (!manifest.work || canonicalJson(parseWorkDeclarations(payload)) !== canonicalJson(manifest.work)) throw new Error('Script work declaration changed since validation')
+      return true
+    case 'work.polls':
+      if (payload !== true || manifest.polls !== true) throw new Error('Script polls declaration changed since validation')
       return true
     case 'data.get': return services.data.get(actor, text(fields(payload, ['key']).key, 'data key'))
     case 'data.set': {
