@@ -3,7 +3,7 @@ schema = "openape-shapes/v1"
 id = "o365-cli"
 executable = "o365-cli"
 audience = "shapes"
-version = "autonomous-mail-sync-1"
+version = "autonomous-mail-sync-2"
 [[operation]]
 id = "workflow.delta"
 command = ["workflow", "delta"]
@@ -24,10 +24,18 @@ resource_chain = ["account:email={account}", "mail:*"]
 id = "workflow.categorize"
 command = ["workflow", "categorize"]
 required_options = ["account", "message", "expected-version", "categories"]
-display = "Set the managed categories (Rechnung, Newsletter, Antwort nötig, Prüfen, Behalten) of one message of {account}"
+display = "Set the Pod-managed categories of one message of {account}"
 action = "categorize"
 risk = "medium"
 resource_chain = ["account:email={account}", "mail:*"]
+[[operation]]
+id = "workflow.ensure-categories"
+command = ["workflow", "ensure-categories"]
+required_options = ["account", "categories"]
+display = "Add missing names to the Outlook category list of {account}"
+action = "configure"
+risk = "medium"
+resource_chain = ["account:email={account}", "mailbox-settings:*"]
 [[operation]]
 id = "auth.login"
 command = ["auth", "login"]
