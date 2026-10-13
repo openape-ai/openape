@@ -21,7 +21,7 @@ let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en') })
 async function capture(desktop: boolean) {
   applyLanguage('de'); await page.viewport(1440, 1000); localStorage.setItem('pods.automations.mode', 'map')
-  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: true, now: NOW, decisions: 17, desktop, sharing: true, ...(desktop ? {} : { subject: 'owner@example.invalid' }) } })
+  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: true, now: NOW, desktop, sharing: true, ...(desktop ? {} : { subject: 'owner@example.invalid' }) } })
   await flushPromises(); await frames()
   const text = wrapper.text()
   const native = wrapper.findAll('button[title="Nur am Desktop"]').map(button => button.text().trim())

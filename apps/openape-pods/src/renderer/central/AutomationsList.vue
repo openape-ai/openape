@@ -4,7 +4,7 @@ import type { MapView } from '../../contracts/map-view'
 import { t } from '../i18n'
 import { buildModel, visibleNodes } from '../utils/automation-layout'
 import type { Layers } from '../utils/automation-layout'
-import { lastResult, nextRun, podState, waitsFor } from '../utils/pod-status'
+import { failureCount, lastResult, nextRun, podState, waitsFor } from '../utils/pod-status'
 import type { PodState } from '../utils/pod-status'
 import { tagsOf } from '../utils/tags'
 
@@ -17,7 +17,7 @@ const rows = computed(() => {
   const shown = props.archived ? props.view.pods.filter(pod => pod.lifecycle === 'archived') : props.view.pods.filter(pod => visible.has(pod.id))
   return shown.map(pod => ({
     id: pod.id, name: pod.name, purpose: pod.description ?? '', tags: tagsOf(props.view, pod.id),
-    state: podState(pod, props.view), result: lastResult(pod, props.now), next: nextRun(pod, props.now), waits: waitsFor(pod, props.view),
+    state: podState(pod, props.view), result: lastResult(pod, props.now), failures: failureCount(pod), next: nextRun(pod, props.now), waits: waitsFor(pod, props.view),
   }))
 })
 </script>
@@ -46,6 +46,7 @@ const rows = computed(() => {
           </td>
           <td class="result-cell" :data-state="row.state" :data-label="t('Last result')">
             {{ row.result }}
+            <small v-if="row.failures" class="failures">{{ row.failures }}</small>
           </td>
           <td :data-label="t('Next run')">
             {{ row.next }}
@@ -73,6 +74,7 @@ const rows = computed(() => {
 .automations-list .pod-cell{min-width:240px;max-width:420px}
 .automations-list-purpose{font-size:13px;color:var(--muted);margin-top:2px}.automations-list-purpose.missing{font-style:italic;color:var(--warn)}
 .automations-list .result-cell{max-width:420px;overflow-wrap:anywhere}.automations-list .result-cell[data-state="failing"]{color:var(--bad)}
+.automations-list .result-cell .failures{display:block;margin-top:2px;font-size:12px;font-weight:600;color:var(--bad)}
 .automations-list .state-chip{display:inline-block;white-space:nowrap;font-size:12px;font-weight:600;padding:2px 8px;border-radius:999px;background:var(--tint);color:var(--muted)}
 .automations-list .state-chip[data-state="ok"],.automations-list .state-chip[data-state="running"]{background:var(--ok-soft);color:var(--ok)}
 .automations-list .state-chip[data-state="failing"]{background:var(--bad-soft);color:var(--bad)}

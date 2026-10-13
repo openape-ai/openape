@@ -9,7 +9,6 @@ import type { WorkspaceCommand } from '../../contracts/control'
 import type { MapView } from '../../contracts/map-view'
 import type { SecretsCommand, SecretsView } from '../../contracts/secrets'
 import AutomationsShell from './AutomationsShell.vue'
-import { kpiFacts } from '../utils/kpis'
 
 /**
  * The shell on this desktop: the local worker answers every read and owner command through the
@@ -63,5 +62,5 @@ const secretsCommand = (command: SecretsCommand) => void run(async () => { secre
   <p v-if="actionError" role="alert" class="error-message" data-action-error>
     {{ diagnostic(actionError) }}
   </p>
-  <AutomationsShell :view="map" :live="true" :now="now" :decisions="map ? kpiFacts(map).decisions.count : undefined" desktop :sharing="sharing" :codex="codexConnected === null ? undefined : codexConnected ? 'connected' : 'disconnected'" :tab="tab" :domain="domain" :secrets="secrets" @update:tab="tab = $event" @domain="domainCommand" @command="localCommand" @secrets="secretsCommand" @open-pod="emit('openPod', $event)" @advanced="emit('advanced')" @import="emit('import')" />
+  <AutomationsShell :view="map" :live="true" :now="now" desktop :sharing="sharing" :codex="codexConnected === null ? undefined : codexConnected ? 'connected' : 'disconnected'" :tab="tab" :domain="domain" :secrets="secrets" @update:tab="tab = $event" @domain="domainCommand" @command="localCommand" @secrets="secretsCommand" @open-pod="emit('openPod', $event)" @advanced="emit('advanced')" @import="emit('import')" />
 </template>

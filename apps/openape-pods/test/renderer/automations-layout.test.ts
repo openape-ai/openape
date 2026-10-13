@@ -82,8 +82,9 @@ it('derives KPI subtitles from the data only', () => {
     active: 5,
     paused: { total: 25, drafts: 1, archived: 1 },
     degraded: { count: 1, name: 'IURIO PR monitor', reason: 'completedWithGaps' },
-    // The fixture's run waiting for an IdP approval counts as an approval.
-    decisions: { count: 22, questions: 17, approvals: 5 },
+    failures: { runs: 140, pods: [{ name: 'IURIO PR monitor', count: 137 }, { name: 'zaz Service-Agent', count: 3 }] },
+    // The run waiting for an IdP approval and the grant requested at the IdP are rights, as in Entscheidungen.
+    decisions: { count: 24, questions: 17, approvals: 4, rights: 2, reconcile: 1, secrets: 0 },
     unknownDeliveries: 1,
   })
 })
