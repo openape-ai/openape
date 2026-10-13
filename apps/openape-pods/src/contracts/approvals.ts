@@ -16,7 +16,7 @@ export interface ApprovalAuthority { version: 5, podId: string, owner: Owner, ba
 export interface ApprovalItem { key: string, authority: ApprovalAuthority, summary: string }
 /** What the worker sends the desktop for one batch operation; `grants` name the item grants of status/consume. */
 export interface ApprovalManifest { podId: string, owner: Owner, batchId: string, title: string, expiresAt: number, items: ApprovalItem[] }
-export interface ApprovalView { id: string, action: ApprovalAction, object: string, title: string, state: ApprovalState, reason: string | null, batchUrl: string | null, updatedAt: number }
+export interface ApprovalView { id: string, action: ApprovalAction, object: string, title: string, state: ApprovalState, reason: string | null, batchId: string | null, batchUrl: string | null, updatedAt: number }
 
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value)
 const hash = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
