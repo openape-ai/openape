@@ -89,6 +89,14 @@ export class WorkLedger {
     return this.fingerprint(source, JSON.parse(String(row.value))) === entry.result.input.fingerprint && source.rule_version === entry.result.ruleVersion
   }
 
+  /** The work key whose result the output currently holds, when that work belongs to this operation. */
+  private outputHolder(operation: OperationRow, object: string): string | null {
+    const output = this.store.db.prepare('SELECT result FROM data_entries WHERE namespace=? AND key=?').get(operation.output, recordKey(object))
+    const holder = output?.result ? (JSON.parse(String(output.result)) as DataResultBinding).workKey : undefined
+    if (!holder) return null
+    return this.store.db.prepare('SELECT 1 FROM work_items WHERE key=? AND operation=?').get(holder, operation.operation) ? holder : null
+  }
+
   /** Records every input entry changed since the cursor as work once; a reset cursor finds the same keys again. */
   private discover(operation: OperationRow): void {
     const rows = this.store.db.prepare('SELECT * FROM data_entries WHERE namespace=? AND sequence>? ORDER BY sequence LIMIT ?').all(operation.input, operation.cursor, workLimits.scan)
@@ -104,6 +112,9 @@ export class WorkLedger {
       if (key) {
         this.store.db.prepare(`INSERT INTO work_items(key,operation,object,input_revision,fingerprint,rule_version,generation,state,ready_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'ready',?,?,?)
         ON CONFLICT(key) DO UPDATE SET state='ready',input_revision=excluded.input_revision,reason=NULL,ready_at=excluded.ready_at,updated_at=excluded.updated_at WHERE work_items.state='superseded'`).run(key, operation.operation, object, Number(row.revision), this.fingerprint(operation, value), operation.rule_version, operation.generation, now, now, now)
+        // A → B → A: the result of B replaced A's output, so A's completed work no longer holds it and runs again.
+        const holder = this.outputHolder(operation, object)
+        if (holder && holder !== key) this.store.db.prepare(`UPDATE work_items SET state='ready',input_revision=?,reason=NULL,ready_at=?,updated_at=? WHERE key=? AND state='completed'`).run(Number(row.revision), now, now, key)
       }
     }
     if (rows.length) this.store.db.prepare('UPDATE work_operations SET cursor=? WHERE operation=?').run(Number(rows.at(-1)!.sequence), operation.operation)
