@@ -64,6 +64,20 @@ describe('self-discovered work on shared domain data', () => {
     expect(f.data.get('owner', 'acme/mail/classifications/m1')!.value).toEqual({ isInvoice: false, contentRevision: 'c2' })
   })
 
+  it('makes superseded work ready again when its input returns to the same fingerprint', () => {
+    const f = mail()
+    // Discovery runs on find; each scan between the writes records the input as it is at that moment.
+    const scan = () => {
+      const run = f.run(f.classifier); try { f.work.find(run, { operation: 'acme/mail-classification' }) }
+      finally { f.finish(run) }
+    }
+    f.write('m1', { contentRevision: 'c1', categories: [] }); scan()
+    f.write('m1', { contentRevision: 'c2', categories: [] }); scan()
+    f.write('m1', { contentRevision: 'c1', categories: [] })
+    expect(f.classify(() => ({ isInvoice: false }))).toBe(1)
+    expect(f.data.get('owner', 'acme/mail/classifications/m1')!.value).toEqual({ isInvoice: false, contentRevision: 'c1' })
+  })
+
   it('lets exactly one claimant win and fences the claim of an ended run', () => {
     const f = mail()
     f.write('m1', { contentRevision: 'c1' })
