@@ -40,12 +40,24 @@ export async function resolveProgram(assignment: ProgramAssignment, argv: string
 }
 /** What an adapter operation declares about its options; the fields after required_options come with declared-option adapters. */
 interface DeclaredOptions { command: string[], required_options?: string[], value_options?: string[], flag_options?: string[], global_options?: string[] }
-const optionKey = (token: string) => token.replace(/^--?/, '').split('=', 1)[0]!
+/**
+ * Whether a token passes a declared option in exactly the dash form a getopt-style parser reads: `--name` or
+ * `--name=value` for a declared name of two or more characters, and exactly `-x` for a declared one-letter name.
+ * Bundles (`-abc`), `-longname`, attached values (`-Cvalue`) and `--x` for a one-letter name are never declared.
+ */
+function passesDeclared(token: string, names: Set<string>): boolean {
+  if (token.startsWith('--')) {
+    const name = token.slice(2).split('=', 1)[0]!
+    return name.length > 1 && names.has(name)
+  }
+  return token.length === 2 && names.has(token[1]!)
+}
 
 /**
  * Fails closed on options for a command that runs with an object approval instead of a grant (issue 1468): every
  * option before the operation's command words must be a declared global option, every option after them a declared
- * option of the operation. An undeclared option such as git's --upload-pack or -c is refused, as is `--`.
+ * option of the operation, each in its exact dash form. An undeclared option such as git's --upload-pack or -c is
+ * refused, as is `--`.
  */
 export function assertDeclaredOptions(operation: DeclaredOptions, argv: string[]): void {
   const undeclared = (token: string) => new Error(`The command passes ${token.split('=', 1)[0]}, which its adapter operation does not declare; an approved command runs only with declared options`)
@@ -53,12 +65,12 @@ export function assertDeclaredOptions(operation: DeclaredOptions, argv: string[]
   let index = 0
   while (index < argv.length && !operation.command.every((word, offset) => argv[index + offset] === word)) {
     const token = argv[index]!
-    if (!token.startsWith('-') || !globals.has(optionKey(token))) throw undeclared(token)
-    index += token.includes('=') ? 1 : 2
+    if (!token.startsWith('-') || !passesDeclared(token, globals)) throw undeclared(token)
+    index += token.startsWith('--') && token.includes('=') ? 1 : 2
   }
   const declared = new Set([...operation.required_options ?? [], ...operation.value_options ?? [], ...operation.flag_options ?? []])
   for (const token of argv.slice(index + operation.command.length)) {
-    if (token === '--' || (token.startsWith('-') && token.length > 1 && !declared.has(optionKey(token)))) throw undeclared(token)
+    if (token.startsWith('-') && token.length > 1 && !passesDeclared(token, declared)) throw undeclared(token)
   }
 }
 

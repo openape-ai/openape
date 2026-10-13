@@ -261,5 +261,13 @@ it('accepts only declared options for approved commands, including declared glob
   expect(() => assertDeclaredOptions(push, ['push', '--upload-pack=evil', 'origin', 'main'])).toThrow('passes --upload-pack')
   expect(() => assertDeclaredOptions(push, ['push', '-fu', 'origin', 'main'])).toThrow('passes -fu')
   expect(() => assertDeclaredOptions(push, ['push', '--', '--atomic'])).toThrow('passes --')
+  // The dash form must match exactly what git reads: no -longname, no --x for a one-letter option, no bundles or attached values.
+  expect(() => assertDeclaredOptions(push, ['push', '-repo', 'origin', 'main'])).toThrow('passes -repo')
+  expect(() => assertDeclaredOptions(push, ['--C', '/repo', 'push', 'origin', 'main'])).toThrow('passes --C')
+  expect(() => assertDeclaredOptions(push, ['-Cfoo', 'push', 'origin', 'main'])).toThrow('passes -Cfoo')
+  expect(() => assertDeclaredOptions({ ...push, flag_options: ['a', 'b', 'c'] }, ['push', '-abc', 'origin', 'main'])).toThrow('passes -abc')
+  expect(() => assertDeclaredOptions({ ...push, flag_options: ['a', 'b', 'c'] }, ['push', '-a', '-b', '-c', 'origin', 'main'])).not.toThrow()
+  expect(() => assertDeclaredOptions({ ...push, value_options: ['r'] }, ['push', '--r=x', 'origin', 'main'])).toThrow('passes --r')
+  expect(() => assertDeclaredOptions(push, ['push', '-force-with-lease=x:1', 'origin', 'main'])).toThrow('passes -force-with-lease')
   expect(() => assertDeclaredOptions({ command: ['push'] }, ['push', '--force', 'origin', 'main'])).toThrow('passes --force')
 })

@@ -25,12 +25,12 @@ const line = (value: unknown, limit: number) => String(value).replace(/[\u0000-\
 
 /** Program approvals show the complete command; one that does not fit is refused, never shortened. */
 export const programApprovalLimits = { object: 500, display: 200, title: 720 } as const
-// eslint-disable-next-line no-control-regex
-const hiddenCharacters = /[\u0000-\u001F\u007F-\u009F\u00AD\u061C\u180E\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF]/
+/** Only printable ASCII is shown to the owner as is; anything else could hide or reorder text, so it is refused. */
+const printable = /^[\x20-\x7E]*$/
 
 /** Each argument stays readable and unambiguous: plain words as they are, anything else JSON-quoted. */
 function shownArgument(value: string): string {
-  if (hiddenCharacters.test(value)) throw new Error('A program approval cannot show a command with control, invisible or direction characters')
+  if (!printable.test(value)) throw new Error('A program approval shows only printable ASCII; this command contains other characters and runs only with a grant')
   return /^[\w@%+=:,./-]+$/.test(value) ? value : JSON.stringify(value)
 }
 
@@ -58,7 +58,7 @@ export function actionTitle(action: ApprovalAction, object: string, payload: Rec
     const argv = parseProgramArgv(payload.argv)
     if (object !== programObject(payload.application, argv)) throw new Error('A program approval object is the exact command')
     if (!display?.trim()) throw new Error('A program approval needs the adapter description of its command')
-    if (hiddenCharacters.test(display) || display.length > programApprovalLimits.display) throw new Error('The adapter description of this command cannot be shown complete; it runs only with a grant')
+    if (!printable.test(display) || display.length > programApprovalLimits.display) throw new Error('The adapter description of this command cannot be shown complete; it runs only with a grant')
     // The complete command follows the adapter's description; the digest suffix of the object is left out.
     return `${display.trim()}: ${object.slice(0, object.lastIndexOf(' #'))}`
   }
