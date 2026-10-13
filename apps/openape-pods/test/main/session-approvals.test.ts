@@ -270,4 +270,7 @@ it('accepts only declared options for approved commands, including declared glob
   expect(() => assertDeclaredOptions({ ...push, value_options: ['r'] }, ['push', '--r=x', 'origin', 'main'])).toThrow('passes --r')
   expect(() => assertDeclaredOptions(push, ['push', '-force-with-lease=x:1', 'origin', 'main'])).toThrow('passes -force-with-lease')
   expect(() => assertDeclaredOptions({ command: ['push'] }, ['push', '--force', 'origin', 'main'])).toThrow('passes --force')
+  // A global option's value must not swallow an option the check would otherwise refuse.
+  expect(() => assertDeclaredOptions(push, ['-C', '--upload-pack=evil', 'push', 'origin', 'main'])).toThrow('passes -C')
+  expect(() => assertDeclaredOptions(push, ['-C'])).toThrow('passes -C')
 })
