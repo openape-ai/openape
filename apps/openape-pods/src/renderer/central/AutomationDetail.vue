@@ -25,7 +25,6 @@ const degraded = computed(() => !!pod.value && props.view.kpis.degraded.some(ite
 const paused = computed(() => pod.value?.lifecycle === 'paused')
 const title = computed(() => pod.value?.name ?? system.value?.name ?? props.id)
 const kind = computed(() => pod.value ? t('Pod') : system.value ? t('System') : '')
-const group = computed(() => pod.value?.group ?? null)
 const byKind = (kind: MapResource['kind']) => pod.value?.resources.filter(resource => resource.kind === kind) ?? []
 const secrets = computed(() => pod.value?.secrets ?? [])
 const openRequests = computed(() => (props.requests ?? []).filter(row => row.podId === props.id && row.status !== 'collected' && row.status !== 'expired'))
@@ -51,7 +50,7 @@ function runNow() {
     </div>
     <div class="row">
       <span v-if="paused" class="pill off">{{ t('paused') }}</span><span v-else-if="degraded" class="pill warn">{{ t('running with gaps') }}</span><span v-else class="pill ok">{{ t('active') }}</span>
-      <span class="pill off">{{ kind }}</span><span v-if="group !== null || pod" class="pill off">{{ group ?? t('without group') }}</span>
+      <span class="pill off">{{ kind }}</span>
       <button v-if="pod" class="secondary" type="button" @click="toggle">
         {{ paused ? t('Resume') : t('Pause') }}
       </button>

@@ -25,8 +25,6 @@ export interface MapPod {
   revision: number
   script: string | null
   description: string | null
-  group: string | null
-  groupId: string | null
   lifecycle: 'active' | 'paused' | 'archived'
   draft: boolean
   kind: MapPodKind

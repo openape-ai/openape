@@ -84,6 +84,8 @@ it('adopts the workspace repeatedly as views only, without table rows, credentia
   const first = projection.snapshot(actor.owner)
   expect(first.workspace.pods[0]?.id).toBe(pod.id)
   expect(Object.keys(first).sort()).toEqual(['artifacts', 'blobs', 'pods', 'schema', 'version', 'workspace'])
+  // Relays before issue 1468 require a group organization; groups are tags now, so it is always empty.
+  expect(first.workspace.organization).toEqual({ revision: 1, groups: [] })
   expect([...splitSnapshot(first).keys()].filter(key => key.startsWith('table/'))).toEqual([])
   expect(first).toEqual(projection.snapshot(actor.owner))
   store.db.prepare('UPDATE remote_pods SET owner=?').run(JSON.stringify({ ...actor.owner, subject: 'other' }))

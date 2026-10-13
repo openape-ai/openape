@@ -68,7 +68,7 @@ export function installWorkspace(overrides: Partial<PodsBridge> = {}): PodsBridg
     getStatus: async () => ready,
     onStatus: () => () => {},
     language: async () => 'en',
-    workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: structuredClone(pods) }),
+    workspace: async () => ({ pods: structuredClone(pods) }),
     details: async command => command.type === 'source'
       ? { ...structuredClone(details), source: { citation, content: 'Sent reply confirms Tuesday delivery. The receiving contact at Northwind Trading Company has not been named yet; the warehouse asked for confirmation before 16:00.', original: { ...citation, id: 'raw-order-mail', locator: 'fixture:Northwind/order-42/raw' } } }
       : structuredClone(details),
