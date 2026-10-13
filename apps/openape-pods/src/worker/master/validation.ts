@@ -26,8 +26,15 @@ import { assignedMail } from '../../main/mail/assigned'
 import { parseMailRequest } from '../../main/mail/contract'
 import { parseWorkDeclarations } from '../../contracts/work'
 import type { WorkDeclaration } from '../../contracts/work'
+import type { ScriptResult } from '../../contracts/runs'
 
-export async function validateDraft(store: PodDatabase, resources: ResourceRegistry, runtime: AgentRuntime, draftId: string, revision: number, signal: AbortSignal): Promise<{ hash: string, evidence: string }> {
+/** Validation is a contract smoke check: any well-formed result passes, unless the script ended unsuccessfully after a refused service request. */
+function assertValidationResult(result: ScriptResult, refusal: Error | undefined): void {
+  if (['completed', 'completedWithGaps'].includes(result.status) || !refusal) return
+  throw new Error(`Draft returned ${result.status} after validation refused a service request: ${refusal.message}`)
+}
+
+export async function validateDraft(store: PodDatabase, resources: ResourceRegistry, runtime: AgentRuntime, draftId: string, revision: number, signal: AbortSignal): Promise<{ hash: string, evidence: string, status: ScriptResult['status'] }> {
   const draft = store.db.prepare('SELECT * FROM script_drafts WHERE id=? AND revision=?').get(draftId, revision)
   if (!draft) throw new Error('Draft changed; reload before validation')
   assertImportSetupFinished(store, draft.pod_id as string)
@@ -64,7 +71,8 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
     const input = { home, directories: [], variables, version: 1 as const, runId: randomUUID(), podId: pod.id, scriptHash: hash, assignmentRevision: pod.bindingRevision, reason: 'manual' as const, eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: epoch, workspace: join(root, 'workspace'), references: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 }, validation: true as const }
     let work: WorkDeclaration[] | undefined
     let polls = false
-    const checked = executeScript({ ...runtime, dependencyRoot }, root, artifact, input, signal, { event: () => {}, request: async (operation, payload) => {
+    let refusal: Error | undefined
+    const synthetic = async (operation: string, payload: unknown): Promise<unknown> => {
       if (operation === 'graph.contract') throw new Error('Network contracts (takes/gives) are retired; declare work and use shared data instead')
       if (operation === 'mail.archive' || operation === 'mail.archiveApproved') throw new Error('Archive proposals require live provider data; synthetic validation never creates grants or moves mail')
       if (operation === 'work.contract') {
@@ -122,14 +130,19 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
         return { version: 1, operation: read.operation, account: scope.account, folder: read.folder, items: [], complete: true, nextCursor: null }
       }
       throw new Error('Validation rejected an undeclared service request')
+    }
+    const result = await executeScript({ ...runtime, dependencyRoot }, root, artifact, input, signal, { event: () => {}, request: async (operation, payload) => {
+      try { return await synthetic(operation, payload) }
+      catch (error) {
+        // A script may swallow or rephrase the refusal; the first refusal is what validation reports.
+        refusal ??= error instanceof Error ? error : new Error('Validation refused a service request')
+        throw error
+      }
     } })
-    // A script may swallow or rephrase the refusal; the refusal itself decides.
-    await Promise.allSettled([checked])
-    const result = await checked
-    if (!['completed', 'completedWithGaps'].includes(result.status)) throw new Error('Draft did not complete its synthetic contract check')
+    assertValidationResult(result, refusal)
     if (result.gapIds.some(id => !fixture.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(fixturePod.id, id))) throw new Error('Draft returned an uncommitted validation gap')
     signal.throwIfAborted()
-    const evidence = JSON.stringify({ kind: 'native-synthetic-contract', variablesHash, draftRevision: revision, assignmentRevision: pod.bindingRevision, resourceEpoch: epoch, dependencyLockHash, services: 'synthetic credentials, empty synthetic mail and recorded agent output', limits: input.limits, result: result.status })
+    const evidence = JSON.stringify({ kind: 'native-synthetic-contract', variablesHash, draftRevision: revision, assignmentRevision: pod.bindingRevision, resourceEpoch: epoch, dependencyLockHash, services: 'synthetic credentials, empty synthetic mail and recorded agent output', limits: input.limits, result: result.status, summary: result.summary.slice(0, 500) })
     store.transaction(() => {
       if (JSON.stringify(new PodVariables(store).list(pod.id)) !== variableState) throw new Error('Variables changed during validation; validate again')
       if (store.getPod(pod.id).lifecycle === 'archived' || store.getPod(pod.id).bindingRevision !== pod.bindingRevision || resources.epoch(pod.id) !== epoch || store.db.prepare('SELECT revision FROM script_drafts WHERE id=?').get(draftId)?.revision !== revision) throw new Error('Draft, script binding or permissions changed during validation')
@@ -141,7 +154,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(pod.id, hash, pod.bindingRevision, epoch, evidence)
       store.db.prepare('UPDATE script_drafts SET script_hash=?,validation=? WHERE id=? AND revision=?').run(hash, evidence, draftId, revision)
     })
-    return { hash, evidence }
+    return { hash, evidence, status: result.status }
   }
   finally { fixture.close() }
 }

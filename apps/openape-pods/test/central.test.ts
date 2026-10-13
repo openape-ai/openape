@@ -114,7 +114,6 @@ it('executes the same MCP/browser command once and exposes central results with 
   expect(await call(submit)).toMatchObject({ id, state: 'applied' })
   expect(await call({ type: 'operation', id })).toMatchObject({ id, state: 'applied' })
   await expect(call({ ...submit, command: { ...command, body: { ...command.body, text: 'Changed retry' } } })).rejects.toThrow('workspace_operation_conflict')
-  await expect(call({ ...submit, id: randomUUID() })).rejects.toThrow('workspace_revision_conflict')
   expect(await call({ type: 'read', runtimeId: actor.id, podId: pod.id })).toMatchObject({ pod: { details: { description: { text: 'Shared with both clients' } }, runs: { runs: [{ id: runId, summary: 'Synthetic result', error: 'Synthetic failure', state: 'failed' }] } } })
   expect(execute).toHaveBeenCalledOnce()
   expect(server.read(actor.owner, actor.id, pod.id).pod.details.description?.text).toBe('Shared with both clients')
@@ -191,7 +190,7 @@ it.each([false, true])('settles a command lost after its claim (started locally:
   expect(execute).not.toHaveBeenCalled()
 }, 15000)
 
-const fast = { heartbeatMs: 100, publishIntervalMs: 0 }
+const fast = { heartbeatMs: 100, publishIntervalMs: 0, submitRetryMs: 10 }
 function connected(options: { request?: (forward: (body: Record<string, unknown>) => Promise<unknown>, body: Record<string, unknown>) => Promise<unknown>, executor?: Partial<CentralExecutor> } = {}) {
   const { root, projection, actor, pod, store, details } = fixture()
   const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
@@ -257,6 +256,42 @@ it('runs concurrent owner actions one at a time and resubmits busy or moved-revi
   expect(order).toEqual(['first', 'second', 'third'])
   expect(refusals).toBe(2)
 }, 12000)
+
+it('resubmits an MCP command refused as busy or moved at the current revision and keeps its receipt', async () => {
+  let refusals = 0
+  const submitted: number[] = []
+  const { controller, actor, pod, server } = connected({ request: async (forward, body) => {
+    if (body.type === 'submit') {
+      submitted.push(Number(body.revision))
+      if (refusals < 2) { refusals++; throw new ProtocolError(refusals === 1 ? 'workspace_busy' : 'workspace_revision_conflict', 409) }
+    }
+    return forward(body)
+  } })
+  controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true), { timeout: 10000 })
+  const current = server.inventory(actor.owner)[0]!.revision
+  const command = { channel: 'details', body: { type: 'describe', podId: pod.id, revision: 0, text: 'Submitted while the runtime publishes' } }
+  const submit = { type: 'submit', runtimeId: actor.id, revision: 0, command, id: randomUUID() }
+  expect(await controller.query(submit)).toMatchObject({ id: submit.id, state: 'accepted' })
+  expect(submitted).toEqual([0, current, current])
+  // A lost response is retried with the caller's original revision and returns the receipt of the accepted command.
+  expect(await controller.query(submit)).toMatchObject({ id: submit.id, runtimeId: actor.id })
+  await expect(controller.query({ ...submit, command: { ...command, body: { ...command.body, text: 'Changed' } } })).rejects.toThrow('workspace_operation_conflict')
+}, 20000)
+
+it('stops resubmitting an MCP command after a bounded number of refusals', async () => {
+  const submitted: unknown[] = []
+  const { controller, actor, pod } = connected({ request: async (forward, body) => {
+    if (body.type !== 'submit') return forward(body)
+    submitted.push(body.id)
+    throw new ProtocolError('workspace_busy', 409)
+  } })
+  controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true), { timeout: 10000 })
+  const submit = { type: 'submit', runtimeId: actor.id, revision: 1, command: { channel: 'runs', body: { type: 'start', podId: pod.id } }, id: randomUUID() }
+  await expect(controller.query(submit)).rejects.toThrow('workspace_busy')
+  expect(submitted).toEqual(Array.from({ length: 10 }, () => submit.id))
+}, 20000)
 
 it('reports other submit refusals immediately', async () => {
   const { controller } = connected({ request: async (forward, body) => {

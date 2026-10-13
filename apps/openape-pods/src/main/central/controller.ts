@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import type { CentralClient, CentralCommand, CentralOperation, CentralSnapshot, CentralState, CentralStatus, UncertainOperation } from '../../contracts/central'
+import type { CentralClient, CentralCommand, CentralOperation, CentralRuntime, CentralSnapshot, CentralState, CentralStatus, UncertainOperation } from '../../contracts/central'
+import { canonicalJson } from '../../contracts/canonical-json'
 import { centralHeartbeatMs, parseCentralSnapshot } from '../../contracts/central'
 import { encodeParts, manifestDigest, splitSnapshot } from '../../contracts/central-parts'
 import type { CentralManifest } from '../../contracts/central-parts'
@@ -28,6 +29,11 @@ function refusedWithoutOperation(error: unknown): boolean {
   const { status, code } = error as { status?: unknown, code?: unknown }
   return status === 409 && (code === 'workspace_busy' || code === 'workspace_revision_conflict')
 }
+function operationConflict(error: unknown): boolean {
+  const { status, code } = error as { status?: unknown, code?: unknown }
+  return status === 409 && code === 'workspace_operation_conflict'
+}
+const submitAttempts = 10
 export const reconnectingMs = 2 * 60000
 export const offlineAlertMs = 5 * 60000
 const batchBytes = 2 * 1024 * 1024
@@ -87,7 +93,7 @@ export class CentralController {
   private cached: { version: number, snapshot: CentralSnapshot, hash: string } | null = null
   private uncertain: UncertainOperation[] = []
   error: string | null = null
-  constructor(private readonly root: string, private readonly request: WorkspaceRequest, private readonly executor: CentralExecutor, private readonly helper: string, private readonly timing = { heartbeatMs: centralHeartbeatMs, publishIntervalMs: 5000 }) {}
+  constructor(private readonly root: string, private readonly request: WorkspaceRequest, private readonly executor: CentralExecutor, private readonly helper: string, private readonly timing: { heartbeatMs: number, publishIntervalMs: number, submitRetryMs?: number } = { heartbeatMs: centralHeartbeatMs, publishIntervalMs: 5000 }) {}
 
   get executing(): boolean { return this.context.getStore() === true }
   get available(): boolean { return this.online }
@@ -369,9 +375,44 @@ export class CentralController {
   async query(body: Record<string, unknown>): Promise<unknown> {
     if (!['inventory', 'read', 'submit', 'operation', 'changes'].includes(String(body.type))) throw new Error('Unsupported workspace query')
     if (!this.lease) throw new Error(this.offlineMessage())
+    if (body.type === 'submit') return this.submit(body)
     const result = await this.call(body)
     if (body.type !== 'inventory' || !Array.isArray(result)) return result
     return result.map((runtime: { id?: unknown }) => runtime.id === this.runtimeId ? { ...runtime, desktop: this.status() } : runtime)
+  }
+
+  /**
+   * A runtime publishes a new revision every few seconds, so a submit at a revision read a moment earlier
+   * is often refused. Both refusals create no operation and commands are idempotent by id: the identical
+   * command is submitted again at the runtime's current revision, a bounded number of times.
+   */
+  private async submit(body: Record<string, unknown>): Promise<unknown> {
+    let revision = body.revision
+    for (let attempt = 1; ; attempt++) {
+      try { return await this.call({ ...body, revision }) }
+      catch (error) {
+        if (operationConflict(error)) return this.acceptedAtAnotherRevision(body, error)
+        if (!refusedWithoutOperation(error) || attempt >= submitAttempts) throw error
+        await delay(this.timing.submitRetryMs ?? 1000, undefined, { signal: this.abort.signal })
+        revision = await this.runtimeRevision(String(body.runtimeId))
+      }
+    }
+  }
+
+  /** A resubmitted command may have been accepted at a later revision than the caller read; the identical command keeps that receipt. */
+  private async acceptedAtAnotherRevision(body: Record<string, unknown>, conflict: unknown): Promise<CentralOperation> {
+    let operation: CentralOperation
+    try { operation = await this.call({ type: 'operation', id: body.id }) as CentralOperation }
+    catch { throw conflict }
+    if (operation.runtimeId !== body.runtimeId || canonicalJson(operation.command) !== canonicalJson(body.command)) throw conflict
+    return operation
+  }
+
+  private async runtimeRevision(runtimeId: string): Promise<number> {
+    const runtimes = await this.call({ type: 'inventory' }) as CentralRuntime[]
+    const runtime = runtimes.find(item => item.id === runtimeId)
+    if (!runtime) throw new Error('This runtime is no longer in the workspace inventory')
+    return runtime.revision
   }
 
   async stop(): Promise<void> {

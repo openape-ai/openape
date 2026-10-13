@@ -476,6 +476,8 @@ async function start(): Promise<void> {
   setInterval(() => { remote.deliverInbox().catch((error: unknown) => console.error('Could not deliver Pod notifications', error)) }, 15000).unref()
   // Always grants of finished object approvals would stay active at the IdP; a few batches are released per minute.
   setInterval(() => { worker.releaseApprovalGrants(AbortSignal.timeout(50000)).catch((error: unknown) => console.error('Could not release approval grants', error)) }, 60000).unref()
+  // A Pod grant decided on the IdP page changes only there; the ledger reads its pending grants again every minute.
+  setInterval(() => { worker.refreshPendingGrants(AbortSignal.timeout(50000)).catch((error: unknown) => console.error('Could not refresh pending Pod grants', error)) }, 60000).unref()
   // Decisions are taken through the central workspace, so they are published only while it is online.
   setInterval(() => {
     const inbox = worker.inbox

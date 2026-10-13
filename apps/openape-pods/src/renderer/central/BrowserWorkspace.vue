@@ -10,7 +10,6 @@ import AccountStatus from '../AccountStatus.vue'
 import CentralWorkspace from './CentralWorkspace.vue'
 import AutomationsShell from './AutomationsShell.vue'
 import AppSettings from '../AppSettings.vue'
-import { kpiFacts } from '../utils/kpis'
 import { t, diagnostic, time } from '../i18n'
 
 /**
@@ -90,7 +89,7 @@ defineExpose({ openPod })
     <p v-if="subject && loaded && !runtime && page === 'Automations'" class="muted">
       {{ t('Connect your desktop to bring your Pods online.') }}
     </p>
-    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :decisions="runtime?.workspace.map ? kpiFacts(runtime.workspace.map).decisions.count : undefined" :tab="tab" inbox-url="/inbox/" :sharing="!!runtime?.online" @update:tab="tab = $event" @settings="page = 'App settings'" @command="remoteCommand" @open-pod="openPod" />
+    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :tab="tab" inbox-url="/inbox/" :sharing="!!runtime?.online" @update:tab="tab = $event" @settings="page = 'App settings'" @command="remoteCommand" @open-pod="openPod" />
     <AppSettings v-if="subject && page === 'App settings'" browser :subject="subject" :sharing="!!runtime?.online" @logout="logout" @import="page = 'Import'" />
     <SharingImport v-if="subject && page === 'Import' && runtime" :api="sharingApi" :desktop="false" @open-pod="openPod" />
     <CentralWorkspace v-if="subject" v-show="page === 'Pods'" ref="workspace" :client="client" embedded shared-editor @inventory="inventory" @connection="connectionError = $event" @login="expired" @logout="logout" />

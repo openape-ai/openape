@@ -270,7 +270,7 @@ onBeforeUnmount(() => { generation++; abort.abort() })
       </p>
     </div>
     <div v-else class="central-layout">
-      <section v-if="!selected" class="central-inventory">
+      <section v-if="!selected && !embedded" class="central-inventory">
         <header class="inventory-heading">
           <div>
             <h1>{{ t('Pods') }}</h1><p class="central-muted">
@@ -304,7 +304,7 @@ onBeforeUnmount(() => { generation++; abort.abort() })
         <slot name="account" />
       </section>
       <div class="central-content">
-        <button v-if="selected" class="text-button" :disabled="busy || !!operationId" @click="showInventory()">
+        <button v-if="selected && !embedded" class="text-button" :disabled="busy || !!operationId" @click="showInventory()">
           ‹ {{ t('Pods') }}
         </button>
         <p v-if="desktopStatus && desktopStatus.state !== 'online'" role="alert" class="central-error">
