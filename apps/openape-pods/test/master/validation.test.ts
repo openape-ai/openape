@@ -50,3 +50,13 @@ it('rejects an unsuccessful result after a refused service request, a thrown scr
   vi.mocked(executeScript).mockResolvedValue({ status: 'completedWithGaps', summary: 'Gap without a claim', completedInputIds: [], gapIds: ['missing'] })
   await expect(validate()).rejects.toThrow('uncommitted validation gap')
 })
+
+// Issue 1469: validation accepted a program approval request that the live run refused.
+it('refuses a program approval request for an application the script does not declare', async () => {
+  const { validate } = await drafted()
+  vi.mocked(executeScript).mockImplementation(async (_runtime, _root, _artifact, _input, _signal, services) => {
+    await services.request('approvals.request', { action: 'program.run', payload: { application: 'git', argv: ['push', 'origin', 'main'] } }, new AbortController().signal)
+    return { status: 'completed', summary: 'Asked', completedInputIds: [], gapIds: [] }
+  })
+  await expect(validate()).rejects.toThrow('Application is not declared and assigned to this script')
+})

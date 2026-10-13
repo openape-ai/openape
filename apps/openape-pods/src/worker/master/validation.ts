@@ -5,6 +5,7 @@ import { parseAgentRequest } from '../../contracts/agent'
 import { DependencyStore } from '../dependencies/store'
 import { resolveProgram } from '../../main/programs/session'
 import { programRequest } from '../../main/programs/invoke'
+import { describeProgram } from '../runs/program-effects'
 import { parseHttpRequest, isHttpEffect } from '../../contracts/http'
 import { assignedHttp } from '../../main/programs/http-service'
 import { PodVariables } from '../resources/variables'
@@ -92,7 +93,12 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       if (operation === 'data.set' || operation === 'data.delete') return { revision: 1 }
       if (operation === 'decisions.ask') return { id: randomUUID(), state: 'pending', option: null }
       if (operation === 'decisions.withdraw') return { withdrawn: 0 }
-      if (operation === 'approvals.request') return { id: randomUUID(), state: 'collecting' }
+      if (operation === 'approvals.request') {
+        // A program approval is checked like at run time: an assigned, declared application and an approvable command.
+        const asked = payload as { action?: unknown, payload?: { application?: unknown, argv?: unknown } } | null
+        if (asked?.action === 'program.run') await describeProgram(resources.list(pod.id), pod.id, capabilities, { application: String(asked.payload?.application ?? ''), argv: asked.payload?.argv })
+        return { id: randomUUID(), state: 'collecting' }
+      }
       if (operation === 'notify') { parseNotify(payload); return { eventId: `${pod.id}:synthetic`, queued: false } }
       if (operation === 'credentials.get') {
         const alias = parseCredentialRead(payload)
