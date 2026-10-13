@@ -27,8 +27,9 @@ const NOW = view.at + 11 * 60000
 const frames = (count = 40) => new Promise<void>((done) => { const tick = (left: number) => left ? requestAnimationFrame(() => tick(left - 1)) : done(); tick(count) })
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; document.documentElement.style.colorScheme = ''; applyLanguage('en'); localStorage.clear() })
-async function mountShell(width: number, height: number, dark = false, shown = view) {
+async function mountShell(width: number, height: number, dark = false, shown = view, mode: 'map' | 'list' = 'map') {
   await page.viewport(width, height)
+  localStorage.setItem('pods.automations.mode', mode)
   document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
   applyLanguage('de')
   wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view: shown, live: false, now: NOW, decisions: 17 } })
@@ -92,6 +93,21 @@ describe('Automatisierungen layout', () => {
     expect(drawer.bottom).toBeLessThanOrEqual(1000)
     expect(document.querySelector('.automation-detail [data-shared]')!.textContent).toContain('delta-mind/mail/classifications')
     await shot('05-pod-detail-klassifizierung')
+  })
+
+  it('shows one row per Pod with purpose, state, result, next run and waits-for at 1280 and 390 px', async () => {
+    const described = structuredClone(view)
+    for (const item of described.pods) item.description = item.description ?? `${item.name}: liest neue Einträge und schreibt das Ergebnis in die gemeinsamen Daten.`
+    for (const [width, height] of [[1280, 900], [390, 844]] as const) {
+      await mountShell(width, height, false, parseMapView(described), 'list')
+      const table = document.querySelector('.automations-list table')!
+      expect(table.querySelectorAll('thead th')).toHaveLength(5)
+      expect(document.querySelector('.automations-list tbody tr .automations-list-purpose')!.textContent).toContain('liest neue Einträge')
+      expect(document.documentElement.scrollWidth, `${width}: page overflow`).toBeLessThanOrEqual(width)
+      await shot(`15-zeilen-${width}`)
+      await page.screenshot({ path: screenshotPath(`redesign-15-zeile-${width}.png`), element: document.querySelector<HTMLElement>('.automations-list tbody tr:nth-child(2)')! })
+      wrapper!.unmount(); wrapper = undefined
+    }
   })
 
   it('pins a Pod without drawing access labels over the map', async () => {
