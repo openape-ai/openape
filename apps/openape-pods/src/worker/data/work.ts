@@ -100,7 +100,11 @@ export class WorkLedger {
       const eligible = value !== null && this.matches(operation, value) && this.current({ result })
       const key = eligible ? this.workKey(operation, object, this.fingerprint(operation, value)) : null
       this.store.db.prepare(`UPDATE work_items SET state='superseded',reason='The input changed before this work started',updated_at=? WHERE operation=? AND object=? AND key IS NOT ? AND state IN ('ready','retry_wait','waiting')`).run(now, operation.operation, object, key)
-      if (key) this.store.db.prepare('INSERT OR IGNORE INTO work_items(key,operation,object,input_revision,fingerprint,rule_version,generation,state,ready_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,\'ready\',?,?,?)').run(key, operation.operation, object, Number(row.revision), this.fingerprint(operation, value), operation.rule_version, operation.generation, now, now, now)
+      // An input that returns to an earlier fingerprint makes that never-finished, superseded work ready again.
+      if (key) {
+        this.store.db.prepare(`INSERT INTO work_items(key,operation,object,input_revision,fingerprint,rule_version,generation,state,ready_at,created_at,updated_at) VALUES(?,?,?,?,?,?,?,'ready',?,?,?)
+        ON CONFLICT(key) DO UPDATE SET state='ready',input_revision=excluded.input_revision,reason=NULL,ready_at=excluded.ready_at,updated_at=excluded.updated_at WHERE work_items.state='superseded'`).run(key, operation.operation, object, Number(row.revision), this.fingerprint(operation, value), operation.rule_version, operation.generation, now, now, now)
+      }
     }
     if (rows.length) this.store.db.prepare('UPDATE work_operations SET cursor=? WHERE operation=?').run(Number(rows.at(-1)!.sequence), operation.operation)
   }
