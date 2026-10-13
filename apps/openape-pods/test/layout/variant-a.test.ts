@@ -22,7 +22,7 @@ function fixture() {
   const status: CentralStatus = { state: 'online', runtimeId: central.host.id, error: null, since: 1790000000000, lastOnlineAt: 1790000000000, gateUntil: 0, lastTickAt: null, tickingSince: null, tickPhase: null, tickTimeout: null, format: 2, lastPublication: null, uncertain: [] }
   let session: McpSessionView = { expiresAt: 1790614800000, pending: false }
   const bridge = installWorkspace({
-    workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: structuredClone(inventory) }),
+    workspace: async () => ({ pods: structuredClone(inventory) }),
     programs: async (command) => { if (command.type === 'launchStatus') return null; throw new Error(`Unexpected program command: ${command.type}`) },
     onboarding: async () => ({ owner: 'owner', complete: true, podIdentity: { podId, bound: true, ownerConnection: 'owner', issuer: 'https://pods.example.invalid', decisionIssuer: 'https://identity.example.invalid', subject: 'mail-knowledge@pods.example.invalid', brokerConnectionId: null }, runtime: { ready: true, error: null }, connections: [{ id: 'owner', provider: 'openape', state: 'ready', account: 'owner@example.invalid', error: null, login: null }, { id: 'codex', provider: 'chatgpt', state: 'ready', account: 'AI account', error: null, login: null }] }),
     mcpSession: async (command) => { if (command.type === 'end') session = { expiresAt: null, pending: false }; return { ...session } },

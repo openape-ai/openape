@@ -132,6 +132,8 @@ function move(event: MouseEvent) {
   const id = item?.id ?? null
   if (id !== hover) { hover = id; emit('hover', id) }
   canvas.value!.style.cursor = item ? 'pointer' : 'default'
+  // The native tooltip names what a Pod does without opening anything.
+  canvas.value!.title = item?.kind === 'pod' ? props.view.pods.find(pod => pod.id === item.id)?.description ?? '' : ''
 }
 function click(event: MouseEvent) {
   const p = position(event); const item = hitTest(model.value, visible.value, p.x, p.y)

@@ -8,7 +8,6 @@ import LocalShell from './central/LocalShell.vue'
 import SharingImport from './SharingImport.vue'
 import SharingExport from './SharingExport.vue'
 import type { PortableSourceSelection, SharingCommand } from '../contracts/sharing'
-import type { Organization } from '../contracts/groups'
 import AccountStatus from './AccountStatus.vue'
 import PodDescription from './PodDescription.vue'
 import PodScript from './PodScript.vue'
@@ -16,29 +15,31 @@ import PodSettings from './PodSettings.vue'
 import PodValues from './PodValues.vue'
 import PodResources from './PodResources.vue'
 import PodRuns from './PodRuns.vue'
-import { runFailure, runHeadline, runResult } from './run-activity'
-import RunApproval from './RunApproval.vue'
 import type { RunApproval as Approval } from '../contracts/activity'
 import PodKnowledge from './PodKnowledge.vue'
-import type { StoredPod, WorkspaceState } from '../contracts/control'
+import TagEditor from './central/TagEditor.vue'
+import type { CentralCommand } from '../contracts/central'
+import type { MapTags } from '../contracts/map-view'
+import type { ItemTags, StoredPod, WorkspaceState } from '../contracts/control'
 import type { PodDetails } from '../contracts/details'
 import type { RunRecord } from '../contracts/runs'
 import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { WorkspaceFrame, AppSettings, LocalShell, SharingImport, SharingExport, AccountStatus, RunApproval, PodDescription, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge },
+  components: { WorkspaceFrame, AppSettings, LocalShell, SharingImport, SharingExport, AccountStatus, PodDescription, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge, TagEditor },
   props: { embedded: Boolean, initialPodId: { type: String, default: '' }, refreshToken: { type: Number, default: 0 } },
   emits: ['settings'],
   setup() { return { access: usePodAccess() } },
   data() {
-    return { sharing: typeof window.pods?.sharing === 'function', shareSelection: null as PortableSourceSelection | null, requestedRun: '', requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: this.initialPodId ? 'Overview' : 'Pods', tabs: ['Overview', 'Script', 'Values', 'Permissions', 'Settings', 'History'], pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { sharing: typeof window.pods?.sharing === 'function', shareSelection: null as PortableSourceSelection | null, requestedRun: '', requestedSecret: '', approvals: [] as (Approval & { runId: string })[], selected: this.initialPodId ? 'Overview' : 'Pods', sections: ['runs', 'values', 'access', 'settings', 'code'], tags: [] as ItemTags[], codeOpen: false, pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
-    activeTab(): string { return this.selected === 'Knowledge' ? 'Overview' : this.selected },
     globalPage(): boolean { return ['App settings', 'Pods', 'Import', 'Share'].includes(this.selected) },
     sharingApi(): (command: SharingCommand) => Promise<import('../contracts/sharing').SharingState> { return command => window.pods.sharing!(command) },
     pod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.podId) },
+    podTags(): MapTags { const item = this.tags.find(entry => entry.id === this.podId); return item ? { own: item.tags, revision: item.revision } : { own: [], revision: 0 } },
+    tagSuggestions(): string[] { return [...new Set(this.tags.flatMap(item => item.tags))].sort() },
     workerLabel(): string { if (this.connectionError) return t('Unavailable'); return label({ starting: 'Starting', ready: 'Ready', recovery: 'Needs attention', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting']) },
     attention(): boolean { return !!this.connectionError || this.status?.worker.state === 'error' },
     currentRun(): RunRecord | undefined { return this.runs.find(run => run.state === 'running') },
@@ -56,10 +57,23 @@ export default defineComponent({
     navigate(page: string) { if (this.embedded && page === 'App settings') { this.$emit('settings'); return }; this.selected = page },
     share(selection: PortableSourceSelection) { this.shareSelection = selection; this.selected = 'Share' },
     podResources(podId: string) { return window.pods.resources({ type: 'list', podId }) },
-    t, runFailure, runHeadline, runResult, diagnostic, label, dateTime,
-    async openRun(podId: string, runId: string) { await this.selectPod(podId); this.requestedRun = runId; this.selected = 'History' },
-    openValues(alias = '') { this.requestedSecret = alias; this.selected = 'Values' },
-    workspaceChanged(state: WorkspaceState) { if (state.organization.revision < this.organization.revision) return; this.pods = state.pods; this.organization = state.organization },
+    t, diagnostic, label, dateTime,
+    sectionTitle(section: string): string { return ({ runs: t('Runs'), values: t('Variables and secrets'), access: t('Access'), settings: t('Settings'), code: t('Code') } as Record<string, string>)[section] ?? section },
+    async openRun(podId: string, runId: string) { await this.selectPod(podId); this.requestedRun = runId; this.goTo('runs') },
+    openValues(alias = '') { this.requestedSecret = alias; this.goTo('values') },
+    /** The Pod page is one scrolling page; section links jump instead of switching tabs. */
+    goTo(section: string) { this.selected = 'Overview'; if (section === 'code') this.codeOpen = true; void this.$nextTick(() => document.getElementById(`section-${section}`)?.scrollIntoView({ block: 'start' })) },
+    async saveTags(command: CentralCommand) {
+      try { await this.access.api.workspace(command.body as Parameters<typeof this.access.api.workspace>[0]); await this.refresh() }
+      catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not save tags' }
+    },
+    async openFolder() {
+      if (this.pod && !this.access.remote) {
+        try { await window.pods.programs({ type: 'openFolder', podId: this.pod.id }) }
+        catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not open folder' }
+      }
+    },
+    workspaceChanged(state: WorkspaceState) { this.pods = state.pods; this.tags = state.tags ?? [] },
     poll() { if (this.closed) return; this.timer = setTimeout(async () => { await this.refresh(); this.poll() }, 1000) },
     async refresh() {
       if (this.busy || (!this.access.remote && this.status?.worker.state !== 'ready')) return
@@ -76,25 +90,16 @@ export default defineComponent({
       catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not load workspace' }
       finally { this.busy = false }
     },
-    async selectPod(id: string) { this.requestedRun = ''; this.requestedSecret = ''; this.podId = id; this.approvals = []; this.creating = false; this.details = null; this.runs = []; this.schedule = null; this.selected = 'Overview'; await this.refresh() },
+    async selectPod(id: string) { this.requestedRun = ''; this.requestedSecret = ''; this.podId = id; this.approvals = []; this.creating = false; this.details = null; this.runs = []; this.schedule = null; this.codeOpen = false; this.selected = 'Overview'; await this.refresh() },
     async changed(id: string) { if (this.creating && id) this.selected = 'Overview'; this.podId = id; this.creating = !id; await this.refresh() },
-    async selectTab(tab: string) { await this.refresh(); this.selected = tab },
     async runOnce() {
-      if (!this.pod) return; try { await this.access.api.runs({ type: 'start', podId: this.pod.id, expectedScript: this.pod.activeScript ?? undefined }); this.selected = 'History'; await this.refresh() }
+      if (!this.pod) return; try { await this.access.api.runs({ type: 'start', podId: this.pod.id, expectedScript: this.pod.activeScript ?? undefined }); await this.refresh(); this.goTo('runs') }
       catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not start run' }
     },
     async pause() {
       if (!this.pod) return
       try { await this.access.api.scheduling({ type: 'lifecycle', podId: this.pod.id, revision: this.pod.revision, lifecycle: this.pod.lifecycle === 'active' ? 'paused' : 'active' }); await this.refresh() }
       catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not change lifecycle' }
-    },
-    moveTab(event: KeyboardEvent, index: number) {
-      if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return
-      event.preventDefault()
-      const next = event.key === 'Home' ? 0 : event.key === 'End' ? this.tabs.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + this.tabs.length) % this.tabs.length
-      const tab = this.tabs[next]
-      if (tab) this.selected = tab
-      ;(this.$refs.tabButtons as HTMLButtonElement[])[next]?.focus()
     },
   },
 })
@@ -126,80 +131,91 @@ export default defineComponent({
         <p v-if="dataError" role="alert" class="error-message">
           {{ diagnostic(dataError) }}
         </p>
-        <nav v-if="!globalPage && !creating" class="tabs" role="tablist" :aria-label="t('Pod sections')">
-          <button v-for="(tab, index) in tabs" :id="`tab-${tab}`" ref="tabButtons" :key="tab" role="tab" :aria-selected="activeTab === tab" :aria-controls="`panel-${tab}`" :tabindex="activeTab === tab ? 0 : -1" @click="selectTab(tab)" @keydown="moveTab($event, index)">
-            {{ tab === 'Values' ? t('Variables and secrets') : label(tab) }}
+        <nav v-if="!globalPage && !creating && pod && selected !== 'Knowledge'" class="section-links" :aria-label="t('Pod sections')">
+          <button v-for="section in sections" :key="section" class="link" type="button" @click="goTo(section)">
+            {{ sectionTitle(section) }}
           </button>
         </nav>
         <RunApproval v-if="!globalPage && selected !== 'History' && podId" :pod-id="podId" :approvals="approvals" />
-        <AppSettings v-if="selected === 'App settings'" />
-        <LocalShell v-else-if="selected === 'Pods'" :sharing="sharing" @open-pod="selectPod" @share="share" @advanced="navigate('App settings')" @import="selected = 'Import'" />
+        <AppSettings v-if="selected === 'App settings'" :sharing="sharing" @import="selected = 'Import'" />
+        <LocalShell v-else-if="selected === 'Pods'" :sharing="sharing" @open-pod="selectPod" @share="share" @settings="navigate('App settings')" />
         <template v-else-if="selected === 'Import'">
           <SharingImport :api="sharingApi" desktop :resources="podResources" @changed="refresh" @open-pod="selectPod" />
         </template>
         <template v-else-if="selected === 'Share' && shareSelection">
           <SharingExport :key="shareSelection.id" :selection="shareSelection" :api="sharingApi" @done="selected = 'Pods'" />
         </template>
-        <section v-else-if="selected === 'Script'" id="panel-Script" role="tabpanel" aria-labelledby="tab-Script">
-          <PodScript v-if="pod" :key="podId" :pod="pod" @changed="refresh" @values="openValues" @ran="selected = 'History'; refresh()" />
-        </section>
-        <section v-else-if="selected === 'Values'" id="panel-Values" role="tabpanel" aria-labelledby="tab-Values">
-          <PodValues v-if="pod" :key="podId" :pod-id="podId" :requested-secret="requestedSecret" />
-        </section>
-        <section v-else-if="selected === 'Settings'" id="panel-Settings" role="tabpanel" aria-labelledby="tab-Settings">
-          <PodSettings :key="podId" :selected-pod-id="podId" @selected="changed" @accounts="navigate('App settings')" />
-        </section>
-        <section v-else-if="selected === 'Permissions'" id="panel-Permissions" role="tabpanel" aria-labelledby="tab-Permissions">
-          <PodResources :key="podId" :selected-pod-id="podId" @discuss="navigate('App settings')" />
-        </section>
-        <section v-else-if="selected === 'History'" id="panel-History" role="tabpanel" aria-labelledby="tab-History">
-          <PodRuns :key="`${podId}:${requestedRun}`" :selected-run-id="requestedRun" :selected-pod-id="podId" @navigate="navigate($event === 'identity' ? 'Settings' : $event === 'settings' ? 'App settings' : 'Permissions')" />
-        </section>
-        <section v-else-if="selected === 'Knowledge'" id="panel-Overview" role="tabpanel" aria-labelledby="tab-Overview">
+        <section v-else-if="selected === 'Knowledge'" class="pod-section">
           <button class="text-button" @click="selected = 'Overview'">
             {{ t('Back to overview') }}
           </button><PodKnowledge v-if="pod" :key="podId" :pod-id="podId" @discuss="navigate('App settings')" />
         </section>
-        <section v-else id="panel-Overview" role="tabpanel" aria-labelledby="tab-Overview">
-          <template v-if="pod">
+        <PodSettings v-else-if="creating" :selected-pod-id="podId" @selected="changed" @accounts="navigate('App settings')" />
+        <template v-else-if="pod">
+          <section id="section-overview" class="pod-section">
             <PodDescription :key="pod.id" :pod-id="pod.id" />
-            <article class="card">
-              <div class="card-heading">
-                <h2>{{ t('Last run') }}</h2><span class="badge">{{ label(runs[0]?.state ?? 'Not run yet') }}</span>
-              </div><p>{{ runs[0] ? diagnostic(runHeadline(runs[0])) : t('Ready for its first manual run.') }}</p><p v-if="runs[0] && !runs[0].error && runResult(runs[0])">
-                {{ label(runResult(runs[0])) }}
-              </p><p v-if="runs[0]" class="muted">
-                {{ dateTime(runs[0].startedAt) }}
-              </p><p v-if="runs[0]?.error && !schedule?.retry" class="error-message">
-                {{ diagnostic(runFailure(runs[0].error)?.help) }}
-              </p><div class="overview-actions">
-                <button class="text-button" @click="selected = 'History'">
-                  {{ t('View run trace') }}
-                </button><button v-if="!access.remote" class="text-button" @click="selected = 'Knowledge'">
-                  {{ t('Results and sources') }}
-                </button>
-              </div>
+            <article class="card pod-tags">
+              <h2>{{ t('Tags') }}</h2>
+              <TagEditor :id="pod.id" :key="`${pod.id}:${podTags.revision}`" :tags="podTags" :suggestions="tagSuggestions" @command="saveTags" />
             </article>
             <div class="overview-actions">
-              <button v-if="needsRecovery && !currentRun" class="primary" @click="selected = 'History'">
+              <button v-if="needsRecovery && !currentRun" class="primary" @click="goTo('runs')">
                 {{ t('Prepare retry') }}
               </button>
               <button v-else class="primary" :disabled="!pod.activeScript || !!currentRun || !!schedule?.retry || pod.lifecycle === 'archived' || attention" @click="runOnce">
                 {{ t('Run now') }}
-              </button><span v-if="!pod.activeScript" class="muted">{{ t('Prepare the script before its first run.') }}</span><span v-else-if="currentRun" class="muted">{{ t('A run is active') }}</span>
+              </button>
+              <button v-if="pod.lifecycle !== 'archived'" class="secondary" @click="pause">
+                {{ pod.lifecycle === 'active' ? t('Pause') : t('Resume') }}
+              </button>
+              <button v-if="!access.remote" class="text-button" @click="selected = 'Knowledge'">
+                {{ t('Results and sources') }}
+              </button>
+              <span v-if="!pod.activeScript" class="muted">{{ t('Prepare the script before its first run.') }}</span><span v-else-if="currentRun" class="muted">{{ t('A run is active') }}</span>
             </div>
             <p v-if="schedule?.retry" role="status">
               {{ t('Waiting for service recovery. Next attempt: {time}', { time: dateTime(schedule.retry.at) }) }}
             </p>
-            <p v-if="schedule?.blocked" class="error-message">
-              {{ t('Unfinished work is waiting. Open run history to prepare a retry.') }}
-            </p>
-          </template><article v-else class="card empty-panel">
-            <h2>{{ t('No pods yet') }}</h2><p class="muted">
-              {{ t('Create your first Pod from the Automations tab: hand a brief to Codex.') }}
-            </p>
-          </article>
-        </section>
+          </section>
+          <section id="section-runs" class="pod-section">
+            <h2 class="section-title">
+              {{ t('Runs') }}
+            </h2>
+            <PodRuns :key="`${podId}:${requestedRun}`" :selected-run-id="requestedRun" :selected-pod-id="podId" @navigate="$event === 'identity' ? goTo('settings') : $event === 'settings' ? navigate('App settings') : goTo('access')" />
+          </section>
+          <section id="section-values" class="pod-section">
+            <h2 class="section-title">
+              {{ t('Variables and secrets') }}
+            </h2>
+            <PodValues :key="podId" :pod-id="podId" :requested-secret="requestedSecret" />
+          </section>
+          <section id="section-access" class="pod-section">
+            <h2 class="section-title">
+              {{ t('Access') }}
+            </h2>
+            <PodResources :key="podId" :selected-pod-id="podId" @discuss="navigate('App settings')" />
+          </section>
+          <section id="section-settings" class="pod-section">
+            <h2 class="section-title">
+              {{ t('Settings') }}
+            </h2>
+            <PodSettings :key="podId" :selected-pod-id="podId" @selected="changed" @accounts="navigate('App settings')" />
+          </section>
+          <section id="section-code" class="pod-section">
+            <details class="code-section" :open="codeOpen" @toggle="codeOpen = ($event.target as HTMLDetailsElement).open">
+              <summary>{{ t('Code') }}</summary>
+              <button v-if="!access.remote" class="secondary" type="button" @click="openFolder">
+                {{ t('Open in editor') }}
+              </button>
+              <PodScript v-if="codeOpen" :key="podId" :pod="pod" @changed="refresh" @values="openValues" @ran="refresh(); goTo('runs')" />
+            </details>
+          </section>
+        </template>
+        <article v-else class="card empty-panel">
+          <h2>{{ t('No pods yet') }}</h2><p class="muted">
+            {{ t('Create your first Pod from the Automations tab: hand a brief to Codex.') }}
+          </p>
+        </article>
       </div>
     </div>
   </WorkspaceFrame>

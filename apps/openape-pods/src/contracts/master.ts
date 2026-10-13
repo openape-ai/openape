@@ -5,7 +5,6 @@ import type { PackageManifest } from './dependencies'
 import type { AdoptionPreview, PodDescription  } from './description'
 import { parseScriptCapabilities } from './credentials'
 import { parseVariable } from './resources'
-import { groupName } from './groups'
 import { parseSchedule } from './scheduling'
 import type { ScheduleSpec } from './scheduling'
 
@@ -60,7 +59,6 @@ export type MasterAction =
   | { action: 'setVariable', podId: string, revision: number, name: string, value: string, variableRevision: number }
   | { action: 'setSchedule', podId: string, revision: number, spec: ScheduleSpec, scheduleRevision: number, enabled: boolean }
   | { action: 'prepareSchedule', podId: string, revision: number, spec: ScheduleSpec, scheduleRevision: number }
-  | { action: 'setGroup', podId: string, revision: number, name: string | null, organizationRevision: number }
   | { action: 'revise', podId: string, revision: number, name: string }
   | { action: 'draft', podId: string, revision: number, draftId: string | null, draftRevision: number, code: string, capabilities: string[], packages?: PackageManifest }
   | { action: 'validate' | 'activate', podId: string, revision: number, draftId: string, draftRevision: number }
@@ -68,7 +66,7 @@ export type MasterAction =
 export function parseMasterAction(value: unknown): MasterAction {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid master action')
   const item = { ...value } as Record<string, unknown>
-  const extra: Record<string, string[]> = { list: [], runtime: [], setVariable: ['name', 'value', 'variableRevision'], prepareSchedule: ['spec', 'scheduleRevision'], setSchedule: ['spec', 'scheduleRevision', 'enabled'], setGroup: ['name', 'organizationRevision'], create: ['name'], inspect: [], run: [], pause: [], resume: [], installMailRecipe: [], revise: ['name'], draft: ['draftId', 'draftRevision', 'code', 'capabilities'], validate: ['draftId', 'draftRevision'], activate: ['draftId', 'draftRevision'], rollback: ['hash', 'expectedActive'] }
+  const extra: Record<string, string[]> = { list: [], runtime: [], setVariable: ['name', 'value', 'variableRevision'], prepareSchedule: ['spec', 'scheduleRevision'], setSchedule: ['spec', 'scheduleRevision', 'enabled'], create: ['name'], inspect: [], run: [], pause: [], resume: [], installMailRecipe: [], revise: ['name'], draft: ['draftId', 'draftRevision', 'code', 'capabilities'], validate: ['draftId', 'draftRevision'], activate: ['draftId', 'draftRevision'], rollback: ['hash', 'expectedActive'] }
   if (typeof item.action !== 'string' || !Object.hasOwn(extra, item.action)) throw new Error('Master action is not allowed')
   const scoped = !['list', 'runtime', 'create'].includes(item.action)
   const allowed = ['action', ...(scoped ? ['podId', 'revision'] : []), ...extra[item.action]!]
@@ -85,7 +83,6 @@ export function parseMasterAction(value: unknown): MasterAction {
   }
   if (item.action === 'setSchedule' && typeof item.enabled !== 'boolean') throw new Error('Schedule enabled state required')
   if (item.action === 'prepareSchedule' || item.action === 'setSchedule') { parseSchedule(item.spec); if (!Number.isSafeInteger(item.scheduleRevision) || (item.scheduleRevision as number) < 0) throw new Error('Invalid schedule revision') }
-  if (item.action === 'setGroup') { if (item.name !== null) item.name = groupName(item.name); if (!Number.isSafeInteger(item.organizationRevision) || (item.organizationRevision as number) < 1) throw new Error('Invalid organization revision') }
   if (item.action === 'rollback' && (typeof item.hash !== 'string' || !/^[a-f0-9]{64}$/.test(item.hash) || (item.expectedActive !== null && (typeof item.expectedActive !== 'string' || !/^[a-f0-9]{64}$/.test(item.expectedActive))))) throw new Error('Invalid rollback version')
   return structuredClone(item) as MasterAction
 }
@@ -95,12 +92,11 @@ export const masterTool = {
   inputSchema: {
     type: 'object', required: ['action'], additionalProperties: false,
     properties: {
-      action: { type: 'string', enum: ['runtime', 'list', 'create', 'inspect', 'revise', 'setVariable', 'prepareSchedule', 'setGroup', 'draft', 'validate', 'activate', 'run', 'pause', 'resume', 'rollback', 'installMailRecipe'] },
+      action: { type: 'string', enum: ['runtime', 'list', 'create', 'inspect', 'revise', 'setVariable', 'prepareSchedule', 'draft', 'validate', 'activate', 'run', 'pause', 'resume', 'rollback', 'installMailRecipe'] },
       podId: { type: 'string', description: 'Exact pod UUID from list/create.' }, revision: { type: 'integer', minimum: 1, description: 'Current pod settings revision.' },
-      name: { type: ['string', 'null'], description: 'Pod/variable/group name; null only removes group membership.' },
+      name: { type: 'string', description: 'Pod or variable name.' },
       value: { type: 'string', description: 'Ordinary, non-secret variable value only.' }, variableRevision: { type: 'integer', minimum: 0 },
       spec: { type: 'object', description: 'Interval {kind:"interval",seconds:60..2592000} or daily {kind:"daily",time:"HH:MM",timezone:"Europe/Vienna"}.' }, scheduleRevision: { type: 'integer', minimum: 0 },
-      organizationRevision: { type: 'integer', minimum: 1 },
       draftId: { type: ['string', 'null'] }, draftRevision: { type: 'integer', minimum: 0 }, code: { type: 'string' }, capabilities: { type: 'array', items: { type: 'string' }, maxItems: 16 },
       packages: { type: 'object', description: 'Optional package.json containing only dependencies with exact npm versions; owner prepares new sets in Script.' },
       hash: { type: 'string' }, expectedActive: { type: ['string', 'null'] },

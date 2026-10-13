@@ -408,6 +408,12 @@ export class FixtureWorker {
   inboxOutbox(command: InboxOutboxCommand): Promise<unknown> { return this.dispatch({ inboxOutbox: command }) }
 
   /** Revokes always grants of finished object approvals at the IdP; a failure is logged and retried later with backoff. */
+  /** Pending Pod grants the owner decides at the IdP page, read there again so Entscheidungen shows their current state. */
+  async refreshPendingGrants(signal: AbortSignal): Promise<void> {
+    await this.setupReady
+    await this.podGrants()?.refreshPending(signal)
+  }
+
   async releaseApprovalGrants(signal: AbortSignal): Promise<void> {
     if (!this.connections) return
     // Brokered Pod grants are revoked by the owner (issue 1462); the sweep derives that session from the apes login
@@ -706,6 +712,12 @@ export class FixtureWorker {
   async runs(command: RunCommand): Promise<RunView> {
     const central = this.centralAction(command.type); if (central) return central.local(() => this.runs(command))
     await this.setupReady
+    if (command.type === 'openGrant') {
+      const grants = this.podGrants()
+      if (!grants) throw new Error('Connection setup is not ready')
+      await shell.openExternal(await grants.approvalPage(command.podId, command.grantId))
+      return parseRunView(await this.dispatch({ run: { type: 'list', podId: command.podId } }))
+    }
     if (command.type !== 'openApproval') return parseRunView(await this.dispatch({ run: command }))
     const { view, url } = await this.pendingApproval(command.podId, command.runId, command.grantId)
     await shell.openExternal(url)

@@ -1,11 +1,11 @@
 /**
- * The complete control database of schema 49: Pods, scripts, runs and grants, and the shared domain data, work ledger,
- * owner questions, object approvals and external effects of autonomous Pods (issue 1465). A fresh profile is created
- * from it; convert.ts converts schema-46 and schema-47 profiles and backups, archiving every row of the retired network
- * runtime in legacy_records, and gives schema-48 profiles the program approvals of issue 1468. Older profiles and
- * backups are refused.
+ * The complete control database of schema 50: Pods, scripts, runs and grants, and the shared domain data, work
+ * ledger, owner questions, object approvals and external effects of autonomous Pods (issue 1465); owner groups are
+ * tags and object approvals also name exact program commands since issue 1468. A fresh profile is created from it;
+ * convert.ts converts schema-46 to schema-49 profiles and backups, archiving every row of the retired network runtime
+ * and of the retired groups in legacy_records. Older profiles and backups are refused.
  */
-export const schemaVersion = 49
+export const schemaVersion = 50
 
 export const baselineSchema = `
 -- Pods, scripts and knowledge
@@ -352,13 +352,6 @@ CREATE TABLE data_settings(
   error TEXT
 );
 CREATE TABLE deletion_jobs(pod_id TEXT PRIMARY KEY, payload TEXT NOT NULL, error TEXT);
-CREATE TABLE pod_organization(id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL);
-CREATE TABLE pod_groups(id TEXT PRIMARY KEY, name TEXT NOT NULL, collapsed INTEGER NOT NULL CHECK(collapsed IN (0,1)));
-CREATE TABLE pod_memberships(
-  pod_id TEXT PRIMARY KEY REFERENCES pods(id) ON DELETE CASCADE,
-  group_id TEXT NOT NULL REFERENCES pod_groups(id) ON DELETE CASCADE
-);
-CREATE INDEX group_members ON pod_memberships(group_id);
 CREATE TABLE remote_registration(id INTEGER PRIMARY KEY CHECK(id=1), body TEXT NOT NULL, enabled INTEGER NOT NULL);
 CREATE TABLE remote_pods(
   pod_id TEXT PRIMARY KEY REFERENCES pods(id),
@@ -689,7 +682,7 @@ CREATE TABLE storage_receipts(
   created_at INTEGER NOT NULL
 );
 
--- Generic inert history of the retired network runtime (issue 1465): one row per converted legacy row
+-- Generic inert history of the retired network runtime (issue 1465) and owner groups (issue 1468): one row per converted legacy row
 CREATE TABLE legacy_records(
   source TEXT NOT NULL CHECK(length(source) BETWEEN 1 AND 64),
   row_id INTEGER NOT NULL,
@@ -703,6 +696,5 @@ export const baselineRows = `
 INSERT INTO settings VALUES(1,1,2);
 INSERT INTO data_settings VALUES(1,10737418240,0,NULL);
 INSERT INTO onboarding VALUES(1,0,NULL);
-INSERT INTO pod_organization VALUES(1,1);
 INSERT INTO data_sequence VALUES(1,0);
 `

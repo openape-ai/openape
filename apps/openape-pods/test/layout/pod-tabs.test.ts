@@ -28,7 +28,9 @@ afterEach(() => {
 async function openTab(tab: string, overrides: Partial<PodsBridge> = {}) {
   installWorkspace({ programs: async command => command.type === 'launchStatus' ? null : Promise.reject(new Error('Sign in with your DDISA account before setting up a pod')), ...overrides })
   wrapper = mount(App, { attachTo: document.body, props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
-  await wrapper.findAll('[role="tab"]').find(item => item.text() === tab)!.trigger('click'); await flushPromises(); await frame()
+  // Former tab names map to the section links of the one-page Pod view (issue 1468).
+  const section = ({ 'Script': 'Code', 'Skript': 'Code', 'Permissions': 'Access', 'Berechtigungen': 'Zugriffe', 'History': 'Runs', 'Historie': 'Läufe' } as Record<string, string>)[tab] ?? tab
+  await wrapper.findAll('.section-links button').find(item => item.text() === section)!.trigger('click'); await flushPromises(); await frame()
 }
 async function show(width: number, height: number, scheme: 'light' | 'dark' = 'light') {
   await page.viewport(width, height); document.documentElement.style.colorScheme = scheme; await frame()
@@ -75,6 +77,30 @@ describe('pod tabs with the production stylesheet', () => {
       expect(pageFits(), `${width}: page overflow`).toBe(true)
       expect(content(), `${width}: content overflow`).toBeLessThanOrEqual(1)
     }
+  })
+
+  it('reaches an earlier run, a variable and the schedule within two clicks of the list (issue 1468)', async () => {
+    const view = { runs: [
+      { id: '00000000-0000-4000-8000-000000000044', podId, scriptHash: hash, state: 'completed', startedAt: 1_790_000_100_000, finishedAt: 1_790_000_110_000, summary: 'Stored 3 messages', error: null, checkpointRevision: 0, recovery: null },
+      { id: '00000000-0000-4000-8000-000000000045', podId, scriptHash: hash, state: 'failed', startedAt: 1_790_000_000_000, finishedAt: 1_790_000_065_000, summary: 'Run failed', error: 'Invalid program arguments', checkpointRevision: 0, recovery: null },
+    ], events: [] } as unknown as RunView
+    applyLanguage('de')
+    // Click 1 (row in the list) is the host's openPod; the page mounts with that Pod selected.
+    installWorkspace({ runs: async () => structuredClone(view) })
+    wrapper = mount(App, { attachTo: document.body, props: { initialPodId: podId } }); await flushPromises(); await frame()
+    await show(1060, 850)
+    // Schedule and variables are on the page itself: no second navigation step.
+    expect(document.querySelector('#section-settings .schedule-panel')).not.toBeNull()
+    expect(document.querySelector('#section-values')).not.toBeNull()
+    // Click 2: the earlier failed run; its cause is visible without expanding anything.
+    const earlier = Array.from(document.querySelectorAll<HTMLElement>('#section-runs .history-entry')).find(item => item.textContent?.includes('Dieser Lauf konnte nicht abgeschlossen werden'))
+    expect(earlier, 'earlier run entry').toBeDefined()
+    earlier!.click(); await flushPromises(); await frame()
+    expect(document.querySelector('#section-runs .run-cause')!.textContent).toContain('Ursache: Ungültige Programmargumente')
+    await page.screenshot({ path: artifact('pod-page-1060.png') })
+    await show(390, 844)
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390)
+    await page.screenshot({ path: artifact('pod-page-390.png') })
   })
 
   it('names the cause of a failed run inside its problem box', async () => {

@@ -8,7 +8,6 @@ import { fixtureShellIdentity } from './fixtures/shell-identity'
 import { PodDatabase } from '../src/worker/storage/database'
 import { ResourceRegistry } from '../src/worker/resources/registry'
 import { installExample } from '../src/worker/runs/examples'
-import { PodGroups } from '../src/worker/workspace/groups'
 import { podDirectories } from '../src/runtime/environment'
 
 cleanupAfterEach()
@@ -20,9 +19,6 @@ it('definition native boundary: isolates identities and validates exact versions
   installExample(store, new ResourceRegistry(store, () => {}), podId, 'deterministic', runtime.dependencyLockHash)
   store.db.prepare('UPDATE pods SET name=\'Reusable source\' WHERE id=?').run(podId)
   store.db.prepare('INSERT INTO remote_registration VALUES(1,?,0)').run(JSON.stringify({ id: randomUUID(), generation: randomUUID(), owner: identity.owner }))
-  const groups = new PodGroups(store)
-  for (const name of ['Synthetic Company A', 'Synthetic Company B']) groups.execute({ type: 'organize', action: 'create', name, revision: groups.view().revision })
-  const companyIds = groups.view().groups.map(group => group.id)
   const sourceHash = store.getPod(podId).activeScript!
   const sourceHome = (await podDirectories(root, podId)).home
   await writeFile(join(sourceHome, 'owner-private.txt'), 'SYNTHETIC_SOURCE_ONLY')
@@ -35,12 +31,12 @@ it('definition native boundary: isolates identities and validates exact versions
   const published = await page.evaluate(({ podId, sourceHash }) => window.pods.definitions({ type: 'publish', podId, expectedScript: sourceHash, name: 'Reusable example', defaults: { label: 'Version one' } }), { podId, sourceHash })
   const definitionId = published.instances.find(item => item.podId === podId)!.definitionId
   const firstRequest = randomUUID(); identity.failNextEnrollment()
-  await expect(page.evaluate(({ requestId, definitionId, groupId }) => window.pods.definitions({ type: 'instantiate', requestId, definitionId, version: 2, name: 'Company A instance', groupId }), { requestId: firstRequest, definitionId, groupId: companyIds[0]! })).rejects.toThrow('retained for provisioning retry')
+  await expect(page.evaluate(({ requestId, definitionId }) => window.pods.definitions({ type: 'instantiate', requestId, definitionId, version: 2, name: 'First instance' }), { requestId: firstRequest, definitionId })).rejects.toThrow('retained for provisioning retry')
   const pending = (await page.evaluate(() => window.pods.definitions({ type: 'list' }))).provisioning.find(item => item.requestId === firstRequest)!
   expect(pending.state).toBe('failed')
   const first = await page.evaluate(requestId => window.pods.definitions({ type: 'retryProvision', requestId }), firstRequest)
   expect(first.createdPodId).toBe(pending.podId)
-  const second = await page.evaluate(({ requestId, definitionId, groupId }) => window.pods.definitions({ type: 'instantiate', requestId, definitionId, version: 2, name: 'Company B instance', groupId }), { requestId: randomUUID(), definitionId, groupId: companyIds[1]! })
+  const second = await page.evaluate(({ requestId, definitionId }) => window.pods.definitions({ type: 'instantiate', requestId, definitionId, version: 2, name: 'Second instance' }), { requestId: randomUUID(), definitionId })
   const instanceIds = [first.createdPodId!, second.createdPodId!]
   expect(new Set(instanceIds).size).toBe(2)
   for (const instanceId of instanceIds) {
@@ -87,7 +83,7 @@ it('definition native boundary: isolates identities and validates exact versions
   })
   expect(evidence.attempts).toHaveLength(3)
   expect(evidence.attempts[0]).toEqual(evidence.attempts[1])
-  await openPod(page, 'Company B instance')
+  await openPod(page, 'Second instance')
   await page.getByRole('tab', { name: 'Script', exact: true }).click()
   await page.locator('.definition-panel summary').click()
   await page.getByRole('button', { name: 'Review update for this instance', exact: true }).click()
@@ -100,7 +96,7 @@ it('definition native boundary: isolates identities and validates exact versions
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(430, 900))
   await page.evaluate(() => window.pods.language({ type: 'set', language: 'de' }))
   await page.reload()
-  await openPod(page, 'Company B instance', 'de')
+  await openPod(page, 'Second instance', 'de')
   await page.getByRole('tab', { name: 'Skript', exact: true }).click()
   await page.locator('.definition-panel summary').click()
   await page.getByRole('button', { name: 'Update für diese Instanz prüfen', exact: true }).click()

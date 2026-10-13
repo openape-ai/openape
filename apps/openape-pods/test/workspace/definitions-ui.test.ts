@@ -6,16 +6,15 @@ import { applyLanguage } from '../../src/renderer/i18n'
 
 const podId = '00000000-0000-4000-8000-000000000001'
 const definitionId = '00000000-0000-4000-8000-000000000002'
-const groupId = '00000000-0000-4000-8000-000000000003'
 const draftId = '00000000-0000-4000-8000-000000000004'
 const props = { pod: { id: podId, name: 'Source', revision: 1, lifecycle: 'paused' as const, activeScript: 'a'.repeat(64) } }
 function fixture() {
   const before = { version: 1, state: 'published' as const, contentHash: 'a'.repeat(64), lockHash: 'b'.repeat(64), work: null, capabilities: [], packages: { dependencies: {} }, defaults: {} }
   const after = { ...before, version: 2, contentHash: 'c'.repeat(64), capabilities: ['mail.read'], defaults: { label: 'Public value' } }
-  const view: DefinitionsView = { definitions: [{ id: definitionId, name: 'Reusable', versions: [before, after] }], instances: [{ podId, definitionId, version: 1, bindingRevision: 1, groupId, diverged: false }], provisioning: [] }
+  const view: DefinitionsView = { definitions: [{ id: definitionId, name: 'Reusable', versions: [before, after] }], instances: [{ podId, definitionId, version: 1, bindingRevision: 1, diverged: false }], provisioning: [] }
   const definitions = vi.fn().mockImplementation(async command => ({ ...structuredClone(view), ...['previewUpdate', 'prepareUpdate'].includes(command.type) ? { update: { podId, before, after, beforeCode: 'old source', afterCode: 'new source', changed: ['code', 'rights', 'defaults'], ...(command.type === 'prepareUpdate' ? { draftId } : {}) } } : {} }))
   const scripts = vi.fn().mockResolvedValue({ pod: props.pod, source: { id: draftId, revision: 1, validated: true } })
-  window.pods = { definitions, scripts, workspace: async () => ({ pods: [props.pod], organization: { revision: 1, groups: [{ id: groupId, name: 'Company A', collapsed: false, podIds: [podId] }] } }) } as unknown as typeof window.pods
+  window.pods = { definitions, scripts, workspace: async () => ({ pods: [props.pod] }) } as unknown as typeof window.pods
   return { view, definitions, scripts }
 }
 afterEach(() => { applyLanguage('en') })
@@ -44,14 +43,13 @@ it('keeps the same creation request after failure and offers an explicit identit
   const f = fixture(); const wrapper = await opened()
   f.definitions.mockImplementation(async (command) => {
     if (command.type === 'instantiate') {
-      f.view.instances.push({ podId: draftId, definitionId, version: 2, bindingRevision: 1, groupId, diverged: true })
+      f.view.instances.push({ podId: draftId, definitionId, version: 2, bindingRevision: 1, diverged: true })
       f.view.provisioning = [{ requestId: command.requestId, podId: draftId, state: 'failed', error: 'Synthetic identity unavailable' }]
       throw new Error('Synthetic identity unavailable')
     }
     return structuredClone(f.view)
   })
   const button = (label: string) => wrapper.findAll('button').find(item => item.text() === label)!
-  await wrapper.findAll('select')[1]!.setValue(groupId)
   await button('Create separate instance').trigger('click'); await flushPromises()
   const first = f.definitions.mock.calls.find(([command]) => command.type === 'instantiate')![0]
   expect(wrapper.get('[role="alert"]').text()).toContain('Synthetic identity unavailable')

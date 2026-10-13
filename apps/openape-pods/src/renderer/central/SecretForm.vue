@@ -41,8 +41,8 @@ function submit() {
         {{ t(item.label) }}
       </button>
     </div>
-    <label>{{ t('Alias') }} <input v-model="alias" autocomplete="off" :placeholder="t('e.g. telegram_bot_token')" :disabled="!desktop"></label>
-    <label v-if="way === 'form'">{{ t('Value') }} <input v-model="value" type="password" autocomplete="off" :placeholder="t('cleared after saving')" :disabled="!desktop"></label>
+    <label>{{ t('Alias') }} <input v-model="alias" name="credential-alias" autocomplete="off" :placeholder="t('e.g. telegram_bot_token')" :disabled="!desktop"></label>
+    <label v-if="way === 'form'">{{ t('Value') }} <input v-model="value" name="credential-value" type="password" autocomplete="new-password" :placeholder="t('cleared after saving')" :disabled="!desktop"></label>
     <p v-else-if="way === 'file'" class="meta">
       {{ t('The app reads the file itself, for example a PEM key.') }}
     </p>
