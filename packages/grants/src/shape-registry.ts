@@ -33,6 +33,18 @@ export interface ServerShapeOperation {
   /** Flags (`--foo` or `-f`) that MUST be present for this operation to match. */
   required_options?: string[]
 
+  /**
+   * Options that take a value. When present (even empty), only these and
+   * `required_options` consume the following token; others are flags.
+   */
+  value_options?: string[]
+
+  /**
+   * Adapter-wide options accepted before the command prefix (`name` or
+   * `name=binding`), copied from the adapter's `[cli] global_options`.
+   */
+  global_options?: string[]
+
   /** Template string like `Clone {repo}` rendered with resolved bindings. */
   display: string
 
