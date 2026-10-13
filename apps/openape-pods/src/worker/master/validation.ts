@@ -63,6 +63,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
     const home = join(root, 'home'); await mkdir(home, { mode: 0o700 })
     const input = { home, directories: [], variables, version: 1 as const, runId: randomUUID(), podId: pod.id, scriptHash: hash, assignmentRevision: pod.bindingRevision, reason: 'manual' as const, eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: epoch, workspace: join(root, 'workspace'), references: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 }, validation: true as const }
     let work: WorkDeclaration[] | undefined
+    let polls = false
     const checked = executeScript({ ...runtime, dependencyRoot }, root, artifact, input, signal, { event: () => {}, request: async (operation, payload) => {
       if (operation === 'graph.contract') throw new Error('Network contracts (takes/gives) are retired; declare work and use shared data instead')
       if (operation === 'mail.archive' || operation === 'mail.archiveApproved') throw new Error('Archive proposals require live provider data; synthetic validation never creates grants or moves mail')
@@ -72,6 +73,11 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
         return true
       }
       // Synthetic shared data is empty and nothing is stored; real reads and writes are checked at run time.
+      if (operation === 'work.polls') {
+        if (payload !== true || polls) throw new Error('Declare export const polls = true')
+        polls = true
+        return true
+      }
       if (operation === 'work.find') return []
       if (operation === 'data.get') return null
       if (operation === 'data.list') return { entries: [], cursor: null }
@@ -126,7 +132,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
     store.transaction(() => {
       if (JSON.stringify(new PodVariables(store).list(pod.id)) !== variableState) throw new Error('Variables changed during validation; validate again')
       if (store.getPod(pod.id).lifecycle === 'archived' || store.getPod(pod.id).bindingRevision !== pod.bindingRevision || resources.epoch(pod.id) !== epoch || store.db.prepare('SELECT revision FROM script_drafts WHERE id=?').get(draftId)?.revision !== revision) throw new Error('Draft, script binding or permissions changed during validation')
-      const checkedManifest: ScriptManifest = { schemaVersion: 1, contentHash: hash, entrypoint: 'run.mjs', dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities, triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.bindingRevision, ...work ? { work } : {}, effects: resources.list(pod.id).some(resource => resource.state === 'ready' && resource.configuration.type === 'http' && capabilities.includes(String(resource.configuration.capability)) && (resource.configuration.methods as string[]).some(isHttpEffect)) ? 'reconciledEffects' : 'readOnly' }
+      const checkedManifest: ScriptManifest = { schemaVersion: 1, contentHash: hash, entrypoint: 'run.mjs', dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities, triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.bindingRevision, ...work ? { work } : {}, ...polls ? { polls: true as const } : {}, effects: resources.list(pod.id).some(resource => resource.state === 'ready' && resource.configuration.type === 'http' && capabilities.includes(String(resource.configuration.capability)) && (resource.configuration.methods as string[]).some(isHttpEffect)) ? 'reconciledEffects' : 'readOnly' }
       if (pinned && pinned.effects !== checkedManifest.effects) throw new Error('Instance HTTP effect permissions differ from the definition. Review this instance’s permissions before validating again.')
       if (pinned && canonicalJson({ ...pinned, assignmentRevision: pod.bindingRevision }) !== canonicalJson(checkedManifest)) throw new Error('Definition contract or runtime requirements changed; publish a new version')
       store.storeScript(pod.id, pinned ? { ...pinned, assignmentRevision: pod.bindingRevision } : checkedManifest, code)
