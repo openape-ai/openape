@@ -4,6 +4,7 @@ import { existsSync, realpathSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
+import { homedir } from 'node:os'
 import { readFile, realpath, writeFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import type { Duplex, Readable, Writable } from 'node:stream'
@@ -106,6 +107,15 @@ const forms = (path: string) => [...new Set([path, canonical(path)])]
 export function ownerProtectedPaths(profileRoot: string, profileBase: string, home: string): string[] {
   const paths = [profileBase, profileRoot, join(home, '.config/apes')]
   return [...new Set(paths.flatMap(forms))]
+}
+
+/**
+ * The HOME a Pod program runs with. At the owner level it is the owner's home, so the owner's command line logins and
+ * settings (az, gh, git) apply as they do outside Pods; the protected paths stay closed whatever HOME says. At the
+ * isolated level it is the Pod-scoped folder the caller passes (owner decision, issue 1468).
+ */
+export function programHome(reach: Pick<SandboxReach, 'level'> | undefined, podHome: string): string {
+  return reach?.level === 'owner' ? homedir() : podHome
 }
 
 /** The configured denylist as absolute paths: `~/` is the owner's home, and each path is listed as written and as resolved. */

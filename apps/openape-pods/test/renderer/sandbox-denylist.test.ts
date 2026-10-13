@@ -18,7 +18,7 @@ const button = (label: string) => wrapper!.findAll('button').find(item => item.a
 it('shows the level and the denied paths and edits them', async () => {
   applyLanguage('de')
   wrapper = mount(SandboxDenylist, { props: { sandbox: view(['~/.ssh']), busy: false } })
-  expect(wrapper.text()).toContain('Stufe Owner: Programme erreichen, was du auf diesem Mac erreichst, außer den Pods-Daten und deinem apes-Login.')
+  expect(wrapper.text()).toContain('Stufe Owner: Programme laufen mit deinem Home-Ordner und erreichen, was du auf diesem Mac erreichst, außer den Pods-Daten und deinem apes-Login. Codex kann diesen Pod auf die isolierte Stufe umstellen.')
   expect(wrapper.get('.trust-note').text()).toBe('Als Owner ausführen bedeutet volles Vertrauen in den Code dieses Pods, einschließlich der Möglichkeit, als du zu handeln. Die verbleibenden Schutzmaßnahmen verhindern nur den direkten Zugriff.')
   expect(wrapper.findAll('.deny-path').map(item => item.text())).toEqual(['~/.ssh'])
   expect(wrapper.findAll('.deny-row button.text-button')).toHaveLength(1)

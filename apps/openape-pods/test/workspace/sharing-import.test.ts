@@ -10,6 +10,7 @@ import { validateDraft } from '../../src/worker/master/validation'
 import { installExample } from '../../src/worker/runs/examples'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { PodVariables } from '../../src/worker/resources/variables'
+import { GrantLedger } from '../../src/worker/resources/grants'
 import { runAliases } from '../../src/contracts/runs'
 import { parsePortableImportCommand } from '../../src/contracts/sharing'
 import { PortableImporter, recoverPortableImports } from '../../src/worker/sharing/import'
@@ -104,6 +105,9 @@ it('creates one independent paused copy and returns it for a repeated commit', a
   const committed = await importer.commit(id, 2); const podId = committed.pods[0]!.podId
   expect(committed).toMatchObject({ state: 'committed', unresolved: [] })
   expect(store.getPod(podId)).toMatchObject({ name: 'Imported fixture', lifecycle: 'paused', activeScript: null })
+  // Imported code is someone else's: it starts isolated while Pods the owner creates start at the owner level (issue 1468).
+  expect(new GrantLedger(store).sandbox(podId).level).toBe('isolated')
+  expect(new GrantLedger(store).sandbox(existing.id).level).toBe('owner')
   expect(new PodVariables(store).values(podId)).toEqual({ greeting: 'hello', limit: '5' })
   expect(store.db.prepare('SELECT code,capabilities,validation,script_hash FROM script_drafts WHERE pod_id=?').get(podId)).toMatchObject({ capabilities: '[]', validation: null, script_hash: null })
   for (const table of ['scripts', 'validations', 'schedules', 'remote_pods', 'script_credential_approvals']) expect(store.db.prepare(`SELECT count(*) AS count FROM ${table} WHERE pod_id=?`).get(podId)!.count, table).toBe(0)
