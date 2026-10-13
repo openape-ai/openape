@@ -29,9 +29,9 @@ it('keeps every German catalog message and placeholder complete and preserves pa
     expect(value.trim(), key).not.toBe('')
     expect(value.match(/\{\w+\}/g)?.sort() ?? [], key).toEqual(key.match(/\{\w+\}/g)?.sort() ?? [])
   }
-  expect(translate('de', 'Group for {p0}', { p0: '<script>{p0} Order</script>' })).toBe('Gruppe für <script>{p0} Order</script>')
-  expect(() => translate('en', 'Group for {p0}')).toThrow('Missing translation parameter')
-  expect(translateDiagnostic('de', 'Error invoking remote method \'pods:workspace\': Error: Groups changed. Refresh and try again.')).toBe('Gruppen wurden geändert. Aktualisiere und versuche es erneut.')
+  expect(translate('de', 'OpenApe Secrets refused the request ({p0})', { p0: '<script>{p0} Order</script>' })).toBe('OpenApe Secrets hat die Anfrage abgelehnt (<script>{p0} Order</script>)')
+  expect(() => translate('en', 'OpenApe Secrets refused the request ({p0})')).toThrow('Missing translation parameter')
+  expect(translateDiagnostic('de', 'Error invoking remote method \'pods:workspace\': Error: Tags changed; reload before saving')).toBe('Die Tags wurden inzwischen geändert; bitte neu laden und erneut speichern')
   expect(translateDiagnostic('en', 'External message <unsafe>')).toBe('External message <unsafe>')
   expect(translateDiagnostic('de', 'External message <unsafe>')).toBe('Technische Meldung (Original): External message <unsafe>')
 })

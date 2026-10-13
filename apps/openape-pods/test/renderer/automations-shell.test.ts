@@ -4,10 +4,10 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { MapView } from '../../src/contracts/map-view'
 import { parseMapView } from '../../src/contracts/map-view'
 import AutomationsShell from '../../src/renderer/central/AutomationsShell.vue'
+import TagEditor from '../../src/renderer/central/TagEditor.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
 import { clock, stamp } from '../../src/renderer/utils/cadence'
 import fixture from './map-view.json'
-import type { SecretsView } from '../../src/contracts/secrets'
 
 // Visible text and emitted commands of the Automatisierungen surface; geometry lives in test/layout/automations.test.ts.
 const view = parseMapView(fixture) as MapView
@@ -15,7 +15,7 @@ const NOW = view.at + 11 * 60000
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en'); localStorage.clear() })
 async function mountShell(props: Record<string, unknown> = {}) {
-  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, decisions: 17, ...props } })
+  wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, ...props } })
   await flushPromises()
   return wrapper
 }
@@ -30,19 +30,20 @@ describe('Automatisierungen', () => {
     expect(kpis).toEqual([
       ['5', 'aktiv', 'Pods mit laufendem Zeitplan'],
       ['25', 'pausiert', 'davon 1 Entwürfe, 1 archiviert'],
-      ['1', 'gestört', 'IURIO PR monitor · mit Lücken abgeschlossen'],
-      // A run waiting for its grant at the IdP is an approval as well.
-      ['22', 'Entscheidungen warten auf dich', '17 Rückfragen, 5 Freigaben'],
+      // Every failed run of the window counts, also for a Pod whose last run succeeded.
+      ['140', 'Fehler 24 h', 'IURIO PR monitor 137, zaz Service-Agent 3'],
+      // The same sections as Entscheidungen: a run waiting for its grant and a grant requested at the IdP are rights.
+      ['24', 'Entscheidungen warten auf dich', '17 Rückfragen, 4 Freigaben, 2 Rechte, 1 abzugleichen'],
       ['1', 'unklare Zustellungen', '1 Zustellungen abzugleichen'],
     ])
-    expect(wrapper!.find('.kpi.alert').text()).toContain('gestört')
+    expect(wrapper!.find('.kpi.alert').text()).toContain('Fehler 24 h')
     expect(wrapper!.find('[role="tablist"]').text()).toContain('Automatisierungen')
-    expect(wrapper!.find('[role="tablist"]').text()).toContain('Entscheidungen 17')
+    expect(wrapper!.find('[role="tablist"]').text()).toContain('Entscheidungen 24')
     expect(wrapper!.find('.automations-stamp').text()).toBe(`Stand ${clock(view.at, 'de')}`)
     expect(wrapper!.find('.kinds').text()).toContain('Service, per HTTPS')
     wrapper!.unmount(); applyLanguage('en')
     await mountShell({ live: true })
-    expect(wrapper!.findAll('.kpi span').map(item => item.text())).toEqual(['active', 'paused', 'degraded', 'decisions waiting for you', 'unknown deliveries'])
+    expect(wrapper!.findAll('.kpi span').map(item => item.text())).toEqual(['active', 'paused', 'errors in 24 h', 'decisions waiting for you', 'unknown deliveries'])
     expect(wrapper!.find('.automations-stamp').text()).toBe(`Live · ${clock(NOW, 'en')}`)
   })
 
@@ -50,6 +51,9 @@ describe('Automatisierungen', () => {
     applyLanguage('de')
     await mountShell()
     expect(wrapper!.find('[aria-label="Ansicht"]').findAll('button').map(item => item.text())).toEqual(['Karte', 'Liste'])
+    // Rows are the default; the map is one click away.
+    expect(wrapper!.find('.automations-list').exists()).toBe(true)
+    await button('Karte').trigger('click')
     expect(wrapper!.find('[aria-label="Gruppe"]').exists()).toBe(false)
     // Without any tag in the workspace there is no tag bar and everything stays visible.
     expect(wrapper!.find('[aria-label="Tags"]').exists()).toBe(false)
@@ -59,40 +63,47 @@ describe('Automatisierungen', () => {
     await button('Pausierte').trigger('click')
     expect(button('Pausierte').attributes('aria-pressed')).toBe('false')
     expect(wrapper!.find('.layers-menu summary').text()).toBe('Ebenen 4/5')
+    // The gear opens the one settings page of the host; the shell has no settings panel of its own.
     await button('⚙ Einstellungen').trigger('click'); await flushPromises()
-    expect(wrapper!.find('.app-settings-menu').exists()).toBe(true)
-    await button('⚙ Einstellungen').trigger('click'); await flushPromises()
-    expect(wrapper!.find('.app-settings-menu').exists()).toBe(false)
-    await button('Entscheidungen 17').trigger('click')
+    expect(wrapper!.emitted('settings')).toHaveLength(1)
+    expect(wrapper!.find('[role="dialog"]').exists()).toBe(false)
+    await button('Entscheidungen 24').trigger('click')
     expect(wrapper!.emitted('update:tab')).toEqual([['decisions']])
     await button('Neue Automatisierung mit Codex').trigger('click')
-    expect(wrapper!.emitted('codex')).toEqual([[null, null]])
-    // The new automation goes next to the pinned Pod, in its group.
+    expect(wrapper!.emitted('codex')).toEqual([[null, []]])
+    // The new automation is labelled like the pinned Pod; this one has no tags.
     const monitor = pod('IURIO PR monitor').id
     ;(wrapper!.vm as unknown as { pin: (id: string) => void }).pin(monitor)
     await button('Neue Automatisierung mit Codex').trigger('click')
-    expect(wrapper!.emitted('codex')!.at(-1)).toEqual([monitor, 'iurio'])
+    expect(wrapper!.emitted('codex')!.at(-1)).toEqual([monitor, []])
   })
 
-  it('lists the same Pods as a table with group, kind, cadence, reads, writes, shared data and last run', async () => {
+  it('lists every Pod with purpose, state, last result, next run and what it waits for', async () => {
     applyLanguage('de')
     await mountShell()
-    await button('Liste').trigger('click')
     const rows = wrapper!.findAll('tbody tr')
     expect(rows).toHaveLength(view.pods.filter(pod => pod.lifecycle !== 'archived').length)
-    expect(rows).toHaveLength(29)
-    expect(wrapper!.findAll('thead th').map(item => item.text())).toEqual(['Pod', 'Gruppe', 'Art', 'Läuft', 'Liest', 'Schreibt', 'Gemeinsame Daten', 'Zuletzt'])
-    const cells = (name: string) => rows.find(row => row.find('b').text() === name)!.findAll('td').map(cell => cell.findAll('div').length > 1 ? cell.findAll('div').map(item => item.text()).join(' ') : cell.text().replace(/\s+/g, ' '))
-    expect(cells('Rechnungsprüfung')).toEqual(['Rechnungsprüfung', 'Delta Mind', 'Regeln', 'bei gemeinsamen Daten', '–', '–', '← delta-mind/mail/classifications', '–'])
-    expect(cells('zaz Service-Agent')).toEqual(['zaz Service-Agent', 'ohne Gruppe', 'Regeln', 'alle 1 min', 'zaz.delta-mind.at', 'zaz.delta-mind.at', '–', 'vor 11 min · abgeschlossen'])
-    expect(cells('IURIO · Mail-Synchronisierung')).toEqual(['IURIO · Mail-Synchronisierung', 'iurio', 'Regeln', '–', 'patrick@docpit.eu', 'patrick@docpit.eu', '–', 'pausiert'])
+    expect(wrapper!.findAll('thead th').map(item => item.text())).toEqual(['Pod', 'Zustand', 'Letztes Ergebnis', 'Nächster Lauf', 'Wartet auf'])
+    const cells = (name: string) => rows.find(row => row.find('b').text() === name)!.findAll('td').slice(1).map(cell => cell.text().replace(/\s+/g, ' ').trim())
+    // The fixture has no descriptions; a missing purpose is named, not left blank.
+    expect(rows.every(row => row.find('.automations-list-purpose').text() === 'Zweck fehlt')).toBe(true)
+    expect(cells('Rechnungsprüfung')).toEqual(['OK', 'noch kein Lauf', 'bei neuen gemeinsamen Daten', '–'])
+    // Failed runs of the last 24 hours stay visible below a successful last result.
+    expect(cells('zaz Service-Agent')).toEqual(['OK', 'vor 11 min · zaz queue empty; no model call 3 fehlgeschlagene Läufe in 24 h', 'alle 1 min', '–'])
+    expect(rows.find(row => row.find('b').text() === 'zaz Service-Agent')!.find('.result-cell .failures').text()).toBe('3 fehlgeschlagene Läufe in 24 h')
+    // A grant the Pod requested at the IdP without a waiting run still waits for the owner.
+    expect(cells('IURIO Task monitor')).toEqual(['Wartet auf dich', 'vor 13 min · Unchanged: 204 tasks. No model call or Telegram message.', 'alle 5 min', 'deine Freigabe am IdP'])
+    expect(cells('IURIO · Mail-Synchronisierung')).toEqual(['pausiert', 'noch kein Lauf', 'pausiert', '–'])
+    expect(cells('IURIO PR monitor')).toEqual(['Fehler', 'läuft gerade 137 fehlgeschlagene Läufe in 24 h', 'alle 15 min', 'deine Freigabe am IdP'])
+    // One click opens the Pod page; there is no detail dialog in between.
     await rows.find(row => row.text().includes('Linde · Server report'))!.trigger('click')
-    expect(wrapper!.find('.automation-detail .dhead b').text()).toBe('Linde · Server report')
+    expect(wrapper!.emitted('openPod')).toEqual([[pod('Linde · Server report').id]])
   })
 
   it('describes a pinned node in the info panel and opens its details', async () => {
     applyLanguage('de')
     await mountShell()
+    await button('Karte').trigger('click')
     expect(wrapper!.find('.automation-info').text()).toBe('Knoten anklicken. Doppelklick oder „Details öffnen“ zeigt die Detailseite.')
     const shell = wrapper!.vm as unknown as { pin: (id: string | null) => void }
     shell.pin(pod('Mail-Klassifizierung').id); await flushPromises()
@@ -105,9 +116,7 @@ describe('Automatisierungen', () => {
     expect(info).toContain('liest: TypeSafe / Jev (10), delta (10)')
     expect(info).toContain('schreibt: delta (10)')
     await button('Details öffnen').trigger('click')
-    expect(wrapper!.find('.automation-detail .dhead b').text()).toBe('Mail-Klassifizierung')
-    await wrapper!.find('.automation-detail .x').trigger('click')
-    expect(wrapper!.find('.automation-detail').exists()).toBe(false)
+    expect(wrapper!.emitted('openPod')).toEqual([[pod('Mail-Klassifizierung').id]])
     shell.pin('app:o365-cli:phofmann@delta-mind.at'); await flushPromises()
     expect(wrapper!.find('.automation-info').text()).toContain('phofmann@delta-mind.at')
     expect(wrapper!.find('.automation-info').text()).toContain('o365-cli · installiert')
@@ -115,7 +124,7 @@ describe('Automatisierungen', () => {
   })
 
   it('shows the loading state without a map and the decisions inbox on the second tab', async () => {
-    await mountShell({ view: null, decisions: 0 })
+    await mountShell({ view: null })
     expect(wrapper!.find('[role="status"]').text()).toBe('Loading workspace…')
     expect(wrapper!.find('[role="tablist"]').text()).not.toContain('0')
     wrapper!.unmount()
@@ -125,45 +134,14 @@ describe('Automatisierungen', () => {
     expect(wrapper.findAll('.kpi')).toHaveLength(5)
     expect(wrapper.find('[role="tablist"]').text()).toContain('Decisions 2')
   })
-
-  it('opens the secret form from the detail and hands typed values, files and requests to the host', async () => {
-    const bot = pod('Morgenbriefing · Calendar-Bot')
-    const secrets: SecretsView = { origin: 'https://secrets.openape.ai', consumer: { id: '01CONSUMER0', registeredAt: NOW }, requests: [{ id: '01REQ0', podId: bot.id, alias: 'calendar_bot_token', purpose: 'Calendar access', status: 'requested', expiresAt: NOW + 86400000, createdAt: NOW, updatedAt: NOW, error: null }] }
-    await mountShell({ desktop: true, secrets })
-    ;(wrapper!.vm as unknown as { open: (id: string) => void }).open(bot.id); await flushPromises()
-    expect(wrapper!.find('[data-testid="secret-form"]').exists()).toBe(false)
-    expect(wrapper!.find('[data-testid="secret-request"]').text()).toContain('calendar_bot_token')
-    expect(wrapper!.find('[data-testid="secret-request"]').text()).toContain('requested')
-    await button('+ Secret').trigger('click')
-    expect(wrapper!.find('[data-testid="secret-form"]').exists()).toBe(true)
-    await wrapper!.find('[data-testid="secret-form"] input').setValue('reports_publisher_key')
-    await wrapper!.find('[data-testid="secret-form"] input[type="password"]').setValue('value-1')
-    await button('Save').trigger('click')
-    expect(wrapper!.emitted('secretSave')).toEqual([[bot.id, 'reports_publisher_key', 'value-1']])
-    expect(wrapper!.find('[data-testid="secret-form"]').exists()).toBe(false)
-    await button('Replace').trigger('click')
-    expect((wrapper!.find('[data-testid="secret-form"] input').element as HTMLInputElement).value).toBe('calendar_bot_token')
-    await wrapper!.findAll('[data-testid="secret-form"] .seg button')[2]!.trigger('click')
-    await wrapper!.findAll('[data-testid="secret-form"] input')[1]!.setValue('Calendar of both accounts')
-    await button('Request').trigger('click')
-    expect(wrapper!.emitted('secrets')).toEqual([[{ type: 'request', podId: bot.id, alias: 'calendar_bot_token', purpose: 'Calendar of both accounts' }]])
-    await button('+ Secret').trigger('click')
-    await wrapper!.findAll('[data-testid="secret-form"] .seg button')[1]!.trigger('click')
-    await wrapper!.find('[data-testid="secret-form"] input').setValue('pem_key')
-    await button('Choose file…').trigger('click')
-    expect(wrapper!.emitted('secrets')!.at(-1)).toEqual([{ type: 'importFile', podId: bot.id, alias: 'pem_key' }])
-    await button('⚙ Settings').trigger('click'); await flushPromises()
-    expect(wrapper!.find('[data-consumer]').text()).toContain('01CONSUMER0')
-    await button('Revoke').trigger('click')
-    expect(wrapper!.emitted('secrets')!.at(-1)).toEqual([{ type: 'revokeConsumer' }])
-  })
 })
 
 describe('Tags (issue 1459)', () => {
   // The Delta Mind mail Pods carry two tags, kept as their own when their network was converted; one monitor has its own.
+  const deltaMind = ['Mail-Synchronisierung', 'Mail-Klassifizierung', 'Mail-Übersicht', 'Rechnungsprüfung', 'Antwortvorbereitung', 'Newsletter-Prüfung', 'Wissensvorschläge']
   function tagged(): MapView {
     const copy = structuredClone(view)
-    for (const member of copy.pods.filter(item => item.group === 'Delta Mind')) member.tags = { own: ['delta-mind', 'mail'], revision: 1 }
+    for (const member of copy.pods.filter(item => deltaMind.includes(item.name))) member.tags = { own: ['delta-mind', 'mail'], revision: 1 }
     copy.pods.find(item => item.name === 'IURIO PR monitor')!.tags = { own: ['iurio'], revision: 3 }
     return parseMapView(copy)
   }
@@ -208,17 +186,14 @@ describe('Tags (issue 1459)', () => {
   })
 
   it('saves edited own tags as one workspace command with the current revision', async () => {
-    await mountShell({ view: tagged() })
     const id = pod('IURIO PR monitor').id
-    ;(wrapper!.vm as unknown as { open: (id: string) => void }).open(id)
-    await flushPromises()
-    const editor = wrapper!.find('[data-tags]')
-    await editor.find('input').setValue('  Entwicklung ')
-    await editor.find('form').trigger('submit')
-    await editor.find('input').setValue('a/b')
-    await editor.find('form').trigger('submit')
-    expect(editor.find('[role="alert"]').exists()).toBe(true)
-    await editor.findAll('button').find(item => item.text() === 'Save tags')!.trigger('click')
-    expect(wrapper!.emitted('command')!.at(-1)).toEqual([{ channel: 'workspace', body: { type: 'tag', id, revision: 3, tags: ['iurio', 'entwicklung'] } }])
+    wrapper = mount(TagEditor, { attachTo: document.body, props: { id, tags: { own: ['iurio'], revision: 3 }, suggestions: ['iurio'] } })
+    await wrapper.find('input').setValue('  Entwicklung ')
+    await wrapper.find('form').trigger('submit')
+    await wrapper.find('input').setValue('a/b')
+    await wrapper.find('form').trigger('submit')
+    expect(wrapper.find('[role="alert"]').exists()).toBe(true)
+    await wrapper.findAll('button').find(item => item.text() === 'Save tags')!.trigger('click')
+    expect(wrapper.emitted('command')!.at(-1)).toEqual([{ channel: 'workspace', body: { type: 'tag', id, revision: 3, tags: ['iurio', 'entwicklung'] } }])
   })
 })

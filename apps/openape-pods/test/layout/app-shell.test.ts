@@ -11,9 +11,10 @@ import { installWorkspace, pods } from './workspace-fixture'
 // Geometry formerly asserted by the packaged `pod-workspace`, `groups`,
 // `language` and `foundation` E2E files. Screenshots keep the names that
 // scripts/report.mjs embeds.
-const tabs = {
-  en: ['Overview', 'Script', 'Variables and secrets', 'Permissions', 'Settings', 'History'],
-  de: ['Übersicht', 'Skript', 'Variablen und Geheimnisse', 'Berechtigungen', 'Einstellungen', 'Historie'],
+// The Pod page is one page; its section links replace the former tabs (issue 1468).
+const sections = {
+  en: ['Runs', 'Variables and secrets', 'Access', 'Settings', 'Code'],
+  de: ['Läufe', 'Variablen und Geheimnisse', 'Zugriffe', 'Einstellungen', 'Code'],
 }
 // One size per breakpoint band (style.css: 1030, 900, 800, 760, 600) plus the
 // shortest window. Colours come from light-dark() tokens and no rule depends on
@@ -65,18 +66,17 @@ describe('workspace shell with the production stylesheet', () => {
       const brand = wrapper!.get('.workspace-brand').element.getBoundingClientRect()
       expect(brand.top, 'brand clears native macOS window controls').toBeGreaterThanOrEqual(36)
 
-      for (const name of tabs[language]) {
-        await click('[role="tab"]', name)
-        expect(wrapper!.get('[role="tab"][aria-selected="true"]').text()).toBe(name)
+      for (const name of sections[language]) {
+        await click('.section-links button', name)
         expect(overflow(), `${language} ${width}x${height} ${scheme} ${name}`).toEqual(fits)
-        if (language === 'en' && ((width === 1060 && name === 'Overview') || (width === 560 && height === 700 && name === 'Permissions')))
+        if (language === 'en' && ((width === 1060 && name === 'Runs') || (width === 560 && height === 700 && name === 'Access')))
           await page.screenshot({ path: artifact(`workspace-${width}-light-${name.toLowerCase()}.png`) })
       }
     }
   })
 
   it('shows the empty workspace in light, dark and the minimum compact window', async () => {
-    await mountWorkspace({ workspace: async () => ({ organization: { revision: 1, groups: [] }, pods: [] }) })
+    await mountWorkspace({ workspace: async () => ({ pods: [] }) })
     expect(wrapper!.text()).toContain('No pods yet')
     for (const scheme of ['light', 'dark'] as const) {
       await show(1060, 850, scheme)
@@ -107,7 +107,7 @@ describe('workspace shell with the production stylesheet', () => {
   it('saves settings and schedule panels as report evidence', async () => {
     await mountWorkspace()
     await show(1060, 850)
-    await click('[role="tab"]', 'Settings')
+    await click('.section-links button', 'Settings')
     expect(overflow(), 'settings').toEqual(fits)
     await page.screenshot({ path: artifact('storage-settings.png') })
     await page.screenshot({ path: artifact('schedule-settings.png'), element: document.querySelector('.schedule-panel')! })
@@ -138,7 +138,7 @@ it('shows automatic service recovery in the shared narrow German workspace', asy
   expect(overflow()).toEqual(fits)
   wrapper!.get('[role="status"]').element.scrollIntoView({ block: 'nearest' }); await frame()
   await page.screenshot({ path: artifact('infrastructure-shared-de-dark.png') })
-  await click('[role="tab"]', 'Einstellungen')
+  await click('.section-links button', 'Einstellungen')
   expect(wrapper!.get('.schedule-panel [role="status"]').text()).toContain('Warte auf den Dienst.')
   expect(overflow()).toEqual(fits)
 })

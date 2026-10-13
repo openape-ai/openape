@@ -27,7 +27,7 @@ Select a node to read its facts in the info panel. Open details opens the detail
 Stand HH:MM marks a published snapshot in the browser; Live · HH:MM means the desktop answers directly. The browser renders the same tab from the snapshot of the selected desktop. Native controls such as opening the script folder or choosing a private file stay on the desktop and are shown disabled in the browser.
 
 1. Open Pods; Automations is the landing page.
-2. Switch between Map and List, choose a group and toggle the layers.
+2. Switch between Map and List, choose tags and toggle the layers.
 3. Select a Pod and choose Open details.
 4. Use Pause, Resume or Run now on the detail page. Details öffnen in the developer section opens the Pod editor for permissions, variables and secrets, history and identity.
 
@@ -50,7 +50,7 @@ Pods never decides for you: no model and no schedule chooses, approves, excludes
 
 ## Connect your personal accounts
 
-Choose your account at the top right, or open the gear menu → More settings → Open desktop settings, and go to Your accounts. Connect your DDISA account to decide permission requests and your Codex / GPT account for LLM calls. Optional TypeSafe / Jev setup is on the same page.
+Choose your account at the top right or the gear ⚙ Settings; both open App settings with Your accounts. Connect your DDISA account to decide permission requests and your Codex / GPT account for LLM calls. Optional TypeSafe / Jev setup is on the same page.
 
 Pods finds your identity provider through the DDISA record of your email domain. Every Pod and permission uses this one DDISA account; there is nothing to select. Pod agents are not your accounts and are never listed here. Switching to another DDISA account gives your Pods new agents, and their permissions must be granted again.
 
@@ -59,13 +59,13 @@ Other services are configured per Pod: application sign-in belongs in Permission
 1. Under Your DDISA account, enter your email and choose Sign in. Complete the browser flow and return to Pods; the account shows Signed in.
 2. Under Codex / GPT account, choose Sign in. Complete the offered browser flow and check Signed in before using AI-powered scripts.
 3. If an account later shows Expired or an error, choose Sign in again on the same account. Enter another email only if you want to switch accounts, and review Confirm switch.
-4. Choose Continue to workspace. To change the interface language, use the gear menu → Language.
+4. Choose Continue to workspace. To change the interface language, open ⚙ Settings → Language.
 
 ![Connect your personal accounts](images/handbook-setup.png)
 
 ## Structured decisions with Jev
 
-Connect TypeSafe with an API key in the desktop settings (account button at the top right, or gear menu → More settings). The key is verified using model discovery, stored encrypted on this Mac, and never given to scripts or Codex. Replacing the key preserves the connection. Codex configures the Pod assignment through the resources API.
+Connect TypeSafe with an API key in the desktop settings (account button at the top right, or ⚙ Settings). The key is verified using model discovery, stored encrypted on this Mac, and never given to scripts or Codex. Replacing the key preserves the connection. Codex configures the Pod assignment through the resources API.
 
 Codex writes the script; Jev evaluates bounded semantic questions at runtime. Use ordinary code for exact rules, Jev for Choice, Score or Noul decisions, and an explicit agent.run call for generated text. A Jev-only script needs no active Codex account. Synthetic validation proves the script contract, not decision quality.
 
@@ -85,9 +85,9 @@ const relevance = result.answers.relevant.noul
 
 ## Create your first Pod
 
-Pods are created by Codex only. Choose New automation with Codex on the Automations tab: Pods writes a brief from the selected group or node, copies it and opens Codex when it is connected. Describe the source, the desired result and how you will recognize success.
+Pods are created by Codex only. Choose New automation with Codex on the Automations tab: Pods writes a brief with the tags of the pinned Pod or node, copies it and opens Codex when it is connected. Describe the source, the desired result and how you will recognize success.
 
-Connect Codex once under the desktop settings → Work from Codex and restart Codex; the gear menu shows whether Codex is connected. Pods contains the map, the decisions and the Pod editor; conversations stay in Codex.
+Connect Codex once under the desktop settings → Work from Codex and restart Codex; the same page shows whether Codex is connected. Pods contains the map, the decisions and the Pod editor; conversations stay in Codex.
 
 Connected Codex can configure access, save and validate a script, activate it and enable a schedule when requested. Its confirmation policy belongs to Codex. A response saying ready is not evidence of a completed run.
 
@@ -133,7 +133,7 @@ Use Variables and secrets for this Pod. Ordinary variables are visible to the as
 
 Codex can ask for a secret by name and purpose but cannot read its stored value. On the detail page under Secrets choose + Secret: type the value, read a private file on this Mac, or request it through OpenApe Secrets. Never paste it in conversation, source, screenshots or support messages.
 
-A request through OpenApe Secrets registers this Mac once as a consumer with its own key and lists the request under Decisions → Secrets. You fill it in at secrets.openape.ai in the browser; the value is sealed against the key of this Mac, Pods collects it once and the request is destroyed. The gear menu shows the registration with Revoke. Codex can raise the same request with requestSecret; it sees only the alias.
+A request through OpenApe Secrets registers this Mac once as a consumer with its own key and lists the request under Decisions → Secrets. You fill it in at secrets.openape.ai in the browser; the value is sealed against the key of this Mac, Pods collects it once and the request is destroyed. App settings (⚙ Settings) show the registration with Revoke. Codex can raise the same request with requestSecret; it sees only the alias.
 
 Assigning a secret lets this Pod’s validated scripts read that alias. Review the source: a script can deliberately copy a secret into a prompt, file or log. Secret storage does not make arbitrary code safe. Managed secret values are encrypted locally and excluded from backup exports.
 
@@ -207,7 +207,7 @@ Disconnecting a DDISA account under Your accounts revokes permissions using it a
 
 ## Back up and restore your work
 
-Choose your account at the top right → Data & backups, or choose Export backup… in the gear menu. Normal app data lives in ~/Library/Application Support/OpenApe Pods. Use the export and restore controls instead of copying a live database.
+Choose your account at the top right or ⚙ Settings, then Data & backups. Normal app data lives in ~/Library/Application Support/OpenApe Pods. Use the export and restore controls instead of copying a live database.
 
 Export includes settings, scripts, workspaces, knowledge, sources and history. Managed account credentials, secret values, protected application state and shell HOME/history are excluded. Personal content or secrets you manually wrote into script source or workspace files can still be in the backup. Keep exports private.
 
@@ -224,21 +224,21 @@ Verify update and back up checks an approved signed update candidate and prepare
 
 ## Choose your language
 
-Open the gear menu at the top right and use Language to switch between Deutsch and English. Your choice is saved per local profile and applies to the interface, native menus and app-owned dialogs. Unsaved editor content is retained when navigating there.
+Open ⚙ Settings at the top right and use Language to switch between Deutsch and English. Your choice is saved per local profile and applies to the interface, native menus and app-owned dialogs. Unsaved editor content is retained when navigating there.
 
-Pod and group names, knowledge, sources, conversation messages, script code and technical audit payloads stay in their original language. The switch does not translate your content or change model prompts. Known app diagnostics are translated; an unknown external diagnostic is labeled and retained exactly. Dates and numbers follow the selected display language; stored times, schedule time zones and script contracts remain unchanged.
+Pod names, tags, knowledge, sources, conversation messages, script code and technical audit payloads stay in their original language. The switch does not translate your content or change model prompts. Known app diagnostics are translated; an unknown external diagnostic is labeled and retained exactly. Dates and numbers follow the selected display language; stored times, schedule time zones and script contracts remain unchanged.
 
 The handbook is available as complete English and German offline editions with matching app screenshots. Use the link to the other edition in the handbook navigation. Keep both HTML files together when using those links. The language preference is local display configuration; a restored profile starts from its system default until you choose again.
 
-## Organize pods in groups
+## Organize pods with tags
 
-Groups organize related Pods; the list and the detail page show each Pod's group, while the map is filtered by tags. Every Pod belongs to one flat group or Ungrouped. Group names and membership are saved on this Mac and included in backups.
+Tags organize related Pods: up to eight per Pod, each 1–32 letters, digits or hyphens, stored in lowercase. List and map filter by tags, and Without tag shows the rest. Tags are saved on this Mac and included in backups. Groups of earlier versions became tags of the same name when Pods updated its data.
 
-Grouping does not share resources or permissions, invalidate a script or alter a running task. New Pods begin in Ungrouped. Removing a group keeps every pod; deleting a pod remains a separate Data & backups action.
+Tags do not share resources or permissions, invalidate a script or alter a running task. New Pods begin without a tag. Removing a tag keeps every Pod; deleting a Pod remains a separate Data & backups action.
 
-1. Ask Codex to set the group of a Pod, or open the Pod editor with Details öffnen and choose Group under Settings; a new name creates the group. Names contain 1–100 characters; up to fifty groups are supported.
-2. Tag Pods by area, for example with the group name, to show a group on its own on the Automations tab.
-3. Rename or remove a group through Codex; removing keeps every Pod and moves it to Ungrouped.
+1. Open a Pod on the Automations tab and edit Tags, or ask Codex to tag it.
+2. Tag Pods by area, for example with a company name, and choose that tag on the Automations tab to show them on their own.
+3. Remove a tag from its Pods to retire it; the Pods stay.
 
 ## Overview
 
@@ -356,7 +356,7 @@ Select an application to add or remove its HTTPS hostnames. Sandboxed applicatio
 
 ## Settings
 
-Settings contains name, group, Pod identity, schedule and limits, and More options. Edit Description directly in Overview. Renaming preserves work and permissions.
+Settings contains name, Pod identity, schedule and limits, and More options. Edit Description directly in Overview. Renaming preserves work and permissions.
 
 More options can archive a Pod or delete an archived Pod after the native confirmation. Deletion removes its local data and variables. Shared accounts and original reference files remain; retained conversation history follows the existing retention policy.
 
@@ -453,7 +453,7 @@ Earlier versions connected Pods through networks. Networks were retired; their h
 
 Connected Codex on this Mac administers Pods directly: it can manage variables and resources, validate and activate scripts, enable schedules, start or recover runs, and define shared-data namespaces with their writer and readers. No global Node installation is needed; Pods supplies its runtime.
 
-New automation with Codex on the Automations tab writes a brief with the selected group or node and the Pods it already knows; the desktop opens Codex, the browser copies the brief for you to paste.
+New automation with Codex on the Automations tab writes a brief with the tags of the pinned Pod or node and the Pods it already knows; the desktop opens Codex, the browser copies the brief for you to paste.
 
 Each Codex session needs your sign-in first. While you are logged in with apes login on this Mac, Pods opens the session silently on the first call. Otherwise Pods opens your DDISA sign-in in the browser and then asks in the Pods app whether Codex may have full Pods access for one hour; confirm only a request you just made. Codex then retries. After the hour or End session in the settings, Pods asks again without a Codex restart. Within the session, confirmations follow the Codex client settings; there is no additional approval queue in Pods. Codex acts with your identity: it can answer a Pod's question, open an approval at the identity provider, approve or deny the rights your Pods request (also a waiting run approval) and revoke them. It can decide only rights a Pod of yours requested for itself; after the session ends, approvals wait for the identity provider again. Full access does not remove script validation, stale-revision checks or real provider sign-in requirements.
 
@@ -461,7 +461,7 @@ Codex receives safe resource metadata and run state, not account tokens, Pod key
 
 Pods must be running. After moving or reinstalling it, open it once to refresh the launcher.
 
-Disconnect under the desktop settings → Work from Codex (gear menu → More settings). If you edited the registered Codex entry yourself, Pods leaves it alone; remove it with codex mcp remove openape-pods.
+Disconnect under ⚙ Settings → Work from Codex. If you edited the registered Codex entry yourself, Pods leaves it alone; remove it with codex mcp remove openape-pods.
 
 1. Connect Codex under the desktop settings → Work from Codex.
 2. Restart Codex once.
@@ -481,6 +481,6 @@ In the browser you can review and configure an import on the connected desktop; 
 
 1. Open the detail page of a Pod and choose Export…; set the package title, keys, aliases, included files and public defaults.
 2. Review the exact package and its privacy findings, acknowledge what you checked, then save the .openape file.
-3. On the receiving device open the gear menu → Portable Pods → Import… and open the package file.
+3. On the receiving device open ⚙ Settings → Portable Pods → Import… and open the package file.
 4. Enter the required values, create the paused copy, then bind folders, destinations and applications on each Pod and add secrets.
 5. Finish setup, validate and activate the Pod; enable its schedule only when you are ready.

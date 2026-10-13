@@ -234,7 +234,7 @@ export class WorkspaceStore {
       const row = raw as unknown as RuntimeRow
       const online = this.online(row)
       const lastSeenAt = row.seen_at || null
-      if (!this.hasData(row)) return { id: row.id, revision: row.revision, online, lastSeenAt, workspace: { pods: [], organization: { revision: 1, groups: [] } } }
+      if (!this.hasData(row)) return { id: row.id, revision: row.revision, online, lastSeenAt, workspace: { pods: [] } }
       const read = this.reader(row.id)
       const workspace = read('workspace') as WorkspaceState
       return { id: row.id, revision: row.revision, online, lastSeenAt, workspace: { ...workspace, ...(workspace.map ? { map: currentMap(workspace.map)! } : {}), pods: workspace.pods.map((pod) => {
