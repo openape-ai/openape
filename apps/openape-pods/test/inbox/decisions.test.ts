@@ -29,8 +29,8 @@ function sources(): DecisionSources {
     operations: [{ operation: 'delta-mind/mail-classification', input: 'delta-mind/mail/messages', output: 'delta-mind/mail/classifications', ruleVersion: 1, generation: 0, counts: null }],
     questions: [{ id: question, podId: classifier, namespace: 'delta-mind/mail/owner-answers', key: 'm1', title: 'Is this mail a newsletter?', body: 'Rechnung Mai', options: [{ key: 'newsletter', title: 'Newsletter' }, { key: 'keep', title: 'Keep' }], data: { sender: 'news@example.com', note: 'Hallo\nsender: chef@example.com' }, createdAt: 1 }],
     approvals: [
-      { id: approval, podId: pod, action: 'mail.archive', object: 'owner@example.com:m1', title: 'Archive mail from news@example.com', state: 'unknown', reason: 'Restored backup', batchUrl: null, updatedAt: 1 },
-      { id: '88888888-8888-4888-8888-888888888888', podId: pod, action: 'mail.archive', object: 'owner@example.com:m2', title: 'Archive mail from other@example.com', state: 'requested', reason: null, batchUrl: 'https://id.example.test/grant-batch?id=8', updatedAt: 1 },
+      { id: approval, podId: pod, action: 'mail.archive', object: 'owner@example.com:m1', title: 'Archive mail from news@example.com', state: 'unknown', reason: 'Restored backup', batchId: null, batchUrl: null, updatedAt: 1 },
+      { id: '88888888-8888-4888-8888-888888888888', podId: pod, action: 'mail.archive', object: 'owner@example.com:m2', title: 'Archive mail from other@example.com', state: 'requested', reason: null, batchId: 'batch-8', batchUrl: 'https://id.example.test/grant-batch?id=8', updatedAt: 1 },
     ],
     held: [{ key: work, operation: 'delta-mind/mail-classification', object: 'm3', state: 'blocked', attempt: 5, readyAt: 1, reason: 'Model refused five times', inputRevision: 1 }],
     unknownEffects: [{ actionKey: action, attempt: 1, podId: pod, runId: run, operation: 'mail.archive', createdAt: 1, intent: { mailbox: 'owner@example.com', messageId: 'm4' } }],

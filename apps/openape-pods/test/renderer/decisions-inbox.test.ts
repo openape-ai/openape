@@ -21,8 +21,10 @@ export const domain: DomainOverview = {
   namespaces: [], operations: [],
   questions: [...choiceEvents].sort((a, b) => Date.parse(a[6]) - Date.parse(b[6])).map(recorded => ({ id: `${recorded[0]}-0000-4000-8000-000000000000`.slice(0, 36), podId: classification.id, namespace: 'delta-mind/mail/owner-answers', key: recorded[0], title: 'Review uncertain mail', body: String(choicePayload(recorded).subject), options, data: { sender: recorded[2], category: recorded[4], confidence: recorded[5] }, createdAt: Date.parse(recorded[6]) })),
   approvals: [
-    { id: '00000000-0000-4000-8000-0000000000a1', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n1', title: 'Archive mail from news@shop.example', state: 'requested', reason: null, batchUrl: 'https://id.openape.ai/grant-batch?id=1', updatedAt: view.at },
-    { id: '00000000-0000-4000-8000-0000000000a2', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n2', title: 'Archive mail from hello@saas.example', state: 'unknown', reason: 'Restored backup: the owner decision after the backup is unknown; request the approval again', batchUrl: null, updatedAt: view.at },
+    { id: '00000000-0000-4000-8000-0000000000a1', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n1', title: 'Archive mail from news@shop.example', state: 'requested', reason: null, batchId: 'batch-1', batchUrl: 'https://id.openape.ai/grant-batch?id=1', updatedAt: view.at },
+    { id: '00000000-0000-4000-8000-0000000000a3', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n3', title: 'Archive mail from deals@shop.example', state: 'requested', reason: null, batchId: 'batch-1', batchUrl: 'https://id.openape.ai/grant-batch?id=1', updatedAt: view.at },
+    { id: '00000000-0000-4000-8000-0000000000a4', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n4', title: 'Archive mail from digest@social.example', state: 'approved', reason: null, batchId: 'batch-1', batchUrl: 'https://id.openape.ai/grant-batch?id=1', updatedAt: view.at },
+    { id: '00000000-0000-4000-8000-0000000000a2', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n2', title: 'Archive mail from hello@saas.example', state: 'unknown', reason: 'Restored backup: the owner decision after the backup is unknown; request the approval again', batchId: null, batchUrl: null, updatedAt: view.at },
   ],
   held: [{ key: 'c'.repeat(64), operation: 'delta-mind/mail-classification', object: 'm3', state: 'blocked', attempt: 5, readyAt: view.at, reason: 'Model refused five times', inputRevision: 1 }],
   unknownEffects: [{ actionKey: 'd'.repeat(64), attempt: 1, podId: newsletters.id, runId: null, operation: 'mail.archive', createdAt: view.at, intent: { mailbox: 'phofmann@delta-mind.at', messageId: 'm4' } }],
@@ -41,7 +43,7 @@ describe('Entscheidungen', () => {
   it('renders the 17 questions with their facts and options and counts what waits for the owner', async () => {
     await mountInbox()
     const kpis = wrapper!.findAll('.kpi').map(item => [item.find('b').text(), item.find('span').text()])
-    expect(kpis).toEqual([['17', 'Rückfragen'], ['2', 'Freigaben'], ['1', 'Rechte'], ['3', 'Abzugleichen'], ['0', 'Geheimnisse']])
+    expect(kpis).toEqual([['17', 'Rückfragen'], ['3', 'Freigaben'], ['1', 'Rechte'], ['3', 'Abzugleichen'], ['0', 'Geheimnisse']])
     const cards = wrapper!.findAll('[data-testid="questions"] .item')
     expect(cards).toHaveLength(17)
     expect(wrapper!.find('[data-testid="questions"] .grp').text()).toContain('Review uncertain mail')
@@ -93,6 +95,13 @@ describe('Entscheidungen', () => {
     await mountInbox()
     const approvals = wrapper!.find('[data-testid="approvals"]')
     expect(approvals.text()).toContain('Archive mail from news@shop.example')
+    // One batch request is one card with one decision link; approved members need nothing from the owner.
+    const batch = approvals.find('[data-batch]')
+    expect(approvals.findAll('[data-batch]')).toHaveLength(1)
+    expect(batch.findAll('button.idp')).toHaveLength(1)
+    expect(batch.text()).toContain('3 Objekte in einer Sammelanfrage')
+    expect(batch.text()).toContain('2 angefragt')
+    expect(batch.text()).toContain('1 freigegeben')
     await approvals.find('button.idp').trigger('click')
     expect(wrapper!.emitted('domain')).toEqual([[{ type: 'openApproval', id: '00000000-0000-4000-8000-0000000000a1' }]])
     const uncertain = approvals.findAll('.item')[1]!
@@ -142,7 +151,7 @@ describe('Entscheidungen', () => {
     applyLanguage('de')
     wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: true, now: view.at, desktop: true, tab: 'decisions', domain } })
     await flushPromises()
-    expect(wrapper.find('[role="tablist"]').text()).toContain('Entscheidungen 23')
+    expect(wrapper.find('[role="tablist"]').text()).toContain('Entscheidungen 24')
     expect(wrapper.find('.decisions-inbox h1').text()).toBe('Entscheidungen')
     await wrapper.findAll('[data-testid="questions"] .item .opts button')[0]!.trigger('click')
     expect(wrapper.emitted('domain')).toHaveLength(1)
