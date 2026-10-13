@@ -107,6 +107,7 @@ function tokenClaims(token: string): { exp: number, grantType: string } {
 }
 
 export class AgentAuthority {
+  private readonly usedOnce = new Set<string>()
   constructor(private readonly connection: AgentConnection, private readonly observe?: GrantObserver, private readonly ledger?: GrantLedgerPort, private readonly tokens?: RunGrantTokens) {
     const url = new URL(connection.issuer)
     if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && url.hostname === '127.0.0.1')) || url.pathname !== '/' || url.search || url.hash || url.username || url.password) throw new Error('Invalid assigned identity origin')
@@ -262,6 +263,8 @@ export class AgentAuthority {
    */
   async refresh(assignment: AssignedAuthorization, signal: AbortSignal): Promise<void> {
     if (await this.reuse(assignment, signal)) return
+    // A once grant this run used up stays its authority; the IdP reports it active until it is revoked or expires.
+    if (this.usedOnce.has(assignment.grantId)) return this.assertActive(assignment.grantId, signal)
     const grant = await this.grant(assignment.grantId, signal)
     if (grant.status !== 'approved') throw new AuthorityError(`Pod execution permission is ${grant.status}; review the Pod permissions before retrying`)
     await this.mint(assignment, signal)
@@ -288,7 +291,8 @@ export class AgentAuthority {
     const jwks = await this.keySet(scope.jwksUri, signal)
     await authorizeAssignedCommand(assignment.command, reply.authz_jwt, { ...scope, jwks })
     const claims = tokenClaims(reply.authz_jwt)
-    if (claims.grantType !== 'once') this.tokens?.remember(this.tokenKey(assignment), { grantId: assignment.grantId, token: reply.authz_jwt, jwks, expiresAt: claims.exp * 1000 })
+    if (claims.grantType === 'once') this.usedOnce.add(assignment.grantId)
+    else this.tokens?.remember(this.tokenKey(assignment), { grantId: assignment.grantId, token: reply.authz_jwt, jwks, expiresAt: claims.exp * 1000 })
   }
 
   private scope(grantId: string, signal: AbortSignal) {
