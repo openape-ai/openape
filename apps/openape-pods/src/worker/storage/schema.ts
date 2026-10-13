@@ -646,7 +646,7 @@ CREATE TABLE action_approvals(
   object TEXT NOT NULL CHECK(length(object) BETWEEN 1 AND 500),
   payload TEXT NOT NULL CHECK(json_valid(payload) AND json_type(payload)='object'),
   payload_hash TEXT NOT NULL CHECK(length(payload_hash)=64),
-  title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 120),
+  title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 720),
   authority TEXT NOT NULL CHECK(json_valid(authority) AND json_type(authority)='object'),
   batch_id TEXT REFERENCES approval_batches(id),
   grant_id TEXT CHECK(grant_id IS NULL OR length(grant_id) BETWEEN 1 AND 128),

@@ -3,7 +3,7 @@ import { AuthorityError } from '../../contracts/infrastructure'
 import { assertGateOperation } from '../../contracts/mail-archive-port'
 import type { PodResource } from '../../contracts/resources'
 import { programRequest } from '../../main/programs/invoke'
-import { readActions } from '../../main/programs/session'
+import { approvableCommand, readActions } from '../../main/programs/session'
 import { EffectLedger } from '../recovery/effects'
 import { canonicalJson } from '../../contracts/canonical-json'
 import type { ApprovedInvocation } from '../../contracts/programs'
@@ -41,16 +41,10 @@ export async function executeProgramEffect(ledger: EffectLedger, podId: string, 
   return reply
 }
 
-/**
- * The adapter's description of one command a script asks approval for. The command must match an adapter operation;
- * a mail move stays with the archive service and a generic execution is never approved by object.
- */
+/** The adapter's description of one command a script asks approval for or runs with one (see approvableCommand). */
 export async function describeProgram(resources: PodResource[], podId: string, capabilities: string[], command: { application: string, argv: unknown }): Promise<string> {
   const { assignment, argv } = programRequest(resources, podId, capabilities, command)
-  const resolved = await resolveCommand(loadAdapter(assignment.cliId, assignment.adapterPath), [assignment.cliId, ...argv])
-  assertGateOperation(resolved.detail.action)
-  if (resolved.detail.operation_id === '_generic.exec') throw new Error('An approved command must match an operation of the application adapter')
-  return resolved.detail.display
+  return approvableCommand(assignment, argv)
 }
 
 /**

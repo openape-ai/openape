@@ -38,6 +38,44 @@ export async function resolveProgram(assignment: ProgramAssignment, argv: string
   assertGateOperation(resolved.detail.action, action)
   return { write: !readActions.includes(resolved.detail.action), authorization: { grantId: '', command: { cliId: assignment.cliId, adapterPath: assignment.adapterPath, adapterDigest: adapter.digest, argv: command, coverage: [resolved.detail] } } }
 }
+/** What an adapter operation declares about its options; the fields after required_options come with declared-option adapters. */
+interface DeclaredOptions { command: string[], required_options?: string[], value_options?: string[], flag_options?: string[], global_options?: string[] }
+const optionKey = (token: string) => token.replace(/^--?/, '').split('=', 1)[0]!
+
+/**
+ * Fails closed on options for a command that runs with an object approval instead of a grant (issue 1468): every
+ * option before the operation's command words must be a declared global option, every option after them a declared
+ * option of the operation. An undeclared option such as git's --upload-pack or -c is refused, as is `--`.
+ */
+export function assertDeclaredOptions(operation: DeclaredOptions, argv: string[]): void {
+  const undeclared = (token: string) => new Error(`The command passes ${token.split('=', 1)[0]}, which its adapter operation does not declare; an approved command runs only with declared options`)
+  const globals = new Set((operation.global_options ?? []).map(entry => entry.split('=', 1)[0]!))
+  let index = 0
+  while (index < argv.length && !operation.command.every((word, offset) => argv[index + offset] === word)) {
+    const token = argv[index]!
+    if (!token.startsWith('-') || !globals.has(optionKey(token))) throw undeclared(token)
+    index += token.includes('=') ? 1 : 2
+  }
+  const declared = new Set([...operation.required_options ?? [], ...operation.value_options ?? [], ...operation.flag_options ?? []])
+  for (const token of argv.slice(index + operation.command.length)) {
+    if (token === '--' || (token.startsWith('-') && token.length > 1 && !declared.has(optionKey(token)))) throw undeclared(token)
+  }
+}
+
+/**
+ * The adapter's description of one command that may run with an object approval: it must resolve to a declared,
+ * non-generic adapter operation with only declared options, and a mail move stays with the archive service.
+ */
+export async function approvableCommand(assignment: ProgramAssignment, argv: string[]): Promise<string> {
+  const loaded = loadAdapter(assignment.cliId, assignment.adapterPath)
+  const resolved = await resolveCommand(loaded, [assignment.cliId, ...argv])
+  assertGateOperation(resolved.detail.action)
+  const operation = loaded.adapter.operations.find(item => item.id === resolved.detail.operation_id)
+  if (!operation || resolved.detail.operation_id === '_generic.exec') throw new Error('An approved command must match an operation of the application adapter')
+  assertDeclaredOptions(operation as DeclaredOptions, argv)
+  return resolved.detail.display
+}
+
 export async function prepareProgramAuthorization(assignment: ProgramAssignment, connection: AgentConnection, argv: string[], observe?: GrantObserver, ledger?: GrantLedgerPort, action?: 'move', tokens?: RunGrantTokens) {
   const { authorization, write } = await resolveProgram(assignment, argv, action)
   return { authority: new AgentAuthority(connection, observe, ledger, tokens), authorization, write }

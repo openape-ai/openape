@@ -23,12 +23,26 @@ function row(value: unknown): Row { return value as Row }
 // eslint-disable-next-line no-control-regex
 const line = (value: unknown, limit: number) => String(value).replace(/[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069]+/g, ' ').trim().slice(0, limit)
 
+/** Program approvals show the complete command; one that does not fit is refused, never shortened. */
+export const programApprovalLimits = { object: 500, display: 200, title: 720 } as const
+// eslint-disable-next-line no-control-regex
+const hiddenCharacters = /[\u0000-\u001F\u007F-\u009F\u00AD\u061C\u180E\u200B-\u200F\u2028-\u202E\u2060-\u206F\uFEFF]/
+
+/** Each argument stays readable and unambiguous: plain words as they are, anything else JSON-quoted. */
+function shownArgument(value: string): string {
+  if (hiddenCharacters.test(value)) throw new Error('A program approval cannot show a command with control, invisible or direction characters')
+  return /^[\w@%+=:,./-]+$/.test(value) ? value : JSON.stringify(value)
+}
+
 /**
- * The object of a program approval is the exact command: the application and its argv, readable for the owner at the
- * IdP and with a digest of the argv, so a changed argument (for git push the lease SHA) is a different object.
+ * The object of a program approval is the exact command: the complete application and argv as the owner reads it at
+ * the IdP, plus a digest of the argv, so a changed argument (for git push the lease SHA) is a different object.
+ * A command whose complete form does not fit is refused instead of shortened.
  */
 export function programObject(application: string, argv: string[]): string {
-  return `${line([application, ...argv].join(' '), 470)} #${digest(canonicalJson(argv)).slice(0, 16)}`
+  const object = `${[application, ...argv].map(shownArgument).join(' ')} #${digest(canonicalJson(argv)).slice(0, 16)}`
+  if (object.length > programApprovalLimits.object) throw new Error(`The command is too long for a program approval; the owner must see it complete (at most ${programApprovalLimits.object - 18} characters)`)
+  return object
 }
 
 /** The single effect a program approval allows: its key in the run's effect ledger. */
@@ -44,7 +58,9 @@ export function actionTitle(action: ApprovalAction, object: string, payload: Rec
     const argv = parseProgramArgv(payload.argv)
     if (object !== programObject(payload.application, argv)) throw new Error('A program approval object is the exact command')
     if (!display?.trim()) throw new Error('A program approval needs the adapter description of its command')
-    return `${line(display, 60)}: ${line(argv.join(' '), 120)}`.slice(0, 120)
+    if (hiddenCharacters.test(display) || display.length > programApprovalLimits.display) throw new Error('The adapter description of this command cannot be shown complete; it runs only with a grant')
+    // The complete command follows the adapter's description; the digest suffix of the object is left out.
+    return `${display.trim()}: ${object.slice(0, object.lastIndexOf(' #'))}`
   }
   if (action === 'mail.archive') {
     const fields = ['mailbox', 'messageId', 'version', 'subject', 'sender']

@@ -3046,5 +3046,9 @@
   "Approved commands need a live owner approval; synthetic validation never consumes approvals or runs them": "Freigegebene Befehle brauchen eine echte Freigabe des Eigentümers; die synthetische Prüfung verbraucht keine Freigaben und führt sie nie aus",
   "Approved program service is unavailable": "Der Dienst für freigegebene Programme ist nicht verfügbar",
   "The approval does not name a program command": "Die Freigabe nennt keinen Programmbefehl",
-  "The approval covers a different command; request an approval for this exact command": "Die Freigabe gilt für einen anderen Befehl; fordere eine Freigabe für genau diesen Befehl an"
+  "The approval covers a different command; request an approval for this exact command": "Die Freigabe gilt für einen anderen Befehl; fordere eine Freigabe für genau diesen Befehl an",
+  "The command passes {p0}, which its adapter operation does not declare; an approved command runs only with declared options": "Der Befehl übergibt {p0}, das seine Adapter-Operation nicht deklariert; ein freigegebener Befehl läuft nur mit deklarierten Optionen",
+  "A program approval cannot show a command with control, invisible or direction characters": "Eine Programmfreigabe kann keinen Befehl mit Steuer-, unsichtbaren oder Richtungszeichen anzeigen",
+  "The command is too long for a program approval; the owner must see it complete (at most {p0} characters)": "Der Befehl ist für eine Programmfreigabe zu lang; der Eigentümer muss ihn vollständig sehen (höchstens {p0} Zeichen)",
+  "The adapter description of this command cannot be shown complete; it runs only with a grant": "Die Adapterbeschreibung dieses Befehls kann nicht vollständig angezeigt werden; er läuft nur mit einer Berechtigung"
 }

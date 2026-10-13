@@ -40,7 +40,7 @@ export function parseApprovalManifest(value: unknown): ApprovalManifest {
   const owner = parseOwner(input.owner)
   const items = input.items.map((entry) => {
     const item = entry as Record<string, unknown>
-    if (!item || typeof item !== 'object' || Object.keys(item).some(key => !['key', 'authority', 'summary'].includes(key)) || !uuid(item.key) || typeof item.summary !== 'string' || !item.summary.trim() || item.summary.length > 120) throw new Error('Invalid approval item')
+    if (!item || typeof item !== 'object' || Object.keys(item).some(key => !['key', 'authority', 'summary'].includes(key)) || !uuid(item.key) || typeof item.summary !== 'string' || !item.summary.trim() || item.summary.length > 720) throw new Error('Invalid approval item')
     const authority = parseApprovalAuthority(item.authority)
     if (authority.podId !== input.podId || authority.batchId !== input.batchId || authority.expiresAt !== input.expiresAt || canonicalJson(authority.owner) !== canonicalJson(owner)) throw new Error('Approval item differs from its batch')
     return { key: item.key, authority, summary: item.summary }

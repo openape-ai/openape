@@ -167,8 +167,9 @@ function assertBaseline(database: DatabaseSync): void {
 }
 
 /**
- * Schema 48 to 49 (issue 1468): object approvals also name exact program commands. Only the CHECK of
- * action_approvals changed, so that table is rebuilt from the baseline with its rows and rowids unchanged.
+ * Schema 48 to 49 (issue 1468): object approvals also name exact program commands, whose titles show the complete
+ * command. Only the CHECKs of action_approvals changed, so that table is rebuilt from the baseline with its rows and
+ * rowids unchanged.
  * It runs inside the caller's transaction with foreign keys off, after the verified pre-upgrade backup.
  */
 export function convert48(database: DatabaseSync): void {

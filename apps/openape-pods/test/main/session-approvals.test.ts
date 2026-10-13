@@ -6,7 +6,7 @@ import { join, resolve } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OwnerSession } from '../../src/main/connections/owner-session'
 import { invokeProgram } from '../../src/main/programs/invoke'
-import { prepareProgramAuthorization, resolveProgram } from '../../src/main/programs/session'
+import { assertDeclaredOptions, prepareProgramAuthorization, resolveProgram } from '../../src/main/programs/session'
 import { programWrite } from '../../src/worker/runs/program-effects'
 import type { ProgramAssignment } from '../../src/contracts/programs'
 import { brokered, brokerRejections, closeProfiles, deniedPodId, identityProvider, issuer, owner, ownerToken, podId, podSubject, program, workerFixture } from './idp-fixture'
@@ -164,6 +164,9 @@ it('runs an exact command with its consumed program approval instead of a grant,
   await expect(call(async () => { throw new Error('No consumed approval of this Pod names this exact command') })).rejects.toThrow('No consumed approval')
   // A confirmed approval replaces the grant: no grant request and no grant token; the call proceeds to the sandbox.
   const confirmed = vi.fn(async () => {})
+  // An option the operation does not declare is refused before the approval is even checked.
+  await expect(invokeProgram([gh.resource] as never, podId, { application: 'gh', argv: ['repo', 'create', 'openape/new', '--clone'] }, '/fixture/helper', root, {} as never, lease, { connection: f.connection(podId), ledger: f.grants.port(podId), reach: { level: 'isolated', protectedPaths: [] }, approval: confirmed })).rejects.toThrow('does not declare')
+  expect(confirmed).not.toHaveBeenCalled()
   await expect(call(confirmed)).rejects.not.toThrow(/approval|grant/i)
   expect(confirmed).toHaveBeenCalledTimes(1)
   expect(idp.state.creates).toHaveLength(requested)
@@ -249,4 +252,14 @@ it('revokes a direct Pod grant as the requesting Pod without an owner session', 
   await mcp(f, httpGrant(), session())
   expect(await mcp(f, { action: 'grants', command: { type: 'revoke', podId, grantId: 'grant-1' } }, null)).toMatchObject({ grant: { id: 'grant-1', state: 'revoked' } })
   expect(idp.state.decisions.filter(decision => decision.action === 'revoke')).toEqual([{ action: 'revoke', id: 'grant-1', bearer: 'SYNTHETIC_POD_AGENT', body: {} }])
+})
+
+it('accepts only declared options for approved commands, including declared global options (issue 1468)', () => {
+  const push = { command: ['push'], required_options: ['force-with-lease'], value_options: ['repo'], flag_options: ['atomic'], global_options: ['C=repository'] }
+  expect(() => assertDeclaredOptions(push, ['-C', '/repo', 'push', '--force-with-lease=x:1', '--repo', 'origin', '--atomic', 'origin', 'main'])).not.toThrow()
+  expect(() => assertDeclaredOptions(push, ['-c', 'core.sshCommand=evil', 'push', 'origin', 'main'])).toThrow('passes -c')
+  expect(() => assertDeclaredOptions(push, ['push', '--upload-pack=evil', 'origin', 'main'])).toThrow('passes --upload-pack')
+  expect(() => assertDeclaredOptions(push, ['push', '-fu', 'origin', 'main'])).toThrow('passes -fu')
+  expect(() => assertDeclaredOptions(push, ['push', '--', '--atomic'])).toThrow('passes --')
+  expect(() => assertDeclaredOptions({ command: ['push'] }, ['push', '--force', 'origin', 'main'])).toThrow('passes --force')
 })
