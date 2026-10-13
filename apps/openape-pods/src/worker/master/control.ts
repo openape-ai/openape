@@ -102,7 +102,7 @@ export class MasterControl {
 
   private apply(action: MasterAction, lock: string, context?: Conversation): unknown {
     if (action.action === 'runtime') return { ...runtimeReference, jevConnection: jevAvailability(this.store) }
-    if (action.action === 'list') return { jev: jevAvailability(this.store), pods: this.store.listPods().map(pod => context ? { id: pod.id, name: pod.name, revision: pod.revision, lifecycle: pod.lifecycle, selected: context.context.pods.some(item => item.id === pod.id) } : pod) }
+    if (action.action === 'list') return { jev: jevAvailability(this.store), pods: this.store.listPods().map(pod => context ? { id: pod.id, name: pod.name, revision: pod.revision, lifecycle: pod.lifecycle, selected: pod.lifecycle !== 'archived' && context.context.pods.some(item => item.id === pod.id) } : pod) }
     if (action.action === 'create') {
       if (this.store.listPods().length >= 100) throw new Error('Local pod limit reached')
       return this.store.createPod({ name: action.name })
