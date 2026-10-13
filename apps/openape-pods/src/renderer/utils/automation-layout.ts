@@ -14,7 +14,6 @@ export interface MapNode {
   kind: NodeKind
   name: string
   sub: string
-  group: string | null
   paused: boolean
   ai: boolean
   degraded: boolean
@@ -38,9 +37,8 @@ export const geometry = { systemX: 100, sinkX: 1095, topY: 56, topGap: 270, firs
 export const boxSize = (kind: NodeKind): { w: number, h: number } => kind === 'sink' ? { w: 190, h: 40 } : kind === 'auth' || kind === 'ai' ? { w: 160, h: 40 } : kind === 'pod' ? { w: 36, h: 36 } : { w: 160, h: 40 }
 export const IDP = 'auth:idp'
 export const YOU = 'auth:you'
-export const ungrouped = '__none__'
 
-const node = (id: string, kind: NodeKind, name: string, extra: Partial<MapNode> = {}): MapNode => ({ id, kind, name, sub: '', group: null, paused: false, ai: false, degraded: false, blocked: false, running: false, rk: null, both: false, badge: 0, secrets: false, labelWidth: 150, x: 0, y: 0, tx: 0, ty: 0, ...extra })
+const node = (id: string, kind: NodeKind, name: string, extra: Partial<MapNode> = {}): MapNode => ({ id, kind, name, sub: '', paused: false, ai: false, degraded: false, blocked: false, running: false, rk: null, both: false, badge: 0, secrets: false, labelWidth: 150, x: 0, y: 0, tx: 0, ty: 0, ...extra })
 
 /** Nodes and links of the read model; open questions link a Pod to the owner, requested approvals to the identity provider. */
 export function buildModel(view: MapView, previous?: MapModel): MapModel {
@@ -51,7 +49,7 @@ export function buildModel(view: MapView, previous?: MapModel): MapModel {
   for (const pod of view.pods) {
     if (pod.lifecycle === 'archived') continue
     shown.add(pod.id)
-    nodes.push(node(pod.id, 'pod', pod.name, { group: pod.group ?? ungrouped, paused: pod.lifecycle === 'paused', ai: pod.ai, degraded: degraded.has(pod.id), blocked: pod.queue.blocked > 0 || pod.work.held > 0, running: pod.lastRun?.state === 'running', secrets: pod.secrets.length > 0 }))
+    nodes.push(node(pod.id, 'pod', pod.name, { paused: pod.lifecycle === 'paused', ai: pod.ai, degraded: degraded.has(pod.id), blocked: pod.queue.blocked > 0 || pod.work.held > 0, running: pod.lastRun?.state === 'running', secrets: pod.secrets.length > 0 }))
     for (const approval of pod.approvals) links.push({ from: pod.id, to: IDP, type: 'auth', label: approval.title, flow: 1 })
   }
   for (const decision of view.kpis.decisions.filter(item => shown.has(item.podId))) links.push({ from: decision.podId, to: decision.kind === 'question' ? YOU : IDP, type: 'auth', label: decision.kind, flow: decision.count })
@@ -80,12 +78,12 @@ export function buildModel(view: MapView, previous?: MapModel): MapModel {
 
 /** A Pod is visible when its layer is selected; a system or authority when it is connected to a visible Pod. */
 export function visibleNodes(model: MapModel, layers: Layers): Set<string> {
-  const own = new Set(model.nodes.filter(item => item.group !== null && (layers.paused || !item.paused)).map(item => item.id))
+  const own = new Set(model.nodes.filter(item => item.kind === 'pod' && (layers.paused || !item.paused)).map(item => item.id))
   const visible = new Set(own)
   for (const link of model.links) {
     if (!layers[link.type]) continue
-    if (own.has(link.from) && model.nodes.some(item => item.id === link.to && item.group === null)) visible.add(link.to)
-    if (own.has(link.to) && model.nodes.some(item => item.id === link.from && item.group === null)) visible.add(link.from)
+    if (own.has(link.from) && model.nodes.some(item => item.id === link.to && item.kind !== 'pod')) visible.add(link.to)
+    if (own.has(link.to) && model.nodes.some(item => item.id === link.from && item.kind !== 'pod')) visible.add(link.from)
   }
   return visible
 }

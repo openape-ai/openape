@@ -15,11 +15,16 @@ import { screenshotPath } from './evidence'
 // follows the content, the info panel moves below the map under 1000 px, dark mode uses tokens.
 // Text and commands are asserted in test/renderer/automations-shell.test.ts.
 const view = parseMapView(fixture) as MapView
-// Every group becomes a tag of its Pods.
+// The companies of the recorded workspace become tags of their Pods, as the group conversion of schema 49 does.
+const deltaMind = ['Mail-Synchronisierung', 'Mail-Klassifizierung', 'Mail-Übersicht', 'Rechnungsprüfung', 'Antwortvorbereitung', 'Newsletter-Prüfung', 'Wissensvorschläge']
+function company(name: string): string | null {
+  if (name.startsWith('IURIO')) return 'iurio'
+  if (/^(?:Linde|Portal) · /.test(name)) return 'linde'
+  return deltaMind.includes(name) ? 'delta-mind' : null
+}
 function tagged(): MapView {
   const copy = structuredClone(view)
-  const tag = (group: string) => group.toLowerCase().replace(/\s+/g, '-')
-  for (const pod of copy.pods) pod.tags = pod.group ? { own: [tag(pod.group)], revision: 1 } : undefined
+  for (const pod of copy.pods) { const tag = company(pod.name); pod.tags = tag ? { own: [tag], revision: 1 } : undefined }
   return parseMapView(copy)
 }
 const NOW = view.at + 11 * 60000
@@ -160,18 +165,6 @@ describe('Automatisierungen layout', () => {
     expect(panel.bottom).toBeLessThanOrEqual(map.top)
     expect(panel.width).toBeGreaterThan(1200)
     await shot('08-codex-uebergabe')
-  })
-
-  it('opens the settings as a gear menu at the top right', async () => {
-    await mountShell(1440, 900)
-    await button('⚙ Einstellungen').trigger('click'); await flushPromises(); await frames(2)
-    const menu = document.querySelector('.app-settings-menu')!.getBoundingClientRect()
-    expect(menu.width).toBe(380)
-    expect(menu.right).toBe(1440 - 16)
-    expect(document.querySelectorAll('.app-settings-menu [data-account]')).toHaveLength(3)
-    expect(document.querySelectorAll('.app-settings-menu [data-switch]')).toHaveLength(0)
-    expect(document.querySelector('.app-settings-menu [data-mcp]')!.getBoundingClientRect().right).toBeLessThanOrEqual(1440 - 16)
-    await shot('09-einstellungen')
   })
 
   it('moves the info panel below the map under 1000 px and keeps the toolbar inside 390 px', async () => {

@@ -67,12 +67,12 @@ it('applies variables directly, preserves scope and validation checks, and creat
   await expect(send({ action: 'resume', podId: pod.id, revision: pod.revision })).rejects.toThrow('Validate')
 })
 
-it('applies grouping and enabled schedules with revision checks, without changing other Pods', async () => {
+it('applies enabled schedules with revision checks, without changing other Pods or accepting retired groups', async () => {
   const { store, pod, send, current } = fixture()
   const other = store.createPod({ name: 'Other' })
   await send({ action: 'select', podIds: [pod.id] })
   await send({ action: 'revise', podId: pod.id, revision: pod.revision, name: 'Renamed' })
-  await send({ action: 'setGroup', podId: pod.id, revision: current().revision, name: 'Finance', organizationRevision: 1 })
+  await expect(send({ action: 'setGroup', podId: pod.id, revision: current().revision, name: 'Finance', organizationRevision: 1 })).rejects.toThrow('not allowed')
   const action = { action: 'setSchedule', podId: pod.id, revision: current().revision, spec: { kind: 'interval', seconds: 900 }, scheduleRevision: 0, enabled: true }
   expect(await send(action)).toMatchObject({ schedule: { enabled: true, revision: 1 } })
   await expect(send(action)).rejects.toThrow('Stale schedule')

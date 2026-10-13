@@ -63,19 +63,19 @@ describe('Automatisierungen', () => {
     await button('Pausierte').trigger('click')
     expect(button('Pausierte').attributes('aria-pressed')).toBe('false')
     expect(wrapper!.find('.layers-menu summary').text()).toBe('Ebenen 4/5')
+    // The gear opens the one settings page of the host; the shell has no settings panel of its own.
     await button('⚙ Einstellungen').trigger('click'); await flushPromises()
-    expect(wrapper!.find('.app-settings-menu').exists()).toBe(true)
-    await button('⚙ Einstellungen').trigger('click'); await flushPromises()
-    expect(wrapper!.find('.app-settings-menu').exists()).toBe(false)
+    expect(wrapper!.emitted('settings')).toHaveLength(1)
+    expect(wrapper!.find('[role="dialog"]').exists()).toBe(false)
     await button('Entscheidungen 24').trigger('click')
     expect(wrapper!.emitted('update:tab')).toEqual([['decisions']])
     await button('Neue Automatisierung mit Codex').trigger('click')
-    expect(wrapper!.emitted('codex')).toEqual([[null, null]])
-    // The new automation goes next to the pinned Pod, in its group.
+    expect(wrapper!.emitted('codex')).toEqual([[null, []]])
+    // The new automation is labelled like the pinned Pod; this one has no tags.
     const monitor = pod('IURIO PR monitor').id
     ;(wrapper!.vm as unknown as { pin: (id: string) => void }).pin(monitor)
     await button('Neue Automatisierung mit Codex').trigger('click')
-    expect(wrapper!.emitted('codex')!.at(-1)).toEqual([monitor, 'iurio'])
+    expect(wrapper!.emitted('codex')!.at(-1)).toEqual([monitor, []])
   })
 
   it('lists every Pod with purpose, state, last result, next run and what it waits for', async () => {
@@ -138,9 +138,10 @@ describe('Automatisierungen', () => {
 
 describe('Tags (issue 1459)', () => {
   // The Delta Mind mail Pods carry two tags, kept as their own when their network was converted; one monitor has its own.
+  const deltaMind = ['Mail-Synchronisierung', 'Mail-Klassifizierung', 'Mail-Übersicht', 'Rechnungsprüfung', 'Antwortvorbereitung', 'Newsletter-Prüfung', 'Wissensvorschläge']
   function tagged(): MapView {
     const copy = structuredClone(view)
-    for (const member of copy.pods.filter(item => item.group === 'Delta Mind')) member.tags = { own: ['delta-mind', 'mail'], revision: 1 }
+    for (const member of copy.pods.filter(item => deltaMind.includes(item.name))) member.tags = { own: ['delta-mind', 'mail'], revision: 1 }
     copy.pods.find(item => item.name === 'IURIO PR monitor')!.tags = { own: ['iurio'], revision: 3 }
     return parseMapView(copy)
   }

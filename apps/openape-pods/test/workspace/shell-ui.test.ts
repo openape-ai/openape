@@ -2,9 +2,8 @@ import { flushPromises, mount } from '@vue/test-utils'
 import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '../../src/renderer/App.vue'
-import type { WorkspaceState } from '../../src/contracts/control'
 import type { RunCommand } from '../../src/contracts/runs'
-import { installWorkspace, podId, pods } from '../layout/workspace-fixture'
+import { installWorkspace, podId } from '../layout/workspace-fixture'
 
 // Behaviour formerly asserted by the packaged `pod-workspace`, `groups` and
 // `foundation` E2E files; geometry for the same views lives in test/layout.
@@ -61,17 +60,13 @@ describe('workspace shell', () => {
   })
 })
 
-describe('pod groups', () => {
-  const groupId = '00000000-0000-4000-8000-0000000000a1'
-  const organized = (): WorkspaceState => ({ organization: { revision: 3, groups: [{ id: groupId, name: 'Work', collapsed: false, podIds: [] }] }, pods: structuredClone(pods) })
-
-  it('assigns the selected pod to a group from Settings', async () => {
-    const workspace = vi.fn(async () => organized())
-    installWorkspace({ workspace })
+describe('pod settings', () => {
+  it('offers no group selector, because tags classify Pods (issue 1468)', async () => {
+    installWorkspace()
     await mountApp()
-    const select = wrapper!.findAll('select').find(item => item.findAll('option').some(option => option.text() === 'Work'))!
-    await select.setValue(groupId); await flushPromises()
-    expect(workspace).toHaveBeenCalledWith({ type: 'organize', revision: 3, action: 'move', podId, groupId })
+    expect(wrapper!.find('#section-settings').exists()).toBe(true)
+    expect(wrapper!.find('#pod-group').exists()).toBe(false)
+    expect(wrapper!.text()).not.toContain('New group')
   })
 })
 

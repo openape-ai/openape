@@ -2,17 +2,15 @@
 import { computed, ref } from 'vue'
 import type { StoredPod } from '../contracts/control'
 import type { DefinitionsView, DefinitionCommand, DefinitionUpdateView } from '../contracts/definitions'
-import type { Organization } from '../contracts/groups'
 import { t, diagnostic } from './i18n'
 
 const props = defineProps<{ pod: StoredPod }>()
 const emit = defineEmits<{ changed: [] }>()
 const view = ref<DefinitionsView>({ definitions: [], instances: [], provisioning: [] })
 const podNames = ref<Record<string, string>>({})
-const organization = ref<Organization>({ revision: 1, groups: [] })
 const busy = ref(false); const error = ref(''); const message = ref('')
 const definitionName = ref(props.pod.name); const defaults = ref('{}')
-const instanceName = ref(props.pod.name); const groupId = ref(''); const version = ref(0)
+const instanceName = ref(props.pod.name); const version = ref(0)
 const update = ref<DefinitionUpdateView | null>(null); const validated = ref(false)
 const requestId = ref(crypto.randomUUID())
 let initialized = false
@@ -42,7 +40,6 @@ async function perform(action: () => Promise<void>) {
 async function load() {
   view.value = await window.pods.definitions({ type: 'list' })
   const workspace = await window.pods.workspace({ type: 'list' })
-  organization.value = workspace.organization
   podNames.value = Object.fromEntries(workspace.pods.map(pod => [pod.id, pod.name]))
   if (!initialized) {
     definitionName.value = definition.value?.name ?? props.pod.name
@@ -75,7 +72,7 @@ async function publish(local = false) {
 async function create() {
   await perform(async () => {
     if (!definition.value || !selected.value) return
-    await command({ type: 'instantiate', requestId: requestId.value, definitionId: definition.value.id, version: selected.value.version, name: instanceName.value, groupId: groupId.value })
+    await command({ type: 'instantiate', requestId: requestId.value, definitionId: definition.value.id, version: selected.value.version, name: instanceName.value })
     requestId.value = crypto.randomUUID()
     message.value = 'Instance created paused. Review its permissions and validate its script before activation.'
   })
@@ -148,8 +145,7 @@ async function activate() {
         {{ t('Review update for this instance') }}
       </button>
       <label>{{ t('Instance name') }}<input v-model="instanceName" :disabled="!!pendingCreation" maxlength="100"></label>
-      <label>{{ t('Company') }}<select v-model="groupId" :disabled="!!pendingCreation"><option value="">{{ t('Select company') }}</option><option v-for="group in organization.groups" :key="group.id" :value="group.id">{{ group.name }}</option></select></label>
-      <button :disabled="!!pendingCreation || !groupId || !instanceName.trim()" @click="create">
+      <button :disabled="!!pendingCreation || !instanceName.trim()" @click="create">
         {{ t('Create separate instance') }}
       </button>
     </fieldset>

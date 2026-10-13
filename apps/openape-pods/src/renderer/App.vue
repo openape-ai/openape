@@ -8,7 +8,6 @@ import LocalShell from './central/LocalShell.vue'
 import SharingImport from './SharingImport.vue'
 import SharingExport from './SharingExport.vue'
 import type { PortableSourceSelection, SharingCommand } from '../contracts/sharing'
-import type { Organization } from '../contracts/groups'
 import AccountStatus from './AccountStatus.vue'
 import PodDescription from './PodDescription.vue'
 import PodScript from './PodScript.vue'
@@ -33,7 +32,7 @@ export default defineComponent({
   emits: ['settings'],
   setup() { return { access: usePodAccess() } },
   data() {
-    return { sharing: typeof window.pods?.sharing === 'function', shareSelection: null as PortableSourceSelection | null, requestedRun: '', requestedSecret: '', approvals: [] as (Approval & { runId: string })[], organization: { revision: 1, groups: [] } as Organization, selected: this.initialPodId ? 'Overview' : 'Pods', sections: ['runs', 'values', 'access', 'settings', 'code'], tags: [] as ItemTags[], codeOpen: false, pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { sharing: typeof window.pods?.sharing === 'function', shareSelection: null as PortableSourceSelection | null, requestedRun: '', requestedSecret: '', approvals: [] as (Approval & { runId: string })[], selected: this.initialPodId ? 'Overview' : 'Pods', sections: ['runs', 'values', 'access', 'settings', 'code'], tags: [] as ItemTags[], codeOpen: false, pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     globalPage(): boolean { return ['App settings', 'Pods', 'Import', 'Share'].includes(this.selected) },
@@ -74,7 +73,7 @@ export default defineComponent({
         catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not open folder' }
       }
     },
-    workspaceChanged(state: WorkspaceState) { if (state.organization.revision < this.organization.revision) return; this.pods = state.pods; this.organization = state.organization; this.tags = state.tags ?? [] },
+    workspaceChanged(state: WorkspaceState) { this.pods = state.pods; this.tags = state.tags ?? [] },
     poll() { if (this.closed) return; this.timer = setTimeout(async () => { await this.refresh(); this.poll() }, 1000) },
     async refresh() {
       if (this.busy || (!this.access.remote && this.status?.worker.state !== 'ready')) return
@@ -137,8 +136,9 @@ export default defineComponent({
             {{ sectionTitle(section) }}
           </button>
         </nav>
-        <AppSettings v-if="selected === 'App settings'" />
-        <LocalShell v-else-if="selected === 'Pods'" :sharing="sharing" @open-pod="selectPod" @share="share" @advanced="navigate('App settings')" @import="selected = 'Import'" />
+        <RunApproval v-if="!globalPage && selected !== 'History' && podId" :pod-id="podId" :approvals="approvals" />
+        <AppSettings v-if="selected === 'App settings'" :sharing="sharing" @import="selected = 'Import'" />
+        <LocalShell v-else-if="selected === 'Pods'" :sharing="sharing" @open-pod="selectPod" @share="share" @settings="navigate('App settings')" />
         <template v-else-if="selected === 'Import'">
           <SharingImport :api="sharingApi" desktop :resources="podResources" @changed="refresh" @open-pod="selectPod" />
         </template>
