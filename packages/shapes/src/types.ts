@@ -23,11 +23,15 @@ export interface ShapesOperation {
   positionals?: string[]
   required_options?: string[]
   /**
-   * Options that take a value. When present (even empty), only these and
-   * `required_options` consume the following argv token; every other option
-   * is a flag. Without it the legacy rule applies (`--name value` binds).
+   * Options that take a value. When this or `flag_options` is present (even
+   * empty), only declared options are accepted: these and `required_options`
+   * consume the following argv token, `flag_options` are flags, and any other
+   * option makes the operation not match. Without both the legacy rule
+   * applies (`--name value` binds).
    */
   value_options?: string[]
+  /** Options accepted as flags once options are declared (see `value_options`). */
+  flag_options?: string[]
   /**
    * Copied from `[cli] global_options`: options such as git `-C <path>`
    * accepted before the command prefix, as `name` or `name=binding`.
