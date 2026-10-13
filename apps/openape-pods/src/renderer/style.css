@@ -584,3 +584,10 @@ input:focus-visible,textarea:focus-visible,select:focus-visible,summary:focus-vi
 .sharing-import label.check, .sharing-export label.check { flex-direction:row; align-items:center; gap:8px; }
 .sharing-import fieldset > button, .sharing-export fieldset > button, .sharing-import fieldset > .text-button { align-self:flex-start; }
 .sharing-import input:not([type="checkbox"]), .sharing-import select, .sharing-export input:not([type="checkbox"]), .sharing-export select, .sharing-export textarea { max-width:100%; }
+/* The Pod page: one scrolling page with jump links instead of tabs (issue 1468). */
+.section-links{display:flex;flex-wrap:wrap;gap:4px 14px;margin:6px 0 14px;padding-bottom:10px;border-bottom:1px solid var(--border)}
+.section-links .link{font-size:13px;color:var(--accent);padding:0;border:0;background:none;cursor:pointer}
+.pod-section{scroll-margin-top:12px;margin-bottom:28px}
+.pod-section .section-title{font-size:17px;margin:0 0 10px}
+.code-section>summary{cursor:pointer;font-size:17px;font-weight:600;margin-bottom:10px}
+.code-section>button{margin-bottom:12px}
