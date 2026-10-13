@@ -59,8 +59,8 @@ it('handbook: captures current native screens from isolated synthetic data witho
         await locator.screenshot({ path: resolve(`.artifacts/handbook-${name}-${locale}.png`) })
       }
       await page.getByRole('button', { name: /^⚙/ }).click()
-      await page.locator('.app-settings-menu .language-control select').selectOption(locale)
-      await page.keyboard.press('Escape')
+      await page.locator('.app-settings .language-control select').selectOption(locale)
+      await page.getByTestId('back-to-automations').click()
       await shot('automations')
       await page.getByRole('tab', { name: title('Decisions', 'Entscheidungen') }).click()
       await shot('decisions')

@@ -4,6 +4,7 @@ import { approvalActions, parseApprovalAuthority } from '../../contracts/approva
 import type { ApprovalAction, ApprovalAuthority, ApprovalManifest, ApprovalState, ApprovalView } from '../../contracts/approvals'
 import { plainJson } from '../../contracts/domain-data'
 import { canonicalJson } from '../../contracts/canonical-json'
+import { parseProgramArgv } from '../../contracts/programs'
 import type { PodDatabase } from '../storage/database'
 import { digest } from '../storage/database'
 
@@ -16,14 +17,51 @@ interface Batch { id: string, pod_id: string, title: string, expires_at: number,
  * minutes or ten minutes passed, up to 30 per IdP request, and join one open IdP batch for seven days and 100 grants.
  */
 export const approvalLimits = { items: 30, members: 100, expiryMs: 7 * 24 * 60 * 60 * 1000, joinMarginMs: 2 * 24 * 60 * 60 * 1000, perPod: 500, quietMs: 2 * 60 * 1000, maxMs: 10 * 60 * 1000, fastPolls: 120, slowPollMs: 60_000, payloadBytes: 16 * 1024 } as const
-const batchTitles: Record<ApprovalAction, string> = { 'mail.archive': 'Archive newsletters' }
+const batchTitles: Record<ApprovalAction, string> = { 'mail.archive': 'Archive newsletters', 'program.run': 'Run program commands' }
 
 function row(value: unknown): Row { return value as Row }
 // eslint-disable-next-line no-control-regex
 const line = (value: unknown, limit: number) => String(value).replace(/[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069]+/g, ' ').trim().slice(0, limit)
 
-/** Each action fixes its payload fields, its object identity and the title the owner reads at the IdP. */
-export function actionTitle(action: ApprovalAction, object: string, payload: Record<string, unknown>): string {
+/** Program approvals show the complete command; one that does not fit is refused, never shortened. */
+export const programApprovalLimits = { object: 500, display: 200, title: 720 } as const
+/** Only printable ASCII is shown to the owner as is; anything else could hide or reorder text, so it is refused. */
+const printable = /^[\x20-\x7E]*$/
+
+/** Each argument stays readable and unambiguous: plain words as they are, anything else JSON-quoted. */
+function shownArgument(value: string): string {
+  if (!printable.test(value)) throw new Error('A program approval shows only printable ASCII; this command contains other characters and runs only with a grant')
+  return /^[\w@%+=:,./-]+$/.test(value) ? value : JSON.stringify(value)
+}
+
+/**
+ * The object of a program approval is the exact command: the complete application and argv as the owner reads it at
+ * the IdP, plus a digest of the argv, so a changed argument (for git push the lease SHA) is a different object.
+ * A command whose complete form does not fit is refused instead of shortened.
+ */
+export function programObject(application: string, argv: string[]): string {
+  const object = `${[application, ...argv].map(shownArgument).join(' ')} #${digest(canonicalJson(argv)).slice(0, 16)}`
+  if (object.length > programApprovalLimits.object) throw new Error(`The command is too long for a program approval; the owner must see it complete (at most ${programApprovalLimits.object - 18} characters)`)
+  return object
+}
+
+/** The single effect a program approval allows: its key in the run's effect ledger. */
+export const approvalEffectKey = (id: string) => `approval:${id}`
+
+/**
+ * Each action fixes its payload fields, its object identity and the title the owner reads at the IdP. A program title
+ * starts with `display`, the application adapter's description of the command, never text the script chose.
+ */
+export function actionTitle(action: ApprovalAction, object: string, payload: Record<string, unknown>, display?: string): string {
+  if (action === 'program.run') {
+    if (Object.keys(payload).some(key => !['application', 'argv'].includes(key)) || typeof payload.application !== 'string' || !payload.application.trim() || payload.application.length > 200) throw new Error('A program approval names the application and its exact argv')
+    const argv = parseProgramArgv(payload.argv)
+    if (object !== programObject(payload.application, argv)) throw new Error('A program approval object is the exact command')
+    if (!display?.trim()) throw new Error('A program approval needs the adapter description of its command')
+    if (!printable.test(display) || display.length > programApprovalLimits.display) throw new Error('The adapter description of this command cannot be shown complete; it runs only with a grant')
+    // The complete command follows the adapter's description; the digest suffix of the object is left out.
+    return `${display.trim()}: ${object.slice(0, object.lastIndexOf(' #'))}`
+  }
   if (action === 'mail.archive') {
     const fields = ['mailbox', 'messageId', 'version', 'subject', 'sender']
     if (Object.keys(payload).some(key => !fields.includes(key)) || fields.some(key => typeof payload[key] !== 'string' || !String(payload[key]).trim())) throw new Error('A mail archive approval names mailbox, messageId, version, subject and sender')
@@ -49,16 +87,17 @@ export class Approvals {
   /**
    * Asks the owner to approve one exact action. The same action, object and payload return the earlier request;
    * a changed payload withdraws every earlier open or approved request for the object, since an approval never
-   * carries over to other content.
+   * carries over to other content. A program approval may omit its object, which is derived from the command.
    */
-  request(principal: { podId: string, runId: string }, value: unknown): ApprovalView {
+  request(principal: { podId: string, runId: string }, value: unknown, display?: string): ApprovalView {
     const input = plainJson(value) as Record<string, unknown>
     if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['action', 'object', 'title', 'payload'].includes(key))) throw new Error('Invalid approval request')
-    if (!approvalActions.includes(input.action as ApprovalAction) || typeof input.object !== 'string' || !input.object || input.object.length > 500 || (input.title !== undefined && typeof input.title !== 'string')) throw new Error('An approval names an action and its object')
     const payload = input.payload as Record<string, unknown>
     if (!payload || typeof payload !== 'object' || Array.isArray(payload) || canonicalJson(payload).length > approvalLimits.payloadBytes) throw new Error('Approval payload is limited to 16 KiB')
+    if (input.action === 'program.run' && input.object === undefined && typeof payload.application === 'string') input.object = programObject(payload.application, parseProgramArgv(payload.argv))
+    if (!approvalActions.includes(input.action as ApprovalAction) || typeof input.object !== 'string' || !input.object || input.object.length > 500 || (input.title !== undefined && typeof input.title !== 'string')) throw new Error('An approval names an action and its object')
     // What the owner sees at the IdP is derived from the bound payload, never from text the script chose.
-    const title = actionTitle(input.action as ApprovalAction, input.object as string, payload)
+    const title = actionTitle(input.action as ApprovalAction, input.object as string, payload, display)
     const hash = digest(canonicalJson(payload))
     return this.store.transaction(() => {
       this.assertRun(principal)
@@ -193,6 +232,16 @@ export class Approvals {
     this.store.db.prepare('UPDATE action_approvals SET state=\'consumed\',updated_at=? WHERE id=? AND state=\'approved\'').run(Date.now(), id)
     if (await service({ operation: 'assertActive', ...body }, signal) !== true) throw new Error('The approval is no longer active')
     return item
+  }
+
+  /**
+   * The desktop's check before it runs an approved command without a continuing grant: the consumed program approval
+   * of this Pod names exactly this command, and its single effect is open in this run.
+   */
+  assertExecution(principal: { podId: string, runId: string }, id: string, command: { application: string, argv: string[] }): void {
+    const item = this.store.db.prepare('SELECT * FROM action_approvals WHERE id=? AND pod_id=?').get(String(id), principal.podId)
+    if (!item || row(item).action !== 'program.run' || row(item).state !== 'consumed' || row(item).payload !== canonicalJson(command)) throw new Error('No consumed approval of this Pod names this exact command')
+    if (!this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE pod_id=? AND effect_key=? AND run_id=? AND state=\'intent\'').get(principal.podId, approvalEffectKey(String(id)), principal.runId)) throw new Error('The approved command already ran or belongs to another run')
   }
 
   /** The desktop's check that a batch operation names exactly the stored requests of this Pod. */

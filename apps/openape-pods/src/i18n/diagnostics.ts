@@ -106,4 +106,8 @@ export const diagnosticPatterns = [
   'Schema 45 lacks table {p0}',
   'Schema 45 lacks column {p0}.{p1}',
   'Upgrade of {p0} lost rows',
+  'The command passes {p0}, which its adapter operation does not declare; an approved command runs only with declared options',
+  'The command is too long for a program approval; the owner must see it complete (at most {p0} characters)',
+  'Draft returned {p0} after validation refused a service request: {p1}',
+  'Archived Pods cannot be selected: {p0}. Inspect them without selection.',
 ] as const satisfies readonly MessageKey[]

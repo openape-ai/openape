@@ -58,7 +58,7 @@ describe('accounts, identity and data views with the production stylesheet', () 
     }
     wrapper!.unmount(); installWorkspace({ onboarding: async () => structuredClone(accounts) })
     wrapper = mount(App, { attachTo: document.body, props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises(); await frame()
-    await click('[role="tab"]', language === 'en' ? 'Settings' : 'Einstellungen')
+    await click('.section-links button', language === 'en' ? 'Settings' : 'Einstellungen')
     expect(document.querySelector('[aria-label="Pod identity"], [aria-label="Pod-Identität"]')).not.toBeNull()
     expect(pageFits(), `${language} pod identity`).toBe(true)
   })

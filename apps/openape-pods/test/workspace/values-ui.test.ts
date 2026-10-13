@@ -17,7 +17,7 @@ it('keeps ordinary variable edits per pod and renders valid bracket references',
 })
 it('keeps unsaved settings across navigation without replacing the saved revision', async () => {
   const pod = { id: crypto.randomUUID(), name: 'Original', revision: 1, lifecycle: 'paused', activeScript: null }
-  window.pods = { workspace: vi.fn().mockResolvedValue({ pods: [pod], organization: { revision: 1, groups: [] } }) } as unknown as typeof window.pods
+  window.pods = { workspace: vi.fn().mockResolvedValue({ pods: [pod] }) } as unknown as typeof window.pods
   const options = { props: { selectedPodId: pod.id }, global: { stubs: { PodSchedule: true, PodValues: true, PodIdentity: true } } }
   let wrapper = mount(PodSettings, options); await flushPromises()
   expect(wrapper.text()).toContain('Run history follows the 50-run retention policy')
@@ -29,7 +29,7 @@ it('keeps unsaved settings across navigation without replacing the saved revisio
 })
 it('keeps an unfinished local pod form while visiting an existing pod', async () => {
   const pod = { id: crypto.randomUUID(), name: 'Existing', revision: 1, lifecycle: 'paused', activeScript: null }
-  window.pods = { workspace: vi.fn().mockResolvedValue({ pods: [pod], organization: { revision: 1, groups: [] } }) } as unknown as typeof window.pods
+  window.pods = { workspace: vi.fn().mockResolvedValue({ pods: [pod] }) } as unknown as typeof window.pods
   const global = { stubs: { PodSchedule: true, PodValues: true, PodIdentity: true } }
   let wrapper = mount(PodSettings, { global }); await flushPromises(); await wrapper.get('input').setValue('New idea'); wrapper.unmount()
   wrapper = mount(PodSettings, { global, props: { selectedPodId: pod.id } }); await flushPromises(); wrapper.unmount()
@@ -38,7 +38,7 @@ it('keeps an unfinished local pod form while visiting an existing pod', async ()
 })
 it('recovers a stale settings form only after explicit discard confirmation', async () => {
   const pod = { id: crypto.randomUUID(), name: 'Current', revision: 1, lifecycle: 'paused', activeScript: null }
-  const workspace = vi.fn().mockImplementation(async (command) => { if (command.type === 'update') throw new Error('Stale pod revision'); return { pods: [structuredClone(pod)], organization: { revision: 1, groups: [] } } })
+  const workspace = vi.fn().mockImplementation(async (command) => { if (command.type === 'update') throw new Error('Stale pod revision'); return { pods: [structuredClone(pod)] } })
   window.pods = { workspace } as unknown as typeof window.pods
   const wrapper = mount(PodSettings, { props: { selectedPodId: pod.id }, global: { stubs: { PodSchedule: true, PodValues: true, PodIdentity: true } } }); await flushPromises()
   await wrapper.get('input').setValue('My edits'); pod.name = 'Updated elsewhere'; pod.revision = 2

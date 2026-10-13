@@ -25,13 +25,13 @@ import { SharingService } from './sharing/service'
 import { parseSharingCommand } from '../contracts/sharing'
 import { DependencyStore } from './dependencies/store'
 import { programRequest } from '../main/programs/invoke'
+import { parseApprovedInvocation } from '../contracts/programs'
 import { archiveRefusal } from '../contracts/mail-archive-port'
 import { podDirectories } from '../runtime/environment'
 import { ProgramControl } from './resources/programs'
 import type { ProgramInternal } from './resources/programs'
 import { parseHttpReply } from '../contracts/http'
 import { PodVariables } from './resources/variables'
-import { PodGroups } from './workspace/groups'
 import { listedPods } from './workspace/pod-list'
 import { mapView } from './workspace/map-view'
 import { ItemTagStore } from './workspace/item-tags'
@@ -102,6 +102,9 @@ const runServices: RunServices = { approval: async (body, signal, scope) => mail
   try { programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, body); signal.throwIfAborted() }
   catch (error) { throw archiveRefusal(error) }
   return mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'mailMove')
+}, approvedProgram: async (body, signal, scope) => {
+  programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, { application: body.application, argv: body.argv })
+  return mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'approvedProgram')
 }, tool: async (body, signal, scope) => {
   if (body && typeof body === 'object' && 'sshInventory' in body) {
     assignedSsh(registry.list(scope.podId), scope.podId, scope.capabilities, body)
@@ -388,6 +391,13 @@ port.on('message', async (event) => {
       dispatcher.approvals.authorize(check.scope.podId, parseApprovalManifest(check.manifest), check.operation, check.grants)
       port.postMessage({ id: request.id, state: true }); return
     }
+    if (request.command && typeof request.command === 'object' && 'approvalExecution' in request.command) {
+      const check = request.command.approvalExecution as ServiceCheck & { invocation: unknown }
+      authorizeRunService(store, registry, dispatcher.runs, check)
+      const invocation = parseApprovedInvocation(check.invocation)
+      dispatcher.approvals.assertExecution(check.scope, invocation.approval, { application: invocation.application, argv: invocation.argv })
+      port.postMessage({ id: request.id, state: true }); return
+    }
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {
       const check = request.command.serviceCheck as ServiceCheck
       const state = authorizeRunService(store, registry, dispatcher.runs, check)
@@ -463,12 +473,11 @@ port.on('message', async (event) => {
       return
     }
     const command = parseCommand(request.command)
-    if (command.type === 'organize') new PodGroups(store).execute(command)
     if (command.type === 'tag') new ItemTagStore(store).execute(command)
     if (command.type === 'pauseAll') store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE lifecycle=\'active\'').run()
     if (command.type === 'create') store.createPod({ name: command.name })
     if (command.type === 'update') { store.updatePod(command.id, command.revision, { name: command.name, lifecycle: command.lifecycle }); if (command.lifecycle === 'archived') dispatcher.cancelPod(command.id, 'Pod archived') }
-    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: listedPods(store), organization: new PodGroups(store).view(), tags: new ItemTagStore(store).view(), ...(command.type === 'map' ? { map: mapView(store) } : {}) } })
+    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: listedPods(store), tags: new ItemTagStore(store).view(), ...(command.type === 'map' ? { map: mapView(store) } : {}) } })
   }
   catch (error) { port.postMessage({ id: request.id, error: error instanceof Error ? error.message : 'Workspace operation failed' }) }
 })

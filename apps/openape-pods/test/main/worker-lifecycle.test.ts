@@ -58,7 +58,7 @@ it('adopts missing identities through the verified owner without reprovisioning 
   const existing = { podId: existingId, identity: { podId: existingId } }
   const created = { podId: missingId }
   const connections = { existingRemotePods: vi.fn(async () => [existing]), podConnection: vi.fn(async () => ({ identity: created })) }
-  const dispatch = vi.fn(async () => ({ pods: [existingId, missingId].map(id => ({ id, name: id, revision: 1, lifecycle: 'paused', activeScript: null })), organization: { revision: 1, groups: [] } }))
+  const dispatch = vi.fn(async () => ({ pods: [existingId, missingId].map(id => ({ id, name: id, revision: 1, lifecycle: 'paused', activeScript: null })) }))
   const remote = vi.spyOn(worker, 'remote').mockResolvedValue({})
   Object.assign(worker, { connections, dispatch, central: {} })
   await worker.indexRemotePods(owner)

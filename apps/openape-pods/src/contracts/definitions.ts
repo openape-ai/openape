@@ -8,14 +8,14 @@ export type DefinitionCommand =
   | { type: 'list' }
   | { type: 'adopt' }
   | { type: 'publish' | 'prepareLocal', podId: string, expectedScript: string, name: string, defaults: Record<string, unknown> }
-  | { type: 'instantiate', requestId: string, definitionId: string, version: number, name: string, groupId: string }
+  | { type: 'instantiate', requestId: string, definitionId: string, version: number, name: string }
   | { type: 'retryProvision', requestId: string }
   | { type: 'previewUpdate' | 'prepareUpdate', podId: string, definitionId: string, version: number, expectedBinding: number }
   | { type: 'activateUpdate', draftId: string, podId: string, expectedBinding: number }
 
 export interface DefinitionVersionView { version: number, state: 'legacy' | 'published', contentHash: string, lockHash: string, work: WorkDeclaration[] | null, capabilities: string[], packages: PackageManifest, defaults: Record<string, unknown> }
 export interface DefinitionView { id: string, name: string, versions: DefinitionVersionView[] }
-export interface DefinitionInstanceView { podId: string, definitionId: string, version: number, bindingRevision: number, diverged: boolean, groupId: string | null }
+export interface DefinitionInstanceView { podId: string, definitionId: string, version: number, bindingRevision: number, diverged: boolean }
 export interface DefinitionUpdateView { podId: string, before: DefinitionVersionView, after: DefinitionVersionView, beforeCode: string, afterCode: string, changed: ('code' | 'work' | 'dependencies' | 'defaults' | 'rights')[], draftId?: string }
 export interface DefinitionsView { definitions: DefinitionView[], instances: DefinitionInstanceView[], provisioning: { requestId: string, podId: string, state: 'pending' | 'ready' | 'failed', error: string | null }[], unavailableReason?: string, createdPodId?: string, update?: DefinitionUpdateView }
 
@@ -41,8 +41,8 @@ export function parseDefinitionCommand(value: unknown): DefinitionCommand {
     return { type: kind, podId: dataIdentity(input.podId), expectedScript: input.expectedScript, name: name(input.name), defaults: definitionDefaults(input.defaults) }
   }
   if (kind === 'instantiate') {
-    const input = dataFields(value, ['type', 'requestId', 'definitionId', 'version', 'name', 'groupId'])
-    return { type: kind, requestId: dataIdentity(input.requestId), definitionId: dataIdentity(input.definitionId), version: revision(input.version), name: name(input.name), groupId: dataIdentity(input.groupId) }
+    const input = dataFields(value, ['type', 'requestId', 'definitionId', 'version', 'name'])
+    return { type: kind, requestId: dataIdentity(input.requestId), definitionId: dataIdentity(input.definitionId), version: revision(input.version), name: name(input.name) }
   }
   if (kind === 'retryProvision') {
     const input = dataFields(value, ['type', 'requestId'])
@@ -77,10 +77,9 @@ export function parseDefinitionsView(value: unknown): DefinitionsView {
     definition.versions.forEach(version)
   }
   for (const item of input.instances) {
-    const instance = dataFields(item, ['podId', 'definitionId', 'version', 'bindingRevision', 'diverged', 'groupId'])
+    const instance = dataFields(item, ['podId', 'definitionId', 'version', 'bindingRevision', 'diverged'])
     dataIdentity(instance.podId); dataIdentity(instance.definitionId); revision(instance.version); revision(instance.bindingRevision)
     if (typeof instance.diverged !== 'boolean') throw new Error('Invalid instance divergence state')
-    if (instance.groupId !== null) dataIdentity(instance.groupId)
   }
   for (const item of input.provisioning) {
     const pending = dataFields(item, ['requestId', 'podId', 'state', 'error'])

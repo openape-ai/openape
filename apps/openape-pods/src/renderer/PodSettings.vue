@@ -6,7 +6,6 @@ import PodSchedule from './PodSchedule.vue'
 import PodLifecycle from './central/PodLifecycle.vue'
 import PodIdentity from './PodIdentity.vue'
 import { defineComponent } from 'vue'
-import type { Organization } from '../contracts/groups'
 import type { StoredPod } from '../contracts/control'
 
 export default defineComponent({
@@ -14,11 +13,11 @@ export default defineComponent({
   props: { selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'accounts'],
   setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
-  data() { return { newGroup: '', confirmReload: false, initialized: false, organization: { revision: 1, groups: [] } as Organization, pods: [] as StoredPod[], selectedId: '', name: '', revision: 0, error: '', message: '', busy: false } },
-  computed: { selectedGroup(): string { return this.organization.groups.find(group => group.podIds.includes(this.selectedId))?.id ?? '' }, selectedPod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.selectedId) }, central(): boolean { return typeof window !== 'undefined' && !!window.pods?.central } },
-  watch: { async remoteRevision() { if (this.busy || this.error || this.name !== this.selectedPod?.name || this.newGroup) return; await this.reload(); const pod = this.selectedPod; if (pod) { this.name = pod.name; this.revision = pod.revision } }, async selectedPodId(id: string) { if (id === this.selectedId) return; await this.reload(); const pod = this.pods.find(pod => pod.id === id); if (pod) this.select(pod); else this.newPod() } },
+  data() { return { confirmReload: false, initialized: false, pods: [] as StoredPod[], selectedId: '', name: '', revision: 0, error: '', message: '', busy: false } },
+  computed: { selectedPod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.selectedId) }, central(): boolean { return typeof window !== 'undefined' && !!window.pods?.central } },
+  watch: { async remoteRevision() { if (this.busy || this.error || this.name !== this.selectedPod?.name) return; await this.reload(); const pod = this.selectedPod; if (pod) { this.name = pod.name; this.revision = pod.revision } }, async selectedPodId(id: string) { if (id === this.selectedId) return; await this.reload(); const pod = this.pods.find(pod => pod.id === id); if (pod) this.select(pod); else this.newPod() } },
   async mounted() {
-    trackPodEdits(this.access, 'settings', () => this.initialized && (this.name !== (this.selectedPod?.name ?? '') || !!this.newGroup))
+    trackPodEdits(this.access, 'settings', () => this.initialized && this.name !== (this.selectedPod?.name ?? ''))
     await this.reload(); const selected = this.pods.find(pod => pod.id === this.selectedPodId); if (selected) {
       this.select(selected)
     }
@@ -36,24 +35,12 @@ export default defineComponent({
     },
     async reload() {
       this.busy = true
-      try { const state = await this.access.api.workspace({ type: 'list' }); this.pods = state.pods; this.organization = state.organization }
+      try { const state = await this.access.api.workspace({ type: 'list' }); this.pods = state.pods }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not load pods' }
       finally { this.busy = false }
     },
-    async createGroup() {
-      this.busy = true; this.error = ''
-      try { const state = await this.access.api.workspace({ type: 'organize', action: 'create', revision: this.organization.revision, name: this.newGroup }); this.organization = state.organization; this.newGroup = '' }
-      catch (error) { this.error = error instanceof Error ? error.message : 'Could not create group' }
-      finally { this.busy = false }
-    },
-    async moveGroup(event: Event) {
-      this.busy = true; this.error = ''
-      try { const state = await this.access.api.workspace({ type: 'organize', revision: this.organization.revision, action: 'move', podId: this.selectedId, groupId: (event.target as HTMLSelectElement).value || null }); this.organization = state.organization; this.$emit('selected', this.selectedId) }
-      catch (error) { this.error = error instanceof Error ? error.message : 'Could not update groups' }
-      finally { this.busy = false; (event.target as HTMLSelectElement).value = this.selectedGroup }
-    },
-    remember() { if (!this.initialized) return; if (this.name !== (this.selectedPod?.name ?? '') || this.newGroup) settingsDrafts.set(this.access.key(this.selectedId), { name: this.name, revision: this.revision, newGroup: this.newGroup }); else settingsDrafts.delete(this.access.key(this.selectedId)) },
-    select(pod: StoredPod) { this.remember(); const draft = settingsDrafts.get(this.access.key(pod.id)); this.selectedId = pod.id; this.newGroup = draft?.newGroup ?? ''; this.name = draft?.name ?? pod.name; this.revision = draft?.revision ?? pod.revision; this.initialized = true; this.$emit('selected', pod.id); this.message = ''; this.error = '' },
+    remember() { if (!this.initialized) return; if (this.name !== (this.selectedPod?.name ?? '')) settingsDrafts.set(this.access.key(this.selectedId), { name: this.name, revision: this.revision }); else settingsDrafts.delete(this.access.key(this.selectedId)) },
+    select(pod: StoredPod) { this.remember(); const draft = settingsDrafts.get(this.access.key(pod.id)); this.selectedId = pod.id; this.name = draft?.name ?? pod.name; this.revision = draft?.revision ?? pod.revision; this.initialized = true; this.$emit('selected', pod.id); this.message = ''; this.error = '' },
     newPod() { this.selectedId = ''; this.name = ''; this.revision = 0; this.$emit('selected', ''); this.message = ''; this.error = '' },
     async remove() {
       const pod = this.selectedPod; if (!pod || pod.lifecycle !== 'archived') return
@@ -133,20 +120,6 @@ export default defineComponent({
       </button>
     </form>
   </article>
-  <article v-if="selectedPod" class="card">
-    <label for="pod-group">{{ t('Group') }}</label><select id="pod-group" :value="selectedGroup" :disabled="busy" @change="moveGroup">
-      <option value="">
-        {{ t('Ungrouped') }}
-      </option><option v-for="group in organization.groups" :key="group.id" :value="group.id">
-        {{ group.name }}
-      </option>
-    </select>
-  </article>
-  <form v-if="selectedPod && access.remote" class="card" @submit.prevent="createGroup">
-    <label>{{ t('New group') }}<input v-model="newGroup" maxlength="100" required></label><button class="secondary" :disabled="busy || !newGroup.trim()">
-      {{ t('Create group') }}
-    </button>
-  </form>
   <PodIdentity v-if="selectedPod && !access.remote" :key="selectedPod.id" :pod-id="selectedPod.id" @accounts="$emit('accounts')" />
   <article v-if="selectedPod && access.remote" class="card">
     <h2>{{ t('Pod identity') }}</h2><p class="muted">

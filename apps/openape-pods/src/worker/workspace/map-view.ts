@@ -1,6 +1,6 @@
 import { descriptionSummary } from '../../contracts/description'
-import type { MapEdge, MapPod, MapResource, MapRun, MapSchedule, MapSystem, MapView } from '../../contracts/map-view'
-import { parseRunApproval } from '../../contracts/activity'
+import type { MapEdge, MapGrant, MapPod, MapResource, MapRun, MapSchedule, MapSystem, MapView } from '../../contracts/map-view'
+import { approvalURL, parseRunApproval } from '../../contracts/activity'
 import { parseManifest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
 import type { PodResource } from '../../contracts/resources'
@@ -24,13 +24,13 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
   const from = at - mapWindowMs
   const db = store.db
   const hidden = new Set(published ? db.prepare(privatePods).all().map(row => row.pod_id as string) : [])
-  const groups = db.prepare('SELECT g.id,g.name,m.pod_id FROM pod_groups g JOIN pod_memberships m ON m.group_id=g.id').all()
   const tagged = new Map(new ItemTagStore(store).view().map(item => [item.id, { own: item.tags, revision: item.revision }]))
   const tagsOf = (id: string) => tagged.has(id) ? { tags: tagged.get(id)! } : {}
-  const groupOf = (podId: string) => groups.find(row => row.pod_id === podId)
   const descriptions = new Map(db.prepare('SELECT pod_id,body FROM pod_descriptions').all().map(row => [row.pod_id as string, descriptionSummary(row.body as string)]))
   const runsInWindow = counter(db.prepare('SELECT pod_id,count(*) AS count FROM runs WHERE started_at>=? GROUP BY pod_id').all(from), 'pod_id')
   const runTotals = counter(db.prepare('SELECT pod_id,count(*) AS count FROM runs GROUP BY pod_id').all(), 'pod_id')
+  // Every failed attempt of the window counts, so a Pod whose last run succeeded still shows how often it failed.
+  const failures = counter(db.prepare('SELECT pod_id,count(*) AS count FROM runs WHERE started_at>=? AND state IN (\'failed\',\'interrupted\',\'blocked\') GROUP BY pod_id').all(from), 'pod_id')
   const writesInWindow = counter(db.prepare('SELECT e.pod_id,count(*) AS count FROM effect_ledger e JOIN runs r ON r.id=e.run_id WHERE r.started_at>=? GROUP BY e.pod_id').all(from), 'pod_id')
   // Ascending order lets the most recently started run win for each Pod.
   const lastRuns = new Map(db.prepare('SELECT pod_id,state,started_at,finished_at,summary,error FROM runs ORDER BY started_at,rowid').all().map(row => [row.pod_id as string, run(row)]))
@@ -39,6 +39,8 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
   const unknownEffects = db.prepare('SELECT pod_id,effect_key,run_id FROM effect_ledger WHERE operation IN (\'http.request\',\'program.call\') AND state=\'unknown\'').all()
   const blocked = db.prepare('SELECT pod_id,count(*) AS count,min(error) AS error FROM accepted_events WHERE state=\'blocked\' GROUP BY pod_id').all()
   const approvals = db.prepare('SELECT r.pod_id,e.run_id,e.data FROM run_events e JOIN runs r ON r.id=e.run_id WHERE r.state=\'running\' AND e.type=\'approval\' AND e.sequence=(SELECT max(newer.sequence) FROM run_events newer WHERE newer.run_id=e.run_id AND newer.type=\'approval\' AND json_extract(newer.data,\'$.grantId\')=json_extract(e.data,\'$.grantId\')) AND json_extract(e.data,\'$.state\')=\'pending\' ORDER BY e.at').all()
+  // Grants a Pod requested at the IdP (for example through MCP) wait there for the owner even when no run waits for them.
+  const pendingGrants = db.prepare('SELECT id,pod_id,issuer,display FROM pod_grants WHERE state=\'pending\' ORDER BY created_at,rowid').all()
   const schedules = new Map(db.prepare('SELECT pod_id,spec,enabled,next_at FROM schedules').all().map(row => [row.pod_id as string, { spec: JSON.parse(row.spec as string), enabled: row.enabled === 1, nextAt: row.next_at === null ? null : Number(row.next_at) } satisfies MapSchedule]))
   const manifests = new Map(db.prepare('SELECT p.id,s.manifest FROM pods p JOIN scripts s ON s.pod_id=p.id AND s.hash=p.active_script').all().map(row => [row.id as string, parseManifest(JSON.parse(row.manifest as string))]))
 
@@ -55,7 +57,8 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
   const pending = counter(db.prepare(`SELECT n.writer AS pod_id,count(*) AS count FROM work_items i JOIN work_operations o ON o.operation=i.operation JOIN data_namespaces n ON n.path=o.output WHERE i.state IN ('ready','retry_wait') AND i.ready_at<=? GROUP BY n.writer`).all(now), 'pod_id')
   const held = counter(db.prepare(`SELECT n.writer AS pod_id,count(*) AS count FROM work_items i JOIN work_operations o ON o.operation=i.operation JOIN data_namespaces n ON n.path=o.output WHERE i.state IN ('blocked','unknown') GROUP BY n.writer`).all(), 'pod_id')
   const questions = db.prepare('SELECT pod_id,count(*) AS count FROM owner_questions WHERE state=\'pending\' GROUP BY pod_id').all()
-  const waitingApprovals = db.prepare('SELECT pod_id,count(*) AS count FROM action_approvals WHERE state IN (\'collecting\',\'requested\') GROUP BY pod_id').all()
+  // Only requested and uncertain object approvals wait for the owner; collecting ones are not yet at the IdP.
+  const waitingApprovals = db.prepare('SELECT pod_id,count(*) AS count FROM action_approvals WHERE state IN (\'requested\',\'unknown\') GROUP BY pod_id').all()
 
   for (const pod of store.listPods()) {
     const local = !hidden.has(pod.id)
@@ -112,14 +115,18 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
     const readsData = readers.filter(row => row.pod_id === pod.id).map(row => String(row.path))
     const kind = writesData.length && !manifests.get(pod.id)?.work?.length ? 'source' : ai ? 'decision' : effect ? 'effect' : 'code'
     const queue = blocked.find(row => row.pod_id === pod.id)
-    const membership = groupOf(pod.id)
+    const runApprovals = approvals.filter(row => local && row.pod_id === pod.id).map((row) => {
+      const approval = parseRunApproval(JSON.parse(row.data as string))
+      return { grantId: approval.grantId, title: approval.title, runId: String(row.run_id) }
+    })
+    const waitingGrants = pendingGrants.filter(row => local && row.pod_id === pod.id && !runApprovals.some(approval => approval.grantId === row.id)).map(grant)
     pods.push({
-      id: pod.id, name: pod.name, revision: pod.revision, script: pod.activeScript, description: descriptions.get(pod.id) || null, group: membership?.name as string ?? null, groupId: membership?.id as string ?? null, lifecycle: pod.lifecycle, draft: pod.activeScript === null,
+      id: pod.id, name: pod.name, revision: pod.revision, script: pod.activeScript, description: descriptions.get(pod.id) || null, lifecycle: pod.lifecycle, draft: pod.activeScript === null,
       kind, ai, data: { writes: writesData, reads: readsData }, work: { pending: pending[pod.id] ?? 0, held: held[pod.id] ?? 0 }, resources: mapped, secrets,
       schedule: schedules.get(pod.id) ?? null, lastRun: local ? lastRuns.get(pod.id) ?? null : null, runs: local ? runTotals[pod.id] ?? 0 : 0,
       queue: local ? { blocked: Number(queue?.count ?? 0), error: (queue?.error as string | null) ?? null } : { blocked: 0, error: null },
       unknown: unknownEffects.filter(row => local && row.pod_id === pod.id).map(row => ({ key: String(row.effect_key), runId: String(row.run_id) })),
-      approvals: approvals.filter(row => local && row.pod_id === pod.id).map(row => parseRunApproval(JSON.parse(row.data as string))).map((approval, index) => ({ grantId: approval.grantId, title: approval.title, runId: String(approvals.filter(row => row.pod_id === pod.id)[index]!.run_id) })),
+      approvals: runApprovals, grants: waitingGrants, failures: local ? failures[pod.id] ?? 0 : 0,
       ...tagsOf(pod.id),
     })
   }
@@ -138,6 +145,11 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
     systems: Array.from(systems.values(), ({ methods, ...item }) => ({ ...item, how: methods ? [...methods].sort().join(', ') : item.how })),
     pods, edges,
   }
+}
+
+function grant(row: Row): MapGrant {
+  const title = String(row.display)
+  return { grantId: String(row.id), title, url: approvalURL({ grantId: String(row.id), issuer: String(row.issuer), state: 'pending', title }) }
 }
 
 function run(row: Row): MapRun {
