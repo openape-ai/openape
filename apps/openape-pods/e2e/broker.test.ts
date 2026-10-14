@@ -68,7 +68,7 @@ ${slow ? 'setInterval(()=>{},1000);' : ''}`)
   const executable = packaged ? join(bundle, 'MacOS/OpenApe Pods Fixture') : process.execPath
   const helper = packaged ? join(bundle, 'Resources/app.asar.unpacked/dist/native/pods-helper') : resolve('dist/native/pods-helper')
   const assignment: ToolAssignment = { id: 'fixture', capability: 'fixture.read', executable, executableHash: sha(await readFile(executable)), entryFiles: [{ path: toolFile, hash: sha(await readFile(toolFile)) }], prefix: [toolFile], connectionId, runtimeDirectories: packaged ? [bundle] : [], environment: packaged ? { ELECTRON_RUN_AS_NODE: '1' } : {}, networkPorts: [], program: { path: toolFile, name: 'fixture', sha256: sha(await readFile(toolFile)) }, argv: ['read'] }
-  const broker = new PodToolBroker(helper, privateRoot, async (call, signal) => callEffect(await authority.authorizeProgram(call, signal)), cache)
+  const broker = new PodToolBroker(helper, privateRoot, async (call, signal) => callEffect(await authority.authorizeProgram(call, signal), call.program.name), cache)
   return { assignment, broker, cache, connectionId, credentialRoot, state, authority, helper, privateRoot, lease: { capabilities: ['fixture.read'], assertCurrent: () => {}, signal: new AbortController().signal }, request: { toolId: 'fixture', argv: ['read'] } }
 }
 describe('ape-shell broker native boundary', () => {

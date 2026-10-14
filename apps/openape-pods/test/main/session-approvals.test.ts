@@ -120,7 +120,7 @@ it('runs new commands under a grant the IdP finds, refuses whole-program request
   const grant = approvedGrant([{ type: 'openape_cli', cli_id: 'gh', operation_id: '*', resource_chain: [], action: 'read', permission: 'gh.*#read', display: 'Every gh read', risk: 'low' }])
   const authority = new AgentAuthority(f.connection(podId), undefined, f.grants.port(podId))
   for (const argv of [['issue', 'list', '--repo', 'openape/monorepo'], ['run', 'list', '--repo', 'another/repository']]) {
-    await expect(authority.authorizeProgram(programCall(gh.assignment, argv), AbortSignal.timeout(5000))).resolves.toEqual({ grantId: grant, actions: ['read'] })
+    await expect(authority.authorizeProgram(programCall(gh.assignment, argv), AbortSignal.timeout(5000))).resolves.toEqual({ grantId: grant, actions: ['read'], programs: ['gh'] })
   }
   expect(idp.state.tokens).toEqual([grant, grant])
   // The desktop sent only the program and the exact command; the IdP made no new request.
@@ -192,6 +192,14 @@ it('never lets a script call move mail, whatever grant covers it; only the archi
   // The archive port names the move explicitly and passes this check; it then reaches the sandbox launch.
   await expect(call('move')).rejects.not.toThrow(/archive service|move operation/)
   expect(programIdentity(mail.assignment)).toEqual({ name: 'o365-cli', sha256: mail.assignment.executableHash })
+  // Fail closed (review finding): an exact-command fallback of the same move, resolved without a shape, is refused too.
+  const fallback = ['workflow', 'move', '--account', 'owner@example.test', '--message', 'm2', '--expected-version', 'v1', '--source-folder', 'inbox', '--destination', 'archive']
+  approvedGrant([{ type: 'openape_cli', cli_id: 'o365-cli', operation_id: '_exact', resource_chain: [], action: 'exec', permission: 'o365-cli.command#exec', display: 'Exact command', risk: 'high', constraints: { exact_command: true } }], { execution_context: { argv_hash: await computeArgvHash(['o365-cli', ...fallback]) } })
+  await expect(invokeProgram([mail.resource] as never, podId, { application: 'o365-cli', argv: fallback }, '/fixture/helper', root, {} as never, lease, { connection: f.connection(podId), ledger: f.grants.port(podId), reach: { level: 'isolated', protectedPaths: [] } })).rejects.toThrow('approved archive service')
+  // A known non-moving effect of the mail program still runs.
+  const categorize = ['workflow', 'categorize', '--account', 'owner@example.test', '--message', 'm1', '--add', 'Newsletter']
+  approvedGrant([{ type: 'openape_cli', cli_id: 'o365-cli', operation_id: 'workflow.categorize', resource_chain: [], action: 'categorize', permission: 'o365-cli.mail[*]#categorize', display: 'Categorize mail', risk: 'medium' }], { execution_context: { argv_hash: await computeArgvHash(['o365-cli', ...categorize]) } })
+  await expect(invokeProgram([mail.resource] as never, podId, { application: 'o365-cli', argv: categorize }, '/fixture/helper', root, {} as never, lease, { connection: f.connection(podId), ledger: f.grants.port(podId), reach: { level: 'isolated', protectedPaths: [] } })).rejects.not.toThrow(/archive service|approval/)
 })
 
 it('approves the requested grant type unless the owner session explicitly chooses another one', async () => {

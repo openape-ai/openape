@@ -25,7 +25,7 @@ import { launchTerminal } from '../../src/worker/runtime/terminal'
 vi.mock('../../src/worker/runtime/sandbox', async original => ({ ...await original<typeof import('../../src/worker/runtime/sandbox')>(), launchSandbox: vi.fn() }))
 vi.mock('../../src/worker/runtime/terminal', () => ({ launchTerminal: vi.fn() }))
 vi.mock('../../src/worker/recovery/domains', () => ({ inspectDomainRecords: vi.fn(async () => {}) }))
-vi.mock('../../src/main/broker/authorization', () => ({ AgentAuthority: class { async authorizeProgram() { return { grantId: 'fixture', actions: ['list'] } } async assertActive() {} } }))
+vi.mock('../../src/main/broker/authorization', () => ({ AgentAuthority: class { async authorizeProgram() { return { grantId: 'fixture', actions: ['list'], programs: ['az'] } } async assertActive() {} } }))
 
 interface Launch { policy: RuntimePolicy, environment: Record<string, string>, temporaryExisted: boolean }
 const podId = randomUUID(); const applicationId = randomUUID()

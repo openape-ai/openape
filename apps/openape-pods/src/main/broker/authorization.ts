@@ -63,8 +63,11 @@ export interface PermissionAuthorization {
  * arguments exactly as executed, without the executable.
  */
 export interface ProgramCall { program: { name: string, sha256: string }, argv: string[] }
-/** A verified command token: the grant it was issued for and the actions that grant authorizes. */
-export interface CommandAuthorization { grantId: string, actions: string[] }
+/**
+ * A verified command token: the grant it was issued for and the IdP's resolution of exactly this call, its actions and
+ * the programs (shape ids) they belong to.
+ */
+export interface CommandAuthorization { grantId: string, actions: string[], programs: string[] }
 interface MintedGrant { grantId: string, token: string, jwks: VerifyAuthzOptions['jwks'], reusableUntil: number }
 interface CommandToken extends CommandAuthorization { reusableUntil: number }
 export const grantTokenReuseMs = 60 * 1000
@@ -111,7 +114,7 @@ export class RunGrantTokens {
 
   command(key: string, now = Date.now()): CommandAuthorization | undefined {
     const entry = this.commands.get(key)
-    if (entry && now < entry.reusableUntil) return { grantId: entry.grantId, actions: entry.actions }
+    if (entry && now < entry.reusableUntil) return { grantId: entry.grantId, actions: entry.actions, programs: entry.programs }
     this.commands.delete(key)
     return undefined
   }
@@ -297,8 +300,8 @@ export class AgentAuthority {
     const claims = result.claims as OpenApeAuthZClaims & { argv_hash?: unknown, program_sha256?: unknown }
     if (claims.sub !== this.connection.subject || claims.target_host !== this.connection.targetHost || claims.grant_id !== reply.grantId || claims.argv_hash !== argvHash || claims.program_sha256 !== call.program.sha256) throw new AuthorityError(commandRefused)
     if (claims.brokered && !sameBrokeredGrant(this.connection.brokered, claims.brokered)) throw new AuthorityError(commandRefused)
-    const actions = (claims.authorization_details ?? []).flatMap(detail => detail.type === 'openape_cli' ? [detail.action] : [])
-    return { authorization: { grantId: reply.grantId, actions }, expiresAt: claims.exp * 1000, once: grantTypeOf(claims) === 'once' }
+    const resolved = (claims.authorization_details ?? []).flatMap(detail => detail.type === 'openape_cli' ? [detail] : [])
+    return { authorization: { grantId: reply.grantId, actions: resolved.map(detail => detail.action), programs: [...new Set(resolved.map(detail => detail.cli_id))] }, expiresAt: claims.exp * 1000, once: grantTypeOf(claims) === 'once' }
   }
 
   /** Finds or requests the grant of a desktop-own permission and waits for its decision; returns its id. */
