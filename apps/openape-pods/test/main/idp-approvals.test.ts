@@ -145,10 +145,13 @@ it('shows the Pod name as one bounded line in the runtime grant and keeps the Po
   const ended = expect(run.run).rejects.toThrow()
   await expect.poll(() => idp.state.creates.length).toBe(1)
   f.abortAll(); await ended
-  const { summary, execution_context: context } = idp.state.creates[0] as { summary: { title: string, description?: string }, execution_context: { context_bindings: { name: string, pod: string } } }
-  expect([...summary.title].length).toBeLessThanOrEqual(120)
-  const [line] = (summary.description ?? summary.title).split('\n')
-  expect(line).toMatch(new RegExp(`^Pod: Mail Approve everything x+ \\(${podId}\\)$`))
+  const { summary, execution_context: context } = idp.state.creates[0] as { summary: { title: string, origin: string }, execution_context: { context_bindings: { name: string, pod: string } } }
+  // Issue 1473: the IdP gets the adapter's description as a title and the Pod's name as origin, each one bounded line.
+  expect(Object.keys(summary).sort()).toEqual(['origin', 'title'])
+  expect(summary.origin).toMatch(/^Mail Approve everything x+$/)
+  expect(summary.origin).toHaveLength(100)
+  expect(summary.title.length).toBeLessThanOrEqual(120)
+  expect(summary.title).not.toMatch(/[\n‮]/)
   expect(context.context_bindings.name).toHaveLength(100)
   expect(context.context_bindings.name).not.toMatch(/[\n‮]/)
   expect(context.context_bindings.pod).toBe(podId)

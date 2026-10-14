@@ -1,12 +1,13 @@
 import { createHash, randomUUID } from 'node:crypto'
 import type { DatabaseSync } from 'node:sqlite'
 import { normalizeTag, tagLimits } from '@openape/pods-protocol'
+import { grantSummaryLimits, summaryLine } from '../../contracts/grant-summary.ts'
 import { StorageError } from './errors.ts'
 import { baselineSchema, schemaVersion } from './schema.ts'
 
 /**
  * One-way conversion of a schema-47 profile into schema 48 (issue 1465); convertGroups continues to schema 49 and
- * convertApprovals to schema 50. It refuses before any change while legacy
+ * convertApprovals to schema 50, convertApprovalSummaries to schema 51. It refuses before any change while legacy
  * network work is open, archives every row of the retired network runtime unchanged in legacy_records (verified by
  * count and digest), carries archive effects into the generalized effect ledger and member checkpoints into each
  * Pod's private state, rebuilds the tables whose definition changed and records a conversion receipt.
@@ -16,24 +17,34 @@ import { baselineSchema, schemaVersion } from './schema.ts'
 /** Every table of schema 47 that schema 48 no longer has; their rows survive only as inert history. */
 export const retiredTables = ['network_sandbox_resources', 'automation_descriptions', 'networks', 'network_revisions', 'network_members', 'network_subscriptions', 'composition_config', 'network_checkpoints', 'network_source_clocks', 'network_scheduler_state', 'network_runtime_status', 'network_maintenance_status', 'network_process_previews', 'network_trace_events', 'network_cases', 'network_case_revisions', 'network_case_sources', 'network_events', 'network_event_identities', 'network_deliveries', 'network_queue_counts', 'network_joins', 'network_join_inputs', 'network_choices', 'network_invocations', 'network_invocation_controls', 'network_effect_attempts', 'network_effect_receipts', 'network_gate_tasks', 'network_gate_task_attempts', 'network_gate_attempt_controls', 'network_gate_controls', 'network_gate_items', 'network_gate_item_grants', 'data_collections', 'data_collection_versions', 'data_permissions', 'data_records', 'data_record_revisions', 'data_record_provenance', 'data_index_values', 'network_data_staging', 'artifact_scopes', 'artifacts', 'artifact_permissions', 'artifact_references', 'network_artifact_staging'] as const
 
-/** Digests of the exact schema-46, schema-47 and schema-48 objects; a converted database must be one of them. */
+/** Digests of the exact schema-46 to schema-50 objects; a converted database must be one of them. */
 const knownSchemas: Record<number, { objects: number, digest: string }> = {
   46: { objects: 147, digest: '4e022a881674f2f188a0a8397e0068e2d4e49147593ece1b813f61d855c41d1f' },
   47: { objects: 148, digest: '220a37d6c30b66ccf0ca88302791f006b3cd38e1290635b5f1ad448d3218901c' },
   48: { objects: 104, digest: '48af432be41c9c98cf89ea081c326ea156775bde3e73c1dd06fadda60ed1e7d9' },
   49: { objects: 100, digest: '601fc34efb6fd577153621c2c2555cb858225ba6e647b9252e63f5dd9c83b82a' },
+  50: { objects: 100, digest: '8ec6f0e1541245e95949f05a13c020855a2c8eb1fa8f9d12f369245563cff679' },
 }
 
-/** Schema 49 differs from the current baseline only in two CHECKs of action_approvals (issue 1468). */
+/** Schema 50 differs from the current baseline only in the summary columns of action_approvals (issue 1473). */
+const schema51Approvals: [current: string, previous: string][] = [
+  ['title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 120),\n  description TEXT CHECK(description IS NULL OR length(description)<=2000),\n  link TEXT CHECK(link IS NULL OR length(link) BETWEEN 1 AND 2048),', 'title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 720),'],
+]
+/** Schema 49 differs from schema 50 only in two CHECKs of action_approvals (issue 1468). */
 const schema50Approvals: [current: string, previous: string][] = [
   ['action TEXT NOT NULL CHECK(action IN (\'mail.archive\',\'program.run\')),', 'action TEXT NOT NULL CHECK(action IN (\'mail.archive\')),'],
   ['title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 720),', 'title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 120),'],
 ]
+function previousSchema(schema: string, changes: [current: string, previous: string][]): string {
+  return changes.reduce((result, [current, previous]) => {
+    if (result.split(current).length !== 2) throw new Error('The baseline lacks a known approval schema change')
+    return result.replace(current, previous)
+  }, schema)
+}
+/** The complete schema 50, the target of the conversion from schema 49. */
+export const schema50 = previousSchema(baselineSchema, schema51Approvals)
 /** The complete schema 49, the target of the older conversions before the approvals step. */
-export const schema49 = schema50Approvals.reduce((schema, [current, previous]) => {
-  if (schema.split(current).length !== 2) throw new Error('The baseline lacks a schema-50 approval check')
-  return schema.replace(current, previous)
-}, baselineSchema)
+export const schema49 = previousSchema(schema50, schema50Approvals)
 
 /** The owner groups of schemas 46 to 48; schema 49 keeps them as tags (issue 1468). */
 export const schema48Groups = `CREATE TABLE pod_organization(id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL);
@@ -257,13 +268,44 @@ export function convertApprovals(database: DatabaseSync): void {
   database.exec('PRAGMA legacy_alter_table=ON')
   database.exec('ALTER TABLE action_approvals RENAME TO conversion_action_approvals')
   database.exec('PRAGMA legacy_alter_table=OFF')
-  for (const statement of statements(baselineSchema).filter(item => item.table === 'action_approvals')) database.exec(statement.sql)
+  for (const statement of statements(schema50).filter(item => item.table === 'action_approvals')) database.exec(statement.sql)
   const list = ['rowid', ...columns(database, 'action_approvals').map(column => `"${column}"`)].join(',')
   database.exec(`INSERT INTO action_approvals(${list}) SELECT ${list} FROM conversion_action_approvals ORDER BY rowid`)
   if (count(database, 'SELECT count(*) FROM action_approvals') !== rows) throw new StorageError('invalid-data', 'Rebuilding action_approvals lost rows')
   database.exec('DROP TABLE conversion_action_approvals')
-  assertSchema(database, baselineSchema, schemaVersion)
+  assertSchema(database, schema50, 50)
   database.prepare('INSERT INTO storage_receipts VALUES(?,\'conversion\',?,?)').run(randomUUID(), JSON.stringify({ from: 49, rebuilt: ['action_approvals'], rows, at: new Date().toISOString() }), Date.now())
+}
+
+/**
+ * Schema 50 to 51 (issue 1473): an approval carries the script's summary (title, description, link) instead of a
+ * title composed by the desktop. The table is rebuilt with its rows and rowids; a former title longer than one summary
+ * title keeps its shortened first part as title and its complete text as description, so nothing the owner read is
+ * lost. Requests already at the IdP keep their grants, whose summaries the IdP migrates itself. It runs inside the
+ * caller's transaction with foreign keys off, after the verified pre-upgrade backup.
+ */
+export function convertApprovalSummaries(database: DatabaseSync): void {
+  assertKnownSchema(database, 50)
+  const rows = count(database, 'SELECT count(*) FROM action_approvals')
+  database.exec('DROP INDEX action_approvals_state')
+  database.exec('PRAGMA legacy_alter_table=ON')
+  database.exec('ALTER TABLE action_approvals RENAME TO conversion_action_approvals')
+  database.exec('PRAGMA legacy_alter_table=OFF')
+  for (const statement of statements(baselineSchema).filter(item => item.table === 'action_approvals')) database.exec(statement.sql)
+  const previous = columns(database, 'conversion_action_approvals')
+  const list = ['rowid', ...previous, 'description', 'link'].map(column => `"${column}"`).join(',')
+  const insert = database.prepare(`INSERT INTO action_approvals(${list}) VALUES(${['rowid', ...previous, 'description', 'link'].map(() => '?').join(',')})`)
+  let shortened = 0
+  for (const row of database.prepare(`SELECT rowid,${previous.map(column => `"${column}"`).join(',')} FROM conversion_action_approvals ORDER BY rowid`).all()) {
+    const former = String(row.title)
+    const title = summaryLine(former, grantSummaryLimits.title)
+    if (title !== former) shortened++
+    insert.run(row.rowid as number, ...previous.map(column => (column === 'title' ? title : row[column]) as string | number | null), title === former ? null : former, null)
+  }
+  if (count(database, 'SELECT count(*) FROM action_approvals') !== rows) throw new StorageError('invalid-data', 'Rebuilding action_approvals lost rows')
+  database.exec('DROP TABLE conversion_action_approvals')
+  assertSchema(database, baselineSchema, schemaVersion)
+  database.prepare('INSERT INTO storage_receipts VALUES(?,\'conversion\',?,?)').run(randomUUID(), JSON.stringify({ from: 50, rebuilt: ['action_approvals'], rows, shortened, at: new Date().toISOString() }), Date.now())
 }
 
 /** The tag table of schema 47, added to a schema-46 database before its conversion. */

@@ -9,6 +9,8 @@ import { DependencyStore } from '../dependencies/store'
 import { assignedDirectories } from '../../runtime/directories'
 import { podDirectories } from '../../runtime/environment'
 import { parseHttpRequest } from '../../contracts/http'
+import { splitScriptSummary } from '../../contracts/grant-summary'
+import type { ScriptSummary } from '../../contracts/grant-summary'
 import type { HttpRequest, HttpReply } from '../../contracts/http'
 import { assignedHttp } from '../../main/programs/http-service'
 import { EffectLedger } from '../recovery/effects'
@@ -63,10 +65,11 @@ export interface RunServices {
   jev?: (request: JevRequest, signal: AbortSignal, scope: RunServiceScope) => Promise<JevEvaluation>
   shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ home: string, environment: Record<string, string>, shell?: { cli: string, environment: Record<string, string> } }>
   closeShell?: (scope: RunServiceScope) => Promise<void>
-  http?: (request: HttpRequest, signal: AbortSignal, scope: RunServiceScope) => Promise<HttpReply>
+  http?: (request: HttpRequest, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary) => Promise<HttpReply>
   credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
   provider?: AgentGatewayServices['provider']
-  tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
+  /** `summary` is the script's own account of the call; the IdP shows it only if the call needs a new grant. */
+  tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary) => Promise<unknown>
   mailMove?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
   /** One exact command whose program approval the worker consumed; it runs without a continuing grant. */
   approvedProgram?: (body: ApprovedInvocation, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
@@ -208,10 +211,10 @@ export class RunDispatcher {
       const runtime = { ...this.runtime, dependencyRoot, registerDomain: (path: string, ownerPid: number) => this.runs.registerDomain(id, path, ownerPid) }
       const scope: RunServiceScope = { podId: pod.id, runId: id, epoch, assignmentRevision: pod.bindingRevision, capabilities: manifest.capabilities, root: directory, assertCurrent, registerDomain: runtime.registerDomain }
       let programWrites = 0
-      const invokeTool = async (body: unknown, toolSignal: AbortSignal) => {
+      const invokeTool = async (body: unknown, toolSignal: AbortSignal, summary?: ScriptSummary) => {
         assertCurrent()
         if (!manifest.capabilities.some(capability => capability === 'mail.read' || capability.startsWith('tool.app_') || capability.startsWith('tool.ssh_')) || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
-        const call = async () => retryService('tool authorization', async () => { assertCurrent(); return this.services!.tool!(body, toolSignal, scope) }, toolSignal)
+        const call = async () => retryService('tool authorization', async () => { assertCurrent(); return this.services!.tool!(body, toolSignal, scope, summary) }, toolSignal)
         // A read can be replayed; an application write is recorded like an HTTP effect and keeps the run from automatic replay.
         const write = await programWrite(this.resources.list(pod.id), pod.id, scope.capabilities, body)
         if (!write) appendEvent('recovery-boundary', { kind: 'read', operation: 'tools.invoke' })
@@ -220,7 +223,7 @@ export class RunDispatcher {
         try { const reply = await operation; assertCurrent(); return reply }
         finally { pendingAgents.delete(operation) }
       }
-      const scriptTool = async (payload: unknown, toolSignal: AbortSignal) => invokeTool(payload, toolSignal)
+      const scriptTool = async (payload: unknown, toolSignal: AbortSignal, summary?: ScriptSummary) => invokeTool(payload, toolSignal, summary)
       if (this.services?.shell) {
         const environment = await retryService('runtime authorization', () => this.services!.shell!(scope, signal), signal, 30000)
         Object.assign(runtime, { home: environment.home, shell: environment.shell, environment: { ...environment.environment, ...runtime.environment } })
@@ -244,8 +247,10 @@ export class RunDispatcher {
       const result = await executeScript(runtime, directory, artifact, input, signal, {
         budgetPaused: () => infrastructureWaiting > 0 || agentBudgetPaused() || this.runs.approvals(pod.id).some(item => item.runId === id),
         event: (type, data) => { assertCurrent(); appendEvent(type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
-        request: async (operation, payload, operationSignal) => {
+        request: async (operation, call, operationSignal) => {
           assertCurrent()
+          // A script's own summary of a tool or HTTP call is split off, so the call and its effect stay the same (issue 1473).
+          const { payload, summary } = operation === 'tools.invoke' || operation === 'http.request' ? splitScriptSummary(call) : { payload: call, summary: undefined }
           if (operation === 'jev.evaluate') {
             const assignment = assignedJev(this.resources.list(pod.id), pod.id, scope.capabilities)
             if (!this.services?.jev) throw new Error('Jev service is unavailable')
@@ -338,7 +343,7 @@ export class RunDispatcher {
             const request = parseHttpRequest(payload)
             assignedHttp(this.resources.list(pod.id), scope, request)
             const pending = executeHttpEffect(new EffectLedger(this.store), pod.id, id, request, async () => {
-              const result = await retryService('HTTP request', async () => { assertCurrent(); return this.services!.http!(request, operationSignal, scope) }, operationSignal)
+              const result = await retryService('HTTP request', async () => { assertCurrent(); return this.services!.http!(request, operationSignal, scope, summary) }, operationSignal)
               assertCurrent(); operationSignal.throwIfAborted(); return result
             })
             pendingAgents.add(pending)
@@ -372,7 +377,7 @@ export class RunDispatcher {
             try { const reply = await work; assertCurrent(); appendEvent('approved-command', { approval: request.approval, exitCode: (reply as { exitCode?: unknown } | null)?.exitCode ?? null }); return reply }
             finally { pendingAgents.delete(work); infrastructureWaiting-- }
           }
-          if (operation === 'tools.invoke') return scriptTool(payload, operationSignal)
+          if (operation === 'tools.invoke') return scriptTool(payload, operationSignal, summary)
           throw new Error('Unsupported script operation')
         },
       })

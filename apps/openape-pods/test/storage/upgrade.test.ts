@@ -16,6 +16,8 @@ afterEach(() => { for (const store of stores.splice(0)) store.close(); for (cons
 const schema47 = readFileSync(join(import.meta.dirname, 'fixtures/schema-47.sql'), 'utf8')
 // The exact schema 49 of the releases with tags instead of groups (issue 1468, main 876ba63b).
 const schema49 = readFileSync(join(import.meta.dirname, 'fixtures/schema-49.sql'), 'utf8')
+// The exact schema 50 of the releases with program approvals (issue 1468, main 1dabba88).
+const schema50 = readFileSync(join(import.meta.dirname, 'fixtures/schema-50.sql'), 'utf8')
 function directory(): string {
   const root = mkdtempSync(join(tmpdir(), 'pods-upgrade-')); roots.push(root); return root
 }
@@ -153,13 +155,38 @@ it.each([
   database.exec(`PRAGMA user_version=${version}`); database.close()
   const store = open(root)
   expect(store.db.prepare('PRAGMA user_version').get()!.user_version).toBe(schemaVersion)
-  expect(schemaVersion).toBe(50)
   expect(readdirSync(root).filter(file => file.startsWith(`before-v${version}-`))).toHaveLength(1)
   expect(store.db.prepare('SELECT id,action,state,grant_id FROM action_approvals').all()).toEqual([{ id: ids.approval, action: 'mail.archive', state: 'approved', grant_id: 'grant-1' }])
-  store.db.prepare('INSERT INTO action_approvals VALUES(?,?,\'program.run\',\'git push\',\'{}\',?,\'Push\',\'{}\',NULL,NULL,\'collecting\',NULL,NULL,1,1)').run(randomUUID(), ids.pod, 'b'.repeat(64))
+  store.db.prepare('INSERT INTO action_approvals(id,pod_id,action,object,payload,payload_hash,title,authority,state,created_at,updated_at) VALUES(?,?,\'program.run\',\'git push\',\'{}\',?,\'Push\',\'{}\',\'collecting\',1,1)').run(randomUUID(), ids.pod, 'b'.repeat(64))
   expect(JSON.parse(String(store.db.prepare('SELECT body FROM storage_receipts WHERE kind=\'conversion\' AND json_extract(body,\'$.from\')=49').get()!.body))).toMatchObject({ from: 49, rebuilt: ['action_approvals'], rows: 1 })
   store.close(); stores.pop()
   // The upgraded schema is exactly the fresh one.
+  expect(objects(join(root, 'control.sqlite'))).toEqual(objects(join(fresh, 'control.sqlite')))
+})
+
+// Issue 1473: titles composed by older desktops become summary titles; nothing the owner read is lost.
+it('converts schema-50 approvals to summaries, keeping a long composed title as description', () => {
+  const fresh = directory(); open(fresh).close(); stores.pop()
+  const root = directory(); const ids = { pod: randomUUID(), batch: randomUUID(), short: randomUUID(), long: randomUUID() }
+  const composed = `Rebase feature/x onto development (Pod) · Push to remote: git push --force-with-lease=feature/x:${'a'.repeat(40)} origin ${'a'.repeat(40)}:refs/heads/feature/x`
+  const database = new DatabaseSync(join(root, 'control.sqlite'))
+  database.exec(schema50)
+  database.exec('INSERT INTO settings VALUES(1,1,2); INSERT INTO data_settings VALUES(1,10737418240,0,NULL); INSERT INTO onboarding VALUES(1,0,NULL); INSERT INTO data_sequence VALUES(1,0);')
+  database.prepare('INSERT INTO pods VALUES(?,\'Rebase\',1,\'active\',NULL,1)').run(ids.pod)
+  database.prepare('INSERT INTO approval_batches(id,pod_id,title,expires_at,next_poll_at,created_at) VALUES(?,?,\'Run program commands\',2,1,1)').run(ids.batch, ids.pod)
+  database.prepare('INSERT INTO action_approvals VALUES(?,?,\'mail.archive\',\'owner@example.invalid:m1\',\'{}\',?,\'Weekly news · news@example.invalid\',\'{}\',NULL,NULL,\'collecting\',NULL,NULL,1,1)').run(ids.short, ids.pod, 'a'.repeat(64))
+  database.prepare('INSERT INTO action_approvals VALUES(?,?,\'program.run\',\'git push\',\'{}\',?,?,\'{}\',?,\'grant-1\',\'requested\',NULL,NULL,1,1)').run(ids.long, ids.pod, 'b'.repeat(64), composed, ids.batch)
+  database.exec('PRAGMA user_version=50'); database.close()
+  const store = open(root)
+  expect(store.db.prepare('PRAGMA user_version').get()!.user_version).toBe(schemaVersion)
+  expect(readdirSync(root).filter(file => file.startsWith('before-v50-'))).toHaveLength(1)
+  expect(store.db.prepare('SELECT id,title,description,link,state,grant_id FROM action_approvals ORDER BY rowid').all()).toEqual([
+    { id: ids.short, title: 'Weekly news · news@example.invalid', description: null, link: null, state: 'collecting', grant_id: null },
+    { id: ids.long, title: `${composed.slice(0, 119)}…`, description: composed, link: null, state: 'requested', grant_id: 'grant-1' },
+  ])
+  expect(JSON.parse(String(store.db.prepare('SELECT body FROM storage_receipts WHERE kind=\'conversion\' AND json_extract(body,\'$.from\')=50').get()!.body))).toMatchObject({ from: 50, rebuilt: ['action_approvals'], rows: 2, shortened: 1 })
+  expect(() => store.db.prepare('UPDATE action_approvals SET title=? WHERE id=?').run('t'.repeat(121), ids.short)).toThrow('CHECK')
+  store.close(); stores.pop()
   expect(objects(join(root, 'control.sqlite'))).toEqual(objects(join(fresh, 'control.sqlite')))
 })
 

@@ -4,12 +4,14 @@ import { approvalActions, parseApprovalAuthority } from '../../contracts/approva
 import type { ApprovalAction, ApprovalAuthority, ApprovalManifest, ApprovalState, ApprovalView } from '../../contracts/approvals'
 import { plainJson } from '../../contracts/domain-data'
 import { canonicalJson } from '../../contracts/canonical-json'
+import { grantSummaryLimits, parseScriptSummary, summaryLine } from '../../contracts/grant-summary'
+import type { GrantSummary } from '../../contracts/grant-summary'
 import { parseProgramArgv } from '../../contracts/programs'
 import type { PodDatabase } from '../storage/database'
 import { digest } from '../storage/database'
 
 export type ApprovalService = (body: { operation: 'create' | 'status' | 'consume' | 'assertActive', manifest: ApprovalManifest, grants?: { key: string, id: string }[] }, signal: AbortSignal) => Promise<unknown>
-interface Row { id: string, pod_id: string, action: ApprovalAction, object: string, payload: string, payload_hash: string, title: string, authority: string, batch_id: string | null, grant_id: string | null, state: ApprovalState, reason: string | null, released_at: number | null, created_at: number, updated_at: number }
+interface Row { id: string, pod_id: string, action: ApprovalAction, object: string, payload: string, payload_hash: string, title: string, description: string | null, link: string | null, authority: string, batch_id: string | null, grant_id: string | null, state: ApprovalState, reason: string | null, released_at: number | null, created_at: number, updated_at: number }
 interface Batch { id: string, pod_id: string, title: string, expires_at: number, url: string | null, next_poll_at: number, polls: number }
 
 /**
@@ -20,11 +22,13 @@ export const approvalLimits = { items: 30, members: 100, expiryMs: 7 * 24 * 60 *
 const batchTitles: Record<ApprovalAction, string> = { 'mail.archive': 'Archive newsletters', 'program.run': 'Run program commands' }
 
 function row(value: unknown): Row { return value as Row }
-// eslint-disable-next-line no-control-regex
-const line = (value: unknown, limit: number) => String(value).replace(/[\u0000-\u001F\u007F\u202A-\u202E\u2066-\u2069]+/g, ' ').trim().slice(0, limit)
+/** What the IdP shows about one item: its stored title and claim, and the Pod's name as origin. */
+function summary(item: Row, origin: string): GrantSummary {
+  return { title: item.title, ...(item.description === null ? {} : { description: item.description }), origin, ...(item.link === null ? {} : { link: item.link }) }
+}
 
-/** Program approvals show the complete command; one that does not fit is refused, never shortened. */
-export const programApprovalLimits = { object: 500, display: 200, headline: 120, title: 720 } as const
+/** A program approval's object is the complete command; one that does not fit is refused, never shortened. */
+export const programApprovalLimits = { object: 500 } as const
 /** Only printable ASCII is shown to the owner as is; anything else could hide or reorder text, so it is refused. */
 const printable = /^[\x20-\x7E]*$/
 
@@ -49,30 +53,23 @@ export function programObject(application: string, argv: string[]): string {
 export const approvalEffectKey = (id: string) => `approval:${id}`
 
 /**
- * Each action fixes its payload fields, its object identity and the title the owner reads at the IdP. A program title
- * starts with `display`, the application adapter's description of the command. A script may put a short headline in
- * front (owner decision October 13, 2026): it is marked as the Pod's statement and the complete command still follows.
+ * Each action fixes its payload fields and its object identity, which the IdP command carries (approvalCommand). The
+ * title the owner reads is the script's (issue 1473); without one it is taken from data, never composed: for a program
+ * the application adapter's description of the command, for mail the message subject.
  */
-export function actionTitle(action: ApprovalAction, object: string, payload: Record<string, unknown>, display?: string, headline?: string): string {
+export function approvalDataTitle(action: ApprovalAction, object: string, payload: Record<string, unknown>, display?: string): string {
   if (action === 'program.run') {
     if (Object.keys(payload).some(key => !['application', 'argv'].includes(key)) || typeof payload.application !== 'string' || !payload.application.trim() || payload.application.length > 200) throw new Error('A program approval names the application and its exact argv')
     const argv = parseProgramArgv(payload.argv)
     if (object !== programObject(payload.application, argv)) throw new Error('A program approval object is the exact command')
     if (!display?.trim()) throw new Error('A program approval needs the adapter description of its command')
-    if (!printable.test(display) || display.length > programApprovalLimits.display) throw new Error('The adapter description of this command cannot be shown complete; it runs only with a grant')
-    // The complete command follows the adapter's description; the digest suffix of the object is left out.
-    const command = `${display.trim()}: ${object.slice(0, object.lastIndexOf(' #'))}`
-    if (headline === undefined) return command
-    if (!headline.trim() || !printable.test(headline) || headline.length > programApprovalLimits.headline) throw new Error(`A program approval headline is printable ASCII of at most ${programApprovalLimits.headline} characters`)
-    const title = `${headline.trim()} (Pod) · ${command}`
-    if (title.length > programApprovalLimits.title) throw new Error('The headline and the complete command do not fit one approval; shorten the headline')
-    return title
+    return summaryLine(display, grantSummaryLimits.title)
   }
   if (action === 'mail.archive') {
     const fields = ['mailbox', 'messageId', 'version', 'subject', 'sender']
     if (Object.keys(payload).some(key => !fields.includes(key)) || fields.some(key => typeof payload[key] !== 'string' || !String(payload[key]).trim())) throw new Error('A mail archive approval names mailbox, messageId, version, subject and sender')
     if (object !== `${String(payload.mailbox).toLowerCase()}:${String(payload.messageId)}`) throw new Error('A mail archive approval object is the mailbox and message ID')
-    return `${line(payload.subject, 80)} · ${line(payload.sender, 38)}`.slice(0, 120)
+    return summaryLine(String(payload.subject), grantSummaryLimits.title)
   }
   throw new Error('Unsupported approval action')
 }
@@ -83,7 +80,7 @@ export class Approvals {
 
   private view(item: Row): ApprovalView {
     const url = item.batch_id ? this.store.db.prepare('SELECT url FROM approval_batches WHERE id=?').get(item.batch_id)?.url as string | null ?? null : null
-    return { id: item.id, action: item.action, object: item.object, title: item.title, state: item.state, reason: item.reason, batchId: item.batch_id, batchUrl: url, updatedAt: item.updated_at }
+    return { id: item.id, action: item.action, object: item.object, title: item.title, description: item.description, link: item.link, state: item.state, reason: item.reason, batchId: item.batch_id, batchUrl: url, updatedAt: item.updated_at }
   }
 
   private assertRun(principal: { podId: string, runId: string }): void {
@@ -94,17 +91,20 @@ export class Approvals {
    * Asks the owner to approve one exact action. The same action, object and payload return the earlier request;
    * a changed payload withdraws every earlier open or approved request for the object, since an approval never
    * carries over to other content. A program approval may omit its object, which is derived from the command.
+   * `title`, `description` and `link` are the script's claim, passed to the IdP unchanged (issue 1473); the first
+   * request of an object keeps its claim.
    */
   request(principal: { podId: string, runId: string }, value: unknown, display?: string): ApprovalView {
     const input = plainJson(value) as Record<string, unknown>
-    if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['action', 'object', 'title', 'payload'].includes(key))) throw new Error('Invalid approval request')
+    if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['action', 'object', 'title', 'description', 'link', 'payload'].includes(key))) throw new Error('Invalid approval request')
     const payload = input.payload as Record<string, unknown>
     if (!payload || typeof payload !== 'object' || Array.isArray(payload) || canonicalJson(payload).length > approvalLimits.payloadBytes) throw new Error('Approval payload is limited to 16 KiB')
     if (input.action === 'program.run' && input.object === undefined && typeof payload.application === 'string') input.object = programObject(payload.application, parseProgramArgv(payload.argv))
-    if (!approvalActions.includes(input.action as ApprovalAction) || typeof input.object !== 'string' || !input.object || input.object.length > 500 || (input.title !== undefined && typeof input.title !== 'string')) throw new Error('An approval names an action and its object')
-    // What the owner sees at the IdP is derived from the bound payload; a program headline is marked as the Pod's.
-    // A mail title stays derived from the message; the script's title only heads a program approval.
-    const title = actionTitle(input.action as ApprovalAction, input.object as string, payload, display, input.action === 'program.run' ? input.title as string | undefined : undefined)
+    if (!approvalActions.includes(input.action as ApprovalAction) || typeof input.object !== 'string' || !input.object || input.object.length > 500) throw new Error('An approval names an action and its object')
+    const claim = parseScriptSummary(Object.fromEntries(Object.entries(input).filter(([key]) => ['title', 'description', 'link'].includes(key))))
+    // The payload is checked whether or not the script names a title.
+    const dataTitle = approvalDataTitle(input.action as ApprovalAction, input.object as string, payload, display)
+    const title = claim.title ?? dataTitle
     const hash = digest(canonicalJson(payload))
     return this.store.transaction(() => {
       this.assertRun(principal)
@@ -114,7 +114,7 @@ export class Approvals {
       this.store.db.prepare(`UPDATE action_approvals SET state='withdrawn',reason='The object changed; this approval does not cover the new content',updated_at=? WHERE pod_id=? AND action=? AND object=? AND state IN ('collecting','requested','approved')`).run(now, principal.podId, input.action as string, input.object as string)
       if (Number(this.store.db.prepare('SELECT count(*) AS count FROM action_approvals WHERE pod_id=? AND state IN (\'collecting\',\'requested\',\'approved\',\'unknown\')').get(principal.podId)!.count) >= approvalLimits.perPod) throw new Error('Too many open approvals; wait until the owner decided some')
       const id = randomUUID()
-      this.store.db.prepare('INSERT INTO action_approvals(id,pod_id,action,object,payload,payload_hash,title,authority,state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,\'{}\',\'collecting\',?,?)').run(id, principal.podId, input.action as string, input.object as string, canonicalJson(payload), hash, title, now, now)
+      this.store.db.prepare('INSERT INTO action_approvals(id,pod_id,action,object,payload,payload_hash,title,description,link,authority,state,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,\'{}\',\'collecting\',?,?)').run(id, principal.podId, input.action as string, input.object as string, canonicalJson(payload), hash, title, claim.description ?? null, claim.link ?? null, now, now)
       return this.view(row(this.store.db.prepare('SELECT * FROM action_approvals WHERE id=?').get(id)))
     })
   }
@@ -137,7 +137,8 @@ export class Approvals {
   }
 
   private manifest(batch: Batch, items: Row[]): ApprovalManifest {
-    return { podId: batch.pod_id, owner: this.owner(), batchId: batch.id, title: batch.title, expiresAt: batch.expires_at, items: items.map(item => ({ key: item.id, authority: parseApprovalAuthority(JSON.parse(item.authority)), summary: item.title })) }
+    const origin = summaryLine(this.store.getPod(batch.pod_id).name, grantSummaryLimits.origin, 'Pod')
+    return { podId: batch.pod_id, owner: this.owner(), batchId: batch.id, title: batch.title, expiresAt: batch.expires_at, items: items.map(item => ({ key: item.id, authority: parseApprovalAuthority(JSON.parse(item.authority)), summary: summary(item, origin) })) }
   }
 
   /** The open IdP batch of a Pod and action while it has life and room left; otherwise a new one. */

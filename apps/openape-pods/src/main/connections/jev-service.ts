@@ -4,7 +4,7 @@ import type { JevAssignment, JevEvaluation, JevRequest } from '../../contracts/j
 import { typesafeOrigin } from '../../contracts/jev'
 import { AgentAuthority } from '../broker/authorization'
 import { httpArgv } from '../grants/execution-context'
-import type { GrantLedgerPort, GrantObserver, RunGrantTokens } from '../broker/authorization'
+import type { GrantLedgerPort, GrantObserver, GrantPresentation, RunGrantTokens } from '../broker/authorization'
 import { PodIdentityManager } from './agent'
 import type { CredentialCache } from './cache'
 import { evaluateTypesafe } from './typesafe'
@@ -16,12 +16,13 @@ export async function executeJev(assignment: JevAssignment, request: JevRequest,
   observe: GrantObserver
   ledger?: GrantLedgerPort
   tokens?: RunGrantTokens
+  presentation?: GrantPresentation
   check: () => Promise<unknown>
   send: (body: string, signal: AbortSignal) => Promise<Response>
   consumeAttempt: () => void
 }): Promise<JevEvaluation> {
   const identity = new PodIdentityManager(options.credentials)
-  const authority = new AgentAuthority(identity.connection(assignment.authority.identity, `pods:${assignment.authority.identity.podId}`), options.observe, options.ledger, options.tokens)
+  const authority = new AgentAuthority(identity.connection(assignment.authority.identity, `pods:${assignment.authority.identity.podId}`), options.observe, options.ledger, options.tokens, options.presentation)
   const adapterPath = join(options.vendor, 'pod-http-shapes.toml')
   const adapter = loadAdapter('pod-http', adapterPath)
   const argv = httpArgv(typesafeOrigin, 'POST')
