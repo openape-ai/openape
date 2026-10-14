@@ -7,12 +7,12 @@ import type { AssignedCommand } from '@openape/apes/assigned'
 import type { RunApproval } from '../../contracts/activity'
 import { grantSummary } from '../../contracts/grant-summary'
 import type { ScriptSummary } from '../../contracts/grant-summary'
-import { loadAdapter, resolveCommand } from '@openape/apes'
+import { exactCommand, loadAdapter, resolveCommand } from '@openape/apes'
 import { setTimeout as delay } from 'node:timers/promises'
 
 export type GrantProgress = RunApproval
 export type GrantObserver = (progress: GrantProgress) => Promise<void>
-export interface Grant { brokered?: BrokeredGrant, id: string, status: string, decided_by?: string, request: { requester: string, audience: string, target_host: string, grant_type: string, duration?: number, waits_until?: number, authorization_details?: { type: string }[] }, created_at?: number }
+export interface Grant { brokered?: BrokeredGrant, id: string, status: string, decided_by?: string, request: { requester: string, audience: string, target_host: string, grant_type: string, duration?: number, waits_until?: number, authorization_details?: { type: string }[], execution_context?: { argv_hash?: string } }, created_at?: number }
 /**
  * The Pod grant ledger as the authority sees it: `find` selects the newest recorded grant whose details cover a call,
  * `record` keeps every grant this Pod requested or observed, so a pending request is reused instead of asked again.
@@ -31,8 +31,10 @@ export function grantCoverage(grant: Pick<Grant, 'request'>): OpenApeCliAuthoriz
 export function ownGrant(grant: Grant, id: string, connection: AgentConnection): boolean {
   return grant?.id === id && ['pending', 'approved', 'used', 'expired', 'denied', 'revoked'].includes(grant.status) && grant.request?.requester === connection.subject && grant.request.audience === 'shapes' && grant.request.target_host === connection.targetHost && sameBrokeredGrant(grant.brokered, connection.brokered)
 }
-function covers(grant: Grant, detail: OpenApeCliAuthorizationDetail): boolean {
+/** With `argvHash` the call runs only with an exact approval: a grant requested for this very argv (issue 1473). */
+function covers(grant: Grant, detail: OpenApeCliAuthorizationDetail, argvHash?: string): boolean {
   const coverage = grantCoverage(grant)
+  if (argvHash !== undefined && grant.request.execution_context?.argv_hash !== argvHash) return false
   return coverage.length > 0 && cliAuthorizationDetailsCover(coverage, [detail])
 }
 
@@ -169,29 +171,37 @@ export class AgentAuthority {
     return await this.request(`/api/grants/${encodeURIComponent(id)}`, 'GET', signal, undefined, true) as Grant | null
   }
 
-  /** Resolves the command with its pinned adapter; it must lie inside the requested coverage and never be a generic execution. */
+  /**
+   * Resolves the command with its pinned adapter; it must lie inside the requested coverage and never be a generic
+   * execution. An exact command is bound to its argv, so only a grant for exactly this argv authorizes it.
+   */
   private async resolve(assignment: AssignedAuthorization) {
     const adapter = loadAdapter(assignment.command.cliId, assignment.command.adapterPath)
     if (adapter.digest !== assignment.command.adapterDigest) throw new Error('Assigned adapter integrity mismatch')
-    const resolved = await resolveCommand(adapter, assignment.command.argv)
+    const structured = await resolveCommand(adapter, assignment.command.argv)
+    const resolved = assignment.command.exact ? exactCommand(structured) : structured
     if (resolved.detail.operation_id === '_generic.exec' || !cliAuthorizationDetailsCover(assignment.command.coverage, [resolved.detail])) throw new Error('Command is outside the assigned operation')
     return resolved
   }
 
   async acquire(assignment: AssignedAuthorization, signal: AbortSignal): Promise<string> {
     const resolved = await this.resolve(assignment)
+    const exact = assignment.command.exact ? resolved.executionContext.argv_hash : undefined
     let grant = assignment.grantId ? await this.grant(assignment.grantId, signal) : undefined
-    if (grant && !covers(grant, resolved.detail)) throw new AuthorityError('The assigned grant does not cover this command')
+    if (grant && !covers(grant, resolved.detail, exact)) throw new AuthorityError('The assigned grant does not cover this command')
     if (!grant || ['used', 'expired'].includes(grant.status)) {
       const recorded = await this.ledger?.find(resolved.detail, this.connection)
       if (recorded && recorded !== grant?.id) {
         const candidate = await this.grant(recorded, signal)
-        if (covers(candidate, resolved.detail)) grant = candidate
+        if (covers(candidate, resolved.detail, exact)) grant = candidate
       }
     }
     // A grant this identity received before the ledger recorded it (schema 43 moved them out of the resources) is
     // adopted instead of asking the owner again; the IdP does not return it for a new brokered request.
-    if (!grant || ['used', 'expired'].includes(grant.status)) grant = await this.ledger?.adopt(resolved.detail, this.connection, id => this.candidate(id, signal)) ?? grant
+    if (!grant || ['used', 'expired'].includes(grant.status)) {
+      const adopted = await this.ledger?.adopt(resolved.detail, this.connection, id => this.candidate(id, signal))
+      if (adopted && covers(adopted, resolved.detail, exact)) grant = adopted
+    }
     // A pending request is reused, so an interrupted wait never asks again; a single-use request whose caller
     // stopped waiting can no longer run anything (DDISA grants §3.4) and is replaced.
     if (grant?.status === 'pending' && grant.request.grant_type === 'once' && (grant.request.waits_until ?? 0) * 1000 <= Date.now()) grant = undefined
@@ -213,7 +223,7 @@ export class AgentAuthority {
       await this.ledger?.record(grant, this.connection)
     }
     if (grant.status !== 'approved') throw new AuthorityError(grant.status === 'pending' ? 'Permission was not decided while this command waited; start it again and approve at the IdP' : grant.status === 'expired' ? 'Permission request expired at the IdP; start a new run to request it again' : `Permission ${grant.status}; review this Pod's permissions before retrying`)
-    if (!covers(grant, resolved.detail)) throw new AuthorityError('The approved grant no longer covers this command; request it again')
+    if (!covers(grant, resolved.detail, exact)) throw new AuthorityError('The approved grant no longer covers this command; request it again')
     await publish('approved')
     assignment.command.coverage = grantCoverage(grant)
     return grant.id
@@ -258,7 +268,8 @@ export class AgentAuthority {
   }
 
   async authorize(assignment: AssignedAuthorization, signal: AbortSignal): Promise<void> {
-    if (!assignment.grantId && this.ledger) assignment.grantId = await this.ledger.find((await this.resolve(assignment)).detail, this.connection) ?? ''
+    // The ledger does not record argv hashes; acquire checks an exact command's grant at the IdP instead.
+    if (!assignment.grantId && this.ledger && !assignment.command.exact) assignment.grantId = await this.ledger.find((await this.resolve(assignment)).detail, this.connection) ?? ''
     if (await this.reuse(assignment, signal)) return
     assignment.grantId = await this.acquire(assignment, signal)
     await this.mint(assignment, signal)

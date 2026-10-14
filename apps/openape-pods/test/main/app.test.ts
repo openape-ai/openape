@@ -46,20 +46,23 @@ describe('main process owner dialogs', () => {
     expect(main.dialog.showMessageBox).not.toHaveBeenCalled()
   })
 
-  it('adds an installed program only from the files the owner picks, asking for its descriptor when none is registered', async () => {
+  it('adds an installed program only from the file the owner picks, with the registry adapter of its command and never an adapter file', async () => {
     main = await startMain()
-    const executable = join(main.root, 'invoice-cli'); const adapter = join(main.root, 'invoice-cli.toml')
+    const executable = join(main.root, 'invoice-cli')
     await writeFile(executable, '#!/bin/sh\necho DO_NOT_EXECUTE\nexit 1\n', { mode: 0o700 })
-    await writeFile(adapter, 'schema="openape-shapes/v1"\n[cli]\nid="invoice-cli"\nexecutable="invoice-cli"\naudience="shapes"\n[[operation]]\nid="read"\ncommand=["read"]\ndisplay="Read fixture mail"\naction="read"\nrisk="low"\nresource_chain=["fixture:*"]\n')
-    main.worker.program.mockImplementation(async (_command: unknown, definition?: { adapterPath?: string }) => { if (!definition?.adapterPath?.endsWith('.toml')) throw new Error('No adapter found for invoice-cli'); return { resources: [], epoch: 2 } })
+    main.worker.registryProgram.mockResolvedValue({ name: 'invoice-cli', executable, cliId: 'invoice-cli' })
     await main.invoke(channels.programs, { type: 'add', podId, epoch: 1 })
-    expect(main.worker.program).not.toHaveBeenCalled()
-    main.dialog.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [executable] }).mockResolvedValueOnce({ canceled: true, filePaths: [] })
+    expect(main.worker.registryProgram).not.toHaveBeenCalled(); expect(main.worker.program).not.toHaveBeenCalled()
+    main.dialog.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [executable] })
     await main.invoke(channels.programs, { type: 'add', podId, epoch: 1 })
-    expect(main.worker.program.mock.calls.every(([, definition]) => !(definition as { adapterPath?: string }).adapterPath?.endsWith('.toml'))).toBe(true)
-    main.dialog.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [executable] }).mockResolvedValueOnce({ canceled: false, filePaths: [adapter] })
-    await main.invoke(channels.programs, { type: 'add', podId, epoch: 1 })
-    expect(main.worker.program).toHaveBeenLastCalledWith({ type: 'add', podId, epoch: 1 }, expect.objectContaining({ name: 'invoice-cli', executable, cliId: 'invoice-cli', adapterPath: adapter }))
+    expect(main.worker.registryProgram).toHaveBeenCalledWith(executable)
+    expect(main.worker.program).toHaveBeenLastCalledWith({ type: 'add', podId, epoch: 1 }, expect.objectContaining({ name: 'invoice-cli', executable, cliId: 'invoice-cli' }))
+    main.worker.registryProgram.mockRejectedValueOnce(new Error('The shapes registry has no adapter for invoice-cli; only registry adapters are accepted'))
+    main.dialog.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [executable] })
+    await expect(main.invoke(channels.programs, { type: 'add', podId, epoch: 1 })).rejects.toThrow('only registry adapters are accepted')
+    // One file dialog per attempt: Pods never asks for an adapter file.
+    expect(main.dialog.showOpenDialog).toHaveBeenCalledTimes(3)
+    expect(main.worker.program).toHaveBeenCalledTimes(1)
     expect(main.execFile).not.toHaveBeenCalled()
   })
 

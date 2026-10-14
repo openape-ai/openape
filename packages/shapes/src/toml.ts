@@ -5,11 +5,12 @@ import type { ShapesAdapter, ShapesOperation } from './types.js'
 type Raw = Record<string, unknown>
 
 const ROOT_KEYS = ['schema', 'cli', 'operation']
-const CLI_KEYS = ['id', 'executable', 'audience', 'version', 'global_options', 'tested_versions', 'version_command', 'version_pattern']
+const CLI_KEYS = ['id', 'executable', 'audience', 'version', 'global_options', 'tested_versions', 'version_command', 'version_pattern', 'tested_digests']
 const OPERATION_KEYS = ['id', 'command', 'positionals', 'required_options', 'value_options', 'flag_options', 'display', 'action', 'risk', 'resource_chain', 'exact_command', 'presentation']
 const RISKS = ['low', 'medium', 'high', 'critical']
 const OPTION_NAME = /^[\w-]+$/
 const GLOBAL_OPTION = /^[\w-]+(?:=[\w-]+)?$/
+const FILE_DIGEST = /^SHA-256:[a-f0-9]{64}$/
 
 function isRecord(value: unknown): value is Raw {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
@@ -50,6 +51,15 @@ function optionalOptionList(value: unknown, field: string, owner: string, patter
   if (list?.some(entry => !pattern.test(entry)))
     throw new Error(`${owner} has an invalid ${field}[]`)
   return list
+}
+
+/** `[cli] tested_digests`: file digests of executables the operations were checked against (issue 1473). */
+function parseTestedDigests(value: unknown): string[] | undefined {
+  if (value === undefined)
+    return undefined
+  if (!isStringList(value) || value.length === 0 || value.length > 64 || value.some(entry => !FILE_DIGEST.test(entry)) || new Set(value).size !== value.length)
+    throw new Error('Adapter cli tested_digests must list distinct SHA-256:<hex> file digests')
+  return [...value]
 }
 
 function parseOperation(operation: unknown, globalOptions: string[] | undefined): ShapesOperation {
@@ -103,6 +113,7 @@ export function parseAdapterToml(content: string): ShapesAdapter {
 
   const globalOptions = optionalOptionList(cli.global_options, 'global_options', 'Adapter cli', GLOBAL_OPTION)
   const versions = parseShapeCliVersions(cli, 'Adapter cli')
+  const digests = parseTestedDigests(cli.tested_digests)
 
   return {
     schema: file.schema,
@@ -112,6 +123,7 @@ export function parseAdapterToml(content: string): ShapesAdapter {
       ...(cli.audience ? { audience: String(cli.audience) } : {}),
       ...(cli.version ? { version: String(cli.version) } : {}),
       ...versions,
+      ...(digests ? { tested_digests: digests } : {}),
     },
     operations: file.operation.map(operation => parseOperation(operation, globalOptions)),
   }

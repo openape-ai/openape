@@ -17,7 +17,7 @@ import { promisify } from 'node:util'
 import { parseProgramCommand } from '../contracts/programs'
 import { parseSecretsCommand } from '../contracts/secrets'
 import { applicationDefinition } from './programs/application'
-import { programDefinition, suggestedProgram } from './programs/definition'
+import { suggestedProgram } from './programs/definition'
 import { LanguagePreference } from './language'
 import { parseLanguageCommand } from '../contracts/language'
 import { translate, translateDiagnostic } from '../i18n'
@@ -280,11 +280,7 @@ async function start(): Promise<void> {
       const path = executable.filePaths[0]
       const icon = (await app.getFileIcon(path, { size: 'normal' })).resize({ width: 32, height: 32 }).toDataURL()
       if (path.endsWith('.app')) return worker.program(command, { ...await applicationDefinition(path, join(app.getPath('userData'), 'application-definitions')), icon })
-      try { return await worker.program(command, { ...await programDefinition(path), icon }) }
-      catch (error) { if (!(error instanceof Error) || !error.message.startsWith('No adapter found for ')) throw error }
-      const adapter = await dialog.showOpenDialog(window, { title: t('Choose its apes command descriptor'), properties: ['openFile'], filters: [{ name: 'apes', extensions: ['toml'] }] })
-      if (adapter.canceled || adapter.filePaths.length !== 1) return unchanged()
-      return worker.program(command, { ...await programDefinition(path, adapter.filePaths[0]), icon })
+      return worker.program(command, { ...await worker.registryProgram(path), icon })
     }
     if (command.type === 'importState') {
       const selected = await dialog.showOpenDialog(window, { title: t('Import an existing application state file'), properties: ['openFile', 'showHiddenFiles'] })

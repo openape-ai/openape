@@ -28,14 +28,15 @@ import { SecretsGate } from './secrets/gate'
 import type { ConsumerRecord } from './secrets/gate'
 import type { SecretRequestRow, SecretsCommand, SecretsView } from '../contracts/secrets'
 import type { SecretRowCommand } from '../worker/secrets/store'
-import { programDefinition } from './programs/definition'
+import { registryProgramDefinition } from './programs/definition'
+import { sandboxVersionProbe } from './programs/version-probe'
 import { modelResources } from '../worker/master/resources'
 import { sameOwner } from '@openape/pods-protocol'
 import type { RemoteInternal } from '../worker/remote/registration'
 import type { Owner } from '@openape/pods-protocol'
 import type { DomainCommand, DomainOverview } from '../contracts/domain-admin'
 import type { ServiceScope, RunContextRequest, ServiceCheck, ServiceRequest  } from '../contracts/services'
-import { loadAdapter, resolveCommand } from '@openape/apes'
+import { resolveCommand } from '@openape/apes'
 import { approvalURL } from '../contracts/activity'
 import type { RunApproval } from '../contracts/activity'
 import { assignedDirectories, directoryPolicy } from '../runtime/directories'
@@ -47,6 +48,7 @@ import type { Administration } from './grants/administration'
 import { archiveRefusal, assertArchiveMove } from '../contracts/mail-archive-port'
 import { ProgramManager } from './programs/manager'
 import { PodGrants, commandSpec, httpSpec } from './grants/pod-grants'
+import { loadPodAdapter } from './grants/registry-copies'
 import { runtimeArgv } from './grants/execution-context'
 import type { GrantSpec } from './grants/pod-grants'
 import type { OwnerSession } from './connections/owner-session'
@@ -333,6 +335,19 @@ export class FixtureWorker {
     await Promise.all(identities.map(identity => identity.close()))
   }
 
+  /** An installed CLI with the shapes-registry adapter of its command; arbitrary adapter files are never assigned. */
+  async registryProgram(path: string, options: { commandName?: string, runtimePath?: string } = {}): Promise<ProgramDefinition> {
+    const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+    return registryProgramDefinition(path, { ...options, store: join(this.root, 'registry-adapters'), protectedRoots: [this.root, this.profileBase, ...await this.writableFolders()], probe: sandboxVersionProbe(join(dist, 'native/pods-helper'), join(this.root, 'probes')) })
+  }
+
+  /** Every folder assigned to a Pod for writing. */
+  private async writableFolders(): Promise<string[]> {
+    const pods = parseWorkspace(await this.dispatch({ type: 'list' })).pods
+    const states = await Promise.all(pods.map(async pod => parseResourceState(await this.dispatch({ resource: { type: 'list', podId: pod.id } }))))
+    return states.flatMap(state => state.resources.filter(item => item.kind === 'directory' && item.state === 'ready' && item.configuration.access === 'readWrite').map(item => String(item.configuration.path)))
+  }
+
   async program(command: ProgramCommand, definition?: ProgramDefinition, file?: string): Promise<Awaited<ReturnType<ProgramManager['terminal']>> | Awaited<ReturnType<ProgramManager['prepare']>> | ResourceState | string | null> {
     const central = this.centralAction(['launchStatus', 'prepare', 'poll', 'input', 'close'].includes(command.type) ? 'list' : command.type)
     if (central) return central.local(() => this.program(command, definition, file))
@@ -585,7 +600,7 @@ export class FixtureWorker {
     if (action.kind === 'program') {
       if (['prepare', 'start', 'poll', 'input', 'close'].includes(action.command.type)) return this.program(action.command)
       const definition = action.command.type === 'add' || action.command.type === 'replace'
-        ? action.path!.endsWith('.app') ? await applicationDefinition(action.path!, join(this.root, 'applications')) : await programDefinition(action.path!, action.adapterPath, action.commandName, action.runtimePath)
+        ? action.path!.endsWith('.app') ? await applicationDefinition(action.path!, join(this.root, 'applications')) : await this.registryProgram(action.path!, { commandName: action.commandName, runtimePath: action.runtimePath })
         : undefined
       if (action.command.type === 'grant') approval = await this.grantProgram(action.command, owner)
       else await this.program(action.command, definition, action.path)
@@ -672,7 +687,7 @@ export class FixtureWorker {
     if (command.type === 'assignSsh') {
       if (before.epoch !== command.epoch) throw new Error('Pod or SSH permissions changed; reload before assigning access')
       const binding = await resolveSshTarget(command.target)
-      const { grantId, approval } = await this.provisionGrant(command.podId, await commandSpec(loadAdapter('pod-ssh', join(vendor, 'pod-ssh-shapes.toml')), sshGrantArgv(binding)), owner)
+      const { grantId, approval } = await this.provisionGrant(command.podId, await commandSpec(loadPodAdapter('pod-ssh', join(vendor, 'pod-ssh-shapes.toml')), sshGrantArgv(binding)), owner)
       return { view: parseResourceState(await this.dispatch({ resource: { type: 'bindSsh', podId: command.podId, epoch: command.epoch, binding, authority: await authority(grantId) } })), approval }
     }
     // The sandbox entry and its grant are separate: the destination becomes reachable, and the same origin and
@@ -705,7 +720,7 @@ export class FixtureWorker {
       resources: podId => this.resources({ type: 'list', podId }),
       podName: podId => this.podName(podId),
       ledger: command => this.dispatch({ grants: command }),
-      programDefinition: async entry => entry.path.endsWith('.app') ? applicationDefinition(entry.path, join(this.root, 'applications')) : programDefinition(entry.path, entry.adapterPath, entry.commandName, entry.runtimePath),
+      programDefinition: async entry => entry.path.endsWith('.app') ? applicationDefinition(entry.path, join(this.root, 'applications')) : this.registryProgram(entry.path, { commandName: entry.commandName, runtimePath: entry.runtimePath }),
       addProgram: async (podId, definition) => { await this.program({ type: 'add', podId, epoch: (await this.resources({ type: 'list', podId })).epoch }, definition) },
       assignHttp: async (podId, permission) => { await this.dispatch({ resource: { type: 'bindHttp', podId, epoch: (await this.resources({ type: 'list', podId })).epoch, permission } }) },
       assignDirectory: async (podId, path, access) => { await this.resources({ type: 'assignDirectory', podId, path, access, epoch: (await this.resources({ type: 'list', podId })).epoch }) },
@@ -952,7 +967,7 @@ export class FixtureWorker {
         const connection = await this.connections.podConnection(scope.podId)
         const authority = new AgentAuthority(connection, observe, ledger, tokens, presentation)
         const adapterPath = join(dist, 'vendor/pod-runtime-shapes.toml')
-        const adapter = loadAdapter('pod-runtime', adapterPath)
+        const adapter = loadPodAdapter('pod-runtime', adapterPath)
         const name = grantPodName(context.name)
         const argv = runtimeArgv({ podId: scope.podId, name, script: join(this.root, 'runs', scope.runId, 'run.mjs'), workspace: environment.workspace, home: environment.home, environment: visibleEnvironment(environment.environment) })
         const resolved = await resolveCommand(adapter, argv)

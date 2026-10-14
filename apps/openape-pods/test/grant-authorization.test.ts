@@ -18,7 +18,7 @@ async function fixture(initial = 'used', decision = 'approved') {
   const resolved = await resolveCommand(adapter, argv)
   const command = { cliId: 'pod-runtime', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] }
   const keys = generateKeyPairSync('ed25519')
-  const state = { checks: 0, lifetime: 60, unavailablePath: '', unavailable: 0, grantType: 'once', initial, decision, creates: 0, consumes: [] as string[], tokens: [] as string[], bodies: [] as Record<string, unknown>[], active: true, tokenError: false, subject: 'pod@example.test', progress: [] as RunApproval[], grants: new Map<string, string>(), types: new Map<string, string>(), approvals: [] as string[], reads: 0, staleAdapters: new Set<string>() }
+  const state = { checks: 0, lifetime: 60, unavailablePath: '', unavailable: 0, grantType: 'once', initial, decision, creates: 0, consumes: [] as string[], tokens: [] as string[], bodies: [] as Record<string, unknown>[], active: true, tokenError: false, subject: 'pod@example.test', progress: [] as RunApproval[], grants: new Map<string, string>(), types: new Map<string, string>(), approvals: [] as string[], reads: 0, staleAdapters: new Set<string>(), contexts: new Map<string, unknown>() }
   let origin = ''
   const server = createServer(async (request, response) => {
     response.setHeader('Content-Type', 'application/json')
@@ -33,7 +33,7 @@ async function fixture(initial = 'used', decision = 'approved') {
     if (request.url === '/api/grants' && request.method === 'POST') {
       let text = ''; for await (const chunk of request) text += chunk
       const body = JSON.parse(text); state.bodies.push(body); state.creates++
-      const next = `fresh-${state.creates}`; state.grants.set(next, state.decision); state.types.set(next, body.grant_type); reply({ id: next }); return
+      const next = `fresh-${state.creates}`; state.grants.set(next, state.decision); state.types.set(next, body.grant_type); state.contexts.set(next, body.execution_context); reply({ id: next }); return
     }
     if (request.url?.endsWith('/token')) {
       state.tokens.push(id)
@@ -44,7 +44,7 @@ async function fixture(initial = 'used', decision = 'approved') {
       reply({ authz_jwt: `${head}.${payload}.${sign(null, Buffer.from(`${head}.${payload}`), keys.privateKey).toString('base64url')}` }); return
     }
     if (request.url?.endsWith('/consume')) { state.consumes.push(id); if (state.grantType === 'once') state.grants.set(id, 'used'); reply({ status: 'valid' }); return }
-    if (request.method === 'GET' && request.url?.startsWith('/api/grants/')) { state.reads++; reply({ id, status: id === 'old' ? state.initial : state.grants.get(id), request: { requester: 'pod@example.test', audience: 'shapes', target_host: `pods:${podId}`, grant_type: state.types.get(id) ?? 'once', authorization_details: [resolved.detail] } }); return }
+    if (request.method === 'GET' && request.url?.startsWith('/api/grants/')) { state.reads++; reply({ id, status: id === 'old' ? state.initial : state.grants.get(id), request: { requester: 'pod@example.test', audience: 'shapes', target_host: `pods:${podId}`, grant_type: state.types.get(id) ?? 'once', authorization_details: [resolved.detail], ...(state.contexts.has(id) ? { execution_context: state.contexts.get(id) } : {}) } }); return }
     response.statusCode = 404; reply({})
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -355,4 +355,19 @@ it('never lets a second application run on the token of another application with
   await run.authorize({ command: f.command, grantId: 'old' }, signal())
   await expect(run.authorize({ command: f.command, grantId: 'other-app' }, signal())).rejects.toThrow('denied')
   expect(f.state.tokens).toEqual(['old']); expect(f.state.consumes).toEqual(['old'])
+})
+
+// Issue 1473: an adapter that is not a tested registry adapter describes a command but never widens its grant.
+it('runs a command of an exact-only adapter only with a grant requested for its exact argv', async () => {
+  const f = await fixture('approved', 'approved')
+  const authority = new AgentAuthority(f.connection, async () => {}, { find: async () => 'old', adopt: async () => undefined, record: async () => {} })
+  const assignment = { command: { ...f.command, exact: true as const }, grantId: '' }
+  await authority.authorize(assignment, new AbortController().signal)
+  // The recorded grant covers the operation but was not requested for this argv, so the Pod asks for an exact grant.
+  expect(f.state.creates).toBe(1)
+  expect(f.state.bodies[0]).toMatchObject({ authorization_details: [{ ...f.resolved.detail, constraints: { exact_command: true } }], execution_context: { argv_hash: f.resolved.executionContext.argv_hash } })
+  expect(assignment.grantId).toBe('fresh-1')
+  expect(f.state.tokens).toEqual(['fresh-1'])
+  await expect(authority.authorize({ command: { ...f.command, exact: true }, grantId: 'old' }, new AbortController().signal)).rejects.toThrow('The assigned grant does not cover this command')
+  expect(f.state.approvals).toEqual([])
 })

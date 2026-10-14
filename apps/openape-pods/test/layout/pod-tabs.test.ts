@@ -151,6 +151,10 @@ describe('pod tabs with the production stylesheet', () => {
     await show(560, 800, 'dark')
     expect(pageFits()).toBe(true)
     expect(document.querySelector('.directory-select .directory-label')!.getBoundingClientRect().width).toBeGreaterThan(120)
+    // The assigned program has no registry adapter (issue 1473): its exact-approval note wraps inside the card.
+    const note = document.querySelector('.application-card .adapter-note')!
+    expect(note.textContent).toContain('exakte Freigabe')
+    expect(note.getBoundingClientRect().right).toBeLessThanOrEqual(document.querySelector('.application-card .play-button')!.getBoundingClientRect().left)
     await page.screenshot({ path: artifact('program-permissions-de-dark.png'), element: document.querySelector('.application-card')! })
     await page.screenshot({ path: artifact('external-terminal-de-dark.png'), element: document.querySelector('.program-permissions')! })
   })

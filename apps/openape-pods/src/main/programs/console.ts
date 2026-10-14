@@ -2,7 +2,7 @@ import { podDirectories } from '../../runtime/environment'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { OpenApeCliAuthorizationDetail } from '@openape/core'
 import type { ConsoleView, ProgramAssignment } from '../../contracts/programs'
-import { parseCommandLine } from '../../contracts/programs'
+import { adapterStanding, parseCommandLine } from '../../contracts/programs'
 import type { ResourceState } from '../../contracts/resources'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
 
@@ -29,5 +29,6 @@ export async function prepareConsole(root: string, podId: string, state: Resourc
     return { ...result, output: adapter.adapter.operations.map(operation => [name, ...operation.command, ...(operation.required_options ?? []).flatMap(option => [`--${option.replace(/^--/, '')}`, `<${option.replace(/^--/, '')}>`])].join(' ')).join('\n') }
   }
   const resolved = await resolveCommand(adapter, [assignment.cliId, ...argv])
-  return { ...result, command: { type: 'start', podId, applicationId: resource.id, epoch: state.epoch, argv }, needsGrant: !await covered(resolved.detail), permission: resolved.permission }
+  // An exact-only adapter needs a grant for this very argv, which recorded grants cannot show (issue 1473).
+  return { ...result, command: { type: 'start', podId, applicationId: resource.id, epoch: state.epoch, argv }, needsGrant: adapterStanding(assignment).exact || !await covered(resolved.detail), permission: resolved.permission }
 }
