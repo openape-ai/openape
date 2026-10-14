@@ -2,6 +2,7 @@ import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { createDelegation } from '@openape/grants'
 import { tryBearerAuth } from '../../utils/agent-auth'
 import { useGrantStores } from '../../utils/grant-stores'
+import { grantsDelegationProblem } from '../../utils/grants-delegation'
 import { requireAuth } from '../../utils/admin'
 import { createProblemError } from '../../utils/problem'
 
@@ -26,13 +27,19 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: 'Invalid grant_type' })
   }
 
+  const scopes = Array.isArray(body.scopes) ? body.scopes : undefined
+  const grantsProblem = await grantsDelegationProblem({ delegator, delegate: body.delegate, audience: body.audience, scopes })
+  if (grantsProblem) {
+    throw createProblemError({ status: 400, title: grantsProblem })
+  }
+
   const { grantStore } = useGrantStores()
 
   const grant = await createDelegation({
     delegator,
     delegate: body.delegate,
     audience: body.audience,
-    scopes: Array.isArray(body.scopes) ? body.scopes : undefined,
+    scopes,
     grant_type: grantType,
     duration: typeof body.duration === 'number' ? body.duration : undefined,
   }, grantStore)
