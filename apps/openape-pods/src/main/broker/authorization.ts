@@ -1,6 +1,6 @@
-import { AuthorityError, transientNetwork, transientResponse } from '../../contracts/infrastructure'
+import { AuthorityError, isTransientStatus, NonRetryableError, transientNetwork, transientResponse } from '../../contracts/infrastructure'
 import type { BrokeredGrant, OpenApeAuthZClaims, OpenApeCliAuthorizationDetail } from '@openape/core'
-import { cliAuthorizationDetailsCover, computeArgvHash, sameBrokeredGrant, verifyAuthzJWT } from '@openape/grants'
+import { cliAuthorizationDetailsCover, computeArgvHash, coverableCliDetails, sameBrokeredGrant, verifyAuthzJWT } from '@openape/grants'
 import type { VerifyAuthzOptions } from '@openape/grants'
 import type { RunApproval } from '../../contracts/activity'
 import { grantSummary } from '../../contracts/grant-summary'
@@ -26,7 +26,7 @@ export interface GrantLedgerPort {
 }
 /** The CLI details a grant authorizes. */
 export function grantCoverage(grant: Pick<Grant, 'request'>): OpenApeCliAuthorizationDetail[] {
-  return (grant.request.authorization_details ?? []).filter((detail): detail is OpenApeCliAuthorizationDetail => detail?.type === 'openape_cli')
+  return coverableCliDetails(grant.request.authorization_details)
 }
 /** A grant this Pod identity requested for its execution target, through the same broker connection. */
 export function ownGrant(grant: Grant, id: string, connection: AgentConnection): boolean {
@@ -148,6 +148,40 @@ function grantTypeOf(claims: OpenApeAuthZClaims): string {
   return claims.grant_type === 'once' || claims.approval === 'once' ? 'once' : String(claims.grant_type)
 }
 
+/** Reads at most 128 KiB of an identity response. */
+async function boundedText(body: ReadableStream<Uint8Array>): Promise<string> {
+  const reader = body.getReader(); const chunks: Uint8Array[] = []; let size = 0
+  try {
+    for (;;) {
+      const next = await reader.read(); if (next.done) break
+      size += next.value.byteLength
+      if (size > 128 * 1024) throw new Error('Oversized identity response')
+      chunks.push(next.value)
+    }
+  }
+  finally { await reader.cancel(); reader.releaseLock() }
+  return Buffer.concat(chunks).toString('utf8')
+}
+
+/**
+ * The HTTP status and the problem type, title and request id of an identity answer (issue 1476), so a failed call
+ * names what the service said. No other field is read: an answer never carries credentials or command arguments here.
+ */
+export function serviceAnswer(status: number, text: string): string {
+  let problem: Record<string, unknown> = {}
+  try { const parsed: unknown = JSON.parse(text); if (parsed && typeof parsed === 'object') problem = parsed as Record<string, unknown> }
+  catch { problem = {} }
+  const data = (problem.data && typeof problem.data === 'object' ? problem.data : {}) as Record<string, unknown>
+  const field = (name: string): string | undefined => {
+    const value = data[name] ?? problem[name]
+    return typeof value === 'string' && value ? value.replace(/\p{Cc}/gu, ' ').slice(0, 120) : undefined
+  }
+  const type = field('type')?.replace(/^https:\/\/openape\.org\/errors\//, '')
+  const title = field('title') ?? field('statusMessage')
+  const requestId = field('request_id')
+  return `HTTP ${status}${type && type !== 'about:blank' ? ` ${type}` : ''}${title ? `: ${title}` : ''}${requestId ? `; request ${requestId}` : ''}`
+}
+
 /** The IdP's answer to a program call (issue 1473, revision 4). */
 type AuthorizeReply = { state: 'approved', grantId: string, token: string } | { state: 'pending', grantId: string }
 interface IdentityReply { status: number, text: string }
@@ -171,20 +205,13 @@ export class AgentAuthority {
     let response: Response
     try { response = await fetch(new URL(path, this.connection.issuer), { method, redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }) }
     catch (error) { if (safe) transientNetwork(error, 'authorization', signal); throw error }
-    try { transientResponse(response, 'authorization') }
-    catch (error) { await response.body?.cancel(); throw error }
-    if (!response.body) throw new Error('Identity service returned no response')
-    const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let size = 0
-    try {
-      for (;;) {
-        const next = await reader.read(); if (next.done) break
-        size += next.value.byteLength
-        if (size > 128 * 1024) throw new Error('Oversized identity response')
-        chunks.push(next.value)
-      }
+    if (isTransientStatus(response.status)) {
+      // The answer only names the failure in the retry notice; without a readable one the status still does.
+      const text = response.body ? await boundedText(response.body).catch(() => '') : ''
+      transientResponse(response, 'authorization', serviceAnswer(response.status, text))
     }
-    finally { await reader.cancel(); reader.releaseLock() }
-    return { status: response.status, text: Buffer.concat(chunks).toString('utf8') }
+    if (!response.body) throw new Error('Identity service returned no response')
+    return { status: response.status, text: await boundedText(response.body) }
   }
 
   private refusal(reply: IdentityReply): Error {
@@ -194,7 +221,9 @@ export class AgentAuthority {
     if (category === 'grant_not_approved') return new AuthorityError('The grant is no longer approved; review its current status before retrying')
     if (reply.status === 401) return new AuthorityError('OpenApe authentication expired; reconnect the Pod owner in App settings')
     if (reply.status === 403) return new AuthorityError('OpenApe rejected this Pod identity; check its assigned owner and permissions')
-    return new Error(`The permission service rejected the request (${reply.status}); inspect the grant before retrying`)
+    const message = `The permission service rejected the request (${serviceAnswer(reply.status, reply.text)}); inspect the grant before retrying`
+    // The IdP refuses a command too large for a command token definitely: the same call fails again.
+    return reply.status === 413 ? new NonRetryableError(message) : new Error(message)
   }
 
   /** With `missing`, a grant the IdP does not show this identity (403, 404) reads as null instead of failing the call. */

@@ -252,7 +252,7 @@ it('automatically resumes runtime authorization after grant creation recovers', 
   const controller = new AbortController()
   const work = retryInfrastructure(() => f.authority.authorize({ grantId: '', permission: f.permission }, controller.signal), controller.signal, notice)
   await expect.poll(() => f.state.progress[0]?.state, { timeout: 4000 }).toBe('pending')
-  expect(notice).toHaveBeenCalledWith({ attempt: 1, nextAt: expect.any(Number), error: 'Permission service temporarily unavailable' })
+  expect(notice).toHaveBeenCalledWith({ attempt: 1, nextAt: expect.any(Number), error: expect.stringMatching(/^Permission service temporarily unavailable \(HTTP 5\d\d/) })
   expect(f.state.consumes).toEqual([])
   f.state.grants.set('fresh-1', 'approved')
   await work
