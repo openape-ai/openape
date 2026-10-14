@@ -1,0 +1,620 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "project": "OpenApe Pods / IdP / DDISA / Shapes",
+  "owner": "Patrick Hofmann",
+  "date": "2026-10-14",
+  "status": "active",
+  "revision": 3,
+  "title": "Generic grant cards and self-improving Shapes",
+  "goal": "Every grant request reads well at the IdP without special code; Shapes adapters are accepted centrally; each user can let a personal Pod shorten their own approvals.",
+  "summary": "The IdP renders one generic grant card from registry adapters (meaning), the requester's new summary fields (claims) and its own facts; the Pod card becomes registry data. Summaries move to title, description, origin and link with a full migration. The shapes-registry, accepted by the owner, is the only adapter source; unknown commands need exact approvals. A personal Pod, running with a delegation of the user, proposes broader standing grants and drafts registry issues or pull requests without user data.",
+  "problem": {
+    "statement": "Approval wording is composed in the Pods desktop and the IdP has hard-coded Pod cards, while Shapes adapters are a curated list that is always incomplete and ages with every CLI release.",
+    "impact": "A headline needed a signed desktop build; most grants lack the meaning that only the Pod card shows; the owner approves the same commands again and again, and adapters that read a command differently than the CLI caused four security fixes on October 13.",
+    "approach": "One generic card from three labeled sources; the shapes-registry as the single, owner-accepted adapter source bound to tested CLI versions; a personal Pod with a scoped user delegation for proposals.",
+    "outcome": "Wording changes by registry merge, Pod script or IdP deploy; missing knowledge makes a card poorer, never wrong; fewer repeated approvals without anyone but the user deciding them."
+  },
+  "context": "Owner decisions October 13–14, 2026: the IdP supports fields such as title, description, command and origin and decides the presentation; the Pods desktop only creates the grant and adds the Pod name. The generic card model was accepted. Revision 3 follows the owner's review: no adapter trust rule (too specific), new summary fields without legacy fields (migration), shape rules accepted centrally through the registry repository, the learning loop is a personal shortcut each user runs for themselves (desktop-integrated or a Pod running with the user's DDISA identity), no evidence leaves the user, and the registry stays current through issues and pull requests.",
+  "scope": [
+    "Protocol: summary becomes {title, description, origin, link}; text is removed with a migration of stored grants and all senders (Pods, apes).",
+    "IdP: one generic grant card (who asks, what happens, what it means, binding facts, details); PodRunGrant special case removed.",
+    "Shapes: the shapes-registry is the only adapter source of IdP and Pods; operations carry presentation data and tested CLI versions; registry CI with golden, hostile-option and real-CLI differential checks.",
+    "Pods: generic pass-through of script-provided title, description and link; origin = Pod name; no composed strings; one signed desktop build.",
+    "Personal learning loop: a DDISA delegation scope that lets a user's Pod read the user's own grants and request grants for the user's agents, never approve.",
+    "Personal grant upgrade Pod and shape maintenance through registry issues and pull requests without user data."
+  ],
+  "nonGoals": [
+    "An LLM never approves, merges or widens anything; a Pod never approves grants, also not with a delegation (DDISA requester ≠ approver).",
+    "No user data or evidence leaves the user; no central learning service at the IdP.",
+    "Auto-update of the internal desktop build (separate decision)."
+  ],
+  "decisions": [
+    {
+      "title": "Generic card, three sources",
+      "description": "The card answers who asks, what happens, what it means (allows / does not allow), binding facts and details. Sources: registry adapter presentation data (meaning), requester summary (claim) and IdP facts (agent and owner from registration, validity, batch, grant type). Accepted by the owner on October 14.",
+      "status": "accepted"
+    },
+    {
+      "title": "Registry is the only adapter source",
+      "description": "Replaces the trust rule of revision 2. Adapters exist only in the shapes-registry; the owner accepts rules by merging there. IdP and Pods load registry adapters by digest. A command without a registry adapter is shown and approved as its exact command. Local adapter files (for example Pods' git adapter) move into the registry.",
+      "status": "accepted"
+    },
+    {
+      "title": "Summary fields with migration",
+      "description": "summary = {title, description?, origin, link?}; title one line ≤120, description ≤2000, link http(s); no Unicode format or control characters. summary.text is removed: stored grants are migrated (first line → title, rest → description) and Pods and apes send only the new fields; IdP, Pods and apes ship together. The PR 399 script title becomes summary.title.",
+      "status": "accepted"
+    },
+    {
+      "title": "Shapes principles",
+      "description": "Shapes is a dictionary, not an allow-list: unknown means an exact approval; adapters declare tested CLI versions and a mismatch falls back to exact approvals; prefer HTTP grants where a stable API exists; sandbox, scoped credentials and server policies remain the hard boundary. Agreed by the owner on October 14.",
+      "status": "accepted"
+    },
+    {
+      "title": "Personal learning loop",
+      "description": "Each user runs it for themselves as a shortcut. Proposed: a Pod running with a DDISA delegation of the user limited to reading the user's own grants and requesting grants for the user's agents; it can never approve, so the user still decides every standing grant at the IdP. Alternative: a generic desktop function without a Pod. To decide.",
+      "status": "accepted"
+    },
+    {
+      "title": "Registry upkeep without evidence",
+      "description": "No evidence leaves the user. The shape maintenance step drafts registry issues or pull requests that contain only the generalized adapter change and synthetic test commands; the user reviews them before anything is pushed, and registry CI plus the owner's merge decide.",
+      "status": "accepted"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "m1-protocol",
+      "title": "Protocol fields and migration",
+      "goal": "DDISA summaries use only title, description, origin and link.",
+      "status": "planned",
+      "steps": [
+        "Replace summary {text, link} in grants.md §3.4, grant-request.json and @openape/core; define the presentation block of a Shapes operation in the registry schema.",
+        "Migrate stored IdP grants (first line → title, rest → description) and switch Pods and apes to the new fields in one coordinated release."
+      ],
+      "acceptance": [
+        "No stored grant keeps summary.text; a request with text is refused; old grants render with their migrated title."
+      ],
+      "rollback": "Restore the IdP backup taken before the migration and the previous releases."
+    },
+    {
+      "id": "m2-registry",
+      "title": "Registry as the single adapter source",
+      "goal": "IdP and Pods use only owner-accepted registry adapters.",
+      "status": "planned",
+      "steps": [
+        "Move the Pods git and pod-runtime adapters into shapes-registry via pull request; add tested versions and presentation data.",
+        "Registry CI: golden, hostile-option and real-CLI differential checks; IdP and Pods load the registry by digest; a version mismatch falls back to exact approvals."
+      ],
+      "acceptance": [
+        "A deliberately wrong adapter fails registry CI; Pods refuses a non-registry adapter path; a version mismatch is visible and asks for the exact command."
+      ],
+      "rollback": "Revert the registry pull requests and the loader change."
+    },
+    {
+      "id": "m3-card",
+      "title": "Generic grant card at the IdP",
+      "goal": "One card for every grant; the Pod card becomes registry data.",
+      "status": "planned",
+      "steps": [
+        "Render the five parts from registry presentation data, summary and IdP facts with clear labels; the batch view shows the card title line.",
+        "Delete PodRunGrant.vue and pod-run-grant.ts; show the agent's registered name and owner."
+      ],
+      "acceptance": [
+        "Vitest browser screenshots: the Pod run card looks as today without special code; git push, az and mail approvals show meaning and facts; commands without a registry adapter show the exact command and claims only."
+      ],
+      "rollback": "Redeploy the previous IdP image."
+    },
+    {
+      "id": "m4-pods",
+      "title": "Pods as generic pass-through",
+      "goal": "Scripts provide title, description and link; the desktop adds the Pod name and sends fields only.",
+      "status": "planned",
+      "steps": [
+        "approvals.request and grant requests accept {title, description, link}; origin is added by the desktop; composed display strings are removed; local and relay inbox cards render the same fields.",
+        "One signed desktop build shipped together with M1."
+      ],
+      "acceptance": [
+        "The rebase Pod shows its headline at the IdP, and a wording change needs only a script edit."
+      ],
+      "rollback": "Install the previous signed desktop from the rollback folder."
+    },
+    {
+      "id": "m5-delegation",
+      "title": "Delegation scope for personal Pods",
+      "goal": "A user can let one of their Pods read their grants and request grants for their agents, never approve.",
+      "status": "planned",
+      "steps": [
+        "Define delegation scopes for reading one's own grants and requesting grants for one's own agents at the IdP; approval endpoints refuse delegated tokens.",
+        "Pods runs a Pod with that delegation when the user grants it."
+      ],
+      "acceptance": [
+        "A delegated Pod can list the user's grants and file a request; every attempt to approve, deny or revoke is refused."
+      ],
+      "rollback": "Revoke the delegation; remove the scopes."
+    },
+    {
+      "id": "m6-upgrade-pod",
+      "title": "Personal grant upgrade Pod",
+      "goal": "Fewer repeated approvals through proposed standing grants.",
+      "status": "planned",
+      "steps": [
+        "From registry shapes and the user's previous approvals the Pod proposes a more general standing grant, or explicitly nothing, as a grant request the user decides at the IdP.",
+        "The request shows the commands it would have covered and what else it allows."
+      ],
+      "acceptance": [
+        "For the IURIO rebase Pod's read commands a proposal appears; push commands get no standing proposal."
+      ],
+      "rollback": "Pause the Pod; accepted grants remain revocable at the IdP."
+    },
+    {
+      "id": "m7-registry-upkeep",
+      "title": "Registry upkeep through issues and pull requests",
+      "goal": "Adapters follow new CLI versions and real use without user data leaving the user.",
+      "status": "planned",
+      "steps": [
+        "The personal Pod notices commands that fit no registry shape (version, definition, operating system) and drafts an issue or pull request with only the generalized adapter change and synthetic tests.",
+        "The user reviews the draft before its push approval; registry CI and the owner's merge decide."
+      ],
+      "acceptance": [
+        "One real pull request passes registry CI and contains no path, branch name or other user data."
+      ],
+      "rollback": "Close the pull request; the registry is unchanged."
+    }
+  ],
+  "risks": [
+    {
+      "title": "Prompt injection through command text.",
+      "mitigation": "LLM output is only a draft; the user decides grant requests at the IdP and the owner merges registry changes."
+    },
+    {
+      "title": "A delegated Pod misuses the user's identity.",
+      "mitigation": "The delegation covers only reading grants and filing requests; approval endpoints refuse delegated tokens; the user can revoke it any time."
+    },
+    {
+      "title": "Migration breaks older clients.",
+      "mitigation": "IdP, Pods and apes ship in one coordinated release with an IdP backup; old stored grants are migrated, not dropped."
+    },
+    {
+      "title": "The registry falls behind.",
+      "mitigation": "Unknown or mismatched commands still work through exact approvals; personal Pods draft issues and pull requests."
+    }
+  ],
+  "changelog": [
+    {
+      "date": "2026-10-13",
+      "text": "Revision 1: structured summaries rendered by the IdP."
+    },
+    {
+      "date": "2026-10-14",
+      "text": "Revision 2: generic grant card from three sources, Shapes principles, and the learning loop with grant upgrade and shape maintenance Pods."
+    },
+    {
+      "date": "2026-10-14",
+      "text": "Revision 3 after the owner's review: registry as the single adapter source instead of a trust rule, summary migration without legacy fields, personal learning loop with a user delegation instead of an IdP service, no evidence leaves the user, widening/narrowing distinction removed."
+    }
+  ],
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "Generic grant cards and self-improving Shapes",
+        "text": "Allgemeine Grant-Karten und sich selbst verbessernde Shapes"
+      },
+      {
+        "path": "goal",
+        "source": "Every grant request reads well at the IdP without special code; Shapes adapters are accepted centrally; each user can let a personal Pod shorten their own approvals.",
+        "text": "Jede Grant-Anfrage ist am IdP ohne Sondercode gut lesbar; Shapes-Adapter werden zentral angenommen; jeder User kann sich mit einem eigenen Pod seine Freigaben verkürzen."
+      },
+      {
+        "path": "summary",
+        "source": "The IdP renders one generic grant card from registry adapters (meaning), the requester's new summary fields (claims) and its own facts; the Pod card becomes registry data. Summaries move to title, description, origin and link with a full migration. The shapes-registry, accepted by the owner, is the only adapter source; unknown commands need exact approvals. A personal Pod, running with a delegation of the user, proposes broader standing grants and drafts registry issues or pull requests without user data.",
+        "text": "Der IdP stellt eine allgemeine Grant-Karte dar, aus Registry-Adaptern (Bedeutung), den neuen Angabefeldern des Antragstellers und eigenem Wissen; die Pod-Karte wird zu Registry-Daten. Angaben wechseln mit vollständiger Migration auf Titel, Beschreibung, Herkunft und Link. Die vom Owner angenommene shapes-registry ist die einzige Adapter-Quelle; unbekannte Befehle brauchen exakte Freigaben. Ein persönlicher Pod mit einer Delegation des Users schlägt allgemeinere Standing Grants vor und entwirft Registry-Issues oder Pull Requests ohne Nutzerdaten."
+      },
+      {
+        "path": "problem.approach",
+        "source": "One generic card from three labeled sources; the shapes-registry as the single, owner-accepted adapter source bound to tested CLI versions; a personal Pod with a scoped user delegation for proposals.",
+        "text": "Eine allgemeine Karte aus drei gekennzeichneten Quellen; die shapes-registry als einzige, vom Owner angenommene Adapter-Quelle, gebunden an geprüfte CLI-Versionen; ein persönlicher Pod mit eingeschränkter User-Delegation für Vorschläge."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "Wording changes by registry merge, Pod script or IdP deploy; missing knowledge makes a card poorer, never wrong; fewer repeated approvals without anyone but the user deciding them.",
+        "text": "Formulierungen ändern sich per Registry-Merge, Pod-Skript oder IdP-Deploy; fehlendes Wissen macht eine Karte ärmer, nie falsch; weniger wiederholte Freigaben, über die nur der User selbst entscheidet."
+      },
+      {
+        "path": "context",
+        "source": "Owner decisions October 13–14, 2026: the IdP supports fields such as title, description, command and origin and decides the presentation; the Pods desktop only creates the grant and adds the Pod name. The generic card model was accepted. Revision 3 follows the owner's review: no adapter trust rule (too specific), new summary fields without legacy fields (migration), shape rules accepted centrally through the registry repository, the learning loop is a personal shortcut each user runs for themselves (desktop-integrated or a Pod running with the user's DDISA identity), no evidence leaves the user, and the registry stays current through issues and pull requests.",
+        "text": "Owner-Entscheidungen vom 13.–14. Oktober 2026: Der IdP unterstützt Felder wie Titel, Beschreibung, Befehl und Herkunft und entscheidet die Darstellung; der Pods-Desktop erstellt nur den Grant und ergänzt den Pod-Namen. Das allgemeine Karten-Modell wurde angenommen. Revision 3 folgt dem Review des Owners: keine Vertrauensregel für Adapter (zu speziell), neue Angabefelder ohne Altfelder (Migration), Shape-Regeln werden zentral über das Registry-Repository angenommen, die Lernschleife ist eine persönliche Abkürzung, die jeder User für sich betreibt (im Desktop integriert oder als Pod mit der DDISA-Identität des Users), keine Belege verlassen den User, und die Registry bleibt über Issues und Pull Requests aktuell."
+      },
+      {
+        "path": "scope.0",
+        "source": "Protocol: summary becomes {title, description, origin, link}; text is removed with a migration of stored grants and all senders (Pods, apes).",
+        "text": "Protokoll: summary wird {title, description, origin, link}; text entfällt, mit Migration gespeicherter Grants und aller Sender (Pods, apes)."
+      },
+      {
+        "path": "scope.1",
+        "source": "IdP: one generic grant card (who asks, what happens, what it means, binding facts, details); PodRunGrant special case removed.",
+        "text": "IdP: eine allgemeine Grant-Karte (wer fragt, was passiert, was es bedeutet, bindende Fakten, Details); Sonderfall PodRunGrant entfernt."
+      },
+      {
+        "path": "scope.2",
+        "source": "Shapes: the shapes-registry is the only adapter source of IdP and Pods; operations carry presentation data and tested CLI versions; registry CI with golden, hostile-option and real-CLI differential checks.",
+        "text": "Shapes: Die shapes-registry ist die einzige Adapter-Quelle von IdP und Pods; Operationen tragen Darstellungsdaten und geprüfte CLI-Versionen; Registry-CI mit Golden-, Gefahrenoptions- und Echt-CLI-Differenztests."
+      },
+      {
+        "path": "scope.3",
+        "source": "Pods: generic pass-through of script-provided title, description and link; origin = Pod name; no composed strings; one signed desktop build.",
+        "text": "Pods: allgemeines Durchreichen von Titel, Beschreibung und Link aus dem Skript; Herkunft = Pod-Name; keine zusammengesetzten Texte; ein signierter Desktop-Build."
+      },
+      {
+        "path": "scope.4",
+        "source": "Personal learning loop: a DDISA delegation scope that lets a user's Pod read the user's own grants and request grants for the user's agents, never approve.",
+        "text": "Persönliche Lernschleife: ein DDISA-Delegationsscope, mit dem der Pod eines Users dessen eigene Grants lesen und Grants für dessen Agents anfragen darf, nie freigeben."
+      },
+      {
+        "path": "scope.5",
+        "source": "Personal grant upgrade Pod and shape maintenance through registry issues and pull requests without user data.",
+        "text": "Persönlicher Grant-Upgrade-Pod und Shape-Pflege über Registry-Issues und Pull Requests ohne Nutzerdaten."
+      },
+      {
+        "path": "nonGoals.0",
+        "source": "An LLM never approves, merges or widens anything; a Pod never approves grants, also not with a delegation (DDISA requester ≠ approver).",
+        "text": "Ein LLM gibt nie frei, merged nie und erweitert nichts; ein Pod gibt nie Grants frei, auch nicht mit Delegation (DDISA: Antragsteller ≠ Freigebender)."
+      },
+      {
+        "path": "nonGoals.1",
+        "source": "No user data or evidence leaves the user; no central learning service at the IdP.",
+        "text": "Keine Nutzerdaten oder Belege verlassen den User; kein zentraler Lerndienst am IdP."
+      },
+      {
+        "path": "nonGoals.2",
+        "source": "Auto-update of the internal desktop build (separate decision).",
+        "text": "Auto-Update des internen Desktop-Builds (eigene Entscheidung)."
+      },
+      {
+        "path": "decisions.0.title",
+        "source": "Generic card, three sources",
+        "text": "Allgemeine Karte, drei Quellen"
+      },
+      {
+        "path": "decisions.0.description",
+        "source": "The card answers who asks, what happens, what it means (allows / does not allow), binding facts and details. Sources: registry adapter presentation data (meaning), requester summary (claim) and IdP facts (agent and owner from registration, validity, batch, grant type). Accepted by the owner on October 14.",
+        "text": "Die Karte beantwortet: wer fragt, was passiert, was es bedeutet (erlaubt / erlaubt nicht), bindende Fakten und Details. Quellen: Darstellungsdaten der Registry-Adapter (Bedeutung), Angabe des Antragstellers und Wissen des IdP (Agent und Owner aus der Registrierung, Gültigkeit, Batch, Grant-Typ). Vom Owner am 14. Oktober angenommen."
+      },
+      {
+        "path": "decisions.1.title",
+        "source": "Registry is the only adapter source",
+        "text": "Die Registry ist die einzige Adapter-Quelle"
+      },
+      {
+        "path": "decisions.1.description",
+        "source": "Replaces the trust rule of revision 2. Adapters exist only in the shapes-registry; the owner accepts rules by merging there. IdP and Pods load registry adapters by digest. A command without a registry adapter is shown and approved as its exact command. Local adapter files (for example Pods' git adapter) move into the registry.",
+        "text": "Ersetzt die Vertrauensregel aus Revision 2. Adapter gibt es nur in der shapes-registry; der Owner nimmt Regeln durch Merge dort an. IdP und Pods laden Registry-Adapter über den Digest. Ein Befehl ohne Registry-Adapter wird als exakter Befehl gezeigt und freigegeben. Lokale Adapter-Dateien (zum Beispiel der git-Adapter von Pods) wandern in die Registry."
+      },
+      {
+        "path": "decisions.2.title",
+        "source": "Summary fields with migration",
+        "text": "Angabefelder mit Migration"
+      },
+      {
+        "path": "decisions.2.description",
+        "source": "summary = {title, description?, origin, link?}; title one line ≤120, description ≤2000, link http(s); no Unicode format or control characters. summary.text is removed: stored grants are migrated (first line → title, rest → description) and Pods and apes send only the new fields; IdP, Pods and apes ship together. The PR 399 script title becomes summary.title.",
+        "text": "summary = {title, description?, origin, link?}; Titel einzeilig ≤120, Beschreibung ≤2000, Link http(s); keine Unicode-Format- oder Steuerzeichen. summary.text entfällt: Gespeicherte Grants werden migriert (erste Zeile → Titel, Rest → Beschreibung), Pods und apes senden nur noch die neuen Felder; IdP, Pods und apes gehen gemeinsam live. Der Skript-Titel aus PR 399 wird summary.title."
+      },
+      {
+        "path": "decisions.3.title",
+        "source": "Shapes principles",
+        "text": "Shapes-Grundsätze"
+      },
+      {
+        "path": "decisions.3.description",
+        "source": "Shapes is a dictionary, not an allow-list: unknown means an exact approval; adapters declare tested CLI versions and a mismatch falls back to exact approvals; prefer HTTP grants where a stable API exists; sandbox, scoped credentials and server policies remain the hard boundary. Agreed by the owner on October 14.",
+        "text": "Shapes ist ein Wörterbuch, keine Positivliste: Unbekannt heißt exakte Freigabe; Adapter nennen geprüfte CLI-Versionen, bei Abweichung gilt nur exakte Freigabe; HTTP-Grants bevorzugen, wo es eine stabile API gibt; Sandbox, eng gefasste Zugangsdaten und Server-Regeln bleiben die harte Grenze. Vom Owner am 14. Oktober zugestimmt."
+      },
+      {
+        "path": "decisions.4.title",
+        "source": "Personal learning loop",
+        "text": "Persönliche Lernschleife"
+      },
+      {
+        "path": "decisions.4.description",
+        "source": "Each user runs it for themselves as a shortcut. Proposed: a Pod running with a DDISA delegation of the user limited to reading the user's own grants and requesting grants for the user's agents; it can never approve, so the user still decides every standing grant at the IdP. Alternative: a generic desktop function without a Pod. To decide.",
+        "text": "Jeder User betreibt sie für sich als Abkürzung. Vorschlag: ein Pod mit einer DDISA-Delegation des Users, beschränkt auf das Lesen der eigenen Grants und das Anfragen von Grants für die eigenen Agents; er kann nie freigeben, der User entscheidet also jeden Standing Grant am IdP. Alternative: eine allgemeine Desktop-Funktion ohne Pod. Zu entscheiden."
+      },
+      {
+        "path": "decisions.5.title",
+        "source": "Registry upkeep without evidence",
+        "text": "Registry-Pflege ohne Belege"
+      },
+      {
+        "path": "decisions.5.description",
+        "source": "No evidence leaves the user. The shape maintenance step drafts registry issues or pull requests that contain only the generalized adapter change and synthetic test commands; the user reviews them before anything is pushed, and registry CI plus the owner's merge decide.",
+        "text": "Keine Belege verlassen den User. Die Shape-Pflege entwirft Registry-Issues oder Pull Requests, die nur die verallgemeinerte Adapter-Änderung und synthetische Testbefehle enthalten; der User prüft sie, bevor etwas gepusht wird, und Registry-CI plus Merge des Owners entscheiden."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Protocol fields and migration",
+        "text": "Protokollfelder und Migration"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "DDISA summaries use only title, description, origin and link.",
+        "text": "DDISA-Angaben nutzen nur noch Titel, Beschreibung, Herkunft und Link."
+      },
+      {
+        "path": "milestones.0.steps.0",
+        "source": "Replace summary {text, link} in grants.md §3.4, grant-request.json and @openape/core; define the presentation block of a Shapes operation in the registry schema.",
+        "text": "summary {text, link} in grants.md §3.4, grant-request.json und @openape/core ersetzen; den Darstellungsblock einer Shapes-Operation im Registry-Schema definieren."
+      },
+      {
+        "path": "milestones.0.steps.1",
+        "source": "Migrate stored IdP grants (first line → title, rest → description) and switch Pods and apes to the new fields in one coordinated release.",
+        "text": "Gespeicherte IdP-Grants migrieren (erste Zeile → Titel, Rest → Beschreibung) und Pods und apes in einem abgestimmten Release auf die neuen Felder umstellen."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "No stored grant keeps summary.text; a request with text is refused; old grants render with their migrated title.",
+        "text": "Kein gespeicherter Grant behält summary.text; eine Anfrage mit text wird abgelehnt; alte Grants erscheinen mit migriertem Titel."
+      },
+      {
+        "path": "milestones.0.rollback",
+        "source": "Restore the IdP backup taken before the migration and the previous releases.",
+        "text": "Das vor der Migration erstellte IdP-Backup und die vorherigen Releases wiederherstellen."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "Registry as the single adapter source",
+        "text": "Registry als einzige Adapter-Quelle"
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "IdP and Pods use only owner-accepted registry adapters.",
+        "text": "IdP und Pods nutzen nur vom Owner angenommene Registry-Adapter."
+      },
+      {
+        "path": "milestones.1.steps.0",
+        "source": "Move the Pods git and pod-runtime adapters into shapes-registry via pull request; add tested versions and presentation data.",
+        "text": "Die git- und pod-runtime-Adapter von Pods per Pull Request in die shapes-registry übernehmen; geprüfte Versionen und Darstellungsdaten ergänzen."
+      },
+      {
+        "path": "milestones.1.steps.1",
+        "source": "Registry CI: golden, hostile-option and real-CLI differential checks; IdP and Pods load the registry by digest; a version mismatch falls back to exact approvals.",
+        "text": "Registry-CI: Golden-, Gefahrenoptions- und Echt-CLI-Differenztests; IdP und Pods laden die Registry über den Digest; eine Versionsabweichung fällt auf exakte Freigaben zurück."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "A deliberately wrong adapter fails registry CI; Pods refuses a non-registry adapter path; a version mismatch is visible and asks for the exact command.",
+        "text": "Ein absichtlich falscher Adapter scheitert an der Registry-CI; Pods lehnt einen Adapter-Pfad außerhalb der Registry ab; eine Versionsabweichung ist sichtbar und fragt den exakten Befehl an."
+      },
+      {
+        "path": "milestones.1.rollback",
+        "source": "Revert the registry pull requests and the loader change.",
+        "text": "Registry-Pull-Requests und Loader-Änderung zurücknehmen."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "Generic grant card at the IdP",
+        "text": "Allgemeine Grant-Karte am IdP"
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "One card for every grant; the Pod card becomes registry data.",
+        "text": "Eine Karte für jeden Grant; die Pod-Karte wird zu Registry-Daten."
+      },
+      {
+        "path": "milestones.2.steps.0",
+        "source": "Render the five parts from registry presentation data, summary and IdP facts with clear labels; the batch view shows the card title line.",
+        "text": "Die fünf Teile aus Registry-Darstellungsdaten, Angabe und IdP-Wissen mit klarer Kennzeichnung darstellen; die Batch-Ansicht zeigt die Titelzeile der Karte."
+      },
+      {
+        "path": "milestones.2.steps.1",
+        "source": "Delete PodRunGrant.vue and pod-run-grant.ts; show the agent's registered name and owner.",
+        "text": "PodRunGrant.vue und pod-run-grant.ts löschen; registrierten Namen und Owner des Agents zeigen."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "Vitest browser screenshots: the Pod run card looks as today without special code; git push, az and mail approvals show meaning and facts; commands without a registry adapter show the exact command and claims only.",
+        "text": "Vitest-Browser-Screenshots: Die Pod-Lauf-Karte sieht ohne Sondercode aus wie heute; git push, az und Mail-Freigaben zeigen Bedeutung und Fakten; Befehle ohne Registry-Adapter zeigen nur exakten Befehl und Angaben."
+      },
+      {
+        "path": "milestones.2.rollback",
+        "source": "Redeploy the previous IdP image.",
+        "text": "Vorheriges IdP-Image erneut deployen."
+      },
+      {
+        "path": "milestones.3.title",
+        "source": "Pods as generic pass-through",
+        "text": "Pods als allgemeiner Durchreicher"
+      },
+      {
+        "path": "milestones.3.goal",
+        "source": "Scripts provide title, description and link; the desktop adds the Pod name and sends fields only.",
+        "text": "Skripte liefern Titel, Beschreibung und Link; der Desktop ergänzt den Pod-Namen und sendet nur Felder."
+      },
+      {
+        "path": "milestones.3.steps.0",
+        "source": "approvals.request and grant requests accept {title, description, link}; origin is added by the desktop; composed display strings are removed; local and relay inbox cards render the same fields.",
+        "text": "approvals.request und Grant-Anfragen akzeptieren {title, description, link}; die Herkunft ergänzt der Desktop; zusammengesetzte Anzeigetexte entfallen; lokale und Relay-Inbox-Karten zeigen dieselben Felder."
+      },
+      {
+        "path": "milestones.3.steps.1",
+        "source": "One signed desktop build shipped together with M1.",
+        "text": "Ein signierter Desktop-Build, gemeinsam mit M1 ausgeliefert."
+      },
+      {
+        "path": "milestones.3.acceptance.0",
+        "source": "The rebase Pod shows its headline at the IdP, and a wording change needs only a script edit.",
+        "text": "Der Rebase-Pod zeigt seine Überschrift am IdP, und eine Wortänderung braucht nur eine Skriptänderung."
+      },
+      {
+        "path": "milestones.3.rollback",
+        "source": "Install the previous signed desktop from the rollback folder.",
+        "text": "Vorherigen signierten Desktop aus dem Rollback-Ordner installieren."
+      },
+      {
+        "path": "milestones.4.title",
+        "source": "Delegation scope for personal Pods",
+        "text": "Delegationsscope für persönliche Pods"
+      },
+      {
+        "path": "milestones.4.goal",
+        "source": "A user can let one of their Pods read their grants and request grants for their agents, never approve.",
+        "text": "Ein User kann einem seiner Pods erlauben, seine Grants zu lesen und Grants für seine Agents anzufragen, nie freizugeben."
+      },
+      {
+        "path": "milestones.4.steps.0",
+        "source": "Define delegation scopes for reading one's own grants and requesting grants for one's own agents at the IdP; approval endpoints refuse delegated tokens.",
+        "text": "Delegationsscopes am IdP für das Lesen eigener Grants und das Anfragen von Grants für eigene Agents definieren; Freigabe-Endpunkte lehnen delegierte Tokens ab."
+      },
+      {
+        "path": "milestones.4.steps.1",
+        "source": "Pods runs a Pod with that delegation when the user grants it.",
+        "text": "Pods betreibt einen Pod mit dieser Delegation, wenn der User sie erteilt."
+      },
+      {
+        "path": "milestones.4.acceptance.0",
+        "source": "A delegated Pod can list the user's grants and file a request; every attempt to approve, deny or revoke is refused.",
+        "text": "Ein delegierter Pod kann die Grants des Users auflisten und eine Anfrage stellen; jeder Versuch, freizugeben, abzulehnen oder zu widerrufen, wird abgelehnt."
+      },
+      {
+        "path": "milestones.4.rollback",
+        "source": "Revoke the delegation; remove the scopes.",
+        "text": "Delegation widerrufen; Scopes entfernen."
+      },
+      {
+        "path": "milestones.5.title",
+        "source": "Personal grant upgrade Pod",
+        "text": "Persönlicher Grant-Upgrade-Pod"
+      },
+      {
+        "path": "milestones.5.goal",
+        "source": "Fewer repeated approvals through proposed standing grants.",
+        "text": "Weniger wiederholte Freigaben durch vorgeschlagene Standing Grants."
+      },
+      {
+        "path": "milestones.5.steps.0",
+        "source": "From registry shapes and the user's previous approvals the Pod proposes a more general standing grant, or explicitly nothing, as a grant request the user decides at the IdP.",
+        "text": "Aus Registry-Shapes und den bisherigen Freigaben des Users schlägt der Pod einen allgemeineren Standing Grant vor, oder ausdrücklich nichts, als Grant-Anfrage, die der User am IdP entscheidet."
+      },
+      {
+        "path": "milestones.5.steps.1",
+        "source": "The request shows the commands it would have covered and what else it allows.",
+        "text": "Die Anfrage zeigt die Befehle, die sie abgedeckt hätte, und was sie zusätzlich erlaubt."
+      },
+      {
+        "path": "milestones.5.acceptance.0",
+        "source": "For the IURIO rebase Pod's read commands a proposal appears; push commands get no standing proposal.",
+        "text": "Für die Lesebefehle des IURIO-Rebase-Pods erscheint ein Vorschlag; Push-Befehle bekommen keinen Standing-Vorschlag."
+      },
+      {
+        "path": "milestones.5.rollback",
+        "source": "Pause the Pod; accepted grants remain revocable at the IdP.",
+        "text": "Pod pausieren; angenommene Grants bleiben am IdP widerrufbar."
+      },
+      {
+        "path": "milestones.6.title",
+        "source": "Registry upkeep through issues and pull requests",
+        "text": "Registry-Pflege über Issues und Pull Requests"
+      },
+      {
+        "path": "milestones.6.goal",
+        "source": "Adapters follow new CLI versions and real use without user data leaving the user.",
+        "text": "Adapter folgen neuen CLI-Versionen und der echten Nutzung, ohne dass Nutzerdaten den User verlassen."
+      },
+      {
+        "path": "milestones.6.steps.0",
+        "source": "The personal Pod notices commands that fit no registry shape (version, definition, operating system) and drafts an issue or pull request with only the generalized adapter change and synthetic tests.",
+        "text": "Der persönliche Pod bemerkt Befehle, die in keinen Registry-Shape passen (Version, Definition, Betriebssystem), und entwirft ein Issue oder einen Pull Request nur mit der verallgemeinerten Adapter-Änderung und synthetischen Tests."
+      },
+      {
+        "path": "milestones.6.steps.1",
+        "source": "The user reviews the draft before its push approval; registry CI and the owner's merge decide.",
+        "text": "Der User prüft den Entwurf vor seiner Push-Freigabe; Registry-CI und Merge des Owners entscheiden."
+      },
+      {
+        "path": "milestones.6.acceptance.0",
+        "source": "One real pull request passes registry CI and contains no path, branch name or other user data.",
+        "text": "Ein echter Pull Request besteht die Registry-CI und enthält keinen Pfad, Branch-Namen oder andere Nutzerdaten."
+      },
+      {
+        "path": "milestones.6.rollback",
+        "source": "Close the pull request; the registry is unchanged.",
+        "text": "Pull Request schließen; die Registry bleibt unverändert."
+      },
+      {
+        "path": "risks.0.title",
+        "source": "Prompt injection through command text.",
+        "text": "Prompt-Injection über Befehlstexte."
+      },
+      {
+        "path": "risks.0.mitigation",
+        "source": "LLM output is only a draft; the user decides grant requests at the IdP and the owner merges registry changes.",
+        "text": "LLM-Ausgaben sind nur Entwürfe; der User entscheidet Grant-Anfragen am IdP, der Owner merged Registry-Änderungen."
+      },
+      {
+        "path": "risks.1.title",
+        "source": "A delegated Pod misuses the user's identity.",
+        "text": "Ein delegierter Pod missbraucht die Identität des Users."
+      },
+      {
+        "path": "risks.1.mitigation",
+        "source": "The delegation covers only reading grants and filing requests; approval endpoints refuse delegated tokens; the user can revoke it any time.",
+        "text": "Die Delegation umfasst nur Grants lesen und Anfragen stellen; Freigabe-Endpunkte lehnen delegierte Tokens ab; der User kann sie jederzeit widerrufen."
+      },
+      {
+        "path": "risks.2.title",
+        "source": "Migration breaks older clients.",
+        "text": "Die Migration bricht ältere Clients."
+      },
+      {
+        "path": "risks.2.mitigation",
+        "source": "IdP, Pods and apes ship in one coordinated release with an IdP backup; old stored grants are migrated, not dropped.",
+        "text": "IdP, Pods und apes gehen in einem abgestimmten Release mit IdP-Backup live; alte gespeicherte Grants werden migriert, nicht verworfen."
+      },
+      {
+        "path": "risks.3.title",
+        "source": "The registry falls behind.",
+        "text": "Die Registry veraltet."
+      },
+      {
+        "path": "risks.3.mitigation",
+        "source": "Unknown or mismatched commands still work through exact approvals; personal Pods draft issues and pull requests.",
+        "text": "Unbekannte oder abweichende Befehle funktionieren weiter über exakte Freigaben; persönliche Pods entwerfen Issues und Pull Requests."
+      },
+      {
+        "path": "changelog.0.text",
+        "source": "Revision 1: structured summaries rendered by the IdP.",
+        "text": "Revision 1: strukturierte Angaben, dargestellt vom IdP."
+      },
+      {
+        "path": "changelog.1.text",
+        "source": "Revision 2: generic grant card from three sources, Shapes principles, and the learning loop with grant upgrade and shape maintenance Pods.",
+        "text": "Revision 2: allgemeine Grant-Karte aus drei Quellen, Shapes-Grundsätze und Lernschleife mit Grant-Upgrade- und Shape-Wartungs-Pod."
+      },
+      {
+        "path": "changelog.2.text",
+        "source": "Revision 3 after the owner's review: registry as the single adapter source instead of a trust rule, summary migration without legacy fields, personal learning loop with a user delegation instead of an IdP service, no evidence leaves the user, widening/narrowing distinction removed.",
+        "text": "Revision 3 nach dem Review des Owners: Registry als einzige Adapter-Quelle statt Vertrauensregel, Migration der Angaben ohne Altfelder, persönliche Lernschleife mit User-Delegation statt IdP-Dienst, keine Belege verlassen den User, Unterscheidung Erweitern/Präzisieren entfernt."
+      },
+      {
+        "path": "problem.statement",
+        "source": "Approval wording is composed in the Pods desktop and the IdP has hard-coded Pod cards, while Shapes adapters are a curated list that is always incomplete and ages with every CLI release.",
+        "text": "Freigabetexte werden im Pods-Desktop zusammengesetzt und der IdP hat fest eingebaute Pod-Karten; Shapes-Adapter sind eine kuratierte Liste, die immer unvollständig ist und mit jeder CLI-Version altert."
+      },
+      {
+        "path": "problem.impact",
+        "source": "A headline needed a signed desktop build; most grants lack the meaning that only the Pod card shows; the owner approves the same commands again and again, and adapters that read a command differently than the CLI caused four security fixes on October 13.",
+        "text": "Eine Überschrift brauchte einen signierten Desktop-Build; den meisten Grants fehlt die Bedeutung, die nur die Pod-Karte zeigt; der Owner gibt dieselben Befehle immer wieder frei, und Adapter, die einen Befehl anders lesen als die CLI, führten am 13. Oktober zu vier Sicherheitsfixes."
+      }
+    ]
+  },
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-14",
+    "reference": "Owner in chat, 2026-10-14, after reviewing revision 3: \"Lernschleife mit Delegation ja / Registry Pflege ohne Belege ja / Passt. Wir sind fertig. Der Plan muss Kontext Komprimierungen standhalten - wir ziehen das jetzt von Anfang bis Ende in dieser Session durch\"",
+    "scope": "Implementation of milestones M1–M7 of revision 3, end to end in this session.",
+    "target": {
+      "revision": 3
+    }
+  }
+}
