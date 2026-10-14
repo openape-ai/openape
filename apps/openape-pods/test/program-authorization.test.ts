@@ -8,6 +8,8 @@ import { performance } from 'node:perf_hooks'
 import { afterEach, expect, it } from 'vitest'
 import { computeArgvHash } from '@openape/grants'
 import { AgentAuthority, RunGrantTokens } from '../src/main/broker/authorization'
+import { CredentialCache } from '../src/main/connections/cache'
+import { ProgramState } from '../src/main/programs/state'
 import type { Grant, ProgramCall } from '../src/main/broker/authorization'
 import { PodToolBroker } from '../src/main/broker/tools'
 import { AuthorityError, InfrastructureError } from '../src/contracts/infrastructure'
@@ -20,10 +22,11 @@ const cleanup: (() => Promise<void>)[] = []
 afterEach(async () => { for (const close of cleanup.splice(0)) await close() })
 
 type Decision = 'approved' | 'pending' | 'denied' | 'revoked'
-interface Tamper { sub?: string, target_host?: string, argv_hash?: string, program_sha256?: string, iss?: string, foreignKey?: true, grant_id?: string, brokered?: unknown }
+interface Tamper { sub?: string, target_host?: string, argv_hash?: string, program_sha256?: string, iss?: string, foreignKey?: true, grant_id?: string, brokered?: unknown, decided_by?: string, run_as?: string, cli_id?: string }
 const allowedFields = ['target_host', 'audience', 'program', 'argv', 'grant_type', 'summary', 'batch']
 
-async function idp() {
+const brokered = { connection_id: '00000000-0000-4000-8000-0000000000b1', broker_issuer: 'https://pods.example.test', agent_issuer: 'https://pods.example.test', owner: 'owner@example.test', key_id: 'key' }
+async function idp(options: { brokered?: typeof brokered } = {}) {
   const podId = randomUUID()
   const keys = generateKeyPairSync('ed25519'); const foreign = generateKeyPairSync('ed25519')
   const state = {
@@ -40,7 +43,7 @@ async function idp() {
   const token = async (grantId: string, body: { program: { name: string, sha256: string }, argv: string[] }) => {
     const now = Math.floor(Date.now() / 1000)
     const argv = [body.program.name, ...body.argv]
-    const claims = { iss: state.tamper.iss ?? origin, sub: state.tamper.sub ?? 'pod@example.test', aud: 'shapes', target_host: state.tamper.target_host ?? `pods:${podId}`, iat: now, exp: now + state.lifetime, jti: randomUUID(), grant_id: state.tamper.grant_id ?? grantId, grant_type: state.grantType, approval: state.grantType, authorization_details: state.resolve(body.argv).map(action => ({ type: 'openape_cli', cli_id: body.program.name, operation_id: 'fixture', resource_chain: [], action, permission: `${body.program.name}.fixture#${action}`, display: 'Fixture command', risk: 'low' })), command: argv, argv_hash: state.tamper.argv_hash ?? await computeArgvHash(argv), program_sha256: state.tamper.program_sha256 ?? body.program.sha256, decided_by: 'owner@example.test', ...(state.tamper.brokered ? { brokered: state.tamper.brokered } : {}) }
+    const claims = { iss: state.tamper.iss ?? origin, sub: state.tamper.sub ?? 'pod@example.test', aud: 'shapes', target_host: state.tamper.target_host ?? `pods:${podId}`, iat: now, exp: now + state.lifetime, jti: randomUUID(), grant_id: state.tamper.grant_id ?? grantId, grant_type: state.grantType, approval: state.grantType, authorization_details: state.resolve(body.argv).map(action => ({ type: 'openape_cli', cli_id: state.tamper.cli_id ?? body.program.name, operation_id: 'fixture', resource_chain: [], action, permission: `${body.program.name}.fixture#${action}`, display: 'Fixture command', risk: 'low' })), command: argv, argv_hash: state.tamper.argv_hash ?? await computeArgvHash(argv), program_sha256: state.tamper.program_sha256 ?? body.program.sha256, decided_by: state.tamper.decided_by ?? 'owner@example.test', ...(state.tamper.run_as ? { run_as: state.tamper.run_as } : {}), ...(state.tamper.brokered ? { brokered: state.tamper.brokered } : {}) }
     const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')
     const payload = Buffer.from(JSON.stringify(claims)).toString('base64url')
     return `${head}.${payload}.${sign(null, Buffer.from(`${head}.${payload}`), (state.tamper.foreignKey ? foreign : keys).privateKey).toString('base64url')}`
@@ -77,7 +80,7 @@ async function idp() {
   cleanup.push(() => new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())))
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('No fixture address')
   origin = `http://127.0.0.1:${address.port}`
-  const connection = { issuer: origin, subject: 'pod@example.test', owner: 'owner@example.test', keyId: 'key', targetHost: `pods:${podId}`, accessToken: async () => 'SYNTHETIC_POD_TOKEN' }
+  const connection = { issuer: origin, subject: 'pod@example.test', owner: 'owner@example.test', keyId: 'key', targetHost: `pods:${podId}`, accessToken: async () => 'SYNTHETIC_POD_TOKEN', ...(options.brokered ? { brokered: options.brokered, decisionIssuer: origin } : {}) }
   const progress: RunApproval[] = []; const recorded: Grant[] = []
   // Program calls never look up the grant ledger: grants recorded before (any adapter digest) cause no new request.
   const lookups: string[] = []
@@ -171,12 +174,47 @@ it.each<[string, Tamper]>([
   ['a foreign signing key', { foreignKey: true }],
   ['another grant', { grant_id: 'grant-9' }],
   ['a foreign broker binding', { brokered: { broker: 'https://broker.example.test', owner: 'owner@example.test', agent: 'pod@example.test' } }],
+  ['a run_as user', { run_as: 'root' }],
+  ['a resolution to a reserved Pods permission', { cli_id: 'pod-runtime' }],
 ])('refuses a token with %s before anything runs and never reuses it', async (_, tamper) => {
   const f = await idp(); f.state.tamper = tamper
   const tokens = new RunGrantTokens()
   await expect(f.authority(tokens).authorizeProgram(call(), signal())).rejects.toThrow(new AuthorityError('The IdP command token does not match this Pod, host, command or program; nothing was run'))
   f.state.tamper = {}
   await f.authority(tokens).authorizeProgram(call(), signal())
+  expect(f.state.authorizations).toHaveLength(2)
+})
+
+// Security review (issue 1473): the broker binding is checked both ways and a brokered grant must be the owner's decision.
+it('refuses a brokered connection\'s token without its binding or decided by someone else, and accepts the matching one', async () => {
+  const f = await idp({ brokered })
+  await expect(f.authority().authorizeProgram(call(), signal())).rejects.toThrow('nothing was run')
+  f.state.tamper = { brokered, decided_by: 'someone@example.test' }
+  await expect(f.authority().authorizeProgram(call(), signal())).rejects.toThrow('nothing was run')
+  f.state.tamper = { brokered }
+  await expect(f.authority().authorizeProgram(call(), signal())).resolves.toMatchObject({ grantId: 'grant-1' })
+})
+
+it('refuses the reserved Pods permission names as program commands before asking the IdP', async () => {
+  const f = await idp()
+  for (const name of ['pod-runtime', 'pod-http', 'pod-ssh']) await expect(f.authority().authorizeProgram({ program: { name, sha256: sha }, argv: ['run'] }, signal())).rejects.toThrow('reserved for Pods itself')
+  expect(f.state.authorizations).toEqual([])
+})
+
+it('never lets a concurrent identical call execute on another call\'s single-use token', async () => {
+  const f = await idp(); f.state.grantType = 'once'
+  const tokens = new RunGrantTokens()
+  const results = await Promise.all([f.authority(tokens).authorizeProgram(call(), signal()), f.authority(tokens).authorizeProgram(call(), signal())])
+  expect(results).toHaveLength(2)
+  // Each caller got a token of its own: two requests, two consumptions.
+  expect(f.state.authorizations).toHaveLength(2); expect(f.state.consumes).toEqual(['grant-1', 'grant-1'])
+})
+
+it('reuses a command token only for the same key and broker connection', async () => {
+  const f = await idp(); const tokens = new RunGrantTokens()
+  await f.authority(tokens).authorizeProgram(call(), signal())
+  const otherKey = new AgentAuthority({ ...f.connection, keyId: 'rotated-key' }, undefined, undefined, tokens)
+  await otherKey.authorizeProgram(call(), signal())
   expect(f.state.authorizations).toHaveLength(2)
 })
 
@@ -229,12 +267,38 @@ it('refuses every action of a mail program outside its archive port except known
   expect(() => callEffect(resolved([], []), 'pods-mail')).toThrow('approved archive service')
   // Matched by the resolved program as well, whatever the assigned file is called.
   expect(() => callEffect(resolved(['exec'], ['o365']), 'outlook-tool')).toThrow('approved archive service')
+  // A renamed mail binary whose token resolves to the o365 shape cannot run its workflow move outside the port.
+  expect(() => callEffect(resolved(['move'], ['o365']), 'renamed-mail')).toThrow('approved archive service')
+  expect(() => callEffect(resolved(['exec'], ['O365']), 'Renamed-Mail')).toThrow('approved archive service')
   // Known non-moving effects and reads stay allowed.
   expect(callEffect(resolved(['categorize'], ['o365']), 'o365-cli')).toEqual({ write: true })
   expect(callEffect(resolved(['configure'], ['o365']), 'o365-cli')).toEqual({ write: true })
   expect(callEffect(resolved(['read', 'list'], ['pods-mail']), 'pods-mail')).toEqual({ write: false })
   // The move itself runs only through the port.
   expect(callEffect(resolved(['move'], ['o365']), 'o365-cli', 'move')).toEqual({ write: true })
+})
+
+// Security review (issue 1473): the executed argv is exactly the authorized one, and the file is checked again at launch.
+it('authorizes the cache folder a program receives and re-checks the program file right before launch', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pods-program-launch-')); cleanup.push(() => rm(root, { recursive: true, force: true }))
+  const program = join(root, 'o365-cli'); await writeFile(program, '#!/bin/sh\nexit 0\n'); await chmod(program, 0o700)
+  const hash = createHash('sha256').update('#!/bin/sh\nexit 0\n').digest('hex')
+  const credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
+  const stateId = await new ProgramState(credentials).create({ podId: '00000000-0000-4000-8000-000000000001', applicationId: '00000000-0000-4000-8000-000000000002' })
+  // The saved application state holds the program's token cache, as an imported login would.
+  await new ProgramState(credentials).use(stateId, { podId: '00000000-0000-4000-8000-000000000001', applicationId: '00000000-0000-4000-8000-000000000002' }, async (directory) => { await writeFile(join(directory, 'token.json'), '{}') }, signal())
+  const asked: ProgramCall[] = []
+  const lease = { capabilities: ['tool.app.invoke'], assertCurrent: () => {}, signal: signal() }
+  const base = { id: 'app', capability: 'tool.app.invoke', program: { path: program, name: 'o365-cli', sha256: hash }, argv: ['pods', 'read'], executable: program, executableHash: hash, entryFiles: [], prefix: [], runtimeDirectories: [], environment: {}, networkPorts: [], programState: { id: stateId, podId: '00000000-0000-4000-8000-000000000001', applicationId: '00000000-0000-4000-8000-000000000002' } }
+  // With a cache argument the command is authorized with the folder it gets; the missing helper stops it after that.
+  const broker = new PodToolBroker(join(root, 'missing-helper'), join(root, 'runs'), async (requested) => { asked.push(requested) }, credentials)
+  await expect(broker.execute({ ...base, cacheArgument: '--cache-dir' }, { toolId: 'app', argv: ['pods', 'read'] }, lease)).rejects.toThrow()
+  expect(asked).toHaveLength(1)
+  expect(asked[0]!.argv.slice(0, 3)).toEqual(['pods', 'read', '--cache-dir'])
+  expect(asked[0]!.argv).toHaveLength(4)
+  // A file swapped after the IdP authorized the call is refused before the process starts.
+  const swapping = new PodToolBroker(join(root, 'missing-helper'), join(root, 'runs'), async () => { await writeFile(program, '#!/bin/sh\necho swapped\n') }, credentials)
+  await expect(swapping.execute(base, { toolId: 'app', argv: ['pods', 'read'] }, lease)).rejects.toThrow('Executable integrity mismatch')
 })
 
 it('refuses a changed program file and a tampered token before anything starts', async () => {

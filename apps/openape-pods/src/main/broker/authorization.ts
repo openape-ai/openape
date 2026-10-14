@@ -5,7 +5,7 @@ import type { VerifyAuthzOptions } from '@openape/grants'
 import type { RunApproval } from '../../contracts/activity'
 import { grantSummary } from '../../contracts/grant-summary'
 import type { ScriptSummary } from '../../contracts/grant-summary'
-import { commandLine } from '../../contracts/programs'
+import { assertProgramName, commandLine, reservedProgramNames } from '../../contracts/programs'
 import type { PodPermission } from '../grants/pod-permissions'
 import { setTimeout as delay } from 'node:timers/promises'
 
@@ -230,11 +230,14 @@ export class AgentAuthority {
    * reused for an identical command until it expires.
    */
   async authorizeProgram(call: ProgramCall, signal: AbortSignal): Promise<CommandAuthorization> {
+    assertProgramName(call.program.name)
     const argvHash = await computeArgvHash([call.program.name, ...call.argv])
-    const key = [this.connection.subject, this.connection.targetHost, argvHash, call.program.sha256].join('\n')
+    // Like a permission token, a command token is reused only for the identity, key and broker connection it was issued to.
+    const key = [this.decisionIssuer, this.connection.subject, this.connection.keyId, this.connection.brokered?.connection_id ?? '', this.connection.targetHost, argvHash, call.program.sha256].join('\n')
     const cached = this.tokens?.command(key)
     if (cached) return cached
-    return this.share(`command:${key}`, async () => {
+    const caller = Symbol('caller')
+    const shared = await this.share(`command:${key}`, async () => {
       let reply = await this.authorizeCall(call, signal)
       if (reply.state === 'pending') {
         await this.awaitProgramDecision(reply.grantId, call, signal)
@@ -245,8 +248,11 @@ export class AgentAuthority {
       // A single-use grant keeps issuing tokens until it is consumed, so its token runs exactly this call and is never reused.
       if (once) await this.consume(reply.token, reply.grantId, signal)
       else this.tokens?.rememberCommand(key, authorization, expiresAt)
-      return authorization
+      return { authorization, once, caller }
     }, signal)
+    // A single-use token authorizes only the call that obtained it; a concurrent identical call asks the IdP again.
+    if (shared.once && shared.caller !== caller) return this.authorizeProgram(call, signal)
+    return shared.authorization
   }
 
   /**
@@ -299,8 +305,12 @@ export class AgentAuthority {
     if (!result.valid || !result.claims) throw new AuthorityError(commandRefused)
     const claims = result.claims as OpenApeAuthZClaims & { argv_hash?: unknown, program_sha256?: unknown }
     if (claims.sub !== this.connection.subject || claims.target_host !== this.connection.targetHost || claims.grant_id !== reply.grantId || claims.argv_hash !== argvHash || claims.program_sha256 !== call.program.sha256) throw new AuthorityError(commandRefused)
-    if (claims.brokered && !sameBrokeredGrant(this.connection.brokered, claims.brokered)) throw new AuthorityError(commandRefused)
+    // The broker binding must match both ways, a brokered grant must be decided by its owner, and no token runs as another user.
+    const brokered = this.connection.brokered
+    if (!sameBrokeredGrant(brokered, claims.brokered) || (brokered && claims.decided_by !== brokered.owner) || claims.run_as !== undefined) throw new AuthorityError(commandRefused)
     const resolved = (claims.authorization_details ?? []).flatMap(detail => detail.type === 'openape_cli' ? [detail] : [])
+    // The desktop's own permissions are never authorized as a program command.
+    if (resolved.some(detail => reservedProgramNames.includes(detail.cli_id))) throw new AuthorityError(commandRefused)
     return { authorization: { grantId: reply.grantId, actions: resolved.map(detail => detail.action), programs: [...new Set(resolved.map(detail => detail.cli_id))] }, expiresAt: claims.exp * 1000, once: grantTypeOf(claims) === 'once' }
   }
 

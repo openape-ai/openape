@@ -6,7 +6,8 @@
 export const gateActions: readonly string[] = ['move', 'archive']
 /**
  * The mail programs that have an archive port: the o365 CLI (registry name `o365`, assigned as `o365-cli`), whose
- * workflow move runs through mail.archiveApproved, and the pods-mail companion of mail.archive.
+ * workflow move runs through mail.archiveApproved, and the pods-mail companion of mail.archive. Compared in lower case with
+ * the command name and with every program (shape) the IdP resolved a call to.
  */
 export const archivePortPrograms: readonly string[] = ['o365', 'o365-cli', 'pods-mail']
 /**

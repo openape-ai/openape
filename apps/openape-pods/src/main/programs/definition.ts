@@ -2,6 +2,7 @@ import { loadProgramRuntime } from './runtime'
 import { basename, sep } from 'node:path'
 import { readFile, realpath, stat } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
+import { assertProgramName } from '../../contracts/programs'
 import type { ProgramDefinition } from '../../contracts/programs'
 
 export interface InstalledProgramOptions {
@@ -49,7 +50,7 @@ export async function programDefinition(executablePath: string, runtimePath?: st
   const executable = await realpath(executablePath)
   const info = await stat(executable)
   if (!info.isFile() || !(info.mode & 0o111) || info.size > 128 * 1024 * 1024) throw new Error('Choose an executable CLI up to 128 MB')
-  if (!/^[\w-]{1,100}$/.test(name)) throw new Error('Application command must use letters, digits, underscores or hyphens')
+  assertProgramName(name)
   return { ...(runtimePath ? { runtime: await loadProgramRuntime(runtimePath) } : {}), name, executable, executableHash: createHash('sha256').update(await readFile(executable)).digest('hex'), cliId: name, entryFiles: [], environment: {}, networkHosts: [] }
 }
 

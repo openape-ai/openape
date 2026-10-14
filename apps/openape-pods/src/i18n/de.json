@@ -3087,5 +3087,6 @@
   "Invalid SSH inventory permission": "Ungültige SSH-Inventarberechtigung",
   "A program approval needs the description of its command": "Eine Programmfreigabe braucht die Beschreibung ihres Befehls",
   "Program authorization service is unavailable": "Die Programmfreigabe ist nicht verfügbar",
-  "Assign a program by its path and optional runtimePath; the IdP decides what its commands mean, so adapterPath and commandName are not accepted": "Weise ein Programm über seinen Pfad und optional runtimePath zu; der IdP entscheidet, was seine Befehle bedeuten, daher werden adapterPath und commandName nicht angenommen"
+  "Assign a program by its path and optional runtimePath; the IdP decides what its commands mean, so adapterPath and commandName are not accepted": "Weise ein Programm über seinen Pfad und optional runtimePath zu; der IdP entscheidet, was seine Befehle bedeuten, daher werden adapterPath und commandName nicht angenommen",
+  "Application command names pod-runtime, pod-http and pod-ssh are reserved for Pods itself": "Die Befehlsnamen pod-runtime, pod-http und pod-ssh sind für Pods selbst reserviert"
 }

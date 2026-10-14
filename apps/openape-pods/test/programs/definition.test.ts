@@ -23,6 +23,11 @@ it('keeps the chosen command name when the symlink target differs and carries no
     await expect(programDefinition(join(root, 'missing'))).rejects.toThrow()
     await writeFile(join(root, 'bad name'), '#!/bin/sh\n', { mode: 0o700 })
     await expect(programDefinition(join(root, 'bad name'))).rejects.toThrow('letters, digits, underscores or hyphens')
+    // The names of Pods' own permissions are reserved (security review, issue 1473).
+    for (const reserved of ['pod-runtime', 'pod-http', 'pod-ssh']) {
+      await writeFile(join(root, reserved), '#!/bin/sh\n', { mode: 0o700 })
+      await expect(programDefinition(join(root, reserved))).rejects.toThrow('reserved for Pods itself')
+    }
   }
   finally { await rm(root, { recursive: true, force: true }) }
 })

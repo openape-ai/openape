@@ -4,7 +4,7 @@ import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { setTimeout as delay } from 'node:timers/promises'
-import { commandLine, programIdentity } from '../../contracts/programs'
+import { assertProgramName, commandLine, programIdentity } from '../../contracts/programs'
 import type { ProgramAssignment, TerminalView } from '../../contracts/programs'
 import type { SandboxReach } from '../../contracts/sandbox'
 import { launchTerminal } from '../../worker/runtime/terminal'
@@ -31,6 +31,7 @@ export async function verifyProgram(assignment: ProgramAssignment): Promise<void
 
 /** One command of an assigned application as the IdP authorizes it: the program's name and file hash and the exact arguments. */
 export function programCall(assignment: ProgramAssignment, argv: string[]): ProgramCall {
+  assertProgramName(assignment.cliId)
   return { program: programIdentity(assignment), argv }
 }
 
@@ -39,12 +40,13 @@ export function programCall(assignment: ProgramAssignment, argv: string[]): Prog
  * resolution of exactly this call (`authorization_details`, the generic exact-command detail for a program the
  * registry does not describe). The call is a read only when every resolved action reads; any other action, or none, makes
  * it a write. Mail moves and archives (gate actions) run only through the approved archive port. Outside it, a call of a
- * mail program with an archive port (by its command name or the resolved program) is refused unless every action is a
+ * mail program with an archive port (by its command name or any program the token resolved) is refused unless every action is a
  * known non-moving one, so an exact-command fallback can never move mail.
  */
 export function callEffect(authorization: CommandAuthorization, program: string, port?: 'move'): { write: boolean } {
   if (port === 'move' && !authorization.actions.includes('move')) throw new Error('The archive port may only run the granted move operation')
-  const mailProgram = [program, ...authorization.programs].some(name => archivePortPrograms.includes(name))
+  // The IdP selects the shape by the tested program hash, so a resolved mail shape follows the binary, not its local name.
+  const mailProgram = [program, ...authorization.programs].some(name => archivePortPrograms.includes(name.toLowerCase()))
   const refused = (action: string) => gateActions.includes(action) || (mailProgram && !mailProgramActions.includes(action))
   if (port !== 'move' && (authorization.actions.some(refused) || (mailProgram && !authorization.actions.length))) throw new Error('Moving or archiving mail runs only through the approved archive service')
   return { write: !authorization.actions.length || authorization.actions.some(action => !readActions.includes(action)) }
@@ -95,19 +97,31 @@ export class ProgramSession {
       await mkdir(directory, { recursive: true, mode: 0o700 })
       // A pending approval is shown in the terminal with its IdP page; the session waits for the owner's decision.
       const authority = new AgentAuthority(await access.connection(), async (progress) => { if (progress.state === 'pending') this.append(`Waiting for approval at ${approvalURL(progress)}\n`) }, access.ledger, undefined, { origin: await access.origin() })
+      const authorize = async (executed: string[]) => {
+        const granted = await authority.authorizeProgram(programCall(assignment, executed), signal)
+        callEffect(granted, assignment.cliId)
+        return granted
+      }
       await verifyProgram(assignment)
-      const authorization = await authority.authorizeProgram(programCall(assignment, argv), signal)
-      callEffect(authorization, assignment.cliId)
+      // A program with a cache argument is authorized below, with the state folder it actually receives.
+      let authorization = assignment.cacheArgument ? undefined : await authorize(argv)
       await check(); signal.throwIfAborted()
       const proxy = assignment.networkHosts.length && (await access.reach()).level === 'isolated' ? await startMailProxy(signal, undefined, assignment.networkHosts) : undefined
       try {
         await new ProgramState(credentials).use(assignment.stateId, { podId: this.podId, applicationId }, async (workspace) => {
           await check(); signal.throwIfAborted()
           const launch = programLaunch(assignment)
-          const args = [...launch.prefix, ...argv, ...(assignment.cacheArgument ? [assignment.cacheArgument, workspace] : [])]
+          // The process gets exactly the arguments the IdP authorized, after the owner-configured runtime prefix.
+          const executed = [...argv, ...(assignment.cacheArgument ? [assignment.cacheArgument, workspace] : [])]
+          authorization ??= await authorize(executed)
+          const granted = authorization
+          const args = [...launch.prefix, ...executed]
           const reach = await access.reach()
           const temporary = reach.level === 'owner' ? ownerTemporary : workspace
           if (temporary === ownerTemporary) await mkdir(temporary, { mode: 0o700 })
+          await check(); signal.throwIfAborted()
+          // The authorized file hash must still hold when the process starts.
+          await verifyProgram(assignment)
           const domain = await launchTerminal(helper, directory, { reach, executable: launch.executable, workspace: podWorkspace, readDirectories: directories.readDirectories, writeDirectories: [...new Set([workspace, temporary]), ...directories.writeDirectories], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: launch.runtimeDirectories, networkPorts: proxy ? [proxy.port] : [], systemTrust: Boolean(proxy) }, args, { ...launch.environment, ...proxy?.environment, HOME: programHome(reach, workspace), TMPDIR: temporary }, (path, ownerPid) => registerAuthDomain(root, path, ownerPid))
           this.domain = domain; verifiedClosed = false
           const decoder = new StringDecoder('utf8')
@@ -116,7 +130,7 @@ export class ProgramSession {
           const stop = () => domain.cancel(); signal.addEventListener('abort', stop, { once: true }); if (signal.aborted) stop()
           const monitoring = new AbortController()
           const monitor = async () => {
-            try { while (!monitoring.signal.aborted) { await delay(1000, undefined, { signal: monitoring.signal }); await check(); await authority.assertActive(authorization.grantId, AbortSignal.any([signal, monitoring.signal])) } }
+            try { while (!monitoring.signal.aborted) { await delay(1000, undefined, { signal: monitoring.signal }); await check(); await authority.assertActive(granted.grantId, AbortSignal.any([signal, monitoring.signal])) } }
             catch (error) { if (!monitoring.signal.aborted) { this.controller.abort(error); domain.cancel() } }
           }
           const watched = monitor()
