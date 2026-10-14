@@ -266,7 +266,8 @@ describe('requestGrantForShellLine', () => {
       const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
       const result = await requestGrantForShellLine('ls -la', { targetHost: 'host.test' })
 
-      expect(result).toEqual({ kind: 'approved', grantId: 'program-grant', mode: 'program' })
+      // bash runs the authorized file and argv, never the typed line
+      expect(result).toEqual({ kind: 'approved', grantId: 'program-grant', mode: 'program', command: '\\builtin command -- \'/bin/ls\' \'-la\'' })
       expect(locateProgram).toHaveBeenCalledWith('ls')
       expect(authorizeProgramCall).toHaveBeenCalledWith(
         { program: lsProgram, argv: ['-la'] },
@@ -301,6 +302,17 @@ describe('requestGrantForShellLine', () => {
         expect(result.reason).toContain('timed out')
     })
 
+    it('refuses a relative program path, which this process would resolve against another directory than bash', async () => {
+      const { locateProgram, authorizeProgramCall } = await import('../src/authorization/program.js')
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('./tool --flag', { targetHost: 'host.test' })
+
+      expect(result).toEqual({ kind: 'denied', reason: 'Use an absolute path or a program on PATH instead of ./tool' })
+      expect(locateProgram).not.toHaveBeenCalled()
+      expect(authorizeProgramCall).not.toHaveBeenCalled()
+    })
+
     it('keeps builtins and lines with expansions on the session path', async () => {
       const { parseShellCommand } = await import('../src/shapes/index.js')
       const { locateProgram } = await import('../src/authorization/program.js')
@@ -309,7 +321,7 @@ describe('requestGrantForShellLine', () => {
       vi.mocked(apiFetch).mockResolvedValue({ data: [{ id: 'session', status: 'approved', request: { audience: 'ape-shell', target_host: 'host.test', grant_type: 'always' } }] } as any)
 
       const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
-      for (const line of ['cd /tmp', 'ls $HOME', 'ls *.txt', 'FOO=1 ls', 'ls ~/x'])
+      for (const line of ['cd /tmp', 'ls $HOME', 'ls *.txt', 'FOO=1 ls', 'ls ~/x', 'ls; id', 'echo $(id)', 'ls > out'])
         expect(await requestGrantForShellLine(line, { targetHost: 'host.test' })).toEqual({ kind: 'approved', grantId: 'session', mode: 'session' })
       expect(locateProgram).not.toHaveBeenCalled()
     })

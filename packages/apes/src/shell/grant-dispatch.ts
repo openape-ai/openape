@@ -12,7 +12,7 @@ import { authorizeProgramCall, locateProgram } from '../authorization/program.js
 import type { GrantType } from '../authorization/program.js'
 import { createWaitProgressReporter } from '../wait-progress.js'
 import { checkSudoRejection, isApesSelfDispatch } from './apes-self-dispatch.js'
-import { programLine } from './program-line.js'
+import { programCommandLine, programLine } from './program-line.js'
 
 /**
  * Result of attempting to obtain a grant for a shell line. On success the
@@ -25,7 +25,9 @@ import { programLine } from './program-line.js'
  * `requestGrantForShellLine` for the rationale.
  */
 export type GrantLineResult =
-  | { kind: 'approved', grantId: string, mode: 'program' | 'session' | 'self' }
+  /** `command` is what bash must run instead of the typed line. */
+  | { kind: 'approved', grantId: string, mode: 'program', command: string }
+  | { kind: 'approved', grantId: string, mode: 'session' | 'self' }
   | { kind: 'denied', reason: string }
 
 // The APES_GATED_SUBCOMMANDS blocklist + `isApesSelfDispatch` helper
@@ -104,6 +106,11 @@ export async function requestGrantForShellLine(
 
   // --- 1. Program path ---
   const call = programLine(line)
+  // A relative path would be resolved against this process, not the bash
+  // session's working directory, so the hashed file could differ from the
+  // one bash would find.
+  if (call?.executable.includes('/') && !call.executable.startsWith('/'))
+    return { kind: 'denied', reason: `Use an absolute path or a program on PATH instead of ${call.executable}` }
   const program = call ? await locateProgram(call.executable) : null
   if (call && program) {
     try {
@@ -126,7 +133,7 @@ export async function requestGrantForShellLine(
       })
       if (authorization.kind !== 'authorized')
         return { kind: 'denied', reason: `Grant ${authorization.grantId} is pending` }
-      return { kind: 'approved', grantId: authorization.grantId, mode: 'program' }
+      return { kind: 'approved', grantId: authorization.grantId, mode: 'program', command: programCommandLine(program.path, call.argv) }
     }
     catch (err) {
       return { kind: 'denied', reason: err instanceof Error ? err.message : String(err) }

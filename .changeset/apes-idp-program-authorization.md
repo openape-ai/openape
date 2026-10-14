@@ -32,7 +32,14 @@ Major because local adapter execution is removed:
 - `ape-shell`: a line that is exactly one program call (plain words, an
   executable file on `PATH`, no builtin) goes to the IdP; compound lines,
   expansions, redirections and builtins use the unchanged ape-shell session
-  grant. Local segment-wise resolution of compound lines is removed. Audit
+  grant. For an authorized program line the interactive shell runs
+  `\builtin command -- '<absolute path>' '<arg>' …` (exactly the authorized
+  file and argv, unaffected by aliases), never the typed line; relative program
+  paths are refused in the interactive shell. `apes run`, `ape-shell -c` and
+  MCP re-hash the file right before running it and refuse a changed file or one
+  that is not a regular file. The program name is a requester claim; the file
+  that runs is bound by `program_sha256`.
+  Local segment-wise resolution of compound lines is removed. Audit
   entries record `grant_mode: "program"` instead of `"adapter"`.
 - `apes grants run <id>` runs a program grant by locating and hashing the
   recorded program again (refused if the file changed) and authorizing at the
