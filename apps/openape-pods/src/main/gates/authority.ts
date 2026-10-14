@@ -1,6 +1,6 @@
 import { computeCmdHash } from '@openape/core'
 import type { OpenApeGrant } from '@openape/core'
-import { sameBrokeredGrant, verifyAuthzJWT } from '@openape/grants'
+import { migrateLegacyGrantSummary, sameBrokeredGrant, verifyAuthzJWT } from '@openape/grants'
 import { AgentAuthority } from '../broker/authorization'
 import type { AgentConnection } from '../broker/authorization'
 import { connectionRequest, readJSON } from '../connections/http'
@@ -27,13 +27,22 @@ export interface GrantAuthority {
 
 const grantIdPattern = /^[\w-]{1,128}$/
 
+/**
+ * Interim mapping of an item's composed text to the structured summary (issue 1473): first line as title, the rest
+ * as description. The IdP migrates stored grants with the same function, so older bindings keep matching.
+ */
+function sameItemSummary(actual: OpenApeGrant['request']['summary'], text: string): boolean {
+  const expected = migrateLegacyGrantSummary({ text })
+  return actual?.title === expected?.title && actual?.description === expected?.description
+}
+
 export function createGrantAuthority(connection: AgentConnection, signal: AbortSignal, check: () => Promise<unknown>, audience: string, grantTypes: readonly GrantDecision[] = ['once']): GrantAuthority {
   const decisionIssuer = connection.decisionIssuer ?? connection.issuer
   const headers = async () => ({ Authorization: `Bearer ${await connection.accessToken()}` })
   const timeout = () => AbortSignal.any([signal, AbortSignal.timeout(10000)])
   function verify(grant: OpenApeGrant, binding: GrantBinding): OpenApeGrant {
     const request = grant.request
-    if (grant.id !== binding.grantId || request?.requester !== connection.subject || request.audience !== audience || request.target_host !== connection.targetHost || !grantTypes.includes(request.grant_type as GrantDecision) || request.waits_until !== Math.floor(binding.expiresAt / 1000) || JSON.stringify(request.command) !== JSON.stringify(binding.command) || request.summary?.text !== binding.summary || !sameBrokeredGrant(grant.brokered, connection.brokered)) throw new Error('Approval grant differs from the reviewed item or Pod identity')
+    if (grant.id !== binding.grantId || request?.requester !== connection.subject || request.audience !== audience || request.target_host !== connection.targetHost || !grantTypes.includes(request.grant_type as GrantDecision) || request.waits_until !== Math.floor(binding.expiresAt / 1000) || JSON.stringify(request.command) !== JSON.stringify(binding.command) || !sameItemSummary(request.summary, binding.summary) || !sameBrokeredGrant(grant.brokered, connection.brokered)) throw new Error('Approval grant differs from the reviewed item or Pod identity')
     return grant
   }
   async function get(binding: GrantBinding): Promise<OpenApeGrant> {
@@ -82,7 +91,7 @@ export function createGrantAuthority(connection: AgentConnection, signal: AbortS
       const grants: BatchGrant[] = []
       for (const member of request.members) {
         await check(); signal.throwIfAborted()
-        const reply = await connectionRequest(connection.issuer, '/api/grants', { requester: connection.subject, target_host: connection.targetHost, audience, grant_type: 'once', command: member.command, permissions: request.permissions, waits_until: Math.floor(request.expiresAt / 1000), reason: request.reason, summary: { text: member.summary }, batch }, signal, await connection.accessToken())
+        const reply = await connectionRequest(connection.issuer, '/api/grants', { requester: connection.subject, target_host: connection.targetHost, audience, grant_type: 'once', command: member.command, permissions: request.permissions, waits_until: Math.floor(request.expiresAt / 1000), reason: request.reason, summary: migrateLegacyGrantSummary({ text: member.summary }), batch }, signal, await connection.accessToken())
         if (typeof reply.id !== 'string' || !grantIdPattern.test(reply.id)) throw new Error('Invalid approval grant response')
         grants.push({ key: member.key, id: reply.id })
       }

@@ -8,7 +8,7 @@ import PodRunGrant from '../components/PodRunGrant.vue'
 import GrantBatchDecision from '../components/GrantBatchDecision.vue'
 import { podRunPresentation } from '../utils/pod-run-grant'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
-import { grantSummaryText, safeSummaryLink } from '../utils/grant-summary'
+import { grantSummaryView } from '../utils/grant-summary'
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
@@ -44,8 +44,7 @@ const cliDetails = computed(() => getCliAuthorizationDetails(grant.value?.reques
 const pendingDiagnostics = computed(() => grant.value?.pending_diagnostics ?? [])
 const cliSummary = computed(() => summarizeCliGrant(grant.value?.request?.authorization_details))
 const commandDisplay = computed(() => unwrapShellCommand(grant.value?.request?.command))
-const summaryText = computed(() => grantSummaryText(grant.value?.request?.summary))
-const summaryLink = computed(() => safeSummaryLink(grant.value?.request?.summary?.link))
+const summary = computed(() => grantSummaryView(grant.value?.request?.summary))
 const requesterName = computed(() => grant.value?.request?.requester ? formatRequesterName(grant.value.request.requester) : '')
 /**
  * True when this grant was requested via the `apes` generic-fallback path.
@@ -459,15 +458,21 @@ function isExactCommand(detail) {
                     {{ grant.request.run_as }}
                   </dd>
                 </div>
-                <div v-if="summaryText">
+                <div v-if="summary">
                   <dt class="text-muted mb-1">
                     Requester-provided summary
                   </dt>
-                  <dd class="text-sm whitespace-pre-wrap break-words">
-                    {{ summaryText }}
+                  <dd class="text-sm font-medium break-words">
+                    {{ summary.title }}
                   </dd>
-                  <dd v-if="summaryLink" class="text-sm">
-                    <a :href="summaryLink" target="_blank" rel="noopener noreferrer" class="underline break-all">{{ summaryLink }}</a>
+                  <dd v-if="summary.description" class="text-sm whitespace-pre-wrap break-words">
+                    {{ summary.description }}
+                  </dd>
+                  <dd v-if="summary.origin" class="text-xs text-muted break-words">
+                    Origin: {{ summary.origin }}
+                  </dd>
+                  <dd v-if="summary.link" class="text-sm">
+                    <a :href="summary.link" target="_blank" rel="noopener noreferrer" class="underline break-all">{{ summary.link }}</a>
                   </dd>
                 </div>
                 <div v-if="commandDisplay">
@@ -795,15 +800,21 @@ function isExactCommand(detail) {
                     {{ grant.request.run_as }}
                   </dd>
                 </div>
-                <div v-if="summaryText">
+                <div v-if="summary">
                   <dt class="text-muted mb-1">
                     Requester-provided summary
                   </dt>
-                  <dd class="text-sm whitespace-pre-wrap break-words">
-                    {{ summaryText }}
+                  <dd class="text-sm font-medium break-words">
+                    {{ summary.title }}
                   </dd>
-                  <dd v-if="summaryLink" class="text-sm">
-                    <a :href="summaryLink" target="_blank" rel="noopener noreferrer" class="underline break-all">{{ summaryLink }}</a>
+                  <dd v-if="summary.description" class="text-sm whitespace-pre-wrap break-words">
+                    {{ summary.description }}
+                  </dd>
+                  <dd v-if="summary.origin" class="text-xs text-muted break-words">
+                    Origin: {{ summary.origin }}
+                  </dd>
+                  <dd v-if="summary.link" class="text-sm">
+                    <a :href="summary.link" target="_blank" rel="noopener noreferrer" class="underline break-all">{{ summary.link }}</a>
                   </dd>
                 </div>
                 <div v-if="commandDisplay">

@@ -1,6 +1,6 @@
 import type { OpenApeGrantRequest, OpenApeAuthorizationDetail } from '@openape/core'
 import { computeCmdHash } from '@openape/core'
-import { brokerObject, brokerString, canonicalizeCliPermission, computeArgvHash, parseGrantBatch, validateCliAuthorizationDetail } from '@openape/grants'
+import { brokerObject, brokerString, canonicalizeCliPermission, computeArgvHash, parseGrantBatch, parseGrantSummary, validateCliAuthorizationDetail } from '@openape/grants'
 
 export async function parseBrokerGrantRequest(input: unknown, requester: string): Promise<OpenApeGrantRequest> {
   const value = brokerObject(input)
@@ -13,10 +13,7 @@ export async function parseBrokerGrantRequest(input: unknown, requester: string)
   if (value.command !== undefined && (!Array.isArray(value.command) || value.command.length === 0 || value.command.length > 100 || value.command.some(arg => typeof arg !== 'string' || arg.length > 4096 || arg.includes('\0')))) throw new Error('Invalid grant command')
   if (value.permissions !== undefined && (!Array.isArray(value.permissions) || value.permissions.length > 100 || value.permissions.some(item => typeof item !== 'string' || item.length > 4096))) throw new Error('Invalid grant permissions')
   if (value.reason !== undefined && (typeof value.reason !== 'string' || value.reason.length > 4096)) throw new Error('Invalid grant reason')
-  if (value.summary !== undefined) {
-    const summary = brokerObject(value.summary)
-    if (Object.keys(summary).some(key => key !== 'text') || typeof summary.text !== 'string' || summary.text.length > 4096) throw new Error('Invalid request summary')
-  }
+  if (value.summary !== undefined) value.summary = parseGrantSummary(value.summary)
   if (value.batch !== undefined) value.batch = parseGrantBatch(value.batch)
   if (value.waits_until !== undefined && (!Number.isInteger(value.waits_until) || Number(value.waits_until) <= Date.now() / 1000)) throw new Error('Invalid request deadline')
   if (value.authorization_details !== undefined) {

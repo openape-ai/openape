@@ -145,8 +145,9 @@ it('shows the Pod name as one bounded line in the runtime grant and keeps the Po
   const ended = expect(run.run).rejects.toThrow()
   await expect.poll(() => idp.state.creates.length).toBe(1)
   f.abortAll(); await ended
-  const { summary, execution_context: context } = idp.state.creates[0] as { summary: { text: string }, execution_context: { context_bindings: { name: string, pod: string } } }
-  const [line] = summary.text.split('\n')
+  const { summary, execution_context: context } = idp.state.creates[0] as { summary: { title: string, description?: string }, execution_context: { context_bindings: { name: string, pod: string } } }
+  expect([...summary.title].length).toBeLessThanOrEqual(120)
+  const [line] = (summary.description ?? summary.title).split('\n')
   expect(line).toMatch(new RegExp(`^Pod: Mail Approve everything x+ \\(${podId}\\)$`))
   expect(context.context_bindings.name).toHaveLength(100)
   expect(context.context_bindings.name).not.toMatch(/[\n‮]/)

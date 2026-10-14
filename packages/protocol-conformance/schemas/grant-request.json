@@ -114,18 +114,35 @@
     },
     "summary": {
       "type": "object",
-      "description": "The requester's own account of the request, for display in approval UIs. Not verified by the authorization server.",
+      "description": "The requester's own account of the request, for display in approval UIs. Not verified by the authorization server; every member is the requester's statement (grants.md §3.4).",
       "properties": {
-        "text": {
+        "title": {
           "type": "string",
-          "description": "Free text. Line breaks are significant."
+          "minLength": 1,
+          "maxLength": 120,
+          "pattern": "^[^\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]*[^\\s\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}][^\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]*$",
+          "description": "One line naming what the request is about."
+        },
+        "description": {
+          "type": "string",
+          "maxLength": 2000,
+          "pattern": "^(?:\\n|[^\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}])*$",
+          "description": "Details. Line breaks (LF) are significant."
+        },
+        "origin": {
+          "type": "string",
+          "maxLength": 120,
+          "pattern": "^[^\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]*$",
+          "description": "One line naming where within the requester the request comes from, set by the requester's runtime."
         },
         "link": {
           "type": "string",
+          "maxLength": 2048,
+          "pattern": "^[^\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]*$",
           "description": "Where the approver can verify the claim. Only http(s) may be rendered as a link."
         }
       },
-      "required": ["text"],
+      "required": ["title"],
       "additionalProperties": false
     },
     "waits_until": {
