@@ -42,7 +42,7 @@ export async function invokeProgram(resources: PodResource[], podId: string, bod
   try {
     const broker = new PodToolBroker(helper, root, authority, credentials)
     const launch = programLaunch(assignment)
-    return await broker.execute({ id, ...authorization, reach: access.reach, capability: assignment.capability, executable: launch.executable, executableHash: launch.executableHash, entryFiles: assignment.entryFiles, prefix: launch.prefix, programState: { id: assignment.stateId, podId, applicationId: id }, cacheArgument: assignment.cacheArgument, runtimeDirectories: launch.runtimeDirectories, runtimeEnvironment: assignment.runtime?.environment, environment: { ...assignment.environment, ...proxy?.environment }, networkPorts: proxy ? [proxy.port] : [], maxOutputBytes: 200000 }, { toolId: id, argv: [assignment.cliId, ...argv] }, lease)
+    return await broker.execute({ id, ...authorization, identityConnection: access.connection, reach: access.reach, capability: assignment.capability, executable: launch.executable, executableHash: launch.executableHash, entryFiles: assignment.entryFiles, prefix: launch.prefix, programState: { id: assignment.stateId, podId, applicationId: id }, cacheArgument: assignment.cacheArgument, runtimeDirectories: launch.runtimeDirectories, runtimeEnvironment: assignment.runtime?.environment, environment: { ...assignment.environment, ...proxy?.environment }, networkPorts: proxy ? [proxy.port] : [], maxOutputBytes: 200000 }, { toolId: id, argv: [assignment.cliId, ...argv] }, lease)
   }
   finally { await proxy?.close() }
 }
