@@ -4,7 +4,7 @@
   "project": "OpenApe Pods / IdP / DDISA / Shapes",
   "owner": "Patrick Hofmann",
   "date": "2026-10-14",
-  "status": "draft",
+  "status": "active",
   "revision": 4,
   "title": "Generic grant cards, self-improving Shapes and adapter checks only at the IdP",
   "goal": "Every grant request reads well at the IdP without special code; Shapes adapters live and are checked only at the IdP; a Pod calls a program like any ordinary program; each user can let a personal Pod shorten their own approvals.",
@@ -64,22 +64,22 @@
     {
       "title": "Adapter check only at the IdP",
       "description": "A Pod calls a program like any ordinary program: path and arguments. Only the IdP knows Shapes; it resolves the exact command with the registry adapter and checks it against the approved grants. The desktop proves which program runs (file hash) and runs only the command the token names. The personal upgrade Pod reads Shapes through the IdP, nowhere else.",
-      "status": "proposed"
+      "status": "accepted"
     },
     {
       "title": "One token per command",
       "description": "The IdP issues a token for at most five minutes, bound to the agent, the target host, the exact argument list (hash) and the program hash. Identical repeated commands reuse it. Rejected alternative: a token per permission with a local coverage check, because it keeps an adapter in the desktop.",
-      "status": "proposed"
+      "status": "accepted"
     },
     {
       "title": "Approvals carry over",
       "description": "The IdP matches grants by permission, not by adapter version, so all approved grants keep working after the switch and no Pod asks again for a permission it holds. Grant requests for programs no longer carry client-resolved details; the IdP derives them.",
-      "status": "proposed"
+      "status": "accepted"
     },
     {
       "title": "Untested program versions",
-      "description": "Open for the owner. Recommended: an untested program hash is matched with the registry adapter of its name and the card shows \"version not tested\", so reads like Intake's do not ask once per message. Alternative (revision 3): untested versions need exact approvals until a registry pull request adds the hash.",
-      "status": "proposed"
+      "description": "Accepted by the owner on October 14: an untested program hash is matched with the registry adapter of its name and the card shows \"version not tested\", so reads like Intake's do not ask once per message. Rejected alternative (revision 3): exact approvals until a registry pull request adds the hash.",
+      "status": "accepted"
     }
   ],
   "milestones": [
@@ -474,8 +474,8 @@
       },
       {
         "path": "decisions.9.description",
-        "source": "Open for the owner. Recommended: an untested program hash is matched with the registry adapter of its name and the card shows \"version not tested\", so reads like Intake's do not ask once per message. Alternative (revision 3): untested versions need exact approvals until a registry pull request adds the hash.",
-        "text": "Offen für den Owner. Empfohlen: Ein ungetesteter Programm-Hash wird mit dem Registry-Adapter seines Namens abgeglichen und die Karte zeigt \"Version nicht getestet\", damit Lesezugriffe wie die von Intake nicht pro Nachricht nachfragen. Alternative (Revision 3): Ungetestete Versionen brauchen genaue Freigaben, bis ein Registry-Pull-Request den Hash ergänzt."
+        "source": "Accepted by the owner on October 14: an untested program hash is matched with the registry adapter of its name and the card shows \"version not tested\", so reads like Intake's do not ask once per message. Rejected alternative (revision 3): exact approvals until a registry pull request adds the hash.",
+        "text": "Vom Owner am 14. Oktober angenommen: Ein ungetesteter Programm-Hash wird mit dem Registry-Adapter seines Namens abgeglichen und die Karte zeigt \"Version nicht getestet\", damit Lesezugriffe wie die von Intake nicht pro Nachricht nachfragen. Verworfene Alternative (Revision 3): genaue Freigaben, bis ein Registry-Pull-Request den Hash ergänzt."
       },
       {
         "path": "milestones.0.title",
@@ -883,5 +883,15 @@
         "text": "Revision 4 nach der Frage des Owners: Adapterprüfung nur am IdP mit einem Token pro Befehl; Programme nur per Pfad zugewiesen; Freigaben bleiben erhalten; ungetestete Versionen zur Entscheidung offen."
       }
     ]
+  },
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-14",
+    "reference": "Owner in chat, 2026-10-14, after reviewing revision 4 (report version 5): \"Revision 4 freigegeben, Entscheidung 10 wie empfohlen\"",
+    "scope": "Implementation of milestones M8–M11 of revision 4, with decision 10 as recommended.",
+    "target": {
+      "url": "https://report.openape.ai/d/01M4VAP3E4WHRB6SRGCJJ8E6CD",
+      "version": 5
+    }
   }
 }
