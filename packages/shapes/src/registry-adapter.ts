@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs'
+import { basename } from 'node:path'
 import { readCliVersion } from '@openape/grants'
 import { loadAdapter } from './adapters.js'
 import { installedAdapterPath } from './installer.js'
@@ -47,15 +48,26 @@ export interface CliVersionCheck {
 }
 
 /**
- * Compares the output of the adapter's `version_command` with its tested versions. An adapter without version data,
- * a failed command (null output) or an unreadable version is never tested: callers fall back to exact approvals.
+ * Whether an executable is tested with the adapter: its file digest is one of `tested_digests`, or the output of the
+ * adapter's `version_command` names one of `tested_versions`. An adapter without either, a failed command (null output)
+ * or an unreadable version is never tested: callers fall back to exact approvals.
  */
-export function checkCliVersion(adapter: ShapesAdapter, output: string | null): CliVersionCheck {
+export function checkCliVersion(adapter: ShapesAdapter, output: string | null, fileDigest?: string): CliVersionCheck {
+  if (fileDigest && adapter.cli.tested_digests?.includes(fileDigest))
+    return { version: `sha256:${fileDigest.slice('SHA-256:'.length, 'SHA-256:'.length + 12)}`, tested: true }
   const { tested_versions: tested, version_command: command, version_pattern: pattern } = adapter.cli
   if (!tested || !command || !pattern || output === null)
     return { version: null, tested: false }
   const version = readCliVersion({ tested_versions: tested, version_command: command, version_pattern: pattern }, output)
   return { version, tested: version !== null && tested.includes(version) }
+}
+
+/**
+ * Whether an installed executable may use a registry adapter: its real file name is the adapter's executable, or its
+ * file digest is one the adapter was tested with. A caller's command name never binds an executable to an adapter.
+ */
+export function bindsExecutable(adapter: ShapesAdapter, realPath: string, fileDigest: string): boolean {
+  return basename(realPath) === adapter.cli.executable || adapter.cli.tested_digests?.includes(fileDigest) === true
 }
 
 /**

@@ -2,6 +2,7 @@
 export {
   appendAuditLog,
   buildExactCommandGrantRequest,
+  bindsExecutable,
   buildStructuredCliGrantRequest,
   checkCliVersion,
   exactCommand,
