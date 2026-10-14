@@ -32,12 +32,15 @@ Major because local adapter execution is removed:
 - `ape-shell`: a line that is exactly one program call (plain words, an
   executable file on `PATH`, no builtin) goes to the IdP; compound lines,
   expansions, redirections and builtins use the unchanged ape-shell session
-  grant. For an authorized program line the interactive shell runs
-  `\builtin command -- '<absolute path>' '<arg>' …` (exactly the authorized
-  file and argv, unaffected by aliases), never the typed line; relative program
-  paths are refused in the interactive shell. `apes run`, `ape-shell -c` and
-  MCP re-hash the file right before running it and refuse a changed file or one
-  that is not a regular file. The program name is a requester claim; the file
+  grant. An authorized program line is not handed to bash: the interactive
+  shell starts the authorized file itself with exactly the authorized argv, in
+  the working directory and exported environment bash recorded at its last
+  prompt (so aliases, functions and traps of the session cannot replace it);
+  relative program paths are refused there. Programs are located with symlinks
+  resolved (the resolved file is hashed and run, the invoked path is argv[0]).
+  Every path (`apes run`, `ape-shell -c`, REPL, MCP) re-hashes the file right
+  before starting it and refuses a changed file or one that is not a regular
+  file. The program name is a requester claim; the file
   that runs is bound by `program_sha256`. Gated agents must not have an
   agent-writable directory on their `PATH` or as a program location.
   Local segment-wise resolution of compound lines is removed. Audit

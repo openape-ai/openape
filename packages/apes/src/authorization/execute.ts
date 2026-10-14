@@ -1,4 +1,4 @@
-import { execFileSync, spawnSync } from 'node:child_process'
+import { spawnSync } from 'node:child_process'
 import type { StdioOptions } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
@@ -23,14 +23,9 @@ export function assertAuthorizedFile(call: ProgramCall): void {
 export function executeProgramCall(call: ProgramCall, stdio: StdioOptions = 'inherit'): void {
   assertAuthorizedFile(call)
   const { APES_SHELL_WRAPPER: _wrapperMarker, APES_SHELL_MODE: _modeMarker, ...env } = process.env
-  try {
-    execFileSync(call.program.path, call.argv, { stdio, env })
-  }
-  catch (error) {
-    const status = (error as { status?: number | null }).status
-    if (typeof status === 'number') throw new CliExit(status || 1)
-    throw error
-  }
+  const result = spawnSync(call.program.path, call.argv, { stdio, env, argv0: call.program.argv0 })
+  if (result.error) throw result.error
+  if (result.status !== 0) throw new CliExit(result.status ?? 1)
 }
 
 export interface CapturedRun {
@@ -43,7 +38,43 @@ export interface CapturedRun {
 export function captureProgramCall(call: ProgramCall): CapturedRun {
   assertAuthorizedFile(call)
   const { APES_SHELL_WRAPPER: _wrapperMarker, APES_SHELL_MODE: _modeMarker, ...env } = process.env
-  const result = spawnSync(call.program.path, call.argv, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], env })
+  const result = spawnSync(call.program.path, call.argv, { encoding: 'utf-8', stdio: ['ignore', 'pipe', 'pipe'], env, argv0: call.program.argv0 })
   if (result.error) throw result.error
   return { exitCode: result.status ?? 1, stdout: result.stdout, stderr: result.stderr }
+}
+
+export type ShellProgramRun = { kind: 'ran', exitCode: number } | { kind: 'refused', reason: string }
+
+/**
+ * Runs an authorized program call of the interactive shell: apes starts the file itself, never bash, so no alias,
+ * function or trap of the session can replace it. Working directory and exported environment are the session's
+ * (as bash recorded them at its last prompt); the terminal is handed to the program. The file is re-hashed right
+ * before it starts, and `onStart` fires only when it really starts.
+ */
+export function runProgramInShellState(
+  call: ProgramCall,
+  readState: () => { cwd: string, env: Record<string, string> },
+  onStart: () => void,
+): ShellProgramRun {
+  let state: { cwd: string, env: Record<string, string> }
+  try {
+    state = readState()
+    assertAuthorizedFile(call)
+  }
+  catch (error) {
+    return { kind: 'refused', reason: error instanceof Error ? error.message : String(error) }
+  }
+  const { APES_SHELL_WRAPPER: _wrapperMarker, APES_SHELL_MODE: _modeMarker, ...env } = state.env
+  const stdin = process.stdin as NodeJS.ReadStream
+  const wasRaw = stdin.isTTY === true && stdin.isRaw
+  if (wasRaw) stdin.setRawMode(false)
+  try {
+    onStart()
+    const result = spawnSync(call.program.path, call.argv, { cwd: state.cwd, env, stdio: 'inherit', argv0: call.program.argv0 })
+    if (result.error) throw result.error
+    return { kind: 'ran', exitCode: result.status ?? 1 }
+  }
+  finally {
+    if (wasRaw) stdin.setRawMode(true)
+  }
 }
