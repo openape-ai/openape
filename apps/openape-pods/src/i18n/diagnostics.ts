@@ -44,6 +44,7 @@ export const diagnosticPatterns = [
   'The registry adapter {p0} is not installed; run apes adapter install {p1}',
   'The installed adapter {p0} differs from the shapes registry; run apes adapter install {p1} --refresh',
   'Failed to fetch registry: {p0}',
+  'The registry adapter {p0} is for {p1}; {p2} is neither that executable nor a file it was tested with',
   'Cannot back up profile entry: {p0}',
   'Update server returned HTTP {p0}',
   'notify key "{p0}" was already used with different content',

@@ -1,42 +1,59 @@
-import { loadProgramRuntime, programLaunch } from './runtime'
-import { basename, join } from 'node:path'
-import { tmpdir } from 'node:os'
-import { execFile } from 'node:child_process'
-import { promisify } from 'node:util'
+import { loadProgramRuntime } from './runtime'
+import { basename, join, sep } from 'node:path'
 import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
-import { checkCliVersion, fetchRegistry, loadAdapter, loadRegistryAdapter } from '@openape/apes'
+import { bindsExecutable, checkCliVersion, fetchRegistry, loadAdapter, loadRegistryAdapter } from '@openape/apes'
 import type { RegistryIndex } from '@openape/apes'
 import type { ProgramDefinition } from '../../contracts/programs'
+import type { VersionProbe } from './version-probe'
 
-/** Runs an executable with the adapter's version arguments; null when it exits unsuccessfully or times out. */
-export type VersionProbe = (definition: ProgramDefinition, command: string[]) => Promise<string | null>
 export interface RegistryProgramOptions {
   /** Where verified registry adapters are kept by content digest. */
   store: string
+  /** Selects the registry entry when the file name differs; it never binds an executable to an adapter by itself. */
   commandName?: string
   runtimePath?: string
+  /** Folders no assigned executable may come from: the Pods profile, Pod folders and assigned writable folders. */
+  protectedRoots: string[]
+  probe: VersionProbe
   registry?: () => Promise<RegistryIndex>
   /** The installed adapters; `apes adapter install` writes ~/.openape/shapes/adapters. */
   adapters?: string
-  probe?: VersionProbe
 }
 
 /**
  * An executable with the shapes-registry adapter of its CLI, the only adapters Pods assigns (issue 1473). The
  * installed adapter must match the registry index; Pods keeps it as a copy named by its digest, so updating the
- * installed adapter never changes an assignment until the owner replaces it. The adapter's version command runs once
- * here, with the program's launch but without shell or owner environment: the executable is hash-pinned and verified
- * before every command, so the version it printed stays the version that runs.
+ * installed adapter never changes an assignment until the owner replaces it. The executable must be the adapter's
+ * executable by its real file name or one of its tested files by digest, and must not come from a folder a Pod can
+ * write. A tested digest needs no probe; otherwise the adapter's version command runs once in the isolated sandbox.
+ * The executable is hash-pinned and verified before every command, so the version found stays the version that runs.
  */
 export async function registryProgramDefinition(executablePath: string, options: RegistryProgramOptions): Promise<ProgramDefinition> {
   const cliId = options.commandName ?? basename(executablePath)
   const { entry, loaded } = loadRegistryAdapter(await (options.registry ?? fetchRegistry)(), cliId, options.adapters)
   const definition = await programDefinition(executablePath, await pinAdapter(options.store, entry.id, loaded.source), cliId, options.runtimePath)
   if (`SHA-256:${definition.adapterHash}` !== entry.digest) throw new Error('The registry adapter changed during assignment; assign the application again')
+  await assertOutside(options.protectedRoots, [definition.executable, definition.runtime?.executable, definition.runtime?.descriptor.path])
+  const digest = `SHA-256:${definition.executableHash}`
+  if (!bindsExecutable(loaded.adapter, definition.executable, digest)) throw new Error(`The registry adapter ${entry.id} is for ${loaded.adapter.cli.executable}; ${basename(definition.executable)} is neither that executable nor a file it was tested with`)
   const versionCommand = loaded.adapter.cli.version_command
-  const output = versionCommand ? await (options.probe ?? probeVersion)(definition, versionCommand) : null
-  return { ...definition, registry: { id: entry.id, digest: entry.digest }, cliVersion: checkCliVersion(loaded.adapter, output) }
+  const pinned = loaded.adapter.cli.tested_digests?.includes(digest)
+  const output = versionCommand && !pinned ? await options.probe(definition, versionCommand) : null
+  return { ...definition, registry: { id: entry.id, digest: entry.digest }, cliVersion: checkCliVersion(loaded.adapter, output, digest) }
+}
+
+/** Refuses a file inside a protected folder: a Pod could replace it between the assignment and a later run. */
+async function assertOutside(roots: string[], paths: (string | undefined)[]): Promise<void> {
+  const folders = await Promise.all(roots.map(async (root) => {
+    try { return await realpath(root) }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error }
+  }))
+  for (const path of paths) {
+    if (!path) continue
+    const file = await realpath(path)
+    if (folders.some(folder => folder && (file === folder || file.startsWith(`${folder}${sep}`)))) throw new Error('Assign an installed executable outside the Pods profile, Pod folders and folders Pods can write')
+  }
 }
 
 async function pinAdapter(store: string, id: string, source: string): Promise<string> {
@@ -46,20 +63,6 @@ async function pinAdapter(store: string, id: string, source: string): Promise<st
   try { await writeFile(path, content, { mode: 0o600, flag: 'wx' }) }
   catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
   return path
-}
-
-async function probeVersion(definition: ProgramDefinition, command: string[]): Promise<string | null> {
-  const launch = programLaunch(definition)
-  try {
-    const { stdout, stderr } = await promisify(execFile)(launch.executable, [...launch.prefix, ...command], { cwd: tmpdir(), env: { ...launch.environment, PATH: '/usr/bin:/bin:/usr/sbin:/sbin', LANG: 'C' }, timeout: 10000, maxBuffer: 64 * 1024 })
-    return `${stdout}\n${stderr}`
-  }
-  catch (error) {
-    // A non-zero exit, signal, timeout or oversized output leaves the version unknown: exact approvals apply.
-    const failure = error as { code?: unknown, killed?: boolean, signal?: unknown }
-    if (typeof failure.code === 'number' || failure.code === 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER' || failure.killed || failure.signal) return null
-    throw error
-  }
 }
 
 /** A definition with a given adapter file: Pods' generated application launchers and portable requirements. */

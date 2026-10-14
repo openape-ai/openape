@@ -18,7 +18,8 @@ of the shapes registry (installed with `apes adapter install`) are assigned; Pod
 keeps the verified copy named by its digest. Graphical apps get an exact,
 no-argument launcher.
 
-`pod-runtime-shapes.toml` and `pod-http-shapes.toml` are byte-identical copies of
-the registry entries `pod-runtime` and `pod-http`. `registry-adapters.json` pins
-their registry digests; Pods refuses a copy that differs. Update both together
-from a merged registry change.
+`pod-runtime-shapes.toml`, `pod-http-shapes.toml` and `pod-ssh-shapes.toml` are
+byte-identical copies of the registry entries `pod-runtime`, `pod-http` and
+`pod-ssh`. `registry-adapters.json` pins their registry digests; Pods refuses a
+copy that differs. Update both together from a merged registry change.
+`o365-shapes.toml` belongs to the o365 test fixture above and is not shipped.

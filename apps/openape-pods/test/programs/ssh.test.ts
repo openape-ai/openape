@@ -22,6 +22,7 @@ vi.mock('../../src/main/broker/authorization', () => ({ AgentAuthority: class { 
 vi.mock('../../src/main/connections/agent', () => ({ PodIdentityManager: class { connection() { return {} } } }))
 vi.mock('../../src/worker/runtime/sandbox', () => ({ superviseProcess: mocks.launch }))
 vi.mock('@openape/apes', () => ({ loadAdapter: () => ({ digest: 'digest' }), resolveCommand: async () => ({ permission: 'ssh-read' }) }))
+vi.mock('../../src/main/grants/registry-copies', () => ({ loadPodAdapter: () => ({ digest: 'digest' }) }))
 afterEach(() => vi.resetAllMocks())
 const podId = '00000000-0000-4000-8000-000000000001'
 const binding: SshBinding = { profileHash: 'a'.repeat(64), target: { alias: 'fixture.example', jumps: ['jump.example'], profile: 'linde-server-v1' }, hosts: [], knownHosts: [] }

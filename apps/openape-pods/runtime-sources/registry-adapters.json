@@ -1,6 +1,6 @@
 {
   "registry": "https://repos.openape.ai/patrick/shapes-registry",
-  "commit": "647b63e1d9c7db404e5f5e230242e9d2b94f6808",
+  "commit": "cc62e50d7b0bca9239852b35fd964b992fb1a300",
   "adapters": {
     "pod-runtime": {
       "file": "pod-runtime-shapes.toml",
@@ -11,6 +11,11 @@
       "file": "pod-http-shapes.toml",
       "digest": "SHA-256:ffbd24f7a9305386efdeae21a3985b7d17f402f59045d44b832140c8af11f444",
       "grant_digest": "SHA-256:15e719afe70ed1dc888c6df91fdcfd5f34bb57aca5897c8f6c44a3011fbf64e6"
+    },
+    "pod-ssh": {
+      "file": "pod-ssh-shapes.toml",
+      "digest": "SHA-256:022abe2f1c54ee2a1c698c2d7f583c1f4ff413effee5e087ffb7209e1e3aa6bc",
+      "grant_digest": "SHA-256:207e241c0ac71a0429974461d9d3e6a0b8111aafa8b907898846dc5b8ece94a2"
     }
   }
 }

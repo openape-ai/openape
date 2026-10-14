@@ -1653,7 +1653,7 @@
   "A delegation names grants:read, grants:request or both": "Eine Delegation nennt grants:read, grants:request oder beide",
   "A delegation lasts 1 to {p0} days": "Eine Delegation gilt 1 bis {p0} Tage",
   "A delegation goes to the one DDISA agent this Pod authenticates as at your identity provider; assign the Pod exactly one such HTTP destination first": "Eine Delegation geht an den einen DDISA-Agenten, als der sich dieser Pod bei deinem Identity Provider anmeldet; weise dem Pod zuerst genau ein solches HTTP-Ziel zu",
-  "HTTP delegation authentication needs the delegation grant ID":"Die HTTP-Authentifizierung mit Delegation benötigt die ID des Delegations-Grants",
+  "HTTP delegation authentication needs the delegation grant ID": "Die HTTP-Authentifizierung mit Delegation benötigt die ID des Delegations-Grants",
   "A Pod that acts with a personal delegation cannot be exported; remove that HTTP destination first": "Ein Pod, der mit einer persönlichen Delegation handelt, kann nicht exportiert werden; entferne zuerst dieses HTTP-Ziel",
   "HTTP authentication exchange must be \"sp\"": "Der Token-Tausch der HTTP-Authentifizierung muss \"sp\" sein",
   "Service sign-in at {p0} failed ({p1})": "Die Anmeldung beim Dienst {p0} ist fehlgeschlagen ({p1})",
@@ -3083,5 +3083,7 @@
   "The shapes registry has no adapter for {p0}; only registry adapters are accepted": "Die Shapes-Registry hat keinen Adapter für {p0}; nur Registry-Adapter werden akzeptiert",
   "The registry adapter {p0} is not installed; run apes adapter install {p1}": "Der Registry-Adapter {p0} ist nicht installiert; führe apes adapter install {p1} aus",
   "The installed adapter {p0} differs from the shapes registry; run apes adapter install {p1} --refresh": "Der installierte Adapter {p0} weicht von der Shapes-Registry ab; führe apes adapter install {p1} --refresh aus",
-  "Failed to fetch registry: {p0}": "Die Shapes-Registry konnte nicht geladen werden: {p0}"
+  "Failed to fetch registry: {p0}": "Die Shapes-Registry konnte nicht geladen werden: {p0}",
+  "Assign an installed executable outside the Pods profile, Pod folders and folders Pods can write": "Weise ein installiertes Programm außerhalb des Pods-Profils, der Pod-Ordner und der für Pods beschreibbaren Ordner zu",
+  "The registry adapter {p0} is for {p1}; {p2} is neither that executable nor a file it was tested with": "Der Registry-Adapter {p0} gilt für {p1}; {p2} ist weder dieses Programm noch eine damit getestete Datei"
 }
