@@ -7,6 +7,7 @@
 - Rules: Patrick's "desktop is a generic runtime"; UI checks in Vitest browser mode; no push without owner approval at the IdP; IdP, Pods and apes ship the summary change together.
 - M1: branch `feature/issue-1473-summary-fields` (protocol PR on `patrick/protocol`, same branch name). The free IdP migrates stored `summary.text` on startup (`server/plugins/02.database.ts`); take an IdP database backup before deploying it.
 - M4: branch `feature/issue-1473-pods-pass-through` (contains M1 `a419dade`). Pods schema 51 rebuilds `action_approvals` (summary columns; long composed titles keep their full text as description). Scripts pass `title/description/link` on `approvals.request` and `summary` on `tools.invoke`/`http.request`; the desktop adds the Pod name as `origin`. Deploy the M1 IdP before installing this desktop; the desktop sends no `summary.text`.
+- M5 IdP part: branch `feature/issue-1473-delegation-scopes`; scopes `grants:read`/`grants:request` on delegations with audience = IdP issuer, delegated tokens refused everywhere else; protocol branch `feature/issue-1473-delegation-scopes` (delegation.md §8). Pods side (running a Pod with the delegation) is open.
 
 ## Intake category version recovery — issue 1472
 
