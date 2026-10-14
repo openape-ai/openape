@@ -133,10 +133,12 @@ export async function issueCommandJWT(
 /**
  * Whether verified `claims` are the command token that spent this single-use
  * grant: the IdP marks a single-use grant used when it issues the command
- * token, so consuming with that token afterwards confirms the consumption.
+ * token. Consuming with that token may confirm the consumption once; the
+ * caller records that redemption with `GrantStore.markConsumed`.
  */
 export function spentByCommandToken(grant: OpenApeGrant, claims: OpenApeAuthZClaims): boolean {
   return grant.status === 'used'
+    && typeof claims.jti === 'string'
     && (grant.request.grant_type ?? 'once') === 'once'
     && claims.grant_id === grant.id
     && claims.sub === grant.request.requester

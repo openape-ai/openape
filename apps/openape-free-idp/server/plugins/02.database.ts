@@ -262,6 +262,11 @@ export default defineNitroPlugin(async () => {
   catch (error) {
     if (!isDuplicateColumn(error)) throw error
   }
+  // The one /consume redemption of a single-use grant spent by its command token (issue 1473).
+  try { await db.run(sql`ALTER TABLE grants ADD COLUMN consumed_jti TEXT`) }
+  catch (error) {
+    if (!isDuplicateColumn(error)) throw error
+  }
 
   // Issue 1473: summary.text became title/description; requests carrying
   // text are refused, so stored grants must not keep it either.

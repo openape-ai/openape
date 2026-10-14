@@ -117,6 +117,18 @@ describe('spentByCommandToken', () => {
     expect(spentByCommandToken(grant, { ...claims, sub: 'b' })).toBe(false)
     expect(spentByCommandToken(grant, { ...claims, grant_id: 'other' })).toBe(false)
     expect(spentByCommandToken(grant, { ...claims, argv_hash: undefined })).toBe(false)
+    expect(spentByCommandToken(grant, { ...claims, jti: undefined as unknown as string })).toBe(false)
+  })
+})
+
+describe('InMemoryGrantStore.markConsumed', () => {
+  it('records only the first redemption of a grant', async () => {
+    const { InMemoryGrantStore } = await import('../src/stores.js')
+    const grants = new InMemoryGrantStore()
+    await grants.save({ id: 'g', status: 'used', created_at: 1, request: { requester: 'a', target_host: 'h', audience: 'shapes', grant_type: 'once' } })
+    expect((await Promise.all([grants.markConsumed('g', 'j1'), grants.markConsumed('g', 'j1')])).toSorted()).toEqual([false, true])
+    expect(await grants.markConsumed('g', 'j2')).toBe(false)
+    expect(await grants.markConsumed('missing', 'j1')).toBe(false)
   })
 })
 

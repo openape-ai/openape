@@ -16,6 +16,8 @@ export const grants = sqliteTable('grants', {
   decidedBy: text('decided_by'),
   expiresAt: integer('expires_at'),
   usedAt: integer('used_at'),
+  // jti of the command token whose /consume confirmed a single-use grant spent at issuance (issue 1473)
+  consumedJti: text('consumed_jti'),
   // When this grant was auto-approved by matching a standing grant, this
   // column records the standing grant's id for audit-trail purposes.
   // Null for grants decided via the normal manual approval path.
