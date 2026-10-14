@@ -2,7 +2,9 @@ import { brokerInput } from '../utils/broker-input'
 import type { BrokeredGrant } from '@openape/core'
 import { defineEventHandler, readBody, setHeader, setResponseStatus } from 'h3'
 import { decodeJwt } from 'jose'
-import { assertGrantBatchMember, BROKER_REQUEST_TYPE, InvalidGrantBatchError, brokerObject, introspectGrant, issueAuthzJWT, parseBrokerRequest, sameBrokeredGrant, verifyBrokerToken } from '@openape/grants'
+import { assertGrantBatchMember, BROKER_REQUEST_TYPE, InvalidGrantBatchError, brokerObject, introspectGrant, issueAuthzJWT, parseBrokerRequest, parseProgramAuthorizeRequest, sameBrokeredGrant, verifyBrokerToken } from '@openape/grants'
+import { enforceAuthorizeRateLimit } from '../utils/authorize-rate-limit'
+import { authorizeProgramCall, sendProgramAuthorizeResult } from '../utils/program-authorize'
 import { brokerVerificationKey, discoverBroker } from '../utils/broker-network'
 import { useBrokerStore } from '../utils/broker-store'
 import { getIdpIssuer, useIdpStores } from '../utils/stores'
@@ -29,6 +31,13 @@ export default defineEventHandler(async (event) => {
   if (request.operation === 'connection') return connection
   const provenance: BrokeredGrant = { connection_id: connection.id, broker_issuer: connection.broker_issuer, agent_issuer: connection.broker_issuer, owner: connection.owner.subject, key_id: request.key_id }
   const { grantStore } = useGrantStores()
+  if (request.operation === 'authorize') {
+    enforceAuthorizeRateLimit(event, request.sub)
+    const call = await brokerInput(() => parseProgramAuthorizeRequest(request.request))
+    await store.assertConnection(provenance)
+    const result = await authorizeProgramCall(event, { requester: request.sub, request: call, brokered: provenance, onToken: grant => store.recordToken(grant) })
+    return sendProgramAuthorizeResult(event, result)
+  }
   if (request.operation === 'create') {
     const grantRequest = await brokerInput(() => parseBrokerGrantRequest(request.request, request.sub))
     try { await assertGrantBatchMember(grantRequest, grantStore) }

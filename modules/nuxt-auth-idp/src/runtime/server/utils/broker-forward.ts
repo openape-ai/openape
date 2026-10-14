@@ -8,18 +8,26 @@ import { hasBrokerStore, useBrokerStore } from './broker-store'
 import { createProblemError } from './problem'
 import { getIdpIssuer, useIdpStores } from './stores'
 
-export async function forwardBrokerOperation(binding: BrokerAgentBinding, operation: 'connection' | 'create' | 'get' | 'token', input?: unknown): Promise<unknown> {
+export type BrokerOperation = 'connection' | 'create' | 'authorize' | 'get' | 'token'
+
+function brokerClaims(operation: BrokerOperation, common: Record<string, unknown>, identity: Record<string, unknown>, input: unknown): Record<string, unknown> {
+  if (operation === 'connection') return { ...common, operation }
+  if (operation === 'create' || operation === 'authorize') return { ...common, ...identity, operation, request: input }
+  return { ...common, ...identity, operation, grant_id: input }
+}
+
+export async function forwardBrokerOperation(binding: BrokerAgentBinding, operation: BrokerOperation, input?: unknown): Promise<unknown> {
   const discovery = await discoverBroker(binding.decision_issuer, binding.owner.split('@')[1] ?? '')
   const key = await useIdpStores().keyStore.getSigningKey()
   const now = Math.floor(Date.now() / 1000)
   const common = { iss: getIdpIssuer(), aud: binding.decision_issuer, iat: now, exp: now + 60, jti: crypto.randomUUID(), connection_id: binding.connection_id, owner: binding.owner }
   const identity = { sub: binding.subject, key_id: binding.key_id }
-  const request = operation === 'connection' ? { ...common, operation } : operation === 'create' ? { ...common, ...identity, operation, request: input } : { ...common, ...identity, operation, grant_id: input }
-  const assertion = await signBrokerToken(request as BrokerRequest, key.privateKey, key.kid, BROKER_REQUEST_TYPE)
-  return await brokerFetch(brokerEndpoint(discovery, 'openape_brokered_grants_endpoint'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assertion }) })
+  const assertion = await signBrokerToken(brokerClaims(operation, common, identity, input) as unknown as BrokerRequest, key.privateKey, key.kid, BROKER_REQUEST_TYPE)
+  // An owner's denial of a program call is a 403 whose body the caller needs.
+  return await brokerFetch(brokerEndpoint(discovery, 'openape_brokered_grants_endpoint'), { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assertion }), relayRefusal: operation === 'authorize' })
 }
 
-export async function maybeForwardBrokerGrant(event: H3Event, operation: 'create' | 'get' | 'token', input?: unknown): Promise<unknown | undefined> {
+export async function maybeForwardBrokerGrant(event: H3Event, operation: Exclude<BrokerOperation, 'connection'>, input?: unknown): Promise<unknown | undefined> {
   if (!hasBrokerStore()) return undefined
   const caller = await tryBearerAuth(event)
   if (!caller || caller.act !== 'agent' || caller.delegation_grant) return undefined

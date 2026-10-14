@@ -16,6 +16,7 @@ const language = computed(() => props.german ? 'de' as const : 'en' as const)
 const request = computed(() => props.grant.request)
 const registry = computed(() => props.grant.card?.registry ?? null)
 const requester = computed(() => props.grant.card?.requester ?? null)
+const program = computed(() => props.grant.card?.program ?? null)
 const requesterName = computed(() => requester.value?.name || formatRequesterName(request.value.requester))
 const line = computed(() => grantBindingLine(props.grant, language.value))
 const command = computed(() => unwrapShellCommand(request.value.command))
@@ -32,8 +33,8 @@ const showsRequested = computed(() => {
 })
 
 const text = computed(() => props.german
-  ? { language: 'English', exactCommand: 'Genauer Befehl', permission: 'Angefragte Berechtigung', requestedBy: 'Angefragt von', owner: 'Owner', unregistered: 'Nicht bei diesem IdP registriert', submittedBy: 'Eingereicht über Delegation von', validity: 'Gültigkeit', expires: 'Gültig bis', runAs: 'Ausführen als', batch: 'Teil einer Sammelanfrage', reviewBatch: 'Gemeinsam prüfen', show: (label: string) => `${label} anzeigen`, more: 'Weitere Angaben anzeigen', technical: 'Technische Details', target: 'Ziel', audience: 'Audience', permissions: 'Berechtigungen', hash: 'Befehls-Hash', adapter: 'Adapter', requested: 'Mit „laut Anfrage“ markierte Werte gibt die anfragende Anwendung an; diese Freigabe bindet sie nicht.' }
-  : { language: 'Deutsch', exactCommand: 'Exact command', permission: 'Requested permission', requestedBy: 'Requested by', owner: 'Owner', unregistered: 'Not registered at this IdP', submittedBy: 'Submitted via delegation by', validity: 'Validity', expires: 'Valid until', runAs: 'Run as', batch: 'Part of a batch request', reviewBatch: 'Review together', show: (label: string) => `Show ${label.charAt(0).toLowerCase()}${label.slice(1)}`, more: 'Show more details', technical: 'Technical request details', target: 'Target', audience: 'Audience', permissions: 'Permissions', hash: 'Command hash', adapter: 'Adapter', requested: 'Values marked "as requested" are stated by the requesting application; this approval does not bind them.' })
+  ? { language: 'English', exactCommand: 'Genauer Befehl', permission: 'Angefragte Berechtigung', requestedBy: 'Angefragt von', owner: 'Owner', unregistered: 'Nicht bei diesem IdP registriert', submittedBy: 'Eingereicht über Delegation von', validity: 'Gültigkeit', expires: 'Gültig bis', runAs: 'Ausführen als', batch: 'Teil einer Sammelanfrage', reviewBatch: 'Gemeinsam prüfen', show: (label: string) => `${label} anzeigen`, more: 'Weitere Angaben anzeigen', technical: 'Technische Details', target: 'Ziel', audience: 'Audience', permissions: 'Berechtigungen', hash: 'Befehls-Hash', adapter: 'Adapter', program: 'Programmversion', untested: 'Version nicht getestet', untestedNote: 'Der Adapter wurde mit dieser Programmdatei nicht geprüft und liest den Befehl nach dem Programmnamen.', programHash: 'Programm-Hash', requested: 'Mit „laut Anfrage“ markierte Werte gibt die anfragende Anwendung an; diese Freigabe bindet sie nicht.' }
+  : { language: 'Deutsch', exactCommand: 'Exact command', permission: 'Requested permission', requestedBy: 'Requested by', owner: 'Owner', unregistered: 'Not registered at this IdP', submittedBy: 'Submitted via delegation by', validity: 'Validity', expires: 'Valid until', runAs: 'Run as', batch: 'Part of a batch request', reviewBatch: 'Review together', show: (label: string) => `Show ${label.charAt(0).toLowerCase()}${label.slice(1)}`, more: 'Show more details', technical: 'Technical request details', target: 'Target', audience: 'Audience', permissions: 'Permissions', hash: 'Command hash', adapter: 'Adapter', program: 'Program version', untested: 'Version not tested', untestedNote: 'The adapter was not checked against this program file; it reads the command by the program name.', programHash: 'Program hash', requested: 'Values marked "as requested" are stated by the requesting application; this approval does not bind them.' })
 
 const detailsSummary = computed(() => {
   const details = registry.value?.details ?? []
@@ -170,6 +171,17 @@ function formatTime(seconds: number): string {
           {{ text.expires }} {{ formatTime(grant.expires_at) }}
         </dd>
       </div>
+      <div v-if="program?.version_tested === false" data-version-untested>
+        <dt class="text-muted">
+          {{ text.program }}
+        </dt>
+        <dd class="font-semibold text-warning">
+          {{ text.untested }}
+        </dd>
+        <dd class="text-xs text-muted">
+          {{ text.untestedNote }}
+        </dd>
+      </div>
       <div v-if="request.run_as">
         <dt class="text-muted">
           {{ text.runAs }}
@@ -237,6 +249,14 @@ function formatTime(seconds: number): string {
           </dt>
           <dd class="font-mono break-all">
             {{ request.cmd_hash }}
+          </dd>
+        </div>
+        <div v-if="program">
+          <dt class="text-muted">
+            {{ text.programHash }}
+          </dt>
+          <dd class="font-mono break-all">
+            {{ program.sha256 }}
           </dd>
         </div>
         <div v-if="request.execution_context?.adapter_digest">
