@@ -142,6 +142,31 @@ function resourceRefCovers(granted: OpenApeCliResourceRef, required: OpenApeCliR
   })
 }
 
+function isTextRecord(value: unknown): value is Record<string, string> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && Object.values(value).every(item => typeof item === 'string')
+}
+
+/**
+ * Whether a stored detail has every field coverage reads. Grants approved by
+ * older clients can carry details no current IdP writes (issue 1476); such a
+ * detail covers nothing instead of failing the comparison.
+ */
+export function isCoverableCliDetail(detail: unknown): detail is OpenApeCliAuthorizationDetail {
+  if (typeof detail !== 'object' || detail === null) return false
+  const candidate = detail as Record<string, unknown>
+  return candidate.type === 'openape_cli'
+    && [candidate.cli_id, candidate.operation_id, candidate.action, candidate.permission].every(value => typeof value === 'string')
+    && Array.isArray(candidate.resource_chain)
+    && candidate.resource_chain.every(resource => typeof resource === 'object' && resource !== null
+      && typeof (resource as Record<string, unknown>).resource === 'string'
+      && ((resource as Record<string, unknown>).selector === undefined || isTextRecord((resource as Record<string, unknown>).selector)))
+}
+
+/** The coverable CLI details of a stored list, which older clients may have written in any form. */
+export function coverableCliDetails(details: unknown): OpenApeCliAuthorizationDetail[] {
+  return Array.isArray(details) ? details.filter(isCoverableCliDetail) : []
+}
+
 export function isCliAuthorizationDetailExact(detail: Pick<OpenApeCliAuthorizationDetail, 'constraints'>): boolean {
   return detail.constraints?.exact_command === true
 }
@@ -167,7 +192,7 @@ export function cliAuthorizationDetailsCover(
   requiredDetails: OpenApeCliAuthorizationDetail[],
 ): boolean {
   return requiredDetails.every(required =>
-    grantedDetails.some(granted => cliAuthorizationDetailCovers(granted, required)),
+    grantedDetails.some(granted => isCoverableCliDetail(granted) && cliAuthorizationDetailCovers(granted, required)),
   )
 }
 

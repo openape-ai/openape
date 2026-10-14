@@ -4,25 +4,38 @@ export class AuthorityError extends Error {}
 /** A failure that would repeat with the same input, so retrying the run cannot help. */
 export class NonRetryableError extends Error {}
 
-export interface InfrastructureFailure { phase: 'authorization' | 'read', retryAfterMs: number }
+export interface InfrastructureFailure {
+  phase: 'authorization' | 'read'
+  retryAfterMs: number
+  /** What the service answered, such as its HTTP status and problem title; never credentials or command arguments. */
+  detail?: string
+}
 export class InfrastructureError extends Error {
   constructor(readonly failure: InfrastructureFailure) {
-    super(failure.phase === 'authorization' ? 'Permission service temporarily unavailable' : 'HTTP service temporarily unavailable')
+    const message = failure.phase === 'authorization' ? 'Permission service temporarily unavailable' : 'HTTP service temporarily unavailable'
+    super(failure.detail ? `${message} (${failure.detail})` : message)
   }
 }
+
+const failureDetail = /^\P{Cc}{1,512}$/u
 
 export function infrastructureFailure(value: unknown): InfrastructureFailure {
   if (!value || typeof value !== 'object') throw new Error('Invalid infrastructure failure')
   const failure = value as InfrastructureFailure
   if (!['authorization', 'read'].includes(failure.phase) || !Number.isSafeInteger(failure.retryAfterMs) || failure.retryAfterMs < 0 || failure.retryAfterMs > 60000) throw new Error('Invalid infrastructure retry')
-  return { phase: failure.phase, retryAfterMs: failure.retryAfterMs }
+  if (failure.detail !== undefined && (typeof failure.detail !== 'string' || !failureDetail.test(failure.detail))) throw new Error('Invalid infrastructure detail')
+  return { phase: failure.phase, retryAfterMs: failure.retryAfterMs, ...(failure.detail === undefined ? {} : { detail: failure.detail }) }
 }
 
-export function transientResponse(response: Response, phase: InfrastructureFailure['phase']): void {
-  if (![408, 429, 500, 502, 503, 504].includes(response.status)) return
+export function isTransientStatus(status: number): boolean {
+  return [408, 429, 500, 502, 503, 504].includes(status)
+}
+
+export function transientResponse(response: Response, phase: InfrastructureFailure['phase'], detail?: string): void {
+  if (!isTransientStatus(response.status)) return
   const header = response.headers.get('retry-after')
   const seconds = header && /^\d+$/.test(header) ? Number(header) * 1000 : header ? Date.parse(header) - Date.now() : 0
-  throw new InfrastructureError({ phase, retryAfterMs: Number.isFinite(seconds) ? Math.min(60000, Math.max(0, Math.ceil(seconds))) : 0 })
+  throw new InfrastructureError({ phase, retryAfterMs: Number.isFinite(seconds) ? Math.min(60000, Math.max(0, Math.ceil(seconds))) : 0, ...(detail ? { detail } : {}) })
 }
 
 export function transientNetwork(error: unknown, phase: InfrastructureFailure['phase'], signal?: AbortSignal): never {

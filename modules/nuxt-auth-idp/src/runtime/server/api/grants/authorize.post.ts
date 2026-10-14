@@ -6,7 +6,8 @@ import { chargeUnauthenticatedRequest } from '../../plugins/rate-limit'
 import { tryBearerAuth } from '../../utils/agent-auth'
 import { enforceAuthorizeRateLimit } from '../../utils/authorize-rate-limit'
 import { maybeForwardBrokerGrant } from '../../utils/broker-forward'
-import { authorizeProgramCall, readForwardedAuthorize, sendProgramAuthorizeResult } from '../../utils/program-authorize'
+import type { ProgramAuthorizeResult } from '../../utils/program-authorize'
+import { authorizeProgramCall, readForwardedAuthorize, reportUnexpectedAuthorizeFailure, sendProgramAuthorizeResult } from '../../utils/program-authorize'
 import { createProblemError } from '../../utils/problem'
 import { useIdpStores } from '../../utils/stores'
 
@@ -46,8 +47,13 @@ export default defineEventHandler(async (event) => {
   }
   enforceAuthorizeRateLimit(event, caller.sub)
   const request = await readAuthorizeRequest(event)
-  const forwarded = await maybeForwardBrokerGrant(event, 'authorize', request)
-  if (forwarded !== undefined) return sendProgramAuthorizeResult(event, readForwardedAuthorize(forwarded))
+  let forwarded: ProgramAuthorizeResult | undefined
+  try {
+    const answer = await maybeForwardBrokerGrant(event, 'authorize', request)
+    forwarded = answer === undefined ? undefined : readForwardedAuthorize(answer)
+  }
+  catch (error) { throw reportUnexpectedAuthorizeFailure(error, { cli: request.program.name }) }
+  if (forwarded) return sendProgramAuthorizeResult(event, forwarded)
   const account = await useIdpStores().userStore.findByEmail(caller.sub)
   if (!account?.isActive) throw createProblemError({ status: 403, title: 'The requester account is inactive or missing' })
   return sendProgramAuthorizeResult(event, await authorizeProgramCall(event, { requester: caller.sub, request }))

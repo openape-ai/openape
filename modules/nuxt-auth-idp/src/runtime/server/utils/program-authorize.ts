@@ -1,9 +1,9 @@
 import type { BrokeredGrant, OpenApeGrant, OpenApeGrantRequest, OpenApeProgramAuthorizeRequest, OpenApeProgramAuthorizeResponse } from '@openape/core'
 import type { ResolvedProgramCall } from '@openape/grants'
 import { computeCmdHash } from '@openape/core'
-import { assertGrantBatchMember, createGrant, evaluateStandingGrants, InvalidGrantBatchError, InvalidProgramAuthorizeRequestError, issueCommandJWT, resolveProgramCall } from '@openape/grants'
+import { assertGrantBatchMember, createGrant, evaluateStandingGrants, InvalidGrantBatchError, InvalidProgramAuthorizeRequestError, issueCommandJWT, PROGRAM_AUTHORIZE_LIMITS, resolveProgramCall } from '@openape/grants'
 import type { H3Event } from 'h3'
-import { setResponseHeader, setResponseStatus } from 'h3'
+import { isError, setResponseHeader, setResponseStatus } from 'h3'
 import { runGrantPendingHooks } from './grant-pending-hooks'
 import type { ProgramCallScope } from './grant-reuse'
 import { findCoveringGrant, findLatestRequest } from './grant-reuse'
@@ -37,8 +37,35 @@ export function sendProgramAuthorizeResult(event: H3Event, result: ProgramAuthor
   return { type: `https://openape.org/errors/grant_${result.body.state}`, title: `The owner ${result.body.state === 'denied' ? 'denied' : 'revoked'} this permission`, status: 403, ...result.body }
 }
 
-function text(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0 && value.length <= 16 * 1024
+/** What an authorize failure log may name about a call: the program and the operation the IdP resolved, never its arguments. */
+export interface AuthorizeTrace {
+  cli: string
+  operation?: string
+}
+
+function stackFrames(error: unknown): string {
+  // The first stack line repeats the message, which may quote stored grant data.
+  return error instanceof Error ? (error.stack ?? '').split('\n').slice(1, 6).map(line => line.trim()).join(' | ') : ''
+}
+
+/**
+ * Logs an authorize failure the IdP did not intend (a 5xx or an exception)
+ * with a request id that the problem answer carries too, so a requester's
+ * report can be matched to the log. Intended refusals (4xx) pass unchanged.
+ */
+export function reportUnexpectedAuthorizeFailure(error: unknown, trace: AuthorizeTrace): unknown {
+  if (isError(error) && error.statusCode < 500) return error
+  const requestId = crypto.randomUUID()
+  const problem = isError(error) ? error : createProblemError({ status: 500, title: 'Program authorization failed unexpectedly' })
+  problem.data = { ...(problem.data as Record<string, unknown> | undefined), request_id: requestId }
+  const call = `cli=${JSON.stringify(trace.cli)}${trace.operation ? ` operation=${JSON.stringify(trace.operation)}` : ''}`
+  const cause = isError(error) ? '' : ` cause=${error instanceof Error ? error.name : typeof error} ${stackFrames(error)}`
+  console.error(`[grants/authorize] request ${requestId} failed with HTTP ${problem.statusCode} ${JSON.stringify(problem.statusMessage ?? '')} ${call}${cause}`)
+  return problem
+}
+
+function text(value: unknown, maxLength = 16 * 1024): value is string {
+  return typeof value === 'string' && value.length > 0 && value.length <= maxLength
 }
 
 /**
@@ -50,7 +77,7 @@ export function readForwardedAuthorize(value: unknown): ProgramAuthorizeResult {
   const invalid = () => createProblemError({ status: 503, title: 'The decision identity provider returned an invalid authorization answer', type: 'https://openape.org/errors/broker_unavailable' })
   if (!text(answer.grant_id)) throw invalid()
   if (answer.state === 'approved') {
-    if (!text(answer.authz_jwt) || !Number.isInteger(answer.expires_at)) throw invalid()
+    if (!text(answer.authz_jwt, PROGRAM_AUTHORIZE_LIMITS.tokenChars) || !Number.isInteger(answer.expires_at)) throw invalid()
     return { status: 200, body: { state: 'approved', grant_id: answer.grant_id, authz_jwt: answer.authz_jwt, expires_at: answer.expires_at as number } }
   }
   if (answer.state === 'pending') {
@@ -84,6 +111,8 @@ function grantRequestFor(requester: string, request: OpenApeProgramAuthorizeRequ
 async function approvedAnswer(grant: OpenApeGrant, call: ResolvedProgramCall, onToken: ProgramAuthorizeInput['onToken']): Promise<ProgramAuthorizeResult | null> {
   const key = await useIdpStores().keyStore.getSigningKey()
   const { token, expiresAt } = await issueCommandJWT(grant, { argvHash: call.argvHash, programSha256: call.executionContext.program_sha256, detail: call.detail, executionContext: call.executionContext }, getIdpIssuer(), key.privateKey, key.kid)
+  // Refused before a single-use grant is spent: no broker or requester could relay or read a larger answer.
+  if (token.length > PROGRAM_AUTHORIZE_LIMITS.tokenChars) throw createProblemError({ status: 413, title: `The command is too large to authorize: its command token would exceed ${PROGRAM_AUTHORIZE_LIMITS.tokenChars} characters; shorten its arguments`, type: 'https://openape.org/errors/command_too_large' })
   await onToken?.(grant)
   if ((grant.request.grant_type ?? 'once') === 'once' && !await useGrantStores().grantStore.claimOnce(grant.id, Math.floor(Date.now() / 1000))) return null
   return { status: 200, body: { state: 'approved', grant_id: grant.id, authz_jwt: token, expires_at: expiresAt } }
@@ -135,18 +164,23 @@ async function resolveCall(request: OpenApeProgramAuthorizeRequest): Promise<Res
  * standing grants and pre-approval hooks never decide for them.
  */
 export async function authorizeProgramCall(event: H3Event, input: ProgramAuthorizeInput): Promise<ProgramAuthorizeResult> {
-  // A lost race for a single-use grant decides again with the grant spent.
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const result = await decideProgramCall(event, input)
-    if (result) return result
+  const trace: AuthorizeTrace = { cli: input.request.program.name }
+  try {
+    // A lost race for a single-use grant decides again with the grant spent.
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const result = await decideProgramCall(event, input, trace)
+      if (result) return result
+    }
   }
+  catch (error) { throw reportUnexpectedAuthorizeFailure(error, trace) }
   throw createProblemError({ status: 409, title: 'Concurrent calls spent the single-use grants for this command; retry the call' })
 }
 
-async function decideProgramCall(event: H3Event, input: ProgramAuthorizeInput): Promise<ProgramAuthorizeResult | null> {
+async function decideProgramCall(event: H3Event, input: ProgramAuthorizeInput, trace: AuthorizeTrace): Promise<ProgramAuthorizeResult | null> {
   const { requester, request, brokered, onToken } = input
   const { grantStore } = useGrantStores()
   const call = await resolveCall(request)
+  trace.operation = call.detail.operation_id
   const grantRequest = grantRequestFor(requester, request, call, await computeCmdHash(call.executionArgv.join(' ')))
   try { await assertGrantBatchMember(grantRequest, grantStore) }
   catch (error) {
