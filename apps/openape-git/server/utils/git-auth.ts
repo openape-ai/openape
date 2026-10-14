@@ -1,14 +1,17 @@
 import type { GitIdentity } from './git-identity'
-import { createRemoteJWKSet, jwtVerify } from 'jose'
+import { assertPublicUrl, extractDomain, resolveIdP } from '@openape/core'
+import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import { identityFromClaims } from './git-identity'
 
 let _jwks: ReturnType<typeof createRemoteJWKSet> | null = null
+let _jwksIssuer = ''
 
-function idpJwks() {
-  if (!_jwks) {
-    const config = useRuntimeConfig()
-    _jwks = createRemoteJWKSet(new URL('/.well-known/jwks.json', config.idpUrl as string))
+async function idpJwks(issuer: string) {
+  if (process.env.OPENAPE_SP_ALLOW_INSECURE_IDP !== '1') await assertPublicUrl(issuer)
+  if (!_jwks || _jwksIssuer !== issuer) {
+    _jwks = createRemoteJWKSet(new URL('/.well-known/jwks.json', issuer), { timeoutDuration: 5000 })
+    _jwksIssuer = issuer
   }
   return _jwks
 }
@@ -27,12 +30,20 @@ export async function identityFromBasicAuth(header: string | undefined): Promise
   if (!token) return null
   try {
     const config = useRuntimeConfig()
-    const { payload } = await jwtVerify(token, idpJwks(), {
-      issuer: config.idpUrl as string,
+    const subject = decodeJwt(token).sub
+    if (typeof subject !== 'string' || !subject.includes('@')) return null
+    const configuredIssuer = (config.idpUrl as string).replace(/\/$/, '')
+    const issuer = (await resolveIdP(extractDomain(subject)) ?? configuredIssuer).replace(/\/$/, '')
+    const { payload } = await jwtVerify(token, await idpJwks(issuer), {
+      issuer,
       // apes-issued CLI tokens carry aud 'apes-cli'; AuthZ JWTs carry the SP id.
       audience: ['apes-cli', (config.openapeSp as { clientId?: string })?.clientId ?? 'repos.openape.ai'],
     })
-    return identityFromClaims(payload)
+    if (payload.email !== undefined && payload.email !== subject) return null
+    const identity = identityFromClaims(payload)
+    // External IdPs authenticate their own direct subjects; the configured IdP retains its existing delegation trust.
+    if (issuer !== configuredIssuer && identity?.email !== subject) return null
+    return identity
   }
   catch {
     return null
