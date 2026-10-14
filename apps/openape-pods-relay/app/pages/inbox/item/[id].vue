@@ -4,6 +4,7 @@ import InboxDecision from '../../../components/InboxDecision.vue'
 import InboxShell from '../../../components/InboxShell.vue'
 import InboxTags from '../../../components/InboxTags.vue'
 import { isItemId, useInbox } from '../../../inbox/client'
+import { needsRepair, repairTitle } from '../../../inbox/repair'
 import { formatTime, t } from '../../../inbox/i18n'
 
 const inbox = useInbox()
@@ -77,8 +78,8 @@ async function check() { if (item.value) await inbox.check(item.value.id) }
     <article v-if="item">
       <small class="inbox-muted">{{ item.kind === 'decision' ? t('itemDecision') : t('itemMessage') }}<template v-if="item.pod?.name"> · {{ t('itemPod', { name: item.pod.name }) }}</template> · {{ formatTime(item.created) }}</small>
       <InboxTags :tags="item.pod?.tags" />
-      <h1>{{ item.title }}</h1>
-      <p class="inbox-body">
+      <h1>{{ needsRepair(item) ? repairTitle(item) : item.title }}</h1>
+      <p v-if="!needsRepair(item)" class="inbox-body">
         {{ item.body }}
       </p>
       <template v-if="safeLinks.length">

@@ -5,6 +5,8 @@ import type { InboxItem, PendingAnswer, Receipt } from '../inbox/client'
 import { formatTime, t } from '../inbox/i18n'
 import { receiptText } from '../inbox/receipt'
 import { cardSummary } from '../inbox/card'
+import { needsRepair, repairTitle } from '../inbox/repair'
+import InboxRepair from './InboxRepair.vue'
 import InboxTags from './InboxTags.vue'
 
 const props = defineProps<{ items: InboxItem[], empty: string, receipts?: Record<string, Receipt>, pending?: Record<string, PendingAnswer>, online?: boolean, actions?: boolean }>()
@@ -12,7 +14,7 @@ const emit = defineEmits<{ decide: [item: InboxItem, option: string], undo: [ite
 const cards = computed(() => props.items.map(item => ({ item, summary: cardSummary(item) })))
 // Pods decisions can be answered on the card; an option that needs evidence or a value opens the detail with it preselected.
 // Once shown, the answer area keeps its height: a status covers the choices instead of removing them, so cards below never move under a finger.
-const choices = (item: InboxItem) => props.actions && item.kind === 'decision' && item.decision?.authority === 'pods' ? item.decision.options : []
+const choices = (item: InboxItem) => props.actions && !needsRepair(item) && item.kind === 'decision' && item.decision?.authority === 'pods' ? item.decision.options : []
 function cover(item: InboxItem): string | null {
   const pending = props.pending?.[item.id]
   if (pending) return t('pendingSend', { option: pending.title })
@@ -30,16 +32,17 @@ function cover(item: InboxItem): string | null {
     <li v-for="{ item, summary } in cards" :key="item.id" class="inbox-card" :class="{ unread: item.kind === 'message' && !item.read }">
       <NuxtLink class="card-link" :class="{ 'has-sender': summary.sender }" :to="`/inbox/item/${item.id}`">
         <span v-if="item.kind === 'message' && !item.read" class="visually-hidden">{{ t('unread') }}: </span>
-        <strong v-if="summary.sender" class="sender"><span class="visually-hidden">{{ t('cardSender') }}: </span>{{ summary.sender }}</strong>
-        <strong class="title">{{ item.title }}</strong>
-        <span v-if="summary.excerpt" class="excerpt">{{ summary.excerpt }}</span>
+        <strong v-if="!needsRepair(item) && summary.sender" class="sender"><span class="visually-hidden">{{ t('cardSender') }}: </span>{{ summary.sender }}</strong>
+        <strong class="title">{{ needsRepair(item) ? repairTitle(item) : item.title }}</strong>
+        <span v-if="!needsRepair(item) && summary.excerpt" class="excerpt">{{ summary.excerpt }}</span>
         <InboxTags :tags="item.pod?.tags" />
         <small>
           <template v-for="hint in summary.hints" :key="hint">{{ hint }} · </template><template v-if="item.pod?.name">{{ t('itemPod', { name: item.pod.name }) }} · </template>{{ formatTime(item.created) }}
           <template v-if="receipts?.[item.id]?.state === 'applied' && item.state !== 'open'"> · {{ t('receiptAppliedShort', { option: receipts[item.id]!.title }) }}</template>
         </small>
       </NuxtLink>
-      <p v-if="!choices(item).length && item.state === 'open' && receipts?.[item.id]" class="status" role="status">
+      <InboxRepair v-if="needsRepair(item)" :item="item" :receipt="receipts?.[item.id]" />
+      <p v-if="!needsRepair(item) && !choices(item).length && item.state === 'open' && receipts?.[item.id]" class="status" role="status">
         {{ receiptText(receipts[item.id]) }}
       </p>
       <div v-if="choices(item).length" class="answer">

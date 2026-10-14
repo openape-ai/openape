@@ -3,6 +3,8 @@ import { computed, ref } from 'vue'
 import { blocking } from '../inbox/client'
 import type { InboxItem, PendingAnswer, Receipt } from '../inbox/client'
 import { t } from '../inbox/i18n'
+import InboxRepair from './InboxRepair.vue'
+import { needsRepair } from '../inbox/repair'
 import { receiptText } from '../inbox/receipt'
 
 const props = defineProps<{ item: InboxItem, receipt: Receipt | undefined, online: boolean, checking: boolean, preselect?: string, pending?: PendingAnswer }>()
@@ -40,7 +42,8 @@ function submit() {
 </script>
 
 <template>
-  <section class="decision" :aria-label="t('decideTitle')">
+  <InboxRepair v-if="needsRepair(item)" :item="item" :receipt="receipt" />
+  <section v-else class="decision" :aria-label="t('decideTitle')">
     <div v-if="pending" class="row receipt" role="status">
       <span>{{ t('pendingSend', { option: pending.title }) }}</span>
       <button type="button" @click="emit('undo')">
