@@ -25,6 +25,8 @@ let bearerPayload: { sub: string, act: unknown } | null = null
 vi.mock('../src/runtime/server/utils/agent-auth', () => ({
   tryBearerAuth: async () => bearerPayload,
 }))
+// Grants scopes are covered against real tokens in grants-delegation-scopes.test.ts.
+vi.mock('../src/runtime/server/utils/grants-delegation', () => ({ grantsDelegationProblem: async () => null }))
 
 let authedUser = 'owner@example.com'
 vi.mock('../src/runtime/server/utils/admin', () => ({

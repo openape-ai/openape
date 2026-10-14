@@ -184,6 +184,14 @@ export interface OpenApeGrantSummary {
   link?: string
 }
 
+/** Provenance of a grant request submitted by a delegate (delegation.md §8). */
+export interface OpenApeGrantSubmitter {
+  /** The delegate identity that submitted the request. */
+  delegate: string
+  /** The delegation grant that authorized the submission. */
+  delegation_grant: string
+}
+
 /** OpenApe grant request */
 export interface OpenApeGrantRequest {
   /** Who is requesting (agent/service identifier) */
@@ -225,6 +233,13 @@ export interface OpenApeGrantRequest {
   summary?: OpenApeGrantSummary
   /** Display grouping for a joint decision; see OpenApeGrantBatch. */
   batch?: OpenApeGrantBatch
+  /**
+   * Set by the IdP, never by the client: the delegate that submitted this
+   * request for `requester` under a `grants:request` delegation from the
+   * requester's owner (delegation.md §8). Absent when the requester asked
+   * for itself.
+   */
+  submitted_by?: OpenApeGrantSubmitter
   /** Execute as this user identity */
   run_as?: string
   /** Delegator — who is being acted on behalf of (delegation grants only) */

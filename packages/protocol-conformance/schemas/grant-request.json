@@ -190,6 +190,22 @@
       "type": "string",
       "description": "Execute as this user identity."
     },
+    "submitted_by": {
+      "type": "object",
+      "description": "Set by the authorization server only: the delegate that filed the request for the requester under a grants:request delegation (delegation.md §8). A client-supplied value is ignored.",
+      "properties": {
+        "delegate": {
+          "type": "string",
+          "description": "The delegate identity that filed the request."
+        },
+        "delegation_grant": {
+          "type": "string",
+          "description": "The delegation grant that authorized the filing."
+        }
+      },
+      "required": ["delegate", "delegation_grant"],
+      "additionalProperties": false
+    },
     "scopes": {
       "type": "array",
       "items": { "type": "string" },
