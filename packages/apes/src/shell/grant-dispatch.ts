@@ -1,23 +1,18 @@
-import { basename } from 'node:path'
 import consola from 'consola'
 import { loadAuth } from '../config.js'
 import { apiFetch, getGrantsEndpoint } from '../http.js'
 import { notifyGrantPending } from '../notifications.js'
 import {
-  createShapesGrant,
   GRANT_WAIT_MS,
-  fetchGrantToken,
-  findExistingGrant,
   isAutoApproved,
-  loadOrInstallAdapter,
   parseShellCommand,
-  resolveCommand,
-  verifyAndConsume,
-  waitForGrantStatus,
   waitsUntil,
 } from '../shapes/index.js'
+import { authorizeProgramCall, locateProgram } from '../authorization/program.js'
+import type { GrantType } from '../authorization/program.js'
 import { createWaitProgressReporter } from '../wait-progress.js'
 import { checkSudoRejection, isApesSelfDispatch } from './apes-self-dispatch.js'
+import { programLine } from './program-line.js'
 
 /**
  * Result of attempting to obtain a grant for a shell line. On success the
@@ -30,7 +25,7 @@ import { checkSudoRejection, isApesSelfDispatch } from './apes-self-dispatch.js'
  * `requestGrantForShellLine` for the rationale.
  */
 export type GrantLineResult =
-  | { kind: 'approved', grantId: string, mode: 'adapter' | 'session' | 'self' }
+  | { kind: 'approved', grantId: string, mode: 'program' | 'session' | 'self' }
   | { kind: 'denied', reason: string }
 
 // The APES_GATED_SUBCOMMANDS blocklist + `isApesSelfDispatch` helper
@@ -47,22 +42,20 @@ export interface GrantLineOptions {
   /** Target host name. Usually `os.hostname()`. */
   targetHost: string
   /** Approval mode — almost always 'once' for interactive shell lines. */
-  approval?: 'once' | 'timed' | 'always'
+  approval?: GrantType
 }
 
 /**
  * Obtain a grant for a shell line so the interactive REPL may execute it
  * against its persistent bash child.
  *
- * Dispatch strategy mirrors the existing one-shot `tryAdapterModeFromShell`
- * flow:
- *   1. Try to resolve the line as an adapter-backed command (structured
- *      grant with resource chain / permission).
- *   2. If the adapter path succeeds, reuse an existing matching grant or
- *      request a new one, verify + consume it.
- *   3. If the adapter path fails (compound line, no matching adapter,
- *      resolve failure) fall back to a generic `ape-shell` session grant
- *      for the target host.
+ * Dispatch strategy mirrors the one-shot `ape-shell -c` flow:
+ *   1. A line that is exactly one program call (plain words, an executable
+ *      file on PATH) is authorized per call at the IdP, which resolves it
+ *      with Shapes; a pending request is awaited, a refusal or timeout
+ *      denies the line.
+ *   2. Every other line (compound, expansions, builtins, unknown program)
+ *      uses the generic `ape-shell` session grant for the target host.
  *
  * Returns without executing anything. The caller (the orchestrator)
  * decides how to run the line — typically by writing it to bash's pty.
@@ -109,62 +102,34 @@ export async function requestGrantForShellLine(
     return { kind: 'denied', reason: sudoRejection.reason }
   }
 
-  // --- 1. Adapter path ---
-  if (parsed && !parsed.isCompound) {
+  // --- 1. Program path ---
+  const call = programLine(line)
+  const program = call ? await locateProgram(call.executable) : null
+  if (call && program) {
     try {
-      const loaded = await loadOrInstallAdapter(parsed.executable)
-      if (loaded) {
-        const normalizedExecutable = basename(parsed.executable)
-        const resolved = await resolveCommand(loaded, [normalizedExecutable, ...parsed.argv])
-
-        // Try to reuse an existing matching grant first.
-        try {
-          const existingGrantId = await findExistingGrant(resolved, idp)
-          if (existingGrantId) {
-            if (process.env.APES_QUIET_GRANT_REUSE !== '1')
-              consola.info(`Reusing grant ${existingGrantId} for: ${resolved.detail.display}`)
-            const token = await fetchGrantToken(idp, existingGrantId)
-            await verifyAndConsume(token, resolved)
-            return { kind: 'approved', grantId: existingGrantId, mode: 'adapter' }
-          }
-        }
-        catch (err) {
-          consola.debug(`ape-shell: findExistingGrant failed, will request new grant:`, err)
-        }
-
-        // Request a new adapter-backed grant.
-        consola.info(`Requesting grant for: ${resolved.detail.display}`)
-        const grant = await createShapesGrant(resolved, {
-          idp,
-          approval: options.approval ?? 'once',
-          reason: `ape-shell: ${resolved.detail.display}`,
-        })
-        if (!isAutoApproved(grant)) {
-          consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
+      const authorization = await authorizeProgramCall({ program, argv: call.argv }, {
+        idp,
+        subject: auth.email,
+        targetHost: options.targetHost,
+        grantType: options.approval ?? 'once',
+        wait: true,
+        onPending: (pending) => {
+          consola.info(`Approve at: ${pending.approvalUrl}`)
           notifyGrantPending({
-            grantId: grant.id,
-            approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
-            command: resolved.detail?.display ?? line,
-            audience: resolved.adapter?.cli?.audience ?? 'shapes',
+            grantId: pending.grantId,
+            approveUrl: pending.approvalUrl,
+            command: line.slice(0, 200),
+            audience: 'shapes',
             host: options.targetHost,
           })
-        }
-
-        const status = await waitForGrantStatus(idp, grant.id)
-        if (status !== 'approved') {
-          return { kind: 'denied', reason: `Grant ${status}` }
-        }
-        consola.info(`Grant ${grant.id} approved — continuing`)
-
-        const token = await fetchGrantToken(idp, grant.id)
-        await verifyAndConsume(token, resolved)
-        return { kind: 'approved', grantId: grant.id, mode: 'adapter' }
-      }
+        },
+      })
+      if (authorization.kind !== 'authorized')
+        return { kind: 'denied', reason: `Grant ${authorization.grantId} is pending` }
+      return { kind: 'approved', grantId: authorization.grantId, mode: 'program' }
     }
     catch (err) {
-      // Adapter resolution failed — debug-log and fall through to the
-      // generic session grant path.
-      consola.debug(`ape-shell: adapter resolve failed, falling back to session grant:`, err)
+      return { kind: 'denied', reason: err instanceof Error ? err.message : String(err) }
     }
   }
 

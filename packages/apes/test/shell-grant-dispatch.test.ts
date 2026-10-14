@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // We mock every dependency of the grant-dispatch module so tests run
 // without touching the network, filesystem, or auth state. The goal is to
-// verify the flow control logic: adapter path vs session path, reuse vs
+// verify the flow control logic: program path vs session path, reuse vs
 // request, approval vs denial — not the actual IdP integration (that's
 // covered in commands.test.ts via the in-process IdP).
 
@@ -15,21 +15,22 @@ vi.mock('../src/http.js', () => ({
   getGrantsEndpoint: vi.fn(async () => 'http://idp.test/api/grants'),
 }))
 vi.mock('../src/shapes/index.js', async () => ({
-  createShapesGrant: vi.fn(),
-  fetchGrantToken: vi.fn(),
-  findExistingGrant: vi.fn(),
   // Real implementation on purpose — #1083 is about the call sites obeying it.
   isAutoApproved: (await vi.importActual<typeof import('../src/shapes/grants.js')>('../src/shapes/grants.js')).isAutoApproved,
-  loadOrInstallAdapter: vi.fn(),
   parseShellCommand: vi.fn(),
-  resolveCommand: vi.fn(),
-  verifyAndConsume: vi.fn(),
-  waitForGrantStatus: vi.fn(),
   // Real on purpose, like isAutoApproved above: the announced deadline must be
   // the one this module actually waits for, and a stubbed clock would hide a
   // drift between the two (#1306).
   GRANT_WAIT_MS: (await vi.importActual<typeof import('../src/shapes/grants.js')>('../src/shapes/grants.js')).GRANT_WAIT_MS,
   waitsUntil: (await vi.importActual<typeof import('../src/shapes/grants.js')>('../src/shapes/grants.js')).waitsUntil,
+}))
+// Program lines are authorized at the IdP; the real round trip is covered in
+// program-authorization.test.ts. Here only the dispatch decision matters, so no
+// program is found unless a test says so.
+vi.mock('../src/authorization/program.js', async () => ({
+  ...(await vi.importActual<typeof import('../src/authorization/program.js')>('../src/authorization/program.js')),
+  locateProgram: vi.fn(async () => null),
+  authorizeProgramCall: vi.fn(),
 }))
 vi.mock('../src/notifications.js', () => ({
   notifyGrantPending: vi.fn(),
@@ -64,7 +65,8 @@ describe('requestGrantForShellLine', () => {
   })
 
   it('rejects `sudo <cmd>` with a hint to use `apes run --as root -- <cmd>`', async () => {
-    const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+    const { parseShellCommand } = await import('../src/shapes/index.js')
+    const { locateProgram } = await import('../src/authorization/program.js')
     vi.mocked(parseShellCommand).mockReturnValue({ executable: 'sudo', argv: ['apt', 'install', 'ffmpeg'], isCompound: false, raw: 'sudo apt install ffmpeg' })
 
     const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
@@ -74,8 +76,8 @@ describe('requestGrantForShellLine', () => {
       kind: 'denied',
       reason: expect.stringContaining('apes run --as root -- apt install ffmpeg'),
     })
-    // Must short-circuit before any adapter work.
-    expect(loadOrInstallAdapter).not.toHaveBeenCalled()
+    // Must short-circuit before any program lookup.
+    expect(locateProgram).not.toHaveBeenCalled()
   })
 
   it('rejects bare `sudo` with a generic hint', async () => {
@@ -114,7 +116,8 @@ describe('requestGrantForShellLine', () => {
   })
 
   it('`apes run --as root -- brew services restart ollama` self-dispatches (escapes flow)', async () => {
-    const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+    const { parseShellCommand } = await import('../src/shapes/index.js')
+    const { locateProgram } = await import('../src/authorization/program.js')
     vi.mocked(parseShellCommand).mockReturnValue({
       executable: 'apes',
       argv: ['run', '--as', 'root', '--', 'brew', 'services', 'restart', 'ollama'],
@@ -126,11 +129,12 @@ describe('requestGrantForShellLine', () => {
     const result = await requestGrantForShellLine('apes run --as root -- brew services restart ollama', { targetHost: 'host.test' })
 
     expect(result).toEqual({ kind: 'approved', grantId: 'shell-internal', mode: 'self' })
-    expect(loadOrInstallAdapter).not.toHaveBeenCalled()
+    expect(locateProgram).not.toHaveBeenCalled()
   })
 
   it('`apes run -- echo hi` without --as STAYS gated', async () => {
-    const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+    const { parseShellCommand } = await import('../src/shapes/index.js')
+    const { locateProgram } = await import('../src/authorization/program.js')
     const { apiFetch } = await import('../src/http.js')
     vi.mocked(parseShellCommand).mockReturnValue({
       executable: 'apes',
@@ -138,7 +142,7 @@ describe('requestGrantForShellLine', () => {
       isCompound: false,
       raw: 'apes run -- echo hi',
     })
-    vi.mocked(loadOrInstallAdapter).mockResolvedValue(null)
+    vi.mocked(locateProgram).mockResolvedValue(null)
     vi.mocked(apiFetch)
       .mockResolvedValueOnce({ data: [] } as any)
       .mockResolvedValueOnce({ id: 'gated-run', status: 'pending' } as any)
@@ -151,62 +155,9 @@ describe('requestGrantForShellLine', () => {
     expect(result).toEqual({ kind: 'approved', grantId: 'gated-run', mode: 'session' })
   })
 
-  it('reuses an existing adapter grant when findExistingGrant returns one', async () => {
-    const { parseShellCommand, loadOrInstallAdapter, resolveCommand, findExistingGrant, fetchGrantToken, verifyAndConsume, createShapesGrant } = await import('../src/shapes/index.js')
-    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['-la'], isCompound: false, raw: 'ls -la' })
-    vi.mocked(loadOrInstallAdapter).mockResolvedValue({ adapter: { cli: { id: 'ls', executable: 'ls', audience: 'shapes' }, operations: [] }, source: '/tmp/ls.toml', digest: 'sha' } as any)
-    vi.mocked(resolveCommand).mockResolvedValue({ detail: { display: 'ls -la' } } as any)
-    vi.mocked(findExistingGrant).mockResolvedValue('reused-grant-id')
-    vi.mocked(fetchGrantToken).mockResolvedValue('token123')
-    vi.mocked(verifyAndConsume).mockResolvedValue(undefined)
-
-    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
-    const result = await requestGrantForShellLine('ls -la', { targetHost: 'host.test' })
-
-    expect(result).toEqual({ kind: 'approved', grantId: 'reused-grant-id', mode: 'adapter' })
-    expect(createShapesGrant).not.toHaveBeenCalled()
-    expect(verifyAndConsume).toHaveBeenCalledWith('token123', expect.anything())
-  })
-
-  it('requests a new adapter grant when no existing one matches', async () => {
-    const { parseShellCommand, loadOrInstallAdapter, resolveCommand, findExistingGrant, createShapesGrant, waitForGrantStatus, fetchGrantToken, verifyAndConsume } = await import('../src/shapes/index.js')
-    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'curl', argv: ['https://example.com'], isCompound: false, raw: 'curl https://example.com' })
-    vi.mocked(loadOrInstallAdapter).mockResolvedValue({ adapter: { cli: { id: 'curl', executable: 'curl', audience: 'shapes' }, operations: [] }, source: '/tmp/curl.toml', digest: 'sha' } as any)
-    vi.mocked(resolveCommand).mockResolvedValue({ detail: { display: 'curl https://example.com' } } as any)
-    vi.mocked(findExistingGrant).mockResolvedValue(null)
-    vi.mocked(createShapesGrant).mockResolvedValue({ id: 'new-grant-id', status: 'pending' } as any)
-    vi.mocked(waitForGrantStatus).mockResolvedValue('approved')
-    vi.mocked(fetchGrantToken).mockResolvedValue('token456')
-    vi.mocked(verifyAndConsume).mockResolvedValue(undefined)
-
-    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
-    const result = await requestGrantForShellLine('curl https://example.com', { targetHost: 'host.test' })
-
-    expect(result).toEqual({ kind: 'approved', grantId: 'new-grant-id', mode: 'adapter' })
-    expect(createShapesGrant).toHaveBeenCalled()
-    expect(verifyAndConsume).toHaveBeenCalledWith('token456', expect.anything())
-  })
-
-  it('returns denied when the adapter grant request is denied', async () => {
-    const { parseShellCommand, loadOrInstallAdapter, resolveCommand, findExistingGrant, createShapesGrant, waitForGrantStatus } = await import('../src/shapes/index.js')
-    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'rm', argv: ['-rf', '/'], isCompound: false, raw: 'rm -rf /' })
-    vi.mocked(loadOrInstallAdapter).mockResolvedValue({ adapter: { cli: { id: 'rm', executable: 'rm', audience: 'shapes' }, operations: [] }, source: '/tmp/rm.toml', digest: 'sha' } as any)
-    vi.mocked(resolveCommand).mockResolvedValue({ detail: { display: 'rm -rf /' } } as any)
-    vi.mocked(findExistingGrant).mockResolvedValue(null)
-    vi.mocked(createShapesGrant).mockResolvedValue({ id: 'scary-grant-id', status: 'pending' } as any)
-    vi.mocked(waitForGrantStatus).mockResolvedValue('denied')
-
-    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
-    const result = await requestGrantForShellLine('rm -rf /', { targetHost: 'host.test' })
-
-    expect(result.kind).toBe('denied')
-    if (result.kind === 'denied') {
-      expect(result.reason).toContain('denied')
-    }
-  })
-
   it('falls back to a session grant when the command is compound', async () => {
-    const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+    const { parseShellCommand } = await import('../src/shapes/index.js')
+    const { locateProgram } = await import('../src/authorization/program.js')
     const { apiFetch } = await import('../src/http.js')
     vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['|'], isCompound: true, raw: 'ls | grep foo' })
 
@@ -221,8 +172,8 @@ describe('requestGrantForShellLine', () => {
     const result = await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
 
     expect(result).toEqual({ kind: 'approved', grantId: 'session-grant-id', mode: 'session' })
-    // Adapter path should never have been attempted past parseShellCommand
-    expect(loadOrInstallAdapter).not.toHaveBeenCalled()
+    // A compound line is never treated as a program call
+    expect(locateProgram).not.toHaveBeenCalled()
   })
 
   // #1083 — the "a grant is waiting for you" channel is only worth something if
@@ -263,7 +214,8 @@ describe('requestGrantForShellLine', () => {
   })
 
   it('reuses an existing timed session grant when one is found', async () => {
-    const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+    const { parseShellCommand } = await import('../src/shapes/index.js')
+    const { locateProgram } = await import('../src/authorization/program.js')
     const { apiFetch } = await import('../src/http.js')
     vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['|'], isCompound: true, raw: 'ls | grep foo' })
 
@@ -281,14 +233,15 @@ describe('requestGrantForShellLine', () => {
     const result = await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
 
     expect(result).toEqual({ kind: 'approved', grantId: 'existing-session', mode: 'session' })
-    expect(loadOrInstallAdapter).not.toHaveBeenCalled()
+    expect(locateProgram).not.toHaveBeenCalled()
   })
 
-  it('falls back to session grant when no adapter is found for the binary', async () => {
-    const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+  it('falls back to session grant when no executable file is found for the program', async () => {
+    const { parseShellCommand } = await import('../src/shapes/index.js')
+    const { locateProgram } = await import('../src/authorization/program.js')
     const { apiFetch } = await import('../src/http.js')
     vi.mocked(parseShellCommand).mockReturnValue({ executable: 'obscure-tool', argv: ['--foo'], isCompound: false, raw: 'obscure-tool --foo' })
-    vi.mocked(loadOrInstallAdapter).mockResolvedValue(null)
+    vi.mocked(locateProgram).mockResolvedValue(null)
 
     vi.mocked(apiFetch)
       .mockResolvedValueOnce({ data: [] } as any)
@@ -299,6 +252,67 @@ describe('requestGrantForShellLine', () => {
     const result = await requestGrantForShellLine('obscure-tool --foo', { targetHost: 'host.test' })
 
     expect(result).toEqual({ kind: 'approved', grantId: 'fallback-grant', mode: 'session' })
+  })
+
+  describe('program lines (authorized per call at the IdP)', () => {
+    const lsProgram = { path: '/bin/ls', name: 'ls', sha256: 'a'.repeat(64) }
+
+    it('authorizes a plain program line and approves it in program mode', async () => {
+      const { locateProgram, authorizeProgramCall } = await import('../src/authorization/program.js')
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(locateProgram).mockResolvedValue(lsProgram)
+      vi.mocked(authorizeProgramCall).mockResolvedValue({ kind: 'authorized', grantId: 'program-grant', token: 't', claims: {} as any })
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('ls -la', { targetHost: 'host.test' })
+
+      expect(result).toEqual({ kind: 'approved', grantId: 'program-grant', mode: 'program' })
+      expect(locateProgram).toHaveBeenCalledWith('ls')
+      expect(authorizeProgramCall).toHaveBeenCalledWith(
+        { program: lsProgram, argv: ['-la'] },
+        expect.objectContaining({ idp: 'http://idp.test', subject: 'alice@example.com', targetHost: 'host.test', grantType: 'once', wait: true }),
+      )
+      expect(apiFetch).not.toHaveBeenCalled()
+    })
+
+    it('denies the line when the IdP refuses it, without a session-grant fallback', async () => {
+      const { locateProgram, authorizeProgramCall, AuthorizationRefusedError } = await import('../src/authorization/program.js')
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(locateProgram).mockResolvedValue(lsProgram)
+      vi.mocked(authorizeProgramCall).mockRejectedValue(new AuthorizationRefusedError('denied', 'scary-grant'))
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('ls -la', { targetHost: 'host.test' })
+
+      expect(result).toEqual({ kind: 'denied', reason: 'Grant scary-grant denied' })
+      expect(apiFetch).not.toHaveBeenCalled()
+    })
+
+    it('denies the line when the approval wait times out', async () => {
+      const { locateProgram, authorizeProgramCall, AuthorizationTimeoutError } = await import('../src/authorization/program.js')
+      vi.mocked(locateProgram).mockResolvedValue(lsProgram)
+      vi.mocked(authorizeProgramCall).mockRejectedValue(new AuthorizationTimeoutError('slow-grant', 300_000))
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      const result = await requestGrantForShellLine('ls -la', { targetHost: 'host.test' })
+
+      expect(result.kind).toBe('denied')
+      if (result.kind === 'denied')
+        expect(result.reason).toContain('timed out')
+    })
+
+    it('keeps builtins and lines with expansions on the session path', async () => {
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      const { locateProgram } = await import('../src/authorization/program.js')
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'cd', argv: ['/tmp'], isCompound: false, raw: 'cd /tmp' })
+      vi.mocked(apiFetch).mockResolvedValue({ data: [{ id: 'session', status: 'approved', request: { audience: 'ape-shell', target_host: 'host.test', grant_type: 'always' } }] } as any)
+
+      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
+      for (const line of ['cd /tmp', 'ls $HOME', 'ls *.txt', 'FOO=1 ls', 'ls ~/x'])
+        expect(await requestGrantForShellLine(line, { targetHost: 'host.test' })).toEqual({ kind: 'approved', grantId: 'session', mode: 'session' })
+      expect(locateProgram).not.toHaveBeenCalled()
+    })
   })
 
   it('logs a reuse line when a session grant cache hit occurs', async () => {
@@ -344,30 +358,6 @@ describe('requestGrantForShellLine', () => {
 
       const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
       await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
-
-      const reuseCall = infoSpy.mock.calls.find(call =>
-        typeof call[0] === 'string' && call[0].includes('Reusing'),
-      )
-      expect(reuseCall).toBeUndefined()
-    }
-    finally {
-      delete process.env.APES_QUIET_GRANT_REUSE
-    }
-  })
-
-  it('suppresses adapter grant reuse line when APES_QUIET_GRANT_REUSE=1', async () => {
-    process.env.APES_QUIET_GRANT_REUSE = '1'
-    try {
-      const { parseShellCommand, loadOrInstallAdapter, resolveCommand, findExistingGrant, fetchGrantToken, verifyAndConsume } = await import('../src/shapes/index.js')
-      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'ls', argv: ['-la'], isCompound: false, raw: 'ls -la' })
-      vi.mocked(loadOrInstallAdapter).mockResolvedValue({ adapter: { cli: { id: 'ls', executable: 'ls', audience: 'shapes' }, operations: [] }, source: '/tmp/ls.toml', digest: 'sha' } as any)
-      vi.mocked(resolveCommand).mockResolvedValue({ detail: { display: 'ls -la' } } as any)
-      vi.mocked(findExistingGrant).mockResolvedValue('reused-grant-id')
-      vi.mocked(fetchGrantToken).mockResolvedValue('token123')
-      vi.mocked(verifyAndConsume).mockResolvedValue(undefined)
-
-      const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
-      await requestGrantForShellLine('ls -la', { targetHost: 'host.test' })
 
       const reuseCall = infoSpy.mock.calls.find(call =>
         typeof call[0] === 'string' && call[0].includes('Reusing'),
@@ -443,44 +433,6 @@ describe('requestGrantForShellLine', () => {
     }
   })
 
-  it('logs an approval ack line after adapter grant waitForGrantStatus resolves approved', async () => {
-    const { parseShellCommand, loadOrInstallAdapter, resolveCommand, findExistingGrant, createShapesGrant, waitForGrantStatus, fetchGrantToken, verifyAndConsume } = await import('../src/shapes/index.js')
-    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'curl', argv: ['https://example.com'], isCompound: false, raw: 'curl https://example.com' })
-    vi.mocked(loadOrInstallAdapter).mockResolvedValue({ adapter: { cli: { id: 'curl', executable: 'curl', audience: 'shapes' }, operations: [] }, source: '/tmp/curl.toml', digest: 'sha' } as any)
-    vi.mocked(resolveCommand).mockResolvedValue({ detail: { display: 'curl https://example.com' } } as any)
-    vi.mocked(findExistingGrant).mockResolvedValue(null)
-    vi.mocked(createShapesGrant).mockResolvedValue({ id: 'new-grant-id', status: 'pending' } as any)
-    vi.mocked(waitForGrantStatus).mockResolvedValue('approved')
-    vi.mocked(fetchGrantToken).mockResolvedValue('token456')
-    vi.mocked(verifyAndConsume).mockResolvedValue(undefined)
-
-    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
-    await requestGrantForShellLine('curl https://example.com', { targetHost: 'host.test' })
-
-    const approvalCall = infoSpy.mock.calls.find(call =>
-      typeof call[0] === 'string' && /Grant .* approved/.test(call[0]),
-    )
-    expect(approvalCall).toBeDefined()
-  })
-
-  it('does not log an approval ack line when adapter grant is denied', async () => {
-    const { parseShellCommand, loadOrInstallAdapter, resolveCommand, findExistingGrant, createShapesGrant, waitForGrantStatus } = await import('../src/shapes/index.js')
-    vi.mocked(parseShellCommand).mockReturnValue({ executable: 'rm', argv: ['-rf', '/'], isCompound: false, raw: 'rm -rf /' })
-    vi.mocked(loadOrInstallAdapter).mockResolvedValue({ adapter: { cli: { id: 'rm', executable: 'rm', audience: 'shapes' }, operations: [] }, source: '/tmp/rm.toml', digest: 'sha' } as any)
-    vi.mocked(resolveCommand).mockResolvedValue({ detail: { display: 'rm -rf /' } } as any)
-    vi.mocked(findExistingGrant).mockResolvedValue(null)
-    vi.mocked(createShapesGrant).mockResolvedValue({ id: 'scary-grant-id', status: 'pending' } as any)
-    vi.mocked(waitForGrantStatus).mockResolvedValue('denied')
-
-    const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
-    await requestGrantForShellLine('rm -rf /', { targetHost: 'host.test' })
-
-    const approvalCall = infoSpy.mock.calls.find(call =>
-      typeof call[0] === 'string' && call[0].includes('approved — continuing'),
-    )
-    expect(approvalCall).toBeUndefined()
-  })
-
   it('does not log an approval ack line on session grant cache hit', async () => {
     const { parseShellCommand } = await import('../src/shapes/index.js')
     const { apiFetch } = await import('../src/http.js')
@@ -543,7 +495,8 @@ describe('requestGrantForShellLine', () => {
 
   describe('apes self-dispatch shortcut', () => {
     it('exempts `apes whoami` — introspection, not a new user action', async () => {
-      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      const { locateProgram } = await import('../src/authorization/program.js')
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['whoami'], isCompound: false, raw: 'apes whoami' })
 
@@ -551,13 +504,14 @@ describe('requestGrantForShellLine', () => {
       const result = await requestGrantForShellLine('apes whoami', { targetHost: 'host.test' })
 
       expect(result).toEqual({ kind: 'approved', grantId: 'shell-internal', mode: 'self' })
-      // Critical: the adapter + session paths must NOT be reached
-      expect(loadOrInstallAdapter).not.toHaveBeenCalled()
+      // Critical: the program + session paths must NOT be reached
+      expect(locateProgram).not.toHaveBeenCalled()
       expect(apiFetch).not.toHaveBeenCalled()
     })
 
     it('exempts `apes grants run <id>` — the async-flow bootstrap case', async () => {
-      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      const { locateProgram } = await import('../src/authorization/program.js')
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(parseShellCommand).mockReturnValue({
         executable: 'apes',
@@ -570,12 +524,13 @@ describe('requestGrantForShellLine', () => {
       const result = await requestGrantForShellLine('apes grants run e887a7e3-6f8c-4503-bb50-18f47585deb8', { targetHost: 'host.test' })
 
       expect(result).toEqual({ kind: 'approved', grantId: 'shell-internal', mode: 'self' })
-      expect(loadOrInstallAdapter).not.toHaveBeenCalled()
+      expect(locateProgram).not.toHaveBeenCalled()
       expect(apiFetch).not.toHaveBeenCalled()
     })
 
     it('exempts `apes grants list`', async () => {
-      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      const { locateProgram } = await import('../src/authorization/program.js')
       vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['grants', 'list'], isCompound: false, raw: 'apes grants list' })
 
       const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
@@ -584,22 +539,23 @@ describe('requestGrantForShellLine', () => {
       expect(result.kind).toBe('approved')
       if (result.kind === 'approved')
         expect(result.mode).toBe('self')
-      expect(loadOrInstallAdapter).not.toHaveBeenCalled()
+      expect(locateProgram).not.toHaveBeenCalled()
     })
 
-    it('exempts `apes adapter install curl` — parallels the auto-install path', async () => {
-      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
-      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['adapter', 'install', 'curl'], isCompound: false, raw: 'apes adapter install curl' })
+    it('exempts `apes adapter list` — reads the public adapter list of the IdP', async () => {
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      const { locateProgram } = await import('../src/authorization/program.js')
+      vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['adapter', 'list'], isCompound: false, raw: 'apes adapter list' })
 
       const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
-      const result = await requestGrantForShellLine('apes adapter install curl', { targetHost: 'host.test' })
+      const result = await requestGrantForShellLine('apes adapter list', { targetHost: 'host.test' })
 
       expect(result.kind).toBe('approved')
       if (result.kind === 'approved')
         expect(result.mode).toBe('self')
       // Must NOT trigger the adapter flow at dispatch time — the user's
       // explicit `adapter install` command is its own handler
-      expect(loadOrInstallAdapter).not.toHaveBeenCalled()
+      expect(locateProgram).not.toHaveBeenCalled()
     })
 
     it('exempts `apes admin users list` — server-side auth-gated', async () => {
@@ -639,11 +595,12 @@ describe('requestGrantForShellLine', () => {
     })
 
     it('still gates `apes run -- echo hello` — the core grant-system use case', async () => {
-      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      const { locateProgram } = await import('../src/authorization/program.js')
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['run', '--', 'echo', 'hello'], isCompound: false, raw: 'apes run -- echo hello' })
       // No adapter for `apes` specifically — falls through to session grant
-      vi.mocked(loadOrInstallAdapter).mockResolvedValue(null)
+      vi.mocked(locateProgram).mockResolvedValue(null)
       // Session-grant lookup returns empty, grant creation returns pending,
       // then approved; the wait loop completes.
       vi.mocked(apiFetch)
@@ -658,15 +615,16 @@ describe('requestGrantForShellLine', () => {
       expect(result.kind).toBe('approved')
       if (result.kind === 'approved')
         expect(result.mode).toBe('session')
-      expect(loadOrInstallAdapter).toHaveBeenCalled()
+      expect(locateProgram).toHaveBeenCalled()
       expect(apiFetch).toHaveBeenCalled()
     })
 
     it('still gates `apes fetch https://example.com` — credential forwarder', async () => {
-      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      const { locateProgram } = await import('../src/authorization/program.js')
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['fetch', 'https://example.com'], isCompound: false, raw: 'apes fetch https://example.com' })
-      vi.mocked(loadOrInstallAdapter).mockResolvedValue(null)
+      vi.mocked(locateProgram).mockResolvedValue(null)
       vi.mocked(apiFetch)
         .mockResolvedValueOnce({ data: [] } as any)
         .mockResolvedValueOnce({ id: 'gated-fetch', status: 'pending' } as any)
@@ -682,10 +640,11 @@ describe('requestGrantForShellLine', () => {
     })
 
     it('still gates `apes mcp server` — binds a persistent network port', async () => {
-      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      const { locateProgram } = await import('../src/authorization/program.js')
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: ['mcp', 'server'], isCompound: false, raw: 'apes mcp server' })
-      vi.mocked(loadOrInstallAdapter).mockResolvedValue(null)
+      vi.mocked(locateProgram).mockResolvedValue(null)
       vi.mocked(apiFetch)
         .mockResolvedValueOnce({ data: [] } as any)
         .mockResolvedValueOnce({ id: 'gated-mcp', status: 'pending' } as any)
@@ -700,7 +659,8 @@ describe('requestGrantForShellLine', () => {
     })
 
     it('still gates compound commands starting with apes (e.g. `apes whoami | grep alice`)', async () => {
-      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      const { locateProgram } = await import('../src/authorization/program.js')
       const { apiFetch } = await import('../src/http.js')
       // Compound → isCompound true → self-dispatch shortcut skips (it only
       // fires for simple single-command lines). Falls through to session.
@@ -717,7 +677,7 @@ describe('requestGrantForShellLine', () => {
       expect(result.kind).toBe('approved')
       if (result.kind === 'approved')
         expect(result.mode).toBe('session')
-      expect(loadOrInstallAdapter).not.toHaveBeenCalled() // compound short-circuits before adapter
+      expect(locateProgram).not.toHaveBeenCalled() // compound short-circuits before adapter
     })
 
     // ─────────────────────────────────────────────────────────────────
@@ -756,14 +716,15 @@ describe('requestGrantForShellLine', () => {
       // The blocklist isn't exported — assert behaviorally by driving
       // each known subcommand through requestGrantForShellLine and
       // observing which ones self-dispatch vs fall through.
-      const { parseShellCommand, loadOrInstallAdapter } = await import('../src/shapes/index.js')
+      const { parseShellCommand } = await import('../src/shapes/index.js')
+      const { locateProgram } = await import('../src/authorization/program.js')
       const { apiFetch } = await import('../src/http.js')
 
       const observed: Record<string, 'self' | 'gated'> = {}
       for (const sub of KNOWN_APES_SUBCOMMANDS) {
         vi.clearAllMocks()
         vi.mocked(parseShellCommand).mockReturnValue({ executable: 'apes', argv: [sub], isCompound: false, raw: `apes ${sub}` })
-        vi.mocked(loadOrInstallAdapter).mockResolvedValue(null)
+        vi.mocked(locateProgram).mockResolvedValue(null)
         vi.mocked(apiFetch)
           .mockResolvedValueOnce({ data: [] } as any)
           .mockResolvedValueOnce({ id: `probe-${sub}`, status: 'pending' } as any)
