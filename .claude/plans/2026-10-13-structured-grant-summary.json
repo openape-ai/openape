@@ -229,7 +229,7 @@
       "id": "m11-apes",
       "title": "apes uses the same authorization",
       "goal": "One resolution path for Pods and apes.",
-      "status": "active",
+      "status": "done",
       "steps": [
         "apes run and ape-shell send commands to the same IdP authorization instead of resolving them with local adapter files; installed local adapters are removed."
       ],
@@ -237,7 +237,7 @@
         "apes run git status gets a token from the IdP; no file below ~/.openape/shapes is read."
       ],
       "rollback": "Publish the previous apes version.",
-      "proof": "PR 418 merged; npm publication waits for the owner npm login."
+      "proof": "PR 418; published October 14 with its dependency chain: apes 2.0.0, core 1.0.0, grants 0.14.0, shapes 0.10.0, cli-auth 0.6.0, agent-runtime 0.2.10, proxy 0.4.11 (version PR 422)."
     }
   ],
   "risks": [
@@ -912,8 +912,8 @@
       },
       {
         "path": "milestones.10.proof",
-        "source": "PR 418 merged; npm publication waits for the owner npm login.",
-        "text": "PR 418 gemerged; die npm-Veröffentlichung wartet auf den npm-Login des Owners."
+        "source": "PR 418; published October 14 with its dependency chain: apes 2.0.0, core 1.0.0, grants 0.14.0, shapes 0.10.0, cli-auth 0.6.0, agent-runtime 0.2.10, proxy 0.4.11 (version PR 422).",
+        "text": "PR 418; am 14. Oktober mit seiner Abhängigkeitskette veröffentlicht: apes 2.0.0, core 1.0.0, grants 0.14.0, shapes 0.10.0, cli-auth 0.6.0, agent-runtime 0.2.10, proxy 0.4.11 (Versions-PR 422)."
       }
     ]
   },
