@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useHostBridge } from './host-bridge'
 import { onMounted, ref } from 'vue'
 import { diagnostic, t } from './i18n'
 import Onboarding from './Onboarding.vue'
@@ -14,22 +15,26 @@ import type { SecretsView } from '../contracts/secrets'
  * account with sign-out and points to the desktop for everything native.
  */
 const props = defineProps<{ browser?: boolean, subject?: string, sharing?: boolean }>()
+
 defineEmits<{ logout: [], import: [] }>()
+
+const hostBridge = useHostBridge()
+
 const grants = 'https://id.openape.ai/grants'
 const grantsError = ref('')
 async function openGrants() {
   grantsError.value = ''
-  try { await window.pods.onboarding({ type: 'openGrants' }) }
+  try { await hostBridge.onboarding({ type: 'openGrants' }) }
   catch (error) { grantsError.value = error instanceof Error ? error.message : String(error) }
 }
 // OpenApe Secrets exists only on a desktop with the secrets bridge; until its status arrives it is loading, not unregistered.
-const secretsAvailable = !props.browser && typeof window !== 'undefined' && typeof window.pods?.secrets === 'function'
+const secretsAvailable = !props.browser && typeof window !== 'undefined' && typeof hostBridge?.secrets === 'function'
 const secrets = ref<SecretsView | null>(null)
 const secretsBusy = ref(false)
 const secretsError = ref('')
 async function secretsCommand(command: { type: 'list' } | { type: 'revokeConsumer' }) {
   secretsBusy.value = true; secretsError.value = ''
-  try { secrets.value = await window.pods.secrets!(command) }
+  try { secrets.value = await hostBridge.secrets!(command) }
   catch (error) { secretsError.value = error instanceof Error ? error.message : String(error) }
   finally { secretsBusy.value = false }
 }

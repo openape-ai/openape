@@ -8,7 +8,8 @@ import { WorkspaceRequestError } from './client'
 import WorkspaceFrame from '../WorkspaceFrame.vue'
 import AccountStatus from '../AccountStatus.vue'
 import CentralWorkspace from './CentralWorkspace.vue'
-import AutomationsShell from './AutomationsShell.vue'
+import WorkspaceShell from './WorkspaceShell.vue'
+import { browserWorkspaceAccess } from '../workspace-access'
 import AppSettings from '../AppSettings.vue'
 import { t, diagnostic, time } from '../i18n'
 
@@ -22,8 +23,6 @@ const subject = ref('')
 const error = ref('')
 const connectionError = ref('')
 const page = ref<'Automations' | 'Pods' | 'Import' | 'App settings'>('Automations')
-const now = ref(Date.now())
-const tab = ref<'automations' | 'decisions'>('automations')
 const runtimes = ref<CentralRuntime[]>([])
 const runtimeId = ref('')
 const loaded = ref(false)
@@ -44,7 +43,7 @@ async function signIn() {
   }
 }
 function inventory(value: CentralRuntime[]) {
-  runtimes.value = value; loaded.value = true; now.value = Date.now()
+  runtimes.value = value; loaded.value = true
   if (!value.some(host => host.id === runtimeId.value)) runtimeId.value = value[0]?.id ?? ''
 }
 function back() {
@@ -55,7 +54,12 @@ async function openPod(id: string) {
   await workspace.value?.select(runtime.value.id, id)
   page.value = 'Pods'
 }
-const remoteCommand = (command: CentralCommand) => void workspace.value?.command(command.channel, command.body, runtime.value)
+const access = browserWorkspaceAccess(() => runtime.value, async (command: CentralCommand) => {
+  if (!workspace.value) throw new Error('Workspace is not ready')
+  const result = await workspace.value.command(command.channel, command.body, runtime.value)
+  await workspace.value.refresh()
+  return result
+})
 function expired() { subject.value = ''; runtimes.value = []; emit('login') }
 function logout() { workspace.value?.requestNavigation(() => emit('logout')) }
 onMounted(signIn)
@@ -89,7 +93,9 @@ defineExpose({ openPod })
     <p v-if="subject && loaded && !runtime && page === 'Automations'" class="muted">
       {{ t('Connect your desktop to bring your Pods online.') }}
     </p>
-    <AutomationsShell v-if="subject && page === 'Automations'" :view="runtime?.workspace.map ?? null" :live="!!runtime?.online" :now="now" :tab="tab" inbox-url="/inbox/" :sharing="!!runtime?.online" @update:tab="tab = $event" @settings="page = 'App settings'" @command="remoteCommand" @open-pod="openPod" />
+    <div v-if="subject" v-show="page === 'Automations'">
+      <WorkspaceShell :access="access" :revision="runtime?.revision" :paused="page !== 'Automations'" :sharing="!!runtime?.online" @settings="page = 'App settings'" @open-pod="openPod" />
+    </div>
     <AppSettings v-if="subject && page === 'App settings'" browser :subject="subject" :sharing="!!runtime?.online" @logout="logout" @import="page = 'Import'" />
     <SharingImport v-if="subject && page === 'Import' && runtime" :api="sharingApi" :desktop="false" @open-pod="openPod" />
     <CentralWorkspace v-if="subject" v-show="page === 'Pods'" ref="workspace" :client="client" embedded shared-editor @inventory="inventory" @connection="connectionError = $event" @login="expired" @logout="logout" />

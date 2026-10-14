@@ -1,4 +1,5 @@
 <script lang="ts">
+import { useHostBridge } from './host-bridge'
 import { usePodAccess } from './pod-access'
 import SshPermissions from './SshPermissions.vue'
 import ProgramPermissions from './ProgramPermissions.vue'
@@ -16,7 +17,7 @@ export default defineComponent({
   components: { ProgramPermissions, DirectoryPermissions, SshPermissions, SandboxDenylist, SecretForm },
   props: { requestedSecret: { type: String, default: '' }, requiredAliases: { type: Array as PropType<string[]>, default: () => [] }, mode: { type: String, default: 'permissions' }, selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'discuss'],
-  setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
+  setup() { const access = usePodAccess(); return { hostBridge: useHostBridge(), access, remoteRevision: access.revision } },
   data() { return { pods: [] as StoredPod[], podId: '', state: { resources: [], epoch: 0 } as ResourceState, sandbox: null as SandboxView | null, busy: false, error: '', credentialAlias: this.requestedSecret, message: '' } },
   computed: { missingAliases(): string[] { return this.requiredAliases.filter(alias => !this.visibleResources.some(resource => resource.name === alias && resource.state === 'ready')) }, visibleResources() { return this.state.resources.filter(resource => this.mode === 'values' ? resource.kind === 'credential' : this.access.remote && !['reference', 'directory', 'credential'].includes(resource.kind) && !['program', 'http', 'jev', 'sshInventory'].includes(String(resource.configuration.type))) } },
   watch: { remoteRevision() { if (!this.busy && !this.error && this.podId) void this.load() } },
@@ -38,7 +39,7 @@ export default defineComponent({
     /** File import and OpenApe Secrets requests go through the desktop's secrets channel, like the inbox does. */
     async secrets(command: { type: 'importFile', podId: string, alias: string } | { type: 'request', podId: string, alias: string, purpose: string }) {
       this.busy = true; this.error = ''; this.message = ''
-      try { await window.pods.secrets!(command); this.message = command.type === 'request' ? t('Request sent to OpenApe Secrets.') : ''; await this.load() }
+      try { await this.hostBridge.secrets!(command); this.message = command.type === 'request' ? t('Request sent to OpenApe Secrets.') : ''; await this.load() }
       catch (error) { this.error = error instanceof Error ? error.message : 'Secret operation failed' }
       finally { this.busy = false }
     },

@@ -1,0 +1,793 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "project": "OpenApe Pods",
+  "owner": "Patrick Hofmann",
+  "date": "2026-10-14",
+  "revision": 2,
+  "status": "done",
+  "title": "OpenApe Pods: interactive UI development with Vite",
+  "goal": "Develop the actual Pods frontend with Vite and test data, then use the same UI with Electron and the existing backend by selecting the appropriate adapter and running the normal build.",
+  "summary": "Separate the frontend from its data transport for Automations, Decisions and Pod details. Demo, Electron and the browser/backend use the same components and UI behavior through typed adapters; realistic scenarios make iteration fast, while contract and browser tests keep the real integrations working.",
+  "problem": {
+    "statement": "The UI mixes shared components with direct Electron access and separate local/remote orchestration.",
+    "impact": "A demo alone could evolve separately and leave repeated integration work for every UI change.",
+    "approach": "Use a shared frontend with injected adapters, and complete and test the real adapters as part of this change.",
+    "outcome": "UI edits made in Vite reach Electron and the backend-connected browser through the normal build without copying components or rewriting data access."
+  },
+  "context": "Implemented from canonical main 49fef2b3a8d5b1d91c7df56735a44e266c25b489 in the isolated feature/issue-1478-pods-ui-dev worktree. Existing PodAccess and remotePodAccess remain the editor boundary; the workspace controller is now shared and native access is injected. The current domain commands and scrolling Pod page were reused. Actual local checks and inspected screenshots are linked below; this record does not claim deployment or signed installation.",
+  "scope": [
+    "Automations: existing map/list switch, grouping and filters, selection, detail panel, pause/resume and simulated run.",
+    "Decisions: realistic routing questions, single and group choices, counters and resolved state; demonstrate a rejected action and a successful retry.",
+    "Pod details: overview, script and permissions inspection, public variables, settings and run history with logs; edit description, one public variable and schedule through existing controls.",
+    "A small demo toolbar offers scenario selection, reset and visible simulation status. German is the initial UI language.",
+    "Use existing scripts and browser-test infrastructure; add only dev:ui as a new package command. Document startup, scenarios and supported actions.",
+    "Complete the shared frontend boundary and wire demo, Electron and existing backend adapters for the agreed three areas within this feature. Moving a UI change into production must require no second implementation."
+  ],
+  "nonGoals": [
+    "In demo mode, no backend, relay, SQLite, worker, scheduler, Electron process, account login or production data access at runtime. Normal Electron/backend modes retain their real connections.",
+    "No separate UI copy, framework migration, visual redesign or component playground product. Refactor only dependencies needed by the three agreed areas; leave unrelated screens behind explicit host boundaries.",
+    "No real script execution, terminal, files, secrets, permission grants, chat generation, package installation or import/export.",
+    "No exhaustive backend emulation, new state-management framework, protocol redesign, login redesign or changes to permission semantics. No separate dependency installation that removes Electron from the workspace graph. Backend contract extensions, if genuinely required, must be identified before implementation and included in a reviewed revision."
+  ],
+  "sections": [
+    {
+      "id": "architecture",
+      "title": "Implementation architecture",
+      "body": "Target flow: **shared Vue UI → shared frontend controllers and typed access → demo / Electron / backend adapter**. Data flows back through the same view contracts. The host selects adapters at bootstrap; product components do not select transports.\n\nBuild on `PodAccess`, `remotePodAccess`, `CentralClient` and existing command/view types. Add only the missing workspace-level boundary required by Automations and Decisions. Keep interfaces small and named for real use cases; avoid a generic repository or universal command bus. Pure rendering receives props and emits typed events. Shared controllers own loading/error state, selection, refresh scheduling, invalidation and edit state; adapters own transport, response validation and operation settlement. Reuse existing cancellation, revision and unknown-outcome handling instead of weakening them.\n\n**Demo adapter:** an explicit Vite mode injects a typed in-memory implementation. The demo store changes synthetic state only. Scenarios and toolbar live in a development-only wrapper, outside product components. No global `window.pods` replacement is the intended architecture.\n\n**Electron adapter:** wraps the actual preload `PodsBridge`, subscribes/unsubscribes to status and forwards existing commands to the worker. Only the adapter/native host boundary may read `window.pods` for the migrated paths. It uses the same controllers and components as the demo. Both local and registered desktop entries must remain wired.\n\n**Backend adapter:** wraps `browserWorkspaceClient` / `CentralClient` and existing `remotePodAccess`, preserves authenticated HTTP, online state, revision checks and asynchronous operations, and plugs into the same frontend. The relay's workspace page keeps its host/login responsibility. Reuse its existing imports; no copied frontend bundle or templates.\n\nRepresent genuine availability through typed capabilities, not `isDemo` branches. A local terminal or IdP action is a host service; absent capability yields the existing disabled/explanatory state. Transport mode must never grant permission. A demo capability can simulate a local effect without opening live links. Ordinary UI components must not import fixtures, Electron, Node or HTTP clients; shared data access must not fall back to a live adapter.\n\nBefore edits, inventory direct globals, transport imports, polling and native subcomponents on the three paths. Migrate these consumers together and remove superseded orchestration. Host-only UI outside scope can retain its implementation, but must not be reached accidentally in demo mode. Keep normal boot/build behavior; only explicit dev:ui conditionally imports the demo adapter and toolbar.",
+      "placement": "before-details"
+    },
+    {
+      "id": "scenarios",
+      "title": "Data and scenarios",
+      "body": "Use invented organizations and `.invalid` identities, never copied owner mail or credentials. Seed 6–8 related Pods across two organizations: invoice review, newsletter triage, release monitoring and a morning briefing. Give them realistic summaries, tags, schedules, public variables, script snippets and several historical runs. Keep IDs, relationships, counters and statuses consistent.\n\n| Scenario | Visible result |\n| --- | --- |\n| everyday | Active and paused Pods, completed runs, four pending routing questions and two groups |\n| attention | A failed run with logs, a waiting IdP action and one choice that initially fails and succeeds on retry |\n| empty | No Pods or decisions; existing empty-state presentation |\n| loading-error | Delayed reads and an explicit recoverable read error |\n\nA simulated run moves from running to completed after a short controlled delay and appends history. A decision changes the actual fixture state and counters across tabs. Group choices process the visible eligible cases. Changing a description, public variable or schedule remains visible after navigation.\n\nState is memory-only in v1. Reset, scenario switching and browser reload restore the selected seed; scenario and language can be encoded in the URL. Reset cancels pending timers and clears local UI state. Hot reload remains active; fixture/module changes may reset demo state. Do not promise persistence across reloads.",
+      "placement": "before-details"
+    },
+    {
+      "id": "source-map",
+      "title": "Repository orientation",
+      "body": "Repository: `https://repos.openape.ai/patrick/monorepo`. Inspected checkout: `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo`; branch `main`; SHA `e89449e261260e88169394f4f49aa77130f564ea`.\n\nRelevant files under `apps/openape-pods/`: `package.json`, `vite.config.ts`, `index.html`, `src/renderer/main.ts`, `src/contracts/ipc.ts`, `src/renderer/App.vue`, `src/renderer/central/LocalShell.vue`, `src/renderer/central/AutomationsShell.vue`, `src/renderer/central/DecisionsInbox.vue`, `src/renderer/pod-access.ts`, `src/renderer/style.css`.\n\nStarting fixtures: `test/layout/workspace-fixture.ts`, `test/layout/network-fixture.ts`, `test/renderer/map-view.json`, `test/renderer/choice-events.ts`. Existing browser tests: `test/layout/app-shell.test.ts`, `pod-tabs.test.ts`, `automations.test.ts`, `shell-parity.test.ts`; configuration: `vitest.browser.config.ts`.\n\nBefore implementation, read current main instructions and issue workflow, create/link one native development issue and use `feature/issue-<number>-pods-ui-dev` in a dedicated worktree. Carry this plan source into that branch and link the published proposal. No issue, branch or implementation PR has been created for this planning request.\n\nAdditional architecture and test anchors: `src/renderer/central/remote-pod-access.ts`, `RemotePodEditor.vue`, `BrowserWorkspace.vue`, `DesktopWorkspace.vue`, `client.ts`, `src/preload/index.ts`, `apps/openape-pods-relay/app/pages/workspace.vue`, `apps/openape-pods/test/workspace/central-ui.test.ts`, `browser-workspace.test.ts`, `apps/openape-pods/test/main/worker-entry.test.ts` and `apps/openape-pods-relay/test/workspace-store.test.ts`.",
+      "placement": "after-details"
+    },
+    {
+      "id": "delivery",
+      "title": "Effort, approval and handoff",
+      "body": "Implementation of proposal revision 2 was authorized by Patrick on October 15, 2026: “Implementiere das in einem worktree sodass es sich mit anderen worktrees nicht stört”. The exact original statement and revision binding are recorded in the shared approval field.\n\nM1–M5 are implemented and locally verified. The actual Test Run records 1,794 Pods tests, 100 relay tests and 63 browser tests, build results, limitations and inspected screenshots. The earlier estimate was 1–2 working days; it was a forecast, not measured time.\n\nLocal delivery is ready at http://127.0.0.1:5478. The native implementation PR and issue retain code review state. Existing build/install/deploy workflows consume shared UI changes; no production deployment or signed desktop replacement was performed.",
+      "placement": "after-details"
+    },
+    {
+      "id": "iteration-transfer",
+      "title": "From a UI iteration to the real application",
+      "body": "1. Start `pnpm --filter @openape/pods dev:ui`, select a scenario and change shared components, styles or frontend behavior.\n2. Run the focused existing browser tests. If behavior or data access changes, also run the affected controller/adapter contract tests; a CSS-only edit does not require a new backend test.\n3. Use the ordinary Electron/relay entry and normal build. Their bootstrap already supplies the real adapter; no copying files, changing components, toggling demo branches in screens or manual API rewiring is required. Normal installation/deployment remains the existing workflow.\n\nAcceptance exercise: make one small visible shared-component edit and verify it in the demo, the production Electron renderer configuration and the backend-browser configuration. For a supported write, demonstrate that the same UI action dispatches through both real adapters and displays the confirmed result. Record changed files, commands and results. Real network/worker behavior is established by existing isolated backend tests, not merely by demo parity.\n\nBackend contracts still bound what is possible: adding a new domain field or command requires its actual backend implementation and contract tests. The architecture makes that dependency explicit and local; it cannot turn new backend functionality into a mode switch. UI-only changes using existing contracts need no backend domain change.",
+      "placement": "after-details"
+    },
+    {
+      "id": "test-strategy",
+      "title": "Test strategy and ownership",
+      "body": "| Layer | What is verified | Existing location |\n| --- | --- | --- |\n| Shared UI | Observable clicks, form values, disabled states, loading/error display, geometry and screenshots with real CSS | Pods `test/layout`, `test/renderer`, existing `test/workspace/*-ui.test.ts` |\n| Controllers / demo state | Invalidation, consistent counters, scenario reset, timer disposal, async failure and confirmed success | Existing Pods Vitest suites; extend a fitting file or add within the suite |\n| Adapter contracts | Existing request/response types, revisions, command mapping, errors, operation settlement and capabilities for demo/Electron/backend | `test/workspace/central-ui.test.ts`, `browser-workspace.test.ts`, related existing tests |\n| Real boundaries | Production client/bridge handling and worker/relay effects with isolated temporary data and narrow transport doubles | Pods `test/main/worker-entry.test.ts`, workspace/storage/scheduling suites; relay `test/workspace-store.test.ts` where affected |\n\nKeep one set of UI interaction expectations. Run the full UI scenario against the deterministic provider; parameterize a small representative smoke set across adapters using equal capabilities. Existing desktop/browser parity tests remain and gain the demo case where useful. Do not duplicate every screenshot and every interaction for all providers.\n\nAdapter tests exercise the actual production adapter code, replacing only the external transport. For each supported command verify the expected request independently and confirm the displayed refreshed state. Cover rejected/stale revisions, unavailable capabilities, read failures and asynchronous accepted → applied / failed / unknown results. Unknown outcomes must not trigger duplicate writes. A fixture is not the expected result of its own test: use existing parsers plus explicit assertions and backend tests to avoid self-confirming mocks.\n\nFixtures shared with the demo provide data, not business rules or assertions. Unit tests may use controlled time; browser tests wait for visible states with bounded waits. Reset/unmount must clear subscriptions, timers and pending requests. Never weaken an assertion to match a changed mock. Preserve existing tests; remove an obsolete duplicate only when its behavior is demonstrably covered elsewhere and explain it in the PR.\n\nRetain new tests for the durable contracts: adapter substitutability, cross-view consistency, mutation confirmation, cleanup and demo isolation. Use proportionate focused checks for purely visual edits. UI is tested in Vitest browser mode, never through new Electron E2E tests. Native/runtime changes, if any, use their existing boundary suites. No new runner, test script, test directory, mandatory CI context or default-chain change.",
+      "placement": "after-details"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "M1",
+      "title": "Establish the shared frontend and real adapter boundary",
+      "goal": "Make the three agreed areas independent of transport before introducing the demo.",
+      "status": "done",
+      "steps": [
+        "Inventory direct window.pods/HTTP/native access and separate shared frontend state from host-specific responsibilities; extend PodAccess and existing clients instead of introducing parallel abstractions.",
+        "Wire the Electron and backend adapters into their current entry points; migrate the three paths to injected access and capability-based host actions.",
+        "Add dev:ui with the demo provider and wrapper; preserve normal local, registered desktop and relay entry behavior."
+      ],
+      "acceptance": [
+        "pnpm --filter @openape/pods dev:ui serves the actual UI at http://127.0.0.1:5173; a busy port fails clearly.",
+        "No Electron, worker, login or API connection starts; editing a Vue label/style updates the browser through HMR.",
+        "The same UI/controller tree can mount with demo, Electron and backend providers. Shared components on the three migrated paths contain no direct window.pods, HTTP-client, Electron or fixture access.",
+        "Normal host entry points are connected during this milestone, not deferred to a future integration task; genuine capability differences remain explicit."
+      ],
+      "rollback": "Revert the frontend boundary and entry-point migration together with dev:ui; do not leave a mixed old/new orchestration path.",
+      "proof": "Shared workspace controller and injected host/Pod access serve the existing components. Local and registered Electron entries and the browser/relay consumer build and pass their existing parity tests.",
+      "evidenceIds": [
+        "implementation-verification"
+      ]
+    },
+    {
+      "id": "M2",
+      "title": "Create coherent scenarios",
+      "goal": "Provide realistic, repeatable data for all three areas.",
+      "status": "done",
+      "steps": [
+        "Build a typed fixture store and shared selectors for map, details, decisions and runs.",
+        "Implement the four scenarios, toolbar, URL selection and full reset with timer cleanup."
+      ],
+      "acceptance": [
+        "Every visible Pod has matching details and history; decision counts agree across views.",
+        "Each scenario can be opened directly and restored after any action without stale timers or data from another scenario."
+      ],
+      "rollback": "Revert fixture modules and consumers together to avoid divergent fixture copies.",
+      "proof": "Six invented Pods and the four resettable scenarios use validated production payloads. State, counters and draft/timer cleanup are covered by adapter and browser tests.",
+      "evidenceIds": [
+        "implementation-verification"
+      ]
+    },
+    {
+      "id": "M3",
+      "title": "Make the agreed interactions work",
+      "goal": "Changes must affect what the user sees across the real components.",
+      "status": "done",
+      "steps": [
+        "Implement pause/resume, simulated run, single/group choices and edits to description, public variables and schedule.",
+        "Provide explicit local demo responses for native and IdP actions, and explicit errors for unsupported commands."
+      ],
+      "acceptance": [
+        "Pause/resume updates map/list/detail; run moves through running/completed and adds a readable history entry.",
+        "Single/group choices update remaining questions and counters; failure stays visible until a retry succeeds.",
+        "Edited description, variable and schedule survive navigation until reset/reload; unsupported actions never pretend to save."
+      ],
+      "rollback": "Revert the demo handlers; no real workspace data requires restoration.",
+      "proof": "Browser tests exercised descriptions, public variables, schedules, pause/resume, simulated runs, refused/retried choices and grouped choices through the real components.",
+      "evidenceIds": [
+        "implementation-verification"
+      ]
+    },
+    {
+      "id": "M4",
+      "status": "done",
+      "title": "Prove transfer into Electron and the backend UI",
+      "goal": "Make the few-step production handoff an explicit acceptance requirement.",
+      "steps": [
+        "Apply one representative shared visual change and exercise one existing write through the production Electron and backend adapters using their isolated harnesses.",
+        "Build both affected consumers and document the ordinary startup/build path. Verify unchanged login, revision, operation and capability semantics."
+      ],
+      "acceptance": [
+        "The same component edit appears in all three configurations without source copying or API rewiring. Normal builds exclude demo code.",
+        "A supported write produces the correct real-adapter request and confirmed refreshed view; existing isolated backend tests cover its actual effect. Unsupported remote features remain unavailable.",
+        "The handoff is: edit shared UI → focused checks → normal host build/install or deploy. No separate integration refactor is left open."
+      ],
+      "rollback": "Revert the integration and frontend change together; no deployment or signed installation is required to complete this acceptance.",
+      "proof": "A temporary shared component marker appeared via Vite HMR, in the Electron and relay builds and in all three browser-mode host configurations. The marker was restored before final gates; production builds exclude demo data and toolbar.",
+      "evidenceIds": [
+        "implementation-verification"
+      ]
+    },
+    {
+      "id": "M5",
+      "title": "Verify and document the development loop",
+      "goal": "Deliver a repeatable browser workflow with inspected evidence.",
+      "status": "done",
+      "steps": [
+        "Extend established unit/component and Vitest browser suites for the demo contracts and critical interactions.",
+        "Capture and inspect screenshots with real CSS, verify development entry and production exclusion, publish a Test Run and document usage."
+      ],
+      "acceptance": [
+        "Relevant checks pass; screenshots show all three areas at wide and narrow widths with no clipped primary controls.",
+        "Only Vite assets/HMR are requested during the demo journey; ordinary build has no demo dataset or toolbar.",
+        "The final handoff includes the start command, supported actions, scenario URLs, local server URL and verified Test Run link.",
+        "Contract and boundary evidence is separate from UI screenshots; tests prove the real adapters, not just the demo simulation."
+      ],
+      "rollback": "Revert the feature through the native repository workflow; retain evidence and the plan history.",
+      "proof": "Repository lint/typecheck passed. Pods: 1794 tests; relay: 100 tests; browser: 63 tests. Eight final screenshots were personally inspected and embedded with exact hashes in the verified Test Run. Usage and transfer commands are documented.",
+      "evidenceIds": [
+        "implementation-verification"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "title": "One production UI",
+      "description": "Use one shared frontend with injected demo, Electron and backend adapters, extending existing PodAccess and clients. Both production adapters are delivered with the refactor; no global fake bridge as the final design.",
+      "status": "proposed"
+    },
+    {
+      "title": "Memory-only state",
+      "description": "Prefer deterministic reset and simple typed handlers over persistence or a generic backend simulator. No new runtime dependency is expected.",
+      "status": "proposed"
+    },
+    {
+      "title": "Browser verification",
+      "description": "Share UI expectations and data builders; test contracts separately against actual adapters and existing backend handlers. Use Vitest browser mode for UI and screenshots, isolated unit/boundary tests for transport/runtime. No new Electron UI E2E or new test infrastructure.",
+      "status": "proposed"
+    }
+  ],
+  "risks": [
+    {
+      "title": "Fixtures drift from contracts",
+      "mitigation": "Type-check against PodsBridge, validate shared payloads with existing parsers and reuse builders across tests and demo."
+    },
+    {
+      "title": "A click has no visible effect",
+      "mitigation": "Each supported command must mutate one authoritative store and refresh all derived views; unsupported actions report a limitation."
+    },
+    {
+      "title": "Demo code leaks into normal operation",
+      "mitigation": "Explicit development mode, conditional imports, build inspection and network observation; never fall back from a missing bridge to demo data."
+    },
+    {
+      "title": "Production adapters diverge from the demo",
+      "mitigation": "Deliver real adapters in M1 and explicit transfer acceptance in M4; check independent contracts, operation failures and capability differences. Backend additions require an explicit reviewed scope update."
+    }
+  ],
+  "verification": [
+    "From the implementation worktree: export PATH=\"/Users/patrickhofmann/Companies/private/repos/openape/.toolchains/pnpm/10.29.3/bin:$PATH\"; . ./scripts/activate-node.sh; pnpm run doctor. Install locked dependencies only if missing.",
+    "Run lint → typecheck → build → relevant tests for @openape/pods and the consuming @openape-pods-relay/app; stop and fix the first failure. Inspect pnpm check:affected --base origin/main --head HEAD --dry-run for additional consumers. Before commit also satisfy repository-wide lint and typecheck under current instructions.",
+    "Use pnpm --filter @openape/pods test --maxWorkers=4 with focused existing suite selection and pnpm --filter @openape/pods test:browser. Keep screenshots in the existing test/layout evidence flow. Do not use test:layout, which also packages and runs Electron.",
+    "Verify dev:ui/HMR with only Vite running. Test UI behavior once with the deterministic provider, then a representative parity set and independent contract tests with actual Electron/backend adapters. Inspect demo traffic: only Vite assets/HMR, no /api or external requests. Verify real backend effects separately in existing isolated suites.",
+    "Inspect German screenshots at 1440×1000 and 390×844 for Automations, Decisions and Pod details; include error and empty states and existing supported themes. Record exact source SHA, commands and results separately from visual assessment.",
+    "Render actual evidence with ape-report-render test-run and publish through ape-reports in Test Runs. Verify the returned document, category and exported HTML digest. These are future checks, not results of this planning session.",
+    "Boundary checks verify that migrated shared components import no demo, transport or native implementation; production builds contain no demo fixtures or toolbar. Extend existing dependency tooling where it supports this, otherwise keep a focused test within an established suite."
+  ],
+  "handoff": "Ready for UI iteration in /Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-ui-dev-1478. Start command: pnpm --filter @openape/pods dev:ui. Use the existing host build/install/deploy workflow to consume shared UI edits. Native issue 1478 tracks the implementation PR; merging and production rollout remain separate from this local delivery.",
+  "completion": {
+    "result": "achieved",
+    "summary": "The agreed UI development workflow is implemented and locally verified in an isolated worktree on feature/issue-1478-pods-ui-dev. The Vite server runs at http://127.0.0.1:5478. Existing Electron/backend adapters remain connected to the same frontend. No production deployment or signed installation was performed.",
+    "evidenceIds": [
+      "implementation-verification"
+    ]
+  },
+  "changelog": [
+    {
+      "date": "2026-10-14",
+      "text": "Created proposal revision 1 from repository inspection and the owner-selected initial scope."
+    },
+    {
+      "date": "2026-10-14",
+      "text": "Revision 2: owner requires easy transfer of UI iterations to Electron/backend. Replace bridge-only demo architecture with shared controllers and typed adapters, add M4 production-adapter acceptance and a layered test strategy; revise effort to 1–2 working days."
+    },
+    {
+      "date": "2026-10-15",
+      "text": "Owner authorized implementation of revision 2 in an isolated worktree. Implemented against main 49fef2b3 using its current domain commands and scrolling Pod page. Final local gates passed and actual evidence was published; no deployment."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "owner-request",
+      "kind": "text",
+      "role": "reference",
+      "title": "Owner request — planning scope, original wording",
+      "text": "Ja, mach bitte einen Plan dafür. Automatisierungen, Entscheidungen und Pod-Details reichen für den Anfang, mit realistischen Testdaten und klickbaren Interaktionen."
+    },
+    {
+      "id": "owner-architecture",
+      "kind": "text",
+      "role": "reference",
+      "title": "Owner clarification — architecture and testing, original wording",
+      "text": "der plan sollte beinhalten dass nach dem umbau es möglich ist am ui zu iterieren und dann mit wenigen handgriffen das neue UI auch im electron und backend anzubinden. dafür muss die frontendarchitektur passen. achte auch wie wir mit tests umgehen"
+    },
+    {
+      "id": "implementation-verification",
+      "kind": "link",
+      "role": "evidence",
+      "title": "Implementation verification: actual outputs and inspected screenshots",
+      "url": "https://report.openape.ai/d/01M4YD9F33NX8VY85MN8ZSB3KK"
+    }
+  ],
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "OpenApe Pods: interactive UI development with Vite",
+        "text": "OpenApe Pods: interaktive UI-Entwicklung mit Vite"
+      },
+      {
+        "path": "goal",
+        "source": "Develop the actual Pods frontend with Vite and test data, then use the same UI with Electron and the existing backend by selecting the appropriate adapter and running the normal build.",
+        "text": "Das tatsächliche Pods-Frontend mit Vite und Testdaten entwickeln und anschließend dasselbe UI durch Wahl des passenden Adapters und den normalen Build mit Electron und dem vorhandenen Backend verwenden."
+      },
+      {
+        "path": "summary",
+        "source": "Separate the frontend from its data transport for Automations, Decisions and Pod details. Demo, Electron and the browser/backend use the same components and UI behavior through typed adapters; realistic scenarios make iteration fast, while contract and browser tests keep the real integrations working.",
+        "text": "Das Frontend für Automatisierungen, Entscheidungen und Pod-Details von seinem Datentransport trennen. Demo, Electron und Browser/Backend verwenden dieselben Komponenten und dasselbe UI-Verhalten über typisierte Adapter; realistische Szenarien beschleunigen die Iteration, während Vertrags- und Browser-Tests die echten Anbindungen absichern."
+      },
+      {
+        "path": "context",
+        "source": "Implemented from canonical main 49fef2b3a8d5b1d91c7df56735a44e266c25b489 in the isolated feature/issue-1478-pods-ui-dev worktree. Existing PodAccess and remotePodAccess remain the editor boundary; the workspace controller is now shared and native access is injected. The current domain commands and scrolling Pod page were reused. Actual local checks and inspected screenshots are linked below; this record does not claim deployment or signed installation.",
+        "text": "Auf kanonischem main 49fef2b3a8d5b1d91c7df56735a44e266c25b489 im isolierten Worktree feature/issue-1478-pods-ui-dev umgesetzt. Bestehender PodAccess und remotePodAccess bleiben die Editorgrenze; die Workspace-Steuerung wird jetzt geteilt und nativer Zugriff eingesetzt. Aktuelle Domain-Befehle und durchgehende Pod-Seite wurden wiederverwendet. Tatsächliche lokale Prüfungen und persönlich geprüfte Screenshots sind unten verlinkt; dieser Nachweis behauptet kein Deployment und keine signierte Installation."
+      },
+      {
+        "path": "handoff",
+        "source": "Ready for UI iteration in /Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-ui-dev-1478. Start command: pnpm --filter @openape/pods dev:ui. Use the existing host build/install/deploy workflow to consume shared UI edits. Native issue 1478 tracks the implementation PR; merging and production rollout remain separate from this local delivery.",
+        "text": "Bereit für UI-Iteration in /Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-ui-dev-1478. Startbefehl: pnpm --filter @openape/pods dev:ui. Gemeinsame UI-Änderungen über den bestehenden Host-Build-/Installations-/Deployment-Ablauf übernehmen. Natives Issue 1478 verknüpft den Implementierungs-PR; Merge und Produktiv-Rollout bleiben von dieser lokalen Lieferung getrennt."
+      },
+      {
+        "path": "scope.0",
+        "source": "Automations: existing map/list switch, grouping and filters, selection, detail panel, pause/resume and simulated run.",
+        "text": "Automatisierungen: vorhandener Karten-/Listenwechsel, Gruppierung und Filter, Auswahl, Detailbereich, Pausieren/Fortsetzen und simulierter Lauf."
+      },
+      {
+        "path": "scope.1",
+        "source": "Decisions: realistic routing questions, single and group choices, counters and resolved state; demonstrate a rejected action and a successful retry.",
+        "text": "Entscheidungen: realistische Zuordnungsfragen, Einzel- und Gruppenentscheidungen, Zähler und erledigter Zustand; eine abgelehnte Aktion mit erfolgreicher Wiederholung demonstrieren."
+      },
+      {
+        "path": "scope.2",
+        "source": "Pod details: overview, script and permissions inspection, public variables, settings and run history with logs; edit description, one public variable and schedule through existing controls.",
+        "text": "Pod-Details: Übersicht, Ansicht von Skript und Berechtigungen, öffentliche Variablen, Einstellungen und Verlauf mit Logs; Beschreibung, eine öffentliche Variable und Zeitplan über vorhandene Bedienelemente ändern."
+      },
+      {
+        "path": "scope.3",
+        "source": "A small demo toolbar offers scenario selection, reset and visible simulation status. German is the initial UI language.",
+        "text": "Eine kleine Demo-Leiste bietet Szenarioauswahl, Zurücksetzen und einen sichtbaren Simulationshinweis. Deutsch ist die anfängliche UI-Sprache."
+      },
+      {
+        "path": "scope.4",
+        "source": "Use existing scripts and browser-test infrastructure; add only dev:ui as a new package command. Document startup, scenarios and supported actions.",
+        "text": "Vorhandene Skripte und Browser-Testinfrastruktur nutzen; als Paketbefehl kommt nur dev:ui hinzu. Start, Szenarien und unterstützte Aktionen dokumentieren."
+      },
+      {
+        "path": "scope.5",
+        "source": "Complete the shared frontend boundary and wire demo, Electron and existing backend adapters for the agreed three areas within this feature. Moving a UI change into production must require no second implementation.",
+        "text": "Die gemeinsame Frontendgrenze vervollständigen und Demo-, Electron- sowie vorhandene Backend-Adapter für die drei vereinbarten Bereiche innerhalb dieses Features anschließen. Die Übernahme einer UI-Änderung in den Produktivbetrieb darf keine zweite Implementierung erfordern."
+      },
+      {
+        "path": "nonGoals.0",
+        "source": "In demo mode, no backend, relay, SQLite, worker, scheduler, Electron process, account login or production data access at runtime. Normal Electron/backend modes retain their real connections.",
+        "text": "Im Demo-Modus zur Laufzeit kein Backend, Relay, SQLite, Worker, Scheduler, Electron-Prozess, Kontologin oder Zugriff auf Produktivdaten. Normale Electron-/Backend-Modi behalten ihre echten Verbindungen."
+      },
+      {
+        "path": "nonGoals.1",
+        "source": "No separate UI copy, framework migration, visual redesign or component playground product. Refactor only dependencies needed by the three agreed areas; leave unrelated screens behind explicit host boundaries.",
+        "text": "Keine separate UI-Kopie, Framework-Migration, visuelle Neugestaltung oder eigenständiges Komponenten-Playground-Produkt. Nur Abhängigkeiten der drei vereinbarten Bereiche umbauen; andere Ansichten hinter ausdrücklichen Host-Grenzen belassen."
+      },
+      {
+        "path": "nonGoals.2",
+        "source": "No real script execution, terminal, files, secrets, permission grants, chat generation, package installation or import/export.",
+        "text": "Keine echte Skriptausführung, kein Terminal, Dateizugriff, Geheimnisse, Rechtefreigaben, Chat-Generierung, Paketinstallation oder Import/Export."
+      },
+      {
+        "path": "nonGoals.3",
+        "source": "No exhaustive backend emulation, new state-management framework, protocol redesign, login redesign or changes to permission semantics. No separate dependency installation that removes Electron from the workspace graph. Backend contract extensions, if genuinely required, must be identified before implementation and included in a reviewed revision.",
+        "text": "Keine vollständige Backend-Nachbildung, kein neues Zustandsframework, Protokollumbau, Login-Umbau oder Änderung der Berechtigungssemantik. Keine separate Installation, die Electron aus dem Workspace-Abhängigkeitsgraphen entfernt. Tatsächlich erforderliche Backend-Vertragserweiterungen vor der Umsetzung benennen und in eine geprüfte Revision aufnehmen."
+      },
+      {
+        "path": "verification.0",
+        "source": "From the implementation worktree: export PATH=\"/Users/patrickhofmann/Companies/private/repos/openape/.toolchains/pnpm/10.29.3/bin:$PATH\"; . ./scripts/activate-node.sh; pnpm run doctor. Install locked dependencies only if missing.",
+        "text": "Im Umsetzungs-Worktree: export PATH=\"/Users/patrickhofmann/Companies/private/repos/openape/.toolchains/pnpm/10.29.3/bin:$PATH\"; . ./scripts/activate-node.sh; pnpm run doctor. Gepinnte Abhängigkeiten nur installieren, falls sie fehlen."
+      },
+      {
+        "path": "verification.1",
+        "source": "Run lint → typecheck → build → relevant tests for @openape/pods and the consuming @openape-pods-relay/app; stop and fix the first failure. Inspect pnpm check:affected --base origin/main --head HEAD --dry-run for additional consumers. Before commit also satisfy repository-wide lint and typecheck under current instructions.",
+        "text": "lint → typecheck → build → relevante Tests für @openape/pods und den Verbraucher @openape-pods-relay/app ausführen; beim ersten Fehler stoppen und beheben. Mit pnpm check:affected --base origin/main --head HEAD --dry-run weitere Verbraucher bestimmen. Vor dem Commit zusätzlich repositoryweites lint und typecheck gemäß aktuellen Vorgaben erfüllen."
+      },
+      {
+        "path": "verification.2",
+        "source": "Use pnpm --filter @openape/pods test --maxWorkers=4 with focused existing suite selection and pnpm --filter @openape/pods test:browser. Keep screenshots in the existing test/layout evidence flow. Do not use test:layout, which also packages and runs Electron.",
+        "text": "pnpm --filter @openape/pods test --maxWorkers=4 mit gezielter Auswahl bestehender Suiten sowie pnpm --filter @openape/pods test:browser nutzen. Screenshots im vorhandenen test/layout-Nachweisablauf ablegen. test:layout nicht verwenden, da es zusätzlich paketiert und Electron startet."
+      },
+      {
+        "path": "verification.3",
+        "source": "Verify dev:ui/HMR with only Vite running. Test UI behavior once with the deterministic provider, then a representative parity set and independent contract tests with actual Electron/backend adapters. Inspect demo traffic: only Vite assets/HMR, no /api or external requests. Verify real backend effects separately in existing isolated suites.",
+        "text": "dev:ui/HMR bei ausschließlich laufendem Vite prüfen. UI-Verhalten einmal mit deterministischem Provider testen, danach einen repräsentativen Paritätsumfang und unabhängige Vertragstests mit echten Electron-/Backend-Adaptern. Demo-Verkehr prüfen: nur Vite-Assets/HMR, keine /api- oder externen Anfragen. Echte Backend-Wirkungen separat in bestehenden isolierten Suiten prüfen."
+      },
+      {
+        "path": "verification.4",
+        "source": "Inspect German screenshots at 1440×1000 and 390×844 for Automations, Decisions and Pod details; include error and empty states and existing supported themes. Record exact source SHA, commands and results separately from visual assessment.",
+        "text": "Deutsche Screenshots bei 1440×1000 und 390×844 für Automatisierungen, Entscheidungen und Pod-Details ansehen; Fehler- und Leerzustände sowie vorhandene unterstützte Themes einbeziehen. Exakten Quell-SHA, Befehle und Ergebnisse getrennt von der visuellen Beurteilung dokumentieren."
+      },
+      {
+        "path": "verification.5",
+        "source": "Render actual evidence with ape-report-render test-run and publish through ape-reports in Test Runs. Verify the returned document, category and exported HTML digest. These are future checks, not results of this planning session.",
+        "text": "Tatsächliche Nachweise mit ape-report-render test-run rendern und über ape-reports unter Test Runs veröffentlichen. Zurückgegebenes Dokument, Kategorie und Prüfsumme des exportierten HTML prüfen. Das sind zukünftige Prüfungen, keine Ergebnisse dieser Planungssitzung."
+      },
+      {
+        "path": "verification.6",
+        "source": "Boundary checks verify that migrated shared components import no demo, transport or native implementation; production builds contain no demo fixtures or toolbar. Extend existing dependency tooling where it supports this, otherwise keep a focused test within an established suite.",
+        "text": "Grenzprüfungen stellen sicher, dass migrierte gemeinsame Komponenten keine Demo-, Transport- oder native Implementierung importieren; Produktiv-Builds enthalten weder Demo-Fixtures noch Werkzeugleiste. Vorhandene Abhängigkeitswerkzeuge erweitern, soweit unterstützt; sonst einen gezielten Test innerhalb einer etablierten Suite behalten."
+      },
+      {
+        "path": "problem.statement",
+        "source": "The UI mixes shared components with direct Electron access and separate local/remote orchestration.",
+        "text": "Das UI verbindet gemeinsame Komponenten mit direkten Electron-Zugriffen und getrennter lokaler/entfernter Steuerung."
+      },
+      {
+        "path": "problem.impact",
+        "source": "A demo alone could evolve separately and leave repeated integration work for every UI change.",
+        "text": "Eine reine Demo könnte sich unabhängig weiterentwickeln und bei jeder UI-Änderung erneute Integrationsarbeit verursachen."
+      },
+      {
+        "path": "problem.approach",
+        "source": "Use a shared frontend with injected adapters, and complete and test the real adapters as part of this change.",
+        "text": "Ein gemeinsames Frontend mit eingesetzten Adaptern verwenden; die echten Adapter bereits im Zuge dieses Umbaus vollständig anschließen und prüfen."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "UI edits made in Vite reach Electron and the backend-connected browser through the normal build without copying components or rewriting data access.",
+        "text": "UI-Änderungen aus Vite gelangen über den normalen Build in Electron und den mit dem Backend verbundenen Browser, ohne Komponenten zu kopieren oder Datenzugriffe neu zu schreiben."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Establish the shared frontend and real adapter boundary",
+        "text": "Gemeinsames Frontend und echte Adaptergrenze schaffen"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Make the three agreed areas independent of transport before introducing the demo.",
+        "text": "Die drei vereinbarten Bereiche vor Einführung der Demo vom Transport unabhängig machen."
+      },
+      {
+        "path": "milestones.0.proof",
+        "source": "Shared workspace controller and injected host/Pod access serve the existing components. Local and registered Electron entries and the browser/relay consumer build and pass their existing parity tests.",
+        "text": "Gemeinsame Workspace-Steuerung und eingesetzter Host-/Pod-Zugriff versorgen die bestehenden Komponenten. Lokaler und registrierter Electron-Einstieg sowie Browser-/Relay-Verbraucher bestehen Builds und vorhandene Paritätstests."
+      },
+      {
+        "path": "milestones.0.rollback",
+        "source": "Revert the frontend boundary and entry-point migration together with dev:ui; do not leave a mixed old/new orchestration path.",
+        "text": "Frontendgrenze und Migration der Einstiegspunkte gemeinsam mit dev:ui zurücksetzen; keinen gemischten alten/neuen Steuerungspfad zurücklassen."
+      },
+      {
+        "path": "milestones.0.steps.0",
+        "source": "Inventory direct window.pods/HTTP/native access and separate shared frontend state from host-specific responsibilities; extend PodAccess and existing clients instead of introducing parallel abstractions.",
+        "text": "Direkte window.pods-/HTTP-/native Zugriffe erfassen und gemeinsamen Frontend-Zustand von Host-Aufgaben trennen; PodAccess und vorhandene Clients erweitern, statt parallele Abstraktionen einzuführen."
+      },
+      {
+        "path": "milestones.0.steps.1",
+        "source": "Wire the Electron and backend adapters into their current entry points; migrate the three paths to injected access and capability-based host actions.",
+        "text": "Electron- und Backend-Adapter in ihre aktuellen Einstiegspunkte einbauen; die drei Pfade auf eingesetzten Zugriff und capabilitybasierte Host-Aktionen migrieren."
+      },
+      {
+        "path": "milestones.0.steps.2",
+        "source": "Add dev:ui with the demo provider and wrapper; preserve normal local, registered desktop and relay entry behavior.",
+        "text": "dev:ui mit Demo-Provider und Hülle ergänzen; normales lokales, registriertes Desktop- und Relay-Startverhalten erhalten."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "pnpm --filter @openape/pods dev:ui serves the actual UI at http://127.0.0.1:5173; a busy port fails clearly.",
+        "text": "pnpm --filter @openape/pods dev:ui liefert das echte UI unter http://127.0.0.1:5173; ein belegter Port führt zu einer klaren Fehlermeldung."
+      },
+      {
+        "path": "milestones.0.acceptance.1",
+        "source": "No Electron, worker, login or API connection starts; editing a Vue label/style updates the browser through HMR.",
+        "text": "Es starten weder Electron noch Worker, Login oder API-Verbindung; eine Vue-Text-/Style-Änderung erscheint per HMR im Browser."
+      },
+      {
+        "path": "milestones.0.acceptance.2",
+        "source": "The same UI/controller tree can mount with demo, Electron and backend providers. Shared components on the three migrated paths contain no direct window.pods, HTTP-client, Electron or fixture access.",
+        "text": "Derselbe UI-/Steuerungsbaum lässt sich mit Demo-, Electron- und Backend-Providern starten. Gemeinsame Komponenten auf den drei migrierten Pfaden enthalten keine direkten window.pods-, HTTP-Client-, Electron- oder Fixture-Zugriffe."
+      },
+      {
+        "path": "milestones.0.acceptance.3",
+        "source": "Normal host entry points are connected during this milestone, not deferred to a future integration task; genuine capability differences remain explicit.",
+        "text": "Normale Host-Einstiege werden in diesem Meilenstein angeschlossen und nicht auf eine spätere Integrationsaufgabe verschoben; echte Capability-Unterschiede bleiben ausdrücklich erkennbar."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "Create coherent scenarios",
+        "text": "Konsistente Szenarien anlegen"
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "Provide realistic, repeatable data for all three areas.",
+        "text": "Realistische, wiederholbare Daten für alle drei Bereiche bereitstellen."
+      },
+      {
+        "path": "milestones.1.proof",
+        "source": "Six invented Pods and the four resettable scenarios use validated production payloads. State, counters and draft/timer cleanup are covered by adapter and browser tests.",
+        "text": "Sechs erfundene Pods und vier zurücksetzbare Szenarien verwenden validierte Produktivdatenverträge. Zustand, Zähler und Entwurfs-/Timer-Bereinigung sind durch Adapter- und Browser-Tests abgedeckt."
+      },
+      {
+        "path": "milestones.1.rollback",
+        "source": "Revert fixture modules and consumers together to avoid divergent fixture copies.",
+        "text": "Fixture-Module und Verbraucher gemeinsam zurücksetzen, damit keine abweichenden Fixture-Kopien entstehen."
+      },
+      {
+        "path": "milestones.1.steps.0",
+        "source": "Build a typed fixture store and shared selectors for map, details, decisions and runs.",
+        "text": "Typisierten Fixture-Zustand und gemeinsame Ableitungen für Karte, Details, Entscheidungen und Läufe erstellen."
+      },
+      {
+        "path": "milestones.1.steps.1",
+        "source": "Implement the four scenarios, toolbar, URL selection and full reset with timer cleanup.",
+        "text": "Die vier Szenarien, Werkzeugleiste, URL-Auswahl und vollständiges Zurücksetzen mit Timer-Bereinigung implementieren."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "Every visible Pod has matching details and history; decision counts agree across views.",
+        "text": "Jeder sichtbare Pod hat passende Details und einen Verlauf; Entscheidungszähler stimmen zwischen den Ansichten überein."
+      },
+      {
+        "path": "milestones.1.acceptance.1",
+        "source": "Each scenario can be opened directly and restored after any action without stale timers or data from another scenario.",
+        "text": "Jedes Szenario lässt sich direkt öffnen und nach jeder Aktion ohne veraltete Timer oder Daten eines anderen Szenarios wiederherstellen."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "Make the agreed interactions work",
+        "text": "Die vereinbarten Interaktionen umsetzen"
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "Changes must affect what the user sees across the real components.",
+        "text": "Änderungen müssen in den echten Komponenten durchgängig sichtbar werden."
+      },
+      {
+        "path": "milestones.2.proof",
+        "source": "Browser tests exercised descriptions, public variables, schedules, pause/resume, simulated runs, refused/retried choices and grouped choices through the real components.",
+        "text": "Browser-Tests haben Beschreibungen, öffentliche Variablen, Zeitpläne, Pausieren/Fortsetzen, simulierte Läufe, abgelehnte/wiederholte Entscheidungen und Gruppenentscheidungen über die echten Komponenten geprüft."
+      },
+      {
+        "path": "milestones.2.rollback",
+        "source": "Revert the demo handlers; no real workspace data requires restoration.",
+        "text": "Demo-Handler zurücksetzen; keine echten Workspace-Daten müssen wiederhergestellt werden."
+      },
+      {
+        "path": "milestones.2.steps.0",
+        "source": "Implement pause/resume, simulated run, single/group choices and edits to description, public variables and schedule.",
+        "text": "Pausieren/Fortsetzen, simulierten Lauf, Einzel-/Gruppenentscheidungen sowie Änderungen an Beschreibung, öffentlichen Variablen und Zeitplan implementieren."
+      },
+      {
+        "path": "milestones.2.steps.1",
+        "source": "Provide explicit local demo responses for native and IdP actions, and explicit errors for unsupported commands.",
+        "text": "Für native und IdP-Aktionen ausdrückliche lokale Demo-Reaktionen und für nicht unterstützte Befehle eindeutige Fehler bereitstellen."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "Pause/resume updates map/list/detail; run moves through running/completed and adds a readable history entry.",
+        "text": "Pausieren/Fortsetzen aktualisiert Karte/Liste/Detail; ein Lauf wechselt von laufend zu abgeschlossen und ergänzt einen lesbaren Verlaufseintrag."
+      },
+      {
+        "path": "milestones.2.acceptance.1",
+        "source": "Single/group choices update remaining questions and counters; failure stays visible until a retry succeeds.",
+        "text": "Einzel-/Gruppenentscheidungen aktualisieren offene Fragen und Zähler; ein Fehler bleibt sichtbar, bis eine Wiederholung gelingt."
+      },
+      {
+        "path": "milestones.2.acceptance.2",
+        "source": "Edited description, variable and schedule survive navigation until reset/reload; unsupported actions never pretend to save.",
+        "text": "Geänderte Beschreibung, Variable und Zeitplan überstehen Navigation bis zum Zurücksetzen/Neuladen; nicht unterstützte Aktionen täuschen kein Speichern vor."
+      },
+      {
+        "path": "milestones.3.title",
+        "source": "Prove transfer into Electron and the backend UI",
+        "text": "Übernahme in Electron und Backend-UI nachweisen"
+      },
+      {
+        "path": "milestones.3.goal",
+        "source": "Make the few-step production handoff an explicit acceptance requirement.",
+        "text": "Die Übernahme in wenigen Schritten als ausdrückliches Abnahmekriterium nachweisen."
+      },
+      {
+        "path": "milestones.3.proof",
+        "source": "A temporary shared component marker appeared via Vite HMR, in the Electron and relay builds and in all three browser-mode host configurations. The marker was restored before final gates; production builds exclude demo data and toolbar.",
+        "text": "Eine temporäre Kennzeichnung einer gemeinsamen Komponente erschien per Vite-HMR, in Electron-/Relay-Builds und in allen drei Host-Konfigurationen im Browser-Modus. Die Kennzeichnung wurde vor den abschließenden Prüfungen entfernt; Produktiv-Builds enthalten weder Demo-Daten noch Demo-Leiste."
+      },
+      {
+        "path": "milestones.3.rollback",
+        "source": "Revert the integration and frontend change together; no deployment or signed installation is required to complete this acceptance.",
+        "text": "Integration und Frontendänderung gemeinsam zurücksetzen; für diese Abnahme sind weder Deployment noch signierte Installation erforderlich."
+      },
+      {
+        "path": "milestones.3.steps.0",
+        "source": "Apply one representative shared visual change and exercise one existing write through the production Electron and backend adapters using their isolated harnesses.",
+        "text": "Eine repräsentative gemeinsame visuelle Änderung vornehmen und einen bestehenden Schreibzugriff über die Produktivadapter für Electron und Backend mit ihren isolierten Testumgebungen ausführen."
+      },
+      {
+        "path": "milestones.3.steps.1",
+        "source": "Build both affected consumers and document the ordinary startup/build path. Verify unchanged login, revision, operation and capability semantics.",
+        "text": "Beide betroffenen Verbraucher bauen und den gewöhnlichen Start-/Build-Pfad dokumentieren. Unveränderte Login-, Revisions-, Operations- und Capability-Semantik prüfen."
+      },
+      {
+        "path": "milestones.3.acceptance.0",
+        "source": "The same component edit appears in all three configurations without source copying or API rewiring. Normal builds exclude demo code.",
+        "text": "Dieselbe Komponentenänderung erscheint in allen drei Konfigurationen ohne Quellkopien oder erneutes API-Anschließen. Normale Builds schließen Demo-Code aus."
+      },
+      {
+        "path": "milestones.3.acceptance.1",
+        "source": "A supported write produces the correct real-adapter request and confirmed refreshed view; existing isolated backend tests cover its actual effect. Unsupported remote features remain unavailable.",
+        "text": "Ein unterstützter Schreibzugriff erzeugt die korrekte Anfrage des echten Adapters und eine bestätigte aktualisierte Ansicht; bestehende isolierte Backend-Tests prüfen seine tatsächliche Wirkung. Nicht unterstützte entfernte Funktionen bleiben nicht verfügbar."
+      },
+      {
+        "path": "milestones.3.acceptance.2",
+        "source": "The handoff is: edit shared UI → focused checks → normal host build/install or deploy. No separate integration refactor is left open.",
+        "text": "Die Übergabe lautet: gemeinsames UI ändern → gezielte Prüfungen → normaler Host-Build/Installation oder Deployment. Es bleibt kein separater Integrationsumbau offen."
+      },
+      {
+        "path": "milestones.4.title",
+        "source": "Verify and document the development loop",
+        "text": "Entwicklungsablauf prüfen und dokumentieren"
+      },
+      {
+        "path": "milestones.4.goal",
+        "source": "Deliver a repeatable browser workflow with inspected evidence.",
+        "text": "Einen wiederholbaren Browser-Ablauf mit geprüften Nachweisen liefern."
+      },
+      {
+        "path": "milestones.4.proof",
+        "source": "Repository lint/typecheck passed. Pods: 1794 tests; relay: 100 tests; browser: 63 tests. Eight final screenshots were personally inspected and embedded with exact hashes in the verified Test Run. Usage and transfer commands are documented.",
+        "text": "Repositoryweites Lint/Typecheck bestanden. Pods: 1794 Tests; Relay: 100 Tests; Browser: 63 Tests. Acht finale Screenshots wurden persönlich geprüft und mit exakten Prüfsummen in den verifizierten Test Run eingebettet. Nutzung und Übernahmebefehle sind dokumentiert."
+      },
+      {
+        "path": "milestones.4.rollback",
+        "source": "Revert the feature through the native repository workflow; retain evidence and the plan history.",
+        "text": "Das Feature über den nativen Repository-Workflow zurücksetzen; Nachweise und Planhistorie erhalten."
+      },
+      {
+        "path": "milestones.4.steps.0",
+        "source": "Extend established unit/component and Vitest browser suites for the demo contracts and critical interactions.",
+        "text": "Bestehende Unit-/Komponenten- und Vitest-Browser-Suiten um Demo-Verträge und wesentliche Interaktionen erweitern."
+      },
+      {
+        "path": "milestones.4.steps.1",
+        "source": "Capture and inspect screenshots with real CSS, verify development entry and production exclusion, publish a Test Run and document usage.",
+        "text": "Screenshots mit echten Styles aufnehmen und ansehen, Entwicklungseinstieg und Ausschluss aus dem Produktiv-Build prüfen, Test Run veröffentlichen und Nutzung dokumentieren."
+      },
+      {
+        "path": "milestones.4.acceptance.0",
+        "source": "Relevant checks pass; screenshots show all three areas at wide and narrow widths with no clipped primary controls.",
+        "text": "Relevante Prüfungen bestehen; Screenshots zeigen alle drei Bereiche bei breiter und schmaler Ansicht ohne abgeschnittene Hauptbedienelemente."
+      },
+      {
+        "path": "milestones.4.acceptance.1",
+        "source": "Only Vite assets/HMR are requested during the demo journey; ordinary build has no demo dataset or toolbar.",
+        "text": "Während der Demo-Nutzung werden nur Vite-Assets/HMR angefragt; der normale Build enthält weder Demo-Datensatz noch Demo-Leiste."
+      },
+      {
+        "path": "milestones.4.acceptance.2",
+        "source": "The final handoff includes the start command, supported actions, scenario URLs, local server URL and verified Test Run link.",
+        "text": "Die abschließende Übergabe enthält Startbefehl, unterstützte Aktionen, Szenario-URLs, lokale Server-URL und geprüften Test-Run-Link."
+      },
+      {
+        "path": "milestones.4.acceptance.3",
+        "source": "Contract and boundary evidence is separate from UI screenshots; tests prove the real adapters, not just the demo simulation.",
+        "text": "Vertrags- und Grenznachweise stehen getrennt von UI-Screenshots; Tests belegen die echten Adapter und nicht nur die Demo-Simulation."
+      },
+      {
+        "path": "sections.0.title",
+        "source": "Implementation architecture",
+        "text": "Architektur der Umsetzung"
+      },
+      {
+        "path": "sections.0.body",
+        "source": "Target flow: **shared Vue UI → shared frontend controllers and typed access → demo / Electron / backend adapter**. Data flows back through the same view contracts. The host selects adapters at bootstrap; product components do not select transports.\n\nBuild on `PodAccess`, `remotePodAccess`, `CentralClient` and existing command/view types. Add only the missing workspace-level boundary required by Automations and Decisions. Keep interfaces small and named for real use cases; avoid a generic repository or universal command bus. Pure rendering receives props and emits typed events. Shared controllers own loading/error state, selection, refresh scheduling, invalidation and edit state; adapters own transport, response validation and operation settlement. Reuse existing cancellation, revision and unknown-outcome handling instead of weakening them.\n\n**Demo adapter:** an explicit Vite mode injects a typed in-memory implementation. The demo store changes synthetic state only. Scenarios and toolbar live in a development-only wrapper, outside product components. No global `window.pods` replacement is the intended architecture.\n\n**Electron adapter:** wraps the actual preload `PodsBridge`, subscribes/unsubscribes to status and forwards existing commands to the worker. Only the adapter/native host boundary may read `window.pods` for the migrated paths. It uses the same controllers and components as the demo. Both local and registered desktop entries must remain wired.\n\n**Backend adapter:** wraps `browserWorkspaceClient` / `CentralClient` and existing `remotePodAccess`, preserves authenticated HTTP, online state, revision checks and asynchronous operations, and plugs into the same frontend. The relay's workspace page keeps its host/login responsibility. Reuse its existing imports; no copied frontend bundle or templates.\n\nRepresent genuine availability through typed capabilities, not `isDemo` branches. A local terminal or IdP action is a host service; absent capability yields the existing disabled/explanatory state. Transport mode must never grant permission. A demo capability can simulate a local effect without opening live links. Ordinary UI components must not import fixtures, Electron, Node or HTTP clients; shared data access must not fall back to a live adapter.\n\nBefore edits, inventory direct globals, transport imports, polling and native subcomponents on the three paths. Migrate these consumers together and remove superseded orchestration. Host-only UI outside scope can retain its implementation, but must not be reached accidentally in demo mode. Keep normal boot/build behavior; only explicit dev:ui conditionally imports the demo adapter and toolbar.",
+        "text": "Zielablauf: **gemeinsames Vue-UI → gemeinsame Frontend-Steuerung und typisierter Zugriff → Demo- / Electron- / Backend-Adapter**. Daten fließen über dieselben Ansichtsverträge zurück. Der Host wählt die Adapter beim Start; Produktkomponenten wählen keine Transporte aus.\n\nAuf `PodAccess`, `remotePodAccess`, `CentralClient` und den bestehenden Befehls-/Ansichtstypen aufbauen. Nur die für Automatisierungen und Entscheidungen fehlende Workspace-Grenze ergänzen. Schnittstellen klein halten und nach tatsächlichen Anwendungsfällen benennen; kein allgemeines Repository-Framework und kein universeller Befehlsbus. Reine Darstellung erhält Props und sendet typisierte Events. Gemeinsame Steuerung verwaltet Lade-/Fehlerzustand, Auswahl, Aktualisierungsintervalle, Invalidierung und Bearbeitungszustand; Adapter verantworten Transport, Antwortvalidierung und die Abwicklung asynchroner Operationen. Bestehende Abbruch-, Revisions- und Unklarheitsbehandlung wiederverwenden und nicht abschwächen.\n\n**Demo-Adapter:** Ein ausdrücklicher Vite-Modus setzt eine typisierte Implementierung im Speicher ein. Der Demo-Zustand verändert nur synthetische Daten. Szenarien und Werkzeugleiste liegen in einer ausschließlich für Entwicklung verwendeten Hülle außerhalb der Produktkomponenten. Ein globaler Ersatz von `window.pods` ist nicht die angestrebte Architektur.\n\n**Electron-Adapter:** Kapselt den echten Preload-`PodsBridge`, meldet Statusabonnements an/ab und leitet bestehende Befehle an den Worker weiter. Auf den migrierten Pfaden darf nur die Adapter-/native Host-Grenze `window.pods` lesen. Dieselbe Steuerung und dieselben Komponenten wie in der Demo werden verwendet. Sowohl der lokale als auch der registrierte Desktop-Einstieg bleiben angeschlossen.\n\n**Backend-Adapter:** Kapselt `browserWorkspaceClient` / `CentralClient` und den bestehenden `remotePodAccess`, erhält authentifiziertes HTTP, Online-Zustand, Revisionsprüfungen und asynchrone Operationen und wird in dasselbe Frontend eingesetzt. Die Workspace-Seite im Relay behält ihre Host-/Login-Aufgabe. Bestehende Imports wiederverwenden; kein kopiertes Frontend-Bundle und keine kopierten Templates.\n\nTatsächlich verfügbare Funktionen durch typisierte Capabilities ausdrücken, nicht durch `isDemo`-Verzweigungen. Ein lokales Terminal oder eine IdP-Aktion ist ein Host-Dienst; fehlt die Fähigkeit, erscheint der vorhandene deaktivierte/erklärende Zustand. Der Transportmodus darf niemals eine Berechtigung erteilen. Eine Demo-Fähigkeit kann eine lokale Wirkung simulieren, ohne echte Links zu öffnen. Gewöhnliche UI-Komponenten dürfen keine Fixtures, Electron, Node oder HTTP-Clients importieren; gemeinsamer Datenzugriff darf nicht auf einen echten Adapter zurückfallen.\n\nVor Änderungen direkte globale Zugriffe, Transport-Imports, Polling und native Unterkomponenten auf den drei Pfaden erfassen. Diese Verbraucher gemeinsam migrieren und ersetzte Steuerungslogik entfernen. Reine Host-Ansichten außerhalb des Umfangs dürfen ihre Implementierung behalten, aber nicht versehentlich im Demo-Modus erreichbar sein. Normales Start-/Build-Verhalten erhalten; nur ausdrücklich gewähltes dev:ui importiert Demo-Adapter und Werkzeugleiste bedingt."
+      },
+      {
+        "path": "sections.1.title",
+        "source": "Data and scenarios",
+        "text": "Daten und Szenarien"
+      },
+      {
+        "path": "sections.1.body",
+        "source": "Use invented organizations and `.invalid` identities, never copied owner mail or credentials. Seed 6–8 related Pods across two organizations: invoice review, newsletter triage, release monitoring and a morning briefing. Give them realistic summaries, tags, schedules, public variables, script snippets and several historical runs. Keep IDs, relationships, counters and statuses consistent.\n\n| Scenario | Visible result |\n| --- | --- |\n| everyday | Active and paused Pods, completed runs, four pending routing questions and two groups |\n| attention | A failed run with logs, a waiting IdP action and one choice that initially fails and succeeds on retry |\n| empty | No Pods or decisions; existing empty-state presentation |\n| loading-error | Delayed reads and an explicit recoverable read error |\n\nA simulated run moves from running to completed after a short controlled delay and appends history. A decision changes the actual fixture state and counters across tabs. Group choices process the visible eligible cases. Changing a description, public variable or schedule remains visible after navigation.\n\nState is memory-only in v1. Reset, scenario switching and browser reload restore the selected seed; scenario and language can be encoded in the URL. Reset cancels pending timers and clears local UI state. Hot reload remains active; fixture/module changes may reset demo state. Do not promise persistence across reloads.",
+        "text": "Erfundene Organisationen und `.invalid`-Identitäten verwenden, keine kopierten E-Mails oder Zugangsdaten des Owners. Sechs bis acht zusammengehörige Pods in zwei Organisationen anlegen: Rechnungsprüfung, Newsletter-Sortierung, Release-Beobachtung und Morgenbriefing. Realistische Zusammenfassungen, Tags, Zeitpläne, öffentliche Variablen, Skriptausschnitte und mehrere historische Läufe ergänzen. IDs, Beziehungen, Zähler und Statuswerte bleiben konsistent.\n\n| Szenario | Sichtbares Ergebnis |\n| --- | --- |\n| everyday | Aktive und pausierte Pods, abgeschlossene Läufe, vier offene Zuordnungsfragen und zwei Gruppen |\n| attention | Fehlgeschlagener Lauf mit Logs, wartende IdP-Aktion und eine Entscheidung, die zunächst scheitert und beim Wiederholen gelingt |\n| empty | Keine Pods oder Entscheidungen; vorhandene Darstellung leerer Zustände |\n| loading-error | Verzögerte Lesezugriffe und ein ausdrücklich gemeldeter, behebbarer Lesefehler |\n\nEin simulierter Lauf wechselt nach einer kurzen kontrollierten Verzögerung von laufend zu abgeschlossen und ergänzt den Verlauf. Eine Entscheidung ändert den tatsächlichen Fixture-Zustand und die Zähler über die Tabs hinweg. Gruppenentscheidungen bearbeiten die sichtbaren zulässigen Fälle. Änderungen an Beschreibung, öffentlicher Variable oder Zeitplan bleiben nach Navigation sichtbar.\n\nVersion 1 hält den Zustand nur im Speicher. Zurücksetzen, Szenariowechsel und Browser-Neuladen stellen die gewählte Ausgangslage her; Szenario und Sprache können in der URL stehen. Zurücksetzen beendet ausstehende Timer und löscht lokalen UI-Zustand. Hot Reload bleibt aktiv; Änderungen an Fixtures oder Modulen können den Demo-Zustand zurücksetzen. Persistenz über Neuladen hinweg wird nicht zugesagt."
+      },
+      {
+        "path": "sections.2.title",
+        "source": "Repository orientation",
+        "text": "Orientierung im Repository"
+      },
+      {
+        "path": "sections.2.body",
+        "source": "Repository: `https://repos.openape.ai/patrick/monorepo`. Inspected checkout: `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo`; branch `main`; SHA `e89449e261260e88169394f4f49aa77130f564ea`.\n\nRelevant files under `apps/openape-pods/`: `package.json`, `vite.config.ts`, `index.html`, `src/renderer/main.ts`, `src/contracts/ipc.ts`, `src/renderer/App.vue`, `src/renderer/central/LocalShell.vue`, `src/renderer/central/AutomationsShell.vue`, `src/renderer/central/DecisionsInbox.vue`, `src/renderer/pod-access.ts`, `src/renderer/style.css`.\n\nStarting fixtures: `test/layout/workspace-fixture.ts`, `test/layout/network-fixture.ts`, `test/renderer/map-view.json`, `test/renderer/choice-events.ts`. Existing browser tests: `test/layout/app-shell.test.ts`, `pod-tabs.test.ts`, `automations.test.ts`, `shell-parity.test.ts`; configuration: `vitest.browser.config.ts`.\n\nBefore implementation, read current main instructions and issue workflow, create/link one native development issue and use `feature/issue-<number>-pods-ui-dev` in a dedicated worktree. Carry this plan source into that branch and link the published proposal. No issue, branch or implementation PR has been created for this planning request.\n\nAdditional architecture and test anchors: `src/renderer/central/remote-pod-access.ts`, `RemotePodEditor.vue`, `BrowserWorkspace.vue`, `DesktopWorkspace.vue`, `client.ts`, `src/preload/index.ts`, `apps/openape-pods-relay/app/pages/workspace.vue`, `apps/openape-pods/test/workspace/central-ui.test.ts`, `browser-workspace.test.ts`, `apps/openape-pods/test/main/worker-entry.test.ts` and `apps/openape-pods-relay/test/workspace-store.test.ts`.",
+        "text": "Repository: `https://repos.openape.ai/patrick/monorepo`. Geprüfter Checkout: `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo`; Branch `main`; SHA `e89449e261260e88169394f4f49aa77130f564ea`.\n\nRelevante Dateien unter `apps/openape-pods/`: `package.json`, `vite.config.ts`, `index.html`, `src/renderer/main.ts`, `src/contracts/ipc.ts`, `src/renderer/App.vue`, `src/renderer/central/LocalShell.vue`, `src/renderer/central/AutomationsShell.vue`, `src/renderer/central/DecisionsInbox.vue`, `src/renderer/pod-access.ts`, `src/renderer/style.css`.\n\nAusgangs-Fixtures: `test/layout/workspace-fixture.ts`, `test/layout/network-fixture.ts`, `test/renderer/map-view.json`, `test/renderer/choice-events.ts`. Vorhandene Browser-Tests: `test/layout/app-shell.test.ts`, `pod-tabs.test.ts`, `automations.test.ts`, `shell-parity.test.ts`; Konfiguration: `vitest.browser.config.ts`.\n\nVor der Umsetzung aktuelle main-Anweisungen und den Issue-Workflow lesen, ein natives Entwicklungs-Issue anlegen/verknüpfen und `feature/issue-<number>-pods-ui-dev` in einem eigenen Worktree verwenden. Diese Planquelle in den Branch übernehmen und den veröffentlichten Vorschlag verlinken. Für diesen Planungsauftrag wurden noch kein Issue, Branch oder Implementierungs-PR angelegt.\n\nZusätzliche Architektur- und Testanker: `src/renderer/central/remote-pod-access.ts`, `RemotePodEditor.vue`, `BrowserWorkspace.vue`, `DesktopWorkspace.vue`, `client.ts`, `src/preload/index.ts`, `apps/openape-pods-relay/app/pages/workspace.vue`, `apps/openape-pods/test/workspace/central-ui.test.ts`, `browser-workspace.test.ts`, `apps/openape-pods/test/main/worker-entry.test.ts` und `apps/openape-pods-relay/test/workspace-store.test.ts`."
+      },
+      {
+        "path": "sections.3.title",
+        "source": "Effort, approval and handoff",
+        "text": "Aufwand, Freigabe und Übergabe"
+      },
+      {
+        "path": "sections.3.body",
+        "source": "Implementation of proposal revision 2 was authorized by Patrick on October 15, 2026: “Implementiere das in einem worktree sodass es sich mit anderen worktrees nicht stört”. The exact original statement and revision binding are recorded in the shared approval field.\n\nM1–M5 are implemented and locally verified. The actual Test Run records 1,794 Pods tests, 100 relay tests and 63 browser tests, build results, limitations and inspected screenshots. The earlier estimate was 1–2 working days; it was a forecast, not measured time.\n\nLocal delivery is ready at http://127.0.0.1:5478. The native implementation PR and issue retain code review state. Existing build/install/deploy workflows consume shared UI changes; no production deployment or signed desktop replacement was performed.",
+        "text": "Patrick hat die Umsetzung von Vorschlagsrevision 2 am 15. Oktober 2026 autorisiert: „Implementiere das in einem worktree sodass es sich mit anderen worktrees nicht stört“. Originalwortlaut und Bindung an die Revision stehen im gemeinsamen Freigabefeld.\n\nM1–M5 sind umgesetzt und lokal geprüft. Der tatsächliche Test Run dokumentiert 1.794 Pods-Tests, 100 Relay-Tests und 63 Browser-Tests, Build-Ergebnisse, Grenzen und persönlich geprüfte Screenshots. Die frühere Schätzung betrug 1–2 Arbeitstage; sie war eine Prognose und keine gemessene Zeit.\n\nDie lokale Lieferung ist unter http://127.0.0.1:5478 bereit. Nativer Implementierungs-PR und Issue führen den Code-Review-Stand. Bestehende Build-/Installations-/Deployment-Abläufe übernehmen gemeinsame UI-Änderungen; kein Produktiv-Deployment und kein Austausch des signierten Desktops wurden durchgeführt."
+      },
+      {
+        "path": "sections.4.title",
+        "source": "From a UI iteration to the real application",
+        "text": "Von der UI-Iteration zur echten Anwendung"
+      },
+      {
+        "path": "sections.4.body",
+        "source": "1. Start `pnpm --filter @openape/pods dev:ui`, select a scenario and change shared components, styles or frontend behavior.\n2. Run the focused existing browser tests. If behavior or data access changes, also run the affected controller/adapter contract tests; a CSS-only edit does not require a new backend test.\n3. Use the ordinary Electron/relay entry and normal build. Their bootstrap already supplies the real adapter; no copying files, changing components, toggling demo branches in screens or manual API rewiring is required. Normal installation/deployment remains the existing workflow.\n\nAcceptance exercise: make one small visible shared-component edit and verify it in the demo, the production Electron renderer configuration and the backend-browser configuration. For a supported write, demonstrate that the same UI action dispatches through both real adapters and displays the confirmed result. Record changed files, commands and results. Real network/worker behavior is established by existing isolated backend tests, not merely by demo parity.\n\nBackend contracts still bound what is possible: adding a new domain field or command requires its actual backend implementation and contract tests. The architecture makes that dependency explicit and local; it cannot turn new backend functionality into a mode switch. UI-only changes using existing contracts need no backend domain change.",
+        "text": "1. `pnpm --filter @openape/pods dev:ui` starten, ein Szenario auswählen und gemeinsame Komponenten, Styles oder Frontend-Verhalten ändern.\n2. Die gezielten vorhandenen Browser-Tests ausführen. Bei Änderungen an Verhalten oder Datenzugriff zusätzlich betroffene Steuerungs-/Adapter-Vertragstests ausführen; eine reine CSS-Änderung braucht keinen neuen Backend-Test.\n3. Den gewöhnlichen Electron-/Relay-Einstieg und normalen Build verwenden. Deren Startpunkt liefert bereits den echten Adapter; weder Dateien kopieren noch Komponenten ändern, Demo-Verzweigungen in Ansichten umschalten oder APIs manuell neu anschließen. Installation/Deployment folgen weiterhin dem vorhandenen Ablauf.\n\nAbnahmeübung: Eine kleine sichtbare Änderung an einer gemeinsamen Komponente vornehmen und sie in Demo, Produktivkonfiguration des Electron-Renderers und Backend-Browser-Konfiguration prüfen. Für einen unterstützten Schreibzugriff nachweisen, dass dieselbe UI-Aktion über beide echten Adapter läuft und das bestätigte Ergebnis anzeigt. Geänderte Dateien, Befehle und Ergebnisse dokumentieren. Tatsächliches Netzwerk-/Worker-Verhalten wird durch bestehende isolierte Backend-Tests belegt, nicht allein durch Demo-Gleichheit.\n\nBackend-Verträge begrenzen weiterhin die Möglichkeiten: Ein neues fachliches Feld oder ein neuer Befehl benötigt seine tatsächliche Backend-Implementierung und Vertragstests. Die Architektur macht diese Abhängigkeit ausdrücklich und lokal; sie verwandelt neue Backend-Funktionalität nicht in einen Moduswechsel. Reine UI-Änderungen mit bestehenden Verträgen benötigen keine Änderung der Backend-Fachlogik."
+      },
+      {
+        "path": "sections.5.title",
+        "source": "Test strategy and ownership",
+        "text": "Teststrategie und Zuständigkeit"
+      },
+      {
+        "path": "sections.5.body",
+        "source": "| Layer | What is verified | Existing location |\n| --- | --- | --- |\n| Shared UI | Observable clicks, form values, disabled states, loading/error display, geometry and screenshots with real CSS | Pods `test/layout`, `test/renderer`, existing `test/workspace/*-ui.test.ts` |\n| Controllers / demo state | Invalidation, consistent counters, scenario reset, timer disposal, async failure and confirmed success | Existing Pods Vitest suites; extend a fitting file or add within the suite |\n| Adapter contracts | Existing request/response types, revisions, command mapping, errors, operation settlement and capabilities for demo/Electron/backend | `test/workspace/central-ui.test.ts`, `browser-workspace.test.ts`, related existing tests |\n| Real boundaries | Production client/bridge handling and worker/relay effects with isolated temporary data and narrow transport doubles | Pods `test/main/worker-entry.test.ts`, workspace/storage/scheduling suites; relay `test/workspace-store.test.ts` where affected |\n\nKeep one set of UI interaction expectations. Run the full UI scenario against the deterministic provider; parameterize a small representative smoke set across adapters using equal capabilities. Existing desktop/browser parity tests remain and gain the demo case where useful. Do not duplicate every screenshot and every interaction for all providers.\n\nAdapter tests exercise the actual production adapter code, replacing only the external transport. For each supported command verify the expected request independently and confirm the displayed refreshed state. Cover rejected/stale revisions, unavailable capabilities, read failures and asynchronous accepted → applied / failed / unknown results. Unknown outcomes must not trigger duplicate writes. A fixture is not the expected result of its own test: use existing parsers plus explicit assertions and backend tests to avoid self-confirming mocks.\n\nFixtures shared with the demo provide data, not business rules or assertions. Unit tests may use controlled time; browser tests wait for visible states with bounded waits. Reset/unmount must clear subscriptions, timers and pending requests. Never weaken an assertion to match a changed mock. Preserve existing tests; remove an obsolete duplicate only when its behavior is demonstrably covered elsewhere and explain it in the PR.\n\nRetain new tests for the durable contracts: adapter substitutability, cross-view consistency, mutation confirmation, cleanup and demo isolation. Use proportionate focused checks for purely visual edits. UI is tested in Vitest browser mode, never through new Electron E2E tests. Native/runtime changes, if any, use their existing boundary suites. No new runner, test script, test directory, mandatory CI context or default-chain change.",
+        "text": "| Ebene | Was geprüft wird | Vorhandener Ort |\n| --- | --- | --- |\n| Gemeinsames UI | Sichtbare Klickwirkung, Formularwerte, deaktivierte Zustände, Lade-/Fehleranzeige, Geometrie und Screenshots mit echten Styles | Pods `test/layout`, `test/renderer`, vorhandene `test/workspace/*-ui.test.ts` |\n| Steuerung / Demo-Zustand | Invalidierung, konsistente Zähler, Szenario-Reset, Timer-Bereinigung, asynchrone Fehler und bestätigter Erfolg | Vorhandene Pods-Vitest-Suiten; passende Datei erweitern oder innerhalb der Suite ergänzen |\n| Adapter-Verträge | Vorhandene Anfrage-/Antworttypen, Revisionen, Befehlszuordnung, Fehler, Operationsabwicklung und Capabilities für Demo/Electron/Backend | `test/workspace/central-ui.test.ts`, `browser-workspace.test.ts`, verwandte vorhandene Tests |\n| Echte Grenzen | Behandlung im Produktivclient/Bridge und Worker-/Relay-Wirkungen mit isolierten temporären Daten und gezielten Transport-Doubles | Pods `test/main/worker-entry.test.ts`, Workspace-/Storage-/Scheduling-Suiten; Relay `test/workspace-store.test.ts`, soweit betroffen |\n\nEinen gemeinsamen Satz von Erwartungen an UI-Interaktionen pflegen. Das vollständige UI-Szenario gegen den deterministischen Provider ausführen; einen kleinen repräsentativen Smoke-Umfang bei gleichen Capabilities über die Adapter parametrisieren. Vorhandene Desktop-/Browser-Paritätstests bleiben bestehen und erhalten bei Bedarf den Demo-Fall. Nicht jeden Screenshot und jede Interaktion für alle Provider duplizieren.\n\nAdaptertests führen den tatsächlichen Produktivadapter aus und ersetzen nur den externen Transport. Für jeden unterstützten Befehl die erwartete Anfrage unabhängig prüfen und den angezeigten aktualisierten Zustand bestätigen. Abgelehnte/veraltete Revisionen, nicht verfügbare Fähigkeiten, Lesefehler und asynchrone Ergebnisse accepted → applied / failed / unknown abdecken. Unklare Ergebnisse dürfen keine doppelten Schreibzugriffe auslösen. Eine Fixture ist nicht das Soll-Ergebnis ihres eigenen Tests: vorhandene Parser, ausdrückliche Erwartungen und Backend-Tests nutzen, um selbstbestätigende Mocks zu vermeiden.\n\nMit der Demo geteilte Fixtures liefern Daten, keine Fachregeln oder Prüferwartungen. Unit-Tests dürfen kontrollierte Zeit nutzen; Browser-Tests warten begrenzt auf sichtbare Zustände. Reset/Unmount muss Abonnements, Timer und ausstehende Anfragen bereinigen. Erwartungen nie abschwächen, um sie an geänderte Mocks anzupassen. Bestehende Tests erhalten; ein veraltetes Duplikat nur entfernen, wenn sein Verhalten nachweislich anderswo abgedeckt ist, und dies im PR erklären.\n\nNeue Tests für dauerhafte Verträge behalten: Austauschbarkeit der Adapter, ansichtsübergreifende Konsistenz, bestätigte Änderungen, Bereinigung und Demo-Isolation. Bei rein visuellen Änderungen verhältnismäßige gezielte Prüfungen nutzen. UI wird im Vitest-Browser-Modus geprüft, niemals durch neue Electron-E2E-Tests. Etwaige native/Laufzeitänderungen nutzen ihre vorhandenen Grenztests. Kein neuer Runner, Testbefehl, Testverzeichnis, verpflichtender CI-Kontext oder Änderung der Standard-Testkette."
+      },
+      {
+        "path": "decisions.0.title",
+        "source": "One production UI",
+        "text": "Ein gemeinsames Produkt-UI"
+      },
+      {
+        "path": "decisions.0.description",
+        "source": "Use one shared frontend with injected demo, Electron and backend adapters, extending existing PodAccess and clients. Both production adapters are delivered with the refactor; no global fake bridge as the final design.",
+        "text": "Ein gemeinsames Frontend mit eingesetzten Demo-, Electron- und Backend-Adaptern verwenden und vorhandenen PodAccess sowie Clients erweitern. Beide Produktivadapter werden mit dem Umbau geliefert; keine globale künstliche Bridge als endgültige Architektur."
+      },
+      {
+        "path": "decisions.1.title",
+        "source": "Memory-only state",
+        "text": "Zustand nur im Speicher"
+      },
+      {
+        "path": "decisions.1.description",
+        "source": "Prefer deterministic reset and simple typed handlers over persistence or a generic backend simulator. No new runtime dependency is expected.",
+        "text": "Deterministisches Zurücksetzen und einfache typisierte Handler gegenüber Persistenz oder allgemeiner Backend-Simulation bevorzugen. Voraussichtlich keine neue Laufzeitabhängigkeit."
+      },
+      {
+        "path": "decisions.2.title",
+        "source": "Browser verification",
+        "text": "Prüfung im Browser"
+      },
+      {
+        "path": "decisions.2.description",
+        "source": "Share UI expectations and data builders; test contracts separately against actual adapters and existing backend handlers. Use Vitest browser mode for UI and screenshots, isolated unit/boundary tests for transport/runtime. No new Electron UI E2E or new test infrastructure.",
+        "text": "UI-Erwartungen und Daten-Builder teilen; Verträge separat gegen echte Adapter und vorhandene Backend-Handler prüfen. Vitest-Browser-Modus für UI und Screenshots, isolierte Unit-/Grenztests für Transport/Laufzeit nutzen. Keine neuen Electron-UI-E2E-Tests und keine neue Testinfrastruktur."
+      },
+      {
+        "path": "risks.0.title",
+        "source": "Fixtures drift from contracts",
+        "text": "Fixtures weichen von Verträgen ab"
+      },
+      {
+        "path": "risks.0.mitigation",
+        "source": "Type-check against PodsBridge, validate shared payloads with existing parsers and reuse builders across tests and demo.",
+        "text": "Gegen PodsBridge typprüfen, gemeinsame Daten mit vorhandenen Parsern validieren und Builder in Tests und Demo wiederverwenden."
+      },
+      {
+        "path": "risks.1.title",
+        "source": "A click has no visible effect",
+        "text": "Ein Klick zeigt keine Wirkung"
+      },
+      {
+        "path": "risks.1.mitigation",
+        "source": "Each supported command must mutate one authoritative store and refresh all derived views; unsupported actions report a limitation.",
+        "text": "Jeder unterstützte Befehl muss einen maßgeblichen Zustand verändern und alle abgeleiteten Ansichten aktualisieren; nicht unterstützte Aktionen melden eine Grenze."
+      },
+      {
+        "path": "risks.2.title",
+        "source": "Demo code leaks into normal operation",
+        "text": "Demo-Code gelangt in den normalen Betrieb"
+      },
+      {
+        "path": "risks.2.mitigation",
+        "source": "Explicit development mode, conditional imports, build inspection and network observation; never fall back from a missing bridge to demo data.",
+        "text": "Ausdrücklicher Entwicklungsmodus, bedingte Imports, Build-Prüfung und Netzwerkbeobachtung; bei fehlender Schnittstelle nie automatisch auf Demo-Daten ausweichen."
+      },
+      {
+        "path": "risks.3.title",
+        "source": "Production adapters diverge from the demo",
+        "text": "Produktivadapter weichen von der Demo ab"
+      },
+      {
+        "path": "risks.3.mitigation",
+        "source": "Deliver real adapters in M1 and explicit transfer acceptance in M4; check independent contracts, operation failures and capability differences. Backend additions require an explicit reviewed scope update.",
+        "text": "Echte Adapter in M1 und ausdrückliche Übernahmeabnahme in M4 liefern; unabhängige Verträge, Operationsfehler und Capability-Unterschiede prüfen. Backend-Ergänzungen benötigen eine ausdrücklich geprüfte Umfangsänderung."
+      },
+      {
+        "path": "changelog.0.text",
+        "source": "Created proposal revision 1 from repository inspection and the owner-selected initial scope.",
+        "text": "Vorschlagsrevision 1 anhand der Repository-Prüfung und des vom Owner gewählten Anfangsumfangs erstellt."
+      },
+      {
+        "path": "changelog.1.text",
+        "source": "Revision 2: owner requires easy transfer of UI iterations to Electron/backend. Replace bridge-only demo architecture with shared controllers and typed adapters, add M4 production-adapter acceptance and a layered test strategy; revise effort to 1–2 working days.",
+        "text": "Revision 2: Owner verlangt einfache Übernahme von UI-Iterationen in Electron/Backend. Reine Demo-Bridge durch gemeinsame Steuerung und typisierte Adapter ersetzen, M4 zur Abnahme der Produktivadapter und gestufte Teststrategie ergänzen; Aufwand auf 1–2 Arbeitstage aktualisieren."
+      },
+      {
+        "path": "changelog.2.text",
+        "source": "Owner authorized implementation of revision 2 in an isolated worktree. Implemented against main 49fef2b3 using its current domain commands and scrolling Pod page. Final local gates passed and actual evidence was published; no deployment.",
+        "text": "Owner hat die Umsetzung von Revision 2 in einem isolierten Worktree freigegeben. Auf main 49fef2b3 mit dessen aktuellen Domain-Befehlen und durchgehender Pod-Seite umgesetzt. Finale lokale Prüfungen bestanden und tatsächliche Nachweise veröffentlicht; kein Deployment."
+      },
+      {
+        "path": "completion.summary",
+        "source": "The agreed UI development workflow is implemented and locally verified in an isolated worktree on feature/issue-1478-pods-ui-dev. The Vite server runs at http://127.0.0.1:5478. Existing Electron/backend adapters remain connected to the same frontend. No production deployment or signed installation was performed.",
+        "text": "Der vereinbarte UI-Entwicklungsablauf ist in einem isolierten Worktree auf feature/issue-1478-pods-ui-dev umgesetzt und lokal geprüft. Der Vite-Server läuft unter http://127.0.0.1:5478. Bestehende Electron-/Backend-Adapter bleiben mit demselben Frontend verbunden. Kein Produktiv-Deployment und keine signierte Installation wurden durchgeführt."
+      }
+    ]
+  },
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-15",
+    "reference": "Implementiere das in einem worktree sodass es sich mit anderen worktrees nicht stört",
+    "target": {
+      "revision": 2
+    },
+    "scope": "Implement revision 2 in an isolated worktree. No production deployment or signed desktop replacement."
+  }
+}

@@ -1,4 +1,5 @@
 <script lang="ts">
+import { useHostBridge } from './host-bridge'
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
 import { t, diagnostic, dateTime, number } from './i18n'
@@ -22,6 +23,7 @@ const explanations: Record<StorageReason, MessageKey> = {
 
 export default defineComponent({
   props: { failure: { type: Object as PropType<StorageFailure | null>, default: null } },
+  setup() { return { hostBridge: useHostBridge() } },
   data() { return { view: null as StorageRecoveryView | null, error: '', busy: false } },
   computed: {
     reason(): StorageReason { return this.failure?.reason ?? this.view?.failure?.reason ?? 'unknown' },
@@ -32,9 +34,9 @@ export default defineComponent({
   methods: {
     t, diagnostic, dateTime, number,
     async run(command: StorageRecoveryCommand) {
-      if (!window.pods.storage) return
+      if (!this.hostBridge.storage) return
       this.busy = true; this.error = ''
-      try { this.view = await window.pods.storage(command) }
+      try { this.view = await this.hostBridge.storage(command) }
       catch (error) { this.error = error instanceof Error ? error.message : 'Storage recovery failed' }
       finally { this.busy = false }
     },

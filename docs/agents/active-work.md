@@ -1,5 +1,13 @@
 # Active work
 
+## Standalone Pods UI development — issue 1478
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1478. Branch `feature/issue-1478-pods-ui-dev`, base `49fef2b3a8d5b1d91c7df56735a44e266c25b489`.
+- Approved plan revision 2: https://report.openape.ai/d/01M4XBCZ2JQBKT0W16YTRS13S8?v=2. Owner authorized implementation in an isolated worktree on October 15, 2026.
+- Worktree: `/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/pods-ui-dev-1478`. `pnpm --filter @openape/pods dev:ui` serves the actual UI at `http://127.0.0.1:5478`; another worktree must choose its own port. No Electron process or backend runs for the demo.
+- Shared workspace controller and injected host/Pod access keep demo, Electron and backend consumers on the same components. Six invented Pods, four resettable scenarios, edits and simulated commands remain memory-only. Production adapters retain their existing capabilities and command contracts.
+- Verification: repository lint/typecheck and Electron/relay builds passed; 1,794 Pods tests, 100 relay tests and 63 browser tests passed. The shared-component transfer probe passed, and final builds exclude demo data/toolbar. Actual outputs and personally inspected screenshots: https://report.openape.ai/d/01M4YD9F33NX8VY85MN8ZSB3KK. Source evidence is bound to the recorded dirty-tree digest, not falsely attributed to the unchanged base commit. Native PR and final commit follow; no deployment or signed installation.
+
 ## Long program calls through the broker — issue 1476
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1476. Branch `bugfix/issue-1476-authorize-activity-failure`, base `4a1fa8eb`.

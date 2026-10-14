@@ -1,11 +1,16 @@
 <script setup lang="ts">
+import { useHostBridge } from './host-bridge'
 import { computed, ref } from 'vue'
 import type { StoredPod } from '../contracts/control'
 import type { DefinitionsView, DefinitionCommand, DefinitionUpdateView } from '../contracts/definitions'
 import { t, diagnostic } from './i18n'
 
 const props = defineProps<{ pod: StoredPod }>()
+
 const emit = defineEmits<{ changed: [] }>()
+
+const hostBridge = useHostBridge()
+
 const view = ref<DefinitionsView>({ definitions: [], instances: [], provisioning: [] })
 const podNames = ref<Record<string, string>>({})
 const busy = ref(false); const error = ref(''); const message = ref('')
@@ -38,8 +43,8 @@ async function perform(action: () => Promise<void>) {
   finally { busy.value = false }
 }
 async function load() {
-  view.value = await window.pods.definitions({ type: 'list' })
-  const workspace = await window.pods.workspace({ type: 'list' })
+  view.value = await hostBridge.definitions({ type: 'list' })
+  const workspace = await hostBridge.workspace({ type: 'list' })
   podNames.value = Object.fromEntries(workspace.pods.map(pod => [pod.id, pod.name]))
   if (!initialized) {
     definitionName.value = definition.value?.name ?? props.pod.name
@@ -50,16 +55,16 @@ async function load() {
 }
 async function toggle(event: Event) { if ((event.target as HTMLDetailsElement).open) await perform(load) }
 async function command(command: DefinitionCommand) {
-  try { view.value = await window.pods.definitions(command); emit('changed') }
+  try { view.value = await hostBridge.definitions(command); emit('changed') }
   catch (failure) {
-    try { view.value = await window.pods.definitions({ type: 'list' }); emit('changed') }
+    try { view.value = await hostBridge.definitions({ type: 'list' }); emit('changed') }
     catch (refreshFailure) { throw new Error(`${String(failure)}; state refresh failed: ${String(refreshFailure)}`) }
     throw failure
   }
 }
 async function publish(local = false) {
   await perform(async () => {
-    const scripts = await window.pods.scripts({ type: 'list', podId: props.pod.id })
+    const scripts = await hostBridge.scripts({ type: 'list', podId: props.pod.id })
     if (!scripts.pod.activeScript) throw new Error('Activate a validated script before publishing its definition')
     let values: Record<string, unknown>
     try { values = JSON.parse(defaults.value) }
@@ -83,17 +88,17 @@ async function retry(id: string) {
 async function preview() {
   await perform(async () => {
     if (!binding.value || !selected.value) return
-    const result = await window.pods.definitions({ type: 'previewUpdate', podId: props.pod.id, definitionId: binding.value.definitionId, version: selected.value.version, expectedBinding: binding.value.bindingRevision })
+    const result = await hostBridge.definitions({ type: 'previewUpdate', podId: props.pod.id, definitionId: binding.value.definitionId, version: selected.value.version, expectedBinding: binding.value.bindingRevision })
     update.value = result.update!; validated.value = false
   })
 }
 async function prepare() {
   await perform(async () => {
     if (!binding.value || !update.value || update.value.after.version !== version.value) return
-    const result = await window.pods.definitions({ type: 'prepareUpdate', podId: props.pod.id, definitionId: binding.value.definitionId, version: update.value.after.version, expectedBinding: binding.value.bindingRevision })
+    const result = await hostBridge.definitions({ type: 'prepareUpdate', podId: props.pod.id, definitionId: binding.value.definitionId, version: update.value.after.version, expectedBinding: binding.value.bindingRevision })
     update.value = result.update!
-    const script = await window.pods.scripts({ type: 'list', podId: props.pod.id, selection: { kind: 'draft', id: update.value.draftId! } })
-    const checked = await window.pods.scripts({ type: 'validate', podId: props.pod.id, revision: script.pod.revision, draftId: script.source!.id, draftRevision: script.source!.revision })
+    const script = await hostBridge.scripts({ type: 'list', podId: props.pod.id, selection: { kind: 'draft', id: update.value.draftId! } })
+    const checked = await hostBridge.scripts({ type: 'validate', podId: props.pod.id, revision: script.pod.revision, draftId: script.source!.id, draftRevision: script.source!.revision })
     validated.value = checked.source?.validated === true
   })
 }
