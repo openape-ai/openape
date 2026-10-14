@@ -1,5 +1,16 @@
 # @openape/openclaw-grant-gate
 
+## 0.2.1
+
+### Patch Changes
+
+- Updated dependencies [8baa724]
+- Updated dependencies [9214ee1]
+- Updated dependencies [1ab4dbd]
+- Updated dependencies [ea20fbb]
+  - @openape/cli-auth@0.6.0
+  - @openape/shapes@0.10.0
+
 ## 0.2.0
 
 ### Minor Changes

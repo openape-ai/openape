@@ -1,12 +1,12 @@
 {
   "name": "@openape/ape-troop",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "turbo": {
     "tags": [
       "publishable"
     ]
   },
-  "description": "Owner CLI for troop.openape.ai \u2014 manage bound devices (nests) and agents. Authenticates via `apes login` SSO.",
+  "description": "Owner CLI for troop.openape.ai — manage bound devices (nests) and agents. Authenticates via `apes login` SSO.",
   "type": "module",
   "bin": {
     "ape-troop": "./dist/cli.js"

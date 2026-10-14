@@ -1,5 +1,111 @@
 # Changelog
 
+## 0.37.0
+
+### Minor Changes
+
+- 40aeb4b: Support federated agent identities through owner-authorized grant brokering. Preserve the decision provider's original authorization signature, require immutable owner/agent/connection bindings, and enforce revocation during consumption. Direct grants retain their existing behavior.
+- f1dc9f9: Let a `grants:read` delegate read its delegator's brokered grants (for example
+  of their Pod identities), and let a `grants:request` delegate file a pending
+  request for a brokered identity of the delegator: the IdP takes the binding
+  from that identity's newest grant over an active broker connection of the
+  delegator and validates the request like a brokered one. A brokered continuing
+  request that an approved grant of the same binding already covers now returns
+  that grant instead of asking again; single-use and batch requests still ask.
+- f2d7850: Add the delegation scopes `grants:read` and `grants:request` (delegation.md §8).
+  A user can let one of their own agents read the user's grants and standing
+  grants and file pending grant requests for the user's agents, through a
+  delegation whose audience is the IdP issuer. Delegated requests always stay
+  pending and record the submitter in `request.submitted_by`. Every other IdP
+  endpoint now refuses delegated tokens; before, a delegated `apes-cli` token
+  minted from a wildcard delegation was taken as the delegator everywhere,
+  including approve.
+- a766839: One generic grant card replaces the Pod run special case. `GET /api/grants`
+  and `GET /api/grants/:id` attach `card`: the registry presentation of the
+  grant's operation, rendered only when the IdP's shapes table holds the adapter
+  with the grant's adapter digest and the grant's argv matches the same
+  operation with the same permission (values come from that argv), plus the
+  requester's registered name and owner. Values that are not selectors of the
+  permission (and not part of an exact command) are marked "as requested";
+  oversized values, control or format characters, malformed maps and requests
+  that miss `presentation.requires.target_host` fall back to the exact command.
+  The approval page, the batch view and the grants list always lead with the
+  binding line — the registry title or the exact command; the requester's
+  summary appears only in a labeled "Requester's statement" block. The card
+  switches between German and English. `PodRunGrant` and `podRunPresentation`
+  are removed; the pod-runtime registry adapter carries their texts.
+
+  `[operation.presentation] requires.target_host` (a template over always-bound
+  bindings) is accepted by the presentation parser.
+
+- 59bf5ed: Add per-call program authorization (issue 1473). The endpoint is
+  `POST /api/grants/authorize`. A requester sends the program name, the SHA-256
+  of the program file, the exact arguments, the target host and an optional
+  summary. The IdP then performs these steps:
+
+  - It selects the shape by tested digest, or else by executable name with
+    `version_tested: false`.
+  - It resolves the command itself and writes `execution_context`.
+  - It answers 200 with a command token when an approved or standing grant
+    covers the call. The token is bound to `argv_hash` and `program_sha256`
+    and lasts at most five minutes. Issuing it spends a single-use grant;
+    the first `/consume` with that token answers `consumed`, every replay
+    `already_consumed`.
+  - Otherwise it answers 202 with one pending request, reused across calls.
+  - It answers 403 when the owner denied or revoked this permission.
+
+  Brokered identities reach their decision IdP through the new signed broker
+  operation `authorize` with the same body and answer. Calls have their own
+  per-subject rate limit, set with `OPENAPE_RATE_LIMIT_MAX_AUTHORIZE` (default
+  600/min), and leave the per-IP buckets alone.
+
+  `@openape/grants` adds `parseProgramAuthorizeRequest`, `selectProgramShape`,
+  `resolveProgramCall`, `issueCommandJWT` and `ServerShape.tested_digests`. The
+  generic server fallback now binds `computeArgvHash`, the same argv hash that
+  apes uses.
+
+  The grant card renders IdP-resolved grants without a client adapter digest. It
+  shows "version not tested" for untested program versions and now also
+  appears for brokered grants. `POST /api/grants` refuses the IdP-only
+  `execution_context.program_sha256` and `version_tested`.
+
+- 2eca3af: Add assigned-command authorization that binds grants to a specific pod identity,
+  host, pinned adapter and operation without creating grants or executing a shell.
+  Add owner-scoped pod identity provisioning with an explicit transactional store
+  contract, current identity/key/grant status, and active-requester enforcement at
+  existing grant consumption.
+- a419dad: Grant request summaries are structured (grants.md §3.4, issue 1473):
+  `summary` is `{ title, description?, origin?, link? }` with a one-line title of
+  at most 120 characters, a description of at most 2000 characters and a
+  one-line origin set by the requester's runtime. `summary.text` is removed. The
+  IdP refuses requests that still send `text`, unknown members, oversized fields
+  or Unicode control, format and line/paragraph separator characters (line feeds
+  are allowed in the description) and renders title, description, origin and
+  link as the requester's statement. `@openape/grants` exports
+  `parseGrantSummary` and `migrateLegacyGrantSummary`. `apes run` replaces
+  `--summary` with `--summary-title`, `--summary-description` and
+  `--summary-origin`; `--summary-link` stays.
+
+### Patch Changes
+
+- a020cb3: `POST /api/grants/authorize` now refuses with 400 a program whose name matches
+  a desktop-own executable, and it never selects such a shape. Desktop-own
+  executables are the Pods runtime adapters, which `pnpm seed:shapes` marks with
+  `ServerShape.virtual`. A binary called `pod-runtime` can therefore no longer
+  borrow a Pod's runtime grant.
+- Updated dependencies [40aeb4b]
+- Updated dependencies [f2d7850]
+- Updated dependencies [a020cb3]
+- Updated dependencies [a766839]
+- Updated dependencies [59bf5ed]
+- Updated dependencies [be10b17]
+- Updated dependencies [9214ee1]
+- Updated dependencies [1ab4dbd]
+- Updated dependencies [a419dad]
+  - @openape/core@1.0.0
+  - @openape/grants@0.14.0
+  - @openape/auth@0.13.4
+
 ## 0.36.0
 
 ### Minor Changes
@@ -652,6 +758,7 @@
       ⚡ marker on rows that were auto-approved by a standing grant.
 
   ## Helper utilities (new)
+
   - `modules/nuxt-auth-idp/src/runtime/utils/standing-grants.ts`
     - `formatStandingGrantScope(sg)` — render scope as a human string
     - `formatResourceChainTemplate(chain)` — summarise wildcards/selectors

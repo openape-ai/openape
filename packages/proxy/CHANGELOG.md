@@ -1,5 +1,15 @@
 # @openape/proxy
 
+## 0.4.11
+
+### Patch Changes
+
+- Updated dependencies [40aeb4b]
+- Updated dependencies [f2d7850]
+- Updated dependencies [59bf5ed]
+- Updated dependencies [a419dad]
+  - @openape/core@1.0.0
+
 ## 0.4.10
 
 ### Patch Changes
