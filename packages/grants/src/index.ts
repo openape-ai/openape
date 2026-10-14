@@ -55,6 +55,7 @@ export {
   type ShapePresentationConsequence,
   type ShapePresentationField,
   type ShapePresentationFormat,
+  type ShapePresentationRequirements,
 } from './shape-presentation.js'
 export {
   createInMemoryShapeStore,
