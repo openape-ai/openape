@@ -20,6 +20,7 @@ vi.mock('../src/runtime/server/utils/agent-auth', () => ({
   tryBearerAuth: vi.fn(async () => null),
   requireAgent: vi.fn(async () => { throw new Error('not authenticated') }),
 }))
+vi.mock('../src/runtime/server/utils/grants-delegation', () => ({ tryGrantsDelegate: async () => null, assertDelegatedRequest: async () => {} }))
 
 // Most tests here exercise creation logic, not the auth gate — run them in
 // legacy mode. The gate itself is tested explicitly below.
