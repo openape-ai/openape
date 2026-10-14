@@ -128,6 +128,23 @@ describe('shapes-registry assignment (issue 1473)', () => {
     finally { await rm(f.root, { recursive: true, force: true }) }
   })
 
+  it('refuses runtime read directories inside or around folders Pods can write', async () => {
+    const f = await registry()
+    try {
+      const interpreter = join(f.root, 'tools', 'interpreter'); await mkdir(join(f.root, 'tools')); await writeFile(interpreter, '#!/bin/sh\nexit 0\n', { mode: 0o700 })
+      await mkdir(join(f.root, 'profile')); await mkdir(join(f.root, 'writable', 'lib'), { recursive: true })
+      const runtime = join(f.root, 'tools', 'runtime.json')
+      for (const readDirectories of [[join(f.root, 'writable', 'lib')], [f.root]]) {
+        await writeFile(runtime, JSON.stringify({ version: 1, executable: interpreter, arguments: [], readDirectories, environment: {} }), { mode: 0o600 })
+        await expect(registryProgramDefinition(f.executable, { ...f.options, runtimePath: runtime })).rejects.toThrow('Assign an installed executable outside the Pods profile, Pod folders and folders Pods can write')
+      }
+      await writeFile(runtime, JSON.stringify({ version: 1, executable: interpreter, arguments: [], readDirectories: [join(f.root, 'tools')], environment: {} }), { mode: 0o600 })
+      expect((await registryProgramDefinition(f.executable, { ...f.options, runtimePath: runtime })).runtime?.readDirectories).toEqual([join(f.root, 'tools')])
+      expect(f.probe).toHaveBeenCalledTimes(1)
+    }
+    finally { await rm(f.root, { recursive: true, force: true }) }
+  })
+
   it('refuses CLIs without an installed registry adapter and adapter paths at the MCP boundary', async () => {
     const f = await registry()
     try {

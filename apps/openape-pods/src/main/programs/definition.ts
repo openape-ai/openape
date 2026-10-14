@@ -34,7 +34,7 @@ export async function registryProgramDefinition(executablePath: string, options:
   const { entry, loaded } = loadRegistryAdapter(await (options.registry ?? fetchRegistry)(), cliId, options.adapters)
   const definition = await programDefinition(executablePath, await pinAdapter(options.store, entry.id, loaded.source), cliId, options.runtimePath)
   if (`SHA-256:${definition.adapterHash}` !== entry.digest) throw new Error('The registry adapter changed during assignment; assign the application again')
-  await assertOutside(options.protectedRoots, [definition.executable, definition.runtime?.executable, definition.runtime?.descriptor.path])
+  await assertOutside(options.protectedRoots, [definition.executable, definition.runtime?.executable, definition.runtime?.descriptor.path, ...definition.entryFiles.map(file => file.path)], definition.runtime?.readDirectories ?? [])
   const digest = `SHA-256:${definition.executableHash}`
   if (!bindsExecutable(loaded.adapter, definition.executable, digest)) throw new Error(`The registry adapter ${entry.id} is for ${loaded.adapter.cli.executable}; ${basename(definition.executable)} is neither that executable nor a file it was tested with`)
   const versionCommand = loaded.adapter.cli.version_command
@@ -43,16 +43,25 @@ export async function registryProgramDefinition(executablePath: string, options:
   return { ...definition, registry: { id: entry.id, digest: entry.digest }, cliVersion: checkCliVersion(loaded.adapter, output, digest) }
 }
 
-/** Refuses a file inside a protected folder: a Pod could replace it between the assignment and a later run. */
-async function assertOutside(roots: string[], paths: (string | undefined)[]): Promise<void> {
-  const folders = await Promise.all(roots.map(async (root) => {
+/**
+ * Refuses files inside a protected folder, and read directories that lie inside one or contain one: a Pod could
+ * replace what it can write between the assignment and a later run, and a read directory around a protected folder
+ * would expose it to the program.
+ */
+async function assertOutside(roots: string[], files: (string | undefined)[], directories: string[]): Promise<void> {
+  const folders = (await Promise.all(roots.map(async (root) => {
     try { return await realpath(root) }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error }
-  }))
-  for (const path of paths) {
-    if (!path) continue
-    const file = await realpath(path)
-    if (folders.some(folder => folder && (file === folder || file.startsWith(`${folder}${sep}`)))) throw new Error('Assign an installed executable outside the Pods profile, Pod folders and folders Pods can write')
+  }))).filter((folder): folder is string => folder !== null)
+  const within = (path: string, folder: string) => path === folder || path.startsWith(`${folder}${sep}`)
+  const refuse = () => { throw new Error('Assign an installed executable outside the Pods profile, Pod folders and folders Pods can write') }
+  for (const path of [...files.filter((file): file is string => !!file), ...directories]) {
+    const resolved = await realpath(path)
+    if (folders.some(folder => within(resolved, folder))) refuse()
+  }
+  for (const directory of directories) {
+    const resolved = await realpath(directory)
+    if (folders.some(folder => within(folder, resolved))) refuse()
   }
 }
 
