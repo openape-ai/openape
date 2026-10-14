@@ -5,7 +5,8 @@ const requester = { email: 'agent@example.com', isActive: true }
 const mockGrants = new Map<string, any>()
 
 // Mock @openape/grants
-vi.mock('@openape/grants', () => ({
+vi.mock('@openape/grants', async () => ({
+  spentByCommandToken: (await vi.importActual<typeof import('@openape/grants')>('@openape/grants')).spentByCommandToken,
   introspectGrant: vi.fn(async (id: string) => mockGrants.get(id) ?? null),
   useGrant: vi.fn(async (id: string) => {
     const grant = mockGrants.get(id)

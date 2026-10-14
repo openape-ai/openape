@@ -2,6 +2,7 @@ import { sql } from 'drizzle-orm'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import { useDb } from '../database/drizzle'
 import { migrateStoredGrantSummaries } from '../utils/grant-summary-migration'
+import { isDuplicateColumn } from '../utils/sqlite-errors'
 
 export default defineNitroPlugin(async () => {
   if (process.env.OPENAPE_E2E === '1') return
@@ -253,6 +254,18 @@ export default defineNitroPlugin(async () => {
   }
   catch (err) {
     console.error('[database] Table creation failed (tables may already exist):', err)
+  }
+
+  // File digests of tested executables; the IdP selects shapes by program hash (issue 1473).
+  // Outside the block above: any failure other than an existing column stops the start.
+  try { await db.run(sql`ALTER TABLE shapes ADD COLUMN tested_digests TEXT`) }
+  catch (error) {
+    if (!isDuplicateColumn(error)) throw error
+  }
+  // The one /consume redemption of a single-use grant spent by its command token (issue 1473).
+  try { await db.run(sql`ALTER TABLE grants ADD COLUMN consumed_jti TEXT`) }
+  catch (error) {
+    if (!isDuplicateColumn(error)) throw error
   }
 
   // Issue 1473: summary.text became title/description; requests carrying

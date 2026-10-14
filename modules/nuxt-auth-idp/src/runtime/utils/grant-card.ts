@@ -54,6 +54,11 @@ export interface GrantCardContext {
   registry: RegistryCard | null
   /** The requester's registration at this IdP; null when it has none. */
   requester: { name: string, owner: string | null } | null
+  /**
+   * The program file of a grant the IdP resolved itself (`POST /api/grants/authorize`);
+   * null for client-resolved grants. `version_tested` is null for a command no adapter describes.
+   */
+  program?: { sha256: string, version_tested: boolean | null } | null
 }
 
 export type GrantWithCard = OpenApeGrant & { card?: GrantCardContext }

@@ -52,7 +52,7 @@ export function parseBrokerRequest(input: unknown): BrokerRequest {
   }
   brokerString(value.sub)
   brokerString(value.key_id)
-  if (value.operation === 'create') {
+  if (value.operation === 'create' || value.operation === 'authorize') {
     fields(value, [...common, 'sub', 'key_id', 'request'])
     brokerObject(value.request)
   }

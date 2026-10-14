@@ -153,6 +153,28 @@ describe('/token joins the agent bucket', () => {
   })
 })
 
+describe('program authorization (issue 1473)', () => {
+  it('500 program calls from one IP touch neither the sign-in nor the agent bucket', async () => {
+    const request = await createLimiter()
+    for (let i = 0; i < 500; i++) {
+      const response = request('/api/grants/authorize')
+      expect(response.status).toBe(200)
+      // Limited per verified requester inside the handler instead.
+      expect(response.headers['X-RateLimit-Limit']).toBeUndefined()
+    }
+    expect(request('/api/session/login').headers['X-RateLimit-Remaining']).toBe('9')
+    expect(request('/api/agent/challenge').headers['X-RateLimit-Remaining']).toBe('119')
+  })
+
+  it('exempts only the exact authorize path', async () => {
+    const request = await createLimiter()
+    expect(request('/api/grants/authorize?probe=1').headers['X-RateLimit-Limit']).toBeUndefined()
+    for (const path of ['/api/grants/authorize-all', '/api/grants/authorize/extra']) {
+      expect(request(path).headers['X-RateLimit-Limit']).toBe('120')
+    }
+  })
+})
+
 describe('per-IP isolation', () => {
   it('one exhausted IP does not affect another', async () => {
     const request = await createLimiter()

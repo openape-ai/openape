@@ -56,6 +56,8 @@ it('keeps the binding line of a git push above a misleading requester title', as
   const card = await mountPage({ grant_id: 'grant-git-push' }, cardFixtures.gitPush)
   expect(card.get('[data-binding-line]').text()).toBe('Push feature/rebase to origin')
   expect(card.get('[data-requester-claims]').text()).toContain('Read-only status check')
+  // A grant the requester resolved carries no program facts.
+  expect(card.find('[data-version-untested]').exists()).toBe(false)
   await capture('git-push-requester-title')
 })
 
@@ -63,6 +65,19 @@ it('shows the exact command and the claims for an unknown command', async () => 
   const card = await mountPage({ grant_id: 'grant-unknown' }, cardFixtures.unknown)
   expect(card.get('[data-binding-line="command"]').text()).toBe('acme-cli deploy --env production')
   await capture('unknown-command')
+})
+
+it('flags a program version the registry adapter was not tested with', async () => {
+  const card = await mountPage({ grant_id: 'grant-git-untested' }, cardFixtures.gitUntested)
+  expect(card.get('[data-binding-line="registry"]').text()).toBe('Push feature/rebase to origin')
+  expect(card.get('[data-version-untested]').text()).toContain('Version not tested')
+  await capture('git-untested-version-en')
+})
+
+it('flags an untested program version in German', async () => {
+  const card = await mountPage({ grant_id: 'grant-git-untested' }, cardFixtures.gitUntested, 'de-AT')
+  expect(card.get('[data-version-untested]').text()).toContain('Version nicht getestet')
+  await capture('git-untested-version-de')
 })
 
 it('lists batch members by their binding line', async () => {

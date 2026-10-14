@@ -1,6 +1,6 @@
 import type { BrokerConnection, BrokeredGrant } from '@openape/core'
-import { sameBrokeredGrant } from '@openape/grants'
-import { and, eq, gt, lt, sql } from 'drizzle-orm'
+import { sameBrokeredGrant, spentByCommandToken } from '@openape/grants'
+import { and, eq, gt, isNotNull, isNull, lt, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 import { useDb } from '../database/drizzle'
 import { brokerAgents, brokerAudit, brokerConnections, brokerRequests, grants, sshKeys, users } from '../database/schema'
@@ -20,10 +20,24 @@ function checkConnection(row: typeof brokerConnections.$inferSelect | undefined,
   if (provenance && (row.id !== provenance.connection_id || row.owner !== provenance.owner || row.brokerIssuer !== provenance.broker_issuer || row.brokerIssuer !== provenance.agent_issuer)) reject('Broker connection does not match the grant')
 }
 
+type Transaction = Parameters<Parameters<ReturnType<typeof useDb>['transaction']>[0]>[0]
+
+/** The subject when this connection already holds a brokered grant of it, else null. */
+async function knownAgent(tx: Transaction, connectionId: string, subject: string): Promise<string | null> {
+  const grant = await tx.select({ id: grants.id }).from(grants).where(and(eq(grants.requester, subject), sql`json_extract(${grants.brokered}, '$.connection_id') = ${connectionId}`)).get()
+  return grant ? subject : null
+}
+
 export function createDrizzleBrokerStore(): BrokerStore {
   const db = useDb()
   const configuredLimit = Number(process.env.OPENAPE_RATE_LIMIT_MAX_AGENT)
   const requestLimit = Number.isInteger(configuredLimit) && configuredLimit > 0 ? configuredLimit : 120
+  // Matches the per-agent authorize budget (nuxt-auth-idp utils/authorize-rate-limit); assertions live at most 60 s.
+  const configuredCalls = Number(process.env.OPENAPE_RATE_LIMIT_MAX_AUTHORIZE)
+  const callLimit = Number.isInteger(configuredCalls) && configuredCalls > 0 ? configuredCalls : 600
+  // Ceiling over all agents of one connection, so a broker cannot multiply its budget with more agents.
+  const configuredCeiling = Number(process.env.OPENAPE_RATE_LIMIT_MAX_BROKER_CALLS)
+  const callCeiling = Number.isInteger(configuredCeiling) && configuredCeiling > 0 ? configuredCeiling : callLimit * 10
   return {
     async createConnection(connection) {
       return await db.transaction(async (tx) => {
@@ -54,9 +68,20 @@ export function createDrizzleBrokerStore(): BrokerStore {
         if (!owner?.isActive || owner.type === 'agent' || owner.owner) reject('Broker owner is inactive')
         const now = Math.floor(Date.now() / 1000)
         await tx.delete(brokerRequests).where(lt(brokerRequests.expiresAt, now))
-        const recent = await tx.select({ count: sql<number>`count(*)` }).from(brokerRequests).where(and(eq(brokerRequests.connectionId, row.id), gt(brokerRequests.expiresAt, now))).get()
-        if ((recent?.count ?? 0) >= requestLimit) throw createError({ statusCode: 429, statusMessage: 'Broker request rate exceeded' })
-        const inserted = await tx.insert(brokerRequests).values({ connectionId: row.id, jti: request.jti, expiresAt: request.exp }).onConflictDoNothing().returning({ jti: brokerRequests.jti })
+        // Program calls and status polls of an agent this connection already holds grants for have a budget per
+        // agent, bounded by a ceiling over all its agents; every other operation, including the first calls of an
+        // agent unknown here, shares the connection's budget. The agent provider's broker_agents rows are not
+        // stored at the decision IdP, so its brokered grants are what identify a known agent.
+        const subject = request.operation === 'authorize' || request.operation === 'get' ? await knownAgent(tx, row.id, request.sub) : null
+        const outstanding = gt(brokerRequests.expiresAt, now)
+        const budgets = subject
+          ? [{ where: and(eq(brokerRequests.connectionId, row.id), eq(brokerRequests.subject, subject), outstanding), limit: callLimit }, { where: and(eq(brokerRequests.connectionId, row.id), isNotNull(brokerRequests.subject), outstanding), limit: callCeiling }]
+          : [{ where: and(eq(brokerRequests.connectionId, row.id), isNull(brokerRequests.subject), outstanding), limit: requestLimit }]
+        for (const budget of budgets) {
+          const recent = await tx.select({ count: sql<number>`count(*)`, oldest: sql<number | null>`min(${brokerRequests.expiresAt})` }).from(brokerRequests).where(budget.where).get()
+          if ((recent?.count ?? 0) >= budget.limit) throw createError({ statusCode: 429, statusMessage: 'Broker request rate exceeded', data: { retry_after: Math.max(1, (recent?.oldest ?? now + 1) - now) } })
+        }
+        const inserted = await tx.insert(brokerRequests).values({ connectionId: row.id, jti: request.jti, expiresAt: request.exp, subject }).onConflictDoNothing().returning({ jti: brokerRequests.jti })
         if (!inserted.length) throw createError({ statusCode: 409, statusMessage: 'Broker request was already used', data: { type: 'https://openape.org/errors/broker_request_replayed' } })
         return connectionFromRow(row)
       }, { behavior: 'immediate' })
@@ -91,6 +116,14 @@ export function createDrizzleBrokerStore(): BrokerStore {
         const owner = await tx.select().from(users).where(eq(users.email, connection.owner)).get()
         if (!owner?.isActive || owner.type === 'agent' || owner.owner) reject('Broker owner is inactive')
         const now = Math.floor(Date.now() / 1000)
+        // POST /api/grants/authorize spends a single-use grant when it issues the command
+        // token; its first redemption confirms that, every later one is a replay.
+        if (spentByCommandToken(grant, claims)) {
+          const redeemed = await tx.update(grants).set({ consumedJti: claims.jti }).where(and(eq(grants.id, id), isNull(grants.consumedJti))).returning({ id: grants.id })
+          if (!redeemed.length) return { status: 'used', error: 'already_consumed' }
+          await tx.insert(brokerAudit).values(brokerAuditRow(grant, 'consumed'))
+          return { status: 'consumed', grant }
+        }
         if (grant.status !== 'approved') return { status: grant.status, error: grant.status === 'used' ? 'already_consumed' : grant.status }
         if (grant.expires_at && grant.expires_at <= now) return { status: 'expired', error: 'expired' }
         await tx.insert(brokerAudit).values(brokerAuditRow(grant, 'consumed'))

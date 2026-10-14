@@ -6,6 +6,8 @@ export interface ExtendedGrantStore extends GrantStore {
   findAll: () => Promise<OpenApeGrant[]>
   findByDelegate: (delegate: string) => Promise<OpenApeGrant[]>
   findByDelegator: (delegator: string) => Promise<OpenApeGrant[]>
+  claimOnce: NonNullable<GrantStore['claimOnce']>
+  markConsumed: NonNullable<GrantStore['markConsumed']>
 }
 
 // A request never answered stops being a decision after 48h and turns into
@@ -13,6 +15,8 @@ export interface ExtendedGrantStore extends GrantStore {
 // Flip it to 'expired' lazily — on read, no cron. Approving through an old push
 // link then fails cleanly at the status check.
 const PENDING_REQUEST_TTL_S = 48 * 3600
+
+let claims: Promise<unknown> = Promise.resolve()
 
 export function createGrantStore(): ExtendedGrantStore {
   const storage = useGrantStorage()
@@ -52,6 +56,29 @@ export function createGrantStore(): ExtendedGrantStore {
       if (!grant)
         throw new Error(`Grant not found: ${id}`)
       await storage.setItem(`grants:${id}`, { ...grant, status, ...extra })
+    },
+
+    // Claims run one after another; the unstorage fallback serves a single process,
+    // production stores claim in one conditional database statement.
+    async claimOnce(id, usedAt) {
+      const claim = claims.then(async () => {
+        const grant = await storage.getItem<OpenApeGrant>(`grants:${id}`)
+        if (grant?.status !== 'approved') return false
+        await storage.setItem(`grants:${id}`, { ...grant, status: 'used', used_at: usedAt })
+        return true
+      })
+      claims = claim.catch(() => false)
+      return await claim
+    },
+
+    async markConsumed(id, jti) {
+      const mark = claims.then(async () => {
+        if (!await storage.hasItem(`grants:${id}`) || await storage.hasItem(`grants-consumed:${id}`)) return false
+        await storage.setItem(`grants-consumed:${id}`, jti)
+        return true
+      })
+      claims = mark.catch(() => false)
+      return await mark
     },
 
     async findPending() {

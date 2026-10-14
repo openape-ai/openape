@@ -10,7 +10,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { registryCard, withGrantCards } from '../src/runtime/server/utils/grant-card'
 import { grantBindingLine } from '../src/runtime/utils/grant-card'
 import type { GrantWithCard } from '../src/runtime/utils/grant-card'
-import { buildCardFixtures, findUser, getShape, gitAdapter, POD_ID, podArgv, podRuntimeAdapter, pushArgv, shapedRequest } from './helpers/grant-card-fixtures'
+import { buildCardFixtures, findUser, getShape, gitAdapter, idpResolvedRequest, POD_ID, podArgv, podRuntimeAdapter, pushArgv, shapedRequest, UNTESTED_GIT_SHA256 } from './helpers/grant-card-fixtures'
 
 vi.mock('nitropack/runtime', () => ({ useRuntimeConfig: () => ({}), useEvent: () => undefined, useStorage: () => ({}) }))
 
@@ -106,6 +106,23 @@ describe('grant cards', () => {
     const withoutRegistry: GrantWithCard = { ...gitPush, card: { registry: null, requester: null } }
     expect(grantBindingLine(withoutRegistry, 'de')).toEqual({ kind: 'command', text: pushArgv.join(' ') })
     expect(grantBindingLine(unknown, 'en')).toEqual({ kind: 'command', text: 'acme-cli deploy --env production' })
+  })
+
+  it('render a grant the IdP resolved without a client adapter digest and flag an untested version', async () => {
+    const { gitUntested, gitPush } = await buildCardFixtures()
+    expect(gitUntested.card!.registry?.title.en).toBe('Push feature/rebase to origin')
+    expect(gitUntested.card!.program).toEqual({ sha256: UNTESTED_GIT_SHA256, version_tested: false })
+    expect(gitPush.card!.program).toBeNull()
+
+    // The card follows the IdP's current registry entry, not a digest recorded at request time.
+    const request = await idpResolvedRequest({ name: 'git', sha256: UNTESTED_GIT_SHA256 }, pushArgv.slice(1))
+    const changed = async (cliId: string) => ({ ...(await getShape(cliId))!, digest: 'SHA-256:newer-adapter' })
+    expect((await registryCard({ ...request, execution_context: { ...request.execution_context!, adapter_digest: 'SHA-256:stale' } }, changed))?.title.en).toBe('Push feature/rebase to origin')
+    // Still re-derived from the argv: a forged command cannot borrow the meaning.
+    expect(await registryCard({ ...request, command: [...request.command!.slice(0, -1), 'main'] }, getShape)).toBeNull()
+
+    const [unknownProgram] = await withGrantCards([{ id: 'g', status: 'pending', created_at: 0, request: await idpResolvedRequest({ name: 'acme', sha256: UNTESTED_GIT_SHA256 }, ['deploy']) }], { getShape, findUser })
+    expect(unknownProgram!.card.program).toEqual({ sha256: UNTESTED_GIT_SHA256, version_tested: null })
   })
 
   // After an adapter change: UPDATE_GRANT_CARD_FIXTURES=1 pnpm vitest run test/grant-card.test.ts

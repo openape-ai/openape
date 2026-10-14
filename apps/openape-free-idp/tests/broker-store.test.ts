@@ -42,9 +42,9 @@ beforeEach(async () => {
   await client.executeMultiple(`
     CREATE TABLE users(email TEXT PRIMARY KEY, id TEXT, name TEXT NOT NULL, owner TEXT, approver TEXT, type TEXT, public_key TEXT, is_active INTEGER NOT NULL, created_at INTEGER NOT NULL, last_login_at INTEGER, recovery_vacation_mode INTEGER NOT NULL DEFAULT 0, recovery_vacation_days INTEGER);
     CREATE TABLE ssh_keys(key_id TEXT PRIMARY KEY, user_email TEXT NOT NULL, public_key TEXT NOT NULL, name TEXT NOT NULL, created_at INTEGER NOT NULL);
-    CREATE TABLE grants(id TEXT PRIMARY KEY, status TEXT NOT NULL, type TEXT, requester TEXT NOT NULL, brokered TEXT, broker_owner TEXT, target_host TEXT NOT NULL, audience TEXT NOT NULL, grant_type TEXT NOT NULL, request TEXT NOT NULL, created_at INTEGER NOT NULL, decided_at INTEGER, decided_by TEXT, expires_at INTEGER, used_at INTEGER, decided_by_standing_grant TEXT, auto_approval_kind TEXT);
+    CREATE TABLE grants(id TEXT PRIMARY KEY, status TEXT NOT NULL, type TEXT, requester TEXT NOT NULL, brokered TEXT, broker_owner TEXT, target_host TEXT NOT NULL, audience TEXT NOT NULL, grant_type TEXT NOT NULL, request TEXT NOT NULL, created_at INTEGER NOT NULL, decided_at INTEGER, decided_by TEXT, expires_at INTEGER, used_at INTEGER, decided_by_standing_grant TEXT, auto_approval_kind TEXT, consumed_jti TEXT);
     CREATE TABLE broker_connections(id TEXT PRIMARY KEY, owner TEXT NOT NULL, owner_issuer TEXT NOT NULL, broker_issuer TEXT NOT NULL, agent_domain TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL);
-    CREATE TABLE broker_requests(connection_id TEXT NOT NULL, jti TEXT NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY(connection_id,jti));
+    CREATE TABLE broker_requests(connection_id TEXT NOT NULL, jti TEXT NOT NULL, expires_at INTEGER NOT NULL, subject TEXT, PRIMARY KEY(connection_id,jti));
     CREATE TABLE broker_audit(id INTEGER PRIMARY KEY AUTOINCREMENT, grant_id TEXT NOT NULL, owner TEXT NOT NULL, agent TEXT NOT NULL, broker_issuer TEXT NOT NULL, connection_id TEXT NOT NULL, event TEXT NOT NULL, created_at INTEGER NOT NULL);
     CREATE TABLE broker_agents(subject TEXT PRIMARY KEY, key_id TEXT NOT NULL, owner TEXT NOT NULL, decision_issuer TEXT NOT NULL, connection_id TEXT NOT NULL);
   `)
@@ -93,6 +93,72 @@ describe('durable grant brokering', () => {
     await expect(bounded.acceptRequest(assertion)).resolves.toEqual(connection)
     await database.delete(schema.brokerRequests).where(eq(schema.brokerRequests.jti, records[1]!.jti))
     await expect(bounded.acceptRequest(assertion)).rejects.toMatchObject({ statusCode: 409 })
+  })
+
+  it('spends a single-use grant once in one conditional update and audits it', async () => {
+    const value = grant()
+    await grantStore.save(value)
+    // The update is conditional on `approved`, so the second claim finds nothing to spend.
+    expect(await grantStore.claimOnce(value.id, 7)).toBe(true)
+    expect(await grantStore.claimOnce(value.id, 8)).toBe(false)
+    expect(await grantStore.findById(value.id)).toMatchObject({ status: 'used' })
+    expect(await grantStore.claimOnce(randomUUID(), 7)).toBe(false)
+    const audit = await database.select().from(schema.brokerAudit).where(eq(schema.brokerAudit.grantId, value.id))
+    expect(audit.map(row => row.event)).toEqual(['created', 'used'])
+  })
+
+  it('confirms a grant spent by its command token on the first redemption only', async () => {
+    const value = grant()
+    await grantStore.save(value)
+    await database.insert(schema.users).values({ email: subject, name: 'Agent', type: 'agent', isActive: true, createdAt: 1 })
+    expect(await grantStore.claimOnce(value.id, 7)).toBe(true)
+    const command = { ...claims(value), argv_hash: 'SHA-256:argv', program_sha256: 'a'.repeat(64) }
+    expect(await store.consume(value.id, command)).toMatchObject({ status: 'consumed' })
+    // Replays with the same or another token of the spent grant are refused.
+    expect(await store.consume(value.id, command)).toMatchObject({ error: 'already_consumed' })
+    expect(await store.consume(value.id, { ...command, jti: randomUUID() })).toMatchObject({ error: 'already_consumed' })
+    const audit = await database.select().from(schema.brokerAudit).where(eq(schema.brokerAudit.grantId, value.id))
+    expect(audit.map(row => row.event)).toEqual(['created', 'used', 'consumed'])
+
+    const direct = { ...grant(), brokered: undefined }
+    await grantStore.save(direct)
+    expect(await grantStore.markConsumed(direct.id, 'j1')).toBe(true)
+    expect(await grantStore.markConsumed(direct.id, 'j1')).toBe(false)
+  })
+
+  it('gives known agents a program-call budget apart from the connection-wide one (issue 1473)', async () => {
+    vi.stubEnv('OPENAPE_RATE_LIMIT_MAX_AGENT', '2')
+    vi.stubEnv('OPENAPE_RATE_LIMIT_MAX_AUTHORIZE', '3')
+    const bounded = createDrizzleBrokerStore()
+    await grantStore.save(grant())
+    const call = (sub = subject, operation: 'authorize' | 'get' = 'authorize') => ({ ...request(), operation, sub, key_id: 'key-one', ...(operation === 'get' ? { grant_id: randomUUID() } : { request: {} }) }) as BrokerRequest
+    await bounded.acceptRequest(call())
+    await bounded.acceptRequest(call(subject, 'get'))
+    await bounded.acceptRequest(call())
+    const limited = await bounded.acceptRequest(call()).catch((error: unknown) => error)
+    expect(limited).toMatchObject({ statusCode: 429, data: { retry_after: expect.any(Number) } })
+    expect((limited as { data: { retry_after: number } }).data.retry_after).toBeGreaterThan(0)
+    // An agent without grants of this connection, invented or new, spends the connection-wide budget.
+    await bounded.acceptRequest(call('invented-1@pods.provider.test'))
+    await bounded.acceptRequest(call('invented-2@pods.provider.test'))
+    await expect(bounded.acceptRequest(call('invented-3@pods.provider.test'))).rejects.toMatchObject({ statusCode: 429 })
+    await expect(bounded.acceptRequest(request())).rejects.toMatchObject({ statusCode: 429 })
+  })
+
+  it('bounds the program calls of all known agents of a connection by one ceiling', async () => {
+    vi.stubEnv('OPENAPE_RATE_LIMIT_MAX_AUTHORIZE', '3')
+    vi.stubEnv('OPENAPE_RATE_LIMIT_MAX_BROKER_CALLS', '4')
+    const bounded = createDrizzleBrokerStore()
+    const second = 'second@pods.provider.test'
+    await grantStore.save(grant())
+    await grantStore.save({ ...grant(), request: { ...grant().request, requester: second } })
+    const call = (sub: string) => ({ ...request(), operation: 'authorize', sub, key_id: 'key-one', request: {} }) as BrokerRequest
+    for (const sub of [subject, subject, second, second]) await bounded.acceptRequest(call(sub))
+    await expect(bounded.acceptRequest(call(second))).rejects.toMatchObject({ statusCode: 429 })
+    // Grants of another connection do not make an agent known here.
+    const elsewhere = 'elsewhere@pods.provider.test'
+    await database.insert(schema.grants).values(grantToRow({ ...grant(), request: { ...grant().request, requester: elsewhere }, brokered: { ...grant().brokered!, connection_id: randomUUID() } }))
+    await expect(bounded.acceptRequest(call(elsewhere))).resolves.toEqual(connection)
   })
 
   it('lists foreign grants for the owner without creating a local agent or leaking to another owner', async () => {
