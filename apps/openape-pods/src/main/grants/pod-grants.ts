@@ -1,6 +1,6 @@
 import type { OpenApeCliAuthorizationDetail, OpenApeExecutionContext } from '@openape/core'
 import { canonicalizeCliPermission, cliAuthorizationDetailsCover, sameBrokeredGrant } from '@openape/grants'
-import { loadAdapter, resolveCommand } from '@openape/apes'
+import { exactCommand, loadAdapter, resolveCommand } from '@openape/apes'
 import type { LoadedAdapter } from '@openape/apes'
 import { approvalURL } from '../../contracts/activity'
 import { approvalAudience } from '../../contracts/approvals'
@@ -8,6 +8,7 @@ import { grantSummary } from '../../contracts/grant-summary'
 import { gateActions } from '../../contracts/mail-archive-port'
 import { parsePodGrant, grantTypes  } from '../../contracts/grants'
 import type { GrantState, GrantType, PodGrant } from '../../contracts/grants'
+import { adapterStanding } from '../../contracts/programs'
 import type { ProgramAssignment } from '../../contracts/programs'
 import { grantCoverage, ownGrant } from '../broker/authorization'
 import type { AgentConnection, Grant, GrantLedgerPort } from '../broker/authorization'
@@ -16,6 +17,7 @@ import type { OwnerSession } from '../connections/owner-session'
 import type { GrantLedgerCommand } from '../../worker/resources/grants'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
 import { httpArgv, programContext, runtimeArgv } from './execution-context'
+import { loadPodAdapter } from './registry-copies'
 
 /** What one grant request asks for, as the Pod identity: the authorization details and the adapter they belong to. */
 /**
@@ -59,18 +61,24 @@ export function programCoverage(adapter: LoadedAdapter): OpenApeCliAuthorization
   })
 }
 
-/** One exact command of an adapter, including its executable name. */
-export async function commandSpec(adapter: LoadedAdapter, argv: string[]): Promise<GrantSpec> {
-  const resolved = await resolveCommand(adapter, argv)
+/** One command of an adapter, including its executable name; `exact` binds the grant to this argv (issue 1473). */
+export async function commandSpec(adapter: LoadedAdapter, argv: string[], exact = false): Promise<GrantSpec> {
+  const structured = await resolveCommand(adapter, argv)
+  const resolved = exact ? exactCommand(structured) : structured
   if (resolved.detail.operation_id === '_generic.exec') throw new Error('Generic program execution cannot be granted')
   return { cliId: adapter.adapter.cli.id, details: [resolved.detail], executionContext: resolved.executionContext, display: resolved.detail.display }
 }
 
-/** A whole program, or one command when `argv` is given, of an application assigned to the Pod. */
-export async function programSpec(assignment: Pick<ProgramAssignment, 'cliId' | 'adapterPath' | 'adapterHash'>, argv?: string[]): Promise<GrantSpec> {
+/**
+ * A whole program, or one command when `argv` is given, of an application assigned to the Pod. An adapter that is not
+ * a tested registry adapter only grants exact commands (issue 1473).
+ */
+export async function programSpec(assignment: Pick<ProgramAssignment, 'cliId' | 'adapterPath' | 'adapterHash' | 'registry' | 'cliVersion' | 'bundlePath'>, argv?: string[]): Promise<GrantSpec> {
   await verifyExecutable(assignment.adapterPath, assignment.adapterHash)
   const adapter = loadAdapter(assignment.cliId, assignment.adapterPath)
-  if (argv) return commandSpec(adapter, [assignment.cliId, ...argv])
+  const standing = adapterStanding(assignment)
+  if (argv) return commandSpec(adapter, [assignment.cliId, ...argv], standing.exact)
+  if (standing.exact) throw new Error(`${assignment.cliId} needs an exact approval for every command (${standing.reason}); grant single commands`)
   const details = programCoverage(adapter)
   if (!details.length) throw new Error(`${assignment.cliId} has no operations a whole-program grant can cover; grant single commands`)
   return { cliId: assignment.cliId, details, executionContext: await programContext(adapter), display: `All ${assignment.cliId} operations: ${details.map(detail => `${detail.action} on ${detail.resource_chain[0]!.resource}`).join(', ')}` }
@@ -78,14 +86,14 @@ export async function programSpec(assignment: Pick<ProgramAssignment, 'cliId' | 
 
 /** The grant to run the Pod's stored script; it covers every run of this Pod whatever its script, workspace or name. */
 export async function runtimeSpec(adapterPath: string, podId: string, name: string): Promise<GrantSpec> {
-  const adapter = loadAdapter('pod-runtime', adapterPath)
+  const adapter = loadPodAdapter('pod-runtime', adapterPath)
   const resolved = await resolveCommand(adapter, runtimeArgv({ podId, name, script: 'run.mjs', workspace: 'workspace' }))
   return { cliId: 'pod-runtime', details: [resolved.detail], executionContext: resolved.executionContext, display: resolved.detail.display }
 }
 
 /** An HTTPS origin; with methods, one detail per method (one method carries its request's context), otherwise every method of that origin. */
 export async function httpSpec(adapterPath: string, origin: string, methods?: string[]): Promise<GrantSpec> {
-  const adapter = loadAdapter('pod-http', adapterPath)
+  const adapter = loadPodAdapter('pod-http', adapterPath)
   if (methods) {
     const resolved = await Promise.all(methods.map(async method => await resolveCommand(adapter, httpArgv(origin, method))))
     const details = resolved.map(item => item.detail)
@@ -159,16 +167,20 @@ export class PodGrants {
     }
   }
 
-  /** Requests one continuing grant as the Pod; an equal pending or approved request is reused, so retries never ask twice. */
+  /**
+   * Requests one continuing grant as the Pod; an equal pending or approved request is reused, so retries never ask
+   * twice. The ledger does not know argv hashes, so an exact command is matched only by the IdP's own reuse.
+   */
   async request(podId: string, spec: GrantSpec, signal: AbortSignal): Promise<GrantResult> {
     const connection = await this.dependencies.connection(podId)
     const issuer = connection.decisionIssuer ?? connection.issuer
-    const existing = await this.dependencies.ledger({ type: 'same', podId, issuer, subject: connection.subject, details: spec.details }) as PodGrant | null
+    const exact = spec.details.some(detail => detail.constraints?.exact_command === true)
+    const existing = exact ? null : await this.dependencies.ledger({ type: 'same', podId, issuer, subject: connection.subject, details: spec.details }) as PodGrant | null
     if (existing) {
       const current = await this.record(podId, connection, await this.read(connection, existing.id, signal))
       if (['pending', 'approved'].includes(current.state)) return this.result(current)
     }
-    const adopted = await this.adopt(podId, connection, spec.details, id => this.candidate(connection, id, signal))
+    const adopted = exact ? null : await this.adopt(podId, connection, spec.details, id => this.candidate(connection, id, signal))
     if (adopted) return this.result(await this.record(podId, connection, adopted))
     const response = await fetch(`${connection.issuer}/api/grants`, { method: 'POST', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await connection.accessToken()}` }, body: JSON.stringify({ requester: connection.subject, target_host: connection.targetHost, audience: 'shapes', grant_type: 'always', permissions: spec.details.map(detail => detail.permission), authorization_details: spec.details, execution_context: spec.executionContext, reason: spec.display.slice(0, 4096), summary: grantSummary(spec.display, await this.dependencies.podName(podId)) }) })
     // 201 is a new request; 200 is an existing approved grant the IdP reused.

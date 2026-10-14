@@ -23,7 +23,7 @@ vi.mock('../../src/worker/runtime/sandbox', async original => ({ ...await origin
 vi.mock('../../src/worker/runtime/terminal', () => ({ launchTerminal: vi.fn() }))
 vi.mock('../../src/worker/recovery/domains', () => ({ inspectDomainRecords: vi.fn(async () => {}) }))
 vi.mock('../../src/main/broker/authorization', () => ({ AgentAuthority: class { async authorize() {} async assertActive() {} } }))
-vi.mock('@openape/apes', () => ({ loadAdapter: () => ({ digest: 'synthetic' }), resolveCommand: async () => ({ detail: { action: 'list' } }) }))
+vi.mock('@openape/apes', () => ({ loadAdapter: () => ({ digest: 'synthetic' }), resolveCommand: async () => ({ detail: { action: 'list' } }), exactCommand: (resolved: unknown) => resolved }))
 
 interface Launch { policy: RuntimePolicy, environment: Record<string, string>, temporaryExisted: boolean }
 const podId = randomUUID(); const applicationId = randomUUID()

@@ -3,6 +3,7 @@ import { parseCredentialAlias } from './credentials'
 import { parseGrantDeclaration, parseGrantTarget } from './grants'
 import type { GrantDeclaration, GrantTarget } from './grants'
 import { parseHttpPermission } from './http'
+import { registryAdaptersOnly } from './programs'
 import type { HttpPermission } from './http'
 import type { DirectoryAccess } from './resources'
 
@@ -19,7 +20,7 @@ export const sandboxLevels: readonly SandboxLevel[] = ['isolated', 'owner']
 /** Owner files are named by absolute path; their content never passes through MCP. */
 export interface SandboxDeclaration {
   level?: SandboxLevel
-  programs?: { path: string, adapterPath?: string, commandName?: string, runtimePath?: string }[]
+  programs?: { path: string, commandName?: string, runtimePath?: string }[]
   http?: HttpPermission[]
   directories?: { path: string, access: DirectoryAccess }[]
   secrets?: { alias: string, path: string }[]
@@ -89,8 +90,9 @@ export function parseSandboxDeclaration(value: unknown): SandboxDeclaration {
   if (input.programs !== undefined) {
     result.programs = list(input.programs, 'programs').map((entry) => {
       const item = object(entry, ['path', 'adapterPath', 'commandName', 'runtimePath'], 'Invalid sandbox program')
+      if (item.adapterPath !== undefined) throw new Error(registryAdaptersOnly)
       if (item.commandName !== undefined && (typeof item.commandName !== 'string' || !/^[\w.-]{1,100}$/.test(item.commandName))) throw new Error('Invalid command name')
-      return { path: path(item.path), ...(item.adapterPath === undefined ? {} : { adapterPath: path(item.adapterPath) }), ...(item.commandName === undefined ? {} : { commandName: item.commandName as string }), ...(item.runtimePath === undefined ? {} : { runtimePath: path(item.runtimePath) }) }
+      return { path: path(item.path), ...(item.commandName === undefined ? {} : { commandName: item.commandName as string }), ...(item.runtimePath === undefined ? {} : { runtimePath: path(item.runtimePath) }) }
     })
   }
   if (input.http !== undefined) result.http = list(input.http, 'HTTP origins').map(parseHttpPermission)

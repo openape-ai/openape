@@ -2,8 +2,8 @@
 import { usePodAccess } from './pod-access'
 import { defineComponent } from 'vue'
 import type { ResourceState, PodResource } from '../contracts/resources'
-import { parseTerminalView } from '../contracts/programs'
-import type { ProgramCommand, TerminalView } from '../contracts/programs'
+import { adapterStanding, parseTerminalView } from '../contracts/programs'
+import type { ProgramCommand, ProgramDefinition, TerminalView } from '../contracts/programs'
 import { t, diagnostic } from './i18n'
 
 export default defineComponent({
@@ -22,6 +22,15 @@ export default defineComponent({
   beforeUnmount() { this.disposed = true; clearTimeout(this.pollTimer) },
   methods: {
     t, diagnostic,
+    /** Why every command of this application needs an exact approval (issue 1473); empty for a tested registry adapter. */
+    adapterNote(application: PodResource): string {
+      const definition = application.configuration as unknown as ProgramDefinition
+      const standing = adapterStanding(definition)
+      if (!standing.exact) return ''
+      if (standing.reason === 'notFromRegistry') return t('Adapter not from the shapes registry · every command needs an exact approval')
+      if (standing.reason === 'versionUntested') return t('{cli} {version} is not tested with its registry adapter · every command needs an exact approval', { cli: definition.cliId, version: definition.cliVersion!.version! })
+      return t('{cli} version not verified by its registry adapter · every command needs an exact approval', { cli: definition.cliId })
+    },
     async act(command: ProgramCommand) {
       this.busy = true; this.openingShell = command.type === 'openShell'; this.error = ''
       try {
@@ -114,7 +123,7 @@ export default defineComponent({
         <button class="application-select" :aria-pressed="application.id === selectedApplication" @click="selectedApplication = application.id">
           <img v-if="application.configuration.icon" class="application-icon" :src="String(application.configuration.icon)" alt="">
           <span v-else class="application-icon fallback-icon" aria-hidden="true">{{ application.configuration.bundlePath ? '▣' : '›_' }}</span>
-          <span>{{ application.name }}</span>
+          <span class="destination-label"><span>{{ application.name }}</span><small v-if="adapterNote(application)" class="adapter-note">{{ adapterNote(application) }}</small></span>
         </button>
         <button class="play-button secondary" :aria-label="t('Open {application}', { application: application.name })" :title="t('Open without arguments')" :disabled="access.remote || busy || !!launch && launch.state !== 'closed'" @click="act({ type: 'launch', podId, applicationId: application.id, epoch: state.epoch })">
           ▶

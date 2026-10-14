@@ -2,7 +2,7 @@ import { parseDetailsCommand } from './details'
 import { parseResourceCommand } from './resources'
 import { parseScriptCommand } from './scripts'
 import { parseRunCommand } from './runs'
-import { parseProgramCommand } from './programs'
+import { parseProgramCommand, registryAdaptersOnly } from './programs'
 import { parseCredentialAlias } from './credentials'
 import type { CodexRequest } from './codex'
 import { parseGrantsCommand } from './grants'
@@ -67,7 +67,7 @@ export function parseAdministration(action: Record<string, unknown>) {
   if (!['add', 'replace', 'network', 'grant', 'importState', 'prepare', 'start', 'poll', 'input', 'close'].includes(parsed.type)) throw new Error('Unsupported program operation')
   if (['add', 'replace', 'importState'].includes(parsed.type)) {
     absolutePath(path)
-    if (adapterPath !== undefined) absolutePath(adapterPath)
+    if (adapterPath !== undefined) throw new Error(registryAdaptersOnly)
     if (runtimePath !== undefined) absolutePath(runtimePath)
     if (commandName !== undefined && (typeof commandName !== 'string' || !/^[\w.-]{1,100}$/.test(commandName))) throw new Error('Invalid command name')
     if (parsed.type === 'importState' && (adapterPath !== undefined || commandName !== undefined || runtimePath !== undefined)) throw new Error('Invalid state import fields')
@@ -75,7 +75,7 @@ export function parseAdministration(action: Record<string, unknown>) {
   else {
     noPaths(action)
   }
-  return { kind: 'program', revision: Number(revision), command: parsed, path: path as string | undefined, adapterPath: adapterPath as string | undefined, commandName: commandName as string | undefined, runtimePath: runtimePath as string | undefined } as const
+  return { kind: 'program', revision: Number(revision), command: parsed, path: path as string | undefined, commandName: commandName as string | undefined, runtimePath: runtimePath as string | undefined } as const
 }
 
 function absolutePath(value: unknown): string {

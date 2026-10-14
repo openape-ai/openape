@@ -961,7 +961,6 @@
   "Choose an application state file up to 4 MB": "Wähle eine Datei mit dem Programmzustand bis 4 MB",
   "Choose an executable CLI": "Ausführbares CLI wählen",
   "Choose an executable CLI up to 128 MB": "Wähle ein ausführbares CLI bis 128 MB",
-  "Choose its apes command descriptor": "Zugehörige apes-Befehlsbeschreibung wählen",
   "Close another application terminal first": "Schließe zuerst ein anderes Programm-Terminal",
   "Close the quotation or escape in the command": "Schließe das Anführungszeichen oder Escape im Befehl",
   "Configure application accounts in the pod Permissions tab": "Richte Programmkonten im Tab Berechtigungen des Pods ein",
@@ -3062,5 +3061,16 @@
   "A summary link is an http or https URL without credentials": "Ein Angabe-Link ist eine http- oder https-URL ohne Zugangsdaten",
   "summary must be an object": "summary muss ein Objekt sein",
   "summary.title is required and must not be blank": "summary.title ist Pflicht und darf nicht leer sein",
-  "summary.text is no longer supported; send title and description": "summary.text wird nicht mehr unterstützt; sende title und description"
+  "summary.text is no longer supported; send title and description": "summary.text wird nicht mehr unterstützt; sende title und description",
+  "Adapter not from the shapes registry · every command needs an exact approval": "Adapter nicht aus der Shapes-Registry · jeder Befehl braucht eine exakte Freigabe",
+  "{cli} {version} is not tested with its registry adapter · every command needs an exact approval": "{cli} {version} ist mit seinem Registry-Adapter nicht getestet · jeder Befehl braucht eine exakte Freigabe",
+  "{cli} version not verified by its registry adapter · every command needs an exact approval": "Version von {cli} vom Registry-Adapter nicht bestätigt · jeder Befehl braucht eine exakte Freigabe",
+  "Pods assigns only shapes-registry adapters; leave out adapterPath and install the registry adapter with apes adapter install <name>": "Pods weist nur Adapter aus der Shapes-Registry zu; lass adapterPath weg und installiere den Registry-Adapter mit apes adapter install <name>",
+  "The registry adapter changed during assignment; assign the application again": "Der Registry-Adapter hat sich während der Zuweisung geändert; weise die Anwendung erneut zu",
+  "{p0} needs an exact approval for every command ({p1}); grant single commands": "{p0} braucht für jeden Befehl eine exakte Freigabe ({p1}); gib einzelne Befehle frei",
+  "{p0} differs from its shapes-registry entry; reinstall OpenApe Pods": "{p0} weicht von seinem Eintrag in der Shapes-Registry ab; installiere OpenApe Pods neu",
+  "The shapes registry has no adapter for {p0}; only registry adapters are accepted": "Die Shapes-Registry hat keinen Adapter für {p0}; nur Registry-Adapter werden akzeptiert",
+  "The registry adapter {p0} is not installed; run apes adapter install {p1}": "Der Registry-Adapter {p0} ist nicht installiert; führe apes adapter install {p1} aus",
+  "The installed adapter {p0} differs from the shapes registry; run apes adapter install {p1} --refresh": "Der installierte Adapter {p0} weicht von der Shapes-Registry ab; führe apes adapter install {p1} --refresh aus",
+  "Failed to fetch registry: {p0}": "Die Shapes-Registry konnte nicht geladen werden: {p0}"
 }
