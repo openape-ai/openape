@@ -1,5 +1,6 @@
 import { join } from 'node:path'
-import { loadAdapter, resolveCommand } from '@openape/apes'
+import { resolveCommand } from '@openape/apes'
+import { loadPodAdapter } from '../grants/registry-copies'
 import type { JevAssignment, JevEvaluation, JevRequest } from '../../contracts/jev'
 import { typesafeOrigin } from '../../contracts/jev'
 import { AgentAuthority } from '../broker/authorization'
@@ -24,7 +25,7 @@ export async function executeJev(assignment: JevAssignment, request: JevRequest,
   const identity = new PodIdentityManager(options.credentials)
   const authority = new AgentAuthority(identity.connection(assignment.authority.identity, `pods:${assignment.authority.identity.podId}`), options.observe, options.ledger, options.tokens, options.presentation)
   const adapterPath = join(options.vendor, 'pod-http-shapes.toml')
-  const adapter = loadAdapter('pod-http', adapterPath)
+  const adapter = loadPodAdapter('pod-http', adapterPath)
   const argv = httpArgv(typesafeOrigin, 'POST')
   const resolved = await resolveCommand(adapter, argv)
   const authorization = { grantId: assignment.authority.grantId, command: { cliId: 'pod-http', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] } }

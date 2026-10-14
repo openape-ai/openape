@@ -106,7 +106,9 @@ export const podId = '00000000-0000-4000-8000-000000000001'
 export const deniedPodId = '00000000-0000-4000-8000-000000000002'
 export const applicationId = '00000000-0000-4000-8000-0000000000a1'
 export const adapterPath = resolve(sources, 'pod-http-shapes.toml')
-export const program = { id: applicationId, podId, revision: 1, kind: 'tool', state: 'ready', name: 'Fixture CLI', configuration: { type: 'program', cliId: 'pod-http', adapterPath, adapterHash: createHash('sha256').update(readFileSync(adapterPath)).digest('hex'), capability: 'tool.app_fixture.invoke' } }
+const adapterHash = createHash('sha256').update(readFileSync(adapterPath)).digest('hex')
+// Assigned as a tested registry adapter, so its commands resolve to structured grants (issue 1473).
+export const program = { id: applicationId, podId, revision: 1, kind: 'tool', state: 'ready', name: 'Fixture CLI', configuration: { type: 'program', cliId: 'pod-http', adapterPath, adapterHash, registry: { id: 'pod-http', digest: `SHA-256:${adapterHash}` }, cliVersion: { version: '1', tested: true }, capability: 'tool.app_fixture.invoke' } }
 export const podSubject = (id: string) => `pod-${id.slice(-4)}@example.test`
 
 const profiles: PodDatabase[] = []

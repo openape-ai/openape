@@ -19,10 +19,30 @@ export interface ProgramDefinition {
   cliId: string
   adapterPath: string
   adapterHash: string
+  /** The shapes-registry entry the adapter file was verified against when it was assigned (issue 1473). */
+  registry?: { id: string, digest: string }
+  /** What the adapter's version command printed for this executable when it was assigned. */
+  cliVersion?: { version: string | null, tested: boolean }
   networkHosts: string[]
   cacheArgument?: '--cache-dir'
   entryFiles: { path: string, hash: string }[]
   environment: Record<string, string>
+}
+/** Pods assigns only shapes-registry adapters (issue 1473); an adapter file path is never accepted. */
+export const registryAdaptersOnly = 'Pods assigns only shapes-registry adapters; leave out adapterPath and install the registry adapter with apes adapter install <name>'
+
+/**
+ * How far an assigned adapter is trusted (issue 1473). A tested registry adapter resolves commands to the grants its
+ * operations describe. An adapter that is not from the registry, or whose CLI version is unknown or untested, only
+ * describes a command: every command then needs a grant for its exact argv. Pods' generated application launcher
+ * has a single exact no-argument operation and stays as it is.
+ */
+export type AdapterStanding = { exact: false } | { exact: true, reason: 'notFromRegistry' | 'versionUnknown' | 'versionUntested' }
+export function adapterStanding(definition: Pick<ProgramDefinition, 'registry' | 'cliVersion' | 'bundlePath'>): AdapterStanding {
+  if (definition.bundlePath) return { exact: false }
+  if (!definition.registry) return { exact: true, reason: 'notFromRegistry' }
+  if (!definition.cliVersion?.version) return { exact: true, reason: 'versionUnknown' }
+  return definition.cliVersion.tested ? { exact: false } : { exact: true, reason: 'versionUntested' }
 }
 /** An application in the Pod sandbox. What it may run is decided by Pod grants, recorded apart from it. */
 export interface ProgramAssignment extends ProgramDefinition {

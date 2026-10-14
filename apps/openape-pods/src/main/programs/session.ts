@@ -4,7 +4,8 @@ import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { setTimeout as delay } from 'node:timers/promises'
-import { loadAdapter, resolveCommand } from '@openape/apes'
+import { exactCommand, loadAdapter, resolveCommand } from '@openape/apes'
+import { adapterStanding } from '../../contracts/programs'
 import type { ProgramAssignment, TerminalView } from '../../contracts/programs'
 import type { SandboxReach } from '../../contracts/sandbox'
 import { launchTerminal } from '../../worker/runtime/terminal'
@@ -24,7 +25,8 @@ export const readActions = ['read', 'list', 'get']
 /**
  * Resolves one application command inside the Pod sandbox: the assigned executable, runtime and adapter are
  * verified and the command must match an adapter operation. It does not decide the grant: the run's authority
- * matches the command to any recorded grant that covers it, and the IdP token must cover it as well.
+ * matches the command to any recorded grant that covers it, and the IdP token must cover it as well. A command of
+ * an adapter that is not a tested registry adapter is bound to its exact argv (issue 1473).
  */
 export async function resolveProgram(assignment: ProgramAssignment, argv: string[], action?: 'move') {
   await verifyExecutable(assignment.executable, assignment.executableHash)
@@ -33,10 +35,12 @@ export async function resolveProgram(assignment: ProgramAssignment, argv: string
   for (const file of assignment.entryFiles) await verifyExecutable(file.path, file.hash)
   const adapter = loadAdapter(assignment.cliId, assignment.adapterPath)
   const command = [assignment.cliId, ...argv]
-  const resolved = await resolveCommand(adapter, command)
+  const structured = await resolveCommand(adapter, command)
+  const exact = adapterStanding(assignment).exact
+  const resolved = exact ? exactCommand(structured) : structured
   if (action && resolved.detail.action !== action) throw new Error('The archive port may only run the granted move operation')
   assertGateOperation(resolved.detail.action, action)
-  return { write: !readActions.includes(resolved.detail.action), authorization: { grantId: '', command: { cliId: assignment.cliId, adapterPath: assignment.adapterPath, adapterDigest: adapter.digest, argv: command, coverage: [resolved.detail] } } }
+  return { write: !readActions.includes(resolved.detail.action), authorization: { grantId: '', command: { cliId: assignment.cliId, adapterPath: assignment.adapterPath, adapterDigest: adapter.digest, argv: command, coverage: [resolved.detail], ...(exact ? { exact: true as const } : {}) } } }
 }
 /** What an adapter operation declares about its options; the fields after required_options come with declared-option adapters. */
 interface DeclaredOptions { command: string[], required_options?: string[], value_options?: string[], flag_options?: string[], global_options?: string[] }

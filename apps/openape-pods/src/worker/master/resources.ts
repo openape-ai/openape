@@ -1,5 +1,7 @@
 import { loadAdapter } from '@openape/apes'
 import type { PodResource } from '../../contracts/resources'
+import { adapterStanding } from '../../contracts/programs'
+import type { ProgramAssignment } from '../../contracts/programs'
 
 export function modelResources(resources: PodResource[], includeCommands = false) {
   return resources.map(({ id, revision, kind, state, name, configuration }) => {
@@ -12,6 +14,7 @@ export function modelResources(resources: PodResource[], includeCommands = false
     if (kind === 'directory') { visible.path = configuration.path; visible.access = configuration.access }
     if (Array.isArray(configuration.networkHosts)) visible.networkHosts = configuration.networkHosts.filter(value => typeof value === 'string')
     if (Array.isArray(configuration.methods)) visible.methods = configuration.methods.filter(value => typeof value === 'string')
+    if (configuration.type === 'program') visible.adapter = programAdapter(configuration as unknown as ProgramAssignment)
     if (includeCommands && state === 'ready' && configuration.type === 'program') {
       const adapter = loadAdapter(String(configuration.cliId), String(configuration.adapterPath))
       if (adapter.fileDigest.replace('SHA-256:', '') !== configuration.adapterHash) throw new Error('Application command reference changed; reassign the application in Permissions')
@@ -20,4 +23,10 @@ export function modelResources(resources: PodResource[], includeCommands = false
     }
     return { id, revision, kind, state, name, configuration: visible }
   })
+}
+
+/** Where an application's adapter comes from and why its commands need exact approvals, if they do (issue 1473). */
+function programAdapter(assignment: ProgramAssignment) {
+  const standing = adapterStanding(assignment)
+  return { registry: assignment.registry?.id ?? null, cliVersion: assignment.cliVersion?.version ?? null, exactApprovals: standing.exact ? standing.reason : null }
 }
