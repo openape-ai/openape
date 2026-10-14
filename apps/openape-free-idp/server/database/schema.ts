@@ -46,6 +46,8 @@ export const shapes = sqliteTable('shapes', {
   digest: text('digest').notNull(),
   // JSON-encoded ShapeCliVersions (tested CLI versions and how to probe them); null for virtual executables
   versions: text('versions', { mode: 'json' }),
+  // JSON-encoded file digests (SHA-256:<hex>) of tested executables; null when the adapter lists none
+  testedDigests: text('tested_digests', { mode: 'json' }),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 }, table => [
