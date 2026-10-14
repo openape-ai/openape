@@ -112,4 +112,12 @@ describe('brokered decision lifecycle', () => {
     connection.status = 'revoked'
     expect((await send('create')).status).toBe(403)
   })
+  it('stores a structured summary and rejects the removed text field', async () => {
+    const request = { requester: agent, command: ['printf', 'fixture'], target_host: 'fixture', audience: 'shapes', grant_type: 'once' }
+    const summary = { title: 'Print the fixture', description: 'Line one\nLine two', origin: 'Fixture Pod' }
+    const created = await send('create', undefined, { request: { ...request, summary } })
+    expect(created.status).toBe(201)
+    expect((await created.json()).request.summary).toEqual(summary)
+    expect((await send('create', undefined, { request: { ...request, summary: { text: 'Print the fixture' } } })).status).toBe(400)
+  })
 })

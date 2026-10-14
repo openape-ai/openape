@@ -198,6 +198,25 @@ describe('Automatisierungen layout', () => {
     await shot('13-mobil-entscheidungen')
   })
 
+  // Issue 1473: an approval shows the title, description and link its Pod's script gave, with the Pod as origin.
+  it('shows the script\'s approval fields in the approval cards without overflow at 1440 and 390 px', async () => {
+    await page.viewport(1440, 1000)
+    applyLanguage('de')
+    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', domain } })
+    await flushPromises(); await frames(2)
+    const approvals = document.querySelector<HTMLElement>('[data-testid="approvals"]')!
+    approvals.scrollIntoView({ block: 'end' })
+    const descriptions = Array.from(approvals.querySelectorAll<HTMLElement>('.approval-description'))
+    expect(descriptions.map(item => item.textContent?.trim())).toEqual(['Newsletter: the sender offers an unsubscribe link', 'Weekly product digest'])
+    for (const item of descriptions) expect(item.getBoundingClientRect().right).toBeLessThanOrEqual(approvals.getBoundingClientRect().right)
+    expect(Array.from(approvals.querySelectorAll('a[rel="noopener noreferrer"]'), link => link.textContent)).toEqual(['shop.example', 'saas.example'])
+    await page.screenshot({ path: screenshotPath('summary-01-freigaben.png'), element: approvals })
+    await page.viewport(390, 844); await frames(2)
+    approvals.scrollIntoView({ block: 'end' })
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390)
+    await page.screenshot({ path: screenshotPath('summary-02-freigaben-mobil.png'), element: approvals })
+  })
+
   it('renders the dark scheme from tokens', async () => {
     await mountShell(1440, 1000, true)
     // Canvas needs resolved colours; the probe turns a light-dark() token into the scheme's rgb value.

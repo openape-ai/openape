@@ -20,6 +20,11 @@ type Act = (option: string, input: string) => Promise<unknown>
 export interface DecisionEntry { decision: InboxDecision, act: Act }
 type Draft = Omit<InboxDecision, 'sourceId' | 'type' | 'digest'>
 
+/** The inbox opens only HTTPS links; a summary link is shown by its host. */
+function inboxLink(value: string | null): InboxDecision['link'] {
+  const url = value ? URL.parse(value) : null
+  return url?.protocol === 'https:' ? { title: url.host, url: url.href } : null
+}
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex')
 const clip = (value: string, maximum: number) => value.length > maximum ? `${value.slice(0, maximum - 1)}…` : value
 function sourceId(type: InboxDecisionType, parts: string[]): string {
@@ -89,11 +94,14 @@ export class InboxDecisions {
     })
   }
 
-  // A requested approval is decided at the IdP and only counted in the inbox (issue 1458); an uncertain one is settled here.
+  /**
+   * A requested approval is decided at the IdP and only counted in the inbox (issue 1458); an uncertain one is settled
+   * here. The card shows the approval's own fields (issue 1473): its title, description and link, the Pod as origin.
+   */
   private approvals(sources: DecisionSources): DecisionEntry[] {
     return sources.domain.approvals.filter(approval => approval.state === 'unknown').map(approval => this.entry('approval', [approval.id], {
-      ...this.pod(sources, approval.podId), title: `${this.t('Uncertain approval')} · ${approval.title}`, body: [approval.object, ...(approval.reason ? [approval.reason] : [])].join('\n'), authority: 'pods',
-      options: [{ key: 'renew', title: this.t('Ask again'), input: 'evidence' }, { key: 'withdraw', title: this.t('Withdraw'), input: 'evidence' }], link: null,
+      ...this.pod(sources, approval.podId), title: approval.title, body: [this.t('Uncertain approval'), ...(approval.description ? [approval.description] : []), approval.object, ...(approval.reason ? [approval.reason] : [])].join('\n'), authority: 'pods',
+      options: [{ key: 'renew', title: this.t('Ask again'), input: 'evidence' }, { key: 'withdraw', title: this.t('Withdraw'), input: 'evidence' }], link: inboxLink(approval.link),
     }, async (option, evidence) => this.worker.domain({ type: 'resolveApproval', id: approval.id, decision: option === 'renew' ? 'renew' : 'withdraw', evidence })))
   }
 

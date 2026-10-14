@@ -55,7 +55,7 @@ export async function handleApproval(input: ApprovalRequest): Promise<unknown> {
   const connection = await input.connections.podConnection(input.scope.podId, manifest.owner, true)
   await check()
   const authority = createGrantAuthority(connection, input.signal, check, approvalAudience, ['once', 'always'])
-  if (body.operation === 'create') return authority.createBatch({ id: manifest.batchId, open: true, title: manifest.title, expiresAt: manifest.expiresAt, reason: `${manifest.title}: approve this item`, permissions: [`pods.approval:${manifest.batchId}`], members })
+  if (body.operation === 'create') return authority.createBatch({ id: manifest.batchId, open: true, title: manifest.title, expiresAt: manifest.expiresAt, permissions: [`pods.approval:${manifest.batchId}`], members })
   const bindings = selected.map(({ grant, member }) => ({ ...member, grantId: grant.id, expiresAt: manifest.expiresAt }))
   if (body.operation === 'status') return authority.statuses(manifest.batchId, bindings)
   for (const binding of bindings) {

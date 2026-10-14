@@ -343,6 +343,24 @@ describe('grant create endpoint', () => {
     await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 })
   })
 
+  it('stores the structured request summary with the grant', async () => {
+    const summary = { title: 'Archive "Newsletter XY"', description: 'From news@xy.example\nReceived today', origin: 'Mail archive', link: 'https://mail.example/1' }
+    readBodyMock.mockResolvedValue({ requester: 'agent@example.com', target_host: 'pods:demo', audience: 'pods-graph-gate', grant_type: 'once', command: ['x'], summary })
+    const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
+    const result = await handler({} as any)
+    expect((await grantStore.findById(result.id))?.request.summary).toEqual(summary)
+  })
+
+  it.each([
+    ['the removed text field', { text: 'Archive one mail' }],
+    ['a bidi override', { title: 'Archive \u202Eexe.txt' }],
+    ['an overlong description', { title: 'x', description: 'x'.repeat(2001) }],
+  ])('rejects a request summary with %s (400)', async (_name, summary) => {
+    readBodyMock.mockResolvedValue({ requester: 'agent@example.com', target_host: 'pods:demo', audience: 'pods-graph-gate', grant_type: 'once', command: ['x'], summary })
+    const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 })
+  })
+
   it('rejects a lasting grant hidden in a request batch (400)', async () => {
     readBodyMock.mockResolvedValue({ requester: 'agent@example.com', target_host: 'pods:demo', audience: 'pods-graph-gate', grant_type: 'always', command: ['x'], batch: { id: 'b-1' } })
     const { default: handler } = await import('../src/runtime/server/api/grants/index.post')

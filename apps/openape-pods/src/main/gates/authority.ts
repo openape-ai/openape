@@ -4,13 +4,17 @@ import { sameBrokeredGrant, verifyAuthzJWT } from '@openape/grants'
 import { AgentAuthority } from '../broker/authorization'
 import type { AgentConnection } from '../broker/authorization'
 import { connectionRequest, readJSON } from '../connections/http'
+import type { GrantSummary } from '../../contracts/grant-summary'
 
-/** What one item grant (once or always) is bound to: one item of a reviewed batch. */
-export interface GrantBinding { grantId?: string, expiresAt: number, command: string[], summary: string }
-/** One item of a batch, identified by a key that is unique within the batch. */
-export interface BatchMember { key: string, command: string[], summary: string }
+/**
+ * What one item grant (once or always) is bound to: one item of a reviewed batch. The summary is not part of it: the
+ * IdP owns the presentation and may migrate stored summaries (issue 1473), while the command binds what is allowed.
+ */
+export interface GrantBinding { grantId?: string, expiresAt: number, command: string[] }
+/** One item of a batch, identified by a key that is unique within the batch; the summary is what the IdP shows about it. */
+export interface BatchMember { key: string, command: string[], summary: GrantSummary }
 /** `open`: announce no size, so later requests with the same batch id, title and expiry join it (grants.md §3.4). */
-export interface BatchRequest { id: string, title: string, expiresAt: number, reason: string, permissions: string[], members: BatchMember[], open?: boolean }
+export interface BatchRequest { id: string, title: string, expiresAt: number, permissions: string[], members: BatchMember[], open?: boolean }
 export interface BatchGrant { key: string, id: string }
 export type MemberState = 'pending' | 'approved' | 'denied' | 'expired'
 /** How the owner may decide an item at the IdP: once is consumed on release, always stays valid while approved; both stay bound to the item's exact command. */
@@ -33,7 +37,7 @@ export function createGrantAuthority(connection: AgentConnection, signal: AbortS
   const timeout = () => AbortSignal.any([signal, AbortSignal.timeout(10000)])
   function verify(grant: OpenApeGrant, binding: GrantBinding): OpenApeGrant {
     const request = grant.request
-    if (grant.id !== binding.grantId || request?.requester !== connection.subject || request.audience !== audience || request.target_host !== connection.targetHost || !grantTypes.includes(request.grant_type as GrantDecision) || request.waits_until !== Math.floor(binding.expiresAt / 1000) || JSON.stringify(request.command) !== JSON.stringify(binding.command) || request.summary?.text !== binding.summary || !sameBrokeredGrant(grant.brokered, connection.brokered)) throw new Error('Approval grant differs from the reviewed item or Pod identity')
+    if (grant.id !== binding.grantId || request?.requester !== connection.subject || request.audience !== audience || request.target_host !== connection.targetHost || !grantTypes.includes(request.grant_type as GrantDecision) || request.waits_until !== Math.floor(binding.expiresAt / 1000) || JSON.stringify(request.command) !== JSON.stringify(binding.command) || !sameBrokeredGrant(grant.brokered, connection.brokered)) throw new Error('Approval grant differs from the reviewed item or Pod identity')
     return grant
   }
   async function get(binding: GrantBinding): Promise<OpenApeGrant> {
@@ -82,7 +86,7 @@ export function createGrantAuthority(connection: AgentConnection, signal: AbortS
       const grants: BatchGrant[] = []
       for (const member of request.members) {
         await check(); signal.throwIfAborted()
-        const reply = await connectionRequest(connection.issuer, '/api/grants', { requester: connection.subject, target_host: connection.targetHost, audience, grant_type: 'once', command: member.command, permissions: request.permissions, waits_until: Math.floor(request.expiresAt / 1000), reason: request.reason, summary: { text: member.summary }, batch }, signal, await connection.accessToken())
+        const reply = await connectionRequest(connection.issuer, '/api/grants', { requester: connection.subject, target_host: connection.targetHost, audience, grant_type: 'once', command: member.command, permissions: request.permissions, waits_until: Math.floor(request.expiresAt / 1000), summary: member.summary, batch }, signal, await connection.accessToken())
         if (typeof reply.id !== 'string' || !grantIdPattern.test(reply.id)) throw new Error('Invalid approval grant response')
         grants.push({ key: member.key, id: reply.id })
       }

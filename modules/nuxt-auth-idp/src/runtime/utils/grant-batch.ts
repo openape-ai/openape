@@ -12,10 +12,10 @@ export interface GrantBatchOperation {
   action: 'approve' | 'deny'
 }
 
-/** The member's own one-line description: first summary line, else its command or permissions. */
+/** The member's own one-line description: its summary title, else its command or permissions. */
 export function grantBatchRowLabel(grant: OpenApeGrant): string {
-  const line = grant.request.summary?.text?.split('\n').map(part => part.trim()).find(Boolean)
-  if (line) return line
+  const title = grant.request.summary?.title?.trim()
+  if (title) return title
   if (grant.request.command?.length) return grant.request.command.join(' ')
   if (grant.request.permissions?.length) return grant.request.permissions.join(', ')
   return grant.id
