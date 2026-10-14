@@ -19,6 +19,11 @@ export interface GrantStore {
   findByDelegate?: (delegate: string) => Promise<OpenApeGrant[]>
   findByDelegator?: (delegator: string) => Promise<OpenApeGrant[]>
   listGrants: (params?: GrantListParams) => Promise<PaginatedResponse<OpenApeGrant>>
+  /**
+   * Marks an approved grant `used` in one step and returns true, or returns
+   * false when it is no longer approved, so a single-use grant is spent once.
+   */
+  claimOnce?: (id: string, usedAt: number) => Promise<boolean>
 }
 
 export class InMemoryGrantStore implements GrantStore {
@@ -43,6 +48,13 @@ export class InMemoryGrantStore implements GrantStore {
       throw new Error(`Grant not found: ${id}`)
     }
     this.grants.set(id, { ...grant, status, ...extra })
+  }
+
+  async claimOnce(id: string, usedAt: number): Promise<boolean> {
+    const grant = this.grants.get(id)
+    if (grant?.status !== 'approved') return false
+    this.grants.set(id, { ...grant, status: 'used', used_at: usedAt })
+    return true
   }
 
   async findPending(): Promise<OpenApeGrant[]> {

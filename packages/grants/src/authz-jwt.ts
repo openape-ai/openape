@@ -130,6 +130,20 @@ export async function issueCommandJWT(
   return { token: await signJWT(claims as unknown as JWTPayload, privateKey, { kid }), expiresAt: exp }
 }
 
+/**
+ * Whether verified `claims` are the command token that spent this single-use
+ * grant: the IdP marks a single-use grant used when it issues the command
+ * token, so consuming with that token afterwards confirms the consumption.
+ */
+export function spentByCommandToken(grant: OpenApeGrant, claims: OpenApeAuthZClaims): boolean {
+  return grant.status === 'used'
+    && (grant.request.grant_type ?? 'once') === 'once'
+    && claims.grant_id === grant.id
+    && claims.sub === grant.request.requester
+    && typeof claims.argv_hash === 'string'
+    && typeof claims.program_sha256 === 'string'
+}
+
 export interface VerifyAuthzOptions {
   expectedIss?: string
   expectedAud?: string

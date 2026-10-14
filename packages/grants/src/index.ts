@@ -19,6 +19,7 @@ export {
   type CommandTokenCall,
   issueAuthzJWT,
   issueCommandJWT,
+  spentByCommandToken,
   verifyAuthzJWT,
   type VerifyAuthzOptions,
 } from './authz-jwt.js'
