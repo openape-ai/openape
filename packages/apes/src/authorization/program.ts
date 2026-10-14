@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import { accessSync, constants, createReadStream, statSync } from 'node:fs'
+import { accessSync, constants, createReadStream, realpathSync, statSync } from 'node:fs'
 import { basename, delimiter, join, resolve } from 'node:path'
 import type { OpenApeAuthZClaims, OpenApeGrantSummary } from '@openape/core'
 import { computeArgvHash, verifyAuthzJWT } from '@openape/grants'
@@ -14,9 +14,11 @@ import { createWaitProgressReporter } from '../wait-progress.js'
  */
 
 export interface LocatedProgram {
-  /** The file that runs: the PATH lookup result or the given path. */
+  /** The file that runs: the real path (symlinks resolved) of the PATH lookup result or the given path. */
   path: string
-  /** Basename of `path`, the program name the IdP selects a shape by. */
+  /** The path as found (PATH lookup or given), passed as argv[0] so programs that look at their name still work. */
+  argv0: string
+  /** Basename of `argv0`, the program name the IdP selects a shape by. */
   name: string
   /** Lowercase hex SHA-256 of the file. */
   sha256: string
@@ -98,9 +100,11 @@ export async function hashFile(path: string): Promise<string> {
 
 /** Locates and hashes the program; null when no executable file exists for it. */
 export async function locateProgram(executable: string): Promise<LocatedProgram | null> {
-  const path = findExecutable(executable)
-  if (!path) return null
-  return { path, name: basename(path), sha256: await hashFile(path) }
+  const found = findExecutable(executable)
+  if (!found) return null
+  // The resolved file is hashed and later executed, so retargeting a symlink cannot swap the program in between.
+  const path = realpathSync(found)
+  return { path, argv0: found, name: basename(found), sha256: await hashFile(path) }
 }
 
 /** The argv the IdP resolves and hashes: the program name followed by the arguments. */

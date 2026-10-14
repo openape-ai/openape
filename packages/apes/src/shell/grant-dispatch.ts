@@ -9,10 +9,10 @@ import {
   waitsUntil,
 } from '../shapes/index.js'
 import { authorizeProgramCall, locateProgram } from '../authorization/program.js'
-import type { GrantType } from '../authorization/program.js'
+import type { GrantType, ProgramCall } from '../authorization/program.js'
 import { createWaitProgressReporter } from '../wait-progress.js'
 import { checkSudoRejection, isApesSelfDispatch } from './apes-self-dispatch.js'
-import { programCommandLine, programLine } from './program-line.js'
+import { programLine } from './program-line.js'
 
 /**
  * Result of attempting to obtain a grant for a shell line. On success the
@@ -25,8 +25,8 @@ import { programCommandLine, programLine } from './program-line.js'
  * `requestGrantForShellLine` for the rationale.
  */
 export type GrantLineResult =
-  /** `command` is what bash must run instead of the typed line. */
-  | { kind: 'approved', grantId: string, mode: 'program', command: string }
+  /** ape-shell runs `call` itself instead of handing the typed line to bash. */
+  | { kind: 'approved', grantId: string, mode: 'program', call: ProgramCall }
   | { kind: 'approved', grantId: string, mode: 'session' | 'self' }
   | { kind: 'denied', reason: string }
 
@@ -106,15 +106,15 @@ export async function requestGrantForShellLine(
 
   // --- 1. Program path ---
   const call = programLine(line)
-  // A relative path would be resolved against this process, not the bash
-  // session's working directory, so the hashed file could differ from the
-  // one bash would find.
+  // A relative path would be resolved against this process, not the
+  // session's working directory.
   if (call?.executable.includes('/') && !call.executable.startsWith('/'))
     return { kind: 'denied', reason: `Use an absolute path or a program on PATH instead of ${call.executable}` }
   const program = call ? await locateProgram(call.executable) : null
   if (call && program) {
+    const programCall = { program, argv: call.argv }
     try {
-      const authorization = await authorizeProgramCall({ program, argv: call.argv }, {
+      const authorization = await authorizeProgramCall(programCall, {
         idp,
         subject: auth.email,
         targetHost: options.targetHost,
@@ -133,7 +133,7 @@ export async function requestGrantForShellLine(
       })
       if (authorization.kind !== 'authorized')
         return { kind: 'denied', reason: `Grant ${authorization.grantId} is pending` }
-      return { kind: 'approved', grantId: authorization.grantId, mode: 'program', command: programCommandLine(program.path, call.argv) }
+      return { kind: 'approved', grantId: authorization.grantId, mode: 'program', call: programCall }
     }
     catch (err) {
       return { kind: 'denied', reason: err instanceof Error ? err.message : String(err) }

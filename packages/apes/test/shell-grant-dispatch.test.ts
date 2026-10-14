@@ -266,8 +266,8 @@ describe('requestGrantForShellLine', () => {
       const { requestGrantForShellLine } = await import('../src/shell/grant-dispatch.js')
       const result = await requestGrantForShellLine('ls -la', { targetHost: 'host.test' })
 
-      // bash runs the authorized file and argv, never the typed line
-      expect(result).toEqual({ kind: 'approved', grantId: 'program-grant', mode: 'program', command: '\\builtin command -- \'/bin/ls\' \'-la\'' })
+      // ape-shell runs the authorized file and argv itself, never the typed line
+      expect(result).toEqual({ kind: 'approved', grantId: 'program-grant', mode: 'program', call: { program: lsProgram, argv: ['-la'] } })
       expect(locateProgram).toHaveBeenCalledWith('ls')
       expect(authorizeProgramCall).toHaveBeenCalledWith(
         { program: lsProgram, argv: ['-la'] },
