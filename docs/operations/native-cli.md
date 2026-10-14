@@ -68,3 +68,12 @@ A missing permission is reported as unavailable, not as a healthy mirror.
 Suggested commands are printed but never executed automatically. Follow
 [local development](local-development.md) for real login fixtures and isolated
 app data; the doctor does not start services or reset databases.
+
+## Git authentication inside Pods
+
+The `apps/openape-pods/scripts/git-credential-apes` helper reads `APES_AUTH_FILE` when set. Pods supplies
+this managed, refreshed identity file to scheduled program calls and Pod terminals.
+An unreadable or invalid explicit file fails without using the owner's identity.
+Outside Pods, the helper uses `$HOME/.config/apes/auth.json` from `apes login`.
+Install it with `install -m 755 apps/openape-pods/scripts/git-credential-apes ~/.local/bin/git-credential-apes`
+when the host Git configuration uses the `apes` credential helper.

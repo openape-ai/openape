@@ -1,5 +1,13 @@
 # Active work
 
+## Scheduled Pod identity — issue 1474
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1474. Branch `bugfix/issue-1474-scheduled-pod-identity`, base `013faf3e`.
+- Scheduled program calls receive the same refreshed Pod identity file as Pod terminals through `APES_AUTH_FILE`; the broker permits reading that file, redacts all issued tokens and removes it on completion or failure. The owner's protected apes login remains closed.
+- `apps/openape-pods/scripts/git-credential-apes` honors the explicit identity file and refuses an unreadable file without switching to the owner. The host helper is installed from this source.
+- Validation: full lint/typecheck, Pods build, focused program/approval tests and a native program invocation. Permanent tests protect credential routing, redaction, renewal and cleanup; full Pods results and signed local rollout will be recorded on the PR.
+- The four-project audit Pod is paused until a real canonical Git audit succeeds; target schedule is daily 08:00 Europe/Vienna. Deployment and activation receipts belong on the issue/PR and in Test Runs.
+
 ## Generic grant cards and self-improving Shapes — issue 1473
 
 > **⚠️ IdP deploy gate (issue 1473, since October 14):** main contains the summary migration (PR 405). Do NOT deploy `free-idp` or `pods-idp` from main until the coordinated release with the new signed Pods desktop: installed desktops still send `summary.text`, which the new IdP refuses. The release owner is the issue 1473 session.
