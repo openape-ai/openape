@@ -254,6 +254,17 @@ it('revokes a direct Pod grant as the requesting Pod without an owner session', 
   expect(idp.state.decisions.filter(decision => decision.action === 'revoke')).toEqual([{ action: 'revoke', id: 'grant-1', bearer: 'SYNTHETIC_POD_AGENT', body: {} }])
 })
 
+it('creates a continuing delegation only as the signed-in owner and reports the IdP\'s refusal (issue 1473)', async () => {
+  const f = await workerFixture()
+  const delegate = (audience = issuer) => ({ action: 'grants', command: { type: 'delegate', delegate: 'upgrader@example.test', audience, scopes: ['grants:read', 'grants:request'] } })
+  await expect(mcp(f, delegate(), null)).rejects.toThrow('active owner session')
+  expect(idp.state.delegations).toEqual([])
+  const created = await mcp(f, delegate(), session())
+  expect(created).toEqual({ delegation: 'delegation-1', issuer, delegate: 'upgrader@example.test', audience: issuer, scopes: ['grants:read', 'grants:request'] })
+  expect(idp.state.delegations).toEqual([{ delegate: 'upgrader@example.test', audience: issuer, scopes: ['grants:read', 'grants:request'], grant_type: 'always' }])
+  await expect(mcp(f, delegate('https://sp.example.test'), session())).rejects.toThrow('refused the delegation (400): Grants scopes require the IdP issuer')
+})
+
 it('accepts only declared options for approved commands, including declared global options (issue 1468)', () => {
   const push = { command: ['push'], required_options: ['force-with-lease'], value_options: ['repo'], flag_options: ['atomic'], global_options: ['C=repository'] }
   expect(() => assertDeclaredOptions(push, ['-C', '/repo', 'push', '--force-with-lease=x:1', '--repo', 'origin', '--atomic', 'origin', 'main'])).not.toThrow()

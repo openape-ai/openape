@@ -47,7 +47,7 @@ export const brokered = { connection_id: '00000000-0000-4000-8000-0000000000b1',
 export function identityProvider(options: { brokered?: typeof brokered } = {}) {
   const keys = generateKeyPairSync('ed25519')
   const grants = new Map<string, StubGrant>()
-  const state = { reuse: false, approvals: [] as string[], decisions: [] as Decision[], tokens: [] as string[], creates: [] as Record<string, unknown>[], revokedTokens: [] as string[] }
+  const state = { reuse: false, approvals: [] as string[], decisions: [] as Decision[], tokens: [] as string[], creates: [] as Record<string, unknown>[], revokedTokens: [] as string[], delegations: [] as Record<string, unknown>[] }
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
   const fetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = new URL(String(input))
@@ -55,6 +55,14 @@ export function identityProvider(options: { brokered?: typeof brokered } = {}) {
     const bearer = String(new Headers(init?.headers).get('authorization') ?? '').replace(/^Bearer /, '')
     if (url.pathname === '/revoke') { state.revokedTokens.push(JSON.parse(String(init?.body)).token as string); return json({ status: 'ok' }) }
     if (url.pathname === '/.well-known/jwks.json') return json({ keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'key', alg: 'EdDSA', use: 'sig' }] })
+    if (url.pathname === '/api/delegations' && init?.method === 'POST') {
+      // Like the IdP: only the human owner creates delegations, and grants scopes only for the IdP itself.
+      const request = JSON.parse(String(init.body)) as Record<string, unknown>
+      if (bearer !== ownerToken) return json({ title: 'Only humans can create delegations' }, 403)
+      if (request.audience !== issuer) return json({ title: 'Grants scopes require the IdP issuer as the delegation audience' }, 400)
+      state.delegations.push(request)
+      return json({ id: `delegation-${state.delegations.length}`, type: 'delegation', status: 'approved', request: { ...request, delegator: owner } }, 201)
+    }
     if (url.pathname.startsWith('/api/pods/agents/')) return json({ email: decodeURIComponent(url.pathname.split('/')[4]!), owner, active: true, keyIds: ['key'], grantId: url.searchParams.get('grant'), grantActive: true })
     if (url.pathname === '/api/grants' && init?.method === 'POST') {
       const request = JSON.parse(String(init.body)) as Record<string, unknown>

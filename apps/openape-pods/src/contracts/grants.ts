@@ -42,6 +42,9 @@ export type GrantsCommand
     | { type: 'approve', podId: string, grantId: string, grantType?: Exclude<GrantType, 'timed'> }
     | { type: 'deny', podId: string, grantId: string }
     | { type: 'revoke', podId: string, grantId: string }
+    | DelegateCommand
+/** A continuing DDISA delegation of the signed-in owner to `delegate` for `audience`, limited to `scopes`; the IdP checks all three. */
+export interface DelegateCommand { type: 'delegate', delegate: string, audience: string, scopes: string[] }
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/
 const grantId = /^[\w-]{1,128}$/
@@ -87,10 +90,15 @@ export function parseGrantDeclaration(value: unknown): GrantDeclaration {
 
 export function parseGrantsCommand(value: unknown): GrantsCommand {
   const command = value as Record<string, unknown>
-  const keys: Record<GrantsCommand['type'], string[]> = { list: ['podId'], request: ['target', 'grants', 'approve'], approve: ['podId', 'grantId', 'grantType'], deny: ['podId', 'grantId'], revoke: ['podId', 'grantId'] }
+  const keys: Record<GrantsCommand['type'], string[]> = { list: ['podId'], request: ['target', 'grants', 'approve'], approve: ['podId', 'grantId', 'grantType'], deny: ['podId', 'grantId'], revoke: ['podId', 'grantId'], delegate: ['delegate', 'audience', 'scopes'] }
   if (!command || typeof command !== 'object' || Array.isArray(command) || typeof command.type !== 'string' || !Object.hasOwn(keys, command.type)) throw new Error('Unsupported grants command')
   const type = command.type as GrantsCommand['type']
   object(command, ['type', ...keys[type]], 'Invalid grants command fields')
+  if (type === 'delegate') {
+    if (typeof command.delegate !== 'string' || command.delegate.length > 320 || !/^[^\s@]+@[^\s@]+$/.test(command.delegate)) throw new Error('A delegation names the delegate agent email')
+    if (!Array.isArray(command.scopes) || !command.scopes.length || command.scopes.length > 16 || command.scopes.some(scope => typeof scope !== 'string' || !/^[\w:.-]{1,64}$/.test(scope)) || new Set(command.scopes).size !== command.scopes.length) throw new Error('A delegation names 1 to 16 distinct scopes')
+    return { type, delegate: command.delegate, audience: parseHttpPermission({ origin: command.audience, methods: ['GET'] }).origin, scopes: [...command.scopes] as string[] }
+  }
   if (type === 'list') {
     if (command.podId !== undefined && (typeof command.podId !== 'string' || !uuid.test(command.podId))) throw new Error('Invalid grants filter')
     return { type, ...(command.podId ? { podId: command.podId as string } : {}) }
