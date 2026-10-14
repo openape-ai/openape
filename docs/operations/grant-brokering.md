@@ -59,6 +59,14 @@ deployment is stopped; existing services with a previous image are rolled back.
 Keep the retained owner DB backup for explicit recovery; ordinary image rollback
 does not replace the live DB or discard grants created after the snapshot.
 
+### Program authorization (`authorize` operation)
+
+`POST /api/grants/authorize` (issue 1473, documented in the nuxt-auth-idp reference) also works for brokered identities. The broker IdP authenticates the agent, checks its binding, validates the body and applies the per-subject authorize budget. It then signs a broker request with `operation: "authorize"`, `sub`, `key_id` and `request` (the unchanged authorize body) to the decision IdP's `openape_brokered_grants_endpoint`.
+
+On the decision IdP, the request goes through the same replay, connection and owner checks as `create`. The decision IdP resolves the call with its own shapes. Only approved grants of the same broker binding cover it; standing grants and pre-approval hooks never decide for brokered identities. A new request is stored with the binding and routed to the owner like `create`. Issued command tokens are audited like `token`.
+
+The decision IdP answers 200 (`approved`), 202 (`pending`) or 403 (`denied`/`revoked`) with the same bodies as the direct endpoint. The broker relays the status and body unchanged. Its transport passes a 403 body through only when it carries such an owner refusal. Each call is one broker assertion, so `OPENAPE_RATE_LIMIT_MAX_AGENT` per connection (below) bounds all program calls of one owner's Pods; requesters reuse a command token until it expires.
+
 ### Machine request capacity
 
 `OPENAPE_RATE_LIMIT_MAX_AGENT` sets both the HTTP machine bucket and the accepted broker-request bound per connection. The default remains 120; invalid or non-positive values retain that default. Broker assertions live for at most 60 seconds, and the durable replay records remain until expiry. Increasing capacity does not skip signature, ownership, grant-status or replay verification.
