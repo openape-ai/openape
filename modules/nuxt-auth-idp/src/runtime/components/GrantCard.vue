@@ -7,6 +7,7 @@ import { formatCliResourceChain, getCliAuthorizationDetails } from '../utils/cli
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
 import { grantBatchPath } from '../utils/grant-batch'
 import GrantClaims from './GrantClaims.vue'
+import GrantRequestedMarker from './GrantRequestedMarker.vue'
 
 const props = defineProps<{ grant: GrantWithCard, german: boolean }>()
 defineEmits<{ language: [german: boolean] }>()
@@ -23,10 +24,16 @@ const cliDetails = computed(() => getCliAuthorizationDetails(request.value.autho
 const exactCommand = computed(() => line.value.kind === 'registry' && cliDetails.value.some(detail => detail.constraints?.exact_command) ? command.value : null)
 const validity = computed(() => grantValidity(props.grant, language.value))
 const batchPath = computed(() => request.value.batch ? grantBatchPath(request.value.requester, request.value.batch.id) : null)
+const showsRequested = computed(() => {
+  const card = registry.value
+  if (!card) return false
+  return [card.title, card.statement, card.allows, card.does_not_allow, card.details_note].some(item => item?.requested)
+    || [...card.facts, ...card.details].some(field => field.provenance === 'requested')
+})
 
 const text = computed(() => props.german
-  ? { language: 'English', exactCommand: 'Genauer Befehl', permission: 'Angefragte Berechtigung', requestedBy: 'Angefragt von', owner: 'Owner', unregistered: 'Nicht bei diesem IdP registriert', submittedBy: 'Eingereicht über Delegation von', validity: 'Gültigkeit', expires: 'Gültig bis', runAs: 'Ausführen als', batch: 'Teil einer Sammelanfrage', reviewBatch: 'Gemeinsam prüfen', show: (label: string) => `${label} anzeigen`, more: 'Weitere Angaben anzeigen', technical: 'Technische Details', target: 'Ziel', audience: 'Audience', permissions: 'Berechtigungen', hash: 'Befehls-Hash', adapter: 'Adapter' }
-  : { language: 'Deutsch', exactCommand: 'Exact command', permission: 'Requested permission', requestedBy: 'Requested by', owner: 'Owner', unregistered: 'Not registered at this IdP', submittedBy: 'Submitted via delegation by', validity: 'Validity', expires: 'Valid until', runAs: 'Run as', batch: 'Part of a batch request', reviewBatch: 'Review together', show: (label: string) => `Show ${label.charAt(0).toLowerCase()}${label.slice(1)}`, more: 'Show more details', technical: 'Technical request details', target: 'Target', audience: 'Audience', permissions: 'Permissions', hash: 'Command hash', adapter: 'Adapter' })
+  ? { language: 'English', exactCommand: 'Genauer Befehl', permission: 'Angefragte Berechtigung', requestedBy: 'Angefragt von', owner: 'Owner', unregistered: 'Nicht bei diesem IdP registriert', submittedBy: 'Eingereicht über Delegation von', validity: 'Gültigkeit', expires: 'Gültig bis', runAs: 'Ausführen als', batch: 'Teil einer Sammelanfrage', reviewBatch: 'Gemeinsam prüfen', show: (label: string) => `${label} anzeigen`, more: 'Weitere Angaben anzeigen', technical: 'Technische Details', target: 'Ziel', audience: 'Audience', permissions: 'Berechtigungen', hash: 'Befehls-Hash', adapter: 'Adapter', requested: 'Mit „laut Anfrage“ markierte Werte gibt die anfragende Anwendung an; diese Freigabe bindet sie nicht.' }
+  : { language: 'Deutsch', exactCommand: 'Exact command', permission: 'Requested permission', requestedBy: 'Requested by', owner: 'Owner', unregistered: 'Not registered at this IdP', submittedBy: 'Submitted via delegation by', validity: 'Validity', expires: 'Valid until', runAs: 'Run as', batch: 'Part of a batch request', reviewBatch: 'Review together', show: (label: string) => `Show ${label.charAt(0).toLowerCase()}${label.slice(1)}`, more: 'Show more details', technical: 'Technical request details', target: 'Target', audience: 'Audience', permissions: 'Permissions', hash: 'Command hash', adapter: 'Adapter', requested: 'Values marked "as requested" are stated by the requesting application; this approval does not bind them.' })
 
 const detailsSummary = computed(() => {
   const details = registry.value?.details ?? []
@@ -46,8 +53,8 @@ function formatTime(seconds: number): string {
   <section class="rounded-lg border border-primary/30 bg-primary/5 p-5 space-y-4" data-grant-card>
     <div class="flex items-start justify-between gap-3">
       <div class="min-w-0 flex-1">
-        <h2 v-if="line.kind === 'registry'" class="text-xl font-semibold break-words" data-binding-line="registry">
-          {{ line.text }}
+        <h2 v-if="line.kind === 'registry'" class="text-xl font-semibold break-words">
+          <span data-binding-line="registry">{{ line.text }}</span><GrantRequestedMarker v-if="line.requested" :german="german" />
         </h2>
         <template v-else>
           <p class="text-xs text-muted mb-1 flex items-center gap-2">
@@ -68,18 +75,18 @@ function formatTime(seconds: number): string {
 
     <template v-if="registry">
       <p v-if="registry.statement" class="font-medium">
-        {{ localized(registry.statement) }}
+        {{ localized(registry.statement) }}<GrantRequestedMarker v-if="registry.statement.requested" :german="german" />
       </p>
       <p v-if="registry.allows">
-        {{ localized(registry.allows) }}
+        {{ localized(registry.allows) }}<GrantRequestedMarker v-if="registry.allows.requested" :german="german" />
       </p>
       <p v-if="registry.does_not_allow" class="text-sm text-muted">
-        {{ localized(registry.does_not_allow) }}
+        {{ localized(registry.does_not_allow) }}<GrantRequestedMarker v-if="registry.does_not_allow.requested" :german="german" />
       </p>
       <dl v-if="registry.facts.length" class="space-y-2 text-sm" data-registry-facts>
-        <div v-for="fact in registry.facts" :key="fact.label.en">
+        <div v-for="fact in registry.facts" :key="fact.label.en" :data-provenance="fact.provenance">
           <dt class="text-muted">
-            {{ localized(fact.label) }}
+            {{ localized(fact.label) }}<GrantRequestedMarker v-if="fact.provenance === 'requested'" :german="german" />
           </dt>
           <dd v-if="fact.entries" class="font-mono text-xs break-all">
             <span v-for="[key, value] in fact.entries" :key="key" class="block"><span class="font-semibold">{{ key }}</span> {{ value }}</span>
@@ -97,12 +104,12 @@ function formatTime(seconds: number): string {
       </div>
       <details v-if="registry.details.length || registry.details_note">
         <summary class="cursor-pointer text-sm">
-          {{ detailsSummary }}
+          {{ detailsSummary }}<GrantRequestedMarker v-if="registry.details.some(detail => detail.provenance === 'requested')" :german="german" />
         </summary>
         <dl class="mt-3 space-y-2 text-xs">
-          <div v-for="detail in registry.details" :key="detail.label.en">
+          <div v-for="detail in registry.details" :key="detail.label.en" :data-provenance="detail.provenance">
             <dt v-if="registry.details.length > 1 || !detail.entries" class="text-muted">
-              {{ localized(detail.label) }}
+              {{ localized(detail.label) }}<GrantRequestedMarker v-if="detail.provenance === 'requested'" :german="german" />
             </dt>
             <template v-if="detail.entries">
               <div v-for="[key, value] in detail.entries" :key="key">
@@ -123,6 +130,9 @@ function formatTime(seconds: number): string {
           {{ localized(registry.details_note) }}
         </p>
       </details>
+      <p v-if="showsRequested" class="text-xs text-muted" data-requested-note>
+        {{ text.requested }}
+      </p>
     </template>
 
     <dl class="space-y-2 text-sm border-t border-default pt-3" data-idp-facts>

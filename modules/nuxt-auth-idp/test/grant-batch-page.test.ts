@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import GrantApprovalPage from '../src/runtime/pages/grant-approval.vue'
 import GrantsPage from '../src/runtime/pages/grants.vue'
+import cardFixtures from './fixtures/grant-cards.json'
 import { __resetNuxtImportsMocks, __setFetchUser, __setRouteQuery, __setUser } from './mocks/nuxt-imports'
 
 const stubs = {
@@ -94,6 +95,14 @@ describe('grant batch approval', () => {
     const same = (id: string, subject: string) => member(id, 0, { request: { ...member(id, 0).request, summary: { title: subject } } })
     const { wrapper } = await mountBatch([same('g-c', 'A – first by title'), same('g-a', 'C – last by title'), same('g-b', 'B')])
     expect(wrapper.findAll('[data-batch-row]').map(row => row.attributes('data-batch-row'))).toEqual(['g-a', 'g-b', 'g-c'])
+  })
+
+  it('marks a registry row line that contains values the approval does not bind', async () => {
+    const pod = { ...cardFixtures.podRun, id: 'g-1', request: { ...cardFixtures.podRun.request, requester: 'pod-agent@example.com', batch: { id: 'b-1', size: 1 } } }
+    const { wrapper } = await mountBatch([pod])
+    const row = wrapper.find('[data-batch-row="g-1"]')
+    expect(row.find('[data-binding-line="registry"]').text()).toBe('Mail digest')
+    expect(row.find('[data-requested-marker]').text()).toBe('as requested')
   })
 
   it('shows what each approval binds as the row line and the requester title only as its labeled claim', async () => {

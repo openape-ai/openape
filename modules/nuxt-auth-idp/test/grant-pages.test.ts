@@ -751,6 +751,10 @@ describe('grant approval pages', () => {
       const { wrapper, calls } = await mountCard(cardFixtures.podRun)
 
       expect(wrapper.find('[data-binding-line="registry"]').text()).toBe('Mail digest')
+      // Name, script, workspace and environment are the requester's; only the Pod id is bound.
+      expect(wrapper.find('h2 [data-requested-marker]').text()).toBe('as requested')
+      expect(wrapper.findAll('[data-registry-facts] [data-provenance="requested"]')).toHaveLength(2)
+      expect(wrapper.find('[data-requested-note]').text()).toContain('this approval does not bind them')
       expect(wrapper.text()).toContain('Run the stored Pod script')
       expect(wrapper.text()).toContain('separately assigned permissions')
       expect(wrapper.text()).toContain('/Users/owner/Pods/mail-digest/workspace')
@@ -763,6 +767,7 @@ describe('grant approval pages', () => {
       expect(wrapper.text()).toContain('Gespeichertes Pod-Skript ausführen')
       expect(wrapper.text()).toContain('Arbeitsverzeichnis')
       expect(wrapper.text()).toContain('Umgebungsvariablen anzeigen')
+      expect(wrapper.find('h2 [data-requested-marker]').text()).toBe('laut Anfrage')
       expect(wrapper.find('[data-requester-claims]').text()).toContain('Angabe des Antragstellers')
 
       await wrapper.findAll('button').find(button => button.text() === 'Immer erlauben')!.trigger('click')
@@ -776,6 +781,7 @@ describe('grant approval pages', () => {
       const { wrapper } = await mountCard(cardFixtures.gitPush)
 
       expect(wrapper.find('[data-binding-line]').text()).toBe('Push feature/rebase to origin')
+      expect(wrapper.find('[data-requested-marker]').exists()).toBe(false)
       expect(wrapper.find('[data-requester-claims]').text()).toContain('Read-only status check')
       expect(wrapper.find('h2').text()).not.toContain('Read-only')
       expect(wrapper.text()).toContain('Covers only this exact command')

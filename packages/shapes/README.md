@@ -120,7 +120,7 @@ binding = "repo"
 format = "code"
 ```
 
-The three version fields are set together; `readCliVersion()` from `@openape/grants` returns the first capture group of `version_pattern`. A presentation needs a `title` and may add `statement`, `consequence`, `facts`, `details` (`format` `text`, `code` or `map`) and `details_note`; every text has `de` and `en`. Texts may only reference bindings that every match binds (positionals and required options); facts and details may name optional bindings. Presentation never changes the derived grant detail, but it is part of the adapter file and therefore of its digest. Array strings keep the original reading: each element is split at commas, as stored permissions were derived that way.
+The three version fields are set together; `readCliVersion()` from `@openape/grants` returns the first capture group of `version_pattern`. A presentation needs a `title` and may add `statement`, `consequence`, `facts`, `details` (`format` `text`, `code` or `map`) `details_note` and `requires.target_host` (a template the request's `target_host` must equal for the IdP to use this presentation); every text has `de` and `en`. Texts and `requires` may only reference bindings that every match binds (positionals and required options); facts and details may name optional bindings. Presentation never changes the derived grant detail and is not part of the semantic digest grants bind, only of the adapter file digest. Array strings keep the original reading: each element is split at commas, as stored permissions were derived that way.
 
 ## Resolve capability requests
 

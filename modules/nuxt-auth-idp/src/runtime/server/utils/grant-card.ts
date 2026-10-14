@@ -32,7 +32,8 @@ function sameArgv(a: string[], b: string[]): boolean {
  * resolved with exactly that adapter file (digest), its argv fits its hash
  * and command, and the argv matches the same operation again with the same
  * permission. The card's values are the bindings derived here from the
- * argv, not the requester's `context_bindings`.
+ * argv, not the requester's `context_bindings`; values the permission does
+ * not bind are marked as requested.
  */
 export async function registryCard(request: OpenApeGrantRequest, getShape: GrantCardSources['getShape']): Promise<RegistryCard | null> {
   const details = getCliAuthorizationDetails(request.authorization_details)
@@ -48,7 +49,25 @@ export async function registryCard(request: OpenApeGrantRequest, getShape: Grant
   const presentation = match?.operation.presentation
   if (!match || !presentation || match.operation.id !== detail.operation_id) return null
   if (buildCliAuthDetail(shape.cli_id, match.operation, match.bindings).permission !== detail.permission) return null
-  return renderRegistryCard(shape.cli_id, match.operation.id, presentation, match.bindings)
+  const exact = match.operation.exact_command === true && detail.constraints?.exact_command === true && !!context.argv_hash
+  return renderRegistryCard({
+    cliId: shape.cli_id,
+    operationId: match.operation.id,
+    presentation,
+    bindings: match.bindings,
+    bound: boundBindings(match.operation.resource_chain, match.bindings, exact),
+    targetHost: request.target_host,
+  })
+}
+
+/**
+ * Bindings the approval holds to their value: those that become selectors of
+ * the permission's resource chain, and every binding of an exact command,
+ * whose whole argv the grant binds by hash.
+ */
+export function boundBindings(resourceChain: string[], bindings: Record<string, string>, exactCommand: boolean): Set<string> {
+  if (exactCommand) return new Set(Object.keys(bindings))
+  return new Set(resourceChain.flatMap(entry => Array.from(entry.matchAll(/\{([\w-]+)\}/g), ([, name]) => name!)))
 }
 
 function defaultSources(): GrantCardSources {
