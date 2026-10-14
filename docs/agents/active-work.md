@@ -1,5 +1,12 @@
 # Active work
 
+## Intake category version recovery — issue 1472
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1472. Branch `bugfix/issue-1472-category-version`, worktree `openape-monorepo.worktrees/issue-1472`, base `3b31e7510fc713952f29b936c925a0524e772afb`.
+- Mail Sync reads the current provider message before category work, preserves owner overrides and uses its current version for conditional updates. Metadata-only changes no longer cause repeated stale-version failures.
+- Live shutdown recovery: provider reads proved the interrupted action was not applied; its effect and work holds were reconciled through MCP. Recovery run `58be9bf8-bd54-4998-b4cd-ce1a386d0725` completed with three category changes.
+- Verification and deployment receipts will be recorded on the native issue/PR and in the Test Run.
+
 ## Pods failure repair prompts — issue 1471
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1471. Branch `feature/issue-1471-pods-repair-prompt`, worktree `openape-monorepo.worktrees/issue-1471`, base `7946a2487fcfb2097d728706a47e2c24852743d2`.
