@@ -67,8 +67,9 @@ export default defineEventHandler(async (event) => {
   // Check grant status
   switch (grant.status) {
     case 'used':
-      // POST /api/grants/authorize spends a single-use grant when it issues the command token.
-      if (spentByCommandToken(grant, result.claims)) return { status: 'consumed', grant }
+      // POST /api/grants/authorize spends a single-use grant when it issues the command
+      // token; its first redemption confirms that, every later one is a replay.
+      if (spentByCommandToken(grant, result.claims) && await grantStore.markConsumed(id, result.claims.jti)) return { status: 'consumed', grant }
       return { error: 'already_consumed', status: grant.status }
     case 'revoked':
       return { error: 'revoked', status: grant.status }

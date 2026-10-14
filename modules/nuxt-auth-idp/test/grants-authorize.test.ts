@@ -252,13 +252,24 @@ describe('direct identities', () => {
     expect(next.status).toBe(202)
     expect(next.json.grant_id).not.toBe(once.json.grant_id)
 
-    // apes consumes right before executing: the command token confirms, every other token is refused.
+    // apes consumes right before executing: the first redemption of the command token confirms,
+    // every replay, with the same or any other token, is refused.
     const consumeWith = async (token: string) => (await fetch(`${base}/grants/${once.json.grant_id}/consume`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })).json()
     expect(await consumeWith(issued.json.authz_jwt)).toMatchObject({ status: 'consumed', grant: { id: once.json.grant_id } })
-    expect(await consumeWith(issued.json.authz_jwt)).toMatchObject({ status: 'consumed' })
+    expect(await consumeWith(issued.json.authz_jwt)).toMatchObject({ error: 'already_consumed', status: 'used' })
     const { issueAuthzJWT } = await import('@openape/grants')
     const plain = await issueAuthzJWT({ ...(await grantStore.findById(once.json.grant_id))!, status: 'approved' }, issuer, keys.privateKey)
     expect(await consumeWith(plain)).toMatchObject({ error: 'already_consumed', status: 'used' })
+  })
+
+  it('confirms exactly one of concurrent redemptions of a command token', async () => {
+    const once = await call(direct, body({ grant_type: 'once' }))
+    await approveGrant(once.json.grant_id, owner, grantStore)
+    const issued = await call(direct, body({ grant_type: 'once' }))
+    const redeem = async () => (await fetch(`${base}/grants/${once.json.grant_id}/consume`, { method: 'POST', headers: { Authorization: `Bearer ${issued.json.authz_jwt}` } })).json()
+    const answers = await Promise.all([redeem(), redeem(), redeem()])
+    expect(answers.filter(answer => answer.status === 'consumed')).toHaveLength(1)
+    expect(answers.filter(answer => answer.error === 'already_consumed')).toHaveLength(2)
   })
 
   it('issues one token from a single-use grant to concurrent calls', async () => {

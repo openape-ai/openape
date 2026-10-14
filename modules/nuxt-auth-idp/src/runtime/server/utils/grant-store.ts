@@ -7,6 +7,7 @@ export interface ExtendedGrantStore extends GrantStore {
   findByDelegate: (delegate: string) => Promise<OpenApeGrant[]>
   findByDelegator: (delegator: string) => Promise<OpenApeGrant[]>
   claimOnce: NonNullable<GrantStore['claimOnce']>
+  markConsumed: NonNullable<GrantStore['markConsumed']>
 }
 
 // A request never answered stops being a decision after 48h and turns into
@@ -68,6 +69,16 @@ export function createGrantStore(): ExtendedGrantStore {
       })
       claims = claim.catch(() => false)
       return await claim
+    },
+
+    async markConsumed(id, jti) {
+      const mark = claims.then(async () => {
+        if (!await storage.hasItem(`grants:${id}`) || await storage.hasItem(`grants-consumed:${id}`)) return false
+        await storage.setItem(`grants-consumed:${id}`, jti)
+        return true
+      })
+      claims = mark.catch(() => false)
+      return await mark
     },
 
     async findPending() {
