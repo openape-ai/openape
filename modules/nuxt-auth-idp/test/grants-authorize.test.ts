@@ -21,6 +21,9 @@ const direct = 'direct@owner.test'
 const other = 'other-agent@owner.test'
 const yolo = 'yolo@owner.test'
 const podAgent = 'pod@pods.provider.test'
+const inactive = 'inactive@owner.test'
+const activeAccounts = new Set([direct, other, yolo, podAgent])
+let brokerBusy = false
 const tested = 'a'.repeat(64)
 const untested = 'b'.repeat(64)
 
@@ -48,7 +51,17 @@ const gitShape: ServerShape = {
   createdAt: 0,
   updatedAt: 0,
 }
-let shapeStore = createInMemoryShapeStore([gitShape])
+const toolShape: ServerShape = {
+  ...gitShape,
+  cli_id: 'tool',
+  executable: 'tool',
+  operations: [
+    { id: 'tool.view', command: ['view'], positionals: ['repo'], display: 'View {repo}', action: 'read', risk: 'low', resource_chain: ['repo:name={repo}'] },
+    { id: 'tool.show', command: ['show'], positionals: ['repo'], display: 'Show {repo}', action: 'read', risk: 'low', resource_chain: ['repo:name={repo}'] },
+  ],
+  tested_digests: undefined,
+}
+let shapeStore = createInMemoryShapeStore([gitShape, toolShape])
 
 vi.mock('../src/runtime/server/utils/agent-auth', () => ({
   tryBearerAuth: async (event: H3Event) => {
@@ -65,7 +78,7 @@ vi.mock('../src/runtime/server/utils/stores', () => ({
   getIdpIssuer: () => role.getStore() === 'broker' ? broker : issuer,
   useIdpStores: () => ({
     keyStore: { getSigningKey: async () => role.getStore() === 'broker' ? { ...brokerKeys, kid: 'broker-key' } : { ...keys, kid: 'owner-key' } },
-    userStore: { findByEmail: async (email: string) => email === podAgent ? { email, type: 'agent', isActive: true } : null },
+    userStore: { findByEmail: async (email: string) => activeAccounts.has(email) || email === inactive ? { email, type: 'agent', isActive: email !== inactive } : null },
     sshKeyStore: { findByUser: async (email: string) => email === podAgent ? [{ keyId: 'pod-key' }] : [] },
   }),
 }))
@@ -74,7 +87,10 @@ vi.mock('../src/runtime/server/utils/broker-store', () => ({
   useBrokerStore: () => ({
     getAgent: async (subject: string) => role.getStore() === 'broker' && subject === podAgent ? { subject, key_id: 'pod-key', owner, decision_issuer: issuer, connection_id: connection.id } : null,
     getConnection: async (id: string) => connection.id === id ? connection : null,
-    acceptRequest: async () => connection,
+    acceptRequest: async () => {
+      if (brokerBusy) throw createError({ statusCode: 429, data: { retry_after: 17 } })
+      return connection
+    },
     assertConnection: async () => { if (connection.status !== 'active') throw createError({ statusCode: 403 }) },
     recordToken: async (grant: OpenApeGrant) => tokensRecorded(grant.id),
   }),
@@ -88,13 +104,15 @@ vi.mock('../src/runtime/server/utils/broker-network', () => ({
     const response = await fetch(url, init)
     const body = await response.json() as Record<string, unknown>
     if (response.ok || (response.status === 403 && init.relayRefusal && ['denied', 'revoked'].includes(String(body.state)))) return body
-    throw createError({ statusCode: response.status })
+    throw createError({ statusCode: response.status, data: { retry_after: Number(response.headers.get('retry-after')) || undefined } })
   },
 }))
 
 const { definePreApprovalHook } = await import('../src/runtime/server/utils/pre-approval-hooks')
 definePreApprovalHook(async (_event, request) => request.requester === yolo ? { kind: 'yolo', decidedBy: owner } : null)
 const { resetAuthorizeRateLimit } = await import('../src/runtime/server/utils/authorize-rate-limit')
+const { _internals: ipLimiter } = await import('../src/runtime/server/plugins/rate-limit')
+const consume = (await import('../src/runtime/server/api/grants/[id]/consume.post')).default
 const authorize = (await import('../src/runtime/server/api/grants/authorize.post')).default
 const brokered = (await import('../src/runtime/server/api/brokered-grants.post')).default
 const create = (await import('../src/runtime/server/api/grants/index.post')).default
@@ -116,11 +134,13 @@ async function verified(token: string) {
 
 beforeEach(async () => {
   keys = await generateKeyPair(); brokerKeys = await generateKeyPair()
-  grantStore = new InMemoryGrantStore(); shapeStore = createInMemoryShapeStore([gitShape])
-  notified.mockClear(); tokensRecorded.mockClear(); resetAuthorizeRateLimit()
+  grantStore = new InMemoryGrantStore(); shapeStore = createInMemoryShapeStore([gitShape, toolShape])
+  notified.mockClear(); tokensRecorded.mockClear(); resetAuthorizeRateLimit(); ipLimiter.reset()
+  brokerBusy = false
   delete process.env.OPENAPE_RATE_LIMIT_MAX_AUTHORIZE
+  delete process.env.OPENAPE_RATE_LIMIT_MAX_AGENT
   connection = { id: randomUUID(), owner: { issuer, subject: owner }, broker_issuer: broker, agent_domain: 'pods.provider.test', status: 'active', created_at: 1 }
-  const router = createRouter().post('/grants/authorize', authorize).post('/grants', create).post('/brokered', brokered).post('/pods/grants/authorize', authorize)
+  const router = createRouter().post('/grants/authorize', authorize).post('/grants', create).post('/brokered', brokered).post('/pods/grants/authorize', authorize).post('/grants/:id/consume', consume)
   const listener = toNodeListener(createApp().use(router))
   server = createServer((req, res) => role.run(req.url?.startsWith('/pods/') ? 'broker' : 'decision', () => listener(req, res)))
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -192,7 +212,8 @@ describe('direct identities', () => {
     for (const input of [{ ...body(), authorization_details: [detail] }, { ...body(), execution_context: { argv: ['git'] } }, { ...body(), program: { name: 'git' } }, body({ argv: Array.from({ length: 257 }, () => 'x') }), body({ grant_type: 'timed' }), 'not json']) {
       expect((await call(direct, input)).status).toBe(400)
     }
-    expect((await call(direct, { ...body(), padding: 'x'.repeat(130 * 1024) })).status).toBe(413)
+    // Over 64 KiB, so a maximal body still fits the 128 KiB broker assertion; refused by Content-Length before reading.
+    expect((await call(direct, { ...body(), padding: 'x'.repeat(65 * 1024) })).status).toBe(413)
     expect((await call(null)).status).toBe(401)
     expect(await grantStore.findByRequester(direct)).toEqual([])
   })
@@ -220,14 +241,68 @@ describe('direct identities', () => {
     expect(foreign.json.grant_id).not.toBe(first.json.grant_id)
   })
 
-  it('consumes nothing itself: a single-use approval covers until it is used', async () => {
+  it('spends a single-use approval when it issues the token, and consume confirms it', async () => {
     const once = await call(direct, body({ grant_type: 'once' }))
     await approveGrant(once.json.grant_id, owner, grantStore)
-    expect((await call(direct, body({ grant_type: 'once' }))).json).toMatchObject({ state: 'approved', grant_id: once.json.grant_id })
-    await grantStore.updateStatus(once.json.grant_id, 'used', { used_at: Math.floor(Date.now() / 1000) })
+    const issued = await call(direct, body({ grant_type: 'once' }))
+    expect(issued.json).toMatchObject({ state: 'approved', grant_id: once.json.grant_id })
+    expect(await grantStore.findById(once.json.grant_id)).toMatchObject({ status: 'used', used_at: expect.any(Number) })
+    // A second call gets no token from the spent grant.
     const next = await call(direct, body({ grant_type: 'once' }))
     expect(next.status).toBe(202)
     expect(next.json.grant_id).not.toBe(once.json.grant_id)
+
+    // apes consumes right before executing: the command token confirms, every other token is refused.
+    const consumeWith = async (token: string) => (await fetch(`${base}/grants/${once.json.grant_id}/consume`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })).json()
+    expect(await consumeWith(issued.json.authz_jwt)).toMatchObject({ status: 'consumed', grant: { id: once.json.grant_id } })
+    expect(await consumeWith(issued.json.authz_jwt)).toMatchObject({ status: 'consumed' })
+    const { issueAuthzJWT } = await import('@openape/grants')
+    const plain = await issueAuthzJWT({ ...(await grantStore.findById(once.json.grant_id))!, status: 'approved' }, issuer, keys.privateKey)
+    expect(await consumeWith(plain)).toMatchObject({ error: 'already_consumed', status: 'used' })
+  })
+
+  it('issues one token from a single-use grant to concurrent calls', async () => {
+    const once = await call(direct, body({ grant_type: 'once' }))
+    await approveGrant(once.json.grant_id, owner, grantStore)
+    const answers = await Promise.all([call(direct, body({ grant_type: 'once' })), call(direct, body({ grant_type: 'once' }))])
+    expect(answers.filter(answer => answer.json.state === 'approved' && answer.json.grant_id === once.json.grant_id)).toHaveLength(1)
+  })
+
+  it('never turns a `*` in an argument into a glob: approving `org/*` does not cover `org/secret`', async () => {
+    const glob = await call(direct, body({ name: 'tool', sha256: untested, argv: ['view', 'org/*'] }))
+    expect((await grantStore.findById(glob.json.grant_id))!.request.authorization_details![0]).toMatchObject({ operation_id: '_generic.exec', constraints: { exact_command: true } })
+    await approveGrant(glob.json.grant_id, owner, grantStore)
+    expect((await call(direct, body({ name: 'tool', sha256: untested, argv: ['view', 'org/*'] }))).status).toBe(200)
+    const secret = await call(direct, body({ name: 'tool', sha256: untested, argv: ['view', 'org/secret'] }))
+    expect(secret.status).toBe(202)
+  })
+
+  it('matches denials by structured detail, not by an equal permission string', async () => {
+    const view = await call(direct, body({ name: 'tool', sha256: untested, argv: ['view', 'org/repo'] }))
+    const show = { ...(await grantStore.findById(view.json.grant_id))! }
+    await denyGrant(view.json.grant_id, owner, grantStore)
+    expect((await call(direct, body({ name: 'tool', sha256: untested, argv: ['view', 'org/repo'] }))).status).toBe(403)
+    // tool.show prints the same permission as tool.view but is another operation.
+    const other = await call(direct, body({ name: 'tool', sha256: untested, argv: ['show', 'org/repo'] }))
+    expect((await grantStore.findById(other.json.grant_id))!.request.permissions).toEqual(show.request.permissions)
+    expect(other.status).toBe(202)
+  })
+
+  it('refuses inactive or unknown requester accounts before deciding', async () => {
+    expect((await call(inactive)).status).toBe(403)
+    expect((await call('unknown@owner.test')).status).toBe(403)
+    expect(await grantStore.findByRequester(inactive)).toEqual([])
+  })
+
+  it('charges calls without a valid bearer token to the per-IP agent bucket', async () => {
+    process.env.OPENAPE_RATE_LIMIT_MAX_AGENT = '2'
+    expect((await call(null)).status).toBe(401)
+    expect((await call(null)).status).toBe(401)
+    const limited = await call(null)
+    expect(limited.status).toBe(429)
+    expect(Number(limited.headers.get('retry-after'))).toBeGreaterThan(0)
+    // Verified requesters keep their own budget.
+    expect((await call(direct)).status).toBe(202)
   })
 
   it('lets a standing grant and a pre-approval hook decide for direct identities', async () => {
@@ -292,6 +367,13 @@ describe('brokered identities', () => {
     const brokeredCall = await viaBroker()
     expect(brokeredCall.status).toBe(202)
     expect(brokeredCall.json.grant_id).not.toBe(own.json.grant_id)
+  })
+
+  it('relays the decision IdP\'s Retry-After when its broker budget is spent', async () => {
+    brokerBusy = true
+    const limited = await viaBroker()
+    expect(limited.status).toBe(429)
+    expect(limited.headers.get('retry-after')).toBe('17')
   })
 
   it('refuses the call when the broker connection was revoked', async () => {

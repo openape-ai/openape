@@ -165,6 +165,14 @@ describe('program authorization (issue 1473)', () => {
     expect(request('/api/session/login').headers['X-RateLimit-Remaining']).toBe('9')
     expect(request('/api/agent/challenge').headers['X-RateLimit-Remaining']).toBe('119')
   })
+
+  it('exempts only the exact authorize path', async () => {
+    const request = await createLimiter()
+    expect(request('/api/grants/authorize?probe=1').headers['X-RateLimit-Limit']).toBeUndefined()
+    for (const path of ['/api/grants/authorize-all', '/api/grants/authorize/extra']) {
+      expect(request(path).headers['X-RateLimit-Limit']).toBe('120')
+    }
+  })
 })
 
 describe('per-IP isolation', () => {

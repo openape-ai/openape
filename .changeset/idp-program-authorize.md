@@ -14,7 +14,8 @@ summary. The IdP then performs these steps:
 - It resolves the command itself and writes `execution_context`.
 - It answers 200 with a command token when an approved or standing grant
   covers the call. The token is bound to `argv_hash` and `program_sha256`
-  and lasts at most five minutes.
+  and lasts at most five minutes. Issuing it spends a single-use grant;
+  `/consume` with that token answers `consumed`.
 - Otherwise it answers 202 with one pending request, reused across calls.
 - It answers 403 when the owner denied or revoked this permission.
 

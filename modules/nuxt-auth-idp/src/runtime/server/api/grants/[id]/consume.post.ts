@@ -1,5 +1,5 @@
 import { useBrokerStore } from '../../../utils/broker-store'
-import { introspectGrant, useGrant, verifyAuthzJWT } from '@openape/grants'
+import { introspectGrant, spentByCommandToken, useGrant, verifyAuthzJWT } from '@openape/grants'
 import { defineEventHandler, getHeader, getRouterParam } from 'h3'
 import { useGrantStores } from '../../../utils/grant-stores'
 import { useIdpStores } from '../../../utils/stores'
@@ -67,6 +67,8 @@ export default defineEventHandler(async (event) => {
   // Check grant status
   switch (grant.status) {
     case 'used':
+      // POST /api/grants/authorize spends a single-use grant when it issues the command token.
+      if (spentByCommandToken(grant, result.claims)) return { status: 'consumed', grant }
       return { error: 'already_consumed', status: grant.status }
     case 'revoked':
       return { error: 'revoked', status: grant.status }

@@ -45,6 +45,20 @@ it('reports malformed provider endpoints and signing keys as an unavailable depe
   await expect(brokerVerificationKey(discovery)).rejects.toMatchObject({ statusCode: 503 })
 })
 
+it('keeps the provider\'s Retry-After on a rate-limit refusal', async () => {
+  dns.mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
+  let headers: Record<string, string> = { 'retry-after': '23' }
+  outgoing.mockImplementation((_url, _options, receive) => {
+    const reply = Object.assign(new PassThrough(), { statusCode: 429, headers })
+    return Object.assign(new EventEmitter(), { end: () => { receive(reply); reply.end('{}') } })
+  })
+  await expect(brokerFetch('https://provider.example.test/brokered', { method: 'POST' })).rejects.toMatchObject({ statusCode: 429, data: { retry_after: 23 } })
+  headers = { 'retry-after': 'soon' }
+  const unparsable = await brokerFetch('https://provider.example.test/brokered', { method: 'POST' }).catch((error: { data: Record<string, unknown> }) => error)
+  expect(unparsable).toMatchObject({ statusCode: 429 })
+  expect(unparsable.data.retry_after).toBeUndefined()
+})
+
 it('relays a 403 body only when it carries an owner refusal of a program call', async () => {
   dns.mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
   let body = '{"state":"denied","grant_id":"g-1"}'
