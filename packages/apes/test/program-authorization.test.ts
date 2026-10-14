@@ -372,6 +372,21 @@ describe('apes run with per-call IdP authorization', () => {
     expect(ran()).toBeNull()
   })
 
+  it('re-checks the file right before it runs: a file swapped after authorization or no regular file is refused', async () => {
+    const sha256 = writeProgram()
+    await idp.approved(['fakegit', 'status'], sha256)
+    const { authorizeProgramCall, locateProgram } = await import('../src/authorization/program.js')
+    const { executeProgramCall } = await import('../src/authorization/execute.js')
+    const call = { program: (await locateProgram('fakegit'))!, argv: ['status'] }
+    await authorizeProgramCall(call, { idp: idp.issuer, subject: SUBJECT, targetHost: 'test-host', grantType: 'always', wait: false })
+
+    writeProgram('echo swapped > "$APES_TEST_MARKER"\n')
+    expect(() => executeProgramCall(call)).toThrow('changed after it was authorized')
+    expect(() => executeProgramCall({ ...call, program: { ...call.program, path: bin } })).toThrow('is not a regular file')
+
+    expect(ran()).toBeNull()
+  })
+
   it('consumes a single-use grant before running and refuses when it was already used elsewhere', async () => {
     const sha256 = writeProgram()
     const grant = await idp.approved(['fakegit', 'tag', 'v1'], sha256, 'once')

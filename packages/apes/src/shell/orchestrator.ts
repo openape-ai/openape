@@ -156,7 +156,9 @@ export async function runInteractiveShell(): Promise<void> {
         try {
           await new Promise<void>((resolve) => {
             pendingResolve = resolve
-            bridge.writeLine(line)
+            // An authorized program call runs exactly as authorized, never
+            // the typed line (see programCommandLine).
+            bridge.writeLine(grant.mode === 'program' ? grant.command : line)
           })
         }
         finally {

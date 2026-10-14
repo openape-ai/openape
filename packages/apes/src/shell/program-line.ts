@@ -46,3 +46,16 @@ export function programLine(line: string): ProgramLine | null {
   if (!executable || executable.includes('=') || BASH_BUILTINS.has(executable)) return null
   return { executable, argv }
 }
+
+function singleQuoted(word: string): string {
+  return `'${word.replaceAll('\'', '\'\\\'\'')}'`
+}
+
+/**
+ * The line the interactive bash runs for an authorized program call: the located file by its absolute path with
+ * exactly the authorized arguments, each single-quoted, through `command` so that aliases and functions of the same
+ * name cannot run instead. Bash never parses the typed line for such a call.
+ */
+export function programCommandLine(path: string, argv: string[]): string {
+  return ['\\builtin command --', ...[path, ...argv].map(singleQuoted)].join(' ')
+}
