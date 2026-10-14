@@ -1,6 +1,6 @@
 import { AuthorityError, InfrastructureError, NonRetryableError, infrastructureFailure } from '../../contracts/infrastructure'
 import { randomUUID } from 'node:crypto'
-import type { ServiceScope } from '../../contracts/services'
+import type { ServiceKind, ServiceScope } from '../../contracts/services'
 import type { ScriptSummary } from '../../contracts/grant-summary'
 
 // A service call that does not answer within this time is cancelled; a wait for an IdP decision is exempt.
@@ -42,7 +42,7 @@ export class MailBridge {
     this.timers.set(id, setTimeout(() => this.send({ serviceCancel: id }), serviceTimeoutMs))
   }
 
-  async execute(scope: ServiceScope, body: unknown, signal: AbortSignal, kind?: 'approval' | 'mailArchive' | 'mailMove' | 'approvedProgram' | 'credential' | 'jev' | 'http' | 'shell' | 'shellClose', summary?: ScriptSummary): Promise<unknown> {
+  async execute(scope: ServiceScope, body: unknown, signal: AbortSignal, kind?: ServiceKind, summary?: ScriptSummary): Promise<unknown> {
     signal.throwIfAborted()
     if (this.queued() >= 16) throw new Error('Mail broker queue is full')
     const id = randomUUID()

@@ -77,10 +77,11 @@ revision-checked no-op kept for compatibility.
 
 ## CLI setup help
 
-The MCP `runtime` response includes `programHelp`: executable/adapter assignment,
-command grants, network hosts, a fresh Pod terminal, private provider login and
-a real execution check. `program prepare` resolves a line to safe command metadata
-without running it. It can list assigned CLIs or their adapter operations.
+The MCP `runtime` response includes `programHelp`: assignment by path and file
+hash, per-call authorization at the IdP, network hosts, a fresh Pod terminal,
+private provider login and a real execution check. `program prepare` maps a line
+to an assigned application and its argv without running it, and lists the
+assigned CLIs; the IdP decides each command when it starts.
 Assignments added after a terminal opened require exiting and reopening it.
 Host authentication and extensions are not automatically shared. For Homebrew
 Azure CLI, Python and the Azure DevOps extension must be verified separately;

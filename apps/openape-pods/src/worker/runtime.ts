@@ -20,6 +20,7 @@ import type { AdministrationJournal } from '../contracts/codex-admin'
 import { DesktopRegistration } from './remote/registration'
 import type { RemoteInternal } from './remote/registration'
 import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
+import { parseProgramEffect } from '../contracts/services'
 import { recoverPortableImports } from './sharing/import'
 import { SharingService } from './sharing/service'
 import { parseSharingCommand } from '../contracts/sharing'
@@ -105,6 +106,9 @@ const runServices: RunServices = { approval: async (body, signal, scope) => mail
 }, approvedProgram: async (body, signal, scope) => {
   programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, { application: body.application, argv: body.argv })
   return mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'approvedProgram')
+}, programEffect: async (body, signal, scope, summary) => {
+  programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, body)
+  return parseProgramEffect(await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'programAuthorize', summary))
 }, tool: async (body, signal, scope, summary) => {
   if (body && typeof body === 'object' && 'sshInventory' in body) {
     assignedSsh(registry.list(scope.podId), scope.podId, scope.capabilities, body)

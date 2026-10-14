@@ -1,6 +1,5 @@
 import { basename } from 'node:path'
 import { realpath, stat } from 'node:fs/promises'
-import { loadAdapter } from '@openape/apes'
 import type { PortableApplication } from '@openape/pods-protocol'
 import type { ProgramDefinition } from '../../contracts/programs'
 import { applicationBundle } from './application'
@@ -8,7 +7,12 @@ import type { ApplicationBundle, ReadApplicationPlist } from './application'
 import { programDefinition, suggestedProgram } from './definition'
 
 export const portableLauncher = { identity: 'ai.openape.pods.launch', version: 1 } as const
-export interface ApplicationCandidate { path: string, adapterPath?: string, runtimePath?: string }
+/**
+ * A program a package needs by its command name (issue 1473, revision 4): the recipient's IdP decides what its commands
+ * mean. Packages written before name a Shapes adapter here; Pods resolves them by the command name as well.
+ */
+export const portableProgram = { identity: 'ai.openape.pods.program', version: 1 } as const
+export interface ApplicationCandidate { path: string, runtimePath?: string }
 export interface ApplicationResolutionOptions {
   candidates: ApplicationCandidate[]
   selected?: ApplicationCandidate
@@ -17,7 +21,7 @@ export interface ApplicationResolutionOptions {
   readPlist?: ReadApplicationPlist
 }
 export type ApplicationResolution =
-  | { status: 'available', software: { kind: 'program', definition: ProgramDefinition } | { kind: 'bundle', bundle: ApplicationBundle }, version: string | null, identitySource: 'bundle-declaration' | 'local-adapter', testedVersion: boolean }
+  | { status: 'available', software: { kind: 'program', definition: ProgramDefinition } | { kind: 'bundle', bundle: ApplicationBundle }, version: string | null, identitySource: 'bundle-declaration' | 'command-name', testedVersion: boolean }
   | { status: 'missing' }
   | { status: 'unsupported' | 'incompatible' | 'setupRequired', reason: string }
 
@@ -31,18 +35,11 @@ async function resolveCandidate(requirement: PortableApplication, candidate: App
     if (requirement.testedVersions.length && !requirement.testedVersions.includes(bundle.version!)) return { status: 'incompatible', reason: 'Application version is outside the declared tested versions' }
     return { status: 'available', software: { kind: 'bundle', bundle }, version: bundle.version, identitySource: 'bundle-declaration', testedVersion: requirement.testedVersions.length > 0 }
   }
-  if (!candidate.adapterPath && !options.selected && basename(candidate.path) !== requirement.application) return null
-  if (!candidate.adapterPath) return { status: 'setupRequired', reason: 'Select a local application adapter before continuing' }
-  const loaded = loadAdapter(basename(candidate.adapterPath, '.toml'), candidate.adapterPath)
-  const cli = loaded.adapter.cli
-  if (cli.executable !== requirement.application && !options.selected) return null
-  if (cli.id !== requirement.adapter.identity || cli.executable !== requirement.application) return { status: 'incompatible', reason: 'Local application adapter identity differs from the package requirement' }
-  if (cli.version === undefined) return { status: 'setupRequired', reason: 'Local application adapter does not declare its version' }
-  if (cli.version !== String(requirement.adapter.version)) return { status: 'incompatible', reason: 'Local application adapter version differs from the package requirement' }
+  if (!options.selected && basename(candidate.path) !== requirement.application) return null
   if (requirement.testedVersions.length) return { status: 'setupRequired', reason: 'Application version cannot be verified without an approved execution' }
-  const definition = await programDefinition(candidate.path, candidate.adapterPath, requirement.application, candidate.runtimePath)
-  if (definition.adapterHash !== loaded.fileDigest.replace('SHA-256:', '')) throw new Error('Application adapter changed during resolution')
-  return { status: 'available', software: { kind: 'program', definition }, version: null, identitySource: 'local-adapter', testedVersion: false }
+  // The program is called by the package's command name, whatever its file is named; the IdP decides what it may do.
+  const definition = await programDefinition(candidate.path, candidate.runtimePath, requirement.application)
+  return { status: 'available', software: { kind: 'program', definition }, version: null, identitySource: 'command-name', testedVersion: false }
 }
 
 export async function resolveApplicationRequirement(requirement: PortableApplication, options: ApplicationResolutionOptions): Promise<ApplicationResolution> {
@@ -61,7 +58,7 @@ export async function resolveApplicationRequirement(requirement: PortableApplica
     let path: string
     try { path = await realpath(candidate.path); await stat(path) }
     catch (error) { if (['ENOENT', 'ENOTDIR'].includes((error as NodeJS.ErrnoException).code ?? '')) continue; throw error }
-    const key = `${path}\0${candidate.adapterPath ?? ''}\0${candidate.runtimePath ?? ''}`
+    const key = `${path}\0${candidate.runtimePath ?? ''}`
     if (paths.has(key)) continue
     paths.add(key)
     let result: ApplicationResolution | null

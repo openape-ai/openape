@@ -3,7 +3,7 @@ import { assignedSsh } from '../../contracts/ssh'
 import { assignedJev, parseJevRequest, syntheticJevResult } from '../../contracts/jev'
 import { parseAgentRequest } from '../../contracts/agent'
 import { DependencyStore } from '../dependencies/store'
-import { resolveProgram } from '../../main/programs/session'
+import { verifyProgram } from '../../main/programs/session'
 import { programRequest } from '../../main/programs/invoke'
 import { describeProgram } from '../runs/program-effects'
 import { parseHttpRequest, isHttpEffect } from '../../contracts/http'
@@ -100,7 +100,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
         // A program approval is checked like at run time: an assigned, declared application and an approvable command.
         const asked = payload as { action?: unknown, title?: unknown, description?: unknown, link?: unknown, payload?: { application?: unknown, argv?: unknown } } | null
         parseScriptSummary(Object.fromEntries(Object.entries(asked ?? {}).filter(([key]) => ['title', 'description', 'link'].includes(key))))
-        if (asked?.action === 'program.run') await describeProgram(resources.list(pod.id), pod.id, capabilities, { application: String(asked.payload?.application ?? ''), argv: asked.payload?.argv })
+        if (asked?.action === 'program.run') describeProgram(resources.list(pod.id), pod.id, capabilities, { application: String(asked.payload?.application ?? ''), argv: asked.payload?.argv })
         return { id: randomUUID(), state: 'collecting' }
       }
       if (operation === 'notify') { parseNotify(payload); return { eventId: `${pod.id}:synthetic`, queued: false } }
@@ -130,7 +130,8 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       }
       if (operation === 'tools.invoke' && payload && typeof payload === 'object' && ('applicationId' in payload || 'application' in payload)) {
         const { assignment, argv } = programRequest(resources.list(pod.id), pod.id, capabilities, payload)
-        await resolveProgram(assignment, argv)
+        // Synthetic validation checks the assigned program; what its command may do is decided by the IdP when it runs.
+        await verifyProgram(assignment)
         const argument = (name: string) => argv[argv.indexOf(name) + 1]
         const output = assignment.cliId === 'o365-cli' && argv[0] === 'mail' && argv[1] === 'list' ? [] : assignment.cliId === 'o365-cli' ? { account: argument('--account'), operation: argument('--operation'), items: [], complete: true, nextCursor: null } : {}
         return { exitCode: 0, stdout: JSON.stringify(output), stderr: '' }
