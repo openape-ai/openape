@@ -1,4 +1,5 @@
 <script lang="ts">
+import { useHostBridge } from './host-bridge'
 import { usePodAccess } from './pod-access'
 import { defineComponent } from 'vue'
 import type { ResourceState, PodResource } from '../contracts/resources'
@@ -9,7 +10,7 @@ import { t, diagnostic } from './i18n'
 export default defineComponent({
   props: { podId: { type: String, required: true }, state: { type: Object as () => ResourceState, required: true } },
   emits: ['updated'],
-  setup() { return { access: usePodAccess() } },
+  setup() { return { hostBridge: useHostBridge(), access: usePodAccess() } },
   data() { return { networkHost: '', selectedApplication: '', selectedDestination: '', addingHttp: false, busy: false, openingShell: false, error: '', launch: null as TerminalView | null, pollTimer: undefined as ReturnType<typeof setTimeout> | undefined, disposed: false, origin: '', methods: ['GET'] as string[] } },
   computed: {
     selected() { return this.applications.find(item => item.id === this.selectedApplication) },
@@ -30,7 +31,7 @@ export default defineComponent({
     async act(command: ProgramCommand) {
       this.busy = true; this.openingShell = command.type === 'openShell'; this.error = ''
       try {
-        const result = await window.pods.programs(command)
+        const result = await this.hostBridge.programs(command)
         if (command.type === 'launch' || command.type === 'close') { this.launch = parseTerminalView(result); await this.refreshLaunch() }
         else {
           this.$emit('updated', result)
@@ -42,7 +43,7 @@ export default defineComponent({
     async refreshLaunch() {
       clearTimeout(this.pollTimer)
       try {
-        const result = await window.pods.programs({ type: 'launchStatus', podId: this.podId })
+        const result = await this.hostBridge.programs({ type: 'launchStatus', podId: this.podId })
         if (this.disposed) return
         this.launch = result === null ? null : parseTerminalView(result)
         if (this.launch && this.launch.state !== 'closed') this.pollTimer = setTimeout(() => { void this.refreshLaunch() }, 1000)

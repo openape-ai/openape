@@ -1,4 +1,5 @@
 <script lang="ts">
+import { useHostBridge } from './host-bridge'
 import { usePodAccess, trackPodEdits } from './pod-access'
 import { t, diagnostic, label } from './i18n'
 import { settingsDrafts } from './form-buffer'
@@ -12,9 +13,9 @@ export default defineComponent({
   components: { PodSchedule, PodIdentity, PodLifecycle },
   props: { selectedPodId: { type: String, default: '' } },
   emits: ['selected', 'accounts'],
-  setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
+  setup() { const access = usePodAccess(); return { hostBridge: useHostBridge(), access, remoteRevision: access.revision } },
   data() { return { confirmReload: false, initialized: false, pods: [] as StoredPod[], selectedId: '', name: '', revision: 0, error: '', message: '', busy: false } },
-  computed: { selectedPod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.selectedId) }, central(): boolean { return typeof window !== 'undefined' && !!window.pods?.central } },
+  computed: { selectedPod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.selectedId) }, central(): boolean { return typeof window !== 'undefined' && !!this.hostBridge?.central } },
   watch: { async remoteRevision() { if (this.busy || this.error || this.name !== this.selectedPod?.name) return; await this.reload(); const pod = this.selectedPod; if (pod) { this.name = pod.name; this.revision = pod.revision } }, async selectedPodId(id: string) { if (id === this.selectedId) return; await this.reload(); const pod = this.pods.find(pod => pod.id === id); if (pod) this.select(pod); else this.newPod() } },
   async mounted() {
     trackPodEdits(this.access, 'settings', () => this.initialized && this.name !== (this.selectedPod?.name ?? ''))

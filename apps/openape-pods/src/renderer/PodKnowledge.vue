@@ -1,4 +1,5 @@
 <script lang="ts">
+import { useHostBridge } from './host-bridge'
 import { t, diagnostic } from './i18n'
 import { defineComponent } from 'vue'
 import type { Citation, KnowledgeClaim, PodDetails } from '../contracts/details'
@@ -6,6 +7,7 @@ import type { Citation, KnowledgeClaim, PodDetails } from '../contracts/details'
 export default defineComponent({
   props: { podId: { type: String, required: true } },
   emits: ['discuss'],
+  setup() { return { hostBridge: useHostBridge() } },
   data() { return { claims: [] as KnowledgeClaim[], total: 0, kind: 'all', query: '', history: false, source: null as PodDetails['source'], error: '', busy: false } },
   computed: { visible(): KnowledgeClaim[] { return this.claims.filter(claim => (this.history || claim.current) && (this.kind === 'all' || claim.kind === this.kind) && `${claim.matter} ${claim.text}`.toLowerCase().includes(this.query.toLowerCase())) } },
   async mounted() { await this.load() },
@@ -13,13 +15,13 @@ export default defineComponent({
     t, diagnostic,
     async load() {
       this.busy = true; this.error = ''
-      try { const view = await window.pods.details({ type: 'list', podId: this.podId, offset: this.claims.length }); this.claims.push(...view.claims); this.total = view.total }
+      try { const view = await this.hostBridge.details({ type: 'list', podId: this.podId, offset: this.claims.length }); this.claims.push(...view.claims); this.total = view.total }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not load knowledge' }
       finally { this.busy = false }
     },
     async inspect(citation: Citation) {
       this.busy = true; this.error = ''
-      try { this.source = (await window.pods.details({ type: 'source', podId: this.podId, id: citation.id, version: citation.version })).source }
+      try { this.source = (await this.hostBridge.details({ type: 'source', podId: this.podId, id: citation.id, version: citation.version })).source }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not load evidence' }
       finally { this.busy = false }
     },

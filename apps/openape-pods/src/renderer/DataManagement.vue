@@ -1,4 +1,5 @@
 <script lang="ts">
+import { useHostBridge } from './host-bridge'
 import { t, diagnostic, label, number } from './i18n'
 import { defineComponent } from 'vue'
 import SoftwareUpdates from './SoftwareUpdates.vue'
@@ -6,6 +7,7 @@ import type { DataCommand, DataView } from '../contracts/data'
 
 export default defineComponent({
   components: { SoftwareUpdates },
+  setup() { return { hostBridge: useHostBridge() } },
   data() { return { view: null as DataView | null, limitGiB: 10, busy: false, error: '', notice: '', evidence: '' } },
   async mounted() { await this.perform({ type: 'status' }) },
   methods: {
@@ -14,7 +16,7 @@ export default defineComponent({
     async perform(command: DataCommand) {
       this.busy = true; this.error = ''; this.notice = ''
       try {
-        this.view = await window.pods.data(command); this.limitGiB = this.view.limitBytes / 1024 ** 3
+        this.view = await this.hostBridge.data(command); this.limitGiB = this.view.limitBytes / 1024 ** 3
         if (command.type === 'cleanup') this.notice = 'Unused files cleaned. Referenced evidence and pending inputs are retained.'
         if (command.type === 'limit') this.notice = 'Storage limit saved.'
         if (command.type === 'reviewRestore') { this.notice = 'Restore review recorded. Pods can be resumed again.'; this.evidence = '' }

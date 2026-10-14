@@ -1,8 +1,11 @@
 <script setup lang="ts">
+import { useHostBridge } from './host-bridge'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { McpSessionView } from '../contracts/mcp-session'
 import { diagnostic, t, time } from './i18n'
 import CodexPanel from './CodexPanel.vue'
+
+const hostBridge = useHostBridge()
 
 const state = ref<McpSessionView | null>(null)
 const busy = ref(false)
@@ -12,7 +15,7 @@ let closed = false
 async function load() {
   try {
     if (!busy.value) {
-      const value = await window.pods.mcpSession({ type: 'get' })
+      const value = await hostBridge.mcpSession({ type: 'get' })
       if (!closed && !busy.value) state.value = value
     }
   }
@@ -21,7 +24,7 @@ async function load() {
 }
 async function end() {
   busy.value = true; error.value = ''
-  try { state.value = await window.pods.mcpSession({ type: 'end' }) }
+  try { state.value = await hostBridge.mcpSession({ type: 'end' }) }
   catch (cause) { error.value = String(cause) }
   finally { busy.value = false }
 }

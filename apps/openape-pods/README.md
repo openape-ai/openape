@@ -70,6 +70,13 @@ of a verified native Terminal.app window screenshot is made.
 
 Managed Pod shells ignore ape-shell user configuration in the writable HOME (`APES_IGNORE_USER_CONFIG=1`) and skip bash profiles. Otherwise a script-created pending-grant notification hook could execute outside the script sandbox before approval. Authentication still comes from the protected per-session Pod identity. Ordinary apes CLI configuration is unchanged.
 
+## UI development
+
+Run `pnpm --filter @openape/pods dev:ui` for the actual UI with interactive
+synthetic data at http://127.0.0.1:5478, without Electron or a backend.
+See [UI development](docs/ui-development.md) for scenarios, the shared frontend
+boundaries, tests and the normal Electron/backend build handoff.
+
 ## Run and verify
 
 From the repository root, activate the pinned toolchain with `. ./scripts/activate-node.sh` and install using `pnpm install --frozen-lockfile`.
