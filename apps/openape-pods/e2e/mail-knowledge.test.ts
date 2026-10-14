@@ -40,7 +40,7 @@ it('mail-knowledge: runs the versioned recipe through the actual script, SDK and
   const { installMailRecipe } = await import('../src/worker/mail/install')
   const { ingestMailPage } = await import('../src/worker/mail/ingestion')
   const { parseMailRequest } = await import('../src/main/mail/contract')
-  const { recordedResponse } = await import('./fixtures/responses')
+  const { bundledModel, recordedResponse } = await import('./fixtures/responses')
   const { randomUUID } = await import('node:crypto')
   const { readFile, writeFile } = await import('node:fs/promises')
   const config = await runtime(false)
@@ -62,7 +62,7 @@ it('mail-knowledge: runs the versioned recipe through the actual script, SDK and
       const path = join(lease.root, `mail-${randomUUID()}.json`); await writeFile(path, data)
       return ingestMailPage(store, pod.id, lease.root, { path, hash: digest(data) }, scope, request, lease.assertCurrent)
     },
-    provider: async (body) => {
+    model: bundledModel, provider: async (body) => {
       providerCalls++; expect(JSON.stringify(body)).toContain('UNTRUSTED_CONTEXT')
       const context = JSON.parse(store.db.prepare('SELECT body FROM mail_contexts ORDER BY rowid DESC LIMIT 1').get()!.body as string)
       const answer = JSON.stringify({ claims: [{ kind: 'finding', text: 'Delivery is confirmed for June 8', evidence: [{ sourceId: context.evidence[0].id, quote: 'Delivery is confirmed for June 8.' }] }] })

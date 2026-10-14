@@ -9,6 +9,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { ConnectionManager } from '../../src/main/connections/manager'
 import { CredentialCache } from '../../src/main/connections/cache'
 import { CodexConnection } from '../../src/main/connections/codex'
+import { AuthProcess } from '../../src/main/connections/process'
 import { PodDatabase, digest } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { SetupControl } from '../../src/worker/onboarding/control'
@@ -19,7 +20,7 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(
 async function fixture(locked = false, architecture = process.arch) {
   const root = await mkdtemp(join(tmpdir(), 'pods-connect-')); const vendor = join(root, 'vendor'); await mkdir(vendor)
   await writeFile(join(vendor, 'codex'), 'synthetic-codex')
-  await writeFile(join(vendor, 'manifest.json'), JSON.stringify({ cli: `0.153.4-${process.platform}-${architecture}`, binaryHash: digest('synthetic-codex') }))
+  await writeFile(join(vendor, 'manifest.json'), JSON.stringify({ sdk: '0.153.4', cli: `0.153.4-${process.platform}-${architecture}`, binaryHash: digest('synthetic-codex') }))
   const store = new PodDatabase(root); const registry = new ResourceRegistry(store, () => {}); const control = new SetupControl(store, registry)
   const credentials = new CredentialCache(join(root, 'credentials'), { available: () => !locked, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
   const runtime = { helper: 'unused-fixture-helper', executable: process.execPath, entry: 'unused-entry', runtimeDirectories: [], environment: {}, binary: join(vendor, 'codex'), manifest: join(vendor, 'manifest.json'), catalog: 'unused-catalog', sdkHost: 'unused-host' }
@@ -214,4 +215,67 @@ it('aborts a live TypeSafe request on disconnect and marks rejected credentials 
   transport.mockResolvedValueOnce(new Response('another-key', { status: 403 }))
   const response = await manager.typesafeRequest(id, '{}', new AbortController().signal); await response.body?.cancel()
   expect((await manager.view()).connections[0]).toMatchObject({ state: 'expired', error: 'TypeSafe API key is invalid or access was denied; reconnect' })
+})
+
+/** A stand-in for the bundled Codex app-server: answers `model/list` (Codex 0.153.4 shape) over two pages. */
+function fakeAppServer() {
+  const server = { default: 'fixture-model-a' as string | null, starts: 0, requests: [] as { method: string, params: unknown }[] }
+  vi.spyOn(AuthProcess, 'start').mockImplementation(async () => {
+    server.starts++
+    return {
+      initialized: () => {},
+      close: async () => {},
+      request: async (method: string, params: unknown) => {
+        server.requests.push({ method, params })
+        if (method === 'initialize') return {}
+        if (method !== 'model/list') throw new Error(`Unexpected ${method}`)
+        if ((params as { cursor: string | null }).cursor === null) return { data: [{ id: 'fixture-small', model: 'fixture-small', isDefault: false, hidden: false }], nextCursor: 'page-2' }
+        return { data: server.default ? [{ id: server.default, model: server.default, isDefault: true, hidden: false }] : [], nextCursor: null }
+      },
+    } as unknown as AuthProcess
+  })
+  return server
+}
+async function connectedChatGPT() {
+  const context = await fixture()
+  vi.spyOn(CodexConnection.prototype, 'login').mockResolvedValue({ account: 'model@example.invalid', accountId: 'synthetic-account' })
+  const id = (await context.manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })).connections[0].id
+  await expect.poll(async () => (await context.manager.view()).connections[0].state).toBe('ready')
+  await context.credentials.connect(id, JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: 'synthetic-access', refresh_token: 'synthetic-refresh', account_id: 'synthetic-account' } }))
+  return { ...context, id }
+}
+it('uses the account default from the app-server model list, caches it hourly and re-reads it after sign-in', async () => {
+  const server = fakeAppServer(); const { manager } = await connectedChatGPT(); const signal = new AbortController().signal
+  expect(await manager.model(signal)).toBe('fixture-model-a')
+  expect(server.requests.filter(item => item.method === 'model/list').map(item => item.params)).toEqual([{ cursor: null, includeHidden: false }, { cursor: 'page-2', includeHidden: false }])
+  server.default = 'fixture-model-b'
+  expect(await manager.model(signal)).toBe('fixture-model-a')
+  expect(server.starts).toBe(1)
+  const now = Date.now(); vi.spyOn(Date, 'now').mockReturnValue(now + 61 * 60 * 1000)
+  expect(await manager.model(signal)).toBe('fixture-model-b')
+  expect(server.starts).toBe(2)
+  server.default = 'fixture-model-c'
+  await manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })
+  await expect.poll(async () => (await manager.view()).connections[0].state).toBe('ready')
+  expect(await manager.model(signal)).toBe('fixture-model-c')
+})
+it('reads the account default again once after the provider refuses the cached model', async () => {
+  const server = fakeAppServer(); const { manager } = await connectedChatGPT(); const signal = new AbortController().signal
+  vi.spyOn(CodexConnection.prototype, 'bearer').mockResolvedValue('synthetic-bearer')
+  const refusal = (model: string) => JSON.stringify({ detail: `The '${model}' model is not supported when using Codex with a ChatGPT account.` })
+  const upstream = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => new Response(refusal(JSON.parse(String(init?.body)).model), { status: 400, headers: { 'Content-Type': 'application/json' } }))
+  expect(await manager.model(signal)).toBe('fixture-model-a')
+  const response = await manager.provider({ model: 'fixture-model-a' }, signal)
+  expect(response.status).toBe(400); expect(await response.text()).toBe(refusal('fixture-model-a'))
+  server.default = 'fixture-model-b'
+  expect(await manager.model(signal)).toBe('fixture-model-b')
+  await manager.provider({ model: 'fixture-model-b' }, signal)
+  server.default = 'fixture-model-c'
+  expect(await manager.model(signal)).toBe('fixture-model-b')
+  expect(server.starts).toBe(2); expect(upstream).toHaveBeenCalledTimes(2)
+})
+it('fails visibly when the account reports no default model', async () => {
+  const server = fakeAppServer(); const { manager } = await connectedChatGPT()
+  server.default = null
+  await expect(manager.model(new AbortController().signal)).rejects.toThrow('The connected ChatGPT account reports no default model')
 })

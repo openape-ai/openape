@@ -84,5 +84,8 @@ export default antfu({
       ],
       patterns: [{ group: ['@openape/apes/*', '@openape/shapes/*'], message: 'The Pods desktop never loads Shapes adapters or resolves commands; the IdP does.' }],
     }],
+    // Issue 1475: the model comes from the connected ChatGPT account at runtime; a model change at OpenAI must
+    // never need a desktop code change or signed build. The first two selectors repeat the shared defaults.
+    'no-restricted-syntax': ['error', 'TSEnumDeclaration[const=true]', 'TSExportAssignment', ...['Literal[value=/(^|[^A-Za-z])gpt-/]', 'TemplateElement[value.raw=/(^|[^A-Za-z])gpt-/]'].map(selector => ({ selector, message: 'Do not hard-code a model slug in the Pods desktop; use the connected account\'s default model (src/worker/agent/model.ts).' }))],
   },
 })

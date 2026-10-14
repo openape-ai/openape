@@ -30,9 +30,11 @@ it('bounds a standalone run to 50 agent calls, as for network members', async ()
     await hooks.request('agent.run', { prompt: 'Synthetic task', tools: [] }, signal).catch((error: Error) => { refusal = error.message })
     return { status: 'completed', summary: 'Agent calls bounded', completedInputIds: input.eventIds, gapIds: [] }
   })
-  const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime, { provider: async () => new Response('{}') })
+  const model = async () => 'fixture-account-default'
+  const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime, { provider: async () => new Response('{}'), model })
   dispatcher.start(pod.id)
   await expect.poll(() => dispatcher.view(pod.id).runs[0]?.state).toBe('completed')
   expect(executeAgent).toHaveBeenCalledTimes(50)
+  expect(vi.mocked(executeAgent).mock.calls[0]![4].model).toBe(model)
   expect(refusal).toBe('A run can start at most 50 agent calls')
 })

@@ -12,7 +12,7 @@ import { MasterControl } from '../src/worker/master/control'
 import { MasterService } from '../src/worker/master/service'
 import type { AgentRuntime } from '../src/worker/agent/executor'
 import type { AgentGatewayServices } from '../src/worker/agent/gateway'
-import { recordedResponse } from './fixtures/responses'
+import { bundledModel, recordedResponse } from './fixtures/responses'
 
 let root = ''; let store: PodDatabase; let dispatcher: RunDispatcher; let master: MasterService
 async function setup(provider?: AgentGatewayServices['provider'], packaged = false) {
@@ -22,7 +22,7 @@ async function setup(provider?: AgentGatewayServices['provider'], packaged = fal
   const registry = new ResourceRegistry(store, podId => dispatcher.cancelPod(podId, 'Permissions changed'))
   dispatcher = new RunDispatcher(store, registry, runtime); const scheduler = new Scheduler(store, dispatcher)
   const control = new MasterControl(store, registry, dispatcher, scheduler, runtime)
-  master = new MasterService(store, runtime, control, provider)
+  master = new MasterService(store, runtime, control, provider && { provider, model: bundledModel })
   return { control, registry, runtime, scheduler }
 }
 afterEach(async () => { await master?.stop(); await dispatcher?.stop(); store?.close(); if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
@@ -127,10 +127,10 @@ it('executes the model-facing runtime example and preserves files and progress a
 it('generates a bounded structured description through actual app-server without control tools', async () => {
   const { runtime } = await setup(); const requests: Record<string, unknown>[] = []
   const { summarizeConversation } = await import('../src/worker/master/summarize')
-  const result = await summarizeConversation(store, runtime, async (body) => {
+  const result = await summarizeConversation(store, runtime, { model: bundledModel, provider: async (body) => {
     requests.push(body as Record<string, unknown>)
     return recordedResponse({ type: 'message', id: 'summary', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify({ description: 'Checks every 30 minutes.' }), annotations: [] }] })
-  }, JSON.stringify({ previousDescription: '', conversation: [{ role: 'user', text: 'Check every 30 minutes' }] }), new AbortController().signal)
+  } }, JSON.stringify({ previousDescription: '', conversation: [{ role: 'user', text: 'Check every 30 minutes' }] }), new AbortController().signal)
   expect(result).toBe('Checks every 30 minutes.')
   expect(JSON.stringify(requests[0].tools ?? [])).not.toContain('pods_control')
   expect(store.listPods()).toHaveLength(0)

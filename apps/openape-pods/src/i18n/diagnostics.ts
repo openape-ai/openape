@@ -124,4 +124,5 @@ export const diagnosticPatterns = [
   'summary.{p0} must be at most {p1} characters',
   'summary.{p0} must be a string',
   'summary has unknown fields: {p0}',
+  'The default model of the connected ChatGPT account ({p0}) is not in the bundled Codex model catalog. Update OpenApe Pods to a version whose bundled Codex supports this model.',
 ] as const satisfies readonly MessageKey[]
