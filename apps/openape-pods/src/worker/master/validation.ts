@@ -7,6 +7,7 @@ import { resolveProgram } from '../../main/programs/session'
 import { programRequest } from '../../main/programs/invoke'
 import { describeProgram } from '../runs/program-effects'
 import { parseHttpRequest, isHttpEffect } from '../../contracts/http'
+import { parseScriptSummary, splitScriptSummary } from '../../contracts/grant-summary'
 import { assignedHttp } from '../../main/programs/http-service'
 import { PodVariables } from '../resources/variables'
 import { parseCredentialRead } from '../../contracts/credentials'
@@ -73,7 +74,9 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
     let work: WorkDeclaration[] | undefined
     let polls = false
     let refusal: Error | undefined
-    const synthetic = async (operation: string, payload: unknown): Promise<unknown> => {
+    const synthetic = async (operation: string, input: unknown): Promise<unknown> => {
+      // A summary of a tool or HTTP call is checked like at run time and leaves the call itself unchanged.
+      const { payload } = operation === 'tools.invoke' || operation === 'http.request' ? splitScriptSummary(input) : { payload: input }
       if (operation === 'graph.contract') throw new Error('Network contracts (takes/gives) are retired; declare work and use shared data instead')
       if (operation === 'mail.archive' || operation === 'mail.archiveApproved') throw new Error('Archive proposals require live provider data; synthetic validation never creates grants or moves mail')
       if (operation === 'work.contract') {
@@ -95,7 +98,8 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       if (operation === 'decisions.withdraw') return { withdrawn: 0 }
       if (operation === 'approvals.request') {
         // A program approval is checked like at run time: an assigned, declared application and an approvable command.
-        const asked = payload as { action?: unknown, payload?: { application?: unknown, argv?: unknown } } | null
+        const asked = payload as { action?: unknown, title?: unknown, description?: unknown, link?: unknown, payload?: { application?: unknown, argv?: unknown } } | null
+        parseScriptSummary(Object.fromEntries(Object.entries(asked ?? {}).filter(([key]) => ['title', 'description', 'link'].includes(key))))
         if (asked?.action === 'program.run') await describeProgram(resources.list(pod.id), pod.id, capabilities, { application: String(asked.payload?.application ?? ''), argv: asked.payload?.argv })
         return { id: randomUUID(), state: 'collecting' }
       }

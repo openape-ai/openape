@@ -9,7 +9,7 @@ import type { ProgramAssignment, TerminalView } from '../../contracts/programs'
 import type { SandboxReach } from '../../contracts/sandbox'
 import { launchTerminal } from '../../worker/runtime/terminal'
 import { programHome, verifyExecutable } from '../../worker/runtime/sandbox'
-import type { AgentConnection, GrantObserver, GrantLedgerPort, RunGrantTokens } from '../broker/authorization'
+import type { AgentConnection, GrantObserver, GrantLedgerPort, GrantPresentation, RunGrantTokens } from '../broker/authorization'
 import { AgentAuthority } from '../broker/authorization'
 import type { CredentialCache } from '../connections/cache'
 import { registerAuthDomain } from '../connections/ledger'
@@ -92,13 +92,13 @@ export async function approvableCommand(assignment: ProgramAssignment, argv: str
   return resolved.detail.display
 }
 
-export async function prepareProgramAuthorization(assignment: ProgramAssignment, connection: AgentConnection, argv: string[], observe?: GrantObserver, ledger?: GrantLedgerPort, action?: 'move', tokens?: RunGrantTokens) {
+export async function prepareProgramAuthorization(assignment: ProgramAssignment, connection: AgentConnection, argv: string[], observe?: GrantObserver, ledger?: GrantLedgerPort, action?: 'move', tokens?: RunGrantTokens, presentation?: GrantPresentation) {
   const { authorization, write } = await resolveProgram(assignment, argv, action)
-  return { authority: new AgentAuthority(connection, observe, ledger, tokens), authorization, write }
+  return { authority: new AgentAuthority(connection, observe, ledger, tokens, presentation), authorization, write }
 }
 
-/** How a terminal reaches the Pod identity, its grant ledger and its sandbox reach. */
-export interface ProgramAccess { connection: () => Promise<AgentConnection>, ledger: GrantLedgerPort, reach: () => Promise<SandboxReach> }
+/** How a terminal reaches the Pod identity, its grant ledger, its sandbox reach and its name for grant requests. */
+export interface ProgramAccess { connection: () => Promise<AgentConnection>, ledger: GrantLedgerPort, reach: () => Promise<SandboxReach>, origin: () => Promise<string> }
 
 export class ProgramSession {
   private controller = new AbortController()
@@ -135,7 +135,7 @@ export class ProgramSession {
     const directory = join(root, this.id); const ownerTemporary = join(directory, 'tmp'); let verifiedClosed = true
     try {
       await mkdir(directory, { recursive: true, mode: 0o700 })
-      const { authority, authorization } = await prepareProgramAuthorization(assignment, await access.connection(), argv, undefined, access.ledger)
+      const { authority, authorization } = await prepareProgramAuthorization(assignment, await access.connection(), argv, undefined, access.ledger, undefined, undefined, { origin: await access.origin() })
       await authority.authorize(authorization, signal)
       await check(); signal.throwIfAborted()
       const proxy = assignment.networkHosts.length && (await access.reach()).level === 'isolated' ? await startMailProxy(signal, undefined, assignment.networkHosts) : undefined

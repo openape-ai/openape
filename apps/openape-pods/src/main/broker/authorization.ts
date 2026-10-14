@@ -1,10 +1,12 @@
 import { AuthorityError, transientNetwork, transientResponse  } from '../../contracts/infrastructure'
 import type { BrokeredGrant, OpenApeCliAuthorizationDetail } from '@openape/core'
-import { cliAuthorizationDetailsCover, migrateLegacyGrantSummary, sameBrokeredGrant } from '@openape/grants'
+import { cliAuthorizationDetailsCover, sameBrokeredGrant } from '@openape/grants'
 import type { VerifyAuthzOptions } from '@openape/grants'
 import { authorizeAssignedCommand } from '@openape/apes/assigned'
 import type { AssignedCommand } from '@openape/apes/assigned'
 import type { RunApproval } from '../../contracts/activity'
+import { grantSummary } from '../../contracts/grant-summary'
+import type { ScriptSummary } from '../../contracts/grant-summary'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import { setTimeout as delay } from 'node:timers/promises'
 
@@ -44,6 +46,11 @@ export interface AgentConnection {
   targetHost: string
   accessToken: () => Promise<string>
 }
+/**
+ * What the IdP shows about a grant this authority requests (issue 1473): the Pod's name as origin and, for a script
+ * call, the script's own summary. It never changes what is requested and is used only when a new grant is requested.
+ */
+export interface GrantPresentation { origin: string, summary?: ScriptSummary }
 export interface AssignedAuthorization {
   command: AssignedCommand
   grantId: string
@@ -108,7 +115,7 @@ function tokenClaims(token: string): { exp: number, grantType: string } {
 
 export class AgentAuthority {
   private readonly usedOnce = new Set<string>()
-  constructor(private readonly connection: AgentConnection, private readonly observe?: GrantObserver, private readonly ledger?: GrantLedgerPort, private readonly tokens?: RunGrantTokens) {
+  constructor(private readonly connection: AgentConnection, private readonly observe?: GrantObserver, private readonly ledger?: GrantLedgerPort, private readonly tokens?: RunGrantTokens, private readonly presentation?: GrantPresentation) {
     const url = new URL(connection.issuer)
     if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && url.hostname === '127.0.0.1')) || url.pathname !== '/' || url.search || url.hash || url.username || url.password) throw new Error('Invalid assigned identity origin')
   }
@@ -171,7 +178,7 @@ export class AgentAuthority {
     return resolved
   }
 
-  async acquire(assignment: AssignedAuthorization, signal: AbortSignal, summary?: string): Promise<string> {
+  async acquire(assignment: AssignedAuthorization, signal: AbortSignal): Promise<string> {
     const resolved = await this.resolve(assignment)
     let grant = assignment.grantId ? await this.grant(assignment.grantId, signal) : undefined
     if (grant && !covers(grant, resolved.detail)) throw new AuthorityError('The assigned grant does not cover this command')
@@ -192,7 +199,7 @@ export class AgentAuthority {
     if (grant && ['denied', 'revoked'].includes(grant.status)) throw new AuthorityError(`Permission ${grant.status}; review this Pod's permissions before retrying`)
     if (!grant || grant.status === 'used' || grant.status === 'expired') {
       // Every Pod grant is a continuing grant (owner decision October 10, 2026); per-item approvals are gate batches.
-      const create = async () => await this.request('/api/grants', 'POST', signal, { requester: this.connection.subject, target_host: this.connection.targetHost, audience: 'shapes', grant_type: 'always', command: assignment.command.argv, permissions: [resolved.permission], authorization_details: [resolved.detail], execution_context: resolved.executionContext, reason: resolved.detail.display, ...(summary ? { summary: migrateLegacyGrantSummary({ text: summary }) } : {}) }) as { id?: unknown }
+      const create = async () => await this.request('/api/grants', 'POST', signal, { requester: this.connection.subject, target_host: this.connection.targetHost, audience: 'shapes', grant_type: 'always', command: assignment.command.argv, permissions: [resolved.permission], authorization_details: [resolved.detail], execution_context: resolved.executionContext, reason: resolved.detail.display, summary: grantSummary(resolved.detail.display, this.presentation?.origin, this.presentation?.summary) }) as { id?: unknown }
       // Parallel calls of one run ask once.
       const created = await this.share(`request:${resolved.permission}`, create, signal)
       if (typeof created?.id !== 'string') throw new Error('Permission service returned an invalid grant')
@@ -250,10 +257,10 @@ export class AgentAuthority {
     if (!state || state.email !== this.connection.subject || state.owner !== this.connection.owner || state.active !== true || state.grantActive !== true || state.grantId !== grantId || !Array.isArray(state.keyIds) || !state.keyIds.includes(this.connection.keyId)) throw new AuthorityError('Pod identity, key or grant is no longer active')
   }
 
-  async authorize(assignment: AssignedAuthorization, signal: AbortSignal, summary?: string): Promise<void> {
+  async authorize(assignment: AssignedAuthorization, signal: AbortSignal): Promise<void> {
     if (!assignment.grantId && this.ledger) assignment.grantId = await this.ledger.find((await this.resolve(assignment)).detail, this.connection) ?? ''
     if (await this.reuse(assignment, signal)) return
-    assignment.grantId = await this.acquire(assignment, signal, summary)
+    assignment.grantId = await this.acquire(assignment, signal)
     await this.mint(assignment, signal)
   }
 

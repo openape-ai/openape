@@ -4,6 +4,7 @@ import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { LoadedAdapter } from '@openape/apes'
 import { approvalURL } from '../../contracts/activity'
 import { approvalAudience } from '../../contracts/approvals'
+import { grantSummary } from '../../contracts/grant-summary'
 import { gateActions } from '../../contracts/mail-archive-port'
 import { parsePodGrant, grantTypes  } from '../../contracts/grants'
 import type { GrantState, GrantType, PodGrant } from '../../contracts/grants'
@@ -115,7 +116,7 @@ export class PodGrants {
   private readonly checked = new Set<string>()
   // Pending grants whose refresh failed are reported once; they are read again on every refresh.
   private readonly unreadable = new Set<string>()
-  constructor(private readonly dependencies: { connection: (podId: string) => Promise<PodConnection>, ledger: (command: GrantLedgerCommand) => Promise<unknown> }) {}
+  constructor(private readonly dependencies: { connection: (podId: string) => Promise<PodConnection>, ledger: (command: GrantLedgerCommand) => Promise<unknown>, podName: (podId: string) => Promise<string> }) {}
 
   /** The ledger as one Pod's authority uses it. */
   port(podId: string): GrantLedgerPort {
@@ -169,7 +170,7 @@ export class PodGrants {
     }
     const adopted = await this.adopt(podId, connection, spec.details, id => this.candidate(connection, id, signal))
     if (adopted) return this.result(await this.record(podId, connection, adopted))
-    const response = await fetch(`${connection.issuer}/api/grants`, { method: 'POST', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await connection.accessToken()}` }, body: JSON.stringify({ requester: connection.subject, target_host: connection.targetHost, audience: 'shapes', grant_type: 'always', permissions: spec.details.map(detail => detail.permission), authorization_details: spec.details, execution_context: spec.executionContext, reason: `${spec.display} (Pod ${podId})`.slice(0, 4096) }) })
+    const response = await fetch(`${connection.issuer}/api/grants`, { method: 'POST', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await connection.accessToken()}` }, body: JSON.stringify({ requester: connection.subject, target_host: connection.targetHost, audience: 'shapes', grant_type: 'always', permissions: spec.details.map(detail => detail.permission), authorization_details: spec.details, execution_context: spec.executionContext, reason: spec.display.slice(0, 4096), summary: grantSummary(spec.display, await this.dependencies.podName(podId)) }) })
     // 201 is a new request; 200 is an existing approved grant the IdP reused.
     const created = await readJSON(response)
     if (typeof created.id !== 'string' || !grantIdPattern.test(created.id)) throw new Error('Invalid grant response; inspect the Pod grants before retrying')

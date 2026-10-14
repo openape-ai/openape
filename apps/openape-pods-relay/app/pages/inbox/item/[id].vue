@@ -22,7 +22,8 @@ function https(value: string): URL | null {
   }
   catch { return null }
 }
-const safeLinks = computed(() => (item.value?.kind === 'message' ? item.value.links : []).flatMap((link) => {
+// A message's links and the reference link of a decision Pods settles itself; an IdP or Secrets handoff stays with the decision.
+const safeLinks = computed(() => (item.value?.kind === 'message' || item.value?.decision?.authority === 'pods' ? item.value.links : []).flatMap((link) => {
   const url = https(link.url)
   return url ? [{ title: link.title, url: url.href, host: url.host }] : []
 }))

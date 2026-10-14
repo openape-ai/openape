@@ -1,6 +1,5 @@
 // @vitest-environment node
 import { randomUUID } from 'node:crypto'
-import { migrateLegacyGrantSummary } from '@openape/grants'
 import { afterEach, expect, it, vi } from 'vitest'
 import { archiveItemCommand, archiveItemSummary } from '../../src/contracts/mail-archive'
 import type { ArchiveRecord } from '../../src/contracts/mail-archive'
@@ -14,7 +13,7 @@ function fixture() {
   const record: ArchiveRecord = { state: 'pending', grantId: randomUUID(), grants: [{ id: 'message', grantId }], outcomes: [], manifest: { version: 1, id: randomUUID(), podId, applicationId: randomUUID(), applicationHash: 'pinned', mailbox: 'owner@example.test', expiresAt: Date.now() + 600000, items: [{ id: 'message', version: 'v1', folder: 'inbox', internetMessageId: '<fixture@example.test>', sender: 'sender@example.test', subject: 'Reviewed message', receivedAt: '2026-09-26T05:00:00Z', url: 'https://outlook.office.com/mail/id/one', reason: 'Completed' }] } }
   const connection: AgentConnection = { subject: 'agent@example.test', owner: 'owner@example.test', issuer: 'https://id.example.test', targetHost: `pods:${podId}`, keyId: 'key', accessToken: async () => 'synthetic-only' }
   const item = record.manifest.items[0]!
-  const grant = { id: grantId, status: 'approved', decided_by: connection.owner, request: { requester: connection.subject, target_host: connection.targetHost, audience: 'pods-mail-archive', grant_type: 'once', waits_until: Math.floor(record.manifest.expiresAt / 1000), command: archiveItemCommand(record.manifest, item), summary: migrateLegacyGrantSummary({ text: archiveItemSummary(item) }) } }
+  const grant = { id: grantId, status: 'approved', decided_by: connection.owner, request: { requester: connection.subject, target_host: connection.targetHost, audience: 'pods-mail-archive', grant_type: 'once', waits_until: Math.floor(record.manifest.expiresAt / 1000), command: archiveItemCommand(record.manifest, item), summary: archiveItemSummary(item, 'Archive Pod') } }
   let batchListing = true
   const fetch = vi.fn(async (url: unknown) => String(url).endsWith('/.well-known/openid-configuration') ? Response.json({ openape_grant_batch_supported: batchListing }) : String(url).includes('/api/grants?') ? Response.json({ data: [grant] }) : Response.json(grant)); vi.stubGlobal('fetch', fetch)
   const withoutListing = () => { batchListing = false }

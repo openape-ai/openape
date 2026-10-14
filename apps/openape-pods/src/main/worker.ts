@@ -88,6 +88,8 @@ import type { CredentialCache } from './connections/cache'
 import { createMacOSCredentialCache } from './connections/macos'
 import { PodIdentityManager } from './connections/agent'
 import { AgentAuthority, RunGrantTokens } from './broker/authorization'
+import type { GrantPresentation } from './broker/authorization'
+import { parseScriptSummary } from '../contracts/grant-summary'
 import { setTimeout as delay } from 'node:timers/promises'
 import { MailService } from './mail/service'
 import { assignedMail } from './mail/assigned'
@@ -249,7 +251,7 @@ export class FixtureWorker {
     this.providerGateway = await startAgentGateway({ provider: (body, signal) => this.connections!.provider(body, signal), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
     const connections = this.connections
     const grants = this.podGrants()!
-    this.programs = new ProgramManager(join(this.root, 'authentication'), runtime.helper, this.credentials!, this.connections, podId => this.resources({ type: 'list', podId }), command => this.dispatch({ program: command }), grants, podId => ({ connection: () => connections.podConnection(podId), ledger: grants.port(podId), reach: () => this.sandboxReach(podId) }))
+    this.programs = new ProgramManager(join(this.root, 'authentication'), runtime.helper, this.credentials!, this.connections, podId => this.resources({ type: 'list', podId }), command => this.dispatch({ program: command }), grants, podId => ({ connection: () => connections.podConnection(podId), ledger: grants.port(podId), reach: () => this.sandboxReach(podId), origin: () => this.podName(podId) }))
     await this.connections.initialize(async () => { await this.dispatch({ inspectCredentials: true }); await this.credentials!.reconcileScriptSecrets(await this.dispatch({ credentialInventory: true }) as { id: string, podId: string }[]); await this.finishDeletions() })
     this.secretsGate = new SecretsGate({
       origin: secretsOrigin,
@@ -382,7 +384,7 @@ export class FixtureWorker {
   private podGrants(): PodGrants | null {
     const connections = this.connections
     if (!connections) return null
-    this.grants ??= new PodGrants({ connection: podId => connections.podConnection(podId), ledger: command => this.dispatch({ grants: command }) })
+    this.grants ??= new PodGrants({ connection: podId => connections.podConnection(podId), ledger: command => this.dispatch({ grants: command }), podName: podId => this.podName(podId) })
     return this.grants
   }
 
@@ -691,12 +693,17 @@ export class FixtureWorker {
     return { grantId: grant.id, approval }
   }
 
+  /** The Pod's name as the IdP shows it with the Pod's grant requests. */
+  private async podName(podId: string): Promise<string> {
+    return grantPodName(parseWorkspace(await this.dispatch({ type: 'list' })).pods.find(pod => pod.id === podId)?.name ?? 'Pod')
+  }
+
   private administration(): Administration {
     return {
       grants: this.podGrants()!,
       vendor: join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/'),
       resources: podId => this.resources({ type: 'list', podId }),
-      podName: async podId => grantPodName(parseWorkspace(await this.dispatch({ type: 'list' })).pods.find(pod => pod.id === podId)?.name ?? 'Pod'),
+      podName: podId => this.podName(podId),
       ledger: command => this.dispatch({ grants: command }),
       programDefinition: async entry => entry.path.endsWith('.app') ? applicationDefinition(entry.path, join(this.root, 'applications')) : programDefinition(entry.path, entry.adapterPath, entry.commandName, entry.runtimePath),
       addProgram: async (podId, definition) => { await this.program({ type: 'add', podId, epoch: (await this.resources({ type: 'list', podId })).epoch }, definition) },
@@ -918,6 +925,8 @@ export class FixtureWorker {
         await this.shellIdentities.get(scope.runId)?.close(); this.shellIdentities.delete(scope.runId); this.runTokens.delete(scope.runId); return true
       }
       const context = parseRunContext(await this.dispatch({ runContext: { scope } }))
+      // The Pod's name and, for a script call, its own summary; the IdP shows them when the call needs a new grant (issue 1473).
+      const presentation: GrantPresentation = { origin: grantPodName(context.name), ...(request.summary === undefined ? {} : { summary: parseScriptSummary(request.summary) }) }
       // Every grant this Pod requests or observes is recorded; a later call or run reuses it by coverage.
       const ledger = this.podGrants()?.port(scope.podId)
       const observe = async (observed: RunApproval) => {
@@ -941,14 +950,14 @@ export class FixtureWorker {
         const runtime = { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') }
         const environment = await podEnvironment(this.root, scope.podId, runtime)
         const connection = await this.connections.podConnection(scope.podId)
-        const authority = new AgentAuthority(connection, observe, ledger, tokens)
+        const authority = new AgentAuthority(connection, observe, ledger, tokens, presentation)
         const adapterPath = join(dist, 'vendor/pod-runtime-shapes.toml')
         const adapter = loadAdapter('pod-runtime', adapterPath)
         const name = grantPodName(context.name)
         const argv = runtimeArgv({ podId: scope.podId, name, script: join(this.root, 'runs', scope.runId, 'run.mjs'), workspace: environment.workspace, home: environment.home, environment: visibleEnvironment(environment.environment) })
         const resolved = await resolveCommand(adapter, argv)
         const assignment = { grantId: '', command: { cliId: 'pod-runtime', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] } }
-        await authority.authorize(assignment, controller.signal, `Pod: ${name} (${scope.podId})\nRun the stored script inside this Pod's managed runtime. Script changes remain within separately assigned permissions. This approval does not enable a schedule.\nScript: ${join(this.root, 'runs', scope.runId, 'run.mjs')}\nWorkspace: ${environment.workspace}\nHOME: ${environment.home}`)
+        await authority.authorize(assignment, controller.signal)
         await check(); controller.signal.throwIfAborted()
         const monitoring = new AbortController()
         const monitor = (async () => {
@@ -996,7 +1005,7 @@ export class FixtureWorker {
         if (!this.credentials || !this.connections) throw new Error('Connection service unavailable')
         this.archiveService ??= new MailArchiveService(new ArchiveStore(join(this.root, 'mail-archive')))
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
-        const result = await handleMailArchive({ service: this.archiveService, body: request.body, scope, root: this.root, helper: join(dist, 'native/pods-helper'), credentials: this.credentials, connections: this.connections, check, signal: controller.signal, observe, ledger, reach: () => this.sandboxReach(scope.podId) })
+        const result = await handleMailArchive({ service: this.archiveService, body: request.body, scope, root: this.root, helper: join(dist, 'native/pods-helper'), credentials: this.credentials, connections: this.connections, check, signal: controller.signal, observe, ledger, reach: () => this.sandboxReach(scope.podId), presentation })
         await check(); controller.signal.throwIfAborted(); return result
       }
       if (request.kind === 'jev') {
@@ -1004,7 +1013,7 @@ export class FixtureWorker {
         const assignment = assignedJev(state.resources, scope.podId, scope.capabilities)
         const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
         const result = await executeJev(assignment, parseJevRequest(request.body), {
-          vendor, credentials: this.credentials, signal: controller.signal, observe, ledger, check, tokens,
+          vendor, credentials: this.credentials, signal: controller.signal, observe, ledger, check, tokens, presentation,
           send: (body, signal) => this.connections!.typesafeRequest(assignment.connectionId, body, signal),
           consumeAttempt: () => {
             const count = this.jevAttempts.get(scope.runId) ?? 0
@@ -1026,13 +1035,13 @@ export class FixtureWorker {
           },
           reject: authentication => this.agentTokens.reject(scope.podId, authentication),
         }
-        const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), vendor, await this.connections.podConnection(scope.podId), controller.signal, observe, ledger, bearer, tokens)
+        const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), vendor, await this.connections.podConnection(scope.podId), controller.signal, observe, ledger, bearer, tokens, presentation)
         await check(); controller.signal.throwIfAborted(); return result
       }
       if (request.kind === undefined && request.body && typeof request.body === 'object' && 'sshInventory' in request.body) {
         if (!this.credentials) throw new Error('Credential store is unavailable')
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
-        return await invokeSsh({ resources: state.resources, scope, body: request.body, dist, root: join(this.root, 'runs', scope.runId), credentials: this.credentials, signal: controller.signal, check, observe, ledger, tokens })
+        return await invokeSsh({ resources: state.resources, scope, body: request.body, dist, root: join(this.root, 'runs', scope.runId), credentials: this.credentials, signal: controller.signal, check, observe, ledger, tokens, presentation })
       }
       if (request.kind === 'mailMove' || request.kind === 'approvedProgram' || (request.body && typeof request.body === 'object' && ('applicationId' in request.body || 'application' in request.body))) {
         if (!this.credentials || !this.connections) throw new Error('Credential store is unavailable')
@@ -1051,7 +1060,7 @@ export class FixtureWorker {
         const workspace = await podWorkspace(this.root, scope.podId)
         const directories = directoryPolicy(await assignedDirectories(this.root, scope.podId, state.resources))
         const approval = approved ? async () => { await this.dispatch({ approvalExecution: { scope, invocation: approved } }) } : undefined
-        const result = await invokeProgram(state.resources, scope.podId, body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { ...directories, workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } }, { connection, ledger, reach: await this.sandboxReach(scope.podId), observe, tokens, approval }, request.kind === 'mailMove' ? 'move' : undefined)
+        const result = await invokeProgram(state.resources, scope.podId, body, join(dist, 'native/pods-helper'), join(this.root, 'runs', scope.runId), this.credentials, { ...directories, workspace, capabilities: scope.capabilities, signal: controller.signal, assertCurrent: () => controller.signal.throwIfAborted(), registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } }, { connection, ledger, reach: await this.sandboxReach(scope.podId), observe, tokens, approval, presentation }, request.kind === 'mailMove' ? 'move' : undefined)
         await check(); controller.signal.throwIfAborted(); return result
       }
       const assignment = assignedMail(state.resources)
@@ -1059,7 +1068,7 @@ export class FixtureWorker {
       const credentials = this.credentials
       if (!credentials) throw new Error('Credential store is unavailable')
       const identity = new PodIdentityManager(credentials)
-      const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`), observe, ledger, tokens)
+      const authority = new AgentAuthority(identity.connection(assignment.identity, `pods:${scope.podId}`), observe, ledger, tokens, presentation)
       const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
       const service = new MailService(join(dist, 'native/pods-helper'), join(dist, 'vendor'), authority, credentials)
       const value = await service.execute(assignment.mail, request.body, join(this.root, 'runs', scope.runId), { capabilities: scope.capabilities, assertCurrent: () => controller.signal.throwIfAborted(), signal: controller.signal, registerDomain: async (path, ownerPid) => { await check({ path, ownerPid }); controller.signal.throwIfAborted() } })
