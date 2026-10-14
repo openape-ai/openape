@@ -59,6 +59,9 @@ class FakeIdp {
   authorizeBodies: Record<string, unknown>[] = []
   claimOverrides: Record<string, unknown> = {}
   signWithForeignKey = false
+  consumed: string[] = []
+  /** Replaces the consume answer, e.g. a grant consumed elsewhere in the meantime. */
+  consumeAnswer: Record<string, unknown> | null = null
   /** Called on every `GET /api/grants/{id}`; tests decide pending requests here. */
   onPoll: (grant: FakeGrant) => void = () => {}
   private server!: Server
@@ -87,6 +90,8 @@ class FakeIdp {
     this.authorizeBodies = []
     this.claimOverrides = {}
     this.signWithForeignKey = false
+    this.consumed = []
+    this.consumeAnswer = null
     this.onPoll = () => {}
   }
 
@@ -109,7 +114,9 @@ class FakeIdp {
     const url = new URL(request.url ?? '/', this.issuer)
     if (url.pathname === '/.well-known/jwks.json') return this.send(response, 200, { keys: [this.jwk] })
     if (url.pathname === '/.well-known/openid-configuration')
-      return this.send(response, 200, { issuer: this.issuer, jwks_uri: `${this.issuer}/.well-known/jwks.json`, openape_grants_endpoint: `${this.issuer}/api/grants` })
+      return this.send(response, 200, { issuer: this.issuer, jwks_uri: `${this.issuer}/.well-known/jwks.json`, openape_grants_endpoint: `${this.issuer}/api/grants`, openape_program_authorization_endpoint: `${this.issuer}/api/grants/authorize` })
+    const consumed = this.grants.find(candidate => url.pathname === `/api/grants/${candidate.id}/consume`)
+    if (request.method === 'POST' && consumed) return this.consume(consumed, request, response)
     if (request.headers.authorization !== `Bearer ${ACCESS_TOKEN}`) return this.send(response, 401, { title: 'Unauthorized' })
     if (request.method === 'POST' && url.pathname === '/api/grants/authorize') return this.authorize(request, response)
     const grant = this.grants.find(candidate => url.pathname === `/api/grants/${candidate.id}`)
@@ -118,6 +125,18 @@ class FakeIdp {
       return this.send(response, 200, { id: grant.id, status: grant.status, request: { audience: 'shapes', target_host: grant.targetHost, execution_context: { argv: grant.executionArgv, argv_hash: grant.argvHash, program_sha256: grant.programSha256 } } })
     }
     return this.send(response, 404, { title: 'Not found' })
+  }
+
+  /** Single use is enforced here, as on the IdP: the token holder consumes the grant. */
+  private consume(grant: FakeGrant, request: IncomingMessage, response: ServerResponse): void {
+    const token = request.headers.authorization?.replace(/^Bearer /, '') ?? ''
+    const claims = JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString()) as { grant_id?: string }
+    if (claims.grant_id !== grant.id) return this.send(response, 400, { title: 'Grant ID in token does not match URL' })
+    this.consumed.push(grant.id)
+    if (this.consumeAnswer) return this.send(response, 200, this.consumeAnswer)
+    if (grant.status === 'used') return this.send(response, 200, { error: 'already_consumed', status: 'used' })
+    if (grant.grantType === 'once') grant.status = 'used'
+    return this.send(response, 200, { status: grant.grantType === 'once' ? 'consumed' : 'valid' })
   }
 
   private async authorize(request: IncomingMessage, response: ServerResponse): Promise<void> {
@@ -139,7 +158,6 @@ class FakeIdp {
     const mine = this.grants.filter(grant => grant.argvHash === argvHash && grant.targetHost === body.target_host)
     const covering = mine.find(grant => grant.status === 'approved')
     if (covering) {
-      if (covering.grantType === 'once') covering.status = 'used'
       const now = Math.floor(Date.now() / 1000)
       const claims = {
         iss: this.issuer,
@@ -162,7 +180,7 @@ class FakeIdp {
     }
     const latest = mine.at(-1)
     if (latest?.status === 'denied' || latest?.status === 'revoked')
-      return this.send(response, 403, { state: latest.status, grant_id: latest.id })
+      return this.send(response, 403, { type: `https://openape.org/errors/grant_${latest.status}`, title: `Grant ${latest.status}`, status: 403, state: latest.status, grant_id: latest.id })
     const pending = latest?.status === 'pending' ? latest : await this.add(executionArgv, program.sha256, 'pending', (body.grant_type as 'once' | 'always' | undefined) ?? 'always')
     return this.send(response, 202, { state: 'pending', grant_id: pending.id, approval_url: `${this.issuer}/grant-approval?grant_id=${pending.id}` })
   }
@@ -351,6 +369,21 @@ describe('apes run with per-call IdP authorization', () => {
 
     await expect(apesRun(['fakegit', 'status'])).rejects.toThrow('does not match this program file')
 
+    expect(ran()).toBeNull()
+  })
+
+  it('consumes a single-use grant before running and refuses when it was already used elsewhere', async () => {
+    const sha256 = writeProgram()
+    const grant = await idp.approved(['fakegit', 'tag', 'v1'], sha256, 'once')
+
+    await apesRun(['fakegit', 'tag', 'v1'])
+    expect(ran()).toEqual(['tag', 'v1'])
+    expect(idp.consumed).toEqual([grant.id])
+
+    rmSync(marker)
+    await idp.approved(['fakegit', 'tag', 'v2'], sha256, 'once')
+    idp.consumeAnswer = { error: 'already_consumed', status: 'used' }
+    await expect(apesRun(['fakegit', 'tag', 'v2'])).rejects.toThrow('cannot be used: already_consumed')
     expect(ran()).toBeNull()
   })
 

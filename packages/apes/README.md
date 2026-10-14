@@ -149,8 +149,8 @@ only the IdP knows the Shapes registry and decides:
   command token. apes checks its signature against the IdP's JWKS, the issuer, its
   own identity as subject, the target host, the argv hash of exactly this command and
   the hash of the file it is about to run, and only then runs that file with these
-  arguments. Identical calls reuse a reusable token until it expires; a single-use
-  token is never reused.
+  arguments. A single-use grant is consumed (`POST /api/grants/{id}/consume`) before
+  the command runs; identical calls reuse a reusable token until it expires.
 - **pending** — the IdP created (or reuses) a request for your approval. Without
   `--wait` apes prints it and exits 75; with `--wait` (or `APE_WAIT=1`) it waits up
   to 5 minutes and asks again after approval. A wait that runs out never runs the

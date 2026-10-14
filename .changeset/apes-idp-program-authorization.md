@@ -12,8 +12,11 @@ subject, target host, argv hash of exactly this command, hash of the file it is
 about to run) and runs that file with these arguments; `pending` keeps the
 existing behaviour (async info block and exit 75, or `--wait` / `APE_WAIT=1` for
 up to 5 minutes, then authorize again; a wait that runs out never runs the
-command); `denied` and `revoked` refuse. Identical calls reuse a reusable token
-until it expires; single-use tokens are never reused. Nothing below
+command); `denied` and `revoked` refuse. A single-use grant is consumed at
+`POST /api/grants/{id}/consume` before the command runs (anything but `consumed`
+refuses); identical calls reuse a reusable token until it expires. The
+authorization endpoint comes from discovery
+(`openape_program_authorization_endpoint`, default `/api/grants/authorize`). Nothing below
 `~/.openape/shapes` is read while authorizing or running a command.
 
 Major because local adapter execution is removed:

@@ -3,7 +3,7 @@ import { accessSync, constants, createReadStream, statSync } from 'node:fs'
 import { basename, delimiter, join, resolve } from 'node:path'
 import type { OpenApeAuthZClaims, OpenApeGrantSummary } from '@openape/core'
 import { computeArgvHash, verifyAuthzJWT } from '@openape/grants'
-import { ApiError, apiFetch, getGrantsEndpoint } from '../http.js'
+import { ApiError, apiFetch, discoverEndpoints, getGrantsEndpoint } from '../http.js'
 import { GRANT_WAIT_MS } from '../shapes/grants.js'
 import { createWaitProgressReporter } from '../wait-progress.js'
 
@@ -122,11 +122,16 @@ function parseAnswer(body: Record<string, unknown>): AuthorizeAnswer {
   throw new Error(`Unrecognized authorization answer: ${String(body.state)}`)
 }
 
+async function authorizationEndpoint(issuer: string): Promise<string> {
+  const discovery = await discoverEndpoints(issuer)
+  return (discovery.openape_program_authorization_endpoint as string | undefined) ?? `${issuer}/api/grants/authorize`
+}
+
 /** One `POST /api/grants/authorize` round trip. */
 export async function requestAuthorization(call: ProgramCall, request: AuthorizationRequest): Promise<AuthorizeAnswer> {
   const issuer = issuerOf(request.idp)
   try {
-    const body = await apiFetch<Record<string, unknown>>(`${issuer}/api/grants/authorize`, {
+    const body = await apiFetch<Record<string, unknown>>(await authorizationEndpoint(issuer), {
       method: 'POST',
       idp: issuer,
       body: {
@@ -188,6 +193,22 @@ export async function waitForDecision(idp: string, grantId: string, waitMs: numb
   throw new AuthorizationTimeoutError(grantId, waitMs)
 }
 
+/**
+ * The IdP issues a token for an approved single-use grant on every authorize call until the grant is consumed, so
+ * apes consumes it before the command runs (as for every grant token before); anything but `consumed` refuses.
+ */
+async function consumeSingleUseGrant(idp: string, grantId: string, token: string): Promise<void> {
+  const grantsEndpoint = await getGrantsEndpoint(issuerOf(idp))
+  const response = await fetch(`${grantsEndpoint}/${encodeURIComponent(grantId)}/consume`, {
+    method: 'POST',
+    redirect: 'error',
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!response.ok) throw new Error(`Consuming grant ${grantId} failed: ${response.status} ${response.statusText}`)
+  const result = await response.json() as { error?: string, status?: string }
+  if (result.error || result.status !== 'consumed') throw new Error(`Grant ${grantId} cannot be used: ${result.error ?? result.status}`)
+}
+
 const REUSE_MARGIN_SECONDS = 5
 const tokenCache = new Map<string, { grantId: string, token: string, claims: ProgramTokenClaims }>()
 
@@ -214,8 +235,9 @@ export interface AuthorizeProgramOptions extends AuthorizationRequest {
 
 /**
  * Obtains a verified command token for exactly this call, or the pending request when not waiting. Denied and
- * revoked answers throw `AuthorizationRefusedError`. Reusable tokens of identical calls are kept until shortly
- * before they expire; single-use tokens never are.
+ * revoked answers throw `AuthorizationRefusedError`. A single-use grant is consumed before this returns, so the
+ * caller runs the command at most once for it. Reusable tokens of identical calls are kept until shortly before
+ * they expire; single-use tokens never are.
  */
 export async function authorizeProgramCall(call: ProgramCall, options: AuthorizeProgramOptions): Promise<ProgramAuthorization> {
   const key = await cacheKey(call, options, options.subject)
@@ -238,6 +260,7 @@ export async function authorizeProgramCall(call: ProgramCall, options: Authorize
 
   const claims = await verifyProgramToken(answer.token, { idp: options.idp, subject: options.subject, targetHost: options.targetHost, call })
   const authorized = { grantId: answer.grantId, token: answer.token, claims }
-  if (claims.grant_type !== 'once') tokenCache.set(key, authorized)
+  if (claims.grant_type === 'once') await consumeSingleUseGrant(options.idp, answer.grantId, answer.token)
+  else tokenCache.set(key, authorized)
   return { kind: 'authorized', ...authorized }
 }
