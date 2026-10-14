@@ -16,10 +16,10 @@ import { registerAuthDomain } from '../connections/ledger'
 import { startMailProxy } from '../mail/proxy'
 import { inspectDomainRecords } from '../../worker/recovery/domains'
 import { ProgramState } from './state'
-import { gateActions } from '../../contracts/mail-archive-port'
+import { archivePortPrograms, gateActions, mailProgramActions } from '../../contracts/mail-archive-port'
 import { approvalURL } from '../../contracts/activity'
 
-/** Grant actions that only read; a call whose grant authorizes any other action is a write that is never replayed automatically. */
+/** Actions that only read; a call the IdP resolves to any other action is a write that is never replayed automatically. */
 export const readActions = ['read', 'list', 'get']
 
 /** Verifies the assigned program file, its runtime and entry files before a call is authorized. */
@@ -35,14 +35,18 @@ export function programCall(assignment: ProgramAssignment, argv: string[]): Prog
 }
 
 /**
- * What the IdP's answer means for the run (issue 1473, revision 4): the desktop knows a command only through the grant
- * that covers it. A grant covers a command only with the command's own action, so a grant that authorizes only reads
- * makes the call a read; any other action, or none, makes it a write. Mail moves and archives (gate actions) run only
- * through the approved archive port, whatever grant covers them.
+ * What the IdP's answer means for the run (issue 1473, revision 4): the verified command token carries the IdP's own
+ * resolution of exactly this call (`authorization_details`, the generic exact-command detail for a program the
+ * registry does not describe). The call is a read only when every resolved action reads; any other action, or none, makes
+ * it a write. Mail moves and archives (gate actions) run only through the approved archive port. Outside it, a call of a
+ * mail program with an archive port (by its command name or the resolved program) is refused unless every action is a
+ * known non-moving one, so an exact-command fallback can never move mail.
  */
-export function callEffect(authorization: CommandAuthorization, port?: 'move'): { write: boolean } {
+export function callEffect(authorization: CommandAuthorization, program: string, port?: 'move'): { write: boolean } {
   if (port === 'move' && !authorization.actions.includes('move')) throw new Error('The archive port may only run the granted move operation')
-  if (port !== 'move' && authorization.actions.some(action => gateActions.includes(action))) throw new Error('Moving or archiving mail runs only through the approved archive service')
+  const mailProgram = [program, ...authorization.programs].some(name => archivePortPrograms.includes(name))
+  const refused = (action: string) => gateActions.includes(action) || (mailProgram && !mailProgramActions.includes(action))
+  if (port !== 'move' && (authorization.actions.some(refused) || (mailProgram && !authorization.actions.length))) throw new Error('Moving or archiving mail runs only through the approved archive service')
   return { write: !authorization.actions.length || authorization.actions.some(action => !readActions.includes(action)) }
 }
 
@@ -93,7 +97,7 @@ export class ProgramSession {
       const authority = new AgentAuthority(await access.connection(), async (progress) => { if (progress.state === 'pending') this.append(`Waiting for approval at ${approvalURL(progress)}\n`) }, access.ledger, undefined, { origin: await access.origin() })
       await verifyProgram(assignment)
       const authorization = await authority.authorizeProgram(programCall(assignment, argv), signal)
-      callEffect(authorization)
+      callEffect(authorization, assignment.cliId)
       await check(); signal.throwIfAborted()
       const proxy = assignment.networkHosts.length && (await access.reach()).level === 'isolated' ? await startMailProxy(signal, undefined, assignment.networkHosts) : undefined
       try {

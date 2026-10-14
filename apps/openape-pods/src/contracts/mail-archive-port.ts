@@ -1,9 +1,19 @@
 /**
- * Mail moves belong to owner approvals: a command whose grant carries one of these actions runs only through the approved
+ * Mail moves belong to owner approvals: a command the IdP resolves to one of these actions runs only through the approved
  * archive service (context.mail.archiveApproved), bound to one approved message. A whole-program grant never covers
  * it, and scripts, agents and terminals cannot call it, whatever grant the Pod holds.
  */
 export const gateActions: readonly string[] = ['move', 'archive']
+/**
+ * The mail programs that have an archive port: the o365 CLI (registry name `o365`, assigned as `o365-cli`), whose
+ * workflow move runs through mail.archiveApproved, and the pods-mail companion of mail.archive.
+ */
+export const archivePortPrograms: readonly string[] = ['o365', 'o365-cli', 'pods-mail']
+/**
+ * What a call of such a program may do outside its archive port, as the IdP resolved it: reads and the known effects
+ * that never move mail. Anything else, including a generic exact-command action, is refused (fail closed).
+ */
+export const mailProgramActions: readonly string[] = ['read', 'list', 'get', 'search', 'categorize', 'configure', 'login']
 export function assertGateOperation(action: string, port?: string): void {
   if (gateActions.includes(action) && port !== action) throw new Error('Moving or archiving mail runs only through the approved archive service')
 }

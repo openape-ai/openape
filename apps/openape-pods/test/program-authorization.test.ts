@@ -30,13 +30,17 @@ async function idp() {
     authorizations: [] as Record<string, unknown>[], reads: 0, keySets: 0, consumes: [] as string[], approvals: [] as string[],
     // What the IdP decides for a command: the newest grant of this requester per argv hash.
     grants: new Map<string, { id: string, status: string }>(),
-    initial: 'approved' as Decision, actions: ['read'], grantType: 'always', lifetime: 300, tamper: {} as Tamper, unavailable: 0,
+    initial: 'approved' as Decision,
+    // The IdP's resolution of exactly this call, which the command token carries (IdP PR 417): action per argv.
+    resolve: (_argv: string[]) => ['read'],
+    // The covering grant: a whole-program grant over reads and writes, which never decides the classification.
+    grantActions: ['read', 'edit'], grantType: 'always', lifetime: 300, tamper: {} as Tamper, unavailable: 0,
   }
   let origin = ''
   const token = async (grantId: string, body: { program: { name: string, sha256: string }, argv: string[] }) => {
     const now = Math.floor(Date.now() / 1000)
     const argv = [body.program.name, ...body.argv]
-    const claims = { iss: state.tamper.iss ?? origin, sub: state.tamper.sub ?? 'pod@example.test', aud: 'shapes', target_host: state.tamper.target_host ?? `pods:${podId}`, iat: now, exp: now + state.lifetime, jti: randomUUID(), grant_id: state.tamper.grant_id ?? grantId, grant_type: state.grantType, approval: state.grantType, authorization_details: state.actions.map(action => ({ type: 'openape_cli', cli_id: body.program.name, operation_id: 'fixture', resource_chain: [], action, permission: `${body.program.name}.fixture#${action}`, display: 'Fixture command', risk: 'low' })), command: argv, argv_hash: state.tamper.argv_hash ?? await computeArgvHash(argv), program_sha256: state.tamper.program_sha256 ?? body.program.sha256, decided_by: 'owner@example.test', ...(state.tamper.brokered ? { brokered: state.tamper.brokered } : {}) }
+    const claims = { iss: state.tamper.iss ?? origin, sub: state.tamper.sub ?? 'pod@example.test', aud: 'shapes', target_host: state.tamper.target_host ?? `pods:${podId}`, iat: now, exp: now + state.lifetime, jti: randomUUID(), grant_id: state.tamper.grant_id ?? grantId, grant_type: state.grantType, approval: state.grantType, authorization_details: state.resolve(body.argv).map(action => ({ type: 'openape_cli', cli_id: body.program.name, operation_id: 'fixture', resource_chain: [], action, permission: `${body.program.name}.fixture#${action}`, display: 'Fixture command', risk: 'low' })), command: argv, argv_hash: state.tamper.argv_hash ?? await computeArgvHash(argv), program_sha256: state.tamper.program_sha256 ?? body.program.sha256, decided_by: 'owner@example.test', ...(state.tamper.brokered ? { brokered: state.tamper.brokered } : {}) }
     const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')
     const payload = Buffer.from(JSON.stringify(claims)).toString('base64url')
     return `${head}.${payload}.${sign(null, Buffer.from(`${head}.${payload}`), (state.tamper.foreignKey ? foreign : keys).privateKey).toString('base64url')}`
@@ -89,11 +93,11 @@ const signal = () => new AbortController().signal
 it('sends the exact command and program hash and runs an approved call only with a verified token', async () => {
   const f = await idp()
   const authorization = await f.authority().authorizeProgram(call(), signal())
-  expect(authorization).toEqual({ grantId: 'grant-1', actions: ['read'] })
+  expect(authorization).toEqual({ grantId: 'grant-1', actions: ['read'], programs: ['gh'] })
   expect(f.state.authorizations).toEqual([{ target_host: f.connection.targetHost, audience: 'shapes', program: { name: 'gh', sha256: sha }, argv: ['pr', 'view', '7', '--json', 'state'], grant_type: 'always', summary: { title: 'Read the pull request', origin: 'Rebase Pod' } }])
   // Nothing about the command's meaning leaves the desktop: no permissions, details, adapter or argv hash.
   expect(Object.keys(f.state.authorizations[0]!)).not.toContain('authorization_details')
-  expect(callEffect(authorization)).toEqual({ write: false })
+  expect(callEffect(authorization, 'gh')).toEqual({ write: false })
   expect(f.state.approvals).toEqual([]); expect(f.progress).toEqual([]); expect(f.lookups).toEqual([])
 })
 
@@ -134,7 +138,7 @@ it('shows a pending request, waits for the owner and authorizes the call again a
   expect(f.progress[0]).toMatchObject({ grantId: 'grant-1', issuer: f.origin, title: 'Read the pull request', permission: 'gh.repo[name=x]#read', subject: 'pod@example.test' })
   expect(f.recorded.map(grant => grant.id)).toContain('grant-1')
   f.state.grants.get(await computeArgvHash(['gh', ...call().argv]))!.status = 'approved'
-  await expect(work).resolves.toEqual({ grantId: 'grant-1', actions: ['read'] })
+  await expect(work).resolves.toEqual({ grantId: 'grant-1', actions: ['read'], programs: ['gh'] })
   expect(f.progress.map(item => item.state)).toEqual(['pending', 'approved'])
   expect(f.state.authorizations).toHaveLength(2); expect(f.state.approvals).toEqual([]); expect(f.lookups).toEqual([])
 }, 15000)
@@ -191,13 +195,46 @@ it('treats a rate limit as transient and an IdP without the endpoint as an updat
   await expect(f.authority().authorizeProgram(call(), signal())).rejects.toThrow('does not authorize program calls yet')
 })
 
-it('classifies writes and keeps mail moves in the archive port from the covering grant', () => {
-  expect(callEffect({ grantId: 'g', actions: ['read', 'list'] })).toEqual({ write: false })
-  expect(callEffect({ grantId: 'g', actions: ['read', 'push'] })).toEqual({ write: true })
-  expect(callEffect({ grantId: 'g', actions: [] })).toEqual({ write: true })
-  expect(() => callEffect({ grantId: 'g', actions: ['move'] })).toThrow('approved archive service')
-  expect(callEffect({ grantId: 'g', actions: ['move'] }, 'move')).toEqual({ write: true })
-  expect(() => callEffect({ grantId: 'g', actions: ['read'] }, 'move')).toThrow('only run the granted move')
+// The coordinator's rule (issue 1473): classify by the IdP's resolution of the call, never by the covering grant.
+it('classifies a call by the IdP resolution in its token even when a mixed whole-program grant covers it', async () => {
+  const f = await idp(); const tokens = new RunGrantTokens()
+  f.state.resolve = argv => [argv[1] === 'merge' ? 'edit' : 'read']
+  expect(f.state.grantActions).toEqual(['read', 'edit'])
+  const read = await f.authority(tokens).authorizeProgram(call(['pr', 'view', '7']), signal())
+  expect(read.actions).toEqual(['read']); expect(callEffect(read, 'gh')).toEqual({ write: false })
+  const write = await f.authority(tokens).authorizeProgram(call(['pr', 'merge', '7']), signal())
+  expect(write.actions).toEqual(['edit']); expect(callEffect(write, 'gh')).toEqual({ write: true })
+  // A program the registry does not describe resolves to the generic exact-command detail: an effect.
+  f.state.resolve = () => ['exec']
+  expect(callEffect(await f.authority(tokens).authorizeProgram(call(['unknown']), signal()), 'gh')).toEqual({ write: true })
+})
+
+it('classifies writes and keeps mail moves in the archive port from the resolved actions', () => {
+  const resolved = (actions: string[], programs = ['gh']) => ({ grantId: 'g', actions, programs })
+  expect(callEffect(resolved(['read', 'list']), 'gh')).toEqual({ write: false })
+  expect(callEffect(resolved(['read', 'push']), 'gh')).toEqual({ write: true })
+  expect(callEffect(resolved([]), 'gh')).toEqual({ write: true })
+  // An exact-command fallback of an ordinary program runs as an effect.
+  expect(callEffect(resolved(['exec']), 'git')).toEqual({ write: true })
+  expect(() => callEffect(resolved(['move']), 'gh')).toThrow('approved archive service')
+  expect(callEffect(resolved(['move'], ['o365']), 'o365-cli', 'move')).toEqual({ write: true })
+  expect(() => callEffect(resolved(['read'], ['o365']), 'o365-cli', 'move')).toThrow('only run the granted move')
+})
+
+// Review finding (issue 1473): the archive gate fails closed for mail programs whatever the IdP could resolve.
+it('refuses every action of a mail program outside its archive port except known non-moving ones', () => {
+  const resolved = (actions: string[], programs: string[]) => ({ grantId: 'g', actions, programs })
+  // An exact-command fallback of `workflow move` (no shape for this file) outside the port: refused.
+  for (const action of ['exec', '*', 'unknown', 'move', 'archive']) expect(() => callEffect(resolved([action], ['o365-cli']), 'o365-cli'), action).toThrow('approved archive service')
+  expect(() => callEffect(resolved([], []), 'pods-mail')).toThrow('approved archive service')
+  // Matched by the resolved program as well, whatever the assigned file is called.
+  expect(() => callEffect(resolved(['exec'], ['o365']), 'outlook-tool')).toThrow('approved archive service')
+  // Known non-moving effects and reads stay allowed.
+  expect(callEffect(resolved(['categorize'], ['o365']), 'o365-cli')).toEqual({ write: true })
+  expect(callEffect(resolved(['configure'], ['o365']), 'o365-cli')).toEqual({ write: true })
+  expect(callEffect(resolved(['read', 'list'], ['pods-mail']), 'pods-mail')).toEqual({ write: false })
+  // The move itself runs only through the port.
+  expect(callEffect(resolved(['move'], ['o365']), 'o365-cli', 'move')).toEqual({ write: true })
 })
 
 it('refuses a changed program file and a tampered token before anything starts', async () => {
@@ -208,7 +245,7 @@ it('refuses a changed program file and a tampered token before anything starts',
   const asked: ProgramCall[] = []
   const authority = f.authority()
   // The helper does not exist: reaching the launch would fail differently than the refusals below.
-  const broker = new PodToolBroker(join(root, 'missing-helper'), join(root, 'runs'), async (requested, callSignal) => { asked.push(requested); callEffect(await authority.authorizeProgram(requested, callSignal)) }, undefined as never)
+  const broker = new PodToolBroker(join(root, 'missing-helper'), join(root, 'runs'), async (requested, callSignal) => { asked.push(requested); callEffect(await authority.authorizeProgram(requested, callSignal), requested.program.name) }, undefined as never)
   const lease = { capabilities: ['tool.app.invoke'], assertCurrent: () => {}, signal: signal() }
   const assignment = { id: 'app', capability: 'tool.app.invoke', program: { path: program, name: 'gh', sha256: hash }, argv: ['pr', 'list'], executable: program, executableHash: hash, entryFiles: [], prefix: [], runtimeDirectories: [], environment: {}, networkPorts: [] }
   f.state.tamper = { program_sha256: 'c'.repeat(64) }

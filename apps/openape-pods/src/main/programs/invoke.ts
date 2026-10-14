@@ -40,7 +40,7 @@ function programAuthority(access: ProgramCallAccess): AgentAuthority {
 export async function authorizeProgramEffect(resources: PodResource[], podId: string, capabilities: string[], body: unknown, access: ProgramCallAccess, signal: AbortSignal): Promise<{ write: boolean }> {
   const { assignment, argv } = programRequest(resources, podId, capabilities, body)
   await verifyProgram(assignment)
-  return callEffect(await programAuthority(access).authorizeProgram(programCall(assignment, argv), signal))
+  return callEffect(await programAuthority(access).authorizeProgram(programCall(assignment, argv), signal), assignment.cliId)
 }
 
 /**
@@ -57,7 +57,7 @@ export async function invokeProgram(resources: PodResource[], podId: string, bod
   const authorize: CallAuthority = async (call, signal) => {
     try {
       if (access.approval) await access.approval()
-      else callEffect(await authority.authorizeProgram(call, signal), action)
+      else callEffect(await authority.authorizeProgram(call, signal), call.program.name, action)
     }
     catch (error) { throw notStarted(error) }
   }

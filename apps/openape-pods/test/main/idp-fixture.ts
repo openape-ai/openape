@@ -110,7 +110,8 @@ export function identityProvider(options: { brokered?: typeof brokered } = {}) {
    * Per-call program authorization like the IdP (issue 1473, revision 4). The stub knows no Shapes: a grant covers a call
    * when it is approved for the same Pod and target and either was requested for exactly this argv, or its details
    * name the program with operation `*` (a whole-program grant). Otherwise one pending exact request is created or
-   * reused; the newest denied or revoked request refuses with 403.
+   * reused; the newest denied or revoked request refuses with 403. The token carries the resolution of the call; the
+   * stub's grants have one action each, so their details stand in for it.
    */
   async function authorize(body: Record<string, unknown>): Promise<Response> {
     state.authorizations.push(body)

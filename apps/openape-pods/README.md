@@ -232,7 +232,8 @@ reuses the token for the identical command while it is valid. `202` is a pending
 request, shown and awaited like every Pod approval, after which the call is
 authorized again. `403` (denied or revoked) fails the call without a new request.
 Whether a call writes, and therefore becomes a recorded effect, follows from the
-actions of the grant that covers it; mail moves stay with the archive port.
+IdP's resolution of exactly this call in the verified token (`authorization_details`):
+only read, list or get actions are reads; mail moves stay with the archive port.
 Running the Pod script, HTTP destinations and SSH inventories remain plain
 permission grants with fixed details the desktop builds itself. Schema 52
 removed the adapter fields from existing program assignments; approved grants keep

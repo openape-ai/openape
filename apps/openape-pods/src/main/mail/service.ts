@@ -28,7 +28,7 @@ export class MailService {
     const proxy = await this.network(lease.signal)
     try {
       // The built-in program is authorized per call like any assigned program (issue 1473, revision 4).
-      const broker = new PodToolBroker(this.helper, root, async (call, signal) => callEffect(await this.authority.authorizeProgram(call, signal)), this.credentials)
+      const broker = new PodToolBroker(this.helper, root, async (call, signal) => callEffect(await this.authority.authorizeProgram(call, signal), call.program.name), this.credentials)
       const executable = join(this.vendor, 'o365-cli')
       const reply = await broker.execute({ id: 'o365-mail', capability: 'mail.read', program: { path: executable, name: 'o365-cli', sha256: manifest.binaryHash }, argv: argv.slice(1), executable, executableHash: manifest.binaryHash, entryFiles: [{ path: roots, hash: manifest.rootsHash }], prefix: [], connectionId: assignment.connectionId, cacheArgument: '--cache-dir', maxOutputBytes: 32 * 1024 * 1024, runtimeDirectories: [], environment: { ...proxy.environment, PODS_CA_FILE: roots }, networkPorts: [proxy.port] }, { toolId: 'o365-mail', argv: argv.slice(1) }, lease)
       if (reply.exitCode !== 0) throw new Error(`Mail read failed (${reply.exitCode}): ${reply.stderr.slice(0, 2000)}`)
