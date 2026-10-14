@@ -4,7 +4,9 @@ import { navigateTo, useHead, useIdpAuth } from '#imports'
 import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
 import { callerState, formatCountdown, formatWaited } from '../utils/caller-liveness'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
-import { grantSummaryView } from '../utils/grant-summary'
+import GrantBindingLine from '../components/GrantBindingLine.vue'
+import GrantClaims from '../components/GrantClaims.vue'
+import { grantBindingLine } from '../utils/grant-card'
 import { grantBatchPath, groupPendingGrantBatches } from '../utils/grant-batch'
 import { buildRuleProposals, ruleTemplatePreview, standingRulePreview, suggestAllowPattern } from '../utils/rule-suggestions'
 
@@ -212,8 +214,11 @@ function liveness(grant) {
 function toggleMoreOptions(id) {
   moreOptionsOpen.value = { ...moreOptionsOpen.value, [id]: !moreOptionsOpen.value[id] }
 }
-function summaryOf(grant) {
-  return grantSummaryView(grant.request.summary)
+const german = ref(false)
+onMounted(() => { german.value = navigator.language.startsWith('de') })
+// The primary line of every card: what the approval binds (registry title or exact command).
+function bindingLine(grant) {
+  return grantBindingLine(grant, german.value ? 'de' : 'en')
 }
 function commandDisplay(grant) {
   return unwrapShellCommand(grant.request?.command)
@@ -377,34 +382,12 @@ function isExactCommand(detail) {
                   <UBadge v-if="grant.request.run_as" color="warning" variant="soft" :label="`run as ${grant.request.run_as}`" />
                   <span class="text-xs text-dimmed">on {{ grant.request.target_host }}</span>
                 </div>
-                <p v-if="grant.request.reason">
-                  {{ grant.request.reason }}
-                </p>
+                <GrantBindingLine :line="bindingLine(grant)" :german="german" />
                 <p v-if="cliSummary(grant)" class="text-muted">
                   {{ cliSummary(grant) }}
                 </p>
-                <div v-if="summaryOf(grant)" class="mt-1 rounded border border-default bg-elevated/50 px-3 py-2">
-                  <p class="text-xs text-muted mb-1">
-                    Angabe des Antragstellers
-                  </p>
-                  <p class="text-sm font-medium break-words">
-                    {{ summaryOf(grant).title }}
-                  </p>
-                  <p v-if="summaryOf(grant).description" class="text-sm whitespace-pre-wrap break-words">
-                    {{ summaryOf(grant).description }}
-                  </p>
-                  <p v-if="summaryOf(grant).origin" class="text-xs text-muted break-words">
-                    Herkunft: {{ summaryOf(grant).origin }}
-                  </p>
-                  <a
-                    v-if="summaryOf(grant).link"
-                    :href="summaryOf(grant).link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-sm text-primary underline break-all"
-                  >{{ summaryOf(grant).link }}</a>
-                </div>
-                <div v-if="commandDisplay(grant)" class="mt-1">
+                <GrantClaims :request="grant.request" :german="german" />
+                <div v-if="commandDisplay(grant) && bindingLine(grant).kind !== 'command'" class="mt-1">
                   <div class="flex items-center gap-2">
                     <span class="text-muted">Command:</span>
                     <UBadge v-if="commandDisplay(grant).shell" color="neutral" variant="outline" size="xs" :label="`via ${commandDisplay(grant).shell}`" />
@@ -621,6 +604,7 @@ function isExactCommand(detail) {
                   <UBadge color="success" variant="soft" :label="grant.status" />
                   <UBadge color="secondary" :label="grant.request.grant_type" />
                 </div>
+                <GrantBindingLine :line="bindingLine(grant)" :german="german" />
                 <p><span class="text-muted">Requester:</span> {{ formatRequesterName(grant.request.requester) }}</p>
                 <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
                 <div v-if="standingRule(grant)" class="mt-1">
@@ -633,28 +617,8 @@ function isExactCommand(detail) {
                 <p v-if="grant.request.run_as">
                   <span class="text-muted">Run as:</span> {{ grant.request.run_as }}
                 </p>
-                <div v-if="summaryOf(grant)" class="mt-1 rounded border border-default bg-elevated/50 px-3 py-2">
-                  <p class="text-xs text-muted mb-1">
-                    Angabe des Antragstellers
-                  </p>
-                  <p class="text-sm font-medium break-words">
-                    {{ summaryOf(grant).title }}
-                  </p>
-                  <p v-if="summaryOf(grant).description" class="text-sm whitespace-pre-wrap break-words">
-                    {{ summaryOf(grant).description }}
-                  </p>
-                  <p v-if="summaryOf(grant).origin" class="text-xs text-muted break-words">
-                    Herkunft: {{ summaryOf(grant).origin }}
-                  </p>
-                  <a
-                    v-if="summaryOf(grant).link"
-                    :href="summaryOf(grant).link"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    class="text-sm text-primary underline break-all"
-                  >{{ summaryOf(grant).link }}</a>
-                </div>
-                <div v-if="commandDisplay(grant)" class="mt-1">
+                <GrantClaims :request="grant.request" :german="german" />
+                <div v-if="commandDisplay(grant) && bindingLine(grant).kind !== 'command'" class="mt-1">
                   <div class="flex items-center gap-2">
                     <span class="text-muted">Command:</span>
                     <UBadge v-if="commandDisplay(grant).shell" color="neutral" variant="outline" size="xs" :label="`via ${commandDisplay(grant).shell}`" />
@@ -679,9 +643,6 @@ function isExactCommand(detail) {
                     </div>
                   </div>
                 </div>
-                <p v-if="grant.request.reason">
-                  <span class="text-muted">Reason:</span> {{ grant.request.reason }}
-                </p>
                 <p v-if="grant.decided_by" class="text-xs text-dimmed flex items-center gap-2">
                   <span>Approved by: {{ grant.decided_by }}</span>
                   <UBadge
@@ -731,6 +692,7 @@ function isExactCommand(detail) {
                   :label="grant.status"
                 />
               </div>
+              <GrantBindingLine :line="bindingLine(grant)" :german="german" />
               <p><span class="text-muted">Requester:</span> {{ formatRequesterName(grant.request.requester) }}</p>
               <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
               <p v-if="cliSummary(grant)">
@@ -739,7 +701,7 @@ function isExactCommand(detail) {
               <p v-if="grant.request.run_as">
                 <span class="text-muted">Run as:</span> {{ grant.request.run_as }}
               </p>
-              <div v-if="grant.request.command?.length" class="mt-1">
+              <div v-if="grant.request.command?.length && bindingLine(grant).kind !== 'command'" class="mt-1">
                 <span class="text-muted">Command:</span>
                 <code class="block font-mono text-xs bg-default text-green-400 rounded px-2 py-1 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words">{{ grant.request.command.join(" ") }}</code>
               </div>
@@ -761,9 +723,7 @@ function isExactCommand(detail) {
                   </div>
                 </div>
               </div>
-              <p v-if="grant.request.reason">
-                <span class="text-muted">Reason:</span> {{ grant.request.reason }}
-              </p>
+              <GrantClaims :request="grant.request" :german="german" />
               <p v-if="grant.decided_by" class="text-xs text-dimmed flex items-center gap-2">
                 <span>Decided by: {{ grant.decided_by }}</span>
                 <UBadge

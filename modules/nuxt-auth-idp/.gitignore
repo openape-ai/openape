@@ -13,3 +13,4 @@ src/**/*.js
 .env.*
 !.env.example
 pnpm-workspace.yaml
+.artifacts/

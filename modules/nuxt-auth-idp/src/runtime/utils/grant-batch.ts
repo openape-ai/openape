@@ -1,8 +1,13 @@
 import type { OpenApeGrant } from '@openape/core'
+import type { BindingLine, CardLanguage, GrantWithCard } from './grant-card'
+import { grantBindingLine } from './grant-card'
 
 export interface GrantBatchRow {
   id: string
-  label: string
+  /** What approving this member binds: registry title or exact command. Always the row's primary line. */
+  line: BindingLine
+  /** The member's own summary title, shown only as its labeled claim. */
+  claim: string | null
   status: OpenApeGrant['status']
   decidable: boolean
 }
@@ -12,27 +17,18 @@ export interface GrantBatchOperation {
   action: 'approve' | 'deny'
 }
 
-/** The member's own one-line description: its summary title, else its command or permissions. */
-export function grantBatchRowLabel(grant: OpenApeGrant): string {
-  const title = grant.request.summary?.title?.trim()
-  if (title) return title
-  if (grant.request.command?.length) return grant.request.command.join(' ')
-  if (grant.request.permissions?.length) return grant.request.permissions.join(', ')
-  return grant.id
-}
-
 /**
  * Rows in submission order; members submitted within the same second sort by
- * label, which keeps the list stable and groups equal senders. Only pending
- * once-grants with the batch's scope can be decided together; anything else
- * needs its single approval view.
+ * their binding line, which keeps the list stable and groups equal commands.
+ * Only pending once-grants with the batch's scope can be decided together;
+ * anything else needs its single approval view.
  */
-export function grantBatchRows(members: OpenApeGrant[]): GrantBatchRow[] {
+export function grantBatchRows(members: GrantWithCard[], language: CardLanguage): GrantBatchRow[] {
   const scope = grantBatchScope(members)
   const uniform = (grant: OpenApeGrant) => (grant.request.grant_type ?? 'once') === 'once' && !grant.request.run_as && !grant.request.delegate && grant.request.audience === scope?.audience && grant.request.target_host === scope?.targetHost
   return members
-    .map(grant => ({ grant, row: { id: grant.id, label: grantBatchRowLabel(grant), status: grant.status, decidable: grant.status === 'pending' && uniform(grant) } }))
-    .toSorted((a, b) => a.grant.created_at - b.grant.created_at || a.row.label.localeCompare(b.row.label))
+    .map(grant => ({ grant, row: { id: grant.id, line: grantBindingLine(grant, language), claim: grant.request.summary?.title?.trim() || null, status: grant.status, decidable: grant.status === 'pending' && uniform(grant) } }))
+    .toSorted((a, b) => a.grant.created_at - b.grant.created_at || a.row.line.text.localeCompare(b.row.line.text))
     .map(({ row }) => row)
 }
 

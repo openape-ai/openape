@@ -1,0 +1,315 @@
+{
+  "podRun": {
+    "id": "grant-pod-run",
+    "status": "pending",
+    "created_at": 1791960000,
+    "request": {
+      "requester": "mail-digest+owner+example_com@id.example.com",
+      "target_host": "pods:00000000-0000-4000-8000-000000000001",
+      "audience": "shapes",
+      "grant_type": "always",
+      "permissions": [
+        "pod-runtime.pod[id=00000000-0000-4000-8000-000000000001]#run"
+      ],
+      "authorization_details": [
+        {
+          "type": "openape_cli",
+          "cli_id": "pod-runtime",
+          "operation_id": "run",
+          "resource_chain": [
+            {
+              "resource": "pod",
+              "selector": {
+                "id": "00000000-0000-4000-8000-000000000001"
+              }
+            }
+          ],
+          "action": "run",
+          "permission": "pod-runtime.pod[id=00000000-0000-4000-8000-000000000001]#run",
+          "display": "Run the stored script of Mail digest",
+          "risk": "high"
+        }
+      ],
+      "execution_context": {
+        "argv": [
+          "pod-runtime",
+          "run",
+          "--pod",
+          "00000000-0000-4000-8000-000000000001",
+          "--name",
+          "Mail digest",
+          "--script",
+          "/Users/owner/Pods/mail-digest/run.mjs",
+          "--workspace",
+          "/Users/owner/Pods/mail-digest/workspace",
+          "--environment",
+          "{\"HOME\":\"/Users/owner/Pods/mail-digest/home\",\"LANG\":\"de_AT.UTF-8\"}"
+        ],
+        "argv_hash": "SHA-256:57733c33853ad0223bc0981c13e43e598f02f56acfc5521e9c10bca5a208b93c",
+        "adapter_id": "pod-runtime",
+        "adapter_version": "1",
+        "adapter_digest": "SHA-256:3151180871015971f972b17a6f717ce35408e6393fbc0dd7d03cc5444ce31a1e",
+        "resolved_executable": "pod-runtime",
+        "context_bindings": {
+          "pod": "00000000-0000-4000-8000-000000000001",
+          "name": "Mail digest",
+          "script": "/Users/owner/Pods/mail-digest/run.mjs",
+          "workspace": "/Users/owner/Pods/mail-digest/workspace",
+          "environment": "{\"HOME\":\"/Users/owner/Pods/mail-digest/home\",\"LANG\":\"de_AT.UTF-8\"}"
+        }
+      },
+      "reason": "Run the stored script of Mail digest",
+      "summary": {
+        "title": "Run the stored script of Mail digest",
+        "origin": "Mail digest"
+      }
+    },
+    "card": {
+      "registry": {
+        "cli_id": "pod-runtime",
+        "operation_id": "run",
+        "title": {
+          "de": "Mail digest",
+          "en": "Mail digest",
+          "requested": true
+        },
+        "statement": {
+          "de": "Gespeichertes Pod-Skript ausführen",
+          "en": "Run the stored Pod script"
+        },
+        "allows": {
+          "de": "Erlaubt diesem Pod, seine gespeicherten Skripte innerhalb der separat vergebenen Zugriffsrechte auszuführen. Skriptänderungen benötigen keine erneute Ausführungserlaubnis.",
+          "en": "Allows this Pod to execute its stored scripts within its separately assigned permissions. Script changes do not require a new execution permission."
+        },
+        "does_not_allow": {
+          "de": "Eine dauerhafte Freigabe gilt bis zum Widerruf. Sie aktiviert keinen Zeitplan und erlaubt keine beliebigen Shell-Befehle.",
+          "en": "Continuing permission lasts until revoked. It does not enable a schedule or authorize arbitrary shell commands."
+        },
+        "facts": [
+          {
+            "label": {
+              "de": "Skript",
+              "en": "Script"
+            },
+            "format": "code",
+            "value": "/Users/owner/Pods/mail-digest/run.mjs",
+            "provenance": "requested"
+          },
+          {
+            "label": {
+              "de": "Arbeitsverzeichnis",
+              "en": "Working directory"
+            },
+            "format": "code",
+            "value": "/Users/owner/Pods/mail-digest/workspace",
+            "provenance": "requested"
+          }
+        ],
+        "details": [
+          {
+            "label": {
+              "de": "Umgebungsvariablen",
+              "en": "Environment variables"
+            },
+            "format": "map",
+            "value": "{\"HOME\":\"/Users/owner/Pods/mail-digest/home\",\"LANG\":\"de_AT.UTF-8\"}",
+            "provenance": "requested",
+            "entries": [
+              [
+                "HOME",
+                "/Users/owner/Pods/mail-digest/home"
+              ],
+              [
+                "LANG",
+                "de_AT.UTF-8"
+              ]
+            ]
+          }
+        ],
+        "details_note": {
+          "de": "Die angezeigten Pfade und Werte sind Angaben der anfragenden Anwendung. Geheimniswerte werden nicht angefordert.",
+          "en": "Paths and values are supplied by the requesting application. Secret values are not requested."
+        }
+      },
+      "requester": {
+        "name": "Mail digest Pod",
+        "owner": "owner@example.com"
+      }
+    }
+  },
+  "gitPush": {
+    "id": "grant-git-push",
+    "status": "pending",
+    "created_at": 1791960000,
+    "request": {
+      "requester": "rebase-agent+owner+example_com@id.example.com",
+      "target_host": "macmini",
+      "audience": "shapes",
+      "grant_type": "once",
+      "permissions": [
+        "git.repo[*].remote[name=origin]#push"
+      ],
+      "authorization_details": [
+        {
+          "type": "openape_cli",
+          "cli_id": "git",
+          "operation_id": "git.push.refspec",
+          "resource_chain": [
+            {
+              "resource": "repo"
+            },
+            {
+              "resource": "remote",
+              "selector": {
+                "name": "origin"
+              }
+            }
+          ],
+          "action": "push",
+          "permission": "git.repo[*].remote[name=origin]#push",
+          "display": "Push feature/rebase to origin",
+          "risk": "high",
+          "constraints": {
+            "exact_command": true
+          }
+        }
+      ],
+      "execution_context": {
+        "argv": [
+          "git",
+          "-C",
+          "/Users/owner/repos/iurio",
+          "push",
+          "--force-with-lease",
+          "origin",
+          "feature/rebase"
+        ],
+        "argv_hash": "SHA-256:7dff1661de21cd3060d366ae35ab76f06003164687171c7e32eed548c628a0b9",
+        "adapter_id": "git",
+        "adapter_version": "2",
+        "adapter_digest": "SHA-256:a4783820c4eebf9bf99f52c0842dcf3e0de32b8248eba40e1960c8b3c68135d5",
+        "resolved_executable": "git",
+        "context_bindings": {
+          "force-with-lease": "true",
+          "remote": "origin",
+          "refspec": "feature/rebase",
+          "repo": "/Users/owner/repos/iurio"
+        }
+      },
+      "command": [
+        "git",
+        "-C",
+        "/Users/owner/repos/iurio",
+        "push",
+        "--force-with-lease",
+        "origin",
+        "feature/rebase"
+      ],
+      "summary": {
+        "title": "Read-only status check",
+        "description": "Rebased feature/rebase onto main; 12 commits replayed.",
+        "origin": "IURIO rebase Pod",
+        "link": "https://repos.example.com/iurio/pulls/42"
+      }
+    },
+    "card": {
+      "registry": {
+        "cli_id": "git",
+        "operation_id": "git.push.refspec",
+        "title": {
+          "de": "feature/rebase nach origin pushen",
+          "en": "Push feature/rebase to origin"
+        },
+        "allows": {
+          "de": "Schreibt auf den Server: origin wird gemäß feature/rebase aktualisiert, mit den angegebenen Optionen.",
+          "en": "Writes to the server: origin is updated as given by feature/rebase, with the options shown."
+        },
+        "does_not_allow": {
+          "de": "Gilt nur für genau diesen Befehl mit diesen Optionen; jeder andere Befehl braucht eine eigene Freigabe.",
+          "en": "Covers only this exact command with these options; any other command needs its own approval."
+        },
+        "facts": [
+          {
+            "label": {
+              "de": "Repository",
+              "en": "Repository"
+            },
+            "format": "code",
+            "value": "/Users/owner/repos/iurio",
+            "provenance": "bound"
+          },
+          {
+            "label": {
+              "de": "Refspec",
+              "en": "Refspec"
+            },
+            "format": "code",
+            "value": "feature/rebase",
+            "provenance": "bound"
+          }
+        ],
+        "details": []
+      },
+      "requester": {
+        "name": "IURIO rebase",
+        "owner": "owner@example.com"
+      }
+    }
+  },
+  "unknown": {
+    "id": "grant-unknown",
+    "status": "pending",
+    "created_at": 1791960000,
+    "request": {
+      "requester": "agent@example.com",
+      "target_host": "macmini",
+      "audience": "shapes",
+      "grant_type": "once",
+      "command": [
+        "acme-cli",
+        "deploy",
+        "--env",
+        "production"
+      ],
+      "permissions": [
+        "acme-cli.cli[name=acme-cli].argv[hash=SHA-256:9f]#exec"
+      ],
+      "authorization_details": [
+        {
+          "type": "openape_cli",
+          "cli_id": "acme-cli",
+          "operation_id": "_generic.exec",
+          "resource_chain": [
+            {
+              "resource": "cli",
+              "selector": {
+                "name": "acme-cli"
+              }
+            },
+            {
+              "resource": "argv",
+              "selector": {
+                "hash": "SHA-256:9f"
+              }
+            }
+          ],
+          "action": "exec",
+          "permission": "acme-cli.cli[name=acme-cli].argv[hash=SHA-256:9f]#exec",
+          "display": "Execute (unshaped): `acme-cli deploy --env production`",
+          "risk": "high",
+          "constraints": {
+            "exact_command": true
+          }
+        }
+      ],
+      "summary": {
+        "title": "Deploy the hotfix",
+        "description": "Ticket 7: roll out the login fix."
+      }
+    },
+    "card": {
+      "registry": null,
+      "requester": null
+    }
+  }
+}
