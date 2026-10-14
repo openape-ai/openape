@@ -1,6 +1,6 @@
 # @openape/apes
 
-The unified OpenApe CLI for interacting with a DDISA Identity Provider — handles authentication, grants, delegations, adapter-based command authorization, and MCP server integration.
+The unified OpenApe CLI for interacting with a DDISA Identity Provider — handles authentication, grants, delegations, per-call command authorization at the IdP, and MCP server integration.
 
 Ships three binaries:
 - **`apes`** — main CLI (login, grants, run, admin, etc.)
@@ -25,9 +25,9 @@ apes login --idp https://id.example.com
 # 2. Check who you are
 apes whoami
 
-# 3. Request a grant and run a command
-apes run -- git status
-# → creates a grant, waits for approval, executes
+# 3. Run a command authorized by the IdP
+apes run --wait -- git status
+# → the IdP authorizes this exact call (or waits for your approval), then it runs
 
 # 4. List your grants
 apes grants list
@@ -62,7 +62,7 @@ ape-shell
 ┌─ PROMPT ─────────────────────────────────────────┐
 │ apes$ <user types here>                          │
 │   → multi-line detection via `bash -n` dry-parse │
-│   → grant dispatch (adapter or ape-shell session)│
+│   → grant dispatch (program or ape-shell session)│
 │   → on approval: write line to persistent bash   │
 │   → stream output, detect prompt marker          │
 └──────────────────────────────────────────────────┘
@@ -78,7 +78,7 @@ Every line is audited in `~/.config/apes/audit.jsonl` (session id, line, grant i
 SHELL=$(which ape-shell) openclaw tui
 ```
 
-The first command requests a session grant. After the human approves it (with `grant_type: timed, duration: 8h`), all subsequent commands reuse the same grant without interaction.
+A line that is exactly one program call is authorized per call at the IdP (see [How commands are authorized](#how-commands-are-authorized)); an `always` approval covers later identical calls. Every other line (pipes, expansions, builtins) requests an ape-shell session grant; after the human approves it (with `grant_type: timed, duration: 8h`), later such lines reuse it without interaction.
 
 ### Setup as a login shell (interactive mode)
 
@@ -101,18 +101,15 @@ After this:
 
 ```bash
 $ apes login
-$ ape-shell -c "git status"
-ℹ Requesting ape-shell session grant on my-host
+$ APE_WAIT=1 ape-shell -c "git status"
 ℹ Grant requested: grant_abc123
-ℹ Waiting for approval...
-# Human approves in browser → command executes
+ℹ Approve at: https://id.example.com/grant-approval?grant_id=grant_abc123
+# Human approves in browser (as "always") → the IdP authorizes the call → it runs
 On branch main
 
-$ ape-shell -c "git log --oneline -5"
-# Grant is reused automatically — no approval prompt
-abc123 Latest commit
-def456 Previous commit
-...
+$ ape-shell -c "git status"
+# Covered by the approved grant — no approval prompt
+On branch main
 ```
 
 ### Example (interactive)
@@ -123,15 +120,15 @@ apes interactive shell
 Ctrl-D to exit.
 
 apes$ cd /tmp
-# (grant approved, reused for free)
+# builtin → ape-shell session grant (approved once, reused)
 
-apes$ ls
-# structured adapter grant for `ls` → approve → output
+apes$ ls -la
+# one program call → authorized at the IdP for exactly this command → output
 
 apes$ for i in 1 2 3; do
 >   echo $i
 > done
-# single grant for the whole compound, bash runs it natively
+# not a single program call → ape-shell session grant, bash runs it natively
 
 apes$ vim notes.md
 # grant approved → full TUI vim, raw-mode passthrough
@@ -139,6 +136,29 @@ apes$ vim notes.md
 apes$ ^D
 Goodbye.
 ```
+
+## How commands are authorized
+
+`apes run -- <program> <args…>`, `ape-shell` and the MCP tool `apes.run` send every
+program call to the IdP: `POST {idp}/api/grants/authorize` with the program name
+(basename of the executable found on `PATH`), the SHA-256 of that file and the
+arguments exactly as they will run. apes never resolves commands with adapter files;
+only the IdP knows the Shapes registry and decides:
+
+- **approved** — an approved grant covers the call. The IdP answers with a short
+  command token. apes checks its signature against the IdP's JWKS, the issuer, its
+  own identity as subject, the target host, the argv hash of exactly this command and
+  the hash of the file it is about to run, and only then runs that file with these
+  arguments. Identical calls reuse a reusable token until it expires; a single-use
+  token is never reused.
+- **pending** — the IdP created (or reuses) a request for your approval. Without
+  `--wait` apes prints it and exits 75; with `--wait` (or `APE_WAIT=1`) it waits up
+  to 5 minutes and asks again after approval. A wait that runs out never runs the
+  command.
+- **denied / revoked** — apes refuses.
+
+A program without a registry shape is approved as its exact command. `--approval`
+accepts `once` (default) or `always`.
 
 ## Commands
 
@@ -178,10 +198,11 @@ Goodbye.
 
 | Command | Description |
 |---|---|
-| `apes run -- <cmd>` | Run a command via a shapes adapter grant |
+| `apes run -- <cmd>` | Run a program call authorized per call by the IdP |
 | `apes run --shell -- bash -c <cmd>` | Shell mode (used by `ape-shell`) |
 | `apes run --as root -- <cmd>` | Elevate via `escapes` (separate binary) |
-| `apes explain -- <cmd>` | Explain what grant a command would need |
+| `apes explain -- <cmd>` | Preview how the IdP resolves a command (`POST /api/shapes/resolve`) |
+| `apes adapter list\|info\|search` | Show the Shapes adapters known to the IdP (read-only) |
 
 ### Configuration
 

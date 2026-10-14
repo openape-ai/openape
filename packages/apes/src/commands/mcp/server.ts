@@ -3,7 +3,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { createServer } from 'node:http'
 import consola from 'consola'
-import { registerAdapterTools, registerStaticTools } from './tools'
+import { registerRunTool, registerStaticTools } from './tools'
 
 declare const __VERSION__: string
 
@@ -16,8 +16,8 @@ export async function startMcpServer(transport: 'stdio' | 'sse', port: number) {
   // Register static tools
   registerStaticTools(server)
 
-  // Register adapter-derived tools
-  registerAdapterTools(server)
+  // Program calls authorized per call at the IdP
+  registerRunTool(server)
 
   if (transport === 'stdio') {
     const stdioTransport = new StdioServerTransport()

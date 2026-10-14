@@ -43,8 +43,7 @@ export type {
   ShapesOperation,
 } from '@openape/shapes'
 
-// Grant-orchestration + CLI glue — stayed in apes
-export { createShapesGrant, fetchGrantToken, findExistingGrant, verifyAndExecute, waitForGrantStatus } from './shapes/grants.js'
+// CLI glue — stayed in apes
 export { extractOption, extractWrappedCommand } from './shapes/commands/explain.js'
 
 // Apes-specific exports

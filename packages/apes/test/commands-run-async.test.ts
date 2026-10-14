@@ -20,10 +20,6 @@ vi.mock('../src/config.js', () => ({
   // so tests get the baked-in defaults; individual tests can override
   // via `vi.mocked(loadConfig).mockReturnValueOnce(...)`.
   loadConfig: vi.fn(() => ({})),
-  // Generic-fallback mode is permissive-default; individual tests override
-  // to `false` to verify the opt-out path.
-  isGenericFallbackEnabled: vi.fn(() => true),
-  getGenericAuditLogPath: vi.fn(() => '/tmp/test-generic-calls.log'),
 }))
 
 vi.mock('../src/http.js', () => ({
@@ -32,44 +28,29 @@ vi.mock('../src/http.js', () => ({
   ApiError: class extends Error {},
 }))
 
-vi.mock('../src/shapes/index.js', async () => {
-  // Import the real generic helpers so resolveGenericOrReject produces
-  // real ResolvedCommand shapes in fallback tests. Everything else is
-  // mocked as a jest-style fn for per-test control.
-  const generic = await import('@openape/shapes')
-  return {
-    createShapesGrant: vi.fn(),
-    // Compound resolution answers null in these tests — the assertions
-    // here cover the OPAQUE fallback path; the structured compound path
-    // has its own suite (compound-mode.test.ts).
-    resolveCompoundCommand: vi.fn(async () => null),
-    createCompoundGrant: vi.fn(),
-    findExistingCompoundGrant: vi.fn(),
-    verifyAndConsumeCompound: vi.fn(),
-    compoundCoveredByDetails: vi.fn(),
-    fetchGrantToken: vi.fn(),
-    findExistingGrant: vi.fn(),
-    // Real implementation on purpose — #1083 is about the call sites obeying it.
-    isAutoApproved: (await vi.importActual<typeof import('../src/shapes/grants.js')>('../src/shapes/grants.js')).isAutoApproved,
-    loadOrInstallAdapter: vi.fn(),
-    loadAdapter: vi.fn(),
-    parseShellCommand: vi.fn(),
-    resolveCommand: vi.fn(),
-    resolveGenericOrReject: vi.fn((cliId: string, argv: string[], opts: { genericEnabled: boolean }) => {
-      if (!opts.genericEnabled) throw new Error(`No adapter found for ${cliId}`)
-      return generic.buildGenericResolved(cliId, argv)
-    }),
-    verifyAndExecute: vi.fn(),
-    verifyAndConsume: vi.fn(),
-    waitForGrantStatus: vi.fn(),
-    extractOption: vi.fn(() => undefined),
-    extractShellCommandString: vi.fn((cmd: string[]) => cmd.at(-1) ?? ''),
-    extractWrappedCommand: vi.fn((argv: string[]) => {
-      const idx = argv.indexOf('--')
-      return idx >= 0 ? argv.slice(idx + 1) : []
-    }),
-  }
-})
+vi.mock('../src/shapes/index.js', async () => ({
+  // Real implementation on purpose — #1083 is about the call sites obeying it.
+  isAutoApproved: (await vi.importActual<typeof import('../src/shapes/grants.js')>('../src/shapes/grants.js')).isAutoApproved,
+  parseShellCommand: vi.fn(),
+  extractOption: (await vi.importActual<typeof import('../src/shapes/commands/explain.js')>('../src/shapes/commands/explain.js')).extractOption,
+  extractShellCommandString: vi.fn((cmd: string[]) => cmd.at(-1) ?? ''),
+  extractWrappedCommand: vi.fn((argv: string[]) => {
+    const idx = argv.indexOf('--')
+    return idx >= 0 ? argv.slice(idx + 1) : []
+  }),
+}))
+
+// Program calls: the IdP round trip and token checks are covered by
+// program-authorization.test.ts against a fake IdP. Here only what run.ts does
+// with each answer matters.
+vi.mock('../src/authorization/program.js', async () => ({
+  ...(await vi.importActual<typeof import('../src/authorization/program.js')>('../src/authorization/program.js')),
+  locateProgram: vi.fn(async (executable: string) => ({ path: `/usr/bin/${executable}`, name: executable, sha256: 'a'.repeat(64) })),
+  authorizeProgramCall: vi.fn(),
+}))
+vi.mock('../src/authorization/execute.js', () => ({
+  executeProgramCall: vi.fn(),
+}))
 
 vi.mock('../src/notifications.js', () => ({
   notifyGrantPending: vi.fn(),
@@ -78,13 +59,6 @@ vi.mock('../src/notifications.js', () => ({
 vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
 }))
-
-function makeResolved(display = 'curl https://example.com') {
-  return {
-    detail: { display, permission: display },
-    adapter: { cli: { audience: 'shapes', executable: 'curl' } },
-  } as any
-}
 
 /**
  * Wait for a promise that should throw `CliExit(expectedCode)`. As of
@@ -147,21 +121,17 @@ describe('commands/run async default', () => {
   }
 
   // ------------------------------------------------------------------------
-  // Site #2 — tryAdapterModeFromShell (ape-shell -c "single cmd" path)
+  // Site #2 — program call from `ape-shell -c "single cmd"`
   // ------------------------------------------------------------------------
-  describe('tryAdapterModeFromShell (shell adapter path)', () => {
-    it('async default: prints grant info and exits without waiting', async () => {
-      const shapes = await import('../src/shapes/index.js')
-      vi.mocked(shapes.parseShellCommand).mockReturnValue({
-        executable: 'curl',
-        argv: ['https://example.com'],
-        isCompound: false,
-        raw: 'curl https://example.com',
-      } as any)
-      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue({} as any)
-      vi.mocked(shapes.resolveCommand).mockResolvedValue(makeResolved())
-      vi.mocked(shapes.findExistingGrant).mockResolvedValue(null)
-      vi.mocked(shapes.createShapesGrant).mockResolvedValue({ id: 'grant-abc' } as any)
+  describe('program call from ape-shell -c', () => {
+    function pendingAuthorization(grantId: string) {
+      return { kind: 'pending' as const, grantId, approvalUrl: `http://idp.test/grant-approval?grant_id=${grantId}` }
+    }
+
+    it('async default: prints grant info and exits without running anything', async () => {
+      const program = await import('../src/authorization/program.js')
+      const { executeProgramCall } = await import('../src/authorization/execute.js')
+      vi.mocked(program.authorizeProgramCall).mockResolvedValueOnce(pendingAuthorization('grant-abc'))
 
       const { runCommand } = await import('../src/commands/run.js')
       await expectCliExit(runCommand.run!({
@@ -169,26 +139,19 @@ describe('commands/run async default', () => {
         args: { shell: true, wait: false, approval: 'once' } as any,
       } as any))
 
-      expect(shapes.waitForGrantStatus).not.toHaveBeenCalled()
-      expect(shapes.verifyAndExecute).not.toHaveBeenCalled()
+      expect(program.locateProgram).toHaveBeenCalledWith('curl')
+      expect(program.authorizeProgramCall).toHaveBeenCalledWith(
+        { program: expect.objectContaining({ name: 'curl' }), argv: ['https://example.com'] },
+        expect.objectContaining({ idp: 'http://idp.test', subject: 'alice@example.com', grantType: 'once', wait: false }),
+      )
+      expect(executeProgramCall).not.toHaveBeenCalled()
       assertAsyncInfoBlock('grant-abc')
     })
 
-    it('--wait flag: takes legacy blocking path', async () => {
-      const shapes = await import('../src/shapes/index.js')
-      vi.mocked(shapes.parseShellCommand).mockReturnValue({
-        executable: 'curl',
-        argv: ['https://example.com'],
-        isCompound: false,
-        raw: 'curl https://example.com',
-      } as any)
-      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue({} as any)
-      vi.mocked(shapes.resolveCommand).mockResolvedValue(makeResolved())
-      vi.mocked(shapes.findExistingGrant).mockResolvedValue(null)
-      vi.mocked(shapes.createShapesGrant).mockResolvedValue({ id: 'grant-abc' } as any)
-      vi.mocked(shapes.waitForGrantStatus).mockResolvedValue('approved')
-      vi.mocked(shapes.fetchGrantToken).mockResolvedValue('tok' as any)
-      vi.mocked(shapes.verifyAndExecute).mockResolvedValue(undefined as any)
+    it('--wait flag: waits for the decision and runs the authorized program', async () => {
+      const program = await import('../src/authorization/program.js')
+      const { executeProgramCall } = await import('../src/authorization/execute.js')
+      vi.mocked(program.authorizeProgramCall).mockResolvedValueOnce({ kind: 'authorized', grantId: 'grant-abc', token: 'tok', claims: {} as any })
 
       const { runCommand } = await import('../src/commands/run.js')
       await runCommand.run!({
@@ -196,29 +159,20 @@ describe('commands/run async default', () => {
         args: { shell: true, wait: true, approval: 'once' } as any,
       } as any)
 
-      expect(shapes.waitForGrantStatus).toHaveBeenCalledWith('http://idp.test', 'grant-abc')
-      expect(shapes.verifyAndExecute).toHaveBeenCalled()
-      // Async info block should NOT have been printed
+      expect(program.authorizeProgramCall).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ wait: true }))
+      expect(executeProgramCall).toHaveBeenCalledWith(
+        { program: expect.objectContaining({ path: '/usr/bin/curl' }), argv: ['https://example.com'] },
+        'inherit',
+      )
       const allOutput = consoleLogSpy.mock.calls.map(c => c.join(' ')).join('\n')
       expect(allOutput).not.toContain('apes grants run grant-abc')
     })
 
-    it('APE_WAIT=1 env: takes legacy blocking path', async () => {
+    it('APE_WAIT=1 env: waits like --wait', async () => {
       process.env.APE_WAIT = '1'
-      const shapes = await import('../src/shapes/index.js')
-      vi.mocked(shapes.parseShellCommand).mockReturnValue({
-        executable: 'curl',
-        argv: ['https://example.com'],
-        isCompound: false,
-        raw: 'curl https://example.com',
-      } as any)
-      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue({} as any)
-      vi.mocked(shapes.resolveCommand).mockResolvedValue(makeResolved())
-      vi.mocked(shapes.findExistingGrant).mockResolvedValue(null)
-      vi.mocked(shapes.createShapesGrant).mockResolvedValue({ id: 'grant-env' } as any)
-      vi.mocked(shapes.waitForGrantStatus).mockResolvedValue('approved')
-      vi.mocked(shapes.fetchGrantToken).mockResolvedValue('tok' as any)
-      vi.mocked(shapes.verifyAndExecute).mockResolvedValue(undefined as any)
+      const program = await import('../src/authorization/program.js')
+      const { executeProgramCall } = await import('../src/authorization/execute.js')
+      vi.mocked(program.authorizeProgramCall).mockResolvedValueOnce({ kind: 'authorized', grantId: 'grant-env', token: 'tok', claims: {} as any })
 
       const { runCommand } = await import('../src/commands/run.js')
       await runCommand.run!({
@@ -226,34 +180,42 @@ describe('commands/run async default', () => {
         args: { shell: true, wait: false, approval: 'once' } as any,
       } as any)
 
-      expect(shapes.waitForGrantStatus).toHaveBeenCalled()
-      expect(shapes.verifyAndExecute).toHaveBeenCalled()
+      expect(program.authorizeProgramCall).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ wait: true }))
+      expect(executeProgramCall).toHaveBeenCalled()
     })
 
-    it('cache hit via findExistingGrant: executes immediately, no async exit', async () => {
-      const shapes = await import('../src/shapes/index.js')
-      vi.mocked(shapes.parseShellCommand).mockReturnValue({
-        executable: 'curl',
-        argv: ['https://example.com'],
-        isCompound: false,
-        raw: 'curl https://example.com',
+    it('a refusal or a timed-out wait fails closed and runs nothing', async () => {
+      const program = await import('../src/authorization/program.js')
+      const { executeProgramCall } = await import('../src/authorization/execute.js')
+      const { runCommand } = await import('../src/commands/run.js')
+      const shellRun = () => runCommand.run!({
+        rawArgs: ['run', '--shell', '--wait', '--', 'bash', '-c', 'curl https://example.com'],
+        args: { shell: true, wait: true, approval: 'once' } as any,
       } as any)
-      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue({} as any)
-      vi.mocked(shapes.resolveCommand).mockResolvedValue(makeResolved())
-      vi.mocked(shapes.findExistingGrant).mockResolvedValue('existing-grant-1')
-      vi.mocked(shapes.fetchGrantToken).mockResolvedValue('tok' as any)
-      vi.mocked(shapes.verifyAndExecute).mockResolvedValue(undefined as any)
+
+      vi.mocked(program.authorizeProgramCall).mockRejectedValueOnce(new program.AuthorizationRefusedError('denied', 'grant-no'))
+      await expect(shellRun()).rejects.toThrow('Grant grant-no denied')
+      vi.mocked(program.authorizeProgramCall).mockRejectedValueOnce(new program.AuthorizationTimeoutError('grant-slow', 300_000))
+      await expect(shellRun()).rejects.toThrow(/timed out/)
+
+      expect(executeProgramCall).not.toHaveBeenCalled()
+    })
+
+    it('a line that is not a plain program call never reaches the program authorization', async () => {
+      const program = await import('../src/authorization/program.js')
+      const { apiFetch } = await import('../src/http.js')
+      vi.mocked(apiFetch)
+        .mockResolvedValueOnce({ data: [] } as any) // grants list lookup
+        .mockResolvedValueOnce({ id: 'sess-builtin', status: 'pending' } as any) // create
 
       const { runCommand } = await import('../src/commands/run.js')
-      await runCommand.run!({
-        rawArgs: ['run', '--shell', '--', 'bash', '-c', 'curl https://example.com'],
+      await expectCliExit(runCommand.run!({
+        rawArgs: ['run', '--shell', '--', 'bash', '-c', 'cd /tmp'],
         args: { shell: true, wait: false, approval: 'once' } as any,
-      } as any)
+      } as any))
 
-      expect(shapes.createShapesGrant).not.toHaveBeenCalled()
-      expect(shapes.verifyAndExecute).toHaveBeenCalledWith('tok', expect.anything(), expect.any(String))
-      const allOutput = consoleLogSpy.mock.calls.map(c => c.join(' ')).join('\n')
-      expect(allOutput).not.toContain('apes grants run')
+      expect(program.authorizeProgramCall).not.toHaveBeenCalled()
+      assertAsyncInfoBlock('sess-builtin')
     })
   })
 
@@ -342,15 +304,13 @@ describe('commands/run async default', () => {
   })
 
   // ------------------------------------------------------------------------
-  // Site #3 — runAdapterMode (apes run -- cmd without --shell)
+  // Site #3 — runProgramMode (apes run -- cmd without --shell)
   // ------------------------------------------------------------------------
-  describe('runAdapterMode', () => {
-    it('async default: prints grant info and does NOT call waitForGrantStatus', async () => {
-      const shapes = await import('../src/shapes/index.js')
-      vi.mocked(shapes.loadAdapter).mockReturnValue({} as any)
-      vi.mocked(shapes.resolveCommand).mockResolvedValue(makeResolved('whoami'))
-      vi.mocked(shapes.findExistingGrant).mockResolvedValue(null)
-      vi.mocked(shapes.createShapesGrant).mockResolvedValue({ id: 'grant-xyz' } as any)
+  describe('runProgramMode', () => {
+    it('async default: prints grant info and runs nothing', async () => {
+      const program = await import('../src/authorization/program.js')
+      const { executeProgramCall } = await import('../src/authorization/execute.js')
+      vi.mocked(program.authorizeProgramCall).mockResolvedValueOnce({ kind: 'pending', grantId: 'grant-xyz', approvalUrl: 'http://idp.test/grant-approval?grant_id=grant-xyz' })
 
       const { runCommand } = await import('../src/commands/run.js')
       await expectCliExit(runCommand.run!({
@@ -358,75 +318,47 @@ describe('commands/run async default', () => {
         args: { shell: false, wait: false, approval: 'once' } as any,
       } as any))
 
-      expect(shapes.waitForGrantStatus).not.toHaveBeenCalled()
-      expect(shapes.verifyAndExecute).not.toHaveBeenCalled()
+      expect(executeProgramCall).not.toHaveBeenCalled()
       assertAsyncInfoBlock('grant-xyz')
     })
 
-    it('--wait flag: blocking path executes', async () => {
-      const shapes = await import('../src/shapes/index.js')
-      vi.mocked(shapes.loadAdapter).mockReturnValue({} as any)
-      vi.mocked(shapes.resolveCommand).mockResolvedValue(makeResolved('whoami'))
-      vi.mocked(shapes.findExistingGrant).mockResolvedValue(null)
-      vi.mocked(shapes.createShapesGrant).mockResolvedValue({ id: 'grant-xyz' } as any)
-      vi.mocked(shapes.waitForGrantStatus).mockResolvedValue('approved')
-      vi.mocked(shapes.fetchGrantToken).mockResolvedValue('tok' as any)
-      vi.mocked(shapes.verifyAndExecute).mockResolvedValue(undefined as any)
+    it('--wait flag: runs the program once authorized', async () => {
+      const program = await import('../src/authorization/program.js')
+      const { executeProgramCall } = await import('../src/authorization/execute.js')
+      vi.mocked(program.authorizeProgramCall).mockResolvedValueOnce({ kind: 'authorized', grantId: 'grant-xyz', token: 'tok', claims: {} as any })
 
       const { runCommand } = await import('../src/commands/run.js')
       await runCommand.run!({
-        rawArgs: ['run', '--wait', '--', 'whoami'],
-        args: { shell: false, wait: true, approval: 'once' } as any,
+        rawArgs: ['run', '--wait', '--approval', 'always', '--', 'whoami', '-u'],
+        args: { shell: false, wait: true, approval: 'always' } as any,
       } as any)
 
-      expect(shapes.waitForGrantStatus).toHaveBeenCalledWith('http://idp.test', 'grant-xyz')
-      expect(shapes.verifyAndExecute).toHaveBeenCalledWith('tok', expect.anything(), expect.any(String))
+      expect(program.authorizeProgramCall).toHaveBeenCalledWith(
+        { program: expect.objectContaining({ name: 'whoami' }), argv: ['-u'] },
+        expect.objectContaining({ grantType: 'always', wait: true }),
+      )
+      expect(executeProgramCall).toHaveBeenCalledWith({ program: expect.objectContaining({ path: '/usr/bin/whoami' }), argv: ['-u'] }, 'inherit')
     })
 
-    it('generic fallback: unshaped CLI falls through to synthetic resolved + stderr warning', async () => {
-      const shapes = await import('../src/shapes/index.js')
-      vi.mocked(shapes.loadAdapter).mockImplementation(() => {
-        throw new Error('No adapter found for kubectl')
-      })
-      vi.mocked(shapes.createShapesGrant).mockResolvedValue({ id: 'grant-generic' } as any)
-      const stderrSpy = vi.spyOn(process.stderr, 'write').mockReturnValue(true)
-
+    it('refuses an unknown program, the removed --adapter option and timed approvals before asking the IdP', async () => {
+      const program = await import('../src/authorization/program.js')
       const { runCommand } = await import('../src/commands/run.js')
-      await expectCliExit(runCommand.run!({
-        rawArgs: ['run', '--', 'kubectl', 'get', 'pods'],
-        args: { shell: false, wait: false, approval: 'once' } as any,
-      } as any))
+      vi.mocked(program.locateProgram).mockResolvedValueOnce(null)
 
-      const stderrOut = stderrSpy.mock.calls.map(c => String(c[0])).join('')
-      expect(stderrOut).toContain('No shape registered for `kubectl`')
-      expect(stderrOut).toContain('Generic mode active')
-      expect(shapes.createShapesGrant).toHaveBeenCalled()
-      const resolvedArg = vi.mocked(shapes.createShapesGrant).mock.calls[0]?.[0]
-      expect(resolvedArg?.detail.operation_id).toBe('_generic.exec')
-      expect(resolvedArg?.detail.risk).toBe('high')
-      stderrSpy.mockRestore()
-    })
-
-    it('generic fallback disabled via config: legacy No-adapter-found error', async () => {
-      const shapes = await import('../src/shapes/index.js')
-      vi.mocked(shapes.loadAdapter).mockImplementation(() => {
-        throw new Error('No adapter found for kubectl')
-      })
-      // Override the config mock to disable generic fallback for this test.
-      const configModule = await import('../src/config.js')
-      const origGen = vi.mocked(configModule.isGenericFallbackEnabled).getMockImplementation?.()
-      vi.mocked(configModule.isGenericFallbackEnabled).mockReturnValue(false)
-
-      const { runCommand } = await import('../src/commands/run.js')
       await expect(runCommand.run!({
-        rawArgs: ['run', '--', 'kubectl', 'get', 'pods'],
+        rawArgs: ['run', '--', 'no-such-tool'],
         args: { shell: false, wait: false, approval: 'once' } as any,
-      } as any)).rejects.toThrow(/No adapter found for kubectl/)
+      } as any)).rejects.toThrow('no-such-tool: no executable file found')
+      await expect(runCommand.run!({
+        rawArgs: ['run', '--adapter', '/tmp/kubectl.toml', '--', 'kubectl', 'get', 'pods'],
+        args: { shell: false, wait: false, approval: 'once' } as any,
+      } as any)).rejects.toThrow('--adapter was removed')
+      await expect(runCommand.run!({
+        rawArgs: ['run', '--approval', 'timed', '--', 'whoami'],
+        args: { shell: false, wait: false, approval: 'timed' } as any,
+      } as any)).rejects.toThrow('use once or always')
 
-      expect(shapes.createShapesGrant).not.toHaveBeenCalled()
-      // restore mock
-      if (origGen) vi.mocked(configModule.isGenericFallbackEnabled).mockImplementation(origGen)
-      else vi.mocked(configModule.isGenericFallbackEnabled).mockReset()
+      expect(program.authorizeProgramCall).not.toHaveBeenCalled()
     })
   })
 
@@ -541,57 +473,6 @@ describe('commands/run async default', () => {
       expect(execFileSync).not.toHaveBeenCalled()
       assertAutoApprovedBlock('sess-auto')
       expect(collectedOk()).toContain('(standing)')
-    })
-
-    it('tryAdapterModeFromShell: auto-approved without kind, no "(undefined)"', async () => {
-      const shapes = await import('../src/shapes/index.js')
-      vi.mocked(shapes.parseShellCommand).mockReturnValue({
-        executable: 'curl',
-        argv: ['https://example.com'],
-        isCompound: false,
-        raw: 'curl https://example.com',
-      } as any)
-      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue({} as any)
-      vi.mocked(shapes.resolveCommand).mockResolvedValue(makeResolved())
-      vi.mocked(shapes.findExistingGrant).mockResolvedValue(null)
-      vi.mocked(shapes.createShapesGrant).mockResolvedValue({
-        id: 'shape-auto',
-        status: 'approved',
-        approved_automatically: true,
-      } as any)
-
-      const { execFileSync } = await import('node:child_process')
-
-      const { runCommand } = await import('../src/commands/run.js')
-      await expectCliExit(runCommand.run!({
-        rawArgs: ['run', '--shell', '--', 'bash', '-c', 'curl https://example.com'],
-        args: { shell: true, wait: false, approval: 'once' } as any,
-      } as any), 75)
-
-      expect(shapes.verifyAndExecute).not.toHaveBeenCalled()
-      expect(execFileSync).not.toHaveBeenCalled()
-      assertAutoApprovedBlock('shape-auto')
-      expect(collectedOk()).not.toContain('(undefined)')
-    })
-
-    it('runAdapterMode: auto-approved via status alone (no approved_automatically)', async () => {
-      const shapes = await import('../src/shapes/index.js')
-      vi.mocked(shapes.loadAdapter).mockReturnValue({} as any)
-      vi.mocked(shapes.resolveCommand).mockResolvedValue(makeResolved('whoami'))
-      vi.mocked(shapes.findExistingGrant).mockResolvedValue(null)
-      vi.mocked(shapes.createShapesGrant).mockResolvedValue({
-        id: 'adapter-auto',
-        status: 'approved',
-      } as any)
-
-      const { runCommand } = await import('../src/commands/run.js')
-      await expectCliExit(runCommand.run!({
-        rawArgs: ['run', '--', 'whoami'],
-        args: { shell: false, wait: false, approval: 'once' } as any,
-      } as any), 75)
-
-      expect(shapes.verifyAndExecute).not.toHaveBeenCalled()
-      assertAutoApprovedBlock('adapter-auto')
     })
 
     it('APES_USER=human: auto-approved block replaces the human pending text too', async () => {
@@ -914,9 +795,8 @@ describe('commands/run async default', () => {
 
       await driveShellMode('apes grants status abc-123 --json')
 
-      // Must NOT hit the adapter flow
-      expect(shapes.loadOrInstallAdapter).not.toHaveBeenCalled()
-      expect(shapes.createShapesGrant).not.toHaveBeenCalled()
+      // Must NOT hit the program authorization
+      expect((await import('../src/authorization/program.js')).authorizeProgramCall).not.toHaveBeenCalled()
       // Must NOT hit the session-grant API calls
       expect(apiFetch).not.toHaveBeenCalled()
       // Must NOT print the async info block
@@ -944,7 +824,7 @@ describe('commands/run async default', () => {
 
       await driveShellMode('apes grants run xyz-grant-id')
 
-      expect(shapes.loadOrInstallAdapter).not.toHaveBeenCalled()
+      expect((await import('../src/authorization/program.js')).authorizeProgramCall).not.toHaveBeenCalled()
       expect(apiFetch).not.toHaveBeenCalled()
 
       const { execFileSync } = await import('node:child_process')
@@ -968,24 +848,24 @@ describe('commands/run async default', () => {
 
       await driveShellMode('apes whoami')
 
-      expect(shapes.loadOrInstallAdapter).not.toHaveBeenCalled()
+      expect((await import('../src/authorization/program.js')).authorizeProgramCall).not.toHaveBeenCalled()
       expect(apiFetch).not.toHaveBeenCalled()
     })
 
-    it('`ape-shell -c "apes adapter install curl"` bypasses grant flow', async () => {
+    it('`ape-shell -c "apes adapter list"` bypasses grant flow', async () => {
       const shapes = await import('../src/shapes/index.js')
       vi.mocked(shapes.parseShellCommand).mockReturnValue({
         executable: 'apes',
-        argv: ['adapter', 'install', 'curl'],
+        argv: ['adapter', 'list'],
         isCompound: false,
-        raw: 'apes adapter install curl',
+        raw: 'apes adapter list',
       } as any)
 
       const { apiFetch } = await import('../src/http.js')
 
-      await driveShellMode('apes adapter install curl')
+      await driveShellMode('apes adapter list')
 
-      expect(shapes.loadOrInstallAdapter).not.toHaveBeenCalled()
+      expect((await import('../src/authorization/program.js')).authorizeProgramCall).not.toHaveBeenCalled()
       expect(apiFetch).not.toHaveBeenCalled()
     })
 
@@ -1000,8 +880,8 @@ describe('commands/run async default', () => {
         isCompound: false,
         raw: 'apes run -- echo hi',
       } as any)
-      // No adapter for `apes` registered → adapter path returns false
-      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue(null)
+      // No executable file for `apes` here → the program path returns false
+      vi.mocked((await import('../src/authorization/program.js')).locateProgram).mockResolvedValueOnce(null)
 
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(apiFetch)
@@ -1010,8 +890,8 @@ describe('commands/run async default', () => {
 
       await driveShellMode('apes run -- echo hi', 75)
 
-      // Should NOT have short-circuited — adapter path was attempted
-      expect(shapes.loadOrInstallAdapter).toHaveBeenCalled()
+      // Should NOT have short-circuited — the program path was attempted
+      expect((await import('../src/authorization/program.js')).locateProgram).toHaveBeenCalledWith('apes')
       // Session-grant path was taken, pending info printed
       expect(apiFetch).toHaveBeenCalled()
       const out = successSpy.mock.calls.map(c => c.join(' ')).join('\n')
@@ -1031,8 +911,8 @@ describe('commands/run async default', () => {
 
       await driveShellMode('apes run --as root -- brew services restart ollama')
 
-      // Must self-dispatch — no adapter or session-grant path
-      expect(shapes.loadOrInstallAdapter).not.toHaveBeenCalled()
+      // Must self-dispatch — no program or session-grant path
+      expect((await import('../src/authorization/program.js')).authorizeProgramCall).not.toHaveBeenCalled()
       expect(apiFetch).not.toHaveBeenCalled()
 
       // Must exec the inner command directly
@@ -1052,7 +932,7 @@ describe('commands/run async default', () => {
         isCompound: false,
         raw: 'apes fetch https://example.com',
       } as any)
-      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue(null)
+      vi.mocked((await import('../src/authorization/program.js')).locateProgram).mockResolvedValueOnce(null)
 
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(apiFetch)
@@ -1072,7 +952,7 @@ describe('commands/run async default', () => {
         isCompound: false,
         raw: 'apes mcp server',
       } as any)
-      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue(null)
+      vi.mocked((await import('../src/authorization/program.js')).locateProgram).mockResolvedValueOnce(null)
 
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(apiFetch)
@@ -1092,7 +972,7 @@ describe('commands/run async default', () => {
         isCompound: true, // the key signal
         raw: 'apes whoami | grep alice',
       } as any)
-      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue(null)
+      vi.mocked((await import('../src/authorization/program.js')).locateProgram).mockResolvedValueOnce(null)
 
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(apiFetch)
@@ -1114,16 +994,12 @@ describe('commands/run async default', () => {
         isCompound: false,
         raw: 'curl example.com',
       } as any)
-      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue({} as any)
-      vi.mocked(shapes.resolveCommand).mockResolvedValue(makeResolved('curl example.com'))
-      vi.mocked(shapes.findExistingGrant).mockResolvedValue(null)
-      vi.mocked(shapes.createShapesGrant).mockResolvedValue({ id: 'curl-grant' } as any)
+      vi.mocked((await import('../src/authorization/program.js')).authorizeProgramCall).mockResolvedValueOnce({ kind: 'pending', grantId: 'curl-grant', approvalUrl: 'http://idp.test/grant-approval?grant_id=curl-grant' })
 
       await driveShellMode('curl example.com', 75)
 
-      // Adapter flow was attempted (not short-circuited)
-      expect(shapes.loadOrInstallAdapter).toHaveBeenCalled()
-      expect(shapes.createShapesGrant).toHaveBeenCalled()
+      // The program authorization was attempted (not short-circuited)
+      expect((await import('../src/authorization/program.js')).authorizeProgramCall).toHaveBeenCalledWith({ program: expect.objectContaining({ name: 'curl' }), argv: ['example.com'] }, expect.anything())
     })
   })
 
@@ -1167,7 +1043,7 @@ describe('commands/run async default', () => {
       )
 
       // Must short-circuit before the adapter or session-grant path.
-      expect(shapes.loadOrInstallAdapter).not.toHaveBeenCalled()
+      expect((await import('../src/authorization/program.js')).authorizeProgramCall).not.toHaveBeenCalled()
     })
 
     it('`ape-shell -c "sudo"` (bare) throws with the generic hint', async () => {
@@ -1191,7 +1067,7 @@ describe('commands/run async default', () => {
         isCompound: true,
         raw: 'echo foo | sudo tee /etc/x',
       } as any)
-      vi.mocked(shapes.loadOrInstallAdapter).mockResolvedValue(null)
+      vi.mocked((await import('../src/authorization/program.js')).locateProgram).mockResolvedValueOnce(null)
 
       const { apiFetch } = await import('../src/http.js')
       vi.mocked(apiFetch)
@@ -1394,11 +1270,8 @@ describe('commands/run async default', () => {
   // ------------------------------------------------------------------------
   describe('request summary', () => {
     it('sends title, description, origin and link as the structured summary', async () => {
-      const shapes = await import('../src/shapes/index.js')
-      vi.mocked(shapes.loadAdapter).mockReturnValue({} as any)
-      vi.mocked(shapes.resolveCommand).mockResolvedValue(makeResolved('whoami'))
-      vi.mocked(shapes.findExistingGrant).mockResolvedValue(null)
-      vi.mocked(shapes.createShapesGrant).mockResolvedValue({ id: 'grant-summary' } as any)
+      const program = await import('../src/authorization/program.js')
+      vi.mocked(program.authorizeProgramCall).mockResolvedValueOnce({ kind: 'pending', grantId: 'grant-summary', approvalUrl: 'http://idp.test/grant-approval?grant_id=grant-summary' })
 
       const { runCommand } = await import('../src/commands/run.js')
       await expectCliExit(runCommand.run!({
@@ -1406,7 +1279,7 @@ describe('commands/run async default', () => {
         args: { 'shell': false, 'wait': false, 'approval': 'once', 'summary-title': ' Show the account ', 'summary-description': 'Line one\nLine two', 'summary-origin': 'Status check', 'summary-link': 'https://example.com/status' } as any,
       } as any))
 
-      expect(vi.mocked(shapes.createShapesGrant).mock.calls[0]?.[1]).toMatchObject({
+      expect(vi.mocked(program.authorizeProgramCall).mock.calls[0]?.[1]).toMatchObject({
         summary: { title: 'Show the account', description: 'Line one\nLine two', origin: 'Status check', link: 'https://example.com/status' },
       })
     })
