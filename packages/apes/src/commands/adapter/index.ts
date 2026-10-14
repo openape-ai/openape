@@ -1,227 +1,94 @@
 import { defineCommand } from 'citty'
 import consola from 'consola'
-import {
-  fetchRegistry,
-  findAdapter,
-  findConflictingAdapters,
-  getInstalledDigest,
-  installAdapter,
-  isInstalled,
-  loadAdapter,
-  removeAdapter,
-  searchAdapters,
-} from '../../shapes/index.js'
+import type { ServerShape } from '@openape/grants'
+import { getIdpUrl } from '../../config'
 import { CliError } from '../../errors'
+import { getShape, listShapes } from '../../authorization/shapes'
 
+function requireIdp(explicit: unknown): string {
+  const idp = getIdpUrl(explicit as string | undefined)
+  if (!idp)
+    throw new CliError('No IdP URL configured. Run `apes login` first or pass --idp.')
+  return idp
+}
+
+function printShapes(shapes: ServerShape[]): void {
+  for (const shape of shapes)
+    console.log(`  ${shape.cli_id.padEnd(16)} ${shape.executable.padEnd(16)} ${shape.description}`)
+}
+
+const idpArg = {
+  type: 'string',
+  description: 'IdP URL',
+} as const
+
+const jsonArg = {
+  type: 'boolean',
+  description: 'Output as JSON',
+  default: false,
+} as const
+
+/**
+ * Read-only views of the Shapes adapters the IdP resolves commands with. Adapters are no longer installed
+ * locally: the IdP is the only place that knows them (issue 1473).
+ */
 export const adapterCommand = defineCommand({
   meta: {
     name: 'adapter',
-    description: 'Manage CLI adapters',
+    description: 'Show the CLI adapters (Shapes) the IdP resolves commands with',
   },
   subCommands: {
     list: defineCommand({
       meta: {
         name: 'list',
-        description: 'List available adapters',
+        description: 'List the adapters known to the IdP',
       },
-      args: {
-        remote: {
-          type: 'boolean',
-          description: 'List adapters from the remote registry',
-          default: false,
-        },
-        json: {
-          type: 'boolean',
-          description: 'Output as JSON',
-          default: false,
-        },
-        refresh: {
-          type: 'boolean',
-          description: 'Force refresh the registry cache',
-          default: false,
-        },
-      },
+      args: { idp: idpArg, json: jsonArg },
       async run({ args }) {
-        const forceRefresh = Boolean(args.refresh)
-        if (args.remote) {
-          const index = await fetchRegistry(forceRefresh)
-          if (args.json) {
-            process.stdout.write(`${JSON.stringify(index.adapters, null, 2)}\n`)
-            return
-          }
-          consola.info(`Registry: ${index.adapters.length} adapters (${index.generated_at})`)
-          for (const a of index.adapters) {
-            const installed = isInstalled(a.id, false) ? ' [installed]' : ''
-            console.log(`  ${a.id.padEnd(12)} ${a.name.padEnd(24)} ${a.category}${installed}`)
-          }
-          return
-        }
-
-        const index = await fetchRegistry(forceRefresh)
-        const local: { id: string, source: string, digest: string }[] = []
-        for (const a of index.adapters) {
-          try {
-            const loaded = loadAdapter(a.id)
-            local.push({ id: a.id, source: loaded.source, digest: loaded.digest })
-          }
-          catch {
-            // not installed locally
-          }
-        }
-
+        const shapes = await listShapes(requireIdp(args.idp))
         if (args.json) {
-          process.stdout.write(`${JSON.stringify(local, null, 2)}\n`)
+          process.stdout.write(`${JSON.stringify(shapes, null, 2)}\n`)
           return
         }
-
-        if (local.length === 0) {
-          consola.info('No adapters installed. Use `apes adapter list --remote` to see available adapters.')
-          return
-        }
-
-        for (const a of local) {
-          console.log(`  ${a.id.padEnd(12)} ${a.source}`)
-        }
-      },
-    }),
-
-    install: defineCommand({
-      meta: {
-        name: 'install',
-        description: 'Install an adapter from the registry',
-      },
-      args: {
-        id: {
-          type: 'positional',
-          description: 'Adapter ID to install',
-          required: true,
-        },
-        local: {
-          type: 'boolean',
-          description: 'Install to project-local .openape/ instead of ~/.openape/',
-          default: false,
-        },
-        refresh: {
-          type: 'boolean',
-          description: 'Force refresh the registry cache',
-          default: false,
-        },
-      },
-      async run({ args }) {
-        const ids = [String(args.id), ...args._].filter(Boolean)
-        const local = Boolean(args.local)
-        const index = await fetchRegistry(Boolean(args.refresh))
-
-        for (const id of ids) {
-          const entry = findAdapter(index, id)
-          if (!entry) {
-            consola.error(`Adapter "${id}" not found in registry. Use \`apes adapter search ${id}\` to search.`)
-            continue
-          }
-
-          const conflicts = findConflictingAdapters(entry.executable, id)
-          if (conflicts.length > 0) {
-            for (const c of conflicts) {
-              consola.warn(`Conflicting adapter found: ${c.path} (id: ${c.adapterId}, executable: ${c.executable})`)
-              consola.warn(`  Remove it with: apes adapter remove ${c.adapterId}`)
-            }
-          }
-
-          const result = await installAdapter(entry, { local })
-          const verb = result.updated ? 'Updated' : 'Installed'
-          consola.success(`${verb} ${result.id} → ${result.path}`)
-          consola.info(`Digest: ${result.digest}`)
-        }
-      },
-    }),
-
-    remove: defineCommand({
-      meta: {
-        name: 'remove',
-        description: 'Remove an installed adapter',
-      },
-      args: {
-        id: {
-          type: 'positional',
-          description: 'Adapter ID to remove',
-          required: true,
-        },
-        local: {
-          type: 'boolean',
-          description: 'Remove from project-local .openape/',
-          default: false,
-        },
-      },
-      async run({ args }) {
-        const ids = [String(args.id), ...args._].filter(Boolean)
-        const local = Boolean(args.local)
-        let failed = false
-
-        for (const id of ids) {
-          if (removeAdapter(id, local)) {
-            consola.success(`Removed adapter: ${id}`)
-          }
-          else {
-            consola.error(`Adapter "${id}" is not installed${local ? ' locally' : ''}`)
-            failed = true
-          }
-        }
-
-        if (failed)
-          throw new CliError('Some adapters could not be removed')
+        consola.info(`${shapes.length} adapters at the IdP`)
+        printShapes(shapes)
       },
     }),
 
     info: defineCommand({
       meta: {
         name: 'info',
-        description: 'Show detailed adapter information',
+        description: 'Show one adapter and its operations',
       },
       args: {
         id: {
           type: 'positional',
-          description: 'Adapter ID',
+          description: 'Adapter (CLI) ID',
           required: true,
         },
-        refresh: {
-          type: 'boolean',
-          description: 'Force refresh the registry cache',
-          default: false,
-        },
+        idp: idpArg,
+        json: jsonArg,
       },
       async run({ args }) {
-        const id = String(args.id)
-        const index = await fetchRegistry(Boolean(args.refresh))
-        const entry = findAdapter(index, id)
-        if (!entry)
-          throw new Error(`Adapter "${id}" not found in registry`)
-
-        console.log(`ID:          ${entry.id}`)
-        console.log(`Name:        ${entry.name}`)
-        console.log(`Description: ${entry.description}`)
-        console.log(`Category:    ${entry.category}`)
-        console.log(`Tags:        ${entry.tags.join(', ')}`)
-        console.log(`Author:      ${entry.author}`)
-        console.log(`Executable:  ${entry.executable}`)
-        console.log(`Digest:      ${entry.digest}`)
-        console.log(`Min version: ${entry.min_shapes_version}`)
-        console.log(`URL:         ${entry.download_url}`)
-
-        const localDigest = getInstalledDigest(id, false)
-        if (localDigest) {
-          const upToDate = localDigest === entry.digest
-          console.log(`Installed:   yes${upToDate ? ' (up to date)' : ' (update available)'}`)
+        const shape = await getShape(requireIdp(args.idp), String(args.id))
+        if (args.json) {
+          process.stdout.write(`${JSON.stringify(shape, null, 2)}\n`)
+          return
         }
-        else {
-          console.log(`Installed:   no`)
-        }
+        console.log(`ID:          ${shape.cli_id}`)
+        console.log(`Executable:  ${shape.executable}`)
+        console.log(`Description: ${shape.description}`)
+        console.log(`Digest:      ${shape.digest}`)
+        console.log('Operations:')
+        for (const operation of shape.operations)
+          console.log(`  ${operation.id.padEnd(32)} ${operation.risk.padEnd(8)} ${operation.display}`)
       },
     }),
 
     search: defineCommand({
       meta: {
         name: 'search',
-        description: 'Search adapters in the registry',
+        description: 'Search the adapters known to the IdP',
       },
       args: {
         query: {
@@ -229,141 +96,22 @@ export const adapterCommand = defineCommand({
           description: 'Search query',
           required: true,
         },
-        json: {
-          type: 'boolean',
-          description: 'Output as JSON',
-          default: false,
-        },
-        refresh: {
-          type: 'boolean',
-          description: 'Force refresh the registry cache',
-          default: false,
-        },
+        idp: idpArg,
+        json: jsonArg,
       },
       async run({ args }) {
-        const query = String(args.query)
-        const index = await fetchRegistry(Boolean(args.refresh))
-        const results = searchAdapters(index, query)
-
+        const query = String(args.query).toLowerCase()
+        const shapes = (await listShapes(requireIdp(args.idp))).filter(shape =>
+          [shape.cli_id, shape.executable, shape.description].some(field => field.toLowerCase().includes(query)))
         if (args.json) {
-          process.stdout.write(`${JSON.stringify(results, null, 2)}\n`)
+          process.stdout.write(`${JSON.stringify(shapes, null, 2)}\n`)
           return
         }
-
-        if (results.length === 0) {
-          consola.info(`No adapters matching "${query}"`)
+        if (shapes.length === 0) {
+          consola.info(`No adapters matching "${args.query}"`)
           return
         }
-
-        for (const a of results) {
-          console.log(`  ${a.id.padEnd(12)} ${a.name.padEnd(24)} ${a.category}`)
-          console.log(`    ${a.description}`)
-        }
-      },
-    }),
-
-    update: defineCommand({
-      meta: {
-        name: 'update',
-        description: 'Update installed adapters',
-      },
-      args: {
-        id: {
-          type: 'positional',
-          description: 'Adapter ID (omit to update all)',
-        },
-        yes: {
-          type: 'boolean',
-          description: 'Skip confirmation',
-          default: false,
-        },
-        refresh: {
-          type: 'boolean',
-          description: 'Force refresh the registry cache',
-          default: true,
-        },
-      },
-      async run({ args }) {
-        const index = await fetchRegistry(Boolean(args.refresh))
-        const targetId = args.id ? String(args.id) : undefined
-        const targets = targetId
-          ? [targetId]
-          : index.adapters.map(a => a.id).filter(id => isInstalled(id, false))
-
-        if (targets.length === 0) {
-          consola.info('No adapters installed to update.')
-          return
-        }
-
-        for (const id of targets) {
-          const entry = findAdapter(index, id)
-          if (!entry) {
-            consola.warn(`${id}: not found in registry, skipping`)
-            continue
-          }
-
-          const localDigest = getInstalledDigest(id, false)
-          if (localDigest === entry.digest) {
-            consola.info(`${id}: already up to date`)
-            continue
-          }
-
-          if (localDigest && !args.yes) {
-            consola.warn(`${id}: digest will change — existing grants for this adapter will be invalidated`)
-            consola.info(`  Old: ${localDigest}`)
-            consola.info(`  New: ${entry.digest}`)
-            consola.info('  Use --yes to confirm')
-            continue
-          }
-
-          const result = await installAdapter(entry)
-          consola.success(`Updated ${result.id} → ${result.path}`)
-        }
-      },
-    }),
-
-    verify: defineCommand({
-      meta: {
-        name: 'verify',
-        description: 'Verify installed adapter against registry digest',
-      },
-      args: {
-        id: {
-          type: 'positional',
-          description: 'Adapter ID',
-          required: true,
-        },
-        local: {
-          type: 'boolean',
-          description: 'Check project-local adapter',
-          default: false,
-        },
-        refresh: {
-          type: 'boolean',
-          description: 'Force refresh the registry cache',
-          default: false,
-        },
-      },
-      async run({ args }) {
-        const id = String(args.id)
-        const local = Boolean(args.local)
-        const index = await fetchRegistry(Boolean(args.refresh))
-        const entry = findAdapter(index, id)
-        if (!entry)
-          throw new Error(`Adapter "${id}" not found in registry`)
-
-        const localDigest = getInstalledDigest(id, local)
-        if (!localDigest)
-          throw new Error(`Adapter "${id}" is not installed${local ? ' locally' : ''}`)
-
-        if (localDigest === entry.digest) {
-          consola.success(`${id}: digest matches registry`)
-        }
-        else {
-          console.log(`  Local:    ${localDigest}`)
-          console.log(`  Registry: ${entry.digest}`)
-          throw new CliError(`${id}: digest mismatch`)
-        }
+        printShapes(shapes)
       },
     }),
   },

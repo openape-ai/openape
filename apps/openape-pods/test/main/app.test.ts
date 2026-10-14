@@ -46,20 +46,21 @@ describe('main process owner dialogs', () => {
     expect(main.dialog.showMessageBox).not.toHaveBeenCalled()
   })
 
-  it('adds an installed program only from the file the owner picks, with the registry adapter of its command and never an adapter file', async () => {
+  // Issue 1473, revision 4: a program is assigned by path and file hash; no adapter is selected or asked for.
+  it('adds an installed program only from the file the owner picks, by its path and never with an adapter file', async () => {
     main = await startMain()
     const executable = join(main.root, 'invoice-cli')
     await writeFile(executable, '#!/bin/sh\necho DO_NOT_EXECUTE\nexit 1\n', { mode: 0o700 })
-    main.worker.registryProgram.mockResolvedValue({ name: 'invoice-cli', executable, cliId: 'invoice-cli' })
+    main.worker.installedProgram.mockResolvedValue({ name: 'invoice-cli', executable, cliId: 'invoice-cli' })
     await main.invoke(channels.programs, { type: 'add', podId, epoch: 1 })
-    expect(main.worker.registryProgram).not.toHaveBeenCalled(); expect(main.worker.program).not.toHaveBeenCalled()
+    expect(main.worker.installedProgram).not.toHaveBeenCalled(); expect(main.worker.program).not.toHaveBeenCalled()
     main.dialog.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [executable] })
     await main.invoke(channels.programs, { type: 'add', podId, epoch: 1 })
-    expect(main.worker.registryProgram).toHaveBeenCalledWith(executable)
+    expect(main.worker.installedProgram).toHaveBeenCalledWith(executable)
     expect(main.worker.program).toHaveBeenLastCalledWith({ type: 'add', podId, epoch: 1 }, expect.objectContaining({ name: 'invoice-cli', executable, cliId: 'invoice-cli' }))
-    main.worker.registryProgram.mockRejectedValueOnce(new Error('The shapes registry has no adapter for invoice-cli; only registry adapters are accepted'))
+    main.worker.installedProgram.mockRejectedValueOnce(new Error('Assign an installed executable outside the Pods profile, Pod folders and folders Pods can write'))
     main.dialog.showOpenDialog.mockResolvedValueOnce({ canceled: false, filePaths: [executable] })
-    await expect(main.invoke(channels.programs, { type: 'add', podId, epoch: 1 })).rejects.toThrow('only registry adapters are accepted')
+    await expect(main.invoke(channels.programs, { type: 'add', podId, epoch: 1 })).rejects.toThrow('outside the Pods profile')
     // One file dialog per attempt: Pods never asks for an adapter file.
     expect(main.dialog.showOpenDialog).toHaveBeenCalledTimes(3)
     expect(main.worker.program).toHaveBeenCalledTimes(1)

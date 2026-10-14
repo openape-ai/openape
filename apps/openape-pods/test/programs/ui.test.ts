@@ -97,17 +97,16 @@ it('edits network hosts only for the selected application', async () => {
   expect(programs).toHaveBeenCalledWith({ type: 'network', podId, applicationId: id, epoch: 3, hosts: [] })
   wrapper.unmount()
 })
-it('names why every command of an application needs an exact approval (issue 1473)', async () => {
+// Issue 1473, revision 4: the desktop knows no adapters; a CLI shows the command name the IdP decides it by.
+it('shows the command name of a CLI and no adapter or exact-approval note', async () => {
   window.pods = { ...window.pods, programs: vi.fn(async () => null) }
   const program = (configuration: Record<string, unknown>) => ({ ...state.resources[0]!, configuration: { ...state.resources[0]!.configuration, cliId: 'git', ...configuration } })
-  const registry = { id: 'git', digest: 'SHA-256:fixture' }
-  const wrapper = mount(ProgramPermissions, { props: { podId, state: { epoch: 2, resources: [program({})] } } })
-  expect(wrapper.get('.adapter-note').text()).toBe('Adapter not from the shapes registry · every command needs an exact approval')
-  await wrapper.setProps({ state: { epoch: 3, resources: [program({ registry, cliVersion: { version: '2.39', tested: false } })] } })
-  expect(wrapper.get('.adapter-note').text()).toBe('git 2.39 is not tested with its registry adapter · every command needs an exact approval')
-  await wrapper.setProps({ state: { epoch: 4, resources: [program({ registry, cliVersion: { version: null, tested: false } })] } })
-  expect(wrapper.get('.adapter-note').text()).toBe('git version not verified by its registry adapter · every command needs an exact approval')
-  await wrapper.setProps({ state: { epoch: 5, resources: [program({ registry, cliVersion: { version: '2.54', tested: true } })] } })
-  expect(wrapper.find('.adapter-note').exists()).toBe(false)
+  const wrapper = mount(ProgramPermissions, { props: { podId, state: { epoch: 2, resources: [program({ registry: { id: 'git', digest: 'SHA-256:fixture' }, cliVersion: { version: '2.39', tested: false } })] } } })
+  expect(wrapper.get('.command-note').text()).toBe('Command git')
+  expect(wrapper.text()).not.toMatch(/adapter|exact approval|registry/i)
+  await wrapper.setProps({ state: { epoch: 3, resources: [{ ...program({}), name: 'git' }] } })
+  expect(wrapper.find('.command-note').exists()).toBe(false)
+  await wrapper.setProps({ state: { epoch: 4, resources: [program({ bundlePath: '/Applications/Fixture.app' })] } })
+  expect(wrapper.find('.command-note').exists()).toBe(false)
   wrapper.unmount()
 })

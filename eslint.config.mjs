@@ -71,4 +71,18 @@ export default antfu({
       }],
     }],
   },
+}).append({
+  // Issue 1473, revision 4: the Pods desktop is a generic runtime and only the IdP knows Shapes. Desktop code never
+  // imports a Shapes resolver or adapter loader; a wording or adapter change must never need a signed desktop build.
+  files: ['apps/openape-pods/src/**/*.{ts,tsx,vue,js,mjs}'],
+  rules: {
+    'no-restricted-imports': ['error', {
+      paths: [
+        { name: '@openape/apes', message: 'The Pods desktop sends program calls to the IdP (POST /api/grants/authorize); it never loads Shapes adapters or resolves commands.' },
+        { name: '@openape/shapes', message: 'The Pods desktop sends program calls to the IdP (POST /api/grants/authorize); it never loads Shapes adapters or resolves commands.' },
+        { name: '@openape/grants', importNames: ['resolveServerShape', 'matchArgvToOperation', 'buildCliAuthDetail', 'createInMemoryShapeStore', 'parseShapePresentation', 'parseShapeCliVersions', 'readCliVersion', 'presentationBindings', 'GENERIC_OPERATION_ID'], message: 'Shapes resolution belongs to the IdP; the Pods desktop only verifies the command token it returns.' },
+      ],
+      patterns: [{ group: ['@openape/apes/*', '@openape/shapes/*'], message: 'The Pods desktop never loads Shapes adapters or resolves commands; the IdP does.' }],
+    }],
+  },
 })

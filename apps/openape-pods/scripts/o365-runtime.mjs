@@ -21,7 +21,6 @@ export function bundleO365(destinationPath) {
     writeFileSync(join(destination, 'mail-roots.pem'), roots)
     const binaryHash = createHash('sha256').update(readFileSync(join(destination, 'o365-cli'))).digest('hex')
     writeFileSync(join(destination, 'o365-manifest.json'), JSON.stringify({ ...pin, binaryHash, rootsHash, rootsOrigin: 'Public CA bundle from build-host /etc/ssl/cert.pem', platform: process.platform, architecture: process.arch }, null, 2))
-    writeFileSync(join(destination, 'o365-shapes.toml'), readFileSync('runtime-sources/o365-shapes.toml'))
     writeFileSync(join(destination, 'o365-NOTICE'), `Source: ${pin.repository} at ${pin.revision}\nUpstream README declares MIT but this revision contains no LICENSE file. Full license notice is a distribution gate.\n`)
   }
   finally { rmSync(source, { recursive: true, force: true }) }

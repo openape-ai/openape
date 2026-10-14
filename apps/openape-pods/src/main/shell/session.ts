@@ -1,7 +1,6 @@
 import { programLaunch, verifyProgramRuntime } from '../programs/runtime'
-import { constants } from 'node:fs'
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
-import { chmod, copyFile, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { createServer } from 'node:net'
@@ -11,7 +10,7 @@ import type { ResourceState } from '../../contracts/resources'
 import type { SandboxLevel } from '../../contracts/sandbox'
 import type { CredentialCache } from '../connections/cache'
 import type { ConnectionManager } from '../connections/manager'
-import { launchDescriptor, verifyApplicationBundle } from '../programs/application'
+import { verifyApplicationBundle } from '../programs/application'
 import { ProgramState } from '../programs/state'
 import { programHome, verifyExecutable } from '../../worker/runtime/sandbox'
 import { podDirectory, podEnvironment, quoteShell } from '../../runtime/environment'
@@ -109,9 +108,8 @@ export class ExternalShell {
           finally { checking = false }
         })()
       }, 1000)
-      const configuration = await podDirectory(context.home, '.openape')
-      const shapes = await podDirectory(configuration, 'shapes')
-      const adapters = await podDirectory(shapes, 'adapters')
+      // apes keeps its files in .openape of the Pod HOME; a link planted there must never redirect them outside.
+      await podDirectory(context.home, '.openape')
       const state = new ProgramState(credentials)
       const names = applications.map(item => String(item.configuration.cliId))
       if (new Set(names).size !== names.length) throw new Error('Application command is ambiguous; remove the duplicate assignment in Permissions')
@@ -123,10 +121,6 @@ export class ExternalShell {
           await verifyApplicationBundle(assignment)
           await verifyProgramRuntime(assignment)
           await verifyExecutable(assignment.executable, assignment.executableHash)
-          await verifyExecutable(assignment.adapterPath, assignment.adapterHash)
-          const destination = join(adapters, `${assignment.cliId}.toml`)
-          await rm(destination, { force: true })
-          await copyFile(assignment.adapterPath, destination, constants.COPYFILE_EXCL)
           for (const file of assignment.entryFiles) await verifyExecutable(file.path, file.hash)
           await state.use(assignment.stateId, { podId: this.podId, applicationId: resource.id }, async (home) => {
             const launch = programLaunch(assignment)
@@ -138,7 +132,6 @@ export class ExternalShell {
             await writeFile(wrapper, `#!/bin/sh\nexec /usr/bin/env -u ELECTRON_RUN_AS_NODE ${environment} ${invocation} "$@"${suffix}\n`, { mode: 0o700 })
             if (launchCommand) {
               const launcher = join(context.bin, launchCommand); wrappers.push(launcher)
-              await writeFile(join(adapters, `${launchCommand}.toml`), launchDescriptor(launchCommand, resource.name), { mode: 0o600 })
               await writeFile(launcher, `#!/bin/sh\nexec /usr/bin/env -u ELECTRON_RUN_AS_NODE ${environment} ${quoteShell(assignment.executable)}\n`, { mode: 0o700 })
             }
             await mount(index + 1)

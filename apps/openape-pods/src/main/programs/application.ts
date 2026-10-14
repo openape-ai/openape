@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
+import { readFile, realpath, stat } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import type { ProgramDefinition } from '../../contracts/programs'
 import { programDefinition } from './definition'
@@ -27,24 +27,20 @@ export async function applicationBundle(path: string, readPlist: ReadApplication
   return { bundlePath, executable, executableHash, identity, version }
 }
 
-export async function applicationDefinition(path: string, definitions: string): Promise<ProgramDefinition> {
-  return bundleDefinition(await applicationBundle(path), definitions)
+export async function applicationDefinition(path: string): Promise<ProgramDefinition> {
+  return bundleDefinition(await applicationBundle(path))
 }
 
-export async function bundleDefinition({ bundlePath, executable, executableHash }: ApplicationBundle, definitions: string): Promise<ProgramDefinition> {
+/**
+ * A graphical application: its bundle executable, called by a launcher name of its own without arguments. The IdP
+ * has no meaning for that name, so opening it needs an approval of exactly that no-argument command (issue 1473).
+ */
+export async function bundleDefinition({ bundlePath, executable, executableHash }: ApplicationBundle): Promise<ProgramDefinition> {
   if (createHash('sha256').update(await readFile(executable)).digest('hex') !== executableHash) throw new Error('Application changed; select it again in Permissions')
   const cliId = `pod-app-${createHash('sha256').update(bundlePath).digest('hex').slice(0, 16)}`
-  await mkdir(definitions, { recursive: true, mode: 0o700 })
-  const adapterPath = join(definitions, `${cliId}.toml`)
-  await writeFile(adapterPath, launchDescriptor(cliId, basename(bundlePath, '.app')), { mode: 0o600 })
-  const definition = await programDefinition(executable, adapterPath, cliId)
+  const definition = await programDefinition(executable, undefined, cliId)
   if (definition.executable !== executable || definition.executableHash !== executableHash) throw new Error('Application changed; select it again in Permissions')
-  return { ...definition, name: basename(bundlePath, '.app'), bundlePath, cliId }
-}
-
-export function launchDescriptor(cliId: string, name = cliId): string {
-  if (!/^[\w-]+$/.test(cliId)) throw new Error('Invalid application launcher identity')
-  return `schema="openape-shapes/v1"\n[cli]\nid="${cliId}"\nexecutable="${cliId}"\naudience="shapes"\n[[operation]]\nid="open"\ncommand=[]\ndisplay=${JSON.stringify(`Open application ${name}`)}\naction="open"\nrisk="high"\nexact_command=true\nresource_chain=["application:id=${cliId}"]\n`
+  return { ...definition, name: basename(bundlePath, '.app'), bundlePath }
 }
 
 export async function verifyApplicationBundle(definition: ProgramDefinition): Promise<void> {

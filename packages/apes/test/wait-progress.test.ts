@@ -12,8 +12,8 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 
 const apiFetchMock = vi.fn()
 
-vi.mock('@openape/shapes', async (importOriginal) => {
-  const real = await importOriginal<typeof import('@openape/shapes')>()
+vi.mock('../src/http.js', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../src/http.js')>()
   return {
     ...real,
     apiFetch: (...args: unknown[]) => apiFetchMock(...args),
@@ -100,15 +100,15 @@ describe('createWaitProgressReporter', () => {
   })
 })
 
-describe('waitForGrantStatus progress (#1065)', () => {
+describe('program authorization wait progress (#1065)', () => {
   it('emits progress lines while pending and resolves once approved', async () => {
     let polls = 0
     // Pending for 11 polls (t=0..30 s), approved on the 12th (t=33 s):
     // progress lines are due at 15 s and 30 s.
     apiFetchMock.mockImplementation(async () => (++polls <= 11 ? { status: 'pending' } : { status: 'approved' }))
 
-    const { waitForGrantStatus } = await import('../src/shapes/grants.js')
-    const promise = waitForGrantStatus('http://idp.test', 'grant-1234abcd')
+    const { waitForDecision } = await import('../src/authorization/program.js')
+    const promise = waitForDecision('http://idp.test', 'grant-1234abcd', 300_000, 3000)
     await vi.advanceTimersByTimeAsync(60_000)
 
     await expect(promise).resolves.toBe('approved')
@@ -123,8 +123,8 @@ describe('waitForGrantStatus progress (#1065)', () => {
   it('emits nothing when the grant is approved immediately', async () => {
     apiFetchMock.mockResolvedValue({ status: 'approved' })
 
-    const { waitForGrantStatus } = await import('../src/shapes/grants.js')
-    await expect(waitForGrantStatus('http://idp.test', 'grant-1234abcd')).resolves.toBe('approved')
+    const { waitForDecision } = await import('../src/authorization/program.js')
+    await expect(waitForDecision('http://idp.test', 'grant-1234abcd', 300_000, 3000)).resolves.toBe('approved')
 
     expect(progressLines()).toHaveLength(0)
   })
@@ -134,8 +134,8 @@ describe('waitForGrantStatus progress (#1065)', () => {
     let polls = 0
     apiFetchMock.mockImplementation(async () => (++polls <= 11 ? { status: 'pending' } : { status: 'approved' }))
 
-    const { waitForGrantStatus } = await import('../src/shapes/grants.js')
-    const promise = waitForGrantStatus('http://idp.test', 'grant-1234abcd')
+    const { waitForDecision } = await import('../src/authorization/program.js')
+    const promise = waitForDecision('http://idp.test', 'grant-1234abcd', 300_000, 3000)
     await vi.advanceTimersByTimeAsync(60_000)
 
     await expect(promise).resolves.toBe('approved')

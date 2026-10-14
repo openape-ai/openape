@@ -1,11 +1,13 @@
 import { execFileSync } from 'node:child_process'
 import { defineCommand } from 'citty'
 import consola from 'consola'
-import { getIdpUrl } from '../../config'
+import { getIdpUrl, loadAuth } from '../../config'
 import { CliError, CliExit } from '../../errors'
 import { getPollMaxMinutes, pollGrantUntilResolved } from '../../grant-poll'
 import { apiFetch, getGrantsEndpoint } from '../../http'
-import { buildGenericResolved, fetchGrantToken, GENERIC_OPERATION_ID, resolveFromGrant, verifyAndExecute } from '../../shapes/index.js'
+import { AuthorizationRefusedError, authorizeProgramCall, locateProgram } from '../../authorization/program'
+import { executeProgramCall } from '../../authorization/execute'
+import { shellTargetHost } from '../../shell/context'
 
 interface GrantDetail {
   id: string
@@ -18,7 +20,7 @@ interface GrantDetail {
     audience?: string
     grant_type?: string
     target_host?: string
-    execution_context?: { adapter_digest?: string, argv_hash?: string }
+    execution_context?: { argv?: string[], program_sha256?: string }
     authorization_details?: Array<{ type?: string, permission?: string, operation_id?: string, cli_id?: string }>
   }
 }
@@ -99,31 +101,7 @@ export const runGrantCommand = defineCommand({
     const isShapesGrant = hasOpenApeCliDetail || audience === 'shapes'
 
     if (isShapesGrant) {
-      // Generic-fallback grants have no adapter to re-resolve against —
-      // their command is self-describing (argv + cli_id). Rebuild the
-      // ResolvedCommand in memory via buildGenericResolved instead of
-      // calling resolveFromGrant (which would try to loadOrInstallAdapter
-      // and fail with "No shapes adapter found").
-      const isGenericGrant = authDetails.some(d => d?.operation_id === GENERIC_OPERATION_ID)
-      let resolved
-      if (isGenericGrant) {
-        const argv = grant.request?.command ?? []
-        if (argv.length === 0)
-          throw new CliError(`Generic grant ${grant.id} is missing command argv`)
-        const cliId = authDetails.find(d => d?.operation_id === GENERIC_OPERATION_ID)?.cli_id ?? argv[0]!
-        resolved = await buildGenericResolved(cliId, argv)
-      }
-      else {
-        try {
-          resolved = await resolveFromGrant(grant)
-        }
-        catch (err) {
-          const msg = err instanceof Error ? err.message : String(err)
-          throw new CliError(`Cannot re-resolve grant: ${msg}`)
-        }
-      }
-      const token = await fetchGrantToken(idp, grant.id)
-      await verifyAndExecute(token, resolved, grant.id)
+      await runProgramGrant(grant, idp)
       return
     }
 
@@ -156,3 +134,32 @@ export const runGrantCommand = defineCommand({
     throw new CliError(`Grant ${grant.id} has unsupported audience "${audience}" — no execution path available.`)
   },
 })
+
+/**
+ * Runs the command a program grant was requested for: the program named by its execution argv is located and
+ * hashed again, the call is authorized at the IdP (which finds the approved grant) and runs only with a verified
+ * command token. A program file that changed since the request is refused.
+ */
+async function runProgramGrant(grant: GrantDetail, idp: string): Promise<void> {
+  const auth = loadAuth()
+  if (!auth)
+    throw new CliError('Not logged in. Run `apes login` first.')
+  const [name, ...argv] = grant.request.execution_context?.argv ?? []
+  if (!name)
+    throw new CliError(`Grant ${grant.id} carries no command to run`)
+  const program = await locateProgram(name)
+  if (!program)
+    throw new CliError(`${name}: no executable file found`)
+  const recorded = grant.request.execution_context?.program_sha256
+  if (recorded && recorded !== program.sha256)
+    throw new CliError(`${program.path} changed since grant ${grant.id} was requested. Run the command again to request a new grant.`)
+
+  const call = { program, argv }
+  const authorization = await authorizeProgramCall(call, { idp, subject: auth.email, targetHost: shellTargetHost(), grantType: 'once', wait: false })
+    .catch((error: unknown) => {
+      throw error instanceof AuthorizationRefusedError ? new CliError(error.message) : error
+    })
+  if (authorization.kind === 'pending')
+    throw new CliError(`Grant ${grant.id} does not authorize this command here; request ${authorization.grantId} awaits approval at ${authorization.approvalUrl}`)
+  executeProgramCall(call)
+}

@@ -2,8 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // Mock every dependency so tests run without network / filesystem / auth state.
 // We verify the dispatch logic of `apes grants run <id>`: status gating,
-// shapes-grant re-resolution, escapes pipe, legacy shell-session rejection,
-// unknown audience handling, and resolve-failure surfacing.
+// program grants re-authorized at the IdP, escapes pipe, legacy shell-session
+// rejection, unknown audience handling, and changed-program refusal.
 
 vi.mock('../src/config.js', () => ({
   loadAuth: vi.fn(() => ({ email: 'alice@example.com', idp: 'http://idp.test', expires_at: Date.now() / 1000 + 3600 })),
@@ -14,15 +14,14 @@ vi.mock('../src/http.js', () => ({
   getGrantsEndpoint: vi.fn(async () => 'http://idp.test/api/grants'),
   ApiError: class extends Error {},
 }))
-vi.mock('../src/shapes/index.js', async (importOriginal) => {
-  const real = await importOriginal<typeof import('../src/shapes/index.js')>()
-  return {
-    ...real,
-    resolveFromGrant: vi.fn(),
-    fetchGrantToken: vi.fn(),
-    verifyAndExecute: vi.fn(),
-  }
-})
+vi.mock('../src/authorization/program.js', async () => ({
+  ...(await vi.importActual<typeof import('../src/authorization/program.js')>('../src/authorization/program.js')),
+  locateProgram: vi.fn(async (name: string) => ({ path: `/usr/bin/${name}`, name, sha256: 'a'.repeat(64) })),
+  authorizeProgramCall: vi.fn(),
+}))
+vi.mock('../src/authorization/execute.js', () => ({
+  executeProgramCall: vi.fn(),
+}))
 vi.mock('../src/grant-poll.js', () => ({
   // Mock the entire grant-poll module so the --wait tests can control
   // the polling outcome deterministically instead of actually polling
@@ -40,6 +39,23 @@ async function invoke(id = 'grant-abc', extra: Record<string, unknown> = {}) {
   const { runGrantCommand } = await import('../src/commands/grants/run.js')
   const runFn = (runGrantCommand as unknown as { run: (ctx: { args: Record<string, unknown> }) => Promise<void> }).run
   return runFn({ args: { id, 'escapes-path': 'escapes', ...extra } })
+}
+
+/** A program grant as the IdP records it: execution_context names the program and its file hash. */
+function programGrant(id: string, status: string, programSha256 = 'a'.repeat(64)) {
+  return {
+    id,
+    type: 'cli',
+    status,
+    requester: 'alice@example.com',
+    owner: 'alice@example.com',
+    request: {
+      command: ['curl', 'https://example.com'],
+      audience: 'shapes',
+      authorization_details: [{ type: 'openape_cli' }],
+      execution_context: { argv: ['curl', 'https://example.com'], program_sha256: programSha256 },
+    },
+  }
 }
 
 async function expectCliError(p: Promise<unknown>, matcher: RegExp | string) {
@@ -65,40 +81,26 @@ describe('apes grants run <id>', () => {
     vi.resetModules()
   })
 
-  it('executes an approved shapes grant via verifyAndExecute', async () => {
+  it('runs an approved program grant only after the IdP authorizes the call again', async () => {
     const { apiFetch } = await import('../src/http.js')
-    const { resolveFromGrant, fetchGrantToken, verifyAndExecute } = await import('../src/shapes/index.js')
+    const { locateProgram, authorizeProgramCall } = await import('../src/authorization/program.js')
+    const { executeProgramCall } = await import('../src/authorization/execute.js')
 
-    const grant = {
-      id: 'grant-abc',
-      type: 'cli',
-      status: 'approved',
-      requester: 'alice@example.com',
-      owner: 'alice@example.com',
-      request: {
-        command: ['curl', 'https://example.com'],
-        audience: 'shapes',
-        authorization_details: [{ type: 'openape_cli' }],
-        execution_context: { adapter_digest: 'sha-local' },
-      },
-    }
-    vi.mocked(apiFetch).mockResolvedValueOnce(grant as any)
-    const fakeResolved = { executable: 'curl', commandArgv: ['https://example.com'] }
-    vi.mocked(resolveFromGrant).mockResolvedValueOnce(fakeResolved as any)
-    vi.mocked(fetchGrantToken).mockResolvedValueOnce('jwt-token')
-    vi.mocked(verifyAndExecute).mockResolvedValueOnce(undefined)
+    vi.mocked(apiFetch).mockResolvedValueOnce(programGrant('grant-abc', 'approved') as any)
+    vi.mocked(authorizeProgramCall).mockResolvedValueOnce({ kind: 'authorized', grantId: 'grant-abc', token: 'jwt-token', claims: {} as any })
 
     await invoke('grant-abc')
 
-    expect(resolveFromGrant).toHaveBeenCalledWith(grant)
-    expect(fetchGrantToken).toHaveBeenCalledWith('http://idp.test', 'grant-abc')
-    expect(verifyAndExecute).toHaveBeenCalledWith('jwt-token', fakeResolved, 'grant-abc')
+    expect(locateProgram).toHaveBeenCalledWith('curl')
+    const call = { program: { path: '/usr/bin/curl', name: 'curl', sha256: 'a'.repeat(64) }, argv: ['https://example.com'] }
+    expect(authorizeProgramCall).toHaveBeenCalledWith(call, expect.objectContaining({ idp: 'http://idp.test', subject: 'alice@example.com', wait: false }))
+    expect(executeProgramCall).toHaveBeenCalledWith(call)
   })
 
   it('executes an approved escapes grant via the escapes binary', async () => {
     const { apiFetch } = await import('../src/http.js')
     const { execFileSync } = await import('node:child_process')
-    const { verifyAndExecute } = await import('../src/shapes/index.js')
+    const { executeProgramCall } = await import('../src/authorization/execute.js')
 
     const grant = {
       id: 'grant-esc',
@@ -122,7 +124,7 @@ describe('apes grants run <id>', () => {
       ['--grant', 'tok', '--', 'mount-nfs'],
       { stdio: 'inherit' },
     )
-    expect(verifyAndExecute).not.toHaveBeenCalled()
+    expect(executeProgramCall).not.toHaveBeenCalled()
   })
 
   it('rejects an ape-shell session grant with a clear error', async () => {
@@ -181,27 +183,24 @@ describe('apes grants run <id>', () => {
     await expectCliError(invoke('grant-used'), 'already been used')
   })
 
-  it('surfaces resolve failures without calling verifyAndExecute', async () => {
+  it('refuses a program that changed since the request and one the IdP does not authorize', async () => {
     const { apiFetch } = await import('../src/http.js')
-    const { resolveFromGrant, verifyAndExecute } = await import('../src/shapes/index.js')
+    const { authorizeProgramCall, AuthorizationRefusedError } = await import('../src/authorization/program.js')
+    const { executeProgramCall } = await import('../src/authorization/execute.js')
 
-    vi.mocked(apiFetch).mockResolvedValueOnce({
-      id: 'grant-mismatch',
-      type: 'cli',
-      status: 'approved',
-      requester: 'a',
-      owner: 'a',
-      request: {
-        command: ['curl', 'https://example.com'],
-        audience: 'shapes',
-        authorization_details: [{ type: 'openape_cli' }],
-        execution_context: { adapter_digest: 'sha-old' },
-      },
-    } as any)
-    vi.mocked(resolveFromGrant).mockRejectedValueOnce(new Error('digest mismatch'))
+    vi.mocked(apiFetch).mockResolvedValueOnce(programGrant('grant-changed', 'approved', 'b'.repeat(64)) as any)
+    await expectCliError(invoke('grant-changed'), /changed since grant grant-changed was requested/)
+    expect(authorizeProgramCall).not.toHaveBeenCalled()
 
-    await expectCliError(invoke('grant-mismatch'), /Cannot re-resolve grant.*digest mismatch/)
-    expect(verifyAndExecute).not.toHaveBeenCalled()
+    vi.mocked(apiFetch).mockResolvedValueOnce(programGrant('grant-revoked', 'approved') as any)
+    vi.mocked(authorizeProgramCall).mockRejectedValueOnce(new AuthorizationRefusedError('revoked', 'grant-revoked'))
+    await expectCliError(invoke('grant-revoked'), 'Grant grant-revoked revoked')
+
+    vi.mocked(apiFetch).mockResolvedValueOnce(programGrant('grant-other', 'approved') as any)
+    vi.mocked(authorizeProgramCall).mockResolvedValueOnce({ kind: 'pending', grantId: 'grant-new', approvalUrl: 'http://idp.test/grant-approval?grant_id=grant-new' })
+    await expectCliError(invoke('grant-other'), /does not authorize this command here; request grant-new awaits approval/)
+
+    expect(executeProgramCall).not.toHaveBeenCalled()
   })
 
   it('errors on unknown audience with no openape_cli detail', async () => {
@@ -226,23 +225,11 @@ describe('apes grants run <id>', () => {
   // --------------------------------------------------------------------
   describe('--wait flag', () => {
     function pendingGrant(id: string) {
-      return {
-        id,
-        type: 'cli',
-        status: 'pending',
-        requester: 'alice@example.com',
-        owner: 'alice@example.com',
-        request: {
-          command: ['curl', 'https://example.com'],
-          audience: 'shapes',
-          authorization_details: [{ type: 'openape_cli' }],
-          execution_context: { adapter_digest: 'sha-local' },
-        },
-      }
+      return programGrant(id, 'pending')
     }
 
     function approvedGrant(id: string) {
-      return { ...pendingGrant(id), status: 'approved' }
+      return programGrant(id, 'approved')
     }
 
     it('without --wait: pending grant still errors immediately (regression guard)', async () => {
@@ -258,7 +245,8 @@ describe('apes grants run <id>', () => {
     it('with --wait: pending → poll → approved → dispatch shapes grant', async () => {
       const { apiFetch } = await import('../src/http.js')
       const { pollGrantUntilResolved } = await import('../src/grant-poll.js')
-      const { resolveFromGrant, fetchGrantToken, verifyAndExecute } = await import('../src/shapes/index.js')
+      const { authorizeProgramCall } = await import('../src/authorization/program.js')
+      const { executeProgramCall } = await import('../src/authorization/execute.js')
 
       // First fetch: pending. Second fetch (after poll): approved.
       vi.mocked(apiFetch)
@@ -266,69 +254,66 @@ describe('apes grants run <id>', () => {
         .mockResolvedValueOnce(approvedGrant('grant-wait-1') as any)
 
       vi.mocked(pollGrantUntilResolved).mockResolvedValueOnce({ kind: 'approved' })
-      vi.mocked(resolveFromGrant).mockResolvedValueOnce({ executable: 'curl' } as any)
-      vi.mocked(fetchGrantToken).mockResolvedValueOnce('jwt-tok')
-      vi.mocked(verifyAndExecute).mockResolvedValueOnce(undefined)
+      vi.mocked(authorizeProgramCall).mockResolvedValueOnce({ kind: 'authorized', grantId: 'grant-wait-1', token: 'jwt-tok', claims: {} as any })
 
       await invoke('grant-wait-1', { wait: true })
 
       expect(pollGrantUntilResolved).toHaveBeenCalledWith('http://idp.test', 'grant-wait-1')
-      expect(verifyAndExecute).toHaveBeenCalledWith('jwt-tok', { executable: 'curl' }, 'grant-wait-1')
+      expect(executeProgramCall).toHaveBeenCalledWith({ program: expect.objectContaining({ name: 'curl' }), argv: ['https://example.com'] })
     })
 
     it('with --wait: pending → poll → denied → CliError', async () => {
       const { apiFetch } = await import('../src/http.js')
       const { pollGrantUntilResolved } = await import('../src/grant-poll.js')
-      const { verifyAndExecute } = await import('../src/shapes/index.js')
+      const { executeProgramCall } = await import('../src/authorization/execute.js')
 
       vi.mocked(apiFetch).mockResolvedValueOnce(pendingGrant('grant-wait-denied') as any)
       vi.mocked(pollGrantUntilResolved).mockResolvedValueOnce({ kind: 'terminal', status: 'denied' })
 
       await expectCliError(invoke('grant-wait-denied', { wait: true }), /resolved to denied/)
-      expect(verifyAndExecute).not.toHaveBeenCalled()
+      expect(executeProgramCall).not.toHaveBeenCalled()
     })
 
     it('with --wait: pending → poll → revoked → CliError', async () => {
       const { apiFetch } = await import('../src/http.js')
       const { pollGrantUntilResolved } = await import('../src/grant-poll.js')
-      const { verifyAndExecute } = await import('../src/shapes/index.js')
+      const { executeProgramCall } = await import('../src/authorization/execute.js')
 
       vi.mocked(apiFetch).mockResolvedValueOnce(pendingGrant('grant-wait-revoked') as any)
       vi.mocked(pollGrantUntilResolved).mockResolvedValueOnce({ kind: 'terminal', status: 'revoked' })
 
       await expectCliError(invoke('grant-wait-revoked', { wait: true }), /resolved to revoked/)
-      expect(verifyAndExecute).not.toHaveBeenCalled()
+      expect(executeProgramCall).not.toHaveBeenCalled()
     })
 
     it('with --wait: pending → poll → timeout → CliError mentioning max minutes', async () => {
       const { apiFetch } = await import('../src/http.js')
       const { pollGrantUntilResolved, getPollMaxMinutes } = await import('../src/grant-poll.js')
-      const { verifyAndExecute } = await import('../src/shapes/index.js')
+      const { executeProgramCall } = await import('../src/authorization/execute.js')
 
       vi.mocked(apiFetch).mockResolvedValueOnce(pendingGrant('grant-wait-timeout') as any)
       vi.mocked(pollGrantUntilResolved).mockResolvedValueOnce({ kind: 'timeout' })
       vi.mocked(getPollMaxMinutes).mockReturnValue(5)
 
       await expectCliError(invoke('grant-wait-timeout', { wait: true }), /timed out after 5 minutes/)
-      expect(verifyAndExecute).not.toHaveBeenCalled()
+      expect(executeProgramCall).not.toHaveBeenCalled()
     })
 
     it('with --wait: already-approved grant dispatches immediately, no poll', async () => {
       const { apiFetch } = await import('../src/http.js')
       const { pollGrantUntilResolved } = await import('../src/grant-poll.js')
-      const { resolveFromGrant, fetchGrantToken, verifyAndExecute } = await import('../src/shapes/index.js')
+      const { authorizeProgramCall } = await import('../src/authorization/program.js')
+      const { executeProgramCall } = await import('../src/authorization/execute.js')
 
       vi.mocked(apiFetch).mockResolvedValueOnce(approvedGrant('grant-already-approved') as any)
-      vi.mocked(resolveFromGrant).mockResolvedValueOnce({ executable: 'curl' } as any)
-      vi.mocked(fetchGrantToken).mockResolvedValueOnce('jwt-tok')
-      vi.mocked(verifyAndExecute).mockResolvedValueOnce(undefined)
+      vi.mocked(authorizeProgramCall).mockResolvedValueOnce({ kind: 'authorized', grantId: 'grant-already-approved', token: 'jwt-tok', claims: {} as any })
 
       await invoke('grant-already-approved', { wait: true })
 
       // --wait is harmless on an already-approved grant: it only triggers
       // the poll loop on pending status, not on approved.
       expect(pollGrantUntilResolved).not.toHaveBeenCalled()
-      expect(verifyAndExecute).toHaveBeenCalled()
+      expect(executeProgramCall).toHaveBeenCalled()
     })
 
     it('with --wait: pending → approved → dispatch escapes audience', async () => {

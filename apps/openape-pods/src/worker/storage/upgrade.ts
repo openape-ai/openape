@@ -1,5 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
-import { assertKnownSchema, assertNoOpenNetworkWork, convert47, convertApprovalSummaries, convertApprovals, convertGroups, schema47Tags } from './convert.ts'
+import { assertKnownSchema, assertNoOpenNetworkWork, convert47, convertApprovalSummaries, convertApprovals, convertGroups, convertProgramAssignments, schema47Tags } from './convert.ts'
 import { schemaVersion } from './schema.ts'
 
 /** The oldest schema this version converts: the one the October 2026 releases wrote since issue 1455. */
@@ -17,10 +17,10 @@ export function assertUpgradable(database: DatabaseSync, version: number): void 
 }
 
 /**
- * Brings a schema-46 to schema-50 database to schema 51 inside the caller's transaction, with foreign keys off:
+ * Brings a schema-46 to schema-51 database to schema 52 inside the caller's transaction, with foreign keys off:
  * schema 46 gains the tag table of schema 47, the network runtime of schema 47 is converted, the owner groups of
- * schema 48 become tags, the approval table of schema 49 accepts program approvals, then the approvals of schema 50
- * carry summaries instead of composed titles (convert.ts).
+ * schema 48 become tags, the approval table of schema 49 accepts program approvals, the approvals of schema 50 carry
+ * summaries instead of composed titles, then the program assignments of schema 51 lose their adapter fields (convert.ts).
  */
 export function upgradeToCurrent(database: DatabaseSync, version: number): void {
   if (version < upgradableSchema || version >= schemaVersion) throw new Error(`Database schema ${version} cannot be upgraded`)
@@ -29,5 +29,6 @@ export function upgradeToCurrent(database: DatabaseSync, version: number): void 
   if (version < 48) convert47(database)
   if (version < 49) convertGroups(database)
   if (version < 50) convertApprovals(database)
-  convertApprovalSummaries(database)
+  if (version < 51) convertApprovalSummaries(database)
+  convertProgramAssignments(database)
 }

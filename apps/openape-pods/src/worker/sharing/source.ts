@@ -77,7 +77,7 @@ export function capturePortableSource(store: PodDatabase, ownerValue: Owner, sel
       for (const variable of pod.variables) remember(variable.value)
       for (const field of [...pod.definitions.filter(field => field.kind === 'public')]) remember(JSON.parse(String(field.value)))
       for (const resource of pod.resources) {
-        const paths = resource.kind === 'reference' || resource.kind === 'directory' ? [resource.configuration.path] : resource.configuration.type === 'program' ? [resource.configuration.executable, resource.configuration.adapterPath, resource.configuration.bundlePath] : []
+        const paths = resource.kind === 'reference' || resource.kind === 'directory' ? [resource.configuration.path] : resource.configuration.type === 'program' ? [resource.configuration.executable, resource.configuration.bundlePath] : []
         for (const path of paths) {
           if (typeof path === 'string') privateReferences.add(path)
         }

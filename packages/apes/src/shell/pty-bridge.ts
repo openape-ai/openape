@@ -1,5 +1,8 @@
 import { shellStartupArguments } from './context.js'
 import { randomBytes } from 'node:crypto'
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { isAbsolute, join } from 'node:path'
 import type { IPty } from '@lydell/node-pty'
 import * as pty from '@lydell/node-pty'
 
@@ -58,6 +61,9 @@ export class PtyBridge {
   /** True until bash prints its first marker-prompt. */
   private readyForFirstLine = false
   private awaitingInitialPrompt: ((value: void) => void) | null = null
+  /** Private directory for the shell state bash writes before every prompt. */
+  private readonly stateDirectory: string
+  private readonly statePath: string
 
   constructor(events: PtyBridgeEvents, options: { cols?: number, rows?: number, cwd?: string } = {}) {
     this.events = events
@@ -68,6 +74,9 @@ export class PtyBridge {
     this.markerRegex = new RegExp(
       `__APES_${this.marker}__:(-?\\d+):__END__\\r?\\n?`,
     )
+
+    this.stateDirectory = mkdtempSync(join(tmpdir(), 'apes-shell-'))
+    this.statePath = join(this.stateDirectory, 'state')
 
     const cols = options.cols ?? process.stdout.columns ?? 80
     const rows = options.rows ?? process.stdout.rows ?? 24
@@ -85,6 +94,9 @@ export class PtyBridge {
     // what the user typed; the pty echo is redundant and surprising.
     // Interactive TUI apps (vim/less/top) set their own termios when they
     // start, so they are unaffected.
+    // PROMPT_COMMAND also records the working directory and the exported
+    // environment after every line (`shellState`), so ape-shell can run an
+    // authorized program itself, outside bash, in the session's state.
     // Strip APES_SHELL_WRAPPER so nested `apes` invocations inside the pty
     // don't self-detect as ape-shell mode and reject their argv. The wrapper
     // script sets this marker on the parent ape-shell process; leaking it
@@ -101,7 +113,7 @@ export class PtyBridge {
         // Force our marker PS1 on every prompt and keep pty echo off —
         // both survive .bashrc overrides because PROMPT_COMMAND runs
         // before each prompt.
-        PROMPT_COMMAND: `stty -echo 2>/dev/null; PS1='__APES_${this.marker}__:$?:__END__'`,
+        PROMPT_COMMAND: `stty -echo 2>/dev/null; { /bin/pwd -P; /usr/bin/env -0; } > '${this.statePath}' 2>/dev/null; PS1='__APES_${this.marker}__:$?:__END__'`,
         // Also set it initially so the very first prompt carries the marker.
         PS1: `__APES_${this.marker}__:$?:__END__`,
         PS2: '> ',
@@ -156,7 +168,26 @@ export class PtyBridge {
 
   /** Kill the bash child. Called on Ctrl-D / shell exit. */
   kill(signal?: string): void {
+    rmSync(this.stateDirectory, { recursive: true, force: true })
     this.term.kill(signal)
+  }
+
+  /**
+   * Working directory and exported environment of the session as bash
+   * recorded them at its last prompt. The prompt markers are left out.
+   */
+  shellState(): { cwd: string, env: Record<string, string> } {
+    const raw = readFileSync(this.statePath, 'utf-8')
+    const newline = raw.indexOf('\n')
+    const cwd = raw.slice(0, newline)
+    if (newline < 0 || !isAbsolute(cwd)) throw new Error('The shell session reported no working directory')
+    const env: Record<string, string> = {}
+    for (const entry of raw.slice(newline + 1).split('\0')) {
+      const separator = entry.indexOf('=')
+      if (separator > 0) env[entry.slice(0, separator)] = entry.slice(separator + 1)
+    }
+    const { PROMPT_COMMAND: _command, PS1: _ps1, PS2: _ps2, ...exported } = env
+    return { cwd, env: exported }
   }
 
   /** Process id of the bash child, for logging / debugging. */

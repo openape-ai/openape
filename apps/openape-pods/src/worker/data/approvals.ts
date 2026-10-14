@@ -55,14 +55,14 @@ export const approvalEffectKey = (id: string) => `approval:${id}`
 /**
  * Each action fixes its payload fields and its object identity, which the IdP command carries (approvalCommand). The
  * title the owner reads is the script's (issue 1473); without one it is taken from data, never composed: for a program
- * the application adapter's description of the command, for mail the message subject.
+ * the exact command line, for mail the message subject.
  */
 export function approvalDataTitle(action: ApprovalAction, object: string, payload: Record<string, unknown>, display?: string): string {
   if (action === 'program.run') {
     if (Object.keys(payload).some(key => !['application', 'argv'].includes(key)) || typeof payload.application !== 'string' || !payload.application.trim() || payload.application.length > 200) throw new Error('A program approval names the application and its exact argv')
     const argv = parseProgramArgv(payload.argv)
     if (object !== programObject(payload.application, argv)) throw new Error('A program approval object is the exact command')
-    if (!display?.trim()) throw new Error('A program approval needs the adapter description of its command')
+    if (!display?.trim()) throw new Error('A program approval needs the description of its command')
     return summaryLine(display, grantSummaryLimits.title)
   }
   if (action === 'mail.archive') {

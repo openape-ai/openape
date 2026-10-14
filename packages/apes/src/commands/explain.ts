@@ -1,15 +1,18 @@
 import { defineCommand } from 'citty'
-import { extractOption, extractWrappedCommand, loadAdapter, resolveCommand } from '../shapes/index.js'
+import { getIdpUrl } from '../config.js'
+import { CliError } from '../errors.js'
+import { describePreview, previewCommand } from '../authorization/shapes.js'
+import { extractOption, extractWrappedCommand } from '../shapes/index.js'
 
 export const explainCommand = defineCommand({
   meta: {
     name: 'explain',
-    description: 'Show what permission a command would need',
+    description: 'Preview how the IdP resolves a command (the IdP decides per call)',
   },
   args: {
-    adapter: {
+    idp: {
       type: 'string',
-      description: 'Explicit path to adapter TOML file',
+      description: 'IdP URL',
     },
     _: {
       type: 'positional',
@@ -17,24 +20,17 @@ export const explainCommand = defineCommand({
       required: false,
     },
   },
-  async run({ rawArgs }) {
+  async run({ rawArgs, args }) {
     const command = extractWrappedCommand(rawArgs ?? [])
     if (command.length === 0)
-      throw new Error('Missing wrapped command. Usage: apes explain [--adapter <file>] -- <cli> ...')
+      throw new CliError('Missing wrapped command. Usage: apes explain [--idp <url>] -- <cli> ...')
+    if (extractOption(rawArgs ?? [], 'adapter') !== undefined)
+      throw new CliError('--adapter was removed: the IdP resolves every command with its own Shapes registry.')
 
-    const adapterOpt = extractOption(rawArgs ?? [], 'adapter')
-    const loaded = loadAdapter(command[0]!, adapterOpt)
-    const resolved = await resolveCommand(loaded, command)
+    const idp = getIdpUrl(args.idp as string | undefined)
+    if (!idp)
+      throw new CliError('No IdP URL configured. Run `apes login` first or pass --idp.')
 
-    process.stdout.write(`${JSON.stringify({
-      adapter: resolved.adapter.cli.id,
-      source: resolved.source,
-      operation: resolved.detail.operation_id,
-      display: resolved.detail.display,
-      permission: resolved.permission,
-      resource_chain: resolved.detail.resource_chain,
-      exact_command: resolved.detail.constraints?.exact_command ?? false,
-      adapter_digest: resolved.digest,
-    }, null, 2)}\n`)
+    process.stdout.write(`${JSON.stringify(describePreview(await previewCommand(idp, command)), null, 2)}\n`)
   },
 })

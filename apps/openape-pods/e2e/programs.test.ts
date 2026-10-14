@@ -13,7 +13,9 @@ import { promisify } from 'node:util'
 import { mkdtemp, mkdir, readFile, realpath, readdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir, homedir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { loadAdapter, resolveCommand } from '@openape/apes'
+import type { OpenApeCliAuthorizationDetail } from '@openape/core'
+import { computeArgvHash } from '@openape/grants'
+import { httpPermission } from '../src/main/grants/pod-permissions'
 import { expect, it, vi } from 'vitest'
 import { CredentialCache } from '../src/main/connections/cache'
 import { ProgramState } from '../src/main/programs/state'
@@ -33,7 +35,7 @@ const sha = (value: Buffer | string) => createHash('sha256').update(value).diges
 async function fixture() {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-assigned-program-')))
   const privateRoot = join(root, 'authentication'); await mkdir(privateRoot)
-  const executable = join(root, 'fixture'); const adapterPath = join(root, 'fixture.toml')
+  const executable = join(root, 'fixture')
   await writeFile(join(root, 'fixture.c'), `#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -68,28 +70,38 @@ int main(int argc, char **argv) {
   return 7;
 }`)
   await execute('/usr/bin/xcrun', ['clang', '-Wall', '-Wextra', '-Werror', join(root, 'fixture.c'), '-o', executable])
-  await writeFile(adapterPath, `schema="openape-shapes/v1"\n[cli]\nid="fixture"\nexecutable="fixture"\naudience="shapes"\n${['setup', 'read'].map(action => `[[operation]]\nid="state.${action}"\ncommand=["${action}"]\ndisplay="Synthetic ${action}"\naction="${action === 'setup' ? 'write' : 'read'}"\nrisk="low"\nresource_chain=["state:*"]\n`).join('')}`)
   await writeFile(join(root, 'outside.txt'), 'SYNTHETIC_OUTSIDE')
-  const adapter = loadAdapter('fixture', adapterPath)
-  const commands = await Promise.all(['setup', 'read'].map(action => resolveCommand(adapter, ['fixture', action])))
+  // The IdP's grants of the synthetic program: setup writes its state, read reads it (issue 1473, revision 4).
+  const detail = (action: string): OpenApeCliAuthorizationDetail => ({ type: 'openape_cli', cli_id: 'fixture', operation_id: `state.${action}`, resource_chain: [{ resource: 'state' }], action, permission: `fixture.state[*]#${action}`, display: `Synthetic ${action}`, risk: 'low' })
   fixtureDirectory(root)
   const store = new PodDatabase(root); const pod = store.createPod({ name: 'Application setup' }); store.close()
   const podId = pod.id; const applicationId = randomUUID(); const connectionId = randomUUID()
   const keys = generateKeyPairSync('ed25519'); let origin = ''
-  const state = { active: true, consumed: 0, corruptDetail: false, signedCommand: undefined as Awaited<ReturnType<typeof resolveCommand>> | undefined }
-  const server = createServer((request, response) => {
+  const state = { active: true, consumed: 0, authorized: 0, corruptHash: false, signedDetail: undefined as OpenApeCliAuthorizationDetail | undefined }
+  const signed = (claims: Record<string, unknown>) => {
+    const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')
+    const body = Buffer.from(JSON.stringify(claims)).toString('base64url')
+    return `${head}.${body}.${sign(null, Buffer.from(`${head}.${body}`), keys.privateKey).toString('base64url')}`
+  }
+  const server = createServer(async (request, response) => {
     response.setHeader('Content-Type', 'application/json')
     if (request.url === '/.well-known/jwks.json') { response.end(JSON.stringify({ keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'key', alg: 'EdDSA', use: 'sig' }] })); return }
-    const index = request.url?.split('/')[3] === 'setup' ? 0 : 1
-    const grantId = request.url?.split('/')[3] === 'http' ? 'http' : index === 0 ? 'setup' : 'read'
-    if (request.url?.startsWith('/api/pods/agents/')) { response.end(JSON.stringify({ email: 'pod@example.test', owner: 'owner@example.test', active: true, keyIds: ['pod-key'], grantId: new URL(request.url, origin).searchParams.get('grant'), grantActive: state.active })); return }
-    if (request.url === `/api/grants/${grantId}`) { response.end(JSON.stringify({ id: grantId, status: state.active ? 'approved' : 'revoked', request: { requester: 'pod@example.test', audience: 'shapes', target_host: `pods:${podId}`, grant_type: 'always', authorization_details: [grantId === 'http' ? state.signedCommand!.detail : commands[index]!.detail] } })); return }
-    if (request.url === `/api/grants/${grantId}/token`) {
-      const command = state.signedCommand ?? commands[state.corruptDetail ? 0 : index]!
+    if (request.url === '/api/grants/authorize' && request.method === 'POST') {
+      let text = ''; for await (const chunk of request) text += chunk
+      const call = JSON.parse(text) as { program: { name: string, sha256: string }, argv: string[] }
+      const grantId = call.argv[0] === 'setup' ? 'setup' : 'read'
+      if (!state.active) { response.statusCode = 403; response.end(JSON.stringify({ type: 'https://openape.org/errors/grant_revoked', title: 'Grant revoked', status: 403, state: 'revoked', grant_id: grantId })); return }
+      state.authorized++
       const now = Math.floor(Date.now() / 1000)
-      const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')
-      const body = Buffer.from(JSON.stringify({ iss: origin, sub: 'pod@example.test', aud: 'shapes', target_host: `pods:${podId}`, grant_id: grantId, grant_type: 'always', iat: now, exp: now + 60, jti: randomUUID(), authorization_details: [command.detail], execution_context: command.executionContext })).toString('base64url')
-      response.end(JSON.stringify({ authz_jwt: `${head}.${body}.${sign(null, Buffer.from(`${head}.${body}`), keys.privateKey).toString('base64url')}` })); return
+      const token = signed({ iss: origin, sub: 'pod@example.test', aud: 'shapes', target_host: `pods:${podId}`, grant_id: grantId, grant_type: 'always', iat: now, exp: now + 60, jti: randomUUID(), authorization_details: [detail(grantId === 'setup' ? 'write' : 'read')], argv_hash: await computeArgvHash([call.program.name, ...call.argv]), program_sha256: state.corruptHash ? '0'.repeat(64) : call.program.sha256 })
+      response.end(JSON.stringify({ state: 'approved', grant_id: grantId, authz_jwt: token, expires_at: now + 60 })); return
+    }
+    const grantId = request.url?.split('/')[3] === 'http' ? 'http' : request.url?.split('/')[3] === 'setup' ? 'setup' : 'read'
+    if (request.url?.startsWith('/api/pods/agents/')) { response.end(JSON.stringify({ email: 'pod@example.test', owner: 'owner@example.test', active: true, keyIds: ['pod-key'], grantId: new URL(request.url, origin).searchParams.get('grant'), grantActive: state.active })); return }
+    if (request.url === `/api/grants/${grantId}`) { response.end(JSON.stringify({ id: grantId, status: state.active ? 'approved' : 'revoked', request: { requester: 'pod@example.test', audience: 'shapes', target_host: `pods:${podId}`, grant_type: 'always', authorization_details: [grantId === 'http' ? state.signedDetail! : detail(grantId === 'setup' ? 'write' : 'read')] } })); return }
+    if (request.url === `/api/grants/${grantId}/token`) {
+      const now = Math.floor(Date.now() / 1000)
+      response.end(JSON.stringify({ authz_jwt: signed({ iss: origin, sub: 'pod@example.test', aud: 'shapes', target_host: `pods:${podId}`, grant_id: grantId, grant_type: 'always', iat: now, exp: now + 60, jti: randomUUID(), authorization_details: [state.signedDetail] }) })); return
     }
     if (request.url === `/api/grants/${grantId}/consume`) { state.consumed++; response.end(JSON.stringify({ status: state.active ? 'valid' : 'revoked' })); return }
     response.statusCode = 404; response.end('{}')
@@ -101,8 +113,8 @@ int main(int argc, char **argv) {
   const identity = { connectionId, podId, issuer: origin, owner: 'owner@example.test', subject: 'pod@example.test', keyId: 'pod-key' }
   await cache.connect(connectionId, JSON.stringify({ ...identity, accessToken: 'SYNTHETIC_AGENT', expiresAt: Date.now() / 1000 + 3600 }))
   const stateId = await new ProgramState(cache).create({ podId, applicationId })
-  const assignment: ProgramAssignment = { type: 'program', name: 'Synthetic application', executable, executableHash: sha(await readFile(executable)), adapterPath, adapterHash: sha(await readFile(adapterPath)), cliId: 'fixture', networkHosts: [], entryFiles: [], environment: {}, stateId, capability: `tool.app_${applicationId.replaceAll('-', '')}.invoke` }
-  // The Pod grants: one per command, recorded apart from the sandboxed application and matched by coverage.
+  const assignment: ProgramAssignment = { type: 'program', name: 'Synthetic application', executable, executableHash: sha(await readFile(executable)), cliId: 'fixture', networkHosts: [], entryFiles: [], environment: {}, stateId, capability: `tool.app_${applicationId.replaceAll('-', '')}.invoke` }
+  // The Pod's HTTP grant is recorded apart from the sandboxed application; program commands are authorized by the IdP per call.
   const connection = new PodIdentityManager(cache).connection(identity, `pods:${podId}`)
   const ledger: GrantLedgerPort = { find: async detail => detail.cli_id === 'pod-http' ? 'http' : detail.action === 'write' ? 'setup' : 'read', adopt: async () => undefined, record: async () => {} }
   const resource: PodResource = { id: applicationId, podId, revision: 1, kind: 'tool', state: 'ready', name: assignment.name, configuration: { ...assignment } }
@@ -133,9 +145,9 @@ it('program boundary: owner terminal state is reused by the assigned read tool a
     }
     finally { await gateway.close() }
     await expect(f.invoke(['read'], [])).rejects.toThrow('not declared')
-    f.state.corruptDetail = true
-    await expect(f.invoke(['read'])).rejects.toThrow()
-    expect(f.state.consumed).toBe(3)
+    f.state.corruptHash = true
+    await expect(f.invoke(['read'])).rejects.toThrow('nothing was run')
+    expect(f.state.authorized).toBe(4)
     expect(await readdir(join(f.root, 'credentials/temporary'))).toEqual([])
   }
   finally { terminal.close(); await terminal.completed; await f.close() }
@@ -229,24 +241,23 @@ it('packaged program UI: exposes the external terminal and reuses application se
 
 it('HTTP grant boundary: verifies the signed origin and method before transport and refuses a revoked grant without sending', async () => {
   const f = await fixture(); sendHttp.mockClear()
-  const vendor = resolve('dist/vendor'); const adapter = loadAdapter('pod-http', join(vendor, 'pod-http-shapes.toml'))
-  f.state.signedCommand = await resolveCommand(adapter, ['pod-http', 'request', '--origin', 'https://api.example.com', '--method', 'POST'])
+  f.state.signedDetail = httpPermission('https://api.example.com', 'POST').detail
   const capability = 'tool.http_synthetic.request'
   const resources: PodResource[] = [{ ...f.resource, configuration: { type: 'http', origin: 'https://api.example.com', methods: ['POST'], capability } }]
   const scope = { podId: f.podId, runId: randomUUID(), epoch: 0, assignmentRevision: 1, capabilities: [capability] }
   const request = { url: 'https://api.example.com/send', method: 'POST', headers: {}, key: 'synthetic' }
   const signal = new AbortController().signal
   try {
-    expect(await executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, f.ledger)).toMatchObject({ status: 200 })
+    expect(await executeHttp(resources, scope, request, f.connection, signal, undefined, f.ledger)).toMatchObject({ status: 200 })
     expect(sendHttp).toHaveBeenCalledTimes(1); expect(f.state.consumed).toBe(1)
-    await expect(executeHttp(resources, scope, { ...request, method: 'DELETE' }, vendor, f.connection, signal, undefined, f.ledger)).rejects.toThrow('assigned origin or methods')
-    await expect(executeHttp(resources, { ...scope, podId: randomUUID() }, request, vendor, f.connection, signal, undefined, f.ledger)).rejects.toThrow('not assigned')
-    f.state.signedCommand = await resolveCommand(adapter, ['pod-http', 'request', '--origin', 'https://foreign.example.com', '--method', 'POST'])
-    await expect(executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, f.ledger)).rejects.toThrow('does not cover')
+    await expect(executeHttp(resources, scope, { ...request, method: 'DELETE' }, f.connection, signal, undefined, f.ledger)).rejects.toThrow('assigned origin or methods')
+    await expect(executeHttp(resources, { ...scope, podId: randomUUID() }, request, f.connection, signal, undefined, f.ledger)).rejects.toThrow('not assigned')
+    f.state.signedDetail = httpPermission('https://foreign.example.com', 'POST').detail
+    await expect(executeHttp(resources, scope, request, f.connection, signal, undefined, f.ledger)).rejects.toThrow('does not cover')
     expect(sendHttp).toHaveBeenCalledTimes(1)
-    f.state.signedCommand = await resolveCommand(adapter, ['pod-http', 'request', '--origin', 'https://api.example.com', '--method', 'POST'])
+    f.state.signedDetail = httpPermission('https://api.example.com', 'POST').detail
     f.state.active = false
-    await expect(executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, f.ledger)).rejects.toThrow('Permission revoked')
+    await expect(executeHttp(resources, scope, request, f.connection, signal, undefined, f.ledger)).rejects.toThrow('Permission revoked')
     expect(sendHttp).toHaveBeenCalledTimes(1)
   }
   finally { await f.close() }
@@ -254,8 +265,7 @@ it('HTTP grant boundary: verifies the signed origin and method before transport 
 
 it('HTTP agent authentication: the runtime adds the DDISA bearer, refuses script credentials and forgets rejected tokens', async () => {
   const f = await fixture(); sendHttp.mockClear()
-  const vendor = resolve('dist/vendor'); const adapter = loadAdapter('pod-http', join(vendor, 'pod-http-shapes.toml'))
-  f.state.signedCommand = await resolveCommand(adapter, ['pod-http', 'request', '--origin', 'https://api.example.com', '--method', 'GET'])
+  f.state.signedDetail = httpPermission('https://api.example.com', 'GET').detail
   const capability = 'tool.http_synthetic.request'
   const authentication = { type: 'ddisaAgent' as const, credential: 'agent_key', subject: 'agent@id.example.com', issuer: 'https://id.example.com' }
   const resources: PodResource[] = [{ ...f.resource, configuration: { type: 'http', origin: 'https://api.example.com', methods: ['GET'], capability, authentication } }]
@@ -264,18 +274,18 @@ it('HTTP agent authentication: the runtime adds the DDISA bearer, refuses script
   const bearer = { token: vi.fn(async () => 'SYNTHETIC_AGENT_TOKEN'), reject: vi.fn() }
   const signal = new AbortController().signal
   try {
-    await expect(executeHttp(resources, scope, { ...request, headers: { Authorization: 'Bearer script' } }, vendor, f.connection, signal, undefined, f.ledger, bearer)).rejects.toThrow('remove the Authorization header')
-    await expect(executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, f.ledger)).rejects.toThrow('authentication is unavailable')
+    await expect(executeHttp(resources, scope, { ...request, headers: { Authorization: 'Bearer script' } }, f.connection, signal, undefined, f.ledger, bearer)).rejects.toThrow('remove the Authorization header')
+    await expect(executeHttp(resources, scope, request, f.connection, signal, undefined, f.ledger)).rejects.toThrow('authentication is unavailable')
     expect(sendHttp).not.toHaveBeenCalled()
-    expect(await executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, f.ledger, bearer)).toMatchObject({ status: 200 })
+    expect(await executeHttp(resources, scope, request, f.connection, signal, undefined, f.ledger, bearer)).toMatchObject({ status: 200 })
     expect(bearer.token).toHaveBeenCalledWith(authentication, 'https://api.example.com')
     expect(sendHttp.mock.calls[0]![0]).toMatchObject({ headers: { authorization: 'Bearer SYNTHETIC_AGENT_TOKEN' } })
     expect(request.headers).toEqual({})
     sendHttp.mockResolvedValueOnce({ status: 200, headers: { 'x-echo': 'Bearer SYNTHETIC_AGENT_TOKEN' }, body: 'authorization: Bearer SYNTHETIC_AGENT_TOKEN' })
-    const echoed = await executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, f.ledger, bearer)
+    const echoed = await executeHttp(resources, scope, request, f.connection, signal, undefined, f.ledger, bearer)
     expect(JSON.stringify(echoed)).not.toContain('SYNTHETIC_AGENT_TOKEN')
     sendHttp.mockResolvedValueOnce({ status: 401, headers: {}, body: '' })
-    expect(await executeHttp(resources, scope, request, vendor, f.connection, signal, undefined, f.ledger, bearer)).toMatchObject({ status: 401 })
+    expect(await executeHttp(resources, scope, request, f.connection, signal, undefined, f.ledger, bearer)).toMatchObject({ status: 401 })
     expect(bearer.reject).toHaveBeenCalledWith(authentication)
   }
   finally { await f.close() }
