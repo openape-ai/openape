@@ -7,15 +7,22 @@ import { parseCredentialJSON } from '../connections/cache'
 import type { CredentialCache } from '../connections/cache'
 import { launchSandbox, programHome, verifyExecutable } from '../../worker/runtime/sandbox'
 import { podIdentityFile } from '../connections/identity-file'
-import type { AgentConnection, AgentAuthority, AssignedAuthorization } from './authorization'
+import type { AgentConnection, ProgramCall } from './authorization'
 import type { SandboxReach } from '../../contracts/sandbox'
 
-export interface ToolAssignment extends AssignedAuthorization {
+/** Authorizes one program call before it starts; a refusal throws. */
+export type CallAuthority = (call: ProgramCall, signal: AbortSignal) => Promise<unknown>
+export interface ToolAssignment {
   identityConnection?: AgentConnection
   reach?: SandboxReach
   id: string
   programState?: { id: string, podId: string, applicationId: string }
   capability: string
+  /** The program the call names at the IdP; its file must still have `sha256` right before the call is authorized. */
+  program: { path: string, name: string, sha256: string }
+  /** The arguments exactly as executed, without the executable. */
+  argv: string[]
+  /** What starts: the program itself, or the runtime its descriptor names. */
   executable: string
   executableHash: string
   entryFiles: { path: string, hash: string }[]
@@ -46,16 +53,18 @@ function secretStrings(value: unknown, key = ''): string[] {
 }
 
 export class PodToolBroker {
-  constructor(private readonly helper: string, private readonly root: string, private readonly authority: Pick<AgentAuthority, 'authorize'>, private readonly credentials: CredentialCache) {}
+  constructor(private readonly helper: string, private readonly root: string, private readonly authorize: CallAuthority, private readonly credentials: CredentialCache) {}
   async execute(assignment: ToolAssignment, request: unknown, lease: BrokerLease): Promise<ToolReply> {
     if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('Invalid ape-shell request')
     const value = request as Record<string, unknown>
-    if (Object.keys(value).some(key => !['toolId', 'argv'].includes(key)) || value.toolId !== assignment.id || !Array.isArray(value.argv) || JSON.stringify(value.argv) !== JSON.stringify(assignment.command.argv)) throw new Error('Command is outside the assigned tool call')
+    if (Object.keys(value).some(key => !['toolId', 'argv'].includes(key)) || value.toolId !== assignment.id || !Array.isArray(value.argv) || JSON.stringify(value.argv) !== JSON.stringify(assignment.argv)) throw new Error('Command is outside the assigned tool call')
     lease.assertCurrent(); lease.signal.throwIfAborted()
     if (!lease.capabilities.includes(assignment.capability)) throw new Error('Script does not declare this capability')
+    // The token binds the program's file hash; the file is checked right before, so the authorized file is the one that runs.
+    await verifyExecutable(assignment.program.path, assignment.program.sha256)
     await verifyExecutable(assignment.executable, assignment.executableHash)
     for (const file of assignment.entryFiles) await verifyExecutable(file.path, file.hash)
-    await this.authority.authorize(assignment, lease.signal)
+    await this.authorize({ program: { name: assignment.program.name, sha256: assignment.program.sha256 }, argv: assignment.argv }, lease.signal)
     lease.assertCurrent(); lease.signal.throwIfAborted()
     await mkdir(this.root, { recursive: true, mode: 0o700 })
     if (assignment.programState) {
@@ -94,7 +103,7 @@ export class PodToolBroker {
   private async launch(assignment: ToolAssignment, lease: BrokerLease, workspace: string, temporary: string, cache?: string, identity?: Awaited<ReturnType<typeof podIdentityFile>>): Promise<ToolReply> {
     lease.assertCurrent(); lease.signal.throwIfAborted()
     const secrets = [...Object.values(assignment.environment).filter(Boolean), ...[assignment.environment.HTTPS_PROXY, assignment.environment.HTTP_PROXY].filter(Boolean).flatMap(url => new URL(url).password ? [new URL(url).password] : []), ...(cache ? secretStrings(parseCredentialJSON(await readFile(cache, 'utf8'))) : [])]
-    const args = [...assignment.prefix, ...assignment.command.argv.slice(1), ...(cache && assignment.cacheArgument ? [assignment.cacheArgument, dirname(cache)] : [])]
+    const args = [...assignment.prefix, ...assignment.argv, ...(cache && assignment.cacheArgument ? [assignment.cacheArgument, dirname(cache)] : [])]
     const limit = assignment.maxOutputBytes ?? 256 * 1024
     if (!Number.isSafeInteger(limit) || limit < 1024 || limit > 32 * 1024 * 1024) throw new Error('Invalid tool output bound')
     const domain = await launchSandbox(this.helper, this.root, { reach: assignment.reach, executable: assignment.executable, workspace: await realpath(lease.workspace ?? workspace), readDirectories: lease.readDirectories, writeDirectories: [...(lease.workspace ? [await realpath(workspace)] : []), ...(temporary === workspace ? [] : [await realpath(temporary)]), ...lease.writeDirectories ?? []], readFiles: [...assignment.entryFiles.map(file => file.path), ...(identity ? [identity.path] : [])], runtimeDirectories: assignment.runtimeDirectories, networkPorts: assignment.networkPorts, systemTrust: assignment.networkPorts.length > 0 }, args, { ...assignment.runtimeEnvironment, ...assignment.environment, HOME: programHome(assignment.reach, workspace), TMPDIR: temporary, ...(identity ? { APES_AUTH_FILE: identity.path } : {}), ...(cache ? { POD_TOOL_AUTH_FILE: cache } : {}) }, lease.registerDomain)

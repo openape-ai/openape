@@ -15,7 +15,7 @@ import type { HttpRequest, HttpReply } from '../../contracts/http'
 import { assignedHttp } from '../../main/programs/http-service'
 import { EffectLedger } from '../recovery/effects'
 import { executeHttpEffect } from './http'
-import { describeProgram, executeProgramEffect, invokeApproved, programWrite } from './program-effects'
+import { describeProgram, executeProgramEffect, invokeApproved, isProgramCall } from './program-effects'
 import { parseApprovedInvocation } from '../../contracts/programs'
 import type { ApprovedInvocation } from '../../contracts/programs'
 import { PodVariables } from '../resources/variables'
@@ -70,6 +70,8 @@ export interface RunServices {
   provider?: AgentGatewayServices['provider']
   /** `summary` is the script's own account of the call; the IdP shows it only if the call needs a new grant. */
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary) => Promise<unknown>
+  /** Authorizes one application command at the IdP before it runs and tells whether it writes (issue 1473, revision 4). */
+  programEffect?: (body: unknown, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary) => Promise<{ write: boolean }>
   mailMove?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
   /** One exact command whose program approval the worker consumed; it runs without a continuing grant. */
   approvedProgram?: (body: ApprovedInvocation, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
@@ -216,7 +218,9 @@ export class RunDispatcher {
         if (!manifest.capabilities.some(capability => capability === 'mail.read' || capability.startsWith('tool.app_') || capability.startsWith('tool.ssh_')) || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
         const call = async () => retryService('tool authorization', async () => { assertCurrent(); return this.services!.tool!(body, toolSignal, scope, summary) }, toolSignal)
         // A read can be replayed; an application write is recorded like an HTTP effect and keeps the run from automatic replay.
-        const write = await programWrite(this.resources.list(pod.id), pod.id, scope.capabilities, body)
+        // Only the IdP knows what a command does: it authorizes the call first, and its grant tells whether it writes.
+        if (isProgramCall(body) && !this.services.programEffect) throw new Error('Program authorization service is unavailable')
+        const write = isProgramCall(body) ? (await retryService('tool authorization', async () => { assertCurrent(); return this.services!.programEffect!(body, toolSignal, scope, summary) }, toolSignal)).write : false
         if (!write) appendEvent('recovery-boundary', { kind: 'read', operation: 'tools.invoke' })
         const operation = write ? executeProgramEffect(new EffectLedger(this.store), pod.id, id, `program:${id}:${programWrites++}`, body, call) : call()
         pendingAgents.add(operation)
@@ -283,8 +287,8 @@ export class RunDispatcher {
           }
           if (operation === 'approvals.request') {
             const asked = payload as { action?: unknown, payload?: { application?: unknown, argv?: unknown } } | null
-            // A program approval shows the owner what its application adapter says the command does.
-            const display = asked?.action === 'program.run' ? await describeProgram(this.resources.list(pod.id), pod.id, scope.capabilities, { application: String(asked.payload?.application ?? ''), argv: asked.payload?.argv }) : undefined
+            // A program approval shows the owner the exact command line.
+            const display = asked?.action === 'program.run' ? describeProgram(this.resources.list(pod.id), pod.id, scope.capabilities, { application: String(asked.payload?.application ?? ''), argv: asked.payload?.argv }) : undefined
             assertCurrent()
             const view = this.approvals.request({ podId: pod.id, runId: id }, payload, display); appendEvent('approval-request', { id: view.id, state: view.state }); return view
           }
@@ -366,8 +370,8 @@ export class RunDispatcher {
           if (operation === 'tools.invoke' && payload && typeof payload === 'object' && 'approval' in payload) {
             if (!this.services?.approvedProgram || !this.services.approval) throw new Error('Approved program service is unavailable')
             const request = parseApprovedInvocation(payload)
-            // The command must still be assigned and match its adapter before the approval is used up.
-            await describeProgram(this.resources.list(pod.id), pod.id, scope.capabilities, { application: request.application, argv: request.argv })
+            // The application must still be assigned and declared before the approval is used up.
+            describeProgram(this.resources.list(pod.id), pod.id, scope.capabilities, { application: request.application, argv: request.argv })
             assertCurrent()
             const service: ApprovalService = (body, serviceSignal) => this.services!.approval!(body, serviceSignal, scope)
             // The IdP exchange and the command pause the script budget like other bounded service waits.

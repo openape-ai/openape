@@ -7,13 +7,19 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import { expect, it } from 'vitest'
-import { applicationDefinition, launchDescriptor } from '../src/main/programs/application'
+import { applicationDefinition } from '../src/main/programs/application'
 import { ApplicationLaunch } from '../src/main/programs/launch'
 import { ExternalShell } from '../src/main/shell/session'
 import { ProgramState } from '../src/main/programs/state'
 import { CredentialCache } from '../src/main/connections/cache'
 import type { ConnectionManager } from '../src/main/connections/manager'
 import type { ResourceState } from '../src/contracts/resources'
+
+// The desktop no longer writes Shapes descriptors (issue 1473, revision 4); ape-shell's IdP authorization replaces them
+// (M11). Until then this fixture describes the launcher command the way the IdP resolves an unknown program: exactly.
+function launcherShape(cliId: string, name: string): string {
+  return `schema="openape-shapes/v1"\n[cli]\nid="${cliId}"\nexecutable="${cliId}"\naudience="shapes"\n[[operation]]\nid="open"\ncommand=[]\ndisplay=${JSON.stringify(`Open application ${name}`)}\naction="open"\nrisk="high"\nexact_command=true\nresource_chain=["application:id=${cliId}"]\n`
+}
 
 it.each([false, true])('installed GUI: no-argument Play uses the pod context through ape-shell (approved=%s)', async (approved) => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-installed-gui-')))
@@ -42,9 +48,9 @@ int main(int argc, char **argv) {
   return 0;
 }`)
   await promisify(execFile)('/usr/bin/xcrun', ['clang', '-framework', 'Cocoa', join(root, 'window.m'), '-o', join(bundle, 'Contents/MacOS/fixture')])
-  const definition = await applicationDefinition(bundle, join(root, 'definitions'))
+  const definition = await applicationDefinition(bundle)
   const cliId = `pod-open-${applicationId.replaceAll('-', '')}-${definition.executableHash.slice(0, 16)}`
-  const descriptor = join(root, `${cliId}.toml`); await writeFile(descriptor, launchDescriptor(cliId, definition.name))
+  const descriptor = join(root, `${cliId}.toml`); await writeFile(descriptor, launcherShape(cliId, definition.name))
   const command = await resolveCommand(loadAdapter(cliId, descriptor), [cliId])
   const keys = generateKeyPairSync('ed25519')
   const server = createServer((request, response) => {

@@ -1,8 +1,9 @@
 import { createHash, generateKeyPairSync, randomUUID, sign } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { basename, join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { vi } from 'vitest'
+import { computeArgvHash } from '@openape/grants'
 import { parseBrokerGrantRequest } from '../../../../modules/nuxt-auth-idp/src/runtime/server/utils/broker-grant-request'
 import type { RunApproval } from '../../src/contracts/activity'
 import type { ServiceRequest } from '../../src/contracts/services'
@@ -15,12 +16,10 @@ import { PodDatabase } from '../../src/worker/storage/database'
  * Only the provisioned Pod identities, Electron and the worker process are substitutes; the grant ledger is the
  * real one on a temporary profile.
  */
-export const sources = resolve('runtime-sources')
-// The worker resolves its bundled adapters under dist/vendor; the suites read the same reviewed sources.
-export const source = (path: string) => path.includes('/vendor/') ? resolve(sources, basename(path)) : path
 export const issuer = 'https://id.example.test'
 export const owner = 'owner@example.test'
 export const ownerToken = 'OWNER_SESSION_TOKEN'
+export const podSubject = (id: string) => `pod-${id.slice(-4)}@example.test`
 export interface StubGrant { status: string, request: Record<string, unknown>, decided_by?: string }
 export interface Decision { action: 'approve' | 'deny' | 'revoke', id: string, bearer: string, body: Record<string, unknown> }
 
@@ -47,7 +46,12 @@ export const brokered = { connection_id: '00000000-0000-4000-8000-0000000000b1',
 export function identityProvider(options: { brokered?: typeof brokered } = {}) {
   const keys = generateKeyPairSync('ed25519')
   const grants = new Map<string, StubGrant>()
-  const state = { reuse: false, approvals: [] as string[], decisions: [] as Decision[], tokens: [] as string[], creates: [] as Record<string, unknown>[], revokedTokens: [] as string[], delegations: [] as Record<string, unknown>[] }
+  const state = { reuse: false, approvals: [] as string[], decisions: [] as Decision[], tokens: [] as string[], creates: [] as Record<string, unknown>[], authorizations: [] as Record<string, unknown>[], revokedTokens: [] as string[], delegations: [] as Record<string, unknown>[] }
+  const signed = (claims: Record<string, unknown>) => {
+    const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')
+    const payload = Buffer.from(JSON.stringify(claims)).toString('base64url')
+    return `${head}.${payload}.${sign(null, Buffer.from(`${head}.${payload}`), keys.privateKey).toString('base64url')}`
+  }
   const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })
   const fetch = vi.fn(async (input: string | URL, init?: RequestInit) => {
     const url = new URL(String(input))
@@ -63,6 +67,7 @@ export function identityProvider(options: { brokered?: typeof brokered } = {}) {
       state.delegations.push(request)
       return json({ id: `delegation-${state.delegations.length}`, type: 'delegation', status: 'approved', request: { ...request, delegator: owner }, ...(typeof request.duration === 'number' ? { expires_at: 1_000_000 + request.duration } : {}) }, 201)
     }
+    if (url.pathname === '/api/grants/authorize' && init?.method === 'POST') return authorize(JSON.parse(String(init.body)) as Record<string, unknown>)
     if (url.pathname.startsWith('/api/pods/agents/')) return json({ email: decodeURIComponent(url.pathname.split('/')[4]!), owner, active: true, keyIds: ['key'], grantId: url.searchParams.get('grant'), grantActive: true })
     if (url.pathname === '/api/grants' && init?.method === 'POST') {
       const request = JSON.parse(String(init.body)) as Record<string, unknown>
@@ -95,14 +100,41 @@ export function identityProvider(options: { brokered?: typeof brokered } = {}) {
       if (grant.status !== 'approved') return json({ type: 'https://openape.org/errors/grant_not_approved' }, 400)
       state.tokens.push(id!)
       const now = Math.floor(Date.now() / 1000)
-      const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')
-      const payload = Buffer.from(JSON.stringify({ iss: issuer, sub: grant.request.requester, aud: 'shapes', target_host: grant.request.target_host, grant_id: id, grant_type: grant.request.grant_type, iat: now, exp: now + 3600, jti: randomUUID(), authorization_details: grant.request.authorization_details, execution_context: grant.request.execution_context })).toString('base64url')
-      return json({ authz_jwt: `${head}.${payload}.${sign(null, Buffer.from(`${head}.${payload}`), keys.privateKey).toString('base64url')}` })
+      return json({ authz_jwt: signed({ iss: issuer, sub: grant.request.requester, aud: 'shapes', target_host: grant.request.target_host, grant_id: id, grant_type: grant.request.grant_type, iat: now, exp: now + 3600, jti: randomUUID(), authorization_details: grant.request.authorization_details, execution_context: grant.request.execution_context, ...(grant.decided_by ? { decided_by: grant.decided_by } : {}), ...(options.brokered ? { brokered: options.brokered } : {}) }) })
     }
     if (action === 'consume') return json({ status: 'valid' })
     if (action === undefined && (init?.method ?? 'GET') === 'GET') return json({ id, status: grant.status, request: grant.request, ...(grant.decided_by ? { decided_by: grant.decided_by } : {}), ...(options.brokered ? { brokered: options.brokered } : {}) })
     return json({ title: 'Unsupported' }, 404)
   })
+  /**
+   * Per-call program authorization like the IdP (issue 1473, revision 4). The stub knows no Shapes: a grant covers a call
+   * when it is approved for the same Pod and target and either was requested for exactly this argv, or its details
+   * name the program with operation `*` (a whole-program grant). Otherwise one pending exact request is created or
+   * reused; the newest denied or revoked request refuses with 403.
+   */
+  async function authorize(body: Record<string, unknown>): Promise<Response> {
+    state.authorizations.push(body)
+    if (Object.keys(body).some(key => !['target_host', 'audience', 'program', 'argv', 'grant_type', 'summary', 'batch'].includes(key))) return json({ statusCode: 400, data: { title: 'Invalid request' } }, 400)
+    const program = body.program as { name: string, sha256: string }; const executionArgv = [program.name, ...body.argv as string[]]
+    const argvHash = await computeArgvHash(executionArgv)
+    const requester = podSubject(String(body.target_host).slice(5))
+    const own = [...grants.entries()].filter(([, grant]) => grant.request.requester === requester && grant.request.target_host === body.target_host && grant.request.audience === 'shapes')
+    const details = (grant: StubGrant) => (grant.request.authorization_details ?? []) as { cli_id: string, operation_id: string }[]
+    const covers = (grant: StubGrant) => (grant.request.execution_context as { argv_hash?: string } | undefined)?.argv_hash === argvHash || details(grant).some(detail => detail.cli_id === program.name && detail.operation_id === '*')
+    const approved = own.find(([, grant]) => grant.status === 'approved' && covers(grant))
+    if (approved) {
+      const [id, grant] = approved; const now = Math.floor(Date.now() / 1000)
+      state.tokens.push(id)
+      return json({ state: 'approved', grant_id: id, expires_at: now + 300, authz_jwt: signed({ iss: issuer, sub: requester, aud: 'shapes', target_host: body.target_host, iat: now, exp: now + 300, jti: randomUUID(), grant_id: id, grant_type: grant.request.grant_type, approval: grant.request.grant_type, authorization_details: grant.request.authorization_details, command: executionArgv, argv_hash: argvHash, program_sha256: program.sha256, ...(grant.decided_by ? { decided_by: grant.decided_by } : {}), ...(options.brokered ? { brokered: options.brokered } : {}) }) })
+    }
+    const newest = own.filter(([, grant]) => covers(grant)).at(-1)
+    if (newest && ['denied', 'revoked'].includes(newest[1].status)) return json({ type: `https://openape.org/errors/grant_${newest[1].status}`, title: 'Refused', status: 403, state: newest[1].status, grant_id: newest[0] }, 403)
+    if (newest?.[1].status === 'pending') return json({ state: 'pending', grant_id: newest[0], approval_url: `${issuer}/grant-approval?grant_id=${newest[0]}` }, 202)
+    const id = `grant-${grants.size + 1}`
+    const detail = { type: 'openape_cli', cli_id: program.name, operation_id: '_exact', resource_chain: [], action: 'exec', permission: `${program.name}.command[argv_hash=${argvHash}]#exec`, display: executionArgv.join(' '), risk: 'high', constraints: { exact_command: true } }
+    grants.set(id, { status: 'pending', request: { requester, target_host: body.target_host, audience: 'shapes', grant_type: body.grant_type ?? 'always', command: executionArgv, authorization_details: [detail], execution_context: { argv: executionArgv, argv_hash: argvHash, program_sha256: program.sha256 }, summary: body.summary } })
+    return json({ state: 'pending', grant_id: id, approval_url: `${issuer}/grant-approval?grant_id=${id}` }, 202)
+  }
   /** A decision made outside Pods, by the owner at the IdP or by its expiry. */
   const decide = (id: string, status: 'approved' | 'denied' | 'revoked' | 'expired') => { grants.get(id)!.status = status }
   /** A grant that another requester or for another target asked for, to prove Pods never decides it. */
@@ -113,11 +145,11 @@ export function identityProvider(options: { brokered?: typeof brokered } = {}) {
 export const podId = '00000000-0000-4000-8000-000000000001'
 export const deniedPodId = '00000000-0000-4000-8000-000000000002'
 export const applicationId = '00000000-0000-4000-8000-0000000000a1'
-export const adapterPath = resolve(sources, 'pod-http-shapes.toml')
-const adapterHash = createHash('sha256').update(readFileSync(adapterPath)).digest('hex')
-// Assigned as a tested registry adapter, so its commands resolve to structured grants (issue 1473).
-export const program = { id: applicationId, podId, revision: 1, kind: 'tool', state: 'ready', name: 'Fixture CLI', configuration: { type: 'program', cliId: 'pod-http', adapterPath, adapterHash, registry: { id: 'pod-http', digest: `SHA-256:${adapterHash}` }, cliVersion: { version: '1', tested: true }, capability: 'tool.app_fixture.invoke' } }
-export const podSubject = (id: string) => `pod-${id.slice(-4)}@example.test`
+// A program is assigned by path and file hash only (issue 1473, revision 4); the IdP decides what its commands mean.
+const programRoot = mkdtempSync(join(tmpdir(), 'pods-idp-program-'))
+export const programExecutable = join(programRoot, 'fixture-cli')
+writeFileSync(programExecutable, '#!/bin/sh\nexit 0\n', { mode: 0o700 })
+export const program = { id: applicationId, podId, revision: 1, kind: 'tool', state: 'ready', name: 'Fixture CLI', configuration: { type: 'program', name: 'fixture-cli', cliId: 'fixture-cli', executable: programExecutable, executableHash: createHash('sha256').update('#!/bin/sh\nexit 0\n').digest('hex'), entryFiles: [], environment: {}, networkHosts: [], stateId: '00000000-0000-4000-8000-0000000000c1', capability: 'tool.app_fixture.invoke' } }
 
 const profiles: PodDatabase[] = []
 export function closeProfiles(): void { for (const store of profiles.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) } }
@@ -157,7 +189,7 @@ export async function workerFixture(options: { pods?: string[], resources?: () =
   const credentials = { readScriptSecret: vi.fn(async () => 'SYNTHETIC_SECRET') }
   Object.assign(worker, { root: '/fixture', connections, credentials, dispatch })
   const grants = (worker as unknown as { podGrants: () => import('../../src/main/grants/pod-grants').PodGrants }).podGrants()
-  Object.assign(worker, { programs: new ProgramManager('/fixture/authentication', '/fixture/helper', credentials as never, connections, async () => resources() as never, command => dispatch({ program: command }), grants, id => ({ connection: async () => connection(id) as never, ledger: grants.port(id), origin: async () => 'Pod', reach: async () => ({ level: 'isolated' as const, protectedPaths: [] }) })) })
+  Object.assign(worker, { programs: new ProgramManager('/fixture/authentication', '/fixture/helper', credentials as never, connections, async () => resources() as never, command => dispatch({ program: command }), id => ({ connection: async () => connection(id) as never, ledger: grants.port(id), origin: async () => 'Pod', reach: async () => ({ level: 'isolated' as const, protectedPaths: [] }) })) })
   const service = worker as unknown as { executeService: (request: ServiceRequest) => Promise<unknown> }
   const call = (scope: ServiceRequest['scope'], kind: ServiceRequest['kind'], body: unknown = {}) => service.executeService({ id: randomUUID(), kind, scope, body })
   const start = (id: string, runId = randomUUID(), reason = 'schedule', name?: string) => {

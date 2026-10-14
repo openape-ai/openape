@@ -2,7 +2,7 @@ import { parseDetailsCommand } from './details'
 import { parseResourceCommand } from './resources'
 import { parseScriptCommand } from './scripts'
 import { parseRunCommand } from './runs'
-import { parseProgramCommand, registryAdaptersOnly } from './programs'
+import { parseProgramCommand, programsByPath } from './programs'
 import { parseCredentialAlias } from './credentials'
 import type { CodexRequest } from './codex'
 import { parseGrantsCommand } from './grants'
@@ -11,13 +11,14 @@ import { parseSandboxCommand } from './sandbox'
 export const administrationActions = ['resources', 'scripts', 'recovery', 'program', 'importSecret', 'requestSecret', 'description', 'grants', 'sandbox']
 
 export function parseAdministration(action: Record<string, unknown>) {
-  const { action: kind, command, revision, path, adapterPath, commandName, runtimePath } = action
+  const { action: kind, command, revision, path, runtimePath } = action
   if (kind === 'grants' || kind === 'sandbox') {
     const extra = Object.keys(action).filter(key => !['action', 'command'].includes(key))
     if (extra.length) throw new Error(`Invalid ${kind} action fields; send action and command only: unexpected ${extra.join(', ')}`)
     return kind === 'grants' ? { kind, command: parseGrantsCommand(command) } as const : { kind, command: parseSandboxCommand(command) } as const
   }
-  if (!administrationActions.includes(String(kind)) || Object.keys(action).some(key => !['action', 'command', 'revision', 'path', 'adapterPath', 'commandName', 'runtimePath'].includes(key))) throw new Error('Invalid administration action')
+  if ('adapterPath' in action || 'commandName' in action) throw new Error(programsByPath)
+  if (!administrationActions.includes(String(kind)) || Object.keys(action).some(key => !['action', 'command', 'revision', 'path', 'runtimePath'].includes(key))) throw new Error('Invalid administration action')
   if (!Number.isSafeInteger(revision) || Number(revision) < 1) throw new Error('Current Pod revision required')
   if (kind === 'description') {
     const parsed = parseDetailsCommand(command)
@@ -29,7 +30,7 @@ export function parseAdministration(action: Record<string, unknown>) {
     const value = command as { podId: string, alias: string, epoch: number }
     if (!value || Object.keys(value).some(key => !['podId', 'alias', 'epoch'].includes(key)) || !/^[a-f0-9-]{36}$/.test(value.podId) || !Number.isSafeInteger(value.epoch) || value.epoch < 0) throw new Error('Invalid credential import')
     parseCredentialAlias(value.alias)
-    if (adapterPath !== undefined || commandName !== undefined || runtimePath !== undefined) throw new Error('Invalid credential import fields')
+    if (runtimePath !== undefined) throw new Error('Invalid credential import fields')
     return { kind, revision: Number(revision), command: value, path: absolutePath(path) } as const
   }
   if (kind === 'requestSecret') {
@@ -41,7 +42,7 @@ export function parseAdministration(action: Record<string, unknown>) {
   }
   if (kind === 'resources' && (command as { type?: unknown })?.type === 'importJev') {
     const value = command as { type: 'importJev', podId: string, epoch: number }
-    if (Object.keys(value).some(key => !['type', 'podId', 'epoch'].includes(key)) || !/^[a-f0-9-]{36}$/.test(value.podId) || !Number.isSafeInteger(value.epoch) || value.epoch < 0 || adapterPath !== undefined || commandName !== undefined || runtimePath !== undefined) throw new Error('Invalid Jev key import')
+    if (Object.keys(value).some(key => !['type', 'podId', 'epoch'].includes(key)) || !/^[a-f0-9-]{36}$/.test(value.podId) || !Number.isSafeInteger(value.epoch) || value.epoch < 0 || runtimePath !== undefined) throw new Error('Invalid Jev key import')
     return { kind: 'importJev', revision: Number(revision), command: value, path: absolutePath(path) } as const
   }
   if (kind === 'resources') {
@@ -67,15 +68,13 @@ export function parseAdministration(action: Record<string, unknown>) {
   if (!['add', 'replace', 'network', 'grant', 'importState', 'prepare', 'start', 'poll', 'input', 'close'].includes(parsed.type)) throw new Error('Unsupported program operation')
   if (['add', 'replace', 'importState'].includes(parsed.type)) {
     absolutePath(path)
-    if (adapterPath !== undefined) throw new Error(registryAdaptersOnly)
     if (runtimePath !== undefined) absolutePath(runtimePath)
-    if (commandName !== undefined && (typeof commandName !== 'string' || !/^[\w.-]{1,100}$/.test(commandName))) throw new Error('Invalid command name')
-    if (parsed.type === 'importState' && (adapterPath !== undefined || commandName !== undefined || runtimePath !== undefined)) throw new Error('Invalid state import fields')
+    if (parsed.type === 'importState' && runtimePath !== undefined) throw new Error('Invalid state import fields')
   }
   else {
     noPaths(action)
   }
-  return { kind: 'program', revision: Number(revision), command: parsed, path: path as string | undefined, commandName: commandName as string | undefined, runtimePath: runtimePath as string | undefined } as const
+  return { kind: 'program', revision: Number(revision), command: parsed, path: path as string | undefined, runtimePath: runtimePath as string | undefined } as const
 }
 
 function absolutePath(value: unknown): string {
@@ -83,7 +82,7 @@ function absolutePath(value: unknown): string {
   return value
 }
 function noPaths(action: Record<string, unknown>) {
-  if (['path', 'adapterPath', 'commandName', 'runtimePath'].some(key => key in action)) throw new Error('Unexpected administration path')
+  if (['path', 'runtimePath'].some(key => key in action)) throw new Error('Unexpected administration path')
 }
 
 export type AdministrationReceipt = { completed: false } | { completed: true, result: unknown }

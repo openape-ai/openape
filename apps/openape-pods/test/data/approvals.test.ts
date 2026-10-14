@@ -1,7 +1,5 @@
 // @vitest-environment node
-import { createHash, randomUUID } from 'node:crypto'
-import { readFileSync, writeFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { randomUUID } from 'node:crypto'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Approvals, programObject } from '../../src/worker/data/approvals'
 import { describeProgram, invokeApproved } from '../../src/worker/runs/program-effects'
@@ -202,7 +200,7 @@ describe('program approvals (issue 1468)', () => {
     return { ...f, server, asked, runs, execute, invoke }
   }
 
-  it('derives the object from the exact command and shows the adapter display with the argv', async () => {
+  it('derives the object from the exact command and shows the command line with the argv', async () => {
     const f = await approvedPush()
     expect(f.asked).toMatchObject({ action: 'program.run', object: programObject('git', push(lease)), title: 'Push to remote' })
     expect(f.asked.object).toMatch(new RegExp(`^git push --force-with-lease=feature/x:${lease} origin ${lease}:refs/heads/feature/x #[a-f0-9]{16}$`))
@@ -212,8 +210,8 @@ describe('program approvals (issue 1468)', () => {
     const next = f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push('b'.repeat(40)) } }, 'Push to remote')
     expect(next.id).not.toBe(f.asked.id)
     expect(next.state).toBe('collecting')
-    // Without the adapter's description no command is approvable, and the object cannot name another command.
-    expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease) } })).toThrow('adapter description')
+    // Without the description of its command no command is approvable, and the object cannot name another command.
+    expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease) } })).toThrow('description of its command')
     expect(() => f.approvals.request(f.run, { action: 'program.run', object: 'git status', payload: { application: 'git', argv: push(lease) } }, 'Push to remote')).toThrow('exact command')
     expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease), note: 'x' } }, 'Push to remote')).toThrow('application and its exact argv')
   })
@@ -308,19 +306,13 @@ describe('program approvals (issue 1468)', () => {
     expect(() => f.approvals.assertExecution(f.run, f.asked.id, command)).toThrow('already ran')
   })
 
-  it('describes a command with the application adapter and refuses mail moves and unknown operations', async () => {
+  // Issue 1473, revision 4: the desktop knows no command meanings; the owner sees the complete command, every option included.
+  it('describes a command by its exact command line and refuses an application that is not assigned and declared', () => {
     const f = fixture()
-    const adapter = join(f.root, 'git.toml')
-    writeFileSync(adapter, ['schema = "openape-shapes/v1"', '[cli]', 'id = "git"', 'executable = "git"', 'audience = "shapes"', 'version = "1"', '[[operation]]', 'id = "git.push"', 'command = ["push"]', 'positionals = ["remote", "refspec"]', 'required_options = ["force-with-lease"]', 'display = "Push {refspec} to {remote}"', 'action = "edit"', 'risk = "high"', 'resource_chain = ["repo:*", "remote:*"]', '[[operation]]', 'id = "git.move"', 'command = ["move"]', 'display = "Move"', 'action = "move"', 'risk = "high"', 'resource_chain = ["repo:*"]', ''].join('\n'))
-    const configuration = { type: 'program', name: 'git', cliId: 'git', adapterPath: adapter, adapterHash: createHash('sha256').update(readFileSync(adapter)).digest('hex'), capability: 'tool.app_git.invoke' }
+    const configuration = { type: 'program', name: 'git', cliId: 'git', executable: '/fixture/git', executableHash: 'a'.repeat(64), capability: 'tool.app_git.invoke' }
     const resources = [{ id: randomUUID(), podId: f.podId, revision: 1, kind: 'tool', state: 'ready', name: 'git', configuration }] as never
-    expect(await describeProgram(resources, f.podId, ['tool.app_git.invoke'], { application: 'git', argv: push(lease) })).toBe(`Push ${lease}:refs/heads/feature/x to origin`)
-    await expect(describeProgram(resources, f.podId, ['tool.app_git.invoke'], { application: 'git', argv: ['fetch'] })).rejects.toThrow('No adapter operation matched')
-    // Fail closed: an option the push operation does not declare is refused, wherever it stands.
-    for (const argv of [[...push(lease), '--upload-pack=/tmp/evil'], ['push', '--receive-pack=/tmp/evil', `--force-with-lease=feature/x:${lease}`, 'origin', 'main'], [...push(lease), '--'], ['-c', 'core.sshCommand=evil', ...push(lease)]]) {
-      await expect(describeProgram(resources, f.podId, ['tool.app_git.invoke'], { application: 'git', argv })).rejects.toThrow(/does not declare|No adapter operation matched/)
-    }
-    await expect(describeProgram(resources, f.podId, ['tool.app_git.invoke'], { application: 'git', argv: ['move'] })).rejects.toThrow('approved archive service')
-    await expect(describeProgram(resources, f.podId, [], { application: 'git', argv: push(lease) })).rejects.toThrow('not declared and assigned')
+    expect(describeProgram(resources, f.podId, ['tool.app_git.invoke'], { application: 'git', argv: push(lease) })).toBe(`git push --force-with-lease=feature/x:${lease} origin ${lease}:refs/heads/feature/x`)
+    expect(describeProgram(resources, f.podId, ['tool.app_git.invoke'], { application: 'git', argv: ['-c', 'core.sshCommand=evil sh', 'push'] })).toBe('git -c \'core.sshCommand=evil sh\' push')
+    expect(() => describeProgram(resources, f.podId, [], { application: 'git', argv: push(lease) })).toThrow('not declared and assigned')
   })
 })

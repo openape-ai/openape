@@ -1,35 +1,29 @@
-import { mkdtemp, mkdir, rm, symlink, writeFile } from 'node:fs/promises'
+import { mkdtemp, mkdir, rm, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { createHash } from 'node:crypto'
 import { expect, it } from 'vitest'
 import { prepareConsole, podWorkspace } from '../../src/main/programs/console'
 import type { ResourceState } from '../../src/contracts/resources'
 
 const podId = '00000000-0000-4000-8000-000000000001'
 const applicationId = '00000000-0000-4000-8000-000000000002'
-it('accepts a complete command once, provides bare-CLI help and never executes help', async () => {
+// Issue 1473, revision 4: a terminal line maps to an assigned application and its exact argv; the IdP decides it at start.
+it('maps a complete command to its application without resolving it, lists applications and never executes help', async () => {
   const root = await mkdtemp(join(tmpdir(), 'pods-console-'))
-  const adapterPath = join(root, 'adapter.toml')
-  const source = 'schema="openape-shapes/v1"\n[cli]\nid="o365-cli"\nexecutable="o365-cli"\naudience="shapes"\n[[operation]]\nid="setup"\ncommand=["login"]\nrequired_options=["account"]\ndisplay="Set up {account}"\naction="login"\nrisk="medium"\nresource_chain=["account:email={account}"]\n'
-  await writeFile(adapterPath, source)
-  const state: ResourceState = { epoch: 2, resources: [{ id: applicationId, podId, kind: 'tool', state: 'ready', name: 'Office', revision: 1, configuration: { type: 'program', cliId: 'o365-cli', adapterPath, adapterHash: createHash('sha256').update(source).digest('hex'), registry: { id: 'o365', digest: 'SHA-256:fixture' }, cliVersion: { version: '1.0', tested: true } } }] }
+  const state: ResourceState = { epoch: 2, resources: [{ id: applicationId, podId, kind: 'tool', state: 'ready', name: 'Office', revision: 1, configuration: { type: 'program', cliId: 'o365-cli', executable: '/fixture/o365-cli', executableHash: 'a'.repeat(64) } }] }
   try {
-    const prepared = await prepareConsole(root, podId, state, 'o365-cli login --account user@example.test', async () => false)
-    expect(prepared.command).toEqual({ type: 'start', podId, applicationId, epoch: 2, argv: ['login', '--account', 'user@example.test'] })
-    expect(prepared.needsGrant).toBe(true)
-    expect((await prepareConsole(root, podId, state, 'o365-cli login --account user@example.test', async detail => detail.cli_id === 'o365-cli')).needsGrant).toBe(false)
-    // Without a tested registry adapter only a grant for this exact argv runs it, which recorded grants cannot show.
-    const untested = structuredClone(state); untested.resources[0]!.configuration.cliVersion = { version: '2.0', tested: false }
-    expect((await prepareConsole(root, podId, untested, 'o365-cli login --account user@example.test', async () => true)).needsGrant).toBe(true)
-    const help = await prepareConsole(root, podId, state, 'o365-cli', async () => false)
-    expect(help.command).toBeNull(); expect(help.output).toContain('o365-cli login --account <account>')
-    expect((await prepareConsole(root, podId, state, 'pwd', async () => false)).output).toBe(await podWorkspace(root, podId))
-    for (const command of ['zsh', '/bin/sh', 'o365-cli login; touch /tmp/bad', 'o365-cli $(whoami)']) await expect(prepareConsole(root, podId, state, command, async () => false)).rejects.toThrow()
+    const prepared = await prepareConsole(root, podId, state, 'o365-cli login --account user@example.test')
+    expect(prepared).toMatchObject({ command: { type: 'start', podId, applicationId, epoch: 2, argv: ['login', '--account', 'user@example.test'] }, needsGrant: false, permission: null })
+    const help = await prepareConsole(root, podId, state, 'help')
+    expect(help.command).toBeNull(); expect(help.output).toBe('o365-cli')
+    const bare = await prepareConsole(root, podId, state, 'o365-cli')
+    expect(bare.command).toBeNull(); expect(bare.output).toContain('o365-cli --help')
+    expect((await prepareConsole(root, podId, state, 'pwd')).output).toBe(await podWorkspace(root, podId))
+    for (const command of ['zsh', '/bin/sh', 'o365-cli login; touch /tmp/bad', 'o365-cli $(whoami)']) await expect(prepareConsole(root, podId, state, command)).rejects.toThrow()
     const duplicate = structuredClone(state); duplicate.resources.push({ ...duplicate.resources[0]!, id: '00000000-0000-4000-8000-000000000003' })
-    await expect(prepareConsole(root, podId, duplicate, 'o365-cli login', async () => false)).rejects.toThrow('ambiguous')
+    await expect(prepareConsole(root, podId, duplicate, 'o365-cli login')).rejects.toThrow('ambiguous')
     state.resources[0]!.state = 'revoked'
-    await expect(prepareConsole(root, podId, state, 'o365-cli', async () => false)).rejects.toThrow('not assigned')
+    await expect(prepareConsole(root, podId, state, 'o365-cli')).rejects.toThrow('not assigned')
   }
   finally { await rm(root, { recursive: true, force: true }) }
 })

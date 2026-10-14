@@ -28,28 +28,25 @@ import { SecretsGate } from './secrets/gate'
 import type { ConsumerRecord } from './secrets/gate'
 import type { SecretRequestRow, SecretsCommand, SecretsView } from '../contracts/secrets'
 import type { SecretRowCommand } from '../worker/secrets/store'
-import { registryProgramDefinition } from './programs/definition'
-import { sandboxVersionProbe } from './programs/version-probe'
+import { installedProgramDefinition } from './programs/definition'
 import { modelResources } from '../worker/master/resources'
 import { sameOwner } from '@openape/pods-protocol'
 import type { RemoteInternal } from '../worker/remote/registration'
 import type { Owner } from '@openape/pods-protocol'
 import type { DomainCommand, DomainOverview } from '../contracts/domain-admin'
 import type { ServiceScope, RunContextRequest, ServiceCheck, ServiceRequest  } from '../contracts/services'
-import { resolveCommand } from '@openape/apes'
 import { approvalURL } from '../contracts/activity'
 import type { RunApproval } from '../contracts/activity'
 import { assignedDirectories, directoryPolicy } from '../runtime/directories'
 import { podEnvironment, podEnvironmentValues, visibleEnvironment } from '../runtime/environment'
 import { podWorkspace } from './programs/console'
-import { invokeProgram, programRequest } from './programs/invoke'
+import { authorizeProgramEffect, invokeProgram, programRequest } from './programs/invoke'
 import { administerGrants, administerSandbox } from './grants/administration'
 import type { Administration } from './grants/administration'
 import { archiveRefusal, assertArchiveMove } from '../contracts/mail-archive-port'
 import { ProgramManager } from './programs/manager'
-import { PodGrants, commandSpec, httpSpec } from './grants/pod-grants'
-import { loadPodAdapter } from './grants/registry-copies'
-import { runtimeArgv } from './grants/execution-context'
+import { PodGrants, httpSpec, sshSpec } from './grants/pod-grants'
+import { runtimePermission } from './grants/pod-permissions'
 import type { GrantSpec } from './grants/pod-grants'
 import type { OwnerSession } from './connections/owner-session'
 import { apesLogin } from './connections/apes-login'
@@ -85,7 +82,7 @@ import { boundedCodexResult, parseDesktopAction, parseWorkspaceAction, workspace
 import type { CodexRequest, DesktopAction } from '../contracts/codex'
 import type { MasterCommand, MasterView } from '../contracts/master'
 import { realpathSync } from 'node:fs'
-import { parseRunContext, parseServiceScope, runAuthorityWatchMs } from '../contracts/services'
+import { parseRunContext, parseServiceScope, runAuthorityWatchMs, serviceKinds } from '../contracts/services'
 import type { CredentialCache } from './connections/cache'
 import { createMacOSCredentialCache } from './connections/macos'
 import { PodIdentityManager } from './connections/agent'
@@ -253,7 +250,7 @@ export class FixtureWorker {
     this.providerGateway = await startAgentGateway({ provider: (body, signal) => this.connections!.provider(body, signal), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
     const connections = this.connections
     const grants = this.podGrants()!
-    this.programs = new ProgramManager(join(this.root, 'authentication'), runtime.helper, this.credentials!, this.connections, podId => this.resources({ type: 'list', podId }), command => this.dispatch({ program: command }), grants, podId => ({ connection: () => connections.podConnection(podId), ledger: grants.port(podId), reach: () => this.sandboxReach(podId), origin: () => this.podName(podId) }))
+    this.programs = new ProgramManager(join(this.root, 'authentication'), runtime.helper, this.credentials!, this.connections, podId => this.resources({ type: 'list', podId }), command => this.dispatch({ program: command }), podId => ({ connection: () => connections.podConnection(podId), ledger: grants.port(podId), reach: () => this.sandboxReach(podId), origin: () => this.podName(podId) }))
     await this.connections.initialize(async () => { await this.dispatch({ inspectCredentials: true }); await this.credentials!.reconcileScriptSecrets(await this.dispatch({ credentialInventory: true }) as { id: string, podId: string }[]); await this.finishDeletions() })
     this.secretsGate = new SecretsGate({
       origin: secretsOrigin,
@@ -335,10 +332,9 @@ export class FixtureWorker {
     await Promise.all(identities.map(identity => identity.close()))
   }
 
-  /** An installed CLI with the shapes-registry adapter of its command; arbitrary adapter files are never assigned. */
-  async registryProgram(path: string, options: { commandName?: string, runtimePath?: string } = {}): Promise<ProgramDefinition> {
-    const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
-    return registryProgramDefinition(path, { ...options, store: join(this.root, 'registry-adapters'), protectedRoots: [this.root, this.profileBase, ...await this.writableFolders()], probe: sandboxVersionProbe(join(dist, 'native/pods-helper'), join(this.root, 'probes')) })
+  /** An installed program by its path and file hash, with an optional runtime descriptor (issue 1473, revision 4). */
+  async installedProgram(path: string, options: { runtimePath?: string } = {}): Promise<ProgramDefinition> {
+    return installedProgramDefinition(path, { ...options, protectedRoots: [this.root, this.profileBase, ...await this.writableFolders()] })
   }
 
   /** Every folder assigned to a Pod for writing. */
@@ -388,11 +384,19 @@ export class FixtureWorker {
     return this.resources({ type: 'list', podId: command.podId })
   }
 
-  /** Requests the command grant as the Pod; in an owner session it is approved right away, otherwise the IdP page opens. */
+  /**
+   * Asks the IdP about one command as the Pod (issue 1473, revision 4): a covered command needs nothing; a pending request
+   * is approved right away in an owner session, otherwise its IdP page opens.
+   */
   private async grantProgram(command: Extract<ProgramCommand, { type: 'grant' }>, owner: OwnerSession | null): Promise<string | null> {
     await this.setupReady
-    if (!this.programs || !this.podGrants()) throw new Error('Program service is not ready')
-    return (await this.provisionGrant(command.podId, await this.programs.grantSpec(command), owner)).approval
+    const grants = this.podGrants()
+    if (!this.programs || !grants) throw new Error('Program service is not ready')
+    const { grantId, approval } = await grants.requestProgram(command.podId, await this.programs.grantCall(command), AbortSignal.timeout(120000))
+    if (!approval) return null
+    if (owner) { await grants.approve(owner, command.podId, grantId, 'always', AbortSignal.timeout(60000)); return null }
+    await shell.openExternal(approval)
+    return approval
   }
 
   /** The Pod grants of the connected owner; null until the connection service is set up. */
@@ -600,7 +604,7 @@ export class FixtureWorker {
     if (action.kind === 'program') {
       if (['prepare', 'start', 'poll', 'input', 'close'].includes(action.command.type)) return this.program(action.command)
       const definition = action.command.type === 'add' || action.command.type === 'replace'
-        ? action.path!.endsWith('.app') ? await applicationDefinition(action.path!, join(this.root, 'applications')) : await this.registryProgram(action.path!, { commandName: action.commandName, runtimePath: action.runtimePath })
+        ? action.path!.endsWith('.app') ? await applicationDefinition(action.path!) : await this.installedProgram(action.path!, { runtimePath: action.runtimePath })
         : undefined
       if (action.command.type === 'grant') approval = await this.grantProgram(action.command, owner)
       else await this.program(action.command, definition, action.path)
@@ -675,19 +679,18 @@ export class FixtureWorker {
     await this.setupReady
     if (!this.connections) throw new Error('Connection setup is not ready')
     const before = parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } }))
-    const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
     // Jev and SSH keep the grant they were assigned with; it is a recorded Pod grant like any other.
     const authority = async (grantId: string) => { const connection = await this.connections!.podConnection(command.podId); return { identity: connection.identity, ownerConnection: connection.ownerConnection, grantId } }
     if (command.type === 'assignJev') {
       if (before.epoch !== command.epoch) throw new Error('Pod or Jev permissions changed; reload before assigning access')
       if (before.jev?.id !== command.connectionId || before.jev.state !== 'ready') throw new Error('TypeSafe is not connected; reconnect in App settings')
-      const { grantId, approval } = await this.provisionGrant(command.podId, await httpSpec(join(vendor, 'pod-http-shapes.toml'), typesafeOrigin, ['POST']), owner)
+      const { grantId, approval } = await this.provisionGrant(command.podId, httpSpec(typesafeOrigin, ['POST']), owner)
       return { view: parseResourceState(await this.dispatch({ resource: { ...command, type: 'bindJev', authority: await authority(grantId) } })), approval }
     }
     if (command.type === 'assignSsh') {
       if (before.epoch !== command.epoch) throw new Error('Pod or SSH permissions changed; reload before assigning access')
       const binding = await resolveSshTarget(command.target)
-      const { grantId, approval } = await this.provisionGrant(command.podId, await commandSpec(loadPodAdapter('pod-ssh', join(vendor, 'pod-ssh-shapes.toml')), sshGrantArgv(binding)), owner)
+      const { grantId, approval } = await this.provisionGrant(command.podId, sshSpec(sshGrantArgv(binding)), owner)
       return { view: parseResourceState(await this.dispatch({ resource: { type: 'bindSsh', podId: command.podId, epoch: command.epoch, binding, authority: await authority(grantId) } })), approval }
     }
     // The sandbox entry and its grant are separate: the destination becomes reachable, and the same origin and
@@ -695,7 +698,7 @@ export class FixtureWorker {
     if (before.epoch !== command.epoch) throw new Error('Pod or HTTP permissions changed; reload before assigning access')
     const permission = parseHttpPermission(command.permission)
     const view = parseResourceState(await this.dispatch({ resource: { type: 'bindHttp', podId: command.podId, epoch: command.epoch, permission, ...(command.authentication ? { authentication: command.authentication } : {}) } }))
-    const { approval } = await this.provisionGrant(command.podId, await httpSpec(join(vendor, 'pod-http-shapes.toml'), permission.origin, permission.methods), owner)
+    const { approval } = await this.provisionGrant(command.podId, httpSpec(permission.origin, permission.methods), owner)
     return { view, approval }
   }
 
@@ -716,11 +719,10 @@ export class FixtureWorker {
   private administration(): Administration {
     return {
       grants: this.podGrants()!,
-      vendor: join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/'),
       resources: podId => this.resources({ type: 'list', podId }),
       podName: podId => this.podName(podId),
       ledger: command => this.dispatch({ grants: command }),
-      programDefinition: async entry => entry.path.endsWith('.app') ? applicationDefinition(entry.path, join(this.root, 'applications')) : this.registryProgram(entry.path, { commandName: entry.commandName, runtimePath: entry.runtimePath }),
+      programDefinition: async entry => entry.path.endsWith('.app') ? applicationDefinition(entry.path) : this.installedProgram(entry.path, { runtimePath: entry.runtimePath }),
       addProgram: async (podId, definition) => { await this.program({ type: 'add', podId, epoch: (await this.resources({ type: 'list', podId })).epoch }, definition) },
       assignHttp: async (podId, permission) => { await this.dispatch({ resource: { type: 'bindHttp', podId, epoch: (await this.resources({ type: 'list', podId })).epoch, permission } }) },
       assignDirectory: async (podId, path, access) => { await this.resources({ type: 'assignDirectory', podId, path, access, epoch: (await this.resources({ type: 'list', podId })).epoch }) },
@@ -930,7 +932,7 @@ export class FixtureWorker {
 
   private async executeService(request: ServiceRequest): Promise<unknown> {
     if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size - this.parked.size >= 16) throw new Error('Invalid or excessive broker request')
-    if (request.kind !== undefined && request.kind !== 'approval' && request.kind !== 'mailArchive' && request.kind !== 'mailMove' && request.kind !== 'approvedProgram' && request.kind !== 'credential' && request.kind !== 'jev' && request.kind !== 'http' && request.kind !== 'shell' && request.kind !== 'shellClose') throw new Error('Unsupported broker service')
+    if (request.kind !== undefined && !serviceKinds.includes(request.kind)) throw new Error('Unsupported broker service')
     const scope = parseServiceScope(request.scope)
     const controller = new AbortController(); this.services.set(request.id, controller)
     const check = async (domain?: { path: string, ownerPid: number }) => parseResourceState(await this.dispatch({ serviceCheck: { scope, ...(domain ? { domain } : {}) } }))
@@ -959,19 +961,17 @@ export class FixtureWorker {
       if (request.kind === 'shell') {
         await check()
         if (!this.connections || this.shellIdentities.has(scope.runId)) throw new Error('Pod execution authority is unavailable or already in use')
-        // A run starts with no reused tokens, so the runtime grant, owner, identity and key are checked at the IdP.
-        const tokens = new RunGrantTokens(); this.runTokens.set(scope.runId, tokens)
+        // A run starts with no reused tokens (its id is new), so the runtime grant, owner, identity and key are checked at
+        // the IdP; parallel calls of the run share its request and decision wait.
+        const tokens = this.grantTokens(scope.runId)
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
         const runtime = { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') }
         const environment = await podEnvironment(this.root, scope.podId, runtime)
         const connection = await this.connections.podConnection(scope.podId)
         const authority = new AgentAuthority(connection, observe, ledger, tokens, presentation)
-        const adapterPath = join(dist, 'vendor/pod-runtime-shapes.toml')
-        const adapter = loadPodAdapter('pod-runtime', adapterPath)
         const name = grantPodName(context.name)
-        const argv = runtimeArgv({ podId: scope.podId, name, script: join(this.root, 'runs', scope.runId, 'run.mjs'), workspace: environment.workspace, home: environment.home, environment: visibleEnvironment(environment.environment) })
-        const resolved = await resolveCommand(adapter, argv)
-        const assignment = { grantId: '', command: { cliId: 'pod-runtime', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] } }
+        const permission = runtimePermission({ podId: scope.podId, name, script: join(this.root, 'runs', scope.runId, 'run.mjs'), workspace: environment.workspace, home: environment.home, environment: visibleEnvironment(environment.environment) })
+        const assignment = { grantId: '', permission }
         await authority.authorize(assignment, controller.signal)
         await check(); controller.signal.throwIfAborted()
         const monitoring = new AbortController()
@@ -1026,9 +1026,8 @@ export class FixtureWorker {
       if (request.kind === 'jev') {
         if (!this.credentials || !this.connections) throw new Error('Connection service unavailable')
         const assignment = assignedJev(state.resources, scope.podId, scope.capabilities)
-        const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
         const result = await executeJev(assignment, parseJevRequest(request.body), {
-          vendor, credentials: this.credentials, signal: controller.signal, observe, ledger, check, tokens, presentation,
+          credentials: this.credentials, signal: controller.signal, observe, ledger, check, tokens, presentation,
           send: (body, signal) => this.connections!.typesafeRequest(assignment.connectionId, body, signal),
           consumeAttempt: () => {
             const count = this.jevAttempts.get(scope.runId) ?? 0
@@ -1040,7 +1039,6 @@ export class FixtureWorker {
       }
       if (request.kind === 'http') {
         if (!this.credentials || !this.connections) throw new Error('Credential store is unavailable')
-        const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
         const credentials = this.credentials
         const bearer: AgentBearer = {
           token: async (authentication, origin) => {
@@ -1050,13 +1048,19 @@ export class FixtureWorker {
           },
           reject: authentication => this.agentTokens.reject(scope.podId, authentication),
         }
-        const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), vendor, await this.connections.podConnection(scope.podId), controller.signal, observe, ledger, bearer, tokens, presentation)
+        const result = await executeHttp(state.resources, scope, parseHttpRequest(request.body), await this.connections.podConnection(scope.podId), controller.signal, observe, ledger, bearer, tokens, presentation)
         await check(); controller.signal.throwIfAborted(); return result
       }
       if (request.kind === undefined && request.body && typeof request.body === 'object' && 'sshInventory' in request.body) {
         if (!this.credentials) throw new Error('Credential store is unavailable')
         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
         return await invokeSsh({ resources: state.resources, scope, body: request.body, dist, root: join(this.root, 'runs', scope.runId), credentials: this.credentials, signal: controller.signal, check, observe, ledger, tokens, presentation })
+      }
+      if (request.kind === 'programAuthorize') {
+        if (!this.connections) throw new Error('Connection service unavailable')
+        // The verified token stays in this run's tokens; the call that then runs the command reuses it.
+        const result = await authorizeProgramEffect(state.resources, scope.podId, scope.capabilities, request.body, { connection: await this.connections.podConnection(scope.podId), ledger, reach: await this.sandboxReach(scope.podId), observe, tokens, presentation }, controller.signal)
+        await check(); controller.signal.throwIfAborted(); return result
       }
       if (request.kind === 'mailMove' || request.kind === 'approvedProgram' || (request.body && typeof request.body === 'object' && ('applicationId' in request.body || 'application' in request.body))) {
         if (!this.credentials || !this.connections) throw new Error('Credential store is unavailable')

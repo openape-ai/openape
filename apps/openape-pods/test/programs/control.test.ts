@@ -21,7 +21,7 @@ function fixture() {
   const resources = new ResourceRegistry(store, () => {})
   const pod = store.createPod({ name: 'Application fixture' })
   const id = randomUUID()
-  const configuration: ProgramAssignment = { type: 'program', name: 'fixture', executable: '/fixture', executableHash: 'a'.repeat(64), cliId: 'fixture', adapterPath: '/fixture.toml', adapterHash: 'b'.repeat(64), entryFiles: [], environment: {}, networkHosts: [], stateId: randomUUID(), capability: `tool.app_${id.replaceAll('-', '')}.invoke` }
+  const configuration: ProgramAssignment = { type: 'program', name: 'fixture', executable: '/fixture', executableHash: 'a'.repeat(64), cliId: 'fixture', entryFiles: [], environment: {}, networkHosts: [], stateId: randomUUID(), capability: `tool.app_${id.replaceAll('-', '')}.invoke` }
   const control = new ProgramControl(store, resources)
   control.execute({ type: 'save', podId: pod.id, id, epoch: 0, configuration })
   installExample(store, resources, pod.id, 'deterministic', 'c'.repeat(64))
