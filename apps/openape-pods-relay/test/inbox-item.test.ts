@@ -31,3 +31,9 @@ it('shows the Pod tags as chips on message and decision details, and nothing wit
   expect(decision.findAll('.tag').map(chip => chip.text())).toEqual(['finanzen'])
   for (const untagged of [item({ pod }), item({ pod: { ...pod, tags: [] } }), item({})]) expect((await open(untagged)).find('.tags').exists()).toBe(false)
 })
+
+it('shows an actionable failure heading and keeps raw diagnostics inside the repair prompt', async () => {
+  const wrapper = await open(item({ kind: 'decision', title: 'Held work · technical-operation', body: 'Opaque technical identifier', pod: { id: crypto.randomUUID(), name: 'Intake' }, decision: { type: 'work', sourceId: 'work:1', runtimeId: crypto.randomUUID(), authority: 'pods', digest: 'a'.repeat(64), options: [] } }))
+  expect(wrapper.get('h1').text()).toBe('Pod Intake braucht Hilfe')
+  expect(wrapper.find('.inbox-body').exists()).toBe(false)
+})

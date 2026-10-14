@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
-import { mount } from '@vue/test-utils'
-import { beforeEach, expect, it } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { beforeEach, expect, it, vi } from 'vitest'
 import InboxDecision from '../app/components/InboxDecision.vue'
 import type { InboxItem, Receipt } from '../app/inbox/client'
 import { chooseLanguage } from '../app/inbox/i18n'
@@ -10,7 +10,7 @@ const digest = 'b'.repeat(64)
 function decision(change: Partial<InboxItem['decision']> = {}, item: Partial<InboxItem> = {}): InboxItem {
   return {
     id: crypto.randomUUID(), kind: 'decision', state: 'open', title: 'Zustellen?', body: 'Eine Mail wartet.', pod: null, runId: null, links: [], created: 1, sequence: 1, read: null, archived: null, deleted: null,
-    decision: { sourceId: 'effect:1', digest, type: 'effect', authority: 'pods', runtimeId: crypto.randomUUID(), options: [{ key: 'yes', title: 'Zustellen', input: null }, { key: 'seen', title: 'Bereits erledigt', input: 'evidence' }], ...change },
+    decision: { sourceId: 'effect:1', digest, type: 'question', authority: 'pods', runtimeId: crypto.randomUUID(), options: [{ key: 'yes', title: 'Zustellen', input: null }, { key: 'seen', title: 'Bereits erledigt', input: 'evidence' }], ...change },
     ...item,
   }
 }
@@ -104,4 +104,42 @@ it('opens with the evidence form when the option was picked on the list card', (
   const wrapper = mount(InboxDecision, { props: { item: decision(), receipt: undefined, online: true, checking: false, preselect: 'seen' } })
   expect(wrapper.find('textarea').exists()).toBe(true)
   expect(mount(InboxDecision, { props: { item: decision(), receipt: undefined, online: true, checking: false, preselect: 'yes' } }).find('form').exists()).toBe(false)
+})
+
+it.each(['work', 'effect', 'approval'])('replaces %s recovery choices with a copyable repair prompt, including offline', async (type) => {
+  const writeText = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal('navigator', { clipboard: { writeText } })
+  const item = decision({ type }, { pod: { id: crypto.randomUUID(), name: 'Intake' }, body: 'Application is quitting', runId: crypto.randomUUID() })
+  const wrapper = mount(InboxDecision, { props: { item, receipt: undefined, online: false, checking: false } })
+  expect(buttons(wrapper)).toEqual(['Prompt kopieren'])
+  await wrapper.get('button').trigger('click')
+  await flushPromises()
+  const prompt = writeText.mock.calls[0]![0]
+  expect(prompt).toContain('Lies zuerst runtime')
+  expect(prompt).toContain('Wiederhole keine möglicherweise ausgeführte Aktion blind')
+  for (const value of [item.id, item.pod!.id, item.runId, item.decision!.runtimeId, item.decision!.sourceId, item.body]) expect(prompt).toContain(value)
+  expect(wrapper.text()).toContain('Prompt kopiert')
+  expect(wrapper.text()).toContain('Der Fehler bleibt bis zur erfolgreichen Behebung offen.')
+  expect(wrapper.emitted('decide')).toBeUndefined()
+  expect(item.state).toBe('open')
+  await wrapper.setProps({ item: { ...item, body: 'Updated error' } })
+  expect(buttons(wrapper)).toEqual(['Prompt kopieren'])
+  wrapper.unmount()
+  vi.unstubAllGlobals()
+})
+
+it('provides selectable text when clipboard access fails and copies in the chosen language', async () => {
+  vi.stubGlobal('navigator', { clipboard: { writeText: vi.fn().mockRejectedValue(new Error('denied')) } })
+  chooseLanguage('en')
+  const wrapper = mount(InboxDecision, { props: { item: decision({ type: 'work' }), receipt: receipt('unknown'), online: true, checking: false } })
+  await wrapper.get('button').trigger('click')
+  await flushPromises()
+  expect(wrapper.get('[role=alert]').text()).toContain('Copying failed')
+  expect(wrapper.get('details').attributes('open')).toBeDefined()
+  expect(wrapper.get('textarea').element.value).toContain('Investigate and fix')
+  expect(wrapper.get('textarea').element.value).toContain('"state": "unknown"')
+  expect(wrapper.get('textarea').attributes('readonly')).toBeDefined()
+  expect(wrapper.emitted('decide')).toBeUndefined()
+  wrapper.unmount()
+  vi.unstubAllGlobals()
 })
