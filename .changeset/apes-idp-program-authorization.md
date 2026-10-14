@@ -38,7 +38,8 @@ Major because local adapter execution is removed:
   paths are refused in the interactive shell. `apes run`, `ape-shell -c` and
   MCP re-hash the file right before running it and refuse a changed file or one
   that is not a regular file. The program name is a requester claim; the file
-  that runs is bound by `program_sha256`.
+  that runs is bound by `program_sha256`. Gated agents must not have an
+  agent-writable directory on their `PATH` or as a program location.
   Local segment-wise resolution of compound lines is removed. Audit
   entries record `grant_mode: "program"` instead of `"adapter"`.
 - `apes grants run <id>` runs a program grant by locating and hashing the
