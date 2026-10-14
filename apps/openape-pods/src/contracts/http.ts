@@ -5,7 +5,13 @@ export interface HttpRequest { url: string, method: string, headers: Record<stri
 export interface HttpReply { status: number, headers: Record<string, string>, body: string, receipt?: HttpDigest }
 export interface HttpDigest { sha256: string, bytes: number }
 /** exchange 'sp': the destination accepts only its own tokens, minted at its /api/cli/exchange for the agent's IdP token. */
-export interface HttpAuthentication { type: 'ddisaAgent', credential: string, subject: string, issuer: string, exchange?: 'sp' }
+export interface DdisaAgentAuthentication { type: 'ddisaAgent', credential: string, subject: string, issuer: string, exchange?: 'sp' }
+/**
+ * The agent acts for the user who delegated to it (DDISA delegation.md): the runtime trades the agent's key and the
+ * delegation grant at the issuer's /token for a short-lived token whose audience is the destination origin.
+ */
+export interface DdisaDelegationAuthentication { type: 'ddisaDelegation', credential: string, subject: string, issuer: string, delegation: string }
+export type HttpAuthentication = DdisaAgentAuthentication | DdisaDelegationAuthentication
 export const httpRequestBodyChars = 64 * 1024
 export const httpResponseBodyBytes = 128 * 1024
 const httpRequestBytes = 96 * 1024
@@ -45,12 +51,20 @@ export function parseHttpReply(value: unknown): HttpReply {
   return reply
 }
 
+const authenticationKeys = { ddisaAgent: ['type', 'credential', 'subject', 'issuer', 'exchange'], ddisaDelegation: ['type', 'credential', 'subject', 'issuer', 'delegation'] }
+
 export function parseHttpAuthentication(value: unknown): HttpAuthentication {
-  const authentication = value as HttpAuthentication
-  if (!authentication || typeof authentication !== 'object' || Array.isArray(authentication) || Object.keys(authentication).some(key => !['type', 'credential', 'subject', 'issuer', 'exchange'].includes(key)) || authentication.type !== 'ddisaAgent') throw new Error('Invalid HTTP authentication')
-  parseCredentialAlias(authentication.credential)
-  if (typeof authentication.subject !== 'string' || authentication.subject.length > 320 || !/^[^\s@]+@[^\s@]+$/.test(authentication.subject)) throw new Error('HTTP authentication needs the DDISA agent email')
-  if (authentication.exchange !== undefined && authentication.exchange !== 'sp') throw new Error('HTTP authentication exchange must be "sp"')
+  const authentication = value as Record<string, unknown>
+  const keys = authentication && typeof authentication === 'object' && !Array.isArray(authentication) && typeof authentication.type === 'string' && Object.hasOwn(authenticationKeys, authentication.type) ? authenticationKeys[authentication.type as HttpAuthentication['type']] : undefined
+  if (!keys || Object.keys(authentication).some(key => !keys.includes(key))) throw new Error('Invalid HTTP authentication')
+  const credential = parseCredentialAlias(authentication.credential)
+  const subject = authentication.subject
+  if (typeof subject !== 'string' || subject.length > 320 || !/^[^\s@]+@[^\s@]+$/.test(subject)) throw new Error('HTTP authentication needs the DDISA agent email')
   const issuer = parseHttpPermission({ origin: authentication.issuer, methods: ['POST'] }).origin
-  return { type: 'ddisaAgent', credential: authentication.credential, subject: authentication.subject, issuer, ...(authentication.exchange ? { exchange: authentication.exchange } : {}) }
+  if (authentication.type === 'ddisaDelegation') {
+    if (typeof authentication.delegation !== 'string' || !/^[\w-]{1,128}$/.test(authentication.delegation)) throw new Error('HTTP delegation authentication needs the delegation grant ID')
+    return { type: 'ddisaDelegation', credential, subject, issuer, delegation: authentication.delegation }
+  }
+  if (authentication.exchange !== undefined && authentication.exchange !== 'sp') throw new Error('HTTP authentication exchange must be "sp"')
+  return { type: 'ddisaAgent', credential, subject, issuer, ...(authentication.exchange ? { exchange: 'sp' as const } : {}) }
 }

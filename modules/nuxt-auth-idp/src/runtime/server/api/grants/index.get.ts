@@ -67,7 +67,9 @@ export default defineEventHandler(async (event) => {
   const brokerVisibility: { brokerOwner?: string | null } = {}
   if (hasBrokerStore()) {
     const owner = await userStore.findByEmail(email)
-    brokerVisibility.brokerOwner = owner?.isActive && owner.type !== 'agent' && !owner.owner && !delegate && !bearerPayload?.delegation_grant && bearerPayload?.act !== 'agent' ? email : null
+    // The owner's brokered grants (for example of their Pod identities) are part of what a `grants:read` delegate
+    // reads; other delegated tokens and agents never see them.
+    brokerVisibility.brokerOwner = owner?.isActive && owner.type !== 'agent' && !owner.owner && !bearerPayload?.delegation_grant && bearerPayload?.act !== 'agent' ? email : null
   }
   // Batch ids are scoped to their requester (grants.md §4.2).
   if (batch && !requester) {

@@ -64,3 +64,22 @@ it('obtains the exchanged token only for the authorized assigned origin and hide
   expect(JSON.stringify(reply)).not.toContain('sp-SYNTHETIC-TOKEN')
   expect(reply.headers.echo).toBe('Bearer [redacted]')
 })
+
+it('acts with a delegated token only at the assigned origin, hides it from the script and surfaces a refused delegation', async () => {
+  const authentication = { type: 'ddisaDelegation', credential: 'agent_key', subject: 'agent@example.com', issuer: 'https://id.example.com', delegation: 'delegation-1' }
+  const assigned = resources.map(resource => ({ ...resource, configuration: { ...resource.configuration, authentication } }))
+  const bearer = { token: vi.fn(async () => 'delegated-SYNTHETIC-TOKEN'), reject: vi.fn() }
+  const run = (headers: Record<string, string> = {}) => executeHttp(assigned, scope, { url: 'https://example.com/api/grants', method: 'GET', headers }, '/unused', {} as AgentConnection, new AbortController().signal, undefined, undefined, bearer)
+
+  await expect(run({ Authorization: 'Bearer chosen-by-script' })).rejects.toThrow('remove the Authorization header')
+  mocks.send.mockImplementation(async (request: { headers: Record<string, string> }) => ({ status: 200, headers: {}, body: JSON.stringify({ seen: request.headers.authorization }) }))
+  const reply = await run()
+  expect(bearer.token).toHaveBeenCalledWith(authentication, 'https://example.com')
+  expect(mocks.send.mock.calls[0]![0].headers.authorization).toBe('Bearer delegated-SYNTHETIC-TOKEN')
+  expect(reply.body).toBe('{"seen":"Bearer [redacted]"}')
+
+  mocks.send.mockClear()
+  bearer.token.mockRejectedValueOnce(new Error('DDISA delegation sign-in failed (401): Delegation not approved'))
+  await expect(run()).rejects.toThrow('DDISA delegation sign-in failed (401): Delegation not approved')
+  expect(mocks.send).not.toHaveBeenCalled()
+})

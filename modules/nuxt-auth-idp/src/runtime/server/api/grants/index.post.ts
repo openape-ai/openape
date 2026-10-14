@@ -1,13 +1,14 @@
 import { maybeForwardBrokerGrant } from '../../utils/broker-forward'
-import type { GrantType, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
+import type { BrokeredGrant, GrantType, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
 import { computeCmdHash, GRANTS_REQUEST_SCOPE } from '@openape/core'
-import { assertGrantBatchMember, canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, createGrant, evaluateStandingGrants, findSimilarCliGrants, InvalidGrantBatchError, InvalidGrantSummaryError, isCliAuthorizationDetailExact, parseGrantBatch, parseGrantSummary, validateCliAuthorizationDetail } from '@openape/grants'
+import { assertGrantBatchMember, canonicalizeCliPermission, computeArgvHash, createGrant, evaluateStandingGrants, findSimilarCliGrants, InvalidGrantBatchError, InvalidGrantSummaryError, parseGrantBatch, parseGrantSummary, validateCliAuthorizationDetail } from '@openape/grants'
 import type { H3Event } from 'h3'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { hasValidManagementToken } from '../../utils/admin'
 import { tryBearerAuth } from '../../utils/agent-auth'
 import { allowUnauthenticatedGrantRequests } from '../../utils/grant-request-auth'
 import { useGrantStores } from '../../utils/grant-stores'
+import { findReusableGrant } from '../../utils/grant-reuse'
 import { assertDelegatedRequest, tryGrantsDelegate } from '../../utils/grants-delegation'
 import { runGrantPendingHooks } from '../../utils/grant-pending-hooks'
 import { runPreApprovalHooks } from '../../utils/pre-approval-hooks'
@@ -39,40 +40,25 @@ function normalizeAuthorizationDetails(details?: OpenApeAuthorizationDetail[]): 
   })
 }
 
-function detailSignature(detail: OpenApeAuthorizationDetail): string {
-  if (detail.type !== 'openape_cli')
-    return JSON.stringify(detail)
-
-  const normalizedChain = detail.resource_chain.map(resource => ({
-    resource: resource.resource,
-    ...(resource.selector
-      ? { selector: Object.fromEntries(Object.entries(resource.selector).sort(([a], [b]) => a.localeCompare(b))) }
-      : {}
-    ),
-  }))
-
-  return JSON.stringify({
-    ...detail,
-    permission: canonicalizeCliPermission(detail),
-    resource_chain: normalizedChain,
-  })
-}
-
 function cliDetails(details?: OpenApeAuthorizationDetail[]): OpenApeCliAuthorizationDetail[] {
   return (details ?? []).filter((detail): detail is OpenApeCliAuthorizationDetail => detail.type === 'openape_cli')
 }
 
-function hasStructuredCliGrant(request: Pick<OpenApeGrantRequest, 'authorization_details'>): boolean {
-  return cliDetails(request.authorization_details).length > 0
-}
-
-function hasExactStructuredDetail(request: Pick<OpenApeGrantRequest, 'authorization_details'>): boolean {
-  return cliDetails(request.authorization_details).some(isCliAuthorizationDetailExact)
-}
-
-/** Stores the request as pending and notifies whoever decides it. */
-async function createPendingGrant(event: H3Event, request: OpenApeGrantRequest): Promise<OpenApeGrant> {
-  const grant = await createGrant(request, useGrantStores().grantStore)
+/**
+ * Stores the request as pending and notifies whoever decides it. A request
+ * for a brokered identity keeps that identity's broker binding, so only its
+ * broker can later use the grant.
+ */
+async function createPendingGrant(event: H3Event, request: OpenApeGrantRequest, brokered?: BrokeredGrant): Promise<OpenApeGrant> {
+  const { grantStore } = useGrantStores()
+  let grant: OpenApeGrant
+  if (brokered) {
+    grant = { id: crypto.randomUUID(), status: 'pending', type: 'command', request, brokered, created_at: Math.floor(Date.now() / 1000) }
+    await grantStore.save(grant)
+  }
+  else {
+    grant = await createGrant(request, grantStore)
+  }
   // Fire-and-forget so a slow notification doesn't delay the response.
   void runGrantPendingHooks(grant).catch(err =>
     console.warn('[grants/post] pending-hook failed:', err),
@@ -96,8 +82,8 @@ export default defineEventHandler(async (event) => {
   // (delegation.md §8); the IdP records it as the submitter.
   const delegate = await tryGrantsDelegate(event, GRANTS_REQUEST_SCOPE)
   const bearerPayload = delegate ? null : await tryBearerAuth(event)
+  const delegated = delegate ? await assertDelegatedRequest(event, body, delegate) : undefined
   if (delegate) {
-    await assertDelegatedRequest(body, delegate)
     body.submitted_by = { delegate: delegate.delegate, delegation_grant: delegate.delegationGrant }
   }
   else if (bearerPayload) {
@@ -175,60 +161,14 @@ export default defineEventHandler(async (event) => {
   // A delegate's request is always left to the delegator's decision: no
   // reuse, standing-grant or hook approval may settle it (requester ≠ approver).
   if (delegate) {
-    return await createPendingGrant(event, body)
+    return await createPendingGrant(event, body, delegated?.brokered)
   }
 
-  // Grant-Reuse: check for an active reusable grant with matching parameters
-  // Only timed/always grants are reusable (once grants are single-use by definition)
+  // Grant-Reuse: an approved continuing grant that already covers the request
+  // is returned instead of asking again (once grants are single-use).
   {
     const existingGrants = await grantStore.findByRequester(body.requester)
-    const now = Math.floor(Date.now() / 1000)
-    const reusable = existingGrants.find((g) => {
-      if (g.status !== 'approved') return false
-      if ((g.request.grant_type ?? 'once') === 'once') return false
-      if (g.expires_at && g.expires_at <= now) return false
-      if (g.request.target_host !== body.target_host) return false
-      if (g.request.audience !== body.audience) return false
-      if (g.request.run_as !== (body.run_as ?? undefined)) return false
-      // Match delegation fields
-      if (body.delegator !== (g.request.delegator ?? undefined)) return false
-      if (body.delegate !== (g.request.delegate ?? undefined)) return false
-
-      const incomingStructured = hasStructuredCliGrant(body)
-      const existingStructured = hasStructuredCliGrant(g.request)
-
-      if (incomingStructured || existingStructured) {
-        if (!incomingStructured || !existingStructured) return false
-        if ((g.request.execution_context?.adapter_digest ?? undefined) !== (body.execution_context?.adapter_digest ?? undefined)) return false
-
-        if (!cliAuthorizationDetailsCover(cliDetails(g.request.authorization_details), cliDetails(body.authorization_details))) {
-          return false
-        }
-
-        if (hasExactStructuredDetail(body) || hasExactStructuredDetail(g.request)) {
-          if ((g.request.execution_context?.argv_hash ?? undefined) !== (body.execution_context?.argv_hash ?? undefined)) {
-            return false
-          }
-        }
-        return true
-      }
-
-      // Exact command grants reuse only on exact command binding.
-      if (body.cmd_hash || g.request.cmd_hash) {
-        if (g.request.cmd_hash !== body.cmd_hash) return false
-      }
-      if (body.permissions || g.request.permissions) {
-        const reqPerms = (body.permissions ?? []).toSorted().join(',')
-        const grantPerms = (g.request.permissions ?? []).toSorted().join(',')
-        if (reqPerms !== grantPerms) return false
-      }
-      if (body.authorization_details || g.request.authorization_details) {
-        const reqDetails = (body.authorization_details ?? []).map(detailSignature).toSorted().join(',')
-        const grantDetails = (g.request.authorization_details ?? []).map(detailSignature).toSorted().join(',')
-        if (reqDetails !== grantDetails) return false
-      }
-      return true
-    })
+    const reusable = findReusableGrant(existingGrants, body)
     if (reusable) {
       return reusable
     }
