@@ -28,6 +28,8 @@ function actor(event: H3Event) {
 vi.mock('../src/runtime/server/utils/agent-auth', () => ({ tryBearerAuth: async (event: H3Event) => actor(event) }))
 vi.mock('../src/runtime/server/utils/admin', () => ({ requireAuth: async (event: H3Event) => actor(event)?.sub ?? 'anonymous' }))
 vi.mock('../src/runtime/server/utils/session', () => ({ getAppSession: async (event: H3Event) => ({ data: { userId: getHeader(event, 'x-session') } }) }))
+// Card enrichment (registry adapters, registrations) is covered in grant-card.test.ts.
+vi.mock('../src/runtime/server/utils/grant-card', () => ({ withGrantCards: async (grants: unknown[]) => grants }))
 vi.mock('../src/runtime/server/utils/grant-stores', () => ({ useGrantStores: () => ({ grantStore }) }))
 vi.mock('../src/runtime/server/utils/grant-pending-hooks', () => ({ runGrantPendingHooks: (grant: unknown) => notified(grant) }))
 vi.mock('../src/runtime/server/utils/stores', () => ({

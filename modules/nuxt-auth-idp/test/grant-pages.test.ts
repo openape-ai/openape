@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import GrantApprovalPage from '../src/runtime/pages/grant-approval.vue'
 import GrantsPage from '../src/runtime/pages/grants.vue'
+import cardFixtures from './fixtures/grant-cards.json'
 import {
   __resetNuxtImportsMocks,
   __setFetchUser,
@@ -10,6 +11,8 @@ import {
   __setRouteQuery,
   __setUser,
 } from './mocks/nuxt-imports'
+
+const POD_ID = '00000000-0000-4000-8000-000000000001'
 
 function buildCliGrant(overrides: Record<string, unknown> = {}) {
   return {
@@ -153,10 +156,11 @@ describe('grant approval pages', () => {
     const wrapper = mount(GrantApprovalPage, { global: { stubs: globalStubs } })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Requester-provided summary')
-    expect(wrapper.text()).toContain('List DNS records for the audit')
-    expect(wrapper.text()).toContain('Ticket 42\nRead only')
-    expect(wrapper.text()).toContain('Origin: DNS audit Pod')
+    const claims = wrapper.find('[data-requester-claims]')
+    expect(claims.text()).toContain('Requester\'s statement')
+    expect(claims.text()).toContain('List DNS records for the audit')
+    expect(claims.text()).toContain('Ticket 42\nRead only')
+    expect(claims.text()).toContain('Origin: DNS audit Pod')
     expect(wrapper.find('a[href="https://tickets.example.com/42"]').exists()).toBe(true)
   })
 
@@ -460,10 +464,12 @@ describe('grant approval pages', () => {
     const wrapper = mount(GrantsPage, { global: { stubs: globalStubs } })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('Angabe des Antragstellers')
-    expect(wrapper.text()).toContain('Merge PR #1307 nach main')
-    expect(wrapper.text()).toContain('CI: 4/4 grün\nKeine Konflikte')
-    expect(wrapper.text()).toContain('Herkunft: PR-Merge-Pod')
+    const claims = wrapper.find('[data-requester-claims]')
+    expect(claims.text()).toContain('Requester\'s statement')
+    expect(claims.text()).toContain('Merge PR #1307 nach main')
+    expect(claims.text()).toContain('CI: 4/4 grün\nKeine Konflikte')
+    expect(claims.text()).toContain('Origin: PR-Merge-Pod')
+    expect(wrapper.find('[data-binding-line]').text()).toBe('exo dns show example.com')
     expect(wrapper.find('a[href="https://git.openape.ai/openape-ai/openape/pulls/1307"]').exists()).toBe(true)
   })
 
@@ -727,21 +733,62 @@ describe('grant approval pages', () => {
     })
   })
 
-  it('presents a managed Pod execution and creates only its Pod-scoped standing rule', async () => {
-    __resetNuxtImportsMocks(); __setUser({ email: 'approver@example.com' }); __setFetchUser(async () => {}); __setRouteQuery({ grant_id: 'grant-1' })
-    const podId = '00000000-0000-4000-8000-000000000001'
-    const grant = buildCliGrant()
-    Object.assign(grant.request, { target_host: `pods:${podId}`, command: ['pod-runtime', 'run'], permissions: [`pod-runtime.pod[id=${podId}]#run`], execution_context: { context_bindings: { pod: podId, name: 'Synthetic digest', script: '/fixture/run.mjs', workspace: '/fixture/workspace', environment: '{"HOME":"/fixture/home"}' } }, authorization_details: [{ type: 'openape_cli', cli_id: 'pod-runtime', operation_id: 'run', resource_chain: [{ resource: 'pod', selector: { id: podId } }], action: 'run', risk: 'high', permission: `pod-runtime.pod[id=${podId}]#run`, display: 'Run the stored script of Synthetic digest' }] })
-    const { fetchMock, calls } = routedFetchMock(grant); vi.stubGlobal('$fetch', fetchMock)
-    const wrapper = mount(GrantApprovalPage, { global: { stubs: globalStubs } }); await flushPromises()
-    expect(wrapper.text()).toContain('Synthetic digest')
-    expect(wrapper.text()).toContain('separately assigned permissions')
-    expect(wrapper.text()).toContain('/fixture/home')
-    expect(wrapper.text()).not.toContain('More options')
-    await wrapper.findAll('button').find(button => button.text().includes('Allow Pod execution'))!.trigger('click'); await flushPromises()
-    expect(calls.find(c => c.url === '/api/standing-grants')?.opts.body).toMatchObject({ delegate: 'agent@example.com', target_host: `pods:${podId}`, cli_id: 'pod-runtime', resource_chain_template: [{ resource: 'pod', selector: { id: podId } }] })
-    expect(calls.find(c => c.url.endsWith('/approve'))?.opts.body).toEqual({ grant_type: 'once' })
-    wrapper.unmount()
-  })
+  describe('generic card from registry data', () => {
+    beforeEach(() => {
+      __setRouteQuery({ grant_id: 'grant-1' })
+    })
 
+    async function mountCard(grant: unknown, language = 'en-GB') {
+      vi.spyOn(navigator, 'language', 'get').mockReturnValue(language)
+      const { fetchMock, calls } = routedFetchMock({ ...(grant as ReturnType<typeof buildCliGrant>), id: 'grant-1' })
+      vi.stubGlobal('$fetch', fetchMock)
+      const wrapper = mount(GrantApprovalPage, { global: { stubs: globalStubs } })
+      await flushPromises()
+      return { wrapper, calls }
+    }
+
+    it('renders the Pod run card from the pod-runtime adapter, switchable to German', async () => {
+      const { wrapper, calls } = await mountCard(cardFixtures.podRun)
+
+      expect(wrapper.find('[data-binding-line="registry"]').text()).toBe('Mail digest')
+      expect(wrapper.text()).toContain('Run the stored Pod script')
+      expect(wrapper.text()).toContain('separately assigned permissions')
+      expect(wrapper.text()).toContain('/Users/owner/Pods/mail-digest/workspace')
+      expect(wrapper.text()).toContain('Show environment variables')
+      expect(wrapper.find('[data-idp-facts]').text()).toContain('Mail digest Pod')
+      expect(wrapper.find('[data-idp-facts]').text()).toContain('Owner: owner@example.com')
+      expect(wrapper.find('[data-idp-facts]').text()).toContain('Continuing, until revoked')
+
+      await wrapper.findAll('button').find(button => button.text() === 'Deutsch')!.trigger('click')
+      expect(wrapper.text()).toContain('Gespeichertes Pod-Skript ausführen')
+      expect(wrapper.text()).toContain('Arbeitsverzeichnis')
+      expect(wrapper.text()).toContain('Umgebungsvariablen anzeigen')
+      expect(wrapper.find('[data-requester-claims]').text()).toContain('Angabe des Antragstellers')
+
+      await wrapper.findAll('button').find(button => button.text() === 'Immer erlauben')!.trigger('click')
+      await wrapper.findAll('button').find(button => button.text() === 'Create rule + run once')!.trigger('click')
+      await flushPromises()
+      expect(calls.find(c => c.url === '/api/standing-grants')?.opts.body).toMatchObject({ target_host: `pods:${POD_ID}`, cli_id: 'pod-runtime', resource_chain_template: [{ resource: 'pod', selector: { id: POD_ID } }] })
+      expect(calls.find(c => c.url.endsWith('/approve'))?.opts.body).toEqual({ grant_type: 'once' })
+    })
+
+    it('never lets a requester title replace the binding line', async () => {
+      const { wrapper } = await mountCard(cardFixtures.gitPush)
+
+      expect(wrapper.find('[data-binding-line]').text()).toBe('Push feature/rebase to origin')
+      expect(wrapper.find('[data-requester-claims]').text()).toContain('Read-only status check')
+      expect(wrapper.find('h2').text()).not.toContain('Read-only')
+      expect(wrapper.text()).toContain('Covers only this exact command')
+      expect(wrapper.find('[data-exact-command]').text()).toContain('git -C /Users/owner/repos/iurio push --force-with-lease origin feature/rebase')
+    })
+
+    it('shows the exact command and the claims for a command without a registry adapter', async () => {
+      const { wrapper } = await mountCard(cardFixtures.unknown)
+
+      expect(wrapper.find('[data-binding-line="command"]').text()).toBe('acme-cli deploy --env production')
+      expect(wrapper.find('[data-requester-claims]').text()).toContain('Deploy the hotfix')
+      expect(wrapper.find('[data-idp-facts]').text()).toContain('Not registered at this IdP')
+      expect(wrapper.find('h2').exists()).toBe(false)
+    })
+  })
 })

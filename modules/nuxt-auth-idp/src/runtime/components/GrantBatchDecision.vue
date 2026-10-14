@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import type { OpenApeGrant } from '@openape/core'
+import type { GrantWithCard } from '../utils/grant-card'
 import { formatRequesterName } from '../utils/command-display'
 import { grantBatchInfo, grantBatchOperations, grantBatchRows, grantBatchScope } from '../utils/grant-batch'
 
 const props = defineProps<{ requester: string, batchId: string }>()
 
-const members = ref<OpenApeGrant[]>([])
+const members = ref<GrantWithCard[]>([])
 const selected = ref<Set<string>>(new Set())
 const loading = ref(true)
 const processing = ref(false)
@@ -16,7 +16,7 @@ const german = ref(false)
 const nowSec = ref(Math.floor(Date.now() / 1000))
 let clock: ReturnType<typeof setInterval> | undefined
 
-const rows = computed(() => grantBatchRows(members.value))
+const rows = computed(() => grantBatchRows(members.value, german.value ? 'de' : 'en'))
 const info = computed(() => grantBatchInfo(members.value))
 const scope = computed(() => grantBatchScope(members.value))
 const decidable = computed(() => rows.value.filter(row => row.decidable))
@@ -26,14 +26,14 @@ const allSelected = computed(() => decidable.value.length > 0 && selectedCount.v
 const stopped = computed(() => info.value.waitsUntil !== null && nowSec.value >= info.value.waitsUntil)
 
 const text = computed(() => german.value
-  ? { heading: 'Sammelfreigabe', scope: (target: string, audience: string) => `Einmalige Freigaben für ${target} · ${audience}`, separate: 'Einzeln prüfen', quoted: (value: string) => `„${value}“`, by: 'angefragt von', own: 'Beschreibung des Anfragenden', received: (n: number, size: number) => `${n} von ${size} Anfragen eingegangen`, missing: (n: number) => `${n} Anfragen fehlen noch. Eine Entscheidung gilt nur für die angezeigten.`, notice: 'Die Zeilen sind Angaben des Anfragenden. „Details“ zeigt die genaue Anfrage.', all: 'Alle auswählen', details: 'Details', approve: (n: number, m: number) => m ? `${n} ausgewählte freigeben, ${m} ablehnen` : `${n} freigeben`, deny: 'Alle ablehnen', stopped: 'Der Anfragende wartet nicht mehr. Eine Freigabe hätte keine Wirkung mehr.', done: 'Keine offene Anfrage in diesem Batch.', empty: 'Keine Anfragen zu diesem Batch gefunden.', failed: 'Entscheidung fehlgeschlagen', language: 'English', status: { approved: 'freigegeben', denied: 'abgelehnt', revoked: 'widerrufen', expired: 'abgelaufen', used: 'verwendet', pending: 'offen' } as Record<string, string> }
-  : { heading: 'Batch approval', scope: (target: string, audience: string) => `Single-use approvals for ${target} · ${audience}`, separate: 'Review individually', quoted: (value: string) => `"${value}"`, by: 'requested by', own: 'requester\'s description', received: (n: number, size: number) => `${n} of ${size} requests received`, missing: (n: number) => `${n} requests have not arrived. A decision covers only the requests shown.`, notice: 'Rows are the requester\'s own descriptions. "Details" shows the exact request.', all: 'Select all', details: 'Details', approve: (n: number, m: number) => m ? `Approve ${n} selected, deny ${m}` : `Approve ${n}`, deny: 'Deny all', stopped: 'The requester has stopped waiting. An approval would have no effect.', done: 'No open request in this batch.', empty: 'No requests found for this batch.', failed: 'Decision failed', language: 'Deutsch', status: { approved: 'approved', denied: 'denied', revoked: 'revoked', expired: 'expired', used: 'used', pending: 'pending' } as Record<string, string> })
+  ? { heading: 'Sammelfreigabe', scope: (target: string, audience: string) => `Einmalige Freigaben für ${target} · ${audience}`, separate: 'Einzeln prüfen', quoted: (value: string) => `„${value}“`, by: 'angefragt von', own: 'Beschreibung des Anfragenden', received: (n: number, size: number) => `${n} von ${size} Anfragen eingegangen`, missing: (n: number) => `${n} Anfragen fehlen noch. Eine Entscheidung gilt nur für die angezeigten.`, notice: 'Jede Zeile zeigt, was die Freigabe bindet; Angaben des Anfragenden sind gekennzeichnet. „Details“ zeigt die ganze Anfrage.', all: 'Alle auswählen', details: 'Details', approve: (n: number, m: number) => m ? `${n} ausgewählte freigeben, ${m} ablehnen` : `${n} freigeben`, deny: 'Alle ablehnen', stopped: 'Der Anfragende wartet nicht mehr. Eine Freigabe hätte keine Wirkung mehr.', done: 'Keine offene Anfrage in diesem Batch.', empty: 'Keine Anfragen zu diesem Batch gefunden.', failed: 'Entscheidung fehlgeschlagen', language: 'English', status: { approved: 'freigegeben', denied: 'abgelehnt', revoked: 'widerrufen', expired: 'abgelaufen', used: 'verwendet', pending: 'offen' } as Record<string, string> }
+  : { heading: 'Batch approval', scope: (target: string, audience: string) => `Single-use approvals for ${target} · ${audience}`, separate: 'Review individually', quoted: (value: string) => `"${value}"`, by: 'requested by', own: 'requester\'s description', received: (n: number, size: number) => `${n} of ${size} requests received`, missing: (n: number) => `${n} requests have not arrived. A decision covers only the requests shown.`, notice: 'Each row shows what the approval binds; the requester\'s own descriptions are labeled. "Details" shows the full request.', all: 'Select all', details: 'Details', approve: (n: number, m: number) => m ? `Approve ${n} selected, deny ${m}` : `Approve ${n}`, deny: 'Deny all', stopped: 'The requester has stopped waiting. An approval would have no effect.', done: 'No open request in this batch.', empty: 'No requests found for this batch.', failed: 'Decision failed', language: 'Deutsch', status: { approved: 'approved', denied: 'denied', revoked: 'revoked', expired: 'expired', used: 'used', pending: 'pending' } as Record<string, string> })
 
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    const page = await $fetch<{ data: OpenApeGrant[] }>('/api/grants', { query: { requester: props.requester, batch: props.batchId, limit: 100 } })
+    const page = await $fetch<{ data: GrantWithCard[] }>('/api/grants', { query: { requester: props.requester, batch: props.batchId, limit: 100 } })
     members.value = page.data
     selected.value = new Set(page.data.filter(grant => grant.status === 'pending').map(grant => grant.id))
   }
@@ -142,7 +142,8 @@ onUnmounted(() => clearInterval(clock))
               >
               <span v-else class="mt-0.5 w-24 shrink-0 rounded border border-default px-1.5 text-center text-xs text-muted">{{ row.status === 'pending' ? text.separate : (text.status[row.status] ?? row.status) }}</span>
               <label :for="row.decidable ? `batch-${row.id}` : undefined" class="min-w-0 flex-1 text-sm break-words">
-                {{ row.label }}
+                <span :class="row.line.kind === 'registry' ? 'font-medium' : 'font-mono text-xs break-all'" :data-binding-line="row.line.kind">{{ row.line.text }}</span>
+                <span v-if="row.claim" class="block text-xs text-muted" data-row-claim>{{ text.own }}: {{ text.quoted(row.claim) }}</span>
                 <span v-if="failures[row.id]" class="block text-xs text-error">{{ failures[row.id] }}</span>
               </label>
               <a :href="`/grant-approval?grant_id=${encodeURIComponent(row.id)}`" class="shrink-0 text-sm underline">{{ text.details }} →</a>
