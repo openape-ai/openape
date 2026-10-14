@@ -31,6 +31,12 @@ export interface ProgramDefinition {
  * what their commands mean. Adapter files and command names are no longer accepted.
  */
 export const programsByPath = 'Assign a program by its path and optional runtimePath; the IdP decides what its commands mean, so adapterPath and commandName are not accepted'
+/** The desktop's own permissions (issue 1473): no assigned program may use their names, and no command token may name them. */
+export const reservedProgramNames: readonly string[] = ['pod-runtime', 'pod-http', 'pod-ssh']
+export function assertProgramName(name: string): void {
+  if (!/^[\w-]{1,100}$/.test(name)) throw new Error('Application command must use letters, digits, underscores or hyphens')
+  if (reservedProgramNames.includes(name)) throw new Error('Application command names pod-runtime, pod-http and pod-ssh are reserved for Pods itself')
+}
 /** The program a call names at the IdP: its command name and the SHA-256 of the assigned file (issue 1473). */
 export function programIdentity(definition: Pick<ProgramDefinition, 'cliId' | 'executableHash'>): { name: string, sha256: string } {
   return { name: definition.cliId, sha256: definition.executableHash }
