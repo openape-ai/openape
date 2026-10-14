@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { adapterFileDigest, semanticAdapterDigest } from '../src/digest.js'
-import { checkCliVersion, exactCommand, loadRegistryAdapter } from '../src/registry-adapter.js'
+import { bindsExecutable, checkCliVersion, exactCommand, loadRegistryAdapter } from '../src/registry-adapter.js'
 import { resolveCommand } from '../src/parser.js'
 import { parseAdapterToml } from '../src/toml.js'
 import type { RegistryIndex } from '../src/types.js'
@@ -70,6 +70,22 @@ describe('checkCliVersion', () => {
     expect(checkCliVersion(parsed, 'fixture 2.2.0\n')).toEqual({ version: '2.2', tested: false })
     expect(checkCliVersion(parsed, 'something else')).toEqual({ version: null, tested: false })
     expect(checkCliVersion(parsed, null)).toEqual({ version: null, tested: false })
+  })
+
+  it('treats an executable whose file digest the adapter lists as tested, without a version command', () => {
+    const digest = `SHA-256:${'a'.repeat(64)}`
+    const pinned = parseAdapterToml(adapter.replace('tested_versions = ["2.1"]', `tested_versions = ["2.1"]\ntested_digests = ["${digest}"]`))
+    expect(checkCliVersion(pinned, null, digest)).toEqual({ version: 'sha256:aaaaaaaaaaaa', tested: true })
+    expect(checkCliVersion(pinned, null, `SHA-256:${'b'.repeat(64)}`)).toEqual({ version: null, tested: false })
+    for (const value of ['[]', '["sha256:abc"]', `["${digest}", "${digest}"]`]) expect(() => parseAdapterToml(adapter.replace('tested_versions = ["2.1"]', `tested_versions = ["2.1"]\ntested_digests = ${value}`))).toThrow('tested_digests')
+  })
+
+  it('binds an executable by its real file name or a tested digest, never by a chosen command name', () => {
+    const digest = `SHA-256:${'a'.repeat(64)}`
+    const pinned = parseAdapterToml(adapter.replace('tested_versions = ["2.1"]', `tested_versions = ["2.1"]\ntested_digests = ["${digest}"]`))
+    expect(bindsExecutable(pinned, '/opt/fixture/fixture-cli', `SHA-256:${'b'.repeat(64)}`)).toBe(true)
+    expect(bindsExecutable(pinned, '/opt/fixture/tool.mjs', digest)).toBe(true)
+    expect(bindsExecutable(pinned, '/bin/rm', `SHA-256:${'b'.repeat(64)}`)).toBe(false)
   })
 
   it('never treats an adapter without version data as tested', () => {
