@@ -55,6 +55,12 @@ int main(int argc, char **argv) {
     fputs(line, file); fclose(file); puts("SETUP_SAVED"); return 0;
   }
   if (!strcmp(argv[1], "read")) {
+    const char *authPath=getenv("APES_AUTH_FILE"); if (!authPath) return 11;
+    FILE *auth=fopen(authPath, "r"); if (!auth) return 12;
+    char identity[2048]={0}; fread(identity, 1, sizeof(identity)-1, auth); fclose(auth);
+    if (!strstr(identity, "SYNTHETIC_AGENT") || !strstr(identity, "pod@example.test")) return 13;
+    auth=fopen(authPath, "w"); if (auth) { fclose(auth); return 14; }
+    puts("IDENTITY_READ_ONLY SYNTHETIC_AGENT");
     FILE *file=fopen(statePath, "r"); if (!file) return 5;
     char line[100]; if (!fgets(line, sizeof(line), file)) return 6;
     fclose(file); printf("STATE_MATCH %d\\n", !strcmp(line, "SYNTHETIC_CONFIGURATION\\n")); return 0;
@@ -115,7 +121,7 @@ it('program boundary: owner terminal state is reused by the assigned read tool a
     terminal.input('SYNTHETIC_CONFIGURATION\n'); await terminal.completed
     expect(terminal.view()).toMatchObject({ state: 'closed', exitCode: 0, error: null })
     expect(f.releases()).toBe(1)
-    expect((await f.invoke(['read'])).stdout).toBe('STATE_MATCH 1\n')
+    expect((await f.invoke(['read'])).stdout).toBe('IDENTITY_READ_ONLY [REDACTED]\nSTATE_MATCH 1\n')
     const gateway = await startAgentGateway({ provider: async () => new Response(), tool: async (body) => {
       const request = body as { applicationId: string, argv: string[] }
       if (request.applicationId !== f.applicationId) throw new Error('Unassigned application')

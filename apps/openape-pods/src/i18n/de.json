@@ -1087,7 +1087,7 @@
   "Open Terminal.app": "Terminal.app öffnen",
   "Open Terminal.app to configure assigned programs with ape-shell. The terminal and scripts share the pod workspace and program setup.": "Öffne Terminal.app, um zugewiesene Programme mit ape-shell einzurichten. Terminal und Skripte verwenden denselben Pod-Arbeitsbereich und dieselben Programmeinstellungen.",
   "Invalid pod terminal launcher": "Ungültiger Startbefehl für das Pod-Terminal",
-  "Pod shell identity refresh failed": "Die Pod-Identität konnte nicht erneuert werden",
+  "Pod identity refresh failed": "Die Pod-Identität konnte nicht erneuert werden",
   "Pod terminal was closed before attaching": "Das Pod-Terminal wurde vor dem Verbindungsaufbau geschlossen",
   "Invalid pod terminal control message": "Ungültige Steuernachricht für das Pod-Terminal",
   "Pod terminal disconnected; application setup changes were not saved": "Die Terminalverbindung wurde unterbrochen; Änderungen an den Programmeinstellungen wurden nicht gespeichert",
