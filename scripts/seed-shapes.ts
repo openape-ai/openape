@@ -22,6 +22,7 @@ import { drizzle } from 'drizzle-orm/libsql'
 import { createClient } from '@libsql/client'
 import { shapes } from '../apps/openape-free-idp/server/database/schema'
 import type { ServerShape } from '@openape/grants'
+import { markDesktopOwnShapes } from './desktop-own-shapes.mjs'
 
 interface AdapterMeta {
   description: string
@@ -86,7 +87,8 @@ async function main() {
   })
 
   // Parse every adapter before writing, so one invalid adapter leaves the table untouched.
-  const loaded = entries.map(entry => loadShape(join(adaptersDir, entry), entry)).filter(shape => shape !== null)
+  // Desktop-own operations (desktop-own-shapes.json) are marked virtual: never read as a program call (issue 1473).
+  const loaded: ServerShape[] = markDesktopOwnShapes(entries.map(entry => loadShape(join(adaptersDir, entry), entry)).filter(shape => shape !== null))
   console.log(`Seeding ${loaded.length} shape(s) from ${registryPath}...`)
 
   for (const shape of loaded) {
@@ -99,6 +101,7 @@ async function main() {
       digest: shape.digest,
       versions: shape.versions ?? null,
       testedDigests: shape.tested_digests ?? null,
+      virtual: shape.virtual ?? null,
       createdAt: shape.createdAt,
       updatedAt: shape.updatedAt,
     }).onConflictDoUpdate({
@@ -110,6 +113,7 @@ async function main() {
         digest: shape.digest,
         versions: shape.versions ?? null,
         testedDigests: shape.tested_digests ?? null,
+        virtual: shape.virtual ?? null,
         updatedAt: shape.updatedAt,
         source: 'builtin',
       },

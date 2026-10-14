@@ -262,6 +262,11 @@ export default defineNitroPlugin(async () => {
   catch (error) {
     if (!isDuplicateColumn(error)) throw error
   }
+  // Shapes of operations the Pods desktop performs itself; never selected for a program (issue 1473).
+  try { await db.run(sql`ALTER TABLE shapes ADD COLUMN virtual INTEGER`) }
+  catch (error) {
+    if (!isDuplicateColumn(error)) throw error
+  }
   // The one /consume redemption of a single-use grant spent by its command token (issue 1473).
   try { await db.run(sql`ALTER TABLE grants ADD COLUMN consumed_jti TEXT`) }
   catch (error) {

@@ -61,7 +61,16 @@ const toolShape: ServerShape = {
   ],
   tested_digests: undefined,
 }
-let shapeStore = createInMemoryShapeStore([gitShape, toolShape])
+// The Pods desktop performs pod-runtime itself; the seed marks such shapes virtual.
+const podRuntimeShape: ServerShape = {
+  ...gitShape,
+  cli_id: 'pod-runtime',
+  executable: 'pod-runtime',
+  operations: [{ id: 'run', command: ['run'], positionals: [], value_options: ['pod'], display: 'Run Pod {pod}', action: 'run', risk: 'high', resource_chain: ['pod:id={pod}'] }],
+  tested_digests: undefined,
+  virtual: true,
+}
+let shapeStore = createInMemoryShapeStore([gitShape, toolShape, podRuntimeShape])
 
 vi.mock('../src/runtime/server/utils/agent-auth', () => ({
   tryBearerAuth: async (event: H3Event) => {
@@ -134,7 +143,7 @@ async function verified(token: string) {
 
 beforeEach(async () => {
   keys = await generateKeyPair(); brokerKeys = await generateKeyPair()
-  grantStore = new InMemoryGrantStore(); shapeStore = createInMemoryShapeStore([gitShape, toolShape])
+  grantStore = new InMemoryGrantStore(); shapeStore = createInMemoryShapeStore([gitShape, toolShape, podRuntimeShape])
   notified.mockClear(); tokensRecorded.mockClear(); resetAuthorizeRateLimit(); ipLimiter.reset()
   brokerBusy = false
   delete process.env.OPENAPE_RATE_LIMIT_MAX_AUTHORIZE
@@ -297,6 +306,20 @@ describe('direct identities', () => {
     const other = await call(direct, body({ name: 'tool', sha256: untested, argv: ['show', 'org/repo'] }))
     expect((await grantStore.findById(other.json.grant_id))!.request.permissions).toEqual(show.request.permissions)
     expect(other.status).toBe(202)
+  })
+
+  it('refuses a program named like a desktop-own executable, even when a runtime grant exists', async () => {
+    // The Pod's runtime grant, requested by the desktop through POST /api/grants.
+    const runtime = { type: 'openape_cli' as const, cli_id: 'pod-runtime', operation_id: 'run', resource_chain: [{ resource: 'pod', selector: { id: 'p-1' } }], action: 'run', permission: 'pod-runtime.pod[id=p-1]#run', display: 'Run Pod p-1', risk: 'high' as const }
+    await grantStore.save({ id: randomUUID(), status: 'approved', created_at: 1, decided_by: owner, request: { requester: direct, target_host: 'macmini', audience: 'shapes', grant_type: 'always', authorization_details: [runtime], permissions: [runtime.permission] } })
+    const before = await grantStore.findByRequester(direct)
+    const refused = await call(direct, body({ name: 'pod-runtime', sha256: untested, argv: ['run', '--pod', 'p-1'] }))
+    expect(refused.status).toBe(400)
+    expect(refused.json.statusMessage ?? refused.json.message).toContain('Pods desktop')
+    expect(await grantStore.findByRequester(direct)).toEqual(before)
+    // The same refusal reaches a brokered identity through its broker.
+    expect((await viaBroker(body({ name: 'pod-runtime', sha256: untested, argv: ['run', '--pod', 'p-1'] }))).status).toBe(400)
+    expect(await grantStore.findByRequester(podAgent)).toEqual([])
   })
 
   it('refuses inactive or unknown requester accounts before deciding', async () => {
