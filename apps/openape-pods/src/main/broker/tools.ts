@@ -6,10 +6,12 @@ import { StringDecoder } from 'node:string_decoder'
 import { parseCredentialJSON } from '../connections/cache'
 import type { CredentialCache } from '../connections/cache'
 import { launchSandbox, programHome, verifyExecutable } from '../../worker/runtime/sandbox'
-import type { AgentAuthority, AssignedAuthorization } from './authorization'
+import { podIdentityFile } from '../connections/identity-file'
+import type { AgentConnection, AgentAuthority, AssignedAuthorization } from './authorization'
 import type { SandboxReach } from '../../contracts/sandbox'
 
 export interface ToolAssignment extends AssignedAuthorization {
+  identityConnection?: AgentConnection
   reach?: SandboxReach
   id: string
   programState?: { id: string, podId: string, applicationId: string }
@@ -76,19 +78,26 @@ export class PodToolBroker {
    * files nor the owner's settings land in the saved application state; the isolated level keeps both in `workspace`.
    */
   private async run(assignment: ToolAssignment, lease: BrokerLease, workspace: string, cache?: string): Promise<ToolReply> {
-    if (assignment.reach?.level !== 'owner') return this.launch(assignment, lease, workspace, workspace, cache)
-    const temporary = await mkdtemp(join(this.root, 'tmp-'))
-    try { return await this.launch(assignment, lease, workspace, temporary, cache) }
-    finally { await rm(temporary, { recursive: true, force: true }) }
+    const identity = assignment.identityConnection ? await podIdentityFile(this.root, assignment.identityConnection) : undefined
+    let temporary = workspace
+    try {
+      if (assignment.reach?.level === 'owner') temporary = await mkdtemp(join(this.root, 'tmp-'))
+      const activeLease = identity ? { ...lease, signal: AbortSignal.any([lease.signal, identity.signal]) } : lease
+      return await this.launch(assignment, activeLease, workspace, temporary, cache, identity)
+    }
+    finally {
+      try { if (temporary !== workspace) await rm(temporary, { recursive: true, force: true }) }
+      finally { await identity?.close() }
+    }
   }
 
-  private async launch(assignment: ToolAssignment, lease: BrokerLease, workspace: string, temporary: string, cache?: string): Promise<ToolReply> {
+  private async launch(assignment: ToolAssignment, lease: BrokerLease, workspace: string, temporary: string, cache?: string, identity?: Awaited<ReturnType<typeof podIdentityFile>>): Promise<ToolReply> {
     lease.assertCurrent(); lease.signal.throwIfAborted()
     const secrets = [...Object.values(assignment.environment).filter(Boolean), ...[assignment.environment.HTTPS_PROXY, assignment.environment.HTTP_PROXY].filter(Boolean).flatMap(url => new URL(url).password ? [new URL(url).password] : []), ...(cache ? secretStrings(parseCredentialJSON(await readFile(cache, 'utf8'))) : [])]
     const args = [...assignment.prefix, ...assignment.command.argv.slice(1), ...(cache && assignment.cacheArgument ? [assignment.cacheArgument, dirname(cache)] : [])]
     const limit = assignment.maxOutputBytes ?? 256 * 1024
     if (!Number.isSafeInteger(limit) || limit < 1024 || limit > 32 * 1024 * 1024) throw new Error('Invalid tool output bound')
-    const domain = await launchSandbox(this.helper, this.root, { reach: assignment.reach, executable: assignment.executable, workspace: await realpath(lease.workspace ?? workspace), readDirectories: lease.readDirectories, writeDirectories: [...(lease.workspace ? [await realpath(workspace)] : []), ...(temporary === workspace ? [] : [await realpath(temporary)]), ...lease.writeDirectories ?? []], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: assignment.runtimeDirectories, networkPorts: assignment.networkPorts, systemTrust: assignment.networkPorts.length > 0 }, args, { ...assignment.runtimeEnvironment, ...assignment.environment, HOME: programHome(assignment.reach, workspace), TMPDIR: temporary, ...(cache ? { POD_TOOL_AUTH_FILE: cache } : {}) }, lease.registerDomain)
+    const domain = await launchSandbox(this.helper, this.root, { reach: assignment.reach, executable: assignment.executable, workspace: await realpath(lease.workspace ?? workspace), readDirectories: lease.readDirectories, writeDirectories: [...(lease.workspace ? [await realpath(workspace)] : []), ...(temporary === workspace ? [] : [await realpath(temporary)]), ...lease.writeDirectories ?? []], readFiles: [...assignment.entryFiles.map(file => file.path), ...(identity ? [identity.path] : [])], runtimeDirectories: assignment.runtimeDirectories, networkPorts: assignment.networkPorts, systemTrust: assignment.networkPorts.length > 0 }, args, { ...assignment.runtimeEnvironment, ...assignment.environment, HOME: programHome(assignment.reach, workspace), TMPDIR: temporary, ...(identity ? { APES_AUTH_FILE: identity.path } : {}), ...(cache ? { POD_TOOL_AUTH_FILE: cache } : {}) }, lease.registerDomain)
     let stdout = ''; let stderr = ''; let failure: Error | undefined
     let outputBytes = 0
     const outDecoder = new StringDecoder('utf8'); const errDecoder = new StringDecoder('utf8')
@@ -110,6 +119,7 @@ export class PodToolBroker {
       if (failure) throw failure
       lease.assertCurrent(); lease.signal.throwIfAborted()
       if (cache) secrets.push(...secretStrings(parseCredentialJSON(await readFile(cache, 'utf8'))))
+      if (identity) secrets.push(...identity.secrets)
       for (const secret of secrets) { stdout = stdout.replaceAll(secret, '[REDACTED]'); stderr = stderr.replaceAll(secret, '[REDACTED]') }
       return { exitCode, stdout, stderr }
     }

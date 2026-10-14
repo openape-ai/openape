@@ -16,7 +16,7 @@ import { ProgramState } from '../programs/state'
 import { programHome, verifyExecutable } from '../../worker/runtime/sandbox'
 import { podDirectory, podEnvironment, quoteShell } from '../../runtime/environment'
 import type { ShellRuntime } from '../../runtime/environment'
-import { shellIdentity } from './identity'
+import { podIdentityFile } from '../connections/identity-file'
 
 export class ExternalShell {
   readonly id = randomUUID()
@@ -40,16 +40,16 @@ export class ExternalShell {
     await check()
     const context = await podEnvironment(root, this.podId, runtime)
     const temporary = await mkdtemp(join(tmpdir(), 'pod-shell-'))
-    let identity: Awaited<ReturnType<typeof shellIdentity>> | undefined
+    let identity: Awaited<ReturnType<typeof podIdentityFile>> | undefined
     try {
       await chmod(temporary, 0o700)
-      identity = await shellIdentity(root, this.podId, connections)
+      identity = await podIdentityFile(root, await connections.podConnection(this.podId))
       await this.serve(temporary, context, identity, runtime, resources, credentials, check, release, ready, name)
     }
     finally { await identity?.close(); await rm(temporary, { recursive: true, force: true }) }
   }
 
-  private async serve(temporary: string, context: Awaited<ReturnType<typeof podEnvironment>>, identity: Awaited<ReturnType<typeof shellIdentity>>, runtime: ShellRuntime, resources: ResourceState, credentials: CredentialCache, check: () => Promise<void>, release: () => Promise<void>, ready: (file: string) => void, name: string): Promise<void> {
+  private async serve(temporary: string, context: Awaited<ReturnType<typeof podEnvironment>>, identity: Awaited<ReturnType<typeof podIdentityFile>>, runtime: ShellRuntime, resources: ResourceState, credentials: CredentialCache, check: () => Promise<void>, release: () => Promise<void>, ready: (file: string) => void, name: string): Promise<void> {
     const token = randomBytes(32).toString('hex'); const endpoint = join(temporary, 'control.sock')
     let resolveDone!: () => void; let failure: Error | undefined
     const done = new Promise<void>((resolve) => { resolveDone = resolve })
