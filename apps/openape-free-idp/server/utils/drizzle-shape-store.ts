@@ -1,4 +1,4 @@
-import type { ServerShape, ServerShapeOperation, ShapeStore } from '@openape/grants'
+import type { ServerShape, ServerShapeOperation, ShapeCliVersions, ShapeStore } from '@openape/grants'
 import { asc, eq } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { shapes } from '../database/schema'
@@ -30,6 +30,7 @@ export function createDrizzleShapeStore(): ShapeStore {
         operations: shape.operations,
         source: shape.source,
         digest: shape.digest,
+        versions: shape.versions ?? null,
         createdAt: shape.createdAt,
         updatedAt: shape.updatedAt,
       }
@@ -41,6 +42,7 @@ export function createDrizzleShapeStore(): ShapeStore {
           operations: values.operations,
           source: values.source,
           digest: values.digest,
+          versions: values.versions,
           updatedAt: values.updatedAt,
         },
       })
@@ -60,6 +62,7 @@ function rowToShape(row: typeof shapes.$inferSelect): ServerShape {
     operations: row.operations as ServerShapeOperation[],
     source: row.source as 'builtin' | 'custom',
     digest: row.digest,
+    ...(row.versions ? { versions: row.versions as ShapeCliVersions } : {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }

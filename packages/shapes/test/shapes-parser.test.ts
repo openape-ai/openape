@@ -168,3 +168,101 @@ ${operation}
     expect(() => parseAdapterToml(adapter('', 'flag_options = ["a b"]'))).toThrow(/invalid flag_options/)
   })
 })
+
+describe('registry presentation and tested versions', () => {
+  const adapter = (cli: string, operation: string) => `schema = "openape-shapes/v1"
+[cli]
+id = "git"
+executable = "git"
+global_options = ["C=repo"]
+${cli}
+[[operation]]
+id = "git.push.refspec"
+command = ["push"]
+positionals = ["remote", "refspec"]
+value_options = []
+flag_options = ["force-with-lease"]
+display = "Push {refspec} to {remote}"
+action = "push"
+risk = "high"
+exact_command = true
+resource_chain = ["repo:*", "remote:name={remote}"]
+${operation}
+`
+  const versions = 'tested_versions = ["2.54"]\nversion_command = ["--version"]\nversion_pattern = \'^git version (\\d+\\.\\d+)\''
+  const presentation = `[operation.presentation]
+title = { de = "{refspec} nach {remote} pushen", en = "Push {refspec} to {remote}" }
+
+[operation.presentation.consequence]
+allows = { de = "Erlaubt genau diesen Push.", en = "Allows exactly this push." }
+
+[[operation.presentation.facts]]
+label = { de = "Repository", en = "Repository" }
+binding = "repo"
+format = "code"
+`
+
+  it('parses tested versions on [cli] and presentation sub-tables of an operation', () => {
+    const parsed = parseAdapterToml(adapter(versions, presentation))
+
+    expect(parsed.cli).toMatchObject({ tested_versions: ['2.54'], version_command: ['--version'], version_pattern: '^git version (\\d+\\.\\d+)' })
+    expect(parsed.operations[0]!.presentation).toEqual({
+      title: { de: '{refspec} nach {remote} pushen', en: 'Push {refspec} to {remote}' },
+      consequence: { allows: { de: 'Erlaubt genau diesen Push.', en: 'Allows exactly this push.' } },
+      facts: [{ label: { de: 'Repository', en: 'Repository' }, binding: 'repo', format: 'code' }],
+    })
+  })
+
+  it('keeps the resolved grant detail independent of the presentation', async () => {
+    const file = join(mkdtempSync(join(tmpdir(), 'shapes-presentation-')), 'git.toml')
+    writeFileSync(file, adapter(versions, presentation))
+    const plain = join(mkdtempSync(join(tmpdir(), 'shapes-presentation-')), 'git.toml')
+    writeFileSync(plain, adapter('', ''))
+    const argv = ['git', '-C', '/work/repo', 'push', 'origin', 'HEAD:refs/heads/topic']
+
+    const withPresentation = await resolveCommand(loadAdapter('git', file), argv)
+    const withoutPresentation = await resolveCommand(loadAdapter('git', plain), argv)
+
+    expect(withPresentation.detail).toEqual(withoutPresentation.detail)
+    expect(withPresentation.digest).toBe(withoutPresentation.digest)
+  })
+
+  it('keeps the grant digest for text-only changes and changes it with the matching rules', () => {
+    const write = (content: string) => {
+      const file = join(mkdtempSync(join(tmpdir(), 'shapes-digest-')), 'git.toml')
+      writeFileSync(file, content)
+      return loadAdapter('git', file)
+    }
+    const base = write(adapter(versions, presentation))
+    const texts = write(`# reworded\n${adapter(versions.replace('"2.54"', '"2.55"'), presentation.replace('Erlaubt genau diesen Push.', 'Erlaubt nur diesen Push.'))}`.replace('display = "Push {refspec} to {remote}"', 'display = "Push {refspec} → {remote}"'))
+    const option = write(adapter(versions, presentation).replace('flag_options = ["force-with-lease"]', 'flag_options = ["force-with-lease", "atomic"]'))
+    const exact = write(adapter(versions, presentation).replace('exact_command = true\n', ''))
+
+    expect(texts.digest).toBe(base.digest)
+    expect(texts.fileDigest).not.toBe(base.fileDigest)
+    expect(option.digest).not.toBe(base.digest)
+    expect(exact.digest).not.toBe(base.digest)
+    expect(base.digest).toMatch(/^SHA-256:[a-f0-9]{64}$/)
+  })
+
+  it.each([
+    ['an unknown root key', `trusted = true\n${adapter('', '')}`, /Adapter has unknown key\(s\): trusted/],
+    ['an unknown [cli] key', adapter('help = ["-h"]', ''), /Adapter cli has unknown key\(s\): help/],
+    ['an unknown operation key', adapter('', 'notes = "x"'), /Operation git\.push\.refspec has unknown key\(s\): notes/],
+    ['an unknown presentation key', adapter('', `${presentation}\n[operation.presentation.extra]\nx = 1`), /presentation has unknown key\(s\): extra/],
+    ['a presentation binding the operation never binds', adapter('', '[operation.presentation]\ntitle = { de = "{branch}", en = "{branch}" }'), /references \{branch\}/],
+    ['an optional binding in the title', adapter('', '[operation.presentation]\ntitle = { de = "{repo}", en = "{repo}" }'), /references \{repo\}/],
+    ['partial version fields', adapter('tested_versions = ["2.54"]', ''), /together/],
+    ['an invalid risk', adapter('', '').replace('risk = "high"', 'risk = "severe"'), /invalid risk/],
+    ['a non-boolean exact_command', adapter('', '').replace('exact_command = true', 'exact_command = "yes"'), /invalid exact_command/],
+    ['invalid TOML', adapter('', 'display = "duplicate"'), /.+/],
+  ])('fails closed on %s', (_, content, message) => {
+    expect(() => parseAdapterToml(content)).toThrow(message)
+  })
+
+  it('keeps the original reading of comma-separated array strings', () => {
+    const parsed = parseAdapterToml(adapter('', '').replace('"remote:name={remote}"', '"remote:name={remote},kind=git"'))
+
+    expect(parsed.operations[0]!.resource_chain).toEqual(['repo:*', 'remote:name={remote}', 'kind=git'])
+  })
+})
