@@ -29,13 +29,14 @@ import type { ConsumerRecord } from './secrets/gate'
 import type { SecretRequestRow, SecretsCommand, SecretsView } from '../contracts/secrets'
 import type { SecretRowCommand } from '../worker/secrets/store'
 import { registryProgramDefinition } from './programs/definition'
+import { sandboxVersionProbe } from './programs/version-probe'
 import { modelResources } from '../worker/master/resources'
 import { sameOwner } from '@openape/pods-protocol'
 import type { RemoteInternal } from '../worker/remote/registration'
 import type { Owner } from '@openape/pods-protocol'
 import type { DomainCommand, DomainOverview } from '../contracts/domain-admin'
 import type { ServiceScope, RunContextRequest, ServiceCheck, ServiceRequest  } from '../contracts/services'
-import { loadAdapter, resolveCommand } from '@openape/apes'
+import { resolveCommand } from '@openape/apes'
 import { approvalURL } from '../contracts/activity'
 import type { RunApproval } from '../contracts/activity'
 import { assignedDirectories, directoryPolicy } from '../runtime/directories'
@@ -336,7 +337,15 @@ export class FixtureWorker {
 
   /** An installed CLI with the shapes-registry adapter of its command; arbitrary adapter files are never assigned. */
   async registryProgram(path: string, options: { commandName?: string, runtimePath?: string } = {}): Promise<ProgramDefinition> {
-    return registryProgramDefinition(path, { ...options, store: join(this.root, 'registry-adapters') })
+    const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+    return registryProgramDefinition(path, { ...options, store: join(this.root, 'registry-adapters'), protectedRoots: [this.root, this.profileBase, ...await this.writableFolders()], probe: sandboxVersionProbe(join(dist, 'native/pods-helper'), join(this.root, 'probes')) })
+  }
+
+  /** Every folder assigned to a Pod for writing. */
+  private async writableFolders(): Promise<string[]> {
+    const pods = parseWorkspace(await this.dispatch({ type: 'list' })).pods
+    const states = await Promise.all(pods.map(async pod => parseResourceState(await this.dispatch({ resource: { type: 'list', podId: pod.id } }))))
+    return states.flatMap(state => state.resources.filter(item => item.kind === 'directory' && item.state === 'ready' && item.configuration.access === 'readWrite').map(item => String(item.configuration.path)))
   }
 
   async program(command: ProgramCommand, definition?: ProgramDefinition, file?: string): Promise<Awaited<ReturnType<ProgramManager['terminal']>> | Awaited<ReturnType<ProgramManager['prepare']>> | ResourceState | string | null> {
@@ -678,7 +687,7 @@ export class FixtureWorker {
     if (command.type === 'assignSsh') {
       if (before.epoch !== command.epoch) throw new Error('Pod or SSH permissions changed; reload before assigning access')
       const binding = await resolveSshTarget(command.target)
-      const { grantId, approval } = await this.provisionGrant(command.podId, await commandSpec(loadAdapter('pod-ssh', join(vendor, 'pod-ssh-shapes.toml')), sshGrantArgv(binding)), owner)
+      const { grantId, approval } = await this.provisionGrant(command.podId, await commandSpec(loadPodAdapter('pod-ssh', join(vendor, 'pod-ssh-shapes.toml')), sshGrantArgv(binding)), owner)
       return { view: parseResourceState(await this.dispatch({ resource: { type: 'bindSsh', podId: command.podId, epoch: command.epoch, binding, authority: await authority(grantId) } })), approval }
     }
     // The sandbox entry and its grant are separate: the destination becomes reachable, and the same origin and

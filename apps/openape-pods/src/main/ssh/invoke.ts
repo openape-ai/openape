@@ -1,7 +1,8 @@
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { loadAdapter, resolveCommand } from '@openape/apes'
+import { resolveCommand } from '@openape/apes'
+import { loadPodAdapter } from '../grants/registry-copies'
 import type { PodResource } from '../../contracts/resources'
 import { assignedSsh } from '../../contracts/ssh'
 import type { ServiceScope } from '../../contracts/services'
@@ -56,7 +57,7 @@ export async function invokeSsh(input: { resources: PodResource[], scope: Servic
   if (JSON.stringify(binding) !== JSON.stringify({ profileHash: assignment.profileHash, target: assignment.target, hosts: assignment.hosts, knownHosts: assignment.knownHosts })) throw new Error('SSH configuration changed; review and reassign this target')
   const authority = new AgentAuthority(new PodIdentityManager(credentials).connection(assignment.authority.identity, `pods:${scope.podId}`), observe, ledger, input.tokens, input.presentation)
   const adapterPath = join(dist, 'vendor/pod-ssh-shapes.toml')
-  const adapter = loadAdapter('pod-ssh', adapterPath); const argv = sshGrantArgv(binding)
+  const adapter = loadPodAdapter('pod-ssh', adapterPath); const argv = sshGrantArgv(binding)
   const resolved = await resolveCommand(adapter, argv)
   const authorization = { grantId: assignment.authority.grantId, command: { cliId: 'pod-ssh', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] } }
   await authority.authorize(authorization, signal)
