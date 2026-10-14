@@ -8,6 +8,8 @@
  * these shapes via `resolveServerShape()` (see server-resolver.ts).
  */
 
+import type { ShapeCliVersions, ShapePresentation } from './shape-presentation.js'
+
 /** One recognizable operation within a shape. */
 export interface ServerShapeOperation {
   /**
@@ -71,6 +73,9 @@ export interface ServerShapeOperation {
    * approved argv byte-for-byte. Default false.
    */
   exact_command?: boolean
+
+  /** Approval card content from the adapter's `[operation.presentation]`. */
+  presentation?: ShapePresentation
 }
 
 /** One CLI's complete shape definition. */
@@ -88,8 +93,13 @@ export interface ServerShape {
    * `'custom'` — uploaded by a user via API (future feature).
    */
   source: 'builtin' | 'custom'
-  /** `sha256:<hex>` digest of the serialized shape (for drift detection). */
+  /**
+   * `SHA-256:<hex>` digest of the adapter file, as `loadAdapter()` computes
+   * it and grants carry it in `execution_context.adapter_digest`.
+   */
   digest: string
+  /** CLI versions the adapter was checked against; absent for virtual executables. */
+  versions?: ShapeCliVersions
   /** Unix seconds. */
   createdAt: number
   /** Unix seconds. */

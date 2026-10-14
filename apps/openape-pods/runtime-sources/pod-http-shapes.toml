@@ -1,9 +1,19 @@
 schema = "openape-shapes/v1"
+
+# OpenApe Pods HTTP authority (issue 1473). `pod-http` is no installed program:
+# the Pods desktop builds this argv for an assigned HTTPS origin and its
+# proxy enforces the granted origin and methods. This registry file is the
+# single source; the OpenApe monorepo ships a byte-identical copy in
+# apps/openape-pods/runtime-sources/pod-http-shapes.toml, and grants bind its
+# digest. Grants for several methods carry no bindings, so the title names no
+# binding and the facts are left out there.
+
 [cli]
 id = "pod-http"
 executable = "pod-http"
 audience = "shapes"
 version = "1"
+
 [[operation]]
 id = "request"
 command = ["request"]
@@ -12,3 +22,20 @@ display = "HTTP {method} to {origin}"
 action = "request"
 risk = "high"
 resource_chain = ["https-origin:url={origin}", "http-method:name={method}"]
+
+[operation.presentation]
+title = { de = "HTTP-Zugriff des Pods", en = "Pod HTTP access" }
+
+[operation.presentation.consequence]
+allows = { de = "Erlaubt diesem Pod HTTPS-Anfragen an die freigegebene Adresse, beschränkt auf die freigegebenen Methoden.", en = "Allows this Pod to send HTTPS requests to the approved origin, limited to the approved methods." }
+does_not_allow = { de = "Andere Adressen bleiben gesperrt, bis sie eigens freigegeben werden.", en = "Other origins stay blocked until they are approved separately." }
+
+[[operation.presentation.facts]]
+label = { de = "Adresse", en = "Origin" }
+binding = "origin"
+format = "code"
+
+[[operation.presentation.facts]]
+label = { de = "Methode", en = "Method" }
+binding = "method"
+format = "code"

@@ -2,7 +2,7 @@
 /**
  * Seed the IdP `shapes` table from the shapes-registry repo.
  *
- * Usage:
+ * Usage (after `pnpm --filter @openape/shapes... build`):
  *   SHAPES_REGISTRY_PATH=/path/to/shapes-registry \
  *   TURSO_URL=... TURSO_AUTH_TOKEN=... \
  *   pnpm seed:shapes
@@ -15,40 +15,16 @@
  * shapes are touched — any `custom` shapes in the table are left alone.
  */
 
-import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
-import { parse as parseToml } from 'smol-toml'
+import { loadAdapter } from '@openape/shapes'
 import { drizzle } from 'drizzle-orm/libsql'
 import { createClient } from '@libsql/client'
 import { shapes } from '../apps/openape-free-idp/server/database/schema'
-import type { ServerShape, ServerShapeOperation } from '@openape/grants'
-
-interface AdapterTomlOperation {
-  id: string
-  command?: string[]
-  positionals?: string[]
-  required_options?: string[]
-  value_options?: string[]
-  flag_options?: string[]
-  display: string
-  action: string
-  risk: 'low' | 'medium' | 'high' | 'critical'
-  resource_chain?: string[]
-  exact_command?: boolean
-}
-
-interface AdapterToml {
-  schema: string
-  cli: { id: string, executable: string, audience?: string, version?: string, global_options?: string[] }
-  operation?: AdapterTomlOperation[]
-}
+import type { ServerShape } from '@openape/grants'
 
 interface AdapterMeta {
-  id: string
-  name: string
   description: string
-  executable: string
 }
 
 function resolveRegistryPath(): string {
@@ -56,43 +32,30 @@ function resolveRegistryPath(): string {
   return resolve(import.meta.dirname ?? __dirname, '..', '..', 'shapes-registry')
 }
 
-function loadShape(dir: string): ServerShape | null {
+/**
+ * Parses with the same strict parser as apes and Pods, so the stored
+ * operations, presentation, versions and digest equal what they compute.
+ */
+function loadShape(dir: string, cliId: string): ServerShape | null {
   const adapterPath = join(dir, 'adapter.toml')
   const metaPath = join(dir, 'meta.json')
   if (!existsSync(adapterPath)) return null
 
-  const adapterContent = readFileSync(adapterPath, 'utf-8')
-  const adapter = parseToml(adapterContent) as unknown as AdapterToml
+  const { adapter, digest } = loadAdapter(cliId, adapterPath)
   const meta: AdapterMeta | null = existsSync(metaPath)
     ? (JSON.parse(readFileSync(metaPath, 'utf-8')) as AdapterMeta)
     : null
-
-  const cliId = adapter.cli.id
-  const operations: ServerShapeOperation[] = (adapter.operation ?? []).map(op => ({
-    id: op.id,
-    command: op.command ?? [],
-    positionals: op.positionals,
-    required_options: op.required_options,
-    value_options: op.value_options,
-    flag_options: op.flag_options,
-    // Global options are declared once on [cli] and apply to every operation.
-    global_options: adapter.cli.global_options?.length ? adapter.cli.global_options : undefined,
-    display: op.display,
-    action: op.action,
-    risk: op.risk,
-    resource_chain: op.resource_chain ?? [],
-    exact_command: op.exact_command,
-  }))
+  const { tested_versions, version_command, version_pattern } = adapter.cli
 
   const now = Math.floor(Date.now() / 1000)
-  const digest = `sha256:${createHash('sha256').update(adapterContent).digest('hex')}`
   return {
-    cli_id: cliId,
+    cli_id: adapter.cli.id,
     executable: adapter.cli.executable,
     description: meta?.description ?? '',
-    operations,
+    operations: adapter.operations,
     source: 'builtin',
     digest,
+    ...(tested_versions && version_command && version_pattern ? { versions: { tested_versions, version_command, version_pattern } } : {}),
     createdAt: now,
     updatedAt: now,
   }
@@ -121,17 +84,11 @@ async function main() {
     return statSync(full).isDirectory() && existsSync(join(full, 'adapter.toml'))
   })
 
-  console.log(`Seeding ${entries.length} shape(s) from ${registryPath}...`)
-  let seeded = 0
-  let skipped = 0
+  // Parse every adapter before writing, so one invalid adapter leaves the table untouched.
+  const loaded = entries.map(entry => loadShape(join(adaptersDir, entry), entry)).filter(shape => shape !== null)
+  console.log(`Seeding ${loaded.length} shape(s) from ${registryPath}...`)
 
-  for (const entry of entries) {
-    const shape = loadShape(join(adaptersDir, entry))
-    if (!shape) {
-      skipped += 1
-      console.warn(`Skipped ${entry} (no adapter.toml)`)
-      continue
-    }
+  for (const shape of loaded) {
     await db.insert(shapes).values({
       cliId: shape.cli_id,
       executable: shape.executable,
@@ -139,6 +96,7 @@ async function main() {
       operations: shape.operations,
       source: shape.source,
       digest: shape.digest,
+      versions: shape.versions ?? null,
       createdAt: shape.createdAt,
       updatedAt: shape.updatedAt,
     }).onConflictDoUpdate({
@@ -148,15 +106,15 @@ async function main() {
         description: shape.description,
         operations: shape.operations,
         digest: shape.digest,
+        versions: shape.versions ?? null,
         updatedAt: shape.updatedAt,
         source: 'builtin',
       },
     })
-    seeded += 1
-    console.log(`  ✓ ${shape.cli_id} (${shape.operations.length} operations)`)
+    console.log(`  ✓ ${shape.cli_id} (${shape.operations.length} operations${shape.versions ? `, tested ${shape.versions.tested_versions.join(', ')}` : ''})`)
   }
 
-  console.log(`Done: ${seeded} seeded, ${skipped} skipped.`)
+  console.log(`Done: ${loaded.length} seeded.`)
 }
 
 main().catch((err) => {

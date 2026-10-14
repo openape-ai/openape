@@ -42,8 +42,10 @@ export const shapes = sqliteTable('shapes', {
   operations: text('operations', { mode: 'json' }).notNull(),
   // 'builtin' (seeded from monorepo) or 'custom' (uploaded by user)
   source: text('source').notNull(),
-  // sha256:<hex> of the serialized shape for drift detection
+  // SHA-256:<hex> of the adapter file, equal to grants' execution_context.adapter_digest
   digest: text('digest').notNull(),
+  // JSON-encoded ShapeCliVersions (tested CLI versions and how to probe them); null for virtual executables
+  versions: text('versions', { mode: 'json' }),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 }, table => [

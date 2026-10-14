@@ -7,6 +7,9 @@ import { parseAdapterToml } from '../src/toml.js'
 // Golden permissions recorded with the parser before declared value options
 // existed (issue 1468). Stored grants carry these permission strings, so every
 // argv must keep deriving exactly the same operation, permission and display.
+// The gh cases were re-recorded for issue 1473: the fixture now binds owner and
+// repository name as separate resources; the old chain granted every
+// repository of an owner.
 interface GoldenCase {
   adapter: string
   argv: string[]

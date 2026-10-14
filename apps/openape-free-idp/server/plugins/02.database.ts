@@ -107,6 +107,9 @@ export default defineNitroPlugin(async () => {
       operations TEXT NOT NULL, source TEXT NOT NULL, digest TEXT NOT NULL,
       created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL
     )`)
+    // Tested CLI versions of registry adapters (issue 1473).
+    try { await db.run(sql`ALTER TABLE shapes ADD COLUMN versions TEXT`) }
+    catch { /* already present */ }
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_shapes_source ON shapes(source)`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_shapes_executable ON shapes(executable)`)
 
