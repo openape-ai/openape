@@ -3,6 +3,7 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { GrantWithCard } from '../utils/grant-card'
 import { formatRequesterName } from '../utils/command-display'
 import { grantBatchInfo, grantBatchOperations, grantBatchRows, grantBatchScope } from '../utils/grant-batch'
+import GrantRequestedMarker from './GrantRequestedMarker.vue'
 
 const props = defineProps<{ requester: string, batchId: string }>()
 
@@ -142,7 +143,7 @@ onUnmounted(() => clearInterval(clock))
               >
               <span v-else class="mt-0.5 w-24 shrink-0 rounded border border-default px-1.5 text-center text-xs text-muted">{{ row.status === 'pending' ? text.separate : (text.status[row.status] ?? row.status) }}</span>
               <label :for="row.decidable ? `batch-${row.id}` : undefined" class="min-w-0 flex-1 text-sm break-words">
-                <span :class="row.line.kind === 'registry' ? 'font-medium' : 'font-mono text-xs break-all'" :data-binding-line="row.line.kind">{{ row.line.text }}</span>
+                <span :class="row.line.kind === 'registry' ? 'font-medium' : 'font-mono text-xs break-all'" :data-binding-line="row.line.kind">{{ row.line.text }}</span><GrantRequestedMarker v-if="row.line.requested" :german="german" />
                 <span v-if="row.claim" class="block text-xs text-muted" data-row-claim>{{ text.own }}: {{ text.quoted(row.claim) }}</span>
                 <span v-if="failures[row.id]" class="block text-xs text-error">{{ failures[row.id] }}</span>
               </label>

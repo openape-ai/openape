@@ -70,7 +70,8 @@
         "operation_id": "run",
         "title": {
           "de": "Mail digest",
-          "en": "Mail digest"
+          "en": "Mail digest",
+          "requested": true
         },
         "statement": {
           "de": "Gespeichertes Pod-Skript ausführen",
@@ -91,7 +92,8 @@
               "en": "Script"
             },
             "format": "code",
-            "value": "/Users/owner/Pods/mail-digest/run.mjs"
+            "value": "/Users/owner/Pods/mail-digest/run.mjs",
+            "provenance": "requested"
           },
           {
             "label": {
@@ -99,7 +101,8 @@
               "en": "Working directory"
             },
             "format": "code",
-            "value": "/Users/owner/Pods/mail-digest/workspace"
+            "value": "/Users/owner/Pods/mail-digest/workspace",
+            "provenance": "requested"
           }
         ],
         "details": [
@@ -110,6 +113,7 @@
             },
             "format": "map",
             "value": "{\"HOME\":\"/Users/owner/Pods/mail-digest/home\",\"LANG\":\"de_AT.UTF-8\"}",
+            "provenance": "requested",
             "entries": [
               [
                 "HOME",
@@ -231,7 +235,8 @@
               "en": "Repository"
             },
             "format": "code",
-            "value": "/Users/owner/repos/iurio"
+            "value": "/Users/owner/repos/iurio",
+            "provenance": "bound"
           },
           {
             "label": {
@@ -239,7 +244,8 @@
               "en": "Refspec"
             },
             "format": "code",
-            "value": "feature/rebase"
+            "value": "feature/rebase",
+            "provenance": "bound"
           }
         ],
         "details": []

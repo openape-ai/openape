@@ -382,7 +382,7 @@ function isExactCommand(detail) {
                   <UBadge v-if="grant.request.run_as" color="warning" variant="soft" :label="`run as ${grant.request.run_as}`" />
                   <span class="text-xs text-dimmed">on {{ grant.request.target_host }}</span>
                 </div>
-                <GrantBindingLine :line="bindingLine(grant)" />
+                <GrantBindingLine :line="bindingLine(grant)" :german="german" />
                 <p v-if="cliSummary(grant)" class="text-muted">
                   {{ cliSummary(grant) }}
                 </p>
@@ -604,7 +604,7 @@ function isExactCommand(detail) {
                   <UBadge color="success" variant="soft" :label="grant.status" />
                   <UBadge color="secondary" :label="grant.request.grant_type" />
                 </div>
-                <GrantBindingLine :line="bindingLine(grant)" />
+                <GrantBindingLine :line="bindingLine(grant)" :german="german" />
                 <p><span class="text-muted">Requester:</span> {{ formatRequesterName(grant.request.requester) }}</p>
                 <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
                 <div v-if="standingRule(grant)" class="mt-1">
@@ -692,7 +692,7 @@ function isExactCommand(detail) {
                   :label="grant.status"
                 />
               </div>
-              <GrantBindingLine :line="bindingLine(grant)" />
+              <GrantBindingLine :line="bindingLine(grant)" :german="german" />
               <p><span class="text-muted">Requester:</span> {{ formatRequesterName(grant.request.requester) }}</p>
               <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
               <p v-if="cliSummary(grant)">
