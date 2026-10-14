@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({ authorize: vi.fn(), assertActive: vi.fn(), sen
 vi.mock('../../src/main/broker/authorization', () => ({ AgentAuthority: class { authorize = mocks.authorize; assertActive = mocks.assertActive } }))
 vi.mock('../../src/main/programs/http', () => ({ requestHttp: mocks.send }))
 vi.mock('@openape/apes', () => ({ loadAdapter: () => ({ digest: 'digest' }), resolveCommand: async () => ({ permission: 'http', detail: {} }) }))
+vi.mock('../../src/main/grants/registry-copies', () => ({ loadPodAdapter: () => ({ digest: 'digest' }) }))
 afterEach(() => { vi.resetAllMocks(); vi.useRealTimers() })
 const podId = '00000000-0000-4000-8000-000000000001'
 const scope = { podId, runId: podId, epoch: 1, assignmentRevision: 1, capabilities: ['tool.http_fixture.request'] }

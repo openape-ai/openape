@@ -67,6 +67,15 @@ describe('assigned ape-shell authorization with signed grants', () => {
     await expect(authorizeAssignedCommand({ ...command, coverage: [] }, await token(grant), scope)).rejects.toThrow('coverage')
     expect(requests.filter(request => request.startsWith('POST'))).toHaveLength(1)
   })
+  it('runs an exact command only with a grant for its argv, also under a wider grant', async () => {
+    const wide = { ...resolved.detail, operation_id: '*', resource_chain: [{ resource: 'owner' }], permission: 'gh.owner[*]#list', display: 'gh: list on owner' }
+    const other = await resolveCommand(adapter, ['gh', 'repo', 'list', 'another'])
+    const exact = { ...command, argv: other.executionContext.argv!, coverage: [wide], exact: true as const }
+    await expect(authorizeAssignedCommand(exact, await token({ authorization_details: [wide], execution_context: { adapter_digest: adapter.digest } }), scope)).rejects.toThrow('does not match current argv')
+    await expect(authorizeAssignedCommand(exact, await token({ authorization_details: [wide] }), scope)).rejects.toThrow('does not match current argv')
+    expect(requests.some(request => request.startsWith('POST'))).toBe(false)
+    expect((await authorizeAssignedCommand(exact, await token({ authorization_details: [{ ...other.detail, constraints: { exact_command: true } }], execution_context: other.executionContext }), scope)).detail.constraints).toEqual({ exact_command: true })
+  })
   it('re-verifies a consumed reusable token locally but always consumes a single-use grant', async () => {
     const jwks = { keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'fixture-key', alg: 'EdDSA', use: 'sig' }] }
     await authorizeAssignedCommand(command, await token(), { ...scope, jwks, consume: false })

@@ -180,6 +180,8 @@ export interface AssignedGrantScope {
   jwks?: VerifyAuthzOptions['jwks']
   /** `false` re-verifies a reusable grant token that was consumed earlier; single-use grants are always consumed. */
   consume?: false
+  /** The command runs only with a grant bound to its exact argv (argv hash), whatever its covering detail allows. */
+  exactCommand?: true
 }
 export async function verifyAndConsume(token: string, resolved: ResolvedCommand, scope?: AssignedGrantScope): Promise<void> {
   const payload = decodePayload(token)
@@ -243,7 +245,7 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand,
     )
 
     const isOnce = claims.grant_type === 'once' || claims.approval === 'once'
-    const enforceArgvHash = exactRequired || (isOnce && !!claims.execution_context?.argv_hash)
+    const enforceArgvHash = exactRequired || scope?.exactCommand === true || (isOnce && !!claims.execution_context?.argv_hash)
 
     if (enforceArgvHash && claims.execution_context?.argv_hash !== resolved.executionContext.argv_hash) {
       throw new Error('Granted command does not match current argv')

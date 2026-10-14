@@ -1,6 +1,7 @@
 import type { AgentConnection, GrantObserver, GrantLedgerPort, GrantPresentation, RunGrantTokens } from '../broker/authorization'
 import { join } from 'node:path'
-import { loadAdapter, resolveCommand } from '@openape/apes'
+import { resolveCommand } from '@openape/apes'
+import { loadPodAdapter } from '../grants/registry-copies'
 import type { PodResource } from '../../contracts/resources'
 import type { ServiceScope } from '../../contracts/services'
 import type { HttpAuthentication, HttpRequest, HttpReply } from '../../contracts/http'
@@ -35,7 +36,7 @@ export async function executeHttp(resources: PodResource[], scope: ServiceScope,
   if (authentication && !bearer) throw new Error('DDISA agent authentication is unavailable')
   const authority = new AgentAuthority(connection, observe, ledger, tokens, presentation)
   const adapterPath = join(vendor, 'pod-http-shapes.toml')
-  const adapter = loadAdapter('pod-http', adapterPath)
+  const adapter = loadPodAdapter('pod-http', adapterPath)
   const argv = httpArgv(new URL(request.url).origin, request.method)
   const resolved = await resolveCommand(adapter, argv)
   const authorization = { grantId: '', command: { cliId: 'pod-http', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] } }

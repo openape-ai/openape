@@ -106,11 +106,11 @@ it('applies a Pod sandbox with its level and denylist and requests its grants as
   await expect(mcp(f, { action: 'sandbox', command: { type: 'apply', target: { networkId: randomUUID(), revision: 1 }, sandbox: {} } }, owner)).rejects.toThrow('A grant target names one podId')
 })
 
-/** An application with its own executable and the reviewed gh fixture adapter, assigned in the Pod sandbox. */
+/** An application with its own executable and the reviewed gh fixture adapter, assigned in the Pod sandbox as a tested registry adapter. */
 function application(cliId: string, adapter: string): { resource: Record<string, unknown>, assignment: ProgramAssignment } {
   const executable = join(root, cliId); writeFileSync(executable, '#!/bin/sh\nexit 0\n', { mode: 0o700 })
-  const id = randomUUID()
-  const assignment = { type: 'program', name: cliId, cliId, executable, executableHash: createHash('sha256').update(readFileSync(executable)).digest('hex'), adapterPath: adapter, adapterHash: createHash('sha256').update(readFileSync(adapter)).digest('hex'), stateId: randomUUID(), capability: `tool.app_${id.replaceAll('-', '')}.invoke`, networkHosts: [], entryFiles: [], environment: {} } as ProgramAssignment
+  const id = randomUUID(); const adapterHash = createHash('sha256').update(readFileSync(adapter)).digest('hex')
+  const assignment = { type: 'program', name: cliId, cliId, executable, executableHash: createHash('sha256').update(readFileSync(executable)).digest('hex'), adapterPath: adapter, adapterHash, registry: { id: cliId, digest: `SHA-256:${adapterHash}` }, cliVersion: { version: '2.86', tested: true }, stateId: randomUUID(), capability: `tool.app_${id.replaceAll('-', '')}.invoke`, networkHosts: [], entryFiles: [], environment: {} } as ProgramAssignment
   return { resource: { id, podId, revision: 1, kind: 'tool', state: 'ready', name: cliId, configuration: assignment }, assignment }
 }
 const ghApplication = () => application('gh', resolve('../../packages/shapes/test/fixtures/gh.toml'))

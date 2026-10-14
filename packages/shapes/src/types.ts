@@ -9,6 +9,11 @@ export interface ShapesAdapter {
     executable: string
     audience?: string
     version?: string
+    /**
+     * File digests (`SHA-256:<hex>`) of executables the operations were checked against. For tools without a
+     * version command, such as single-file scripts, a matching digest is the tested version.
+     */
+    tested_digests?: string[]
   } & Partial<ShapeCliVersions>
   operations: ShapesOperation[]
 }
@@ -113,7 +118,10 @@ export interface RegistryEntry {
   author: string
   executable: string
   min_shapes_version: string
+  /** `SHA-256:` digest of the adapter file bytes. */
   digest: string
+  /** Semantic digest grants bind (`semanticAdapterDigest`); registry indexes since issue 1473 record it. */
+  grant_digest?: string
   download_url: string
 }
 

@@ -13,12 +13,15 @@ it('accepts a complete command once, provides bare-CLI help and never executes h
   const adapterPath = join(root, 'adapter.toml')
   const source = 'schema="openape-shapes/v1"\n[cli]\nid="o365-cli"\nexecutable="o365-cli"\naudience="shapes"\n[[operation]]\nid="setup"\ncommand=["login"]\nrequired_options=["account"]\ndisplay="Set up {account}"\naction="login"\nrisk="medium"\nresource_chain=["account:email={account}"]\n'
   await writeFile(adapterPath, source)
-  const state: ResourceState = { epoch: 2, resources: [{ id: applicationId, podId, kind: 'tool', state: 'ready', name: 'Office', revision: 1, configuration: { type: 'program', cliId: 'o365-cli', adapterPath, adapterHash: createHash('sha256').update(source).digest('hex') } }] }
+  const state: ResourceState = { epoch: 2, resources: [{ id: applicationId, podId, kind: 'tool', state: 'ready', name: 'Office', revision: 1, configuration: { type: 'program', cliId: 'o365-cli', adapterPath, adapterHash: createHash('sha256').update(source).digest('hex'), registry: { id: 'o365', digest: 'SHA-256:fixture' }, cliVersion: { version: '1.0', tested: true } } }] }
   try {
     const prepared = await prepareConsole(root, podId, state, 'o365-cli login --account user@example.test', async () => false)
     expect(prepared.command).toEqual({ type: 'start', podId, applicationId, epoch: 2, argv: ['login', '--account', 'user@example.test'] })
     expect(prepared.needsGrant).toBe(true)
     expect((await prepareConsole(root, podId, state, 'o365-cli login --account user@example.test', async detail => detail.cli_id === 'o365-cli')).needsGrant).toBe(false)
+    // Without a tested registry adapter only a grant for this exact argv runs it, which recorded grants cannot show.
+    const untested = structuredClone(state); untested.resources[0]!.configuration.cliVersion = { version: '2.0', tested: false }
+    expect((await prepareConsole(root, podId, untested, 'o365-cli login --account user@example.test', async () => true)).needsGrant).toBe(true)
     const help = await prepareConsole(root, podId, state, 'o365-cli', async () => false)
     expect(help.command).toBeNull(); expect(help.output).toContain('o365-cli login --account <account>')
     expect((await prepareConsole(root, podId, state, 'pwd', async () => false)).output).toBe(await podWorkspace(root, podId))

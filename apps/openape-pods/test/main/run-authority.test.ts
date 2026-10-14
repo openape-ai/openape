@@ -13,6 +13,7 @@ vi.mock('node:timers/promises', () => ({ setTimeout: async (ms: number, value: u
   options?.signal?.addEventListener('abort', () => { clearTimeout(timer); reject(options.signal!.reason) }, { once: true })
 }) }))
 vi.mock('@openape/apes', () => ({ loadAdapter: () => ({ digest: 'digest' }), resolveCommand: async () => ({ permission: 'pod-runtime' }) }))
+vi.mock('../../src/main/grants/registry-copies', () => ({ loadPodAdapter: () => ({ digest: 'digest' }) }))
 vi.mock('../../src/runtime/environment', () => ({ podEnvironment: async () => ({ workspace: '/fixture/workspace', home: '/fixture/home', environment: {} }), podEnvironmentValues: () => ({}), visibleEnvironment: () => ({}) }))
 afterEach(() => { vi.useRealTimers(); vi.resetAllMocks() })
 
