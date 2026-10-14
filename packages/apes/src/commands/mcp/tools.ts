@@ -1,10 +1,12 @@
 import { hostname } from 'node:os'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
-import { createShapesGrant, fetchGrantToken, loadAdapter, resolveCommand, verifyAndExecute } from '../../shapes/index.js'
 import { z } from 'zod'
 import { getAuthToken, getIdpUrl, getRequesterIdentity } from '../../config'
 import { apiFetch, getGrantsEndpoint } from '../../http'
-import { loadAdapterTools } from './adapter-tools'
+import { authorizeProgramCall, locateProgram } from '../../authorization/program'
+import { captureProgramCall } from '../../authorization/execute'
+import { describePreview, listShapes, previewCommand } from '../../authorization/shapes'
+import { shellTargetHost } from '../../shell/context'
 
 export function registerStaticTools(server: McpServer) {
   server.registerTool('apes.grants.list', {
@@ -88,29 +90,16 @@ export function registerStaticTools(server: McpServer) {
   })
 
   server.registerTool('apes.explain', {
-    description: 'Show what permissions a command would need',
+    description: 'Preview how the IdP resolves a command (the IdP decides per call)',
     inputSchema: {
       command: z.array(z.string()).describe('Command as array of strings (e.g. ["gh", "repo", "list"])'),
-      adapter: z.string().optional().describe('Explicit adapter TOML path'),
     },
-  }, async ({ command, adapter }) => {
+  }, async ({ command }) => {
+    const idp = getIdpUrl()
+    if (!idp)
+      return { content: [{ type: 'text' as const, text: 'Not configured. Run `apes login` first.' }], isError: true }
     try {
-      const loaded = loadAdapter(command[0]!, adapter)
-      const resolved = await resolveCommand(loaded, command)
-      return {
-        content: [{
-          type: 'text' as const,
-          text: JSON.stringify({
-            adapter: resolved.adapter.cli.id,
-            operation: resolved.detail.operation_id,
-            display: resolved.detail.display,
-            permission: resolved.permission,
-            resource_chain: resolved.detail.resource_chain,
-            exact_command: resolved.detail.constraints?.exact_command ?? false,
-            adapter_digest: resolved.digest,
-          }, null, 2),
-        }],
-      }
+      return { content: [{ type: 'text' as const, text: JSON.stringify(describePreview(await previewCommand(idp, command)), null, 2) }] }
     }
     catch (err) {
       return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true }
@@ -118,17 +107,17 @@ export function registerStaticTools(server: McpServer) {
   })
 
   server.registerTool('apes.adapter.list', {
-    description: 'List installed CLI adapters',
-  }, () => {
-    const tools = loadAdapterTools()
-    const adapters = [...new Set(tools.map(t => t.adapterId))]
-    return {
-      content: [{
-        type: 'text' as const,
-        text: adapters.length > 0
-          ? `Installed adapters: ${adapters.join(', ')}`
-          : 'No adapters installed.',
-      }],
+    description: 'List the CLI adapters (Shapes) the IdP resolves commands with',
+  }, async () => {
+    const idp = getIdpUrl()
+    if (!idp)
+      return { content: [{ type: 'text' as const, text: 'Not configured. Run `apes login` first.' }], isError: true }
+    try {
+      const shapes = await listShapes(idp)
+      return { content: [{ type: 'text' as const, text: shapes.length > 0 ? `IdP adapters: ${shapes.map(shape => shape.cli_id).join(', ')}` : 'The IdP has no adapters.' }] }
+    }
+    catch (err) {
+      return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true }
     }
   })
 
@@ -162,77 +151,49 @@ export function registerStaticTools(server: McpServer) {
   })
 }
 
-export function registerAdapterTools(server: McpServer) {
-  const adapterTools = loadAdapterTools()
-
-  for (const tool of adapterTools) {
-    // Build Zod schema from adapter operation
-    const schemaShape: Record<string, z.ZodType> = {
-      grant_id: z.string().optional().describe('Grant ID from a previous pending_approval response'),
-    }
-
-    if (tool.inputSchema && typeof tool.inputSchema === 'object') {
-      const props = (tool.inputSchema as { properties?: Record<string, { description?: string }> }).properties
-      if (props) {
-        for (const [key, val] of Object.entries(props)) {
-          schemaShape[key] = z.string().optional().describe(val.description || key)
-        }
-      }
-    }
-
-    server.registerTool(tool.name, {
-      description: tool.description,
-      inputSchema: schemaShape,
-    }, async (args) => {
-      const idp = getIdpUrl()
-      if (!idp)
-        return { content: [{ type: 'text' as const, text: 'Not configured. Run `apes login` first.' }], isError: true }
-
-      try {
-        const loaded = loadAdapter(tool.adapterId)
-        const op = loaded.adapter.operations.find(o => o.id === tool.operationId)
-        if (!op)
-          return { content: [{ type: 'text' as const, text: `Operation ${tool.operationId} not found` }], isError: true }
-
-        const argv = [loaded.adapter.cli.executable, ...op.command]
-        if (op.positionals) {
-          for (const pos of op.positionals) {
-            if (args[pos])
-              argv.push(String(args[pos]))
-          }
-        }
-        if (op.required_options) {
-          for (const opt of op.required_options) {
-            const name = opt.replace(/^--/, '')
-            if (args[name])
-              argv.push(opt, String(args[name]))
-          }
-        }
-
-        const resolved = await resolveCommand(loaded, argv)
-
-        if (args.grant_id) {
-          const token = await fetchGrantToken(idp, String(args.grant_id))
-          await verifyAndExecute(token, resolved)
-          return { content: [{ type: 'text' as const, text: 'Command executed successfully.' }] }
-        }
-
-        const grant = await createShapesGrant(resolved, { idp, approval: 'once' })
+/**
+ * `apes.run`: one program call, authorized per call at the IdP like `apes run`. A pending request is returned to
+ * the caller, who calls again with the same command after approval; nothing runs without a verified token.
+ */
+export function registerRunTool(server: McpServer) {
+  server.registerTool('apes.run', {
+    description: 'Run a program call authorized by the IdP (returns pending_approval until the owner approves)',
+    inputSchema: {
+      command: z.array(z.string()).min(1).describe('Program and arguments, e.g. ["git", "status"]'),
+      approval: z.enum(['once', 'always']).optional().describe('Requested grant type, default once'),
+    },
+  }, async ({ command, approval }) => {
+    const idp = getIdpUrl()
+    const subject = getRequesterIdentity()
+    if (!idp || !subject)
+      return { content: [{ type: 'text' as const, text: 'Not authenticated. Run `apes login` first.' }], isError: true }
+    try {
+      const program = await locateProgram(command[0]!)
+      if (!program)
+        return { content: [{ type: 'text' as const, text: `${command[0]}: no executable file found` }], isError: true }
+      const call = { program, argv: command.slice(1) }
+      const authorization = await authorizeProgramCall(call, { idp, subject, targetHost: shellTargetHost(), grantType: approval ?? 'once', wait: false })
+      if (authorization.kind === 'pending') {
         return {
           content: [{
             type: 'text' as const,
             text: JSON.stringify({
               status: 'pending_approval',
-              grant_id: grant.id,
-              approve_url: `${idp}/grant-approval?grant_id=${grant.id}`,
-              message: 'Grant needs approval. Approve, then call this tool again with grant_id.',
+              grant_id: authorization.grantId,
+              approve_url: authorization.approvalUrl,
+              message: 'Grant needs approval. After approval call this tool again with the same command.',
             }, null, 2),
           }],
         }
       }
-      catch (err) {
-        return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true }
+      const run = captureProgramCall(call)
+      return {
+        content: [{ type: 'text' as const, text: JSON.stringify({ exit_code: run.exitCode, stdout: run.stdout, stderr: run.stderr }, null, 2) }],
+        ...(run.exitCode === 0 ? {} : { isError: true }),
       }
-    })
-  }
+    }
+    catch (err) {
+      return { content: [{ type: 'text' as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true }
+    }
+  })
 }

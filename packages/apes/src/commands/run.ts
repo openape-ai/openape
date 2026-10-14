@@ -1,33 +1,18 @@
 import { shellStdio, shellTargetHost } from '../shell/context.js'
 import { execFileSync } from 'node:child_process'
-import { hostname } from 'node:os'
-import { basename } from 'node:path'
+import type { StdioOptions } from 'node:child_process'
 import { defineCommand } from 'citty'
 import {
-  createCompoundGrant,
-  createShapesGrant,
   extractOption,
   extractShellCommandString,
   extractWrappedCommand,
-  fetchGrantToken,
-  findExistingCompoundGrant,
-  findExistingGrant,
   isAutoApproved,
-  loadAdapter,
-  loadOrInstallAdapter,
   parseShellCommand,
-  resolveCommand,
-  resolveCompoundCommand,
-  resolveGenericOrReject,
-  verifyAndConsumeCompound,
-  verifyAndExecute,
-  waitForGrantStatus,
 } from '../shapes/index.js'
 import type { OpenApeGrantSummary } from '@openape/core'
 import { InvalidGrantSummaryError, parseGrantSummary } from '@openape/grants'
-import type { ResolvedCommand } from '../shapes/index.js'
 import consola from 'consola'
-import { getIdpUrl, isGenericFallbackEnabled, loadAuth, loadConfig } from '../config'
+import { getIdpUrl, loadAuth, loadConfig } from '../config'
 import { getPollMaxMinutes } from '../grant-poll'
 import { fetchPendingDiagnostics, formatPendingDiagnostics } from '../pending-diagnostics'
 import { apiFetch, getGrantsEndpoint } from '../http'
@@ -36,6 +21,10 @@ import { notifyGrantPending } from '../notifications'
 import { checkSudoRejection, isApesSelfDispatch } from '../shell/apes-self-dispatch'
 import { AGENT_NAME_REGEX } from '../lib/agent-bootstrap'
 import { getHostPlatform, isLinux } from '../lib/host-platform'
+import { AuthorizationRefusedError, AuthorizationTimeoutError, authorizeProgramCall, locateProgram } from '../authorization/program'
+import type { GrantType, ProgramCall } from '../authorization/program'
+import { executeProgramCall } from '../authorization/execute'
+import { programLine } from '../shell/program-line'
 
 /**
  * Resolve an agent name (`igor`) to its OS-level username. On Linux the
@@ -204,7 +193,7 @@ interface CreatedGrantInfo {
  * Both modes keep the same core Approve / Status / Execute lines so
  * external scripts that grep for those labels keep working.
  */
-async function printPendingGrantInfo(grant: CreatedGrantInfo, idp: string): Promise<void> {
+async function printPendingGrantInfo(grant: CreatedGrantInfo, idp: string, approvalUrl?: string): Promise<void> {
   const mode = getUserMode()
   const executeCmd = `apes grants run ${grant.id}`
 
@@ -219,7 +208,7 @@ async function printPendingGrantInfo(grant: CreatedGrantInfo, idp: string): Prom
     return
   }
 
-  const approveUrl = `${idp}/grant-approval?grant_id=${grant.id}`
+  const approveUrl = approvalUrl ?? `${idp}/grant-approval?grant_id=${grant.id}`
   const statusCmd = `apes grants status ${grant.id}`
   const diagLines = formatPendingDiagnostics(await fetchPendingDiagnostics(idp, grant.id))
 
@@ -293,7 +282,7 @@ export const runCommand = defineCommand({
   args: {
     'approval': {
       type: 'string',
-      description: 'Approval type: once, timed, always',
+      description: 'Approval type: once or always (timed only for --as and audience mode)',
       default: 'once',
     },
     'reason': {
@@ -315,10 +304,6 @@ export const runCommand = defineCommand({
     'summary-link': {
       type: 'string',
       description: 'Link the approver can use to verify the summary',
-    },
-    'adapter': {
-      type: 'string',
-      description: 'Explicit path to adapter TOML file',
     },
     'as': {
       type: 'string',
@@ -369,8 +354,8 @@ export const runCommand = defineCommand({
     }
 
     if (wrappedCommand.length > 0) {
-      // Adapter mode: apes run [options] -- <cli> <args...>
-      await runAdapterMode(wrappedCommand, rawArgs ?? [], args)
+      // Program mode: apes run [options] -- <program> <args...>
+      await runProgramMode(wrappedCommand, rawArgs ?? [], args)
     }
     else {
       // Audience mode: apes run <audience> <action>
@@ -422,11 +407,9 @@ async function runShellMode(
       throw new CliError(sudoRejection.reason)
   }
 
-  // Try to handle this command via the shapes adapter system first.
-  // This gives us structured grants with resource chains (e.g. "rm file:/tmp/foo.txt")
-  // instead of opaque "bash -c …" grants.
-  const adapterHandled = await tryAdapterModeFromShell(command, idp, args)
-  if (adapterHandled) return
+  // A line that is exactly one program call is authorized per call at the IdP; everything else (compound lines,
+  // expansions, builtins, unknown programs) stays on the ape-shell session grant below.
+  if (await tryProgramModeFromShell(command, idp, auth.email, args)) return
 
   const grantsUrl = await getGrantsEndpoint(idp)
   const targetHost = (args.host as string) || shellTargetHost()
@@ -511,185 +494,23 @@ async function runShellMode(
 }
 
 /**
- * Try to handle a shell command via the shapes adapter system.
- *
- * Flow:
- * 1. Extract the command string from `bash -c "…"` argv
- * 2. Parse into executable + argv (bail out on compound commands)
- * 3. Load adapter locally, or auto-install from registry
- * 4. Resolve the command against adapter operations → structured CLI grant detail
- * 5. Reuse an existing matching grant, or request a new one and execute
- *
- * Returns true when the command was handled (executed or failed hard).
- * Returns false for any reason — caller should fall back to the generic session grant.
+ * Runs `ape-shell -c "<line>"` as a program call when the line is exactly one: the program is located and hashed,
+ * authorized at the IdP and run directly with the authorized arguments. Returns false when the line is not a plain
+ * program call or names no executable file, so the caller falls back to the session grant.
  */
-async function tryAdapterModeFromShell(
+async function tryProgramModeFromShell(
   command: string[],
   idp: string,
+  subject: string,
   args: Record<string, unknown>,
 ): Promise<boolean> {
-  const cmdString = extractShellCommandString(command)
-  if (!cmdString) return false
-
-  const parsed = parseShellCommand(cmdString)
-  if (!parsed) return false
-  // Compound lines (`a | b`, `a && b`) resolve segment by segment into ONE
-  // structured grant (plan 2026-07-29-compound-shapes-grants M2). When the
-  // line cannot be modelled precisely (substitution, redirects, mixed
-  // audiences) this returns false and the opaque session-grant path below
-  // takes over — same fail-closed direction as before.
-  if (parsed.isCompound) return await tryCompoundModeFromShell(command, idp, args)
-
-  const loaded = await loadOrInstallAdapter(parsed.executable)
-  if (!loaded) return false
-
-  // resolveCommand does a strict comparison against `adapter.cli.executable`,
-  // which is always the bare binary name. When the user typed an absolute
-  // path we must pass the basename, not the full path.
-  const normalizedExecutable = basename(parsed.executable)
-
-  let resolved: ResolvedCommand
-  try {
-    resolved = await resolveCommand(loaded, [normalizedExecutable, ...parsed.argv])
-  }
-  catch (err) {
-    consola.debug(`ape-shell: adapter resolve failed for "${parsed.raw}":`, err)
-    return false
-  }
-
-  // Try to reuse an existing matching grant (with widening support)
-  try {
-    const existingGrantId = await findExistingGrant(resolved, idp)
-    if (existingGrantId) {
-      consola.info(`Reusing grant ${existingGrantId} for: ${resolved.detail.display}`)
-      const token = await fetchGrantToken(idp, existingGrantId)
-      await verifyAndExecute(token, resolved, existingGrantId)
-      return true
-    }
-  }
-  catch {
-    // Fall through to request a new grant
-  }
-
-  // Request a new grant for this specific command
-  const approval = (args.approval ?? 'once') as 'once' | 'timed' | 'always'
-  consola.info(`Requesting grant for: ${resolved.detail.display}`)
-  const grant = await createShapesGrant(resolved, {
-    idp,
-    approval,
-    reason: (args.reason as string) || `ape-shell: ${resolved.detail.display}`,
-    ...summaryFrom(args),
-  })
-
-  if (grant.similar_grants?.similar_grants?.length) {
-    const n = grant.similar_grants.similar_grants.length
-    consola.info('')
-    consola.info(`  Similar grant(s) found (${n}). Your approver can extend an existing grant to cover this request.`)
-  }
-
-  if (!isAutoApproved(grant)) {
-    notifyGrantPending({
-      grantId: grant.id,
-      approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
-      command: resolved.detail?.display || parsed?.raw || 'unknown',
-      audience: resolved.adapter?.cli?.audience ?? 'shapes',
-      host: (args.host as string) || hostname(),
-    })
-  }
-
-  if (shouldWaitForGrant(args)) {
-    consola.info(`Grant requested: ${grant.id}`)
-    consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
-
-    const status = await waitForGrantStatus(idp, grant.id)
-    if (status !== 'approved')
-      throw new CliError(`Grant ${status}`)
-
-    const token = await fetchGrantToken(idp, grant.id)
-    await verifyAndExecute(token, resolved, grant.id)
-    return true
-  }
-
-  await printPendingGrantInfo(grant, idp)
-  throw new CliExit(getAsyncExitCode())
-}
-
-/**
- * Compound sibling of the adapter path: segment-wise resolution, ONE grant
- * with every segment's structured detail, execution of the ORIGINAL line
- * through the shell after verify+consume (pipes need the shell, per-segment
- * exec would change semantics).
- */
-async function tryCompoundModeFromShell(
-  command: string[],
-  idp: string,
-  args: Record<string, unknown>,
-): Promise<boolean> {
-  const compound = await resolveCompoundCommand(command)
-  if (!compound) return false
-
-  // sudo never rides a structured grant — root work goes through the
-  // escapes flow (`apes run --as root`). A sudo segment drops the whole
-  // line back to the opaque path, matching the pre-compound behavior.
-  if (compound.segments.some(seg => basename(seg.executable) === 'sudo'))
-    return false
-
-  // Reuse an approved timed/always grant that covers every segment.
-  try {
-    const existingGrantId = await findExistingCompoundGrant(compound, idp)
-    if (existingGrantId) {
-      consola.info(`Reusing grant ${existingGrantId} for compound: ${compound.innerLine.slice(0, 100)}`)
-      const token = await fetchGrantToken(idp, existingGrantId)
-      await verifyAndConsumeCompound(token, compound)
-      execShellCommand(command)
-      return true
-    }
-  }
-  catch {
-    // Fall through to request a new grant
-  }
-
-  const approval = (args.approval ?? 'once') as 'once' | 'timed' | 'always'
-  consola.info(`Requesting grant for compound command (${compound.segments.length} segments): ${compound.innerLine.slice(0, 100)}`)
-  const grant = await createCompoundGrant(compound, {
-    idp,
-    approval,
-    reason: (args.reason as string) || `ape-shell compound: ${compound.innerLine.slice(0, 100)}`,
-    ...summaryFrom(args),
-  })
-
-  if (grant.similar_grants?.similar_grants?.length) {
-    const n = grant.similar_grants.similar_grants.length
-    consola.info('')
-    consola.info(`  Similar grant(s) found (${n}). Your approver can extend an existing grant to cover this request.`)
-  }
-
-  if (!isAutoApproved(grant)) {
-    notifyGrantPending({
-      grantId: grant.id,
-      approveUrl: `${idp}/grant-approval?grant_id=${grant.id}`,
-      command: compound.innerLine.slice(0, 200),
-      audience: compound.audience,
-      host: (args.host as string) || hostname(),
-    })
-  }
-
-  if (shouldWaitForGrant(args)) {
-    consola.info(`Grant requested: ${grant.id}`)
-    consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
-
-    const status = await waitForGrantStatus(idp, grant.id)
-    if (status !== 'approved')
-      throw new CliError(`Grant ${status}`)
-
-    const token = await fetchGrantToken(idp, grant.id)
-    await verifyAndConsumeCompound(token, compound)
-    execShellCommand(command)
-    return true
-  }
-
-  await printPendingGrantInfo(grant, idp)
-  throw new CliExit(getAsyncExitCode())
+  const line = extractShellCommandString(command)
+  const call = line ? programLine(line) : null
+  if (!call) return false
+  const program = await locateProgram(call.executable)
+  if (!program) return false
+  await authorizeAndRun({ program, argv: call.argv }, idp, subject, args, shellStdio())
+  return true
 }
 
 /**
@@ -737,27 +558,71 @@ function extractPositionals(rawArgs: string[]): string[] {
   return positionals
 }
 
-/**
- * Print a stderr warning when an unshaped CLI is being run through the
- * generic-fallback path. Written to stderr (not stdout) so shell pipelines
- * capturing stdout see the command output, not the warning.
- */
-function printGenericWarning(cliId: string): void {
-  process.stderr.write(`⚠ No shape registered for \`${cliId}\`.\n`)
-  process.stderr.write('Generic mode active — single-use grant will be required.\n')
+function grantTypeFrom(args: Record<string, unknown>): GrantType {
+  const approval = (args.approval as string | undefined) ?? 'once'
+  if (approval === 'once' || approval === 'always') return approval
+  throw new CliError(`--approval ${approval} is not available for program calls; use once or always.`)
 }
 
-async function runAdapterMode(
+function authorizationFailure(error: unknown): unknown {
+  if (error instanceof AuthorizationRefusedError || error instanceof AuthorizationTimeoutError)
+    return new CliError(error.message)
+  return error
+}
+
+/**
+ * Authorizes a program call at the IdP and runs it. Pending answers either wait (`--wait` / `APE_WAIT=1`) or
+ * print the async info block and exit 75; denied, revoked or timed-out requests refuse and nothing runs.
+ */
+async function authorizeAndRun(
+  call: ProgramCall,
+  idp: string,
+  subject: string,
+  args: Record<string, unknown>,
+  stdio: StdioOptions,
+): Promise<void> {
+  const targetHost = (args.host as string) || shellTargetHost()
+  const wait = shouldWaitForGrant(args)
+  const authorization = await authorizeProgramCall(call, {
+    idp,
+    subject,
+    targetHost,
+    grantType: grantTypeFrom(args),
+    ...summaryFrom(args),
+    wait,
+    onPending: (pending) => {
+      notifyGrantPending({
+        grantId: pending.grantId,
+        approveUrl: pending.approvalUrl,
+        command: [call.program.name, ...call.argv].join(' ').slice(0, 200),
+        audience: 'shapes',
+        host: targetHost,
+      })
+      if (wait) {
+        consola.info(`Grant requested: ${pending.grantId}`)
+        consola.info(`Approve at: ${pending.approvalUrl}`)
+      }
+    },
+  }).catch((error: unknown) => { throw authorizationFailure(error) })
+
+  if (authorization.kind === 'pending') {
+    await printPendingGrantInfo({ id: authorization.grantId }, idp, authorization.approvalUrl)
+    throw new CliExit(getAsyncExitCode())
+  }
+  executeProgramCall(call, stdio)
+}
+
+async function runProgramMode(
   command: string[],
   rawArgs: string[],
   args: Record<string, unknown>,
 ) {
   const idp = getIdpUrl(args.idp as string | undefined)
   if (!idp)
-    throw new Error('No IdP URL configured. Run `apes login` first or pass --idp.')
+    throw new CliError('No IdP URL configured. Run `apes login` first or pass --idp.')
 
   // If caller wants to run as another user (e.g. root), auto-switch to the escapes audience flow.
-  // Adapter mode (Shapes) is user-level and cannot elevate privileges.
+  // Program calls are user-level and cannot elevate privileges.
   // Pass the argv array through so commands carrying shell metacharacters
   // or spaces (e.g. `sh -c "mkdir … && cat > …"` from the nest secret
   // relay) survive intact — joining to a string and re-splitting on spaces
@@ -767,73 +632,17 @@ async function runAdapterMode(
     return
   }
 
-  const adapterOpt = extractOption(rawArgs, 'adapter')
-  const cliId = command[0]!
-  let resolved: ResolvedCommand
-  try {
-    const loaded = loadAdapter(cliId, adapterOpt)
-    resolved = await resolveCommand(loaded, command)
-  }
-  catch (err) {
-    const message = err instanceof Error ? err.message : String(err)
-    const isNoAdapter = message.startsWith('No adapter found for ')
-    if (!isNoAdapter)
-      throw err
-    // Fallback to generic synthetic adapter (opt-out via [generic] enabled = false)
-    resolved = await resolveGenericOrReject(cliId, command, {
-      genericEnabled: isGenericFallbackEnabled(),
-    })
-    printGenericWarning(cliId)
-  }
-  const approval = (args.approval ?? 'once') as 'once' | 'timed' | 'always'
+  if (extractOption(rawArgs, 'adapter') !== undefined)
+    throw new CliError('--adapter was removed: the IdP resolves every command with its own Shapes registry.')
 
-  // Try reusing an existing timed/always grant (findExistingGrant skips once grants)
-  try {
-    const existingGrantId = await findExistingGrant(resolved, idp)
-    if (existingGrantId) {
-      consola.info(`Reusing existing grant: ${existingGrantId}`)
-      const token = await fetchGrantToken(idp, existingGrantId)
-      await verifyAndExecute(token, resolved, existingGrantId)
-      return
-    }
-  }
-  catch {
-    // Fall through to creating a new grant
-  }
+  const auth = loadAuth()
+  if (!auth)
+    throw new CliError('Not logged in. Run `apes login` first.')
 
-  const grant = await createShapesGrant(resolved, {
-    idp,
-    approval,
-    ...(args.reason ? { reason: args.reason as string } : {}),
-    ...summaryFrom(args),
-  })
-
-  if (grant.similar_grants?.similar_grants?.length) {
-    const n = grant.similar_grants.similar_grants.length
-    consola.info('')
-    consola.info(`  Similar grant(s) found (${n}). Your approver can extend an existing grant to cover this request.`)
-    if (grant.similar_grants.widened_details?.length) {
-      const wider = grant.similar_grants.widened_details.map(d => d.permission).join(', ')
-      consola.info(`  Broader scope: ${wider}`)
-    }
-    consola.info('')
-  }
-
-  if (shouldWaitForGrant(args)) {
-    consola.info(`Grant requested: ${grant.id}`)
-    consola.info(`Approve at: ${idp}/grant-approval?grant_id=${grant.id}`)
-
-    const status = await waitForGrantStatus(idp, grant.id)
-    if (status !== 'approved')
-      throw new Error(`Grant ${status}`)
-
-    const token = await fetchGrantToken(idp, grant.id)
-    await verifyAndExecute(token, resolved, grant.id)
-    return
-  }
-
-  await printPendingGrantInfo(grant, idp)
-  throw new CliExit(getAsyncExitCode())
+  const program = await locateProgram(command[0]!)
+  if (!program)
+    throw new CliError(`${command[0]}: no executable file found`)
+  await authorizeAndRun({ program, argv: command.slice(1) }, idp, auth.email, args, 'inherit')
 }
 
 async function runAudienceMode(
