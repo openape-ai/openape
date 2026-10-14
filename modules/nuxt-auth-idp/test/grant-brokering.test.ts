@@ -116,6 +116,14 @@ describe('brokered decision lifecycle', () => {
     connection.status = 'revoked'
     expect((await send('create')).status).toBe(403)
   })
+  it('stores a structured summary and rejects the removed text field', async () => {
+    const request = { requester: agent, command: ['printf', 'fixture'], target_host: 'fixture', audience: 'shapes', grant_type: 'once' }
+    const summary = { title: 'Print the fixture', description: 'Line one\nLine two', origin: 'Fixture Pod' }
+    const created = await send('create', undefined, { request: { ...request, summary } })
+    expect(created.status).toBe(201)
+    expect((await created.json()).request.summary).toEqual(summary)
+    expect((await send('create', undefined, { request: { ...request, summary: { text: 'Print the fixture' } } })).status).toBe(400)
+  })
 })
 
 describe('grant upgrades through a grants delegation (issue 1473)', () => {
@@ -125,7 +133,7 @@ describe('grant upgrades through a grants delegation (issue 1473)', () => {
   }
   const context = (argv: string[]) => ({ argv, adapter_id: 'git', adapter_version: '2', adapter_digest: 'SHA-256:adapter', resolved_executable: 'git' })
   const brokeredRead = (path: string, grantType = 'always') => ({ request: { requester: agent, target_host: 'fixture', audience: 'shapes', grant_type: grantType, authorization_details: [detail({ path })], execution_context: context(['git', '-C', path, 'status']) } })
-  const proposal = { requester: agent, target_host: 'fixture', audience: 'shapes', grant_type: 'always', authorization_details: [detail()], execution_context: context(['git']), reason: 'Read any repository' }
+  const proposal = { requester: agent, target_host: 'fixture', audience: 'shapes', grant_type: 'always', authorization_details: [detail()], execution_context: context(['git']), reason: 'Read any repository', summary: { title: 'Standing read access', description: 'It would have covered:\n- git -C /a status' } }
 
   async function delegatedToken(scopes = ['grants:read', 'grants:request']): Promise<string> {
     const { createDelegation } = await import('@openape/grants')
@@ -146,7 +154,7 @@ describe('grant upgrades through a grants delegation (issue 1473)', () => {
     const response = await file(await delegatedToken(), proposal)
     expect(response.status).toBe(201)
     const filed = await response.json()
-    expect(filed).toMatchObject({ status: 'pending', brokered: first.brokered, request: { requester: agent, submitted_by: { delegate: upgrader } } })
+    expect(filed).toMatchObject({ status: 'pending', brokered: first.brokered, request: { requester: agent, submitted_by: { delegate: upgrader }, summary: { title: 'Standing read access' } } })
     expect((await send('create', undefined, brokeredRead('/b'))).status).toBe(201)
 
     expect((await fetch(`${base}/grants/${filed.id}/approve`, { method: 'POST', headers: { Authorization: `Bearer ${owner}` } })).status).toBe(200)

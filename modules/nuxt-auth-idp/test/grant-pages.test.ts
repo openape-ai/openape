@@ -144,6 +144,22 @@ describe('grant approval pages', () => {
     expect(wrapper.text()).toContain('Grant approved')
   })
 
+  it('shows title, description, origin and link of the requester summary on the approval page', async () => {
+    __setRouteQuery({ grant_id: 'grant-1' })
+    const grant = buildCliGrant()
+    grant.request.summary = { title: 'List DNS records for the audit', description: 'Ticket 42\nRead only', origin: 'DNS audit Pod', link: 'https://tickets.example.com/42' }
+    vi.stubGlobal('$fetch', routedFetchMock(grant).fetchMock)
+
+    const wrapper = mount(GrantApprovalPage, { global: { stubs: globalStubs } })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('Requester-provided summary')
+    expect(wrapper.text()).toContain('List DNS records for the audit')
+    expect(wrapper.text()).toContain('Ticket 42\nRead only')
+    expect(wrapper.text()).toContain('Origin: DNS audit Pod')
+    expect(wrapper.find('a[href="https://tickets.example.com/42"]').exists()).toBe(true)
+  })
+
   it('"Always allow" proposes a standing-grant rule and runs this request once', async () => {
     __setRouteQuery({ grant_id: 'grant-1' })
     const { fetchMock, calls } = routedFetchMock(buildCliGrant())
@@ -434,7 +450,9 @@ describe('grant approval pages', () => {
   it('shows the requester summary, marked as the requester\'s own claim', async () => {
     const grant = buildCliGrant()
     grant.request.summary = {
-      text: 'Merge PR #1307 nach main\nCI: 4/4 grün',
+      title: 'Merge PR #1307 nach main',
+      description: 'CI: 4/4 grün\nKeine Konflikte',
+      origin: 'PR-Merge-Pod',
       link: 'https://git.openape.ai/openape-ai/openape/pulls/1307',
     }
     vi.stubGlobal('$fetch', routedFetchMock(grant).fetchMock)
@@ -444,12 +462,14 @@ describe('grant approval pages', () => {
 
     expect(wrapper.text()).toContain('Angabe des Antragstellers')
     expect(wrapper.text()).toContain('Merge PR #1307 nach main')
+    expect(wrapper.text()).toContain('CI: 4/4 grün\nKeine Konflikte')
+    expect(wrapper.text()).toContain('Herkunft: PR-Merge-Pod')
     expect(wrapper.find('a[href="https://git.openape.ai/openape-ai/openape/pulls/1307"]').exists()).toBe(true)
   })
 
   it('never turns an executable scheme into a link', async () => {
     const grant = buildCliGrant()
-    grant.request.summary = { text: 'Harmlos aussehender Text', link: 'javascript:alert(1)' }
+    grant.request.summary = { title: 'Harmlos aussehender Text', link: 'javascript:alert(1)' }
     vi.stubGlobal('$fetch', routedFetchMock(grant).fetchMock)
 
     const wrapper = mount(GrantsPage, { global: { stubs: globalStubs } })

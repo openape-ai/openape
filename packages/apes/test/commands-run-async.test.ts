@@ -1388,4 +1388,35 @@ describe('commands/run async default', () => {
       expect(execFileSync).toHaveBeenCalled()
     })
   })
+
+  // ------------------------------------------------------------------------
+  // #1473 — the requester summary is sent as title/description/origin/link
+  // ------------------------------------------------------------------------
+  describe('request summary', () => {
+    it('sends title, description, origin and link as the structured summary', async () => {
+      const shapes = await import('../src/shapes/index.js')
+      vi.mocked(shapes.loadAdapter).mockReturnValue({} as any)
+      vi.mocked(shapes.resolveCommand).mockResolvedValue(makeResolved('whoami'))
+      vi.mocked(shapes.findExistingGrant).mockResolvedValue(null)
+      vi.mocked(shapes.createShapesGrant).mockResolvedValue({ id: 'grant-summary' } as any)
+
+      const { runCommand } = await import('../src/commands/run.js')
+      await expectCliExit(runCommand.run!({
+        rawArgs: ['run', '--', 'whoami'],
+        args: { 'shell': false, 'wait': false, 'approval': 'once', 'summary-title': ' Show the account ', 'summary-description': 'Line one\nLine two', 'summary-origin': 'Status check', 'summary-link': 'https://example.com/status' } as any,
+      } as any))
+
+      expect(vi.mocked(shapes.createShapesGrant).mock.calls[0]?.[1]).toMatchObject({
+        summary: { title: 'Show the account', description: 'Line one\nLine two', origin: 'Status check', link: 'https://example.com/status' },
+      })
+    })
+
+    it('refuses the removed --summary option and summaries the IdP would refuse', async () => {
+      const { summaryFrom } = await import('../src/commands/run.js')
+      expect(() => summaryFrom({ summary: 'old text' })).toThrow('--summary was replaced')
+      expect(() => summaryFrom({ 'summary-description': 'details only' })).toThrow('--summary-title is required')
+      expect(() => summaryFrom({ 'summary-title': 'Archive \u202Eexe.txt' })).toThrow('Invalid summary')
+      expect(summaryFrom({})).toEqual({})
+    })
+  })
 })

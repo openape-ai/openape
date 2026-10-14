@@ -1,3 +1,6 @@
+import { grantSummary, parseScriptSummary } from './grant-summary'
+import type { GrantSummary } from './grant-summary'
+
 export interface ArchiveMail {
   id: string
   version: string
@@ -38,7 +41,8 @@ export function parseArchiveProposal(value: unknown): ArchiveProposal {
   const item = value as ArchiveProposal
   if (Object.keys(item).some(key => !['application', 'mailbox', 'items'].includes(key)) || typeof item.application !== 'string' || !item.application || item.application.length > 100 || typeof item.mailbox !== 'string' || !address.test(item.mailbox) || item.mailbox.length > 320 || !Array.isArray(item.items) || !item.items.length || item.items.length > 30) throw new Error('Archive proposals require an assigned application, mailbox and 1–30 messages')
   for (const mail of item.items) {
-    if (!mail || Object.keys(mail).some(key => !['id', 'version', 'reason'].includes(key)) || typeof mail.id !== 'string' || !mail.id || mail.id.length > 2048 || typeof mail.version !== 'string' || !mail.version || mail.version.length > 2048 || typeof mail.reason !== 'string' || !mail.reason.trim() || mail.reason.length > 500) throw new Error('Each archive proposal needs an exact message and reason')
+    if (!mail || Object.keys(mail).some(key => !['id', 'version', 'reason'].includes(key)) || typeof mail.id !== 'string' || !mail.id || mail.id.length > 2048 || typeof mail.version !== 'string' || !mail.version || mail.version.length > 2048 || typeof mail.reason !== 'string' || !mail.reason.trim() || mail.reason.length > 500) throw new Error('Each archive proposal needs an exact message and reason')    // The reason reaches the IdP as the summary description of its message.
+    parseScriptSummary({ description: mail.reason })
   }
   if (new Set(item.items.map(mail => mail.id)).size !== item.items.length) throw new Error('Duplicate archive messages')
   return { application: item.application, mailbox: item.mailbox.toLowerCase(), items: item.items.map(mail => ({ id: mail.id, version: mail.version, reason: mail.reason.trim() })) }
@@ -61,7 +65,10 @@ export function archiveItemCommand(manifest: ArchiveManifest, item: ArchiveItem)
   const { items, ...batch } = manifest
   return ['pods-mail-archive', 'archive', JSON.stringify({ ...batch, count: items.length }), JSON.stringify(item)]
 }
-/** First line is the row an owner reads in the batch approval; the rest is detail. */
-export function archiveItemSummary(item: ArchiveItem): string {
-  return [`${item.sender} – ${item.subject || '(Ohne Betreff)'}`, `Eingang: ${item.receivedAt}`, `Grund: ${item.reason}`, 'Aktion: vom Posteingang ins Archiv verschieben', item.url].join('\n')
+/**
+ * What the IdP shows about one message (issue 1473): its subject (or sender) as title, the script's reason as
+ * description, its provider link, and the Pod as origin. The grant command binds the exact message.
+ */
+export function archiveItemSummary(item: ArchiveItem, origin?: string): GrantSummary {
+  return grantSummary(item.subject || item.sender, origin, { description: item.reason, link: item.url })
 }

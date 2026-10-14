@@ -1,6 +1,7 @@
 import { sql } from 'drizzle-orm'
 import { useRuntimeConfig } from 'nitropack/runtime'
 import { useDb } from '../database/drizzle'
+import { migrateStoredGrantSummaries } from '../utils/grant-summary-migration'
 
 export default defineNitroPlugin(async () => {
   if (process.env.OPENAPE_E2E === '1') return
@@ -250,4 +251,9 @@ export default defineNitroPlugin(async () => {
   catch (err) {
     console.error('[database] Table creation failed (tables may already exist):', err)
   }
+
+  // Issue 1473: summary.text became title/description; requests carrying
+  // text are refused, so stored grants must not keep it either.
+  const migrated = await migrateStoredGrantSummaries(db)
+  if (migrated) console.info(`[database] Migrated ${migrated} grant summaries to title/description`)
 })

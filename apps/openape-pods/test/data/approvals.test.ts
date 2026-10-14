@@ -19,11 +19,11 @@ const reply = (operation: 'read' | 'move', fields: Record<string, unknown>) => (
 
 /** An IdP double: records every operation and answers with the decision set for each grant. */
 function idp() {
-  const calls: { operation: string, keys: string[], commands: string[][] }[] = []
+  const calls: { operation: string, keys: string[], commands: string[][], summaries: unknown[] }[] = []
   const decisions = new Map<string, string>()
   let failCreate = false
   const service: ApprovalService = async (body) => {
-    calls.push({ operation: body.operation, keys: (body.grants ?? body.manifest.items).map(item => 'key' in item ? item.key : ''), commands: body.manifest.items.map(item => approvalCommand(item.authority)) })
+    calls.push({ operation: body.operation, keys: (body.grants ?? body.manifest.items).map(item => 'key' in item ? item.key : ''), commands: body.manifest.items.map(item => approvalCommand(item.authority)), summaries: body.manifest.items.map(item => item.summary) })
     if (body.operation === 'create') {
       if (failCreate) throw new Error('IdP connection reset')
       return { url: 'https://id.example.invalid/grant-approval?batch=1', grants: body.manifest.items.map(item => ({ key: item.key, id: `grant-${item.key}` })) }
@@ -40,7 +40,7 @@ function fixture() {
   const approvals = new Approvals(f.store, () => owner)
   approvals.collect = { quietMs: 0, maxMs: 0 }
   const run = f.run(pod)
-  const ask = (version = mailContentVersion(mail), subject = mail.subject) => approvals.request(run, { action: 'mail.archive', object: `${mailbox}:${mail.id}`, title: 'Ignored script title', payload: { mailbox, messageId: mail.id, version, subject, sender: 'news@example.invalid' } })
+  const ask = (version = mailContentVersion(mail), subject = mail.subject) => approvals.request(run, { action: 'mail.archive', object: `${mailbox}:${mail.id}`, payload: { mailbox, messageId: mail.id, version, subject, sender: 'news@example.invalid' } })
   return { ...f, podId: pod, approvals, run, ask }
 }
 
@@ -102,9 +102,9 @@ describe('object approvals at the IdP', () => {
     expect(f.approvals.get(f.podId, asked.id).state).toBe('collecting')
   })
 
-  it('shows the owner a title derived from the bound message, never the script\'s, and binds the object to it', () => {
+  it('shows the message subject without a script title and binds the object to the message', () => {
     const f = fixture()
-    expect(f.ask().title).toBe(`${mail.subject} · news@example.invalid`)
+    expect(f.ask()).toMatchObject({ title: mail.subject, description: null, link: null })
     const request = (object: string, payload: Record<string, string>) => () => f.approvals.request(f.run, { action: 'mail.archive', object, payload })
     expect(request(`${mailbox}:other-message`, { mailbox, messageId: mail.id, version: 'v', subject: 's', sender: 'x@example.invalid' })).toThrow('mailbox and message ID')
     expect(request(`${mailbox}:${mail.id}`, { mailbox, messageId: mail.id, version: 'v', subject: 's' })).toThrow('subject and sender')
@@ -204,7 +204,7 @@ describe('program approvals (issue 1468)', () => {
 
   it('derives the object from the exact command and shows the adapter display with the argv', async () => {
     const f = await approvedPush()
-    expect(f.asked).toMatchObject({ action: 'program.run', object: programObject('git', push(lease)), title: `Push to remote: git push --force-with-lease=feature/x:${lease} origin ${lease}:refs/heads/feature/x` })
+    expect(f.asked).toMatchObject({ action: 'program.run', object: programObject('git', push(lease)), title: 'Push to remote' })
     expect(f.asked.object).toMatch(new RegExp(`^git push --force-with-lease=feature/x:${lease} origin ${lease}:refs/heads/feature/x #[a-f0-9]{16}$`))
     // The authority the owner approves at the IdP carries the action and the exact command object.
     expect(JSON.parse(f.server.calls[0]!.commands[0]![2]!)).toMatchObject({ action: 'program.run', object: f.asked.object })
@@ -212,28 +212,37 @@ describe('program approvals (issue 1468)', () => {
     const next = f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push('b'.repeat(40)) } }, 'Push to remote')
     expect(next.id).not.toBe(f.asked.id)
     expect(next.state).toBe('collecting')
-    // The title never comes from the script, and the object cannot name another command.
+    // Without the adapter's description no command is approvable, and the object cannot name another command.
     expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease) } })).toThrow('adapter description')
     expect(() => f.approvals.request(f.run, { action: 'program.run', object: 'git status', payload: { application: 'git', argv: push(lease) } }, 'Push to remote')).toThrow('exact command')
     expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease), note: 'x' } }, 'Push to remote')).toThrow('application and its exact argv')
   })
 
-  // Owner decision October 13, 2026: a script may name what the command does; the IdP still shows the whole command.
-  it('puts a marked Pod headline in front of the complete command and keeps the approval bound to the command', () => {
-    const f = fixture()
-    const asked = f.approvals.request(f.run, { action: 'program.run', title: 'Rebase feature/x onto development', payload: { application: 'git', argv: push(lease) } }, 'Push to remote')
-    expect(asked.title).toBe(`Rebase feature/x onto development (Pod) · Push to remote: git push --force-with-lease=feature/x:${lease} origin ${lease}:refs/heads/feature/x`)
-    expect(asked.object).toBe(programObject('git', push(lease)))
-    // Another headline for the same command is the same approval.
-    expect(f.approvals.request(f.run, { action: 'program.run', title: 'Something else', payload: { application: 'git', argv: push(lease) } }, 'Push to remote').id).toBe(asked.id)
-    const ask = (title: string) => () => f.approvals.request(f.run, { action: 'program.run', title, payload: { application: 'git', argv: push('c'.repeat(40)) } }, 'Push to remote')
-    expect(ask('x'.repeat(121))).toThrow('at most 120 characters')
-    expect(ask('Rebase\u202Eevil')).toThrow('printable ASCII')
-    expect(ask('two\nlines')).toThrow('printable ASCII')
-    expect(ask('  ')).toThrow('printable ASCII')
-    // The command is never shortened to make room for a headline.
-    const long = ['push', `--force-with-lease=feature/x:${lease}`, 'origin', `${'y'.repeat(340)}:refs/heads/feature/x`]
-    expect(() => f.approvals.request(f.run, { action: 'program.run', title: 'h'.repeat(120), payload: { application: 'git', argv: long } }, 'D'.repeat(200))).toThrow('shorten the headline')
+  // Issue 1473: the script says what a request is for; the desktop passes it through and adds the Pod as origin.
+  it('passes the script\'s title, description and link to the IdP unchanged and keeps the approval bound to the command', async () => {
+    const f = fixture(); const server = idp()
+    const claim = { title: 'Rebase feature/x onto development', description: 'Rebased onto development.\nThe lease protects concurrent pushes.', link: 'https://repos.example.invalid/pr/7' }
+    const asked = f.approvals.request(f.run, { action: 'program.run', ...claim, payload: { application: 'git', argv: push(lease) } }, 'Push to remote')
+    expect(asked).toMatchObject({ ...claim, object: programObject('git', push(lease)) })
+    // Another title for the same command is the same approval with its first title.
+    expect(f.approvals.request(f.run, { action: 'program.run', title: 'Something else', payload: { application: 'git', argv: push(lease) } }, 'Push to remote')).toMatchObject({ id: asked.id, title: claim.title })
+    const mail = f.approvals.request(f.run, { action: 'mail.archive', object: `${mailbox}:${'message-2'}`, title: 'Archive the weekly news', payload: { mailbox, messageId: 'message-2', version: 'v', subject: 'Weekly news', sender: 'news@example.invalid' } })
+    await f.approvals.sync(f.podId, server.service, new AbortController().signal)
+    // One IdP request per action; each item carries exactly the claim and the Pod's name.
+    expect(server.calls.filter(call => call.operation === 'create').flatMap(call => call.summaries)).toEqual(expect.arrayContaining([{ ...claim, origin: 'Newsletter Review' }, { title: 'Archive the weekly news', origin: 'Newsletter Review' }]))
+    expect(f.approvals.get(f.podId, mail.id)).toMatchObject({ title: 'Archive the weekly news', description: null, link: null })
+    // An invalid claim is refused, never shortened or cleaned, and nothing is stored.
+    const ask = (change: Record<string, unknown>) => () => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push('c'.repeat(40)) }, ...change }, 'Push to remote')
+    expect(ask({ title: 'x'.repeat(121) })).toThrow('summary.title')
+    expect(ask({ title: 'Rebase\u202Eevil' })).toThrow('summary.title')
+    expect(ask({ title: 'two\nlines' })).toThrow('summary.title')
+    expect(ask({ title: '  ' })).toThrow('summary.title')
+    expect(ask({ description: 'd'.repeat(2001) })).toThrow('summary.description')
+    expect(ask({ description: 'tab\there' })).toThrow('summary.description')
+    expect(ask({ link: 'javascript:alert(1)' })).toThrow('summary link')
+    expect(ask({ link: 'https://user:secret@example.invalid/' })).toThrow('summary link')
+    expect(ask({ origin: 'Another Pod' })).toThrow('Invalid approval request')
+    expect(f.store.db.prepare('SELECT count(*) AS count FROM action_approvals WHERE object LIKE ?').get(`%${'c'.repeat(40)}%`)).toEqual({ count: 0 })
   })
 
   it('shows the owner the complete command and refuses one that does not fit instead of shortening it', () => {
@@ -246,12 +255,13 @@ describe('program approvals (issue 1468)', () => {
     expect(f.store.db.prepare('SELECT count(*) AS count FROM action_approvals').get()).toEqual({ count: 0 })
     // Arguments stay unambiguous; hidden characters are refused rather than replaced.
     const spaced = f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: ['commit', '-m', 'two words', ''] } }, 'Commit')
-    expect(spaced.title).toBe('Commit: git commit -m "two words" ""')
+    expect(spaced.object).toMatch(/^git commit -m "two words" "" #[a-f0-9]{16}$/)
     // Only printable ASCII is shown; any other code point (direction isolates, variation selectors, letters) is refused.
     for (const hidden of ['feature/x\u202Egnp.exe', 'feature/\u2066x', 'main\uFE0F', 'caf\u00E9', 'tab\tx']) expect(ask(['push', 'origin', hidden])).toThrow('only printable ASCII')
     expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'g\u2066it', argv: ['push'] } }, 'Push')).toThrow('only printable ASCII')
-    expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: ['push', 'origin', 'main'] } }, 'Push \u2066main')).toThrow('cannot be shown complete')
-    expect(() => f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease) } }, 'x'.repeat(201))).toThrow('cannot be shown complete')
+    // The adapter's description is data: hidden characters become spaces and a long one is shortened to one title.
+    expect(f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: ['push', 'origin', 'main'] } }, 'Push \u2066main').title).toBe('Push main')
+    expect(f.approvals.request(f.run, { action: 'program.run', payload: { application: 'git', argv: push(lease) } }, 'x'.repeat(201)).title).toBe(`${'x'.repeat(119)}…`)
   })
 
   it('consumes an approved request and runs the exact command once, refusing a second use', async () => {
