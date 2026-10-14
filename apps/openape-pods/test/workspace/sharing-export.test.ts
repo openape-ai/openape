@@ -254,10 +254,9 @@ it('exports public values only after explicit default selection and leaves sourc
 it('exports two application bindings as distinct recipient accounts without paths, state or environment values', async () => {
   const f = sourceFixture()
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'pods-sharing-programs-'))); assetRoots.push(root)
-  const executable = join(root, 'fixture'); const adapterPath = join(root, 'fixture.toml')
+  const executable = join(root, 'fixture')
   writeFileSync(executable, '#!/bin/sh\nexit 77\n', { mode: 0o700 })
-  writeFileSync(adapterPath, 'schema="openape-shapes/v1"\n[cli]\nid="fixture"\nexecutable="fixture"\nversion="1"\n[[operation]]\nid="read"\ncommand=["read"]\ndisplay="Read fixture"\naction="read"\nrisk="low"\nresource_chain=["fixture:*"]\n')
-  const definition = await programDefinition(executable, adapterPath)
+  const definition = await programDefinition(executable)
   const applicationIds = [randomUUID(), randomUUID()]; const stateIds = [randomUUID(), randomUUID()]
   for (const [index, id] of applicationIds.entries()) f.resources.assignProgram(f.pod.id, id, { ...definition, type: 'program', stateId: stateIds[index]!, capability: `tool.app_${id.replaceAll('-', '')}.invoke`, environment: { PROFILE: 'PRIVATE_ENV_CANARY' } }, f.resources.epoch(f.pod.id))
   installExample(f.store, f.resources, f.pod.id, 'deterministic', 'a'.repeat(64))
@@ -272,6 +271,8 @@ it('exports two application bindings as distinct recipient accounts without path
   const serialized = Object.values(unzipSync(exported.archive)).map(file => Buffer.from(file).toString()).join('\n')
   for (const privateValue of [...applicationIds, ...stateIds, root, 'PRIVATE_ENV_CANARY']) expect(serialized).not.toContain(privateValue)
   expect(exported.manifest.applications.every(application => application.testedVersions.length === 0)).toBe(true)
+  // A program is required by its command name; the recipient's IdP decides its commands (issue 1473, revision 4).
+  expect(exported.manifest.applications.map(application => [application.application, application.adapter])).toEqual(applicationIds.map(() => ['fixture', { identity: 'ai.openape.pods.program', version: 1, operations: ['invoke'] }]))
 })
 
 it('serializes preparation and still scans selected defaults inside payloads', async () => {

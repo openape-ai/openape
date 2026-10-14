@@ -1,30 +1,22 @@
-import type { OpenApeCliAuthorizationDetail, OpenApeExecutionContext } from '@openape/core'
-import { canonicalizeCliPermission, cliAuthorizationDetailsCover, sameBrokeredGrant } from '@openape/grants'
-import { exactCommand, loadAdapter, resolveCommand } from '@openape/apes'
-import type { LoadedAdapter } from '@openape/apes'
+import type { OpenApeCliAuthorizationDetail } from '@openape/core'
+import { cliAuthorizationDetailsCover, sameBrokeredGrant } from '@openape/grants'
 import { approvalURL } from '../../contracts/activity'
 import { approvalAudience } from '../../contracts/approvals'
 import { grantSummary } from '../../contracts/grant-summary'
-import { gateActions } from '../../contracts/mail-archive-port'
 import { parsePodGrant, grantTypes  } from '../../contracts/grants'
 import type { GrantState, GrantType, PodGrant } from '../../contracts/grants'
-import { adapterStanding } from '../../contracts/programs'
-import type { ProgramAssignment } from '../../contracts/programs'
-import { grantCoverage, ownGrant } from '../broker/authorization'
-import type { AgentConnection, Grant, GrantLedgerPort } from '../broker/authorization'
+import { AgentAuthority, grantCoverage, ownGrant } from '../broker/authorization'
+import type { AgentConnection, Grant, GrantLedgerPort, ProgramCall } from '../broker/authorization'
 import { connectionRequest, readJSON } from '../connections/http'
 import type { OwnerSession } from '../connections/owner-session'
 import type { GrantLedgerCommand } from '../../worker/resources/grants'
-import { verifyExecutable } from '../../worker/runtime/sandbox'
-import { httpArgv, programContext, runtimeArgv } from './execution-context'
-import { loadPodAdapter } from './registry-copies'
+import { httpPermission, originPermission, runtimePermission, sshPermission } from './pod-permissions'
 
-/** What one grant request asks for, as the Pod identity: the authorization details and the adapter they belong to. */
 /**
- * A single command carries the context the run-time path resolves for it, so an exact-command grant can bind to it;
- * a grant covering several commands carries the program context. The IdP rejects a Pod request without argv.
+ * What one request for a desktop-own permission asks for, as the Pod identity: its fixed authorization details and the
+ * command the IdP shows it with. Program commands are never requested this way; the IdP authorizes them per call.
  */
-export interface GrantSpec { cliId: string, details: OpenApeCliAuthorizationDetail[], executionContext: OpenApeExecutionContext, display: string }
+export interface GrantSpec { details: OpenApeCliAuthorizationDetail[], command: string[], display: string }
 export interface PodConnection extends AgentConnection { owner: string }
 export interface GrantResult { grant: PodGrant, approval: string | null }
 /**
@@ -34,74 +26,29 @@ export interface GrantResult { grant: PodGrant, approval: string | null }
 export interface GrantDecision { id: string, podId: string, state: GrantState, grantType: GrantType, requestedType: GrantType, widened: boolean, approvedInSession: boolean, grant: PodGrant | null }
 
 const grantIdPattern = /^[\w-]{1,128}$/
-const riskOrder = ['low', 'medium', 'high', 'critical']
 const endedStates = ['revoked', 'denied', 'expired', 'used']
 
-/**
- * The details of a whole-program grant: one per action and first resource, without selector, so every operation of
- * that action on that resource is covered. Operations the adapter marks as exact commands and generic execution are
- * never covered: such a group is left out and its commands need their own grant. Mail moves (gate actions) are left out
- * as well; they run only through the archive port.
- */
-export function programCoverage(adapter: LoadedAdapter): OpenApeCliAuthorizationDetail[] {
-  const groups = new Map<string, { action: string, resource: string, risk: string, exact: boolean }>()
-  for (const operation of adapter.adapter.operations) {
-    if (operation.id === '_generic.exec' || gateActions.includes(operation.action)) continue
-    const resource = operation.resource_chain[0]?.split(':', 1)[0]
-    if (!resource) continue
-    const key = `${operation.action}\n${resource}`
-    const group = groups.get(key) ?? { action: operation.action, resource, risk: 'low', exact: false }
-    if (riskOrder.indexOf(operation.risk) > riskOrder.indexOf(group.risk)) group.risk = operation.risk
-    group.exact ||= operation.exact_command === true
-    groups.set(key, group)
-  }
-  return [...groups.values()].filter(group => !group.exact).map((group) => {
-    const detail = { type: 'openape_cli' as const, cli_id: adapter.adapter.cli.id, operation_id: '*', resource_chain: [{ resource: group.resource }], action: group.action, permission: '', display: `${adapter.adapter.cli.id}: every ${group.action} on ${group.resource}`, risk: group.risk as OpenApeCliAuthorizationDetail['risk'] }
-    return { ...detail, permission: canonicalizeCliPermission(detail) }
-  })
-}
-
-/** One command of an adapter, including its executable name; `exact` binds the grant to this argv (issue 1473). */
-export async function commandSpec(adapter: LoadedAdapter, argv: string[], exact = false): Promise<GrantSpec> {
-  const structured = await resolveCommand(adapter, argv)
-  const resolved = exact ? exactCommand(structured) : structured
-  if (resolved.detail.operation_id === '_generic.exec') throw new Error('Generic program execution cannot be granted')
-  return { cliId: adapter.adapter.cli.id, details: [resolved.detail], executionContext: resolved.executionContext, display: resolved.detail.display }
-}
-
-/**
- * A whole program, or one command when `argv` is given, of an application assigned to the Pod. An adapter that is not
- * a tested registry adapter only grants exact commands (issue 1473).
- */
-export async function programSpec(assignment: Pick<ProgramAssignment, 'cliId' | 'adapterPath' | 'adapterHash' | 'registry' | 'cliVersion' | 'bundlePath'>, argv?: string[]): Promise<GrantSpec> {
-  await verifyExecutable(assignment.adapterPath, assignment.adapterHash)
-  const adapter = loadAdapter(assignment.cliId, assignment.adapterPath)
-  const standing = adapterStanding(assignment)
-  if (argv) return commandSpec(adapter, [assignment.cliId, ...argv], standing.exact)
-  if (standing.exact) throw new Error(`${assignment.cliId} needs an exact approval for every command (${standing.reason}); grant single commands`)
-  const details = programCoverage(adapter)
-  if (!details.length) throw new Error(`${assignment.cliId} has no operations a whole-program grant can cover; grant single commands`)
-  return { cliId: assignment.cliId, details, executionContext: await programContext(adapter), display: `All ${assignment.cliId} operations: ${details.map(detail => `${detail.action} on ${detail.resource_chain[0]!.resource}`).join(', ')}` }
-}
-
 /** The grant to run the Pod's stored script; it covers every run of this Pod whatever its script, workspace or name. */
-export async function runtimeSpec(adapterPath: string, podId: string, name: string): Promise<GrantSpec> {
-  const adapter = loadPodAdapter('pod-runtime', adapterPath)
-  const resolved = await resolveCommand(adapter, runtimeArgv({ podId, name, script: 'run.mjs', workspace: 'workspace' }))
-  return { cliId: 'pod-runtime', details: [resolved.detail], executionContext: resolved.executionContext, display: resolved.detail.display }
+export function runtimeSpec(podId: string, name: string): GrantSpec {
+  const { detail, argv } = runtimePermission({ podId, name, script: 'run.mjs', workspace: 'workspace' })
+  return { details: [detail], command: argv, display: detail.display }
 }
 
-/** An HTTPS origin; with methods, one detail per method (one method carries its request's context), otherwise every method of that origin. */
-export async function httpSpec(adapterPath: string, origin: string, methods?: string[]): Promise<GrantSpec> {
-  const adapter = loadPodAdapter('pod-http', adapterPath)
-  if (methods) {
-    const resolved = await Promise.all(methods.map(async method => await resolveCommand(adapter, httpArgv(origin, method))))
-    const details = resolved.map(item => item.detail)
-    const executionContext = resolved.length === 1 ? resolved[0]!.executionContext : await programContext(adapter)
-    return { cliId: 'pod-http', details, executionContext, display: details.map(detail => detail.display).join('; ') }
+/** An HTTPS origin; with methods, one detail per method, otherwise every method of that origin. */
+export function httpSpec(origin: string, methods?: string[]): GrantSpec {
+  if (!methods) {
+    const { detail, argv } = originPermission(origin)
+    return { details: [detail], command: argv, display: detail.display }
   }
-  const detail = { type: 'openape_cli' as const, cli_id: 'pod-http', operation_id: 'request', resource_chain: [{ resource: 'https-origin', selector: { url: origin } }], action: 'request', permission: '', display: `HTTP requests to ${origin}`, risk: 'high' as const }
-  return { cliId: 'pod-http', details: [{ ...detail, permission: canonicalizeCliPermission(detail) }], executionContext: await programContext(adapter), display: detail.display }
+  const permissions = methods.map(method => httpPermission(origin, method))
+  const details = permissions.map(item => item.detail)
+  return { details, command: permissions.length === 1 ? permissions[0]!.argv : ['pod-http'], display: details.map(detail => detail.display).join('; ') }
+}
+
+/** The fixed inventory of one reviewed SSH binding; `argv` is sshGrantArgv of that binding. */
+export function sshSpec(argv: string[]): GrantSpec {
+  const { detail } = sshPermission(argv)
+  return { details: [detail], command: argv, display: detail.display }
 }
 
 function typeOf(value: string): GrantType {
@@ -168,21 +115,30 @@ export class PodGrants {
   }
 
   /**
-   * Requests one continuing grant as the Pod; an equal pending or approved request is reused, so retries never ask
-   * twice. The ledger does not know argv hashes, so an exact command is matched only by the IdP's own reuse.
+   * Asks the IdP once about one program command as the Pod, without running it (issue 1473, revision 4): an approved
+   * grant that covers it needs nothing; otherwise the IdP's pending request is recorded and its approval page returned.
    */
+  async requestProgram(podId: string, call: ProgramCall, signal: AbortSignal): Promise<{ grantId: string, approval: string | null }> {
+    const connection = await this.dependencies.connection(podId)
+    const authority = new AgentAuthority(connection, undefined, this.port(podId), undefined, { origin: await this.dependencies.podName(podId) })
+    const reply = await authority.requestProgram(call, signal)
+    if (reply.state === 'approved') return { grantId: reply.grantId, approval: null }
+    const recorded = (await this.list({ podId })).find(grant => grant.id === reply.grantId)
+    return { grantId: reply.grantId, approval: approvalURL({ grantId: reply.grantId, issuer: connection.decisionIssuer ?? connection.issuer, state: 'pending', title: recorded?.display ?? 'Program command' }) }
+  }
+
+  /** Requests one continuing grant for a desktop-own permission as the Pod; an equal pending or approved request is reused, so retries never ask twice. */
   async request(podId: string, spec: GrantSpec, signal: AbortSignal): Promise<GrantResult> {
     const connection = await this.dependencies.connection(podId)
     const issuer = connection.decisionIssuer ?? connection.issuer
-    const exact = spec.details.some(detail => detail.constraints?.exact_command === true)
-    const existing = exact ? null : await this.dependencies.ledger({ type: 'same', podId, issuer, subject: connection.subject, details: spec.details }) as PodGrant | null
+    const existing = await this.dependencies.ledger({ type: 'same', podId, issuer, subject: connection.subject, details: spec.details }) as PodGrant | null
     if (existing) {
       const current = await this.record(podId, connection, await this.read(connection, existing.id, signal))
       if (['pending', 'approved'].includes(current.state)) return this.result(current)
     }
-    const adopted = exact ? null : await this.adopt(podId, connection, spec.details, id => this.candidate(connection, id, signal))
+    const adopted = await this.adopt(podId, connection, spec.details, id => this.candidate(connection, id, signal))
     if (adopted) return this.result(await this.record(podId, connection, adopted))
-    const response = await fetch(`${connection.issuer}/api/grants`, { method: 'POST', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await connection.accessToken()}` }, body: JSON.stringify({ requester: connection.subject, target_host: connection.targetHost, audience: 'shapes', grant_type: 'always', permissions: spec.details.map(detail => detail.permission), authorization_details: spec.details, execution_context: spec.executionContext, reason: spec.display.slice(0, 4096), summary: grantSummary(spec.display, await this.dependencies.podName(podId)) }) })
+    const response = await fetch(`${connection.issuer}/api/grants`, { method: 'POST', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${await connection.accessToken()}` }, body: JSON.stringify({ requester: connection.subject, target_host: connection.targetHost, audience: 'shapes', grant_type: 'always', command: spec.command, permissions: spec.details.map(detail => detail.permission), authorization_details: spec.details, reason: spec.display.slice(0, 4096), summary: grantSummary(spec.display, await this.dependencies.podName(podId)) }) })
     // 201 is a new request; 200 is an existing approved grant the IdP reused.
     const created = await readJSON(response)
     if (typeof created.id !== 'string' || !grantIdPattern.test(created.id)) throw new Error('Invalid grant response; inspect the Pod grants before retrying')

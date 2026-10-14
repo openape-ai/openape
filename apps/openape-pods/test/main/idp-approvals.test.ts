@@ -2,27 +2,15 @@
 import { randomUUID } from 'node:crypto'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AuthorityError } from '../../src/contracts/infrastructure'
-import { resolve } from 'node:path'
 import { typesafeOrigin } from '../../src/contracts/jev'
-import type { ProgramAssignment } from '../../src/contracts/programs'
-import { httpArgv, runtimeArgv } from '../../src/main/grants/execution-context'
-import { httpSpec, programSpec, runtimeSpec } from '../../src/main/grants/pod-grants'
-import { applicationId, brokerRejections, closeProfiles, deniedPodId, identityProvider, issuer, podId, podSubject, program, sources, workerFixture } from './idp-fixture'
+import { httpArgv, runtimeArgv } from '../../src/main/grants/pod-permissions'
+import { httpSpec, runtimeSpec } from '../../src/main/grants/pod-grants'
+import { applicationId, brokerRejections, closeProfiles, deniedPodId, identityProvider, issuer, podId, podSubject, program, workerFixture } from './idp-fixture'
 
 // Security contract (issue 1455, owner decisions October 9 and 10, 2026): without the owner's MCP session Pods
 // requests grants as the Pod identity and waits for the owner at the IdP; it never calls an approve endpoint
 // itself (DDISA: the requester is never its own approver). The stub IdP records every approve call and the test
 // fails on any. Approvals inside an owner session are covered in session-approvals.test.ts.
-vi.mock('@openape/apes', async (importOriginal) => {
-  const original = await importOriginal<typeof import('@openape/apes')>()
-  const { source } = await import('./idp-fixture')
-  return { ...original, loadAdapter: (id: string, path: string) => original.loadAdapter(id, source(path)) }
-})
-vi.mock('@openape/apes/assigned', async (importOriginal) => {
-  const original = await importOriginal<typeof import('@openape/apes/assigned')>()
-  const { source } = await import('./idp-fixture')
-  return { ...original, authorizeAssignedCommand: (command: Parameters<typeof original.authorizeAssignedCommand>[0], token: string, scope: Parameters<typeof original.authorizeAssignedCommand>[2]) => original.authorizeAssignedCommand({ ...command, adapterPath: source(command.adapterPath) }, token, scope) }
-})
 vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent', isPackaged: false }, shell: { openExternal: vi.fn(async () => {}) } }))
 vi.mock('../../src/runtime/environment', () => ({ podEnvironment: async () => ({ workspace: '/fixture/workspace', home: '/fixture/home', environment: {} }), podEnvironmentValues: () => ({}), visibleEnvironment: () => ({}) }))
 
@@ -36,14 +24,17 @@ it('requests program and HTTP assignments as continuing grants and opens the IdP
   const f = await fixture()
   await f.worker.program({ type: 'grant', podId, applicationId, epoch: 1, argv: ['request', '--origin', 'https://api.example.test', '--method', 'GET'] })
   await f.worker.resources({ type: 'assignHttp', podId, epoch: 1, permission: { origin: 'https://hooks.example.test', methods: ['POST'] } })
-  expect(idp.state.creates.map(request => [request.grant_type, request.requester, request.target_host])).toEqual([['always', 'pod-0001@example.test', `pods:${podId}`], ['always', 'pod-0001@example.test', `pods:${podId}`]])
+  // The program command is asked at the IdP with its program hash and exact argv (issue 1473, revision 4); the HTTP
+  // destination is a desktop-own permission grant.
+  expect(idp.state.authorizations).toEqual([{ target_host: `pods:${podId}`, audience: 'shapes', program: { name: 'fixture-cli', sha256: program.configuration.executableHash }, argv: ['request', '--origin', 'https://api.example.test', '--method', 'GET'], grant_type: 'always', summary: { title: 'fixture-cli request --origin https://api.example.test --method GET', origin: 'Pod 0001' } }])
+  expect(idp.state.creates.map(request => [request.grant_type, request.requester, request.target_host])).toEqual([['always', 'pod-0001@example.test', `pods:${podId}`]])
   expect(idp.state.creates.every(request => !('waits_until' in request))).toBe(true)
   expect(f.openExternal.mock.calls).toEqual([[`${issuer}/grant-approval?grant_id=grant-1`], [`${issuer}/grant-approval?grant_id=grant-2`]])
   // The assignment keeps its pending request; the first run that needs it waits for the owner's decision.
   // The grants are recorded apart from the sandbox: the application stays as it was, the destination is bound without a grant.
   expect(f.bound.map(item => (item as { type: string }).type)).toEqual(['bindHttp'])
   expect(f.bound[0]).not.toHaveProperty('authority')
-  expect(f.ledger.list(podId).map(grant => [grant.id, grant.state, grant.cliId])).toEqual([['grant-2', 'pending', 'pod-http'], ['grant-1', 'pending', 'pod-http']])
+  expect(f.ledger.list(podId).map(grant => [grant.id, grant.state, grant.cliId])).toEqual([['grant-2', 'pending', 'pod-http'], ['grant-1', 'pending', 'fixture-cli']])
   expect(idp.state.tokens).toEqual([])
 })
 
@@ -145,16 +136,17 @@ it('shows the Pod name as one bounded line in the runtime grant and keeps the Po
   const ended = expect(run.run).rejects.toThrow()
   await expect.poll(() => idp.state.creates.length).toBe(1)
   f.abortAll(); await ended
-  const { summary, execution_context: context } = idp.state.creates[0] as { summary: { title: string, origin: string }, execution_context: { context_bindings: { name: string, pod: string } } }
-  // Issue 1473: the IdP gets the adapter's description as a title and the Pod's name as origin, each one bounded line.
+  const { summary, command } = idp.state.creates[0] as { summary: { title: string, origin: string }, command: string[] }
+  // Issue 1473: the IdP gets the permission's description as a title and the Pod's name as origin, each one bounded line.
   expect(Object.keys(summary).sort()).toEqual(['origin', 'title'])
   expect(summary.origin).toMatch(/^Mail Approve everything x+$/)
   expect(summary.origin).toHaveLength(100)
   expect(summary.title.length).toBeLessThanOrEqual(120)
   expect(summary.title).not.toMatch(/[\n‮]/)
-  expect(context.context_bindings.name).toHaveLength(100)
-  expect(context.context_bindings.name).not.toMatch(/[\n‮]/)
-  expect(context.context_bindings.pod).toBe(podId)
+  const value = (flag: string) => command[command.indexOf(flag) + 1]!
+  expect(value('--name')).toHaveLength(100)
+  expect(value('--name')).not.toMatch(/[\n‮]/)
+  expect(value('--pod')).toBe(podId)
 })
 
 // Issue 1455 rehearsal: schema 43 removed the grant ids kept inside the resources and the brokered IdP never returns an
@@ -167,14 +159,14 @@ function previousRun(f: Awaited<ReturnType<typeof fixture>>, events: { grantId: 
 
 it('adopts the grants a Pod used before schema 43 instead of asking the owner again', async () => {
   const f = await fixture()
-  const runtime = await runtimeSpec(resolve(sources, 'pod-runtime-shapes.toml'), podId, 'Synthetic Pod')
-  const http = await httpSpec(resolve(sources, 'pod-http-shapes.toml'), 'https://hooks.example.test', ['POST'])
+  const runtime = runtimeSpec(podId, 'Synthetic Pod')
+  const http = httpSpec('https://hooks.example.test', ['POST'])
   const target = { requester: podSubject(podId), target_host: `pods:${podId}` }
-  const runtimeGrant = idp.foreign({ ...target, authorization_details: runtime.details, execution_context: runtime.executionContext }); idp.decide(runtimeGrant, 'approved')
-  const httpGrant = idp.foreign({ ...target, authorization_details: http.details, execution_context: http.executionContext }); idp.decide(httpGrant, 'approved')
+  const runtimeGrant = idp.foreign({ ...target, authorization_details: runtime.details, command: runtime.command }); idp.decide(runtimeGrant, 'approved')
+  const httpGrant = idp.foreign({ ...target, authorization_details: http.details, command: http.command }); idp.decide(httpGrant, 'approved')
   // Skipped without failing the run: another target, a grant the IdP no longer shows, a single-use grant and another identity.
-  const otherTarget = idp.foreign({ ...target, target_host: 'pods:another', authorization_details: runtime.details, execution_context: runtime.executionContext }); idp.decide(otherTarget, 'approved')
-  const single = idp.foreign({ ...target, grant_type: 'once', authorization_details: runtime.details, execution_context: runtime.executionContext }); idp.decide(single, 'approved')
+  const otherTarget = idp.foreign({ ...target, target_host: 'pods:another', authorization_details: runtime.details, command: runtime.command }); idp.decide(otherTarget, 'approved')
+  const single = idp.foreign({ ...target, grant_type: 'once', authorization_details: runtime.details, command: runtime.command }); idp.decide(single, 'approved')
   previousRun(f, [
     { grantId: runtimeGrant, permission: runtime.details[0]!.permission, state: 'approved' },
     { grantId: httpGrant, permission: http.details[0]!.permission, state: 'approved' },
@@ -200,8 +192,8 @@ it('adopts the grants a Pod used before schema 43 instead of asking the owner ag
 
 it('waits on an earlier pending request instead of asking again', async () => {
   const f = await fixture()
-  const runtime = await runtimeSpec(resolve(sources, 'pod-runtime-shapes.toml'), podId, 'Synthetic Pod')
-  const pending = idp.foreign({ requester: podSubject(podId), target_host: `pods:${podId}`, authorization_details: runtime.details, execution_context: runtime.executionContext })
+  const runtime = runtimeSpec(podId, 'Synthetic Pod')
+  const pending = idp.foreign({ requester: podSubject(podId), target_host: `pods:${podId}`, authorization_details: runtime.details, command: runtime.command })
   previousRun(f, [{ grantId: pending, permission: runtime.details[0]!.permission, state: 'pending' }])
   const run = f.start(podId)
   await expect.poll(() => f.approvals.find(item => item.state === 'pending')?.grantId).toBe(pending)
@@ -211,24 +203,22 @@ it('waits on an earlier pending request instead of asking again', async () => {
   expect(idp.state.creates).toEqual([])
 })
 
-it('requests every grant kind with an execution context the owner IdP accepts for a Pod identity', async () => {
+it('requests every desktop-own grant kind as a plain permission the owner IdP accepts for a Pod identity', async () => {
   const f = await fixture()
-  const http = (origin: string, methods?: string[]) => httpSpec(resolve(sources, 'pod-http-shapes.toml'), origin, methods)
   const specs = {
-    runtime: await runtimeSpec(resolve(sources, 'pod-runtime-shapes.toml'), podId, 'Synthetic Pod'),
-    oneMethod: await http('https://hooks.example.test', ['POST']),
-    methods: await http('https://hooks.example.test', ['GET', 'POST']),
-    origin: await http('https://hooks.example.test'),
-    jev: await http(typesafeOrigin, ['POST']),
-    program: await programSpec(program.configuration as unknown as ProgramAssignment),
+    runtime: runtimeSpec(podId, 'Synthetic Pod'),
+    oneMethod: httpSpec('https://hooks.example.test', ['POST']),
+    methods: httpSpec('https://hooks.example.test', ['GET', 'POST']),
+    origin: httpSpec('https://hooks.example.test'),
+    jev: httpSpec(typesafeOrigin, ['POST']),
   }
   for (const spec of Object.values(specs)) await f.grants.request(podId, spec, AbortSignal.timeout(5000))
-  expect(idp.state.creates).toHaveLength(6)
+  expect(idp.state.creates).toHaveLength(5)
   expect(await brokerRejections(idp.state.creates)).toEqual([])
-  // A single command carries the argv its run-time call resolves; a grant over several commands names only the program.
-  expect(specs.runtime.executionContext.argv).toEqual(runtimeArgv({ podId, name: 'Synthetic Pod', script: 'run.mjs', workspace: 'workspace' }))
-  expect(specs.jev.executionContext.argv).toEqual(httpArgv(typesafeOrigin, 'POST'))
-  expect([specs.methods, specs.origin, specs.program].map(spec => spec.executionContext.argv)).toEqual([['pod-http'], ['pod-http'], ['pod-http']])
+  // A single command carries the argv the IdP shows it with; a grant over several commands names only the permission's command.
+  expect(idp.state.creates.map(request => request.command)).toEqual([runtimeArgv({ podId, name: 'Synthetic Pod', script: 'run.mjs', workspace: 'workspace' }), httpArgv('https://hooks.example.test', 'POST'), ['pod-http'], ['pod-http'], httpArgv(typesafeOrigin, 'POST')])
+  // No adapter file, resolver or adapter digest is involved (issue 1473, revision 4).
+  expect(idp.state.creates.every(request => !('execution_context' in request))).toBe(true)
 })
 
 it('opens the IdP page of a pending Pod grant for the owner and reads pending grants again until the IdP decided them', async () => {

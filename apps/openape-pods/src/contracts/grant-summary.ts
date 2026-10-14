@@ -5,7 +5,7 @@ import { parseGrantSummary } from '@openape/grants'
  * The DDISA request summary (grants.md §3.4, issue 1473): the requester's own claim of what a grant request is about.
  * The IdP decides how it is presented; Pods only passes it through. A script may name `title`, `description` and
  * `link`; the desktop adds `origin`, the Pod's name. Without a script title the desktop sends a neutral title taken
- * from data (the adapter's operation display, the message subject), never composed prose.
+ * from data (a permission's display, the exact command line, the message subject), never composed prose.
  */
 export type GrantSummary = OpenApeGrantSummary
 /** What a script may claim; `origin` is always the desktop's. */
@@ -34,7 +34,7 @@ export function parseScriptSummary(value: unknown): ScriptSummary {
 }
 
 /**
- * Data the desktop shows as a title or origin (an adapter display, a message subject, a Pod name) as one line that
+ * Data the desktop shows as a title or origin (a command line, a message subject, a Pod name) as one line that
  * fits: hidden characters become spaces and a longer value ends with an ellipsis. Empty data yields `fallback`.
  */
 export function summaryLine(value: string, limit: number, fallback = '–'): string {

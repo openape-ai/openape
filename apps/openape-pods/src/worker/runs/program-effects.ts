@@ -1,9 +1,7 @@
-import { loadAdapter, resolveCommand } from '@openape/apes'
 import { AuthorityError } from '../../contracts/infrastructure'
-import { assertGateOperation } from '../../contracts/mail-archive-port'
 import type { PodResource } from '../../contracts/resources'
 import { programRequest } from '../../main/programs/invoke'
-import { approvableCommand, readActions } from '../../main/programs/session'
+import { describeCommand } from '../../main/programs/session'
 import { EffectLedger } from '../recovery/effects'
 import { canonicalJson } from '../../contracts/canonical-json'
 import type { ApprovedInvocation } from '../../contracts/programs'
@@ -11,14 +9,9 @@ import { approvalEffectKey } from '../data/approvals'
 import type { Approvals, ApprovalService } from '../data/approvals'
 import type { PodDatabase } from '../storage/database'
 
-/** Whether a tool call runs an application command whose adapter action is not a read. */
-export async function programWrite(resources: PodResource[], podId: string, capabilities: string[], body: unknown): Promise<boolean> {
-  if (!body || typeof body !== 'object' || !('applicationId' in body || 'application' in body)) return false
-  const { assignment, argv } = programRequest(resources, podId, capabilities, body)
-  const resolved = await resolveCommand(loadAdapter(assignment.cliId, assignment.adapterPath), [assignment.cliId, ...argv])
-  // Refused before anything is recorded or sent: a mail move only runs through the archive port.
-  assertGateOperation(resolved.detail.action)
-  return !readActions.includes(resolved.detail.action)
+/** Whether a tool call runs an assigned application; such a call is authorized at the IdP before it is recorded or sent. */
+export function isProgramCall(body: unknown): boolean {
+  return !!body && typeof body === 'object' && ('applicationId' in body || 'application' in body)
 }
 
 /**
@@ -41,10 +34,10 @@ export async function executeProgramEffect(ledger: EffectLedger, podId: string, 
   return reply
 }
 
-/** The adapter's description of one command a script asks approval for or runs with one (see approvableCommand). */
-export async function describeProgram(resources: PodResource[], podId: string, capabilities: string[], command: { application: string, argv: unknown }): Promise<string> {
+/** The exact command line of one command a script asks approval for or runs with one; the application must be assigned and declared. */
+export function describeProgram(resources: PodResource[], podId: string, capabilities: string[], command: { application: string, argv: unknown }): string {
   const { assignment, argv } = programRequest(resources, podId, capabilities, command)
-  return approvableCommand(assignment, argv)
+  return describeCommand(assignment, argv)
 }
 
 /**

@@ -16,33 +16,34 @@ export interface ProgramDefinition {
   bundlePath?: string
   executable: string
   executableHash: string
+  /**
+   * The command name the program is called by: the file name it was assigned with. The IdP receives it with the
+   * file hash and selects the meaning of a command by them (issue 1473).
+   */
   cliId: string
-  adapterPath: string
-  adapterHash: string
-  /** The shapes-registry entry the adapter file was verified against when it was assigned (issue 1473). */
-  registry?: { id: string, digest: string }
-  /** What the adapter's version command printed for this executable when it was assigned. */
-  cliVersion?: { version: string | null, tested: boolean }
   networkHosts: string[]
   cacheArgument?: '--cache-dir'
   entryFiles: { path: string, hash: string }[]
   environment: Record<string, string>
 }
-/** Pods assigns only shapes-registry adapters (issue 1473); an adapter file path is never accepted. */
-export const registryAdaptersOnly = 'Pods assigns only shapes-registry adapters; leave out adapterPath and install the registry adapter with apes adapter install <name>'
-
 /**
- * How far an assigned adapter is trusted (issue 1473). A tested registry adapter resolves commands to the grants its
- * operations describe. An adapter that is not from the registry, or whose CLI version is unknown or untested, only
- * describes a command: every command then needs a grant for its exact argv. Pods' generated application launcher
- * has a single exact no-argument operation and stays as it is.
+ * Programs are assigned by path, file hash and an optional runtime descriptor (issue 1473, revision 4); the IdP decides
+ * what their commands mean. Adapter files and command names are no longer accepted.
  */
-export type AdapterStanding = { exact: false } | { exact: true, reason: 'notFromRegistry' | 'versionUnknown' | 'versionUntested' }
-export function adapterStanding(definition: Pick<ProgramDefinition, 'registry' | 'cliVersion' | 'bundlePath'>): AdapterStanding {
-  if (definition.bundlePath) return { exact: false }
-  if (!definition.registry) return { exact: true, reason: 'notFromRegistry' }
-  if (!definition.cliVersion?.version) return { exact: true, reason: 'versionUnknown' }
-  return definition.cliVersion.tested ? { exact: false } : { exact: true, reason: 'versionUntested' }
+export const programsByPath = 'Assign a program by its path and optional runtimePath; the IdP decides what its commands mean, so adapterPath and commandName are not accepted'
+/** The desktop's own permissions (issue 1473): no assigned program may use their names, and no command token may name them. */
+export const reservedProgramNames: readonly string[] = ['pod-runtime', 'pod-http', 'pod-ssh']
+export function assertProgramName(name: string): void {
+  if (!/^[\w-]{1,100}$/.test(name)) throw new Error('Application command must use letters, digits, underscores or hyphens')
+  if (reservedProgramNames.includes(name)) throw new Error('Application command names pod-runtime, pod-http and pod-ssh are reserved for Pods itself')
+}
+/** The program a call names at the IdP: its command name and the SHA-256 of the assigned file (issue 1473). */
+export function programIdentity(definition: Pick<ProgramDefinition, 'cliId' | 'executableHash'>): { name: string, sha256: string } {
+  return { name: definition.cliId, sha256: definition.executableHash }
+}
+/** An exact command as one readable line: arguments with spaces, quotes or shell characters are single-quoted. */
+export function commandLine(argv: string[]): string {
+  return argv.map(argument => argument && /^[\w@%+=:,./-]+$/.test(argument) ? argument : `'${argument.replaceAll('\'', '\'\\\'\'')}'`).join(' ')
 }
 /** An application in the Pod sandbox. What it may run is decided by Pod grants, recorded apart from it. */
 export interface ProgramAssignment extends ProgramDefinition {

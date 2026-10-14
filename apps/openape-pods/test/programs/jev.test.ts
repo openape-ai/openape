@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { assignedJev, defaultJevModel, parseJevModel, parseJevRequest, parseJevResult, syntheticJevResult } from '../../src/contracts/jev'
 import { evaluateTypesafe, typesafeJSON, verifyTypesafe } from '../../src/main/connections/typesafe'
@@ -98,7 +98,7 @@ it('cancels an in-flight evaluation when its assignment is withdrawn, without po
   const assertActive = vi.spyOn(AgentAuthority.prototype, 'assertActive')
   const send = vi.fn(async (_body: string, attempt: AbortSignal): Promise<Response> => new Promise((_resolve, reject) => attempt.addEventListener('abort', () => reject(attempt.reason), { once: true })))
   const credentials = new CredentialCache(join(f.root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
-  const pending = executeJev(f.assignment, request, { vendor: resolve('runtime-sources'), credentials, signal: signal(), observe: async () => {}, ledger: { find: async () => undefined, adopt: async () => undefined, record: async () => {} }, check: async () => { if (!active) throw new Error('withdrawn') }, send, consumeAttempt: () => {} })
+  const pending = executeJev(f.assignment, request, { credentials, signal: signal(), observe: async () => {}, ledger: { find: async () => undefined, adopt: async () => undefined, record: async () => {} }, check: async () => { if (!active) throw new Error('withdrawn') }, send, consumeAttempt: () => {} })
   const rejected = expect(pending).rejects.toThrow('no longer active')
   await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1)); active = false
   await rejected

@@ -4,101 +4,57 @@ import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { setTimeout as delay } from 'node:timers/promises'
-import { exactCommand, loadAdapter, resolveCommand } from '@openape/apes'
-import { adapterStanding } from '../../contracts/programs'
+import { assertProgramName, commandLine, programIdentity } from '../../contracts/programs'
 import type { ProgramAssignment, TerminalView } from '../../contracts/programs'
 import type { SandboxReach } from '../../contracts/sandbox'
 import { launchTerminal } from '../../worker/runtime/terminal'
 import { programHome, verifyExecutable } from '../../worker/runtime/sandbox'
-import type { AgentConnection, GrantObserver, GrantLedgerPort, GrantPresentation, RunGrantTokens } from '../broker/authorization'
+import type { AgentConnection, CommandAuthorization, GrantLedgerPort, ProgramCall } from '../broker/authorization'
 import { AgentAuthority } from '../broker/authorization'
 import type { CredentialCache } from '../connections/cache'
 import { registerAuthDomain } from '../connections/ledger'
 import { startMailProxy } from '../mail/proxy'
 import { inspectDomainRecords } from '../../worker/recovery/domains'
 import { ProgramState } from './state'
-import { assertGateOperation } from '../../contracts/mail-archive-port'
+import { archivePortPrograms, gateActions, mailProgramActions } from '../../contracts/mail-archive-port'
+import { approvalURL } from '../../contracts/activity'
 
-/** Read operations of an adapter; any other action is a write whose run is never replayed automatically. */
+/** Actions that only read; a call the IdP resolves to any other action is a write that is never replayed automatically. */
 export const readActions = ['read', 'list', 'get']
 
-/**
- * Resolves one application command inside the Pod sandbox: the assigned executable, runtime and adapter are
- * verified and the command must match an adapter operation. It does not decide the grant: the run's authority
- * matches the command to any recorded grant that covers it, and the IdP token must cover it as well. A command of
- * an adapter that is not a tested registry adapter is bound to its exact argv (issue 1473).
- */
-export async function resolveProgram(assignment: ProgramAssignment, argv: string[], action?: 'move') {
+/** Verifies the assigned program file, its runtime and entry files before a call is authorized. */
+export async function verifyProgram(assignment: ProgramAssignment): Promise<void> {
   await verifyExecutable(assignment.executable, assignment.executableHash)
   await verifyProgramRuntime(assignment)
-  await verifyExecutable(assignment.adapterPath, assignment.adapterHash)
   for (const file of assignment.entryFiles) await verifyExecutable(file.path, file.hash)
-  const adapter = loadAdapter(assignment.cliId, assignment.adapterPath)
-  const command = [assignment.cliId, ...argv]
-  const structured = await resolveCommand(adapter, command)
-  const exact = adapterStanding(assignment).exact
-  const resolved = exact ? exactCommand(structured) : structured
-  if (action && resolved.detail.action !== action) throw new Error('The archive port may only run the granted move operation')
-  assertGateOperation(resolved.detail.action, action)
-  return { write: !readActions.includes(resolved.detail.action), authorization: { grantId: '', command: { cliId: assignment.cliId, adapterPath: assignment.adapterPath, adapterDigest: adapter.digest, argv: command, coverage: [resolved.detail], ...(exact ? { exact: true as const } : {}) } } }
 }
-/** What an adapter operation declares about its options; the fields after required_options come with declared-option adapters. */
-interface DeclaredOptions { command: string[], required_options?: string[], value_options?: string[], flag_options?: string[], global_options?: string[] }
-/**
- * Whether a token passes a declared option in exactly the dash form a getopt-style parser reads: `--name` or
- * `--name=value` for a declared name of two or more characters, and exactly `-x` for a declared one-letter name.
- * Bundles (`-abc`), `-longname`, attached values (`-Cvalue`) and `--x` for a one-letter name are never declared.
- */
-function passesDeclared(token: string, names: Set<string>): boolean {
-  if (token.startsWith('--')) {
-    const name = token.slice(2).split('=', 1)[0]!
-    return name.length > 1 && names.has(name)
-  }
-  return token.length === 2 && names.has(token[1]!)
+
+/** One command of an assigned application as the IdP authorizes it: the program's name and file hash and the exact arguments. */
+export function programCall(assignment: ProgramAssignment, argv: string[]): ProgramCall {
+  assertProgramName(assignment.cliId)
+  return { program: programIdentity(assignment), argv }
 }
 
 /**
- * Fails closed on options for a command that runs with an object approval instead of a grant (issue 1468): every
- * option before the operation's command words must be a declared global option, every option after them a declared
- * option of the operation, each in its exact dash form. An undeclared option such as git's --upload-pack or -c is
- * refused, as is `--`.
+ * What the IdP's answer means for the run (issue 1473, revision 4): the verified command token carries the IdP's own
+ * resolution of exactly this call (`authorization_details`, the generic exact-command detail for a program the
+ * registry does not describe). The call is a read only when every resolved action reads; any other action, or none, makes
+ * it a write. Mail moves and archives (gate actions) run only through the approved archive port. Outside it, a call of a
+ * mail program with an archive port (by its command name or any program the token resolved) is refused unless every action is a
+ * known non-moving one, so an exact-command fallback can never move mail.
  */
-export function assertDeclaredOptions(operation: DeclaredOptions, argv: string[]): void {
-  const undeclared = (token: string) => new Error(`The command passes ${token.split('=', 1)[0]}, which its adapter operation does not declare; an approved command runs only with declared options`)
-  const globals = new Set((operation.global_options ?? []).map(entry => entry.split('=', 1)[0]!))
-  let index = 0
-  while (index < argv.length && !operation.command.every((word, offset) => argv[index + offset] === word)) {
-    const token = argv[index]!
-    if (!token.startsWith('-') || !passesDeclared(token, globals)) throw undeclared(token)
-    if (token.startsWith('--') && token.includes('=')) { index += 1; continue }
-    // Every global option takes a value; a missing or dash-led value would hide the next option from this check.
-    const value = argv[index + 1]
-    if (value === undefined || value.startsWith('-')) throw undeclared(token)
-    index += 2
-  }
-  const declared = new Set([...operation.required_options ?? [], ...operation.value_options ?? [], ...operation.flag_options ?? []])
-  for (const token of argv.slice(index + operation.command.length)) {
-    if (token.startsWith('-') && token.length > 1 && !passesDeclared(token, declared)) throw undeclared(token)
-  }
+export function callEffect(authorization: CommandAuthorization, program: string, port?: 'move'): { write: boolean } {
+  if (port === 'move' && !authorization.actions.includes('move')) throw new Error('The archive port may only run the granted move operation')
+  // The IdP selects the shape by the tested program hash, so a resolved mail shape follows the binary, not its local name.
+  const mailProgram = [program, ...authorization.programs].some(name => archivePortPrograms.includes(name.toLowerCase()))
+  const refused = (action: string) => gateActions.includes(action) || (mailProgram && !mailProgramActions.includes(action))
+  if (port !== 'move' && (authorization.actions.some(refused) || (mailProgram && !authorization.actions.length))) throw new Error('Moving or archiving mail runs only through the approved archive service')
+  return { write: !authorization.actions.length || authorization.actions.some(action => !readActions.includes(action)) }
 }
 
-/**
- * The adapter's description of one command that may run with an object approval: it must resolve to a declared,
- * non-generic adapter operation with only declared options, and a mail move stays with the archive service.
- */
-export async function approvableCommand(assignment: ProgramAssignment, argv: string[]): Promise<string> {
-  const loaded = loadAdapter(assignment.cliId, assignment.adapterPath)
-  const resolved = await resolveCommand(loaded, [assignment.cliId, ...argv])
-  assertGateOperation(resolved.detail.action)
-  const operation = loaded.adapter.operations.find(item => item.id === resolved.detail.operation_id)
-  if (!operation || resolved.detail.operation_id === '_generic.exec') throw new Error('An approved command must match an operation of the application adapter')
-  assertDeclaredOptions(operation as DeclaredOptions, argv)
-  return resolved.detail.display
-}
-
-export async function prepareProgramAuthorization(assignment: ProgramAssignment, connection: AgentConnection, argv: string[], observe?: GrantObserver, ledger?: GrantLedgerPort, action?: 'move', tokens?: RunGrantTokens, presentation?: GrantPresentation) {
-  const { authorization, write } = await resolveProgram(assignment, argv, action)
-  return { authority: new AgentAuthority(connection, observe, ledger, tokens, presentation), authorization, write }
+/** What the owner sees of one command a script asks approval for: the exact command line (issue 1468). */
+export function describeCommand(assignment: ProgramAssignment, argv: string[]): string {
+  return commandLine([assignment.cliId, ...argv])
 }
 
 /** How a terminal reaches the Pod identity, its grant ledger, its sandbox reach and its name for grant requests. */
@@ -139,18 +95,33 @@ export class ProgramSession {
     const directory = join(root, this.id); const ownerTemporary = join(directory, 'tmp'); let verifiedClosed = true
     try {
       await mkdir(directory, { recursive: true, mode: 0o700 })
-      const { authority, authorization } = await prepareProgramAuthorization(assignment, await access.connection(), argv, undefined, access.ledger, undefined, undefined, { origin: await access.origin() })
-      await authority.authorize(authorization, signal)
+      // A pending approval is shown in the terminal with its IdP page; the session waits for the owner's decision.
+      const authority = new AgentAuthority(await access.connection(), async (progress) => { if (progress.state === 'pending') this.append(`Waiting for approval at ${approvalURL(progress)}\n`) }, access.ledger, undefined, { origin: await access.origin() })
+      const authorize = async (executed: string[]) => {
+        const granted = await authority.authorizeProgram(programCall(assignment, executed), signal)
+        callEffect(granted, assignment.cliId)
+        return granted
+      }
+      await verifyProgram(assignment)
+      // A program with a cache argument is authorized below, with the state folder it actually receives.
+      let authorization = assignment.cacheArgument ? undefined : await authorize(argv)
       await check(); signal.throwIfAborted()
       const proxy = assignment.networkHosts.length && (await access.reach()).level === 'isolated' ? await startMailProxy(signal, undefined, assignment.networkHosts) : undefined
       try {
         await new ProgramState(credentials).use(assignment.stateId, { podId: this.podId, applicationId }, async (workspace) => {
           await check(); signal.throwIfAborted()
           const launch = programLaunch(assignment)
-          const args = [...launch.prefix, ...argv, ...(assignment.cacheArgument ? [assignment.cacheArgument, workspace] : [])]
+          // The process gets exactly the arguments the IdP authorized, after the owner-configured runtime prefix.
+          const executed = [...argv, ...(assignment.cacheArgument ? [assignment.cacheArgument, workspace] : [])]
+          authorization ??= await authorize(executed)
+          const granted = authorization
+          const args = [...launch.prefix, ...executed]
           const reach = await access.reach()
           const temporary = reach.level === 'owner' ? ownerTemporary : workspace
           if (temporary === ownerTemporary) await mkdir(temporary, { mode: 0o700 })
+          await check(); signal.throwIfAborted()
+          // The authorized file hash must still hold when the process starts.
+          await verifyProgram(assignment)
           const domain = await launchTerminal(helper, directory, { reach, executable: launch.executable, workspace: podWorkspace, readDirectories: directories.readDirectories, writeDirectories: [...new Set([workspace, temporary]), ...directories.writeDirectories], readFiles: assignment.entryFiles.map(file => file.path), runtimeDirectories: launch.runtimeDirectories, networkPorts: proxy ? [proxy.port] : [], systemTrust: Boolean(proxy) }, args, { ...launch.environment, ...proxy?.environment, HOME: programHome(reach, workspace), TMPDIR: temporary }, (path, ownerPid) => registerAuthDomain(root, path, ownerPid))
           this.domain = domain; verifiedClosed = false
           const decoder = new StringDecoder('utf8')
@@ -159,7 +130,7 @@ export class ProgramSession {
           const stop = () => domain.cancel(); signal.addEventListener('abort', stop, { once: true }); if (signal.aborted) stop()
           const monitoring = new AbortController()
           const monitor = async () => {
-            try { while (!monitoring.signal.aborted) { await delay(1000, undefined, { signal: monitoring.signal }); await check(); await authority.assertActive(authorization.grantId, AbortSignal.any([signal, monitoring.signal])) } }
+            try { while (!monitoring.signal.aborted) { await delay(1000, undefined, { signal: monitoring.signal }); await check(); await authority.assertActive(granted.grantId, AbortSignal.any([signal, monitoring.signal])) } }
             catch (error) { if (!monitoring.signal.aborted) { this.controller.abort(error); domain.cancel() } }
           }
           const watched = monitor()

@@ -11,7 +11,6 @@ const IDP_BACKED_TESTS = [
   'test/grants-edge.test.ts',
   'test/http.test.ts',
   'test/inprocess.test.ts',
-  'test/shapes-adapter-grants.test.ts',
   'test/workflows.test.ts',
 ]
 

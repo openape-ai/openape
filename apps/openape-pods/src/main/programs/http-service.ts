@@ -1,13 +1,10 @@
 import type { AgentConnection, GrantObserver, GrantLedgerPort, GrantPresentation, RunGrantTokens } from '../broker/authorization'
-import { join } from 'node:path'
-import { resolveCommand } from '@openape/apes'
-import { loadPodAdapter } from '../grants/registry-copies'
 import type { PodResource } from '../../contracts/resources'
 import type { ServiceScope } from '../../contracts/services'
 import type { HttpAuthentication, HttpRequest, HttpReply } from '../../contracts/http'
 import { parseHttpAuthentication, parseHttpPermission, parseHttpRequest } from '../../contracts/http'
 import { AgentAuthority } from '../broker/authorization'
-import { httpArgv } from '../grants/execution-context'
+import { httpPermission } from '../grants/pod-permissions'
 import { requestHttp } from './http'
 
 export interface AgentBearer {
@@ -29,18 +26,13 @@ export function assignedHttp(resources: PodResource[], scope: Pick<ServiceScope,
 }
 
 /** Sends one request inside the sandbox; the Pod identity needs a grant that covers this origin and method. */
-export async function executeHttp(resources: PodResource[], scope: ServiceScope, request: HttpRequest, vendor: string, connection: AgentConnection, signal: AbortSignal, observe?: GrantObserver, ledger?: GrantLedgerPort, bearer?: AgentBearer, tokens?: RunGrantTokens, presentation?: GrantPresentation): Promise<HttpReply> {
+export async function executeHttp(resources: PodResource[], scope: ServiceScope, request: HttpRequest, connection: AgentConnection, signal: AbortSignal, observe?: GrantObserver, ledger?: GrantLedgerPort, bearer?: AgentBearer, tokens?: RunGrantTokens, presentation?: GrantPresentation): Promise<HttpReply> {
   const configured = assignedHttp(resources, scope, request).configuration.authentication
   const authentication = configured === undefined ? undefined : parseHttpAuthentication(configured)
   if (authentication && Object.keys(request.headers).some(name => name.toLowerCase() === 'authorization')) throw new Error('This HTTP destination authenticates as its assigned DDISA agent; remove the Authorization header')
   if (authentication && !bearer) throw new Error('DDISA agent authentication is unavailable')
   const authority = new AgentAuthority(connection, observe, ledger, tokens, presentation)
-  const adapterPath = join(vendor, 'pod-http-shapes.toml')
-  const adapter = loadPodAdapter('pod-http', adapterPath)
-  const argv = httpArgv(new URL(request.url).origin, request.method)
-  const resolved = await resolveCommand(adapter, argv)
-  const authorization = { grantId: '', command: { cliId: 'pod-http', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] } }
-  await authority.authorize(authorization, signal)
+  await authority.authorize({ grantId: '', permission: httpPermission(new URL(request.url).origin, request.method) }, signal)
   const token = authentication ? await bearer!.token(authentication, new URL(request.url).origin) : undefined
   const outgoing = token ? { ...request, headers: { ...request.headers, authorization: `Bearer ${token}` } } : request
   signal.throwIfAborted()

@@ -1,6 +1,7 @@
 import { shellTargetHost } from './context.js'
 import consola from 'consola'
 import { loadAuth } from '../config.js'
+import { runProgramInShellState } from '../authorization/execute.js'
 import { requestGrantForShellLine } from './grant-dispatch.js'
 import { createMetaCommandHandler } from './meta-commands.js'
 import { PtyBridge } from './pty-bridge.js'
@@ -132,6 +133,21 @@ export async function runInteractiveShell(): Promise<void> {
         if (grant.kind === 'denied') {
           session.logLineDenied({ line, reason: grant.reason })
           consola.error(grant.reason)
+          return
+        }
+
+        // --- 1b. Authorized program call: apes starts the file itself ---
+        if (grant.mode === 'program') {
+          let programSeq = 0
+          const run = runProgramInShellState(grant.call, () => bridge.shellState(), () => {
+            programSeq = session.logLineGranted({ line, grantId: grant.grantId, grantMode: 'program' })
+          })
+          if (run.kind === 'refused') {
+            session.logLineDenied({ line, reason: run.reason })
+            consola.error(run.reason)
+            return
+          }
+          session.logLineDone({ seq: programSeq, exitCode: run.exitCode })
           return
         }
 
