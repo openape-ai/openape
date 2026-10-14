@@ -185,7 +185,7 @@
       "id": "m8-idp-authorize",
       "title": "Per-call authorization at the IdP",
       "goal": "The IdP decides every program call with the registry adapter.",
-      "status": "planned",
+      "status": "done",
       "steps": [
         "The agent sends program name, program hash, exact arguments, target host and the summary; the IdP picks the registry adapter by name, resolves the command and looks for an approved or standing grant that covers it.",
         "Covered: a token bound to agent, host, argument hash and program hash for at most five minutes. Not covered: one pending request is created or reused and returned with its approval link. Calls have their own rate limit per agent, separate from sign-in."
@@ -193,13 +193,14 @@
       "acceptance": [
         "Tests: a covered command returns a token bound to its arguments; a different argument list is refused; client-supplied details are ignored; 500 calls of one agent do not touch the sign-in limit."
       ],
-      "rollback": "Redeploy the previous IdP image; the desktop of revision 3 keeps working against it."
+      "rollback": "Redeploy the previous IdP image; the desktop of revision 3 keeps working against it.",
+      "proof": "PRs 417 and 420; IdP prod-e85625a0 live; Test Run https://report.openape.ai/d/01M4XEY7XWZ2AYD1BRK4PTVP84"
     },
     {
       "id": "m9-desktop-generic",
       "title": "Generic program calls in the desktop",
       "goal": "The desktop has no Shapes code: it calls, waits for the decision and verifies the binding.",
-      "status": "planned",
+      "status": "done",
       "steps": [
         "Programs are assigned by path, file hash and optional runtime descriptor; adapter selection, registry copies, version probe and local command matching are removed.",
         "Before running, the desktop checks token signature, agent, host, argument hash and program hash; Pod run and HTTP grants stay plain permission grants without an adapter."
@@ -207,33 +208,36 @@
       "acceptance": [
         "A check fails the build when desktop code imports a Shapes resolver; a registry change takes effect without a desktop build or Pod change; measured p95 latency per program call below 300 ms."
       ],
-      "rollback": "Install the previous signed desktop from the rollback folder."
+      "rollback": "Install the previous signed desktop from the rollback folder.",
+      "proof": "PR 419; signed desktop (main 58118fe1, schema 52) installed October 14; Test Run https://report.openape.ai/d/01M4XEY7XWZ2AYD1BRK4PTVP84"
     },
     {
       "id": "m10-rollout",
       "title": "Rollout without re-approvals",
       "goal": "All active Pods keep running after the switch.",
-      "status": "planned",
+      "status": "done",
       "steps": [
         "Release order: IdP backup, IdP deploy, signed desktop; a desktop schema migration removes adapter fields from program assignments without owner action."
       ],
       "acceptance": [
         "After installation every active Pod completes its next run, and no grant request appears for a permission that was approved before."
       ],
-      "rollback": "Restore the IdP backup and install the previous signed desktop."
+      "rollback": "Restore the IdP backup and install the previous signed desktop.",
+      "proof": "Intake, Task monitor, IURIO PR rebase and PR monitor ran on the new desktop without re-approvals; morning Pods follow on October 15."
     },
     {
       "id": "m11-apes",
       "title": "apes uses the same authorization",
       "goal": "One resolution path for Pods and apes.",
-      "status": "planned",
+      "status": "active",
       "steps": [
         "apes run and ape-shell send commands to the same IdP authorization instead of resolving them with local adapter files; installed local adapters are removed."
       ],
       "acceptance": [
         "apes run git status gets a token from the IdP; no file below ~/.openape/shapes is read."
       ],
-      "rollback": "Publish the previous apes version."
+      "rollback": "Publish the previous apes version.",
+      "proof": "PR 418 merged; npm publication waits for the owner npm login."
     }
   ],
   "risks": [
@@ -282,6 +286,10 @@
     {
       "date": "2026-10-14",
       "text": "Revision 4 after the owner's question: adapter checks only at the IdP with one token per command; programs assigned by path only; approvals carry over; untested versions open for decision."
+    },
+    {
+      "date": "2026-10-14",
+      "text": "Revision 4 implemented: IdP authorization live (PRs 417, 420), generic desktop installed (PR 419, schema 52), apes merged (PR 418); apes publication pending."
     }
   ],
   "translations": {
@@ -881,6 +889,31 @@
         "path": "changelog.4.text",
         "source": "Revision 4 after the owner's question: adapter checks only at the IdP with one token per command; programs assigned by path only; approvals carry over; untested versions open for decision.",
         "text": "Revision 4 nach der Frage des Owners: Adapterprüfung nur am IdP mit einem Token pro Befehl; Programme nur per Pfad zugewiesen; Freigaben bleiben erhalten; ungetestete Versionen zur Entscheidung offen."
+      },
+      {
+        "path": "changelog.5.text",
+        "source": "Revision 4 implemented: IdP authorization live (PRs 417, 420), generic desktop installed (PR 419, schema 52), apes merged (PR 418); apes publication pending.",
+        "text": "Revision 4 umgesetzt: IdP-Autorisierung live (PRs 417, 420), allgemeiner Desktop installiert (PR 419, Schema 52), apes gemerged (PR 418); apes-Veröffentlichung offen."
+      },
+      {
+        "path": "milestones.7.proof",
+        "source": "PRs 417 and 420; IdP prod-e85625a0 live; Test Run https://report.openape.ai/d/01M4XEY7XWZ2AYD1BRK4PTVP84",
+        "text": "PRs 417 und 420; IdP prod-e85625a0 live; Test Run https://report.openape.ai/d/01M4XEY7XWZ2AYD1BRK4PTVP84"
+      },
+      {
+        "path": "milestones.8.proof",
+        "source": "PR 419; signed desktop (main 58118fe1, schema 52) installed October 14; Test Run https://report.openape.ai/d/01M4XEY7XWZ2AYD1BRK4PTVP84",
+        "text": "PR 419; signierter Desktop (main 58118fe1, Schema 52) am 14. Oktober installiert; Test Run https://report.openape.ai/d/01M4XEY7XWZ2AYD1BRK4PTVP84"
+      },
+      {
+        "path": "milestones.9.proof",
+        "source": "Intake, Task monitor, IURIO PR rebase and PR monitor ran on the new desktop without re-approvals; morning Pods follow on October 15.",
+        "text": "Intake, Task monitor, IURIO PR rebase und PR monitor liefen auf dem neuen Desktop ohne erneute Freigaben; die Morgen-Pods folgen am 15. Oktober."
+      },
+      {
+        "path": "milestones.10.proof",
+        "source": "PR 418 merged; npm publication waits for the owner npm login.",
+        "text": "PR 418 gemerged; die npm-Veröffentlichung wartet auf den npm-Login des Owners."
       }
     ]
   },
