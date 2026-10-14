@@ -1,4 +1,5 @@
 import { generateKeyPairSync, verify } from 'node:crypto'
+import type { DdisaAgentAuthentication } from '../../src/contracts/http'
 import { expect, it, vi } from 'vitest'
 import { httpRequestBodyChars, httpResponseBodyBytes, parseHttpAuthentication, parseHttpRequest, parseHttpPermission } from '../../src/contracts/http'
 import { DdisaAgentTokens } from '../../src/main/programs/ddisa-agent'
@@ -44,7 +45,7 @@ it('accepts larger bounded bodies and digest receipts only for effects', async (
 })
 
 it('mints a DDISA agent token from the assigned key, caches it per credential and forgets rejected tokens', async () => {
-  const authentication = parseHttpAuthentication({ type: 'ddisaAgent', credential: 'agent_key', subject: 'agent@id.example.com', issuer: 'https://id.example.com' })
+  const authentication = parseHttpAuthentication({ type: 'ddisaAgent', credential: 'agent_key', subject: 'agent@id.example.com', issuer: 'https://id.example.com' }) as DdisaAgentAuthentication
   expect(() => parseHttpAuthentication({ ...authentication, issuer: 'http://id.example.com' })).toThrow('HTTPS')
   expect(() => parseHttpAuthentication({ ...authentication, credential: 'Key' })).toThrow('Credential aliases')
   const keys = generateKeyPairSync('ed25519')
@@ -113,6 +114,37 @@ it('exchanges the agent token at the destination origin, caches the service toke
   spReply = () => new Response(null, { status: 503 })
   await expect(destination()).rejects.toBeInstanceOf(InfrastructureError)
   expect(agents).toBe(5)
+})
+
+it('trades the agent key and a delegation for a token of the destination origin and names a refused delegation', async () => {
+  const authentication = parseHttpAuthentication({ type: 'ddisaDelegation', credential: 'agent_key', subject: 'agent@id.example.com', issuer: 'https://id.example.com', delegation: 'delegation-1' })
+  expect(() => parseHttpAuthentication({ ...authentication, delegation: 'bad id' })).toThrow('delegation grant ID')
+  expect(() => parseHttpAuthentication({ ...authentication, exchange: 'sp' })).toThrow('Invalid HTTP authentication')
+  expect(() => parseHttpAuthentication({ ...authentication, type: 'toString' })).toThrow('Invalid HTTP authentication')
+  const keys = generateKeyPairSync('ed25519')
+  const pem = keys.privateKey.export({ type: 'pkcs8', format: 'pem' }).toString()
+  let issued = 0
+  let refusal: string | undefined
+  const transport = vi.fn(async (url: string, options: RequestInit) => {
+    const body = JSON.parse(String(options.body)) as Record<string, string>
+    const [header, payload, signature] = body.client_assertion!.split('.') as [string, string, string]
+    expect(verify(null, Buffer.from(`${header}.${payload}`), keys.publicKey, Buffer.from(signature, 'base64url'))).toBe(true)
+    expect([url, body.grant_type, body.delegation_grant, options.redirect]).toEqual(['https://id.example.com/token', 'client_credentials', 'delegation-1', 'error'])
+    if (refusal) return new Response(JSON.stringify({ error: 'invalid_client', error_description: refusal }), { status: 401 })
+    return new Response(JSON.stringify({ access_token: `delegated-${++issued}-for-${body.audience}`, token_type: 'Bearer', expires_in: 300 }), { status: 200 })
+  })
+  let now = 1_000_000
+  const tokens = new DdisaAgentTokens(transport, () => now)
+  const destination = (origin: string) => tokens.destination('pod-a', authentication, origin, 'credential-1', async () => pem, new AbortController().signal)
+  expect(await destination('https://id.example.com')).toBe('delegated-1-for-https://id.example.com')
+  expect(await destination('https://id.example.com')).toBe('delegated-1-for-https://id.example.com')
+  expect(await destination('https://sp.example.com')).toBe('delegated-2-for-https://sp.example.com')
+  now += 300_000 - 30_000
+  expect(await destination('https://id.example.com')).toBe('delegated-3-for-https://id.example.com')
+  tokens.reject('pod-a', authentication)
+  refusal = 'Delegation not approved\u0000'
+  const error = await destination('https://id.example.com').catch((caught: Error) => caught)
+  expect((error as Error).message).toBe('DDISA delegation sign-in failed (401): Delegation not approved')
 })
 
 it('retries only safe reads on temporary HTTP responses and transport failures', async () => {
