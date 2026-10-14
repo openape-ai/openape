@@ -13,6 +13,11 @@ function adapterPath(id: string, local: boolean): string {
   return join(adapterDir(local), `${id}.toml`)
 }
 
+/** Where `installAdapter` keeps a registry adapter for the user (`~/.openape/shapes/adapters/<id>.toml`), or in `directory`. */
+export function installedAdapterPath(id: string, directory = adapterDir(false)): string {
+  return join(directory, `${id}.toml`)
+}
+
 export interface InstallResult {
   id: string
   path: string
