@@ -1,5 +1,12 @@
 # Active work
 
+## Pods failure repair prompts — issue 1471
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1471. Branch `feature/issue-1471-pods-repair-prompt`, worktree `openape-monorepo.worktrees/issue-1471`, base `7946a2487fcfb2097d728706a47e2c24852743d2`.
+- Relay/PWA lists and details present held work, uncertain effects and uncertain approvals as a Pod needing help, with a localized copyable prompt for Codex or Claude. The prompt carries diagnostic references and requires external reconciliation before recovery; copying does not change runtime state. Ordinary questions and IdP handoffs retain their controls.
+- Verification: full lint/typecheck, relay production build, 99 relay tests; temporary Vitest browser check with actual Inbox CSS passed at 390/1280 pixels, screenshots personally inspected. The temporary check is retained with the report evidence, not in the default test chain.
+- Next: native PR, merge and relay deployment; post-merge receipt and Test Run will be recorded on the issue/PR.
+
 ## Pods UX and creation plan — issue 1468 (delivered)
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1468. Plan revision 6 (done, result partial): https://report.openape.ai/d/01M4TMF0QVFME0772ECFK9HZ4J; source `.claude/plans/2026-10-13-pods-ux-creation.json`.
