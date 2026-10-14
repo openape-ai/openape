@@ -2,6 +2,8 @@
 
 ## Generic grant cards and self-improving Shapes — issue 1473
 
+> **⚠️ IdP deploy gate (issue 1473, since October 14):** main contains the summary migration (PR 405). Do NOT deploy `free-idp` or `pods-idp` from main until the coordinated release with the new signed Pods desktop: installed desktops still send `summary.text`, which the new IdP refuses. The release owner is the issue 1473 session.
+
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1473. Plan revision 3, approved October 14, 2026 ("… wir ziehen das jetzt von Anfang bis Ende in dieser Session durch"): https://report.openape.ai/d/01M4VAP3E4WHRB6SRGCJJ8E6CD; source `.claude/plans/2026-10-13-structured-grant-summary.json`.
 - Milestones: M1 protocol summary {title, description, origin, link} + migration (protocol repo, @openape/core, IdP, apes); M2 shapes-registry as the only adapter source; M3 generic IdP grant card (PodRunGrant removed); M4 Pods pass-through + signed build; M5 delegation scopes (read own grants, request for own agents, never approve); M6 personal grant upgrade Pod; M7 registry upkeep via issues/PRs without user data.
 - Rules: Patrick's "desktop is a generic runtime"; UI checks in Vitest browser mode; no push without owner approval at the IdP; IdP, Pods and apes ship the summary change together.
