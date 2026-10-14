@@ -39,6 +39,19 @@ export {
   validateDelegation,
 } from './grants.js'
 export {
+  type LocalizedText,
+  parseShapeCliVersions,
+  parseShapePresentation,
+  type PresentationBindings,
+  presentationBindings,
+  readCliVersion,
+  type ShapeCliVersions,
+  type ShapePresentation,
+  type ShapePresentationConsequence,
+  type ShapePresentationField,
+  type ShapePresentationFormat,
+} from './shape-presentation.js'
+export {
   createInMemoryShapeStore,
   type ServerShape,
   type ServerShapeOperation,

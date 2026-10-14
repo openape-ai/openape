@@ -26,7 +26,7 @@ positionals = ["repo"]
 display = "View repository {repo}"
 action = "read"
 risk = "low"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}"]
 
 [[operation]]
 id = "repo.clone"
@@ -35,7 +35,7 @@ positionals = ["repo"]
 display = "Clone repository {repo}"
 action = "read"
 risk = "low"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}"]
 
 # ══════════════════════════════════════════════════════
 # REPO — Write Operations
@@ -60,7 +60,7 @@ display = "Rename repository {repo} to {new_name}"
 action = "rename"
 risk = "high"
 exact_command = true
-resource_chain = ["repo:owner={repo|owner},name={repo|name}"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}"]
 
 [[operation]]
 id = "repo.delete"
@@ -70,7 +70,7 @@ display = "Delete repository {repo}"
 action = "delete"
 risk = "critical"
 exact_command = true
-resource_chain = ["repo:owner={repo|owner},name={repo|name}"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}"]
 
 # ══════════════════════════════════════════════════════
 # ISSUES
@@ -83,7 +83,7 @@ required_options = ["repo"]
 display = "List issues in {repo}"
 action = "list"
 risk = "low"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "issue:*"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "issue:*"]
 
 [[operation]]
 id = "issue.view"
@@ -93,7 +93,7 @@ required_options = ["repo"]
 display = "View issue #{number} in {repo}"
 action = "read"
 risk = "low"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "issue:number={number}"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "issue:number={number}"]
 
 [[operation]]
 id = "issue.create"
@@ -102,7 +102,7 @@ required_options = ["repo", "title"]
 display = "Create issue in {repo}: {title}"
 action = "create"
 risk = "medium"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "issue:*"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "issue:*"]
 
 [[operation]]
 id = "issue.close"
@@ -112,7 +112,7 @@ required_options = ["repo"]
 display = "Close issue #{number} in {repo}"
 action = "edit"
 risk = "medium"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "issue:number={number}"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "issue:number={number}"]
 
 [[operation]]
 id = "issue.comment"
@@ -122,7 +122,7 @@ required_options = ["repo", "body"]
 display = "Comment on issue #{number} in {repo}"
 action = "create"
 risk = "medium"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "issue:number={number}", "comment:*"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "issue:number={number}", "comment:*"]
 
 # ══════════════════════════════════════════════════════
 # PULL REQUESTS
@@ -135,7 +135,7 @@ required_options = ["repo"]
 display = "List pull requests in {repo}"
 action = "list"
 risk = "low"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "pr:*"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "pr:*"]
 
 [[operation]]
 id = "pr.view"
@@ -145,7 +145,7 @@ required_options = ["repo"]
 display = "View PR #{number} in {repo}"
 action = "read"
 risk = "low"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "pr:number={number}"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "pr:number={number}"]
 
 [[operation]]
 id = "pr.create"
@@ -154,7 +154,7 @@ required_options = ["repo", "title"]
 display = "Create pull request in {repo}: {title}"
 action = "create"
 risk = "medium"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "pr:*"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "pr:*"]
 
 [[operation]]
 id = "pr.merge"
@@ -165,7 +165,7 @@ display = "Merge PR #{number} in {repo}"
 action = "edit"
 risk = "high"
 exact_command = true
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "pr:number={number}"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "pr:number={number}"]
 
 [[operation]]
 id = "pr.close"
@@ -175,7 +175,7 @@ required_options = ["repo"]
 display = "Close PR #{number} in {repo}"
 action = "edit"
 risk = "medium"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "pr:number={number}"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "pr:number={number}"]
 
 [[operation]]
 id = "pr.comment"
@@ -185,7 +185,7 @@ required_options = ["repo", "body"]
 display = "Comment on PR #{number} in {repo}"
 action = "create"
 risk = "medium"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "pr:number={number}", "comment:*"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "pr:number={number}", "comment:*"]
 
 # ══════════════════════════════════════════════════════
 # RUNS (CI/CD)
@@ -198,7 +198,7 @@ required_options = ["repo"]
 display = "List workflow runs in {repo}"
 action = "list"
 risk = "low"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "run:*"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "run:*"]
 
 [[operation]]
 id = "run.view"
@@ -208,7 +208,7 @@ required_options = ["repo"]
 display = "View run {run_id} in {repo}"
 action = "read"
 risk = "low"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "run:id={run_id}"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "run:id={run_id}"]
 
 [[operation]]
 id = "run.rerun"
@@ -218,7 +218,7 @@ required_options = ["repo"]
 display = "Rerun workflow {run_id} in {repo}"
 action = "edit"
 risk = "medium"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "run:id={run_id}"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "run:id={run_id}"]
 
 # ══════════════════════════════════════════════════════
 # RELEASE
@@ -231,7 +231,7 @@ required_options = ["repo"]
 display = "List releases in {repo}"
 action = "list"
 risk = "low"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "release:*"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "release:*"]
 
 [[operation]]
 id = "release.view"
@@ -241,7 +241,7 @@ required_options = ["repo"]
 display = "View release {tag} in {repo}"
 action = "read"
 risk = "low"
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "release:tag={tag}"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "release:tag={tag}"]
 
 [[operation]]
 id = "release.create"
@@ -252,4 +252,4 @@ display = "Create release {tag} in {repo}"
 action = "create"
 risk = "high"
 exact_command = true
-resource_chain = ["repo:owner={repo|owner},name={repo|name}", "release:tag={tag}"]
+resource_chain = ["owner:login={repo|owner}", "repo:name={repo|name}", "release:tag={tag}"]

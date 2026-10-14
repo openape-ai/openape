@@ -223,7 +223,10 @@ function renderTemplate(template: string, bindings: Record<string, string>): str
 function parseResourceChain(chain: string[], bindings: Record<string, string>): OpenApeCliResourceRef[] {
   return chain.map((entry) => {
     const [resource, selectorSpec = '*'] = entry.split(':', 2)
-    if (!resource) throw new Error(`Invalid resource chain entry: ${entry}`)
+    // A resource name is never a template: adapter parsers split array strings at commas, so
+    // `repo:owner={o},name={n}` would otherwise yield an unbound `name={n}` resource that
+    // matches every repository of the owner.
+    if (!resource || !/^[\w-]+$/.test(resource)) throw new Error(`Invalid resource chain entry: ${entry}`)
     if (selectorSpec === '*') return { resource }
     const selector = Object.fromEntries(
       selectorSpec.split(',').map((segment) => {

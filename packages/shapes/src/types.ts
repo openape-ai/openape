@@ -1,13 +1,15 @@
 import type { OpenApeCliAuthorizationDetail, OpenApeExecutionContext, OpenApeGrantRequest, ScopeRiskLevel } from '@openape/core'
+import type { ShapeCliVersions, ShapePresentation } from '@openape/grants'
 
 export interface ShapesAdapter {
   schema: string
+  /** Version fields are set together (see `ShapeCliVersions`) or not at all. */
   cli: {
     id: string
     executable: string
     audience?: string
     version?: string
-  }
+  } & Partial<ShapeCliVersions>
   operations: ShapesOperation[]
 }
 
@@ -42,6 +44,8 @@ export interface ShapesOperation {
   risk: ScopeRiskLevel
   resource_chain: string[]
   exact_command?: boolean
+  /** Approval card content from `[operation.presentation]`. */
+  presentation?: ShapePresentation
 }
 
 export interface LoadedAdapter {
