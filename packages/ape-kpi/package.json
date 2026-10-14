@@ -1,6 +1,6 @@
 {
   "name": "@openape/ape-kpi",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI for dashboard.openape.ai — agents push KPIs, the dashboard and morning mail consume them",
   "type": "module",
   "license": "MIT",
