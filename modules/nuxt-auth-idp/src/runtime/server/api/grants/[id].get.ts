@@ -32,7 +32,8 @@ export default defineEventHandler(async (event) => {
 
   if (grant.brokered) {
     await requireBrokerGrantOwner(event, grant, false)
-    return grant
+    const [brokeredCard] = await withGrantCards([grant])
+    return brokeredCard
   }
 
   // ETag for efficient polling

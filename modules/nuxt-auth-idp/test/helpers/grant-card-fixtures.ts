@@ -2,6 +2,7 @@ import { join } from 'node:path'
 import type { User } from '@openape/auth'
 import type { OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
 import type { ServerShape } from '@openape/grants'
+import { createInMemoryShapeStore, resolveProgramCall } from '@openape/grants'
 import type { LoadedAdapter } from '@openape/shapes'
 import { loadAdapter, resolveCommand } from '@openape/shapes'
 import { withGrantCards } from '../../src/runtime/server/utils/grant-card'
@@ -33,6 +34,15 @@ const registrations: Record<string, User> = {
 }
 export const findUser = async (email: string): Promise<User | null> => registrations[email] ?? null
 
+/** A request the way `POST /api/grants/authorize` stores it: resolved by the IdP from the program call. */
+export async function idpResolvedRequest(program: { name: string, sha256: string }, argv: string[], extra: Partial<OpenApeGrantRequest> = {}): Promise<OpenApeGrantRequest> {
+  const call = await resolveProgramCall(createInMemoryShapeStore([...shapes.values()]), { program, argv })
+  return { requester: 'agent@example.com', target_host: 'macmini', audience: 'shapes', grant_type: 'always', permissions: [call.detail.permission], authorization_details: [call.detail], command: call.executionArgv, execution_context: call.executionContext, ...extra }
+}
+
+/** A git binary none of the registry's tested digests names. */
+export const UNTESTED_GIT_SHA256 = '5e'.repeat(32)
+
 /** A request the way apes and the Pods desktop build it from an adapter. */
 export async function shapedRequest(loaded: LoadedAdapter, argv: string[], extra: Partial<OpenApeGrantRequest> = {}): Promise<OpenApeGrantRequest> {
   const resolved = await resolveCommand(loaded, argv)
@@ -46,7 +56,7 @@ function pending(id: string, request: OpenApeGrantRequest): OpenApeGrant {
   return { id, status: 'pending', created_at: 1_791_960_000, request }
 }
 
-export type CardFixtures = Record<'podRun' | 'gitPush' | 'unknown', GrantWithCard>
+export type CardFixtures = Record<'podRun' | 'gitPush' | 'unknown' | 'gitUntested', GrantWithCard>
 
 export async function buildCardFixtures(): Promise<CardFixtures> {
   const podRun = pending('grant-pod-run', await shapedRequest(podRuntimeAdapter, podArgv, {
@@ -71,6 +81,10 @@ export async function buildCardFixtures(): Promise<CardFixtures> {
     authorization_details: [{ type: 'openape_cli', cli_id: 'acme-cli', operation_id: '_generic.exec', resource_chain: [{ resource: 'cli', selector: { name: 'acme-cli' } }, { resource: 'argv', selector: { hash: 'SHA-256:9f' } }], action: 'exec', permission: 'acme-cli.cli[name=acme-cli].argv[hash=SHA-256:9f]#exec', display: 'Execute (unshaped): `acme-cli deploy --env production`', risk: 'high', constraints: { exact_command: true } }],
     summary: { title: 'Deploy the hotfix', description: 'Ticket 7: roll out the login fix.' },
   })
-  const [podRunCard, gitPushCard, unknownCard] = await withGrantCards([podRun, gitPush, unknown], { getShape, findUser })
-  return { podRun: podRunCard!, gitPush: gitPushCard!, unknown: unknownCard! }
+  const gitUntested = pending('grant-git-untested', await idpResolvedRequest({ name: 'git', sha256: UNTESTED_GIT_SHA256 }, pushArgv.slice(1), {
+    requester: 'rebase-agent+owner+example_com@id.example.com',
+    summary: { title: 'Push the rebased branch', origin: 'IURIO rebase Pod' },
+  }))
+  const [podRunCard, gitPushCard, unknownCard, gitUntestedCard] = await withGrantCards([podRun, gitPush, unknown, gitUntested], { getShape, findUser })
+  return { podRun: podRunCard!, gitPush: gitPushCard!, unknown: unknownCard!, gitUntested: gitUntestedCard! }
 }

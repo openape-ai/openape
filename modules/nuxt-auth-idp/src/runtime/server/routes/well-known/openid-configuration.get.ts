@@ -36,6 +36,7 @@ export default defineEventHandler(() => {
 
     // OpenApe extensions
     openape_grants_endpoint: `${issuer}/api/grants`,
+    openape_program_authorization_endpoint: `${issuer}/api/grants/authorize`,
     openape_delegations_endpoint: `${issuer}/api/delegations`,
     openape_grant_types_supported: ['once', 'timed', 'always'],
     openape_grant_categories_supported: ['command', 'delegation'],

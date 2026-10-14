@@ -134,7 +134,8 @@
       "requester": {
         "name": "Mail digest Pod",
         "owner": "owner@example.com"
-      }
+      },
+      "program": null
     }
   },
   "gitPush": {
@@ -253,7 +254,8 @@
       "requester": {
         "name": "IURIO rebase",
         "owner": "owner@example.com"
-      }
+      },
+      "program": null
     }
   },
   "unknown": {
@@ -309,7 +311,131 @@
     },
     "card": {
       "registry": null,
-      "requester": null
+      "requester": null,
+      "program": null
+    }
+  },
+  "gitUntested": {
+    "id": "grant-git-untested",
+    "status": "pending",
+    "created_at": 1791960000,
+    "request": {
+      "requester": "rebase-agent+owner+example_com@id.example.com",
+      "target_host": "macmini",
+      "audience": "shapes",
+      "grant_type": "always",
+      "permissions": [
+        "git.repo[*].remote[name=origin]#push"
+      ],
+      "authorization_details": [
+        {
+          "type": "openape_cli",
+          "cli_id": "git",
+          "operation_id": "git.push.refspec",
+          "resource_chain": [
+            {
+              "resource": "repo"
+            },
+            {
+              "resource": "remote",
+              "selector": {
+                "name": "origin"
+              }
+            }
+          ],
+          "action": "push",
+          "permission": "git.repo[*].remote[name=origin]#push",
+          "display": "Push feature/rebase to origin",
+          "risk": "high",
+          "constraints": {
+            "exact_command": true
+          }
+        }
+      ],
+      "command": [
+        "git",
+        "-C",
+        "/Users/owner/repos/iurio",
+        "push",
+        "--force-with-lease",
+        "origin",
+        "feature/rebase"
+      ],
+      "execution_context": {
+        "argv": [
+          "git",
+          "-C",
+          "/Users/owner/repos/iurio",
+          "push",
+          "--force-with-lease",
+          "origin",
+          "feature/rebase"
+        ],
+        "argv_hash": "SHA-256:7dff1661de21cd3060d366ae35ab76f06003164687171c7e32eed548c628a0b9",
+        "adapter_id": "git",
+        "adapter_version": "server",
+        "adapter_digest": "SHA-256:a4783820c4eebf9bf99f52c0842dcf3e0de32b8248eba40e1960c8b3c68135d5",
+        "resolved_executable": "git",
+        "context_bindings": {
+          "force-with-lease": "true",
+          "remote": "origin",
+          "refspec": "feature/rebase",
+          "repo": "/Users/owner/repos/iurio"
+        },
+        "program_sha256": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+        "version_tested": false
+      },
+      "summary": {
+        "title": "Push the rebased branch",
+        "origin": "IURIO rebase Pod"
+      }
+    },
+    "card": {
+      "registry": {
+        "cli_id": "git",
+        "operation_id": "git.push.refspec",
+        "title": {
+          "de": "feature/rebase nach origin pushen",
+          "en": "Push feature/rebase to origin"
+        },
+        "allows": {
+          "de": "Schreibt auf den Server: origin wird gemäß feature/rebase aktualisiert, mit den angegebenen Optionen.",
+          "en": "Writes to the server: origin is updated as given by feature/rebase, with the options shown."
+        },
+        "does_not_allow": {
+          "de": "Gilt nur für genau diesen Befehl mit diesen Optionen; jeder andere Befehl braucht eine eigene Freigabe.",
+          "en": "Covers only this exact command with these options; any other command needs its own approval."
+        },
+        "facts": [
+          {
+            "label": {
+              "de": "Repository",
+              "en": "Repository"
+            },
+            "format": "code",
+            "value": "/Users/owner/repos/iurio",
+            "provenance": "bound"
+          },
+          {
+            "label": {
+              "de": "Refspec",
+              "en": "Refspec"
+            },
+            "format": "code",
+            "value": "feature/rebase",
+            "provenance": "bound"
+          }
+        ],
+        "details": []
+      },
+      "requester": {
+        "name": "IURIO rebase",
+        "owner": "owner@example.com"
+      },
+      "program": {
+        "sha256": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
+        "version_tested": false
+      }
     }
   }
 }

@@ -141,6 +141,10 @@ export default defineEventHandler(async (event) => {
   }
 
   const executionContext = body.execution_context
+  // The grant card treats these as the IdP's own resolution (POST /api/grants/authorize).
+  if (executionContext && ('program_sha256' in executionContext || 'version_tested' in executionContext)) {
+    throw createProblemError({ status: 400, title: 'execution_context.program_sha256 and version_tested are set by the IdP; use POST /api/grants/authorize' })
+  }
   const executionArgv = executionContext?.argv
   if (executionContext && executionArgv?.length) {
     body.execution_context = {

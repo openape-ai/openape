@@ -89,6 +89,12 @@ const RE_MANAGEMENT_PATHS = /^\/api\/(?:my-agents|users)\b/
 // QR sign-in endpoints (subset of /api/session, so checked first).
 const RE_QR_PATHS = /^\/api\/session\/qr\b/
 
+// Per-call program authorization (issue 1473) is limited per verified
+// requester inside its handler (utils/authorize-rate-limit), not per IP:
+// one agent's program calls must never drain an IP bucket another agent or
+// the owner's browser shares.
+const RE_SUBJECT_LIMITED_PATHS = /^\/api\/grants\/authorize\b/
+
 const store = new Map<string, RateLimitEntry>()
 
 // Periodic cleanup to prevent unbounded memory growth
@@ -203,7 +209,7 @@ export default (nitroApp: NitroApp) => {
 
   nitroApp.hooks.hook('request', (event) => {
     const path = event.path || ''
-    if (!RE_AUTH_PATHS.test(path)) return
+    if (!RE_AUTH_PATHS.test(path) || RE_SUBJECT_LIMITED_PATHS.test(path)) return
 
     cleanup()
 
