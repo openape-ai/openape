@@ -91,6 +91,37 @@ resource_chain = ["repo:*"]
 
 `global_options` entries are `name` or `name=binding`. They always take a value, use the same exact dash form, are accepted only before the command prefix and apply to every operation; any other leading option and a repeated global option prevent a match. An operation option or positional with the same binding name as a global option prevents a match, so a global binding is never replaced.
 
+### Tested versions and presentation
+
+Registry adapters name the CLI versions their declared options were checked against and the texts approvers read on the IdP grant card. `parseAdapterToml` (also used by `loadAdapter`) reads adapters with a TOML parser and rejects unknown keys at every level, so an adapter never carries a rule this library would silently drop:
+
+```toml
+[cli]
+id = "git"
+executable = "git"
+tested_versions = ["2.54"]
+version_command = ["--version"]
+version_pattern = '^git version (\d+\.\d+)'
+
+[[operation]]
+id = "git.push.refspec"
+# … command, options, display, action, risk, resource_chain …
+
+[operation.presentation]
+title = { de = "{refspec} nach {remote} pushen", en = "Push {refspec} to {remote}" }
+
+[operation.presentation.consequence]
+allows = { de = "Schreibt auf den Server …", en = "Writes to the server …" }
+does_not_allow = { de = "…", en = "…" }
+
+[[operation.presentation.facts]]
+label = { de = "Repository", en = "Repository" }
+binding = "repo"
+format = "code"
+```
+
+The three version fields are set together; `readCliVersion()` from `@openape/grants` returns the first capture group of `version_pattern`. A presentation needs a `title` and may add `statement`, `consequence`, `facts`, `details` (`format` `text`, `code` or `map`) and `details_note`; every text has `de` and `en`. Texts may only reference bindings that every match binds (positionals and required options); facts and details may name optional bindings. Presentation never changes the derived grant detail, but it is part of the adapter file and therefore of its digest. Array strings keep the original reading: each element is split at commas, as stored permissions were derived that way.
+
 ## Resolve capability requests
 
 Use `resolveCapabilityRequest` when you want to request permissions by resource chain and action instead of by a full command line.
