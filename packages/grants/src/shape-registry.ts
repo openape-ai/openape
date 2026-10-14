@@ -101,6 +101,12 @@ export interface ServerShape {
   digest: string
   /** CLI versions the adapter was checked against; absent for virtual executables. */
   versions?: ShapeCliVersions
+  /**
+   * File digests (`SHA-256:<hex>`) of executables the operations were checked
+   * against (registry `[cli] tested_digests`). A program whose hash is listed
+   * is a tested version of this shape.
+   */
+  tested_digests?: string[]
   /** Unix seconds. */
   createdAt: number
   /** Unix seconds. */
