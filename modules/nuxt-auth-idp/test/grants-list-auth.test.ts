@@ -17,6 +17,7 @@ vi.mock('h3', () => ({
   createError: (opts: any) => Object.assign(new Error(opts.message ?? opts.statusMessage), { statusCode: opts.statusCode }),
 }))
 vi.mock('../src/runtime/server/utils/agent-auth', () => ({ tryBearerAuth: (...a: any[]) => bearerMock(...a) }))
+vi.mock('../src/runtime/server/utils/grants-delegation', () => ({ tryGrantsDelegate: async () => null }))
 vi.mock('../src/runtime/server/utils/grant-stores', () => ({ useGrantStores: () => ({ grantStore: { listGrants: listGrantsMock } }) }))
 vi.mock('../src/runtime/server/utils/session', () => ({ getAppSession: (...a: any[]) => sessionMock(...a) }))
 vi.mock('../src/runtime/server/utils/stores', () => ({ useIdpStores: () => ({ userStore: { findByOwner: findByOwnerMock, findByApprover: findByApproverMock } }) }))

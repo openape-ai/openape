@@ -1,12 +1,14 @@
 import { maybeForwardBrokerGrant } from '../../utils/broker-forward'
-import type { GrantType, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDetail, OpenApeGrantRequest } from '@openape/core'
-import { computeCmdHash } from '@openape/core'
+import type { GrantType, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
+import { computeCmdHash, GRANTS_REQUEST_SCOPE } from '@openape/core'
 import { assertGrantBatchMember, canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, createGrant, evaluateStandingGrants, findSimilarCliGrants, InvalidGrantBatchError, isCliAuthorizationDetailExact, parseGrantBatch, validateCliAuthorizationDetail } from '@openape/grants'
+import type { H3Event } from 'h3'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { hasValidManagementToken } from '../../utils/admin'
 import { tryBearerAuth } from '../../utils/agent-auth'
 import { allowUnauthenticatedGrantRequests } from '../../utils/grant-request-auth'
 import { useGrantStores } from '../../utils/grant-stores'
+import { assertDelegatedRequest, tryGrantsDelegate } from '../../utils/grants-delegation'
 import { runGrantPendingHooks } from '../../utils/grant-pending-hooks'
 import { runPreApprovalHooks } from '../../utils/pre-approval-hooks'
 import { createProblemError } from '../../utils/problem'
@@ -68,17 +70,37 @@ function hasExactStructuredDetail(request: Pick<OpenApeGrantRequest, 'authorizat
   return cliDetails(request.authorization_details).some(isCliAuthorizationDetailExact)
 }
 
+/** Stores the request as pending and notifies whoever decides it. */
+async function createPendingGrant(event: H3Event, request: OpenApeGrantRequest): Promise<OpenApeGrant> {
+  const grant = await createGrant(request, useGrantStores().grantStore)
+  // Fire-and-forget so a slow notification doesn't delay the response.
+  void runGrantPendingHooks(grant).catch(err =>
+    console.warn('[grants/post] pending-hook failed:', err),
+  )
+  setResponseStatus(event, 201)
+  return grant
+}
+
 export default defineEventHandler(async (event) => {
   const body = await readBody<OpenApeGrantRequest>(event)
+  // Provenance is the IdP's to record, never the client's.
+  delete body.submitted_by
   const forwarded = await maybeForwardBrokerGrant(event, 'create', body)
   if (forwarded !== undefined) return forwarded
   const { grantStore } = useGrantStores()
 
   // Spec §5: grant requests MUST carry a Bearer token; §3.4: an authenticated
   // requester is always the token's subject — a body-supplied `requester` is
-  // display data an attacker controls, never an identity.
-  const bearerPayload = await tryBearerAuth(event)
-  if (bearerPayload) {
+  // display data an attacker controls, never an identity. The one exception
+  // is a `grants:request` delegate, which names one of its delegator's agents
+  // (delegation.md §8); the IdP records it as the submitter.
+  const delegate = await tryGrantsDelegate(event, GRANTS_REQUEST_SCOPE)
+  const bearerPayload = delegate ? null : await tryBearerAuth(event)
+  if (delegate) {
+    await assertDelegatedRequest(body, delegate)
+    body.submitted_by = { delegate: delegate.delegate, delegation_grant: delegate.delegationGrant }
+  }
+  else if (bearerPayload) {
     body.requester = bearerPayload.sub
   }
   else if (!hasValidManagementToken(event) && !allowUnauthenticatedGrantRequests()) {
@@ -140,6 +162,12 @@ export default defineEventHandler(async (event) => {
   // Compute cmd_hash server-side from command array (never trust client-provided hash)
   if (body.command?.length) {
     body.cmd_hash = await computeCmdHash(body.command.join(' '))
+  }
+
+  // A delegate's request is always left to the delegator's decision: no
+  // reuse, standing-grant or hook approval may settle it (requester ≠ approver).
+  if (delegate) {
+    return await createPendingGrant(event, body)
   }
 
   // Grant-Reuse: check for an active reusable grant with matching parameters
@@ -245,25 +273,10 @@ export default defineEventHandler(async (event) => {
     if (incomingCliDetails.length > 0) {
       const similarResult = findSimilarCliGrants(body, existingGrants)
       if (similarResult) {
-        const grant = await createGrant(body, grantStore)
-        // Grant landed in pending state and needs human approval —
-        // fan out a push / mail / etc. via registered hooks.
-        // Fire-and-forget so a slow notification doesn't delay the
-        // grant-creation response.
-        void runGrantPendingHooks(grant).catch(err =>
-          console.warn('[grants/post] pending-hook failed:', err),
-        )
-        setResponseStatus(event, 201)
-        return { ...grant, similar_grants: similarResult }
+        return { ...await createPendingGrant(event, body), similar_grants: similarResult }
       }
     }
   }
 
-  const grant = await createGrant(body, grantStore)
-  // Grant landed in pending state — notify the human.
-  void runGrantPendingHooks(grant).catch(err =>
-    console.warn('[grants/post] pending-hook failed:', err),
-  )
-  setResponseStatus(event, 201)
-  return grant
+  return await createPendingGrant(event, body)
 })
