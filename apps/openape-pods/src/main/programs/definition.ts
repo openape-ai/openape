@@ -1,46 +1,26 @@
 import { loadProgramRuntime } from './runtime'
-import { basename, join, sep } from 'node:path'
-import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises'
+import { basename, sep } from 'node:path'
+import { readFile, realpath, stat } from 'node:fs/promises'
 import { createHash } from 'node:crypto'
-import { bindsExecutable, checkCliVersion, fetchRegistry, loadAdapter, loadRegistryAdapter } from '@openape/apes'
-import type { RegistryIndex } from '@openape/apes'
+import { assertProgramName } from '../../contracts/programs'
 import type { ProgramDefinition } from '../../contracts/programs'
-import type { VersionProbe } from './version-probe'
 
-export interface RegistryProgramOptions {
-  /** Where verified registry adapters are kept by content digest. */
-  store: string
-  /** Selects the registry entry when the file name differs; it never binds an executable to an adapter by itself. */
-  commandName?: string
+export interface InstalledProgramOptions {
   runtimePath?: string
   /** Folders no assigned executable may come from: the Pods profile, Pod folders and assigned writable folders. */
   protectedRoots: string[]
-  probe: VersionProbe
-  registry?: () => Promise<RegistryIndex>
-  /** The installed adapters; `apes adapter install` writes ~/.openape/shapes/adapters. */
-  adapters?: string
 }
 
 /**
- * An executable with the shapes-registry adapter of its CLI, the only adapters Pods assigns (issue 1473). The
- * installed adapter must match the registry index; Pods keeps it as a copy named by its digest, so updating the
- * installed adapter never changes an assignment until the owner replaces it. The executable must be the adapter's
- * executable by its real file name or one of its tested files by digest, and must not come from a folder a Pod can
- * write. A tested digest needs no probe; otherwise the adapter's version command runs once in the isolated sandbox.
- * The executable is hash-pinned and verified before every command, so the version found stays the version that runs.
+ * An installed program, assigned by its path, file hash and optional runtime descriptor (issue 1473, revision 4). Its
+ * command name is the file name it was chosen by; the IdP selects what a command means by that name and the file hash.
+ * The executable must not come from a folder a Pod can write, and it is verified before every call, so the file the
+ * IdP authorized is the file that runs.
  */
-export async function registryProgramDefinition(executablePath: string, options: RegistryProgramOptions): Promise<ProgramDefinition> {
-  const cliId = options.commandName ?? basename(executablePath)
-  const { entry, loaded } = loadRegistryAdapter(await (options.registry ?? fetchRegistry)(), cliId, options.adapters)
-  const definition = await programDefinition(executablePath, await pinAdapter(options.store, entry.id, loaded.source), cliId, options.runtimePath)
-  if (`SHA-256:${definition.adapterHash}` !== entry.digest) throw new Error('The registry adapter changed during assignment; assign the application again')
+export async function installedProgramDefinition(executablePath: string, options: InstalledProgramOptions): Promise<ProgramDefinition> {
+  const definition = await programDefinition(executablePath, options.runtimePath)
   await assertOutside(options.protectedRoots, [definition.executable, definition.runtime?.executable, definition.runtime?.descriptor.path, ...definition.entryFiles.map(file => file.path)], definition.runtime?.readDirectories ?? [])
-  const digest = `SHA-256:${definition.executableHash}`
-  if (!bindsExecutable(loaded.adapter, definition.executable, digest)) throw new Error(`The registry adapter ${entry.id} is for ${loaded.adapter.cli.executable}; ${basename(definition.executable)} is neither that executable nor a file it was tested with`)
-  const versionCommand = loaded.adapter.cli.version_command
-  const pinned = loaded.adapter.cli.tested_digests?.includes(digest)
-  const output = versionCommand && !pinned ? await options.probe(definition, versionCommand) : null
-  return { ...definition, registry: { id: entry.id, digest: entry.digest }, cliVersion: checkCliVersion(loaded.adapter, output, digest) }
+  return definition
 }
 
 /**
@@ -65,27 +45,13 @@ async function assertOutside(roots: string[], files: (string | undefined)[], dir
   }
 }
 
-async function pinAdapter(store: string, id: string, source: string): Promise<string> {
-  const content = await readFile(source)
-  const path = join(store, `${id}-${createHash('sha256').update(content).digest('hex')}.toml`)
-  await mkdir(store, { recursive: true, mode: 0o700 })
-  try { await writeFile(path, content, { mode: 0o600, flag: 'wx' }) }
-  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
-  return path
-}
-
-/** A definition with a given adapter file: Pods' generated application launchers and portable requirements. */
-export async function programDefinition(executablePath: string, adapterFile: string, commandName?: string, runtimePath?: string): Promise<ProgramDefinition> {
+/** A program by its path; `name` is the command it is called by, the path's file name unless a launcher names it. */
+export async function programDefinition(executablePath: string, runtimePath?: string, name = basename(executablePath)): Promise<ProgramDefinition> {
   const executable = await realpath(executablePath)
   const info = await stat(executable)
   if (!info.isFile() || !(info.mode & 0o111) || info.size > 128 * 1024 * 1024) throw new Error('Choose an executable CLI up to 128 MB')
-  const cliId = commandName ?? basename(executablePath)
-  const adapter = loadAdapter(cliId, adapterFile)
-  if (!/^[\w-]+$/.test(adapter.adapter.cli.executable)) throw new Error('Application command must use letters, digits, underscores or hyphens')
-  const adapterPath = await realpath(adapter.source)
-  const entryFiles: ProgramDefinition['entryFiles'] = []
-  const environment: Record<string, string> = {}
-  return { ...(runtimePath ? { runtime: await loadProgramRuntime(runtimePath) } : {}), name: cliId, executable, executableHash: createHash('sha256').update(await readFile(executable)).digest('hex'), cliId: adapter.adapter.cli.executable, adapterPath, adapterHash: adapter.fileDigest.replace('SHA-256:', ''), entryFiles, environment, networkHosts: [] }
+  assertProgramName(name)
+  return { ...(runtimePath ? { runtime: await loadProgramRuntime(runtimePath) } : {}), name, executable, executableHash: createHash('sha256').update(await readFile(executable)).digest('hex'), cliId: name, entryFiles: [], environment: {}, networkHosts: [] }
 }
 
 export async function suggestedProgram(name: string, searchPath: string): Promise<string | undefined> {

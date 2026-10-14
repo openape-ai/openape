@@ -18,7 +18,8 @@ import type { GrantWithCard } from '../../src/runtime/utils/grant-card'
 
 const PODS = join(__dirname, '../../../../apps/openape-pods')
 export const POD_ID = '00000000-0000-4000-8000-000000000001'
-export const podRuntimeAdapter = loadAdapter('pod-runtime', join(PODS, 'runtime-sources/pod-runtime-shapes.toml'))
+// The registry entry pod-runtime as the IdP stores it; the Pods desktop ships no adapters since issue 1473 revision 4.
+export const podRuntimeAdapter = loadAdapter('pod-runtime', join(__dirname, '../fixtures/pod-runtime-shapes.toml'))
 export const gitAdapter = loadAdapter('git', join(PODS, 'examples/git-shapes.toml'))
 
 function storeShape(loaded: LoadedAdapter): ServerShape {

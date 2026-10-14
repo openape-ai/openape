@@ -7,7 +7,7 @@ import { baselineSchema, schemaVersion } from './schema.ts'
 
 /**
  * One-way conversion of a schema-47 profile into schema 48 (issue 1465); convertGroups continues to schema 49 and
- * convertApprovals to schema 50, convertApprovalSummaries to schema 51. It refuses before any change while legacy
+ * convertApprovals to schema 50, convertApprovalSummaries to schema 51 and convertProgramAssignments to schema 52. It refuses before any change while legacy
  * network work is open, archives every row of the retired network runtime unchanged in legacy_records (verified by
  * count and digest), carries archive effects into the generalized effect ledger and member checkpoints into each
  * Pod's private state, rebuilds the tables whose definition changed and records a conversion receipt.
@@ -17,13 +17,14 @@ import { baselineSchema, schemaVersion } from './schema.ts'
 /** Every table of schema 47 that schema 48 no longer has; their rows survive only as inert history. */
 export const retiredTables = ['network_sandbox_resources', 'automation_descriptions', 'networks', 'network_revisions', 'network_members', 'network_subscriptions', 'composition_config', 'network_checkpoints', 'network_source_clocks', 'network_scheduler_state', 'network_runtime_status', 'network_maintenance_status', 'network_process_previews', 'network_trace_events', 'network_cases', 'network_case_revisions', 'network_case_sources', 'network_events', 'network_event_identities', 'network_deliveries', 'network_queue_counts', 'network_joins', 'network_join_inputs', 'network_choices', 'network_invocations', 'network_invocation_controls', 'network_effect_attempts', 'network_effect_receipts', 'network_gate_tasks', 'network_gate_task_attempts', 'network_gate_attempt_controls', 'network_gate_controls', 'network_gate_items', 'network_gate_item_grants', 'data_collections', 'data_collection_versions', 'data_permissions', 'data_records', 'data_record_revisions', 'data_record_provenance', 'data_index_values', 'network_data_staging', 'artifact_scopes', 'artifacts', 'artifact_permissions', 'artifact_references', 'network_artifact_staging'] as const
 
-/** Digests of the exact schema-46 to schema-50 objects; a converted database must be one of them. */
+/** Digests of the exact schema-46 to schema-51 objects; a converted database must be one of them. */
 const knownSchemas: Record<number, { objects: number, digest: string }> = {
   46: { objects: 147, digest: '4e022a881674f2f188a0a8397e0068e2d4e49147593ece1b813f61d855c41d1f' },
   47: { objects: 148, digest: '220a37d6c30b66ccf0ca88302791f006b3cd38e1290635b5f1ad448d3218901c' },
   48: { objects: 104, digest: '48af432be41c9c98cf89ea081c326ea156775bde3e73c1dd06fadda60ed1e7d9' },
   49: { objects: 100, digest: '601fc34efb6fd577153621c2c2555cb858225ba6e647b9252e63f5dd9c83b82a' },
   50: { objects: 100, digest: '8ec6f0e1541245e95949f05a13c020855a2c8eb1fa8f9d12f369245563cff679' },
+  51: { objects: 100, digest: '7c7012332cba58f01ba7ef168d48763c44ebb745dbcf9b1931d729d6ef8c7a5f' },
 }
 
 /** Schema 50 differs from the current baseline only in the summary columns of action_approvals (issue 1473). */
@@ -306,6 +307,33 @@ export function convertApprovalSummaries(database: DatabaseSync): void {
   database.exec('DROP TABLE conversion_action_approvals')
   assertSchema(database, baselineSchema, schemaVersion)
   database.prepare('INSERT INTO storage_receipts VALUES(?,\'conversion\',?,?)').run(randomUUID(), JSON.stringify({ from: 50, rebuilt: ['action_approvals'], rows, shortened, at: new Date().toISOString() }), Date.now())
+}
+
+/** What a schema-51 program assignment kept about its Shapes adapter (issue 1473, revision 3). */
+export const retiredProgramFields = ['adapterPath', 'adapterHash', 'registry', 'cliVersion', 'adapter', 'commands'] as const
+
+/**
+ * Schema 51 to 52 (issue 1473, revision 4): programs are assigned by path, file hash and optional runtime descriptor;
+ * the IdP alone resolves their commands. The adapter fields leave every program assignment without owner action, and
+ * everything else stays, including the command name (cliId) the program was assigned with, so grants for its exact
+ * commands keep matching. Only resource configurations change; the tables stay as they are. It runs inside the
+ * caller's transaction, after the verified pre-upgrade backup.
+ */
+export function convertProgramAssignments(database: DatabaseSync): void {
+  assertKnownSchema(database, 51)
+  const update = database.prepare('UPDATE resources SET configuration=? WHERE id=?')
+  let programs = 0; let converted = 0
+  for (const row of database.prepare('SELECT id,configuration FROM resources WHERE json_extract(configuration,\'$.type\')=\'program\' ORDER BY rowid').all()) {
+    programs++
+    const configuration = JSON.parse(String(row.configuration)) as Record<string, unknown>
+    if (typeof configuration.cliId !== 'string' || typeof configuration.executable !== 'string' || typeof configuration.executableHash !== 'string') throw new StorageError('invalid-data', `Program assignment ${String(row.id)} has no command name, executable or file hash`)
+    const kept = Object.fromEntries(Object.entries(configuration).filter(([key]) => !(retiredProgramFields as readonly string[]).includes(key)))
+    if (Object.keys(kept).length === Object.keys(configuration).length) continue
+    update.run(JSON.stringify(kept), String(row.id))
+    converted++
+  }
+  assertSchema(database, baselineSchema, schemaVersion)
+  database.prepare('INSERT INTO storage_receipts VALUES(?,\'conversion\',?,?)').run(randomUUID(), JSON.stringify({ from: 51, programs, converted, removed: retiredProgramFields, at: new Date().toISOString() }), Date.now())
 }
 
 /** The tag table of schema 47, added to a schema-46 database before its conversion. */

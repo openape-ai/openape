@@ -191,13 +191,14 @@ atomic provisioning store; the Free IdP uses one SQL transaction for account
 and key creation. Disabled or conflicting identities require explicit recovery.
 The route creates no grants and does not invoke the normal safe-command seeder.
 
-The `@openape/apes/assigned` entry reuses ape-shell's Shapes resolution and grant
-verification, with fixed issuer, subject, host, adapter, operation and grant
-bindings. It neither requests new grants nor installs adapters, invokes generic
-fallback or executes shell text. The private app broker starts a separate native
-tool sandbox after that check. Its first contract accepts exact assigned argv;
-mailbox-specific parameter handling belongs to M8. Scripts must declare the
-capability and retain a current resource/assignment lease.
+Since issue 1473 (revision 4) the desktop knows no Shapes adapters. Before each
+call the broker verifies the assigned program file and asks the IdP
+(`POST /api/grants/authorize`) with the program's command name, its file hash and
+the exact argv; it starts the separate native tool sandbox only with a command
+token whose signature, issuer, Pod identity, execution target, argv hash and
+program hash it verified (see "Program calls" below). It neither resolves commands,
+installs adapters, invokes generic fallback nor executes shell text. Scripts must
+declare the capability and retain a current resource/assignment lease.
 
 Only the authorized tool gets its connection cache. Cache updates are serialized,
 encrypted and flushed before cleanup, including refresh followed by a failed
@@ -213,9 +214,30 @@ runtimes. No real identities, Keychain items, provider credentials or grants hav
 been accessed. The existing resource UI remains the M3A view; script dispatch and
 owner connection onboarding are M4 and M11.
 
-The app adds only the existing `@openape/apes` workspace as a build dependency
-for its narrowly exported assigned-command entry. No second grant engine or new
-third-party authentication dependency is introduced.
+The app keeps the existing `@openape/apes` workspace only as a build dependency for
+the bundled ape-shell; desktop code must not import it or any other Shapes resolver
+(enforced by the lint rule in the repository's `eslint.config.mjs`). No second grant
+engine or new third-party authentication dependency is introduced.
+
+## Program calls (issue 1473, revision 4)
+
+A program is assigned by its path, file hash, optional runtime descriptor and
+network hosts; its command name is the file name it was chosen by. Only the IdP
+knows Shapes: per call the desktop sends `{target_host, audience: "shapes",
+program: {name, sha256}, argv, grant_type: "always", summary}` and the IdP
+resolves the exact command with the shapes registry. `200` carries a command
+token (at most five minutes, bound to the Pod, its target, the argv hash of
+`[name, ...argv]` and the program hash); the desktop verifies every binding and
+reuses the token for the identical command while it is valid. `202` is a pending
+request, shown and awaited like every Pod approval, after which the call is
+authorized again. `403` (denied or revoked) fails the call without a new request.
+Whether a call writes, and therefore becomes a recorded effect, follows from the
+IdP's resolution of exactly this call in the verified token (`authorization_details`):
+only read, list or get actions are reads; mail moves stay with the archive port.
+Running the Pod script, HTTP destinations and SSH inventories remain plain
+permission grants with fixed details the desktop builds itself. Schema 52
+removed the adapter fields from existing program assignments; approved grants keep
+matching because the IdP matches by permission, not by adapter version.
 
 ## M4: manual runs and pinned Codex execution
 
@@ -493,8 +515,8 @@ The reviewed upstream history change is ac04293166dda43ca35cc67bd77108d2fe6911c9
 merged through https://git.openape.ai/delta-mind/o365-cli/pulls/6.
 The bundled source now pins `f3c2f71d6ce70f1c1bce028e2668ad66597e5d60`,
 which also includes the account-scoped workflow transport from upstream PR 8.
-The network preview example uses only its `workflow read` operation; its Shapes
-adapter declares no mutation command. Message pagination
+The network preview example uses only its `workflow read` operation; the IdP's
+registry adapter for it declares no mutation command. Message pagination
 preserves the exact receivedDateTime boundary. An attachment parent must already
 be recorded within that boundary. Existing durable knowledge is retained when
 read permissions narrow.

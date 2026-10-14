@@ -1,11 +1,11 @@
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { createHash, randomUUID } from 'node:crypto'
-import { loadAdapter, resolveCommand } from '@openape/apes'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
 import { PodToolBroker } from '../broker/tools'
 import type { BrokerLease } from '../broker/tools'
 import type { AgentAuthority } from '../broker/authorization'
+import { callEffect } from '../programs/session'
 import type { CredentialCache } from '../connections/cache'
 import { parseMailRequest } from './contract'
 import type { MailScope } from './contract'
@@ -17,8 +17,7 @@ export class MailService {
   constructor(private readonly helper: string, private readonly vendor: string, private readonly authority: AgentAuthority, private readonly credentials: CredentialCache, private readonly network: (signal: AbortSignal) => ReturnType<typeof startMailProxy> = startMailProxy) {}
   async execute(assignment: MailAssignment, request: unknown, root: string, lease: BrokerLease): Promise<MailArtifact> {
     const { argv, read } = parseMailRequest(request, assignment)
-    const grantId = assignment.grants[read.operation]
-    if (!grantId) throw new Error('No grant is assigned for this mail operation')
+    if (!assignment.grants[read.operation]) throw new Error('No grant is assigned for this mail operation')
     let manifestBytes: string
     try { manifestBytes = await readFile(join(this.vendor, 'o365-manifest.json'), 'utf8') }
     catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') throw new Error('The built-in mail program is no longer supplied. Assign an installed CLI in Permissions and update the script to its supported commands.'); throw error }
@@ -26,13 +25,12 @@ export class MailService {
     if (manifest.protocol !== 1) throw new Error('Unsupported o365 protocol')
     const roots = join(this.vendor, 'mail-roots.pem')
     await verifyExecutable(roots, manifest.rootsHash)
-    const adapterPath = join(this.vendor, 'o365-shapes.toml')
-    const adapter = loadAdapter('o365-cli', adapterPath)
-    const resolved = await resolveCommand(adapter, argv)
     const proxy = await this.network(lease.signal)
     try {
-      const broker = new PodToolBroker(this.helper, root, this.authority, this.credentials)
-      const reply = await broker.execute({ id: 'o365-mail', capability: 'mail.read', executable: join(this.vendor, 'o365-cli'), executableHash: manifest.binaryHash, entryFiles: [{ path: roots, hash: manifest.rootsHash }], prefix: [], connectionId: assignment.connectionId, cacheArgument: '--cache-dir', maxOutputBytes: 32 * 1024 * 1024, runtimeDirectories: [], environment: { ...proxy.environment, PODS_CA_FILE: roots }, networkPorts: [proxy.port], grantId, command: { cliId: 'o365-cli', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] } }, request, lease)
+      // The built-in program is authorized per call like any assigned program (issue 1473, revision 4).
+      const broker = new PodToolBroker(this.helper, root, async (call, signal) => callEffect(await this.authority.authorizeProgram(call, signal), call.program.name), this.credentials)
+      const executable = join(this.vendor, 'o365-cli')
+      const reply = await broker.execute({ id: 'o365-mail', capability: 'mail.read', program: { path: executable, name: 'o365-cli', sha256: manifest.binaryHash }, argv: argv.slice(1), executable, executableHash: manifest.binaryHash, entryFiles: [{ path: roots, hash: manifest.rootsHash }], prefix: [], connectionId: assignment.connectionId, cacheArgument: '--cache-dir', maxOutputBytes: 32 * 1024 * 1024, runtimeDirectories: [], environment: { ...proxy.environment, PODS_CA_FILE: roots }, networkPorts: [proxy.port] }, { toolId: 'o365-mail', argv: argv.slice(1) }, lease)
       if (reply.exitCode !== 0) throw new Error(`Mail read failed (${reply.exitCode}): ${reply.stderr.slice(0, 2000)}`)
       lease.assertCurrent(); lease.signal.throwIfAborted()
       const path = join(root, `mail-${randomUUID()}.json`)

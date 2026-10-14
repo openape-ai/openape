@@ -1,11 +1,10 @@
 import type { PortablePodChoices } from '../../contracts/sharing'
-import { loadAdapter } from '@openape/apes'
 import { canonicalPortableJson, portableKey } from '@openape/pods-protocol'
 import type { PortableApplication, PortableInput, PortableInputKind, PortablePod } from '@openape/pods-protocol'
 import type { ProgramAssignment } from '../../contracts/programs'
 import { parseHttpAuthentication } from '../../contracts/http'
 import { applicationBundle } from '../../main/programs/application'
-import { portableLauncher } from '../../main/programs/requirements'
+import { portableLauncher, portableProgram } from '../../main/programs/requirements'
 import { readPortableAssets } from './assets'
 import type { PortablePodSource } from './source'
 import type { PortablePayload } from './package'
@@ -57,10 +56,8 @@ async function applicationRequirement(configuration: ProgramAssignment, key: str
     application = bundle.identity; adapter = { ...portableLauncher, operations: ['invoke'] }
   }
   else {
-    const loaded = loadAdapter(configuration.cliId, configuration.adapterPath)
-    const cli = loaded.adapter.cli
-    if (loaded.fileDigest !== `SHA-256:${configuration.adapterHash}` || cli.executable !== configuration.cliId || !cli.version || !/^[1-9]\d{0,2}$/.test(cli.version)) throw new Error('Application adapter changed or has no portable version')
-    application = cli.executable; adapter = { identity: cli.id, version: Number(cli.version), operations: ['invoke'] }
+    // A program is required by its command name; the recipient's IdP decides what its commands mean (issue 1473).
+    application = configuration.cliId; adapter = { ...portableProgram, operations: ['invoke'] }
   }
   return { key, application, adapter, testedVersions: [], platforms: [{ os: process.platform as 'darwin' | 'linux' | 'win32', architecture: process.arch as 'arm64' | 'x64' }], distribution: null, instructions: '' }
 }

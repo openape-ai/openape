@@ -1,5 +1,4 @@
 import { createHash } from 'node:crypto'
-import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { PodResource } from '../../../contracts/resources'
 import type { ArchiveManifest } from '../../../contracts/mail-archive'
 import { parseArchiveMail } from '../../../contracts/mail-archive'
@@ -8,6 +7,7 @@ import type { CredentialCache } from '../../connections/cache'
 import type { BrokerLease, ToolReply } from '../../broker/tools'
 import { PodToolBroker } from '../../broker/tools'
 import { programRequest } from '../../programs/invoke'
+import { programIdentity } from '../../../contracts/programs'
 import { programLaunch, verifyProgramRuntime } from '../../programs/runtime'
 import { verifyExecutable } from '../../../worker/runtime/sandbox'
 import { startMailProxy } from '../proxy'
@@ -53,19 +53,14 @@ export async function moveApprovedMail(input: { resources: PodResource[], manife
   const assignment = selected.assignment
   const item = manifest.items.find(mail => JSON.stringify(argv) === JSON.stringify(['archive', '--account', manifest.mailbox, '--message', mail.id, '--version', mail.version, '--folder', mail.folder]))
   if (!item || assignment.cliId !== 'pods-mail' || archiveApplicationHash(assignment) !== manifest.applicationHash) throw new Error('Move is outside the frozen archive batch')
+  // The move is authorized by the frozen, approved batch: the exact argv of one of its items, not by a grant.
   await verifyExecutable(assignment.executable, assignment.executableHash)
-  await verifyExecutable(assignment.adapterPath, assignment.adapterHash)
   await verifyProgramRuntime(assignment)
-  const adapter = loadAdapter(assignment.cliId, assignment.adapterPath)
-  const command = [assignment.cliId, ...argv]
-  const resolved = await resolveCommand(adapter, command)
-  if (resolved.detail.operation_id !== 'archive' || resolved.detail.action !== 'archive') throw new Error('Assigned mail archive operation changed')
   const proxy = await startMailProxy(lease.signal, undefined, assignment.networkHosts)
   try {
-    const authority = { authorize: async () => input.assertAuthority(), assertActive: async () => input.assertAuthority() }
-    const broker = new PodToolBroker(input.helper, input.root, authority, input.credentials)
+    const broker = new PodToolBroker(input.helper, input.root, async () => input.assertAuthority(), input.credentials)
     const launch = programLaunch(assignment)
-    return await broker.execute({ id: selected.id, capability: assignment.capability, grantId: manifest.id, command: { cliId: assignment.cliId, adapterPath: assignment.adapterPath, adapterDigest: adapter.digest, argv: command, coverage: [resolved.detail] }, executable: launch.executable, executableHash: launch.executableHash, entryFiles: assignment.entryFiles, prefix: launch.prefix, programState: { id: assignment.stateId, podId: manifest.podId, applicationId: selected.id }, runtimeDirectories: launch.runtimeDirectories, runtimeEnvironment: assignment.runtime?.environment, environment: { ...assignment.environment, ...proxy.environment }, networkPorts: [proxy.port], maxOutputBytes: 200000 }, { toolId: selected.id, argv: command }, lease)
+    return await broker.execute({ id: selected.id, capability: assignment.capability, program: { path: assignment.executable, ...programIdentity(assignment) }, argv, executable: launch.executable, executableHash: launch.executableHash, entryFiles: assignment.entryFiles, prefix: launch.prefix, programState: { id: assignment.stateId, podId: manifest.podId, applicationId: selected.id }, runtimeDirectories: launch.runtimeDirectories, runtimeEnvironment: assignment.runtime?.environment, environment: { ...assignment.environment, ...proxy.environment }, networkPorts: [proxy.port], maxOutputBytes: 200000 }, { toolId: selected.id, argv }, lease)
   }
   finally { await proxy.close() }
 }

@@ -12,7 +12,7 @@ import type { ResourceState } from '../../src/contracts/resources'
 import type { SandboxLevel } from '../../src/contracts/sandbox'
 import { ProgramState } from '../../src/main/programs/state'
 
-it('keeps generated adapters inside the pod HOME and cleans up a refused setup', async () => {
+it('refuses a redirected .openape folder in the pod HOME and cleans up a refused setup', async () => {
   const root = await mkdtemp(join(tmpdir(), 'pods-shell-path-')); const podId = randomUUID()
   try {
     const runtime = { executable: process.execPath, cli: '/fixture/cli', client: '/fixture/client' }
@@ -42,10 +42,9 @@ async function wrapper(level: SandboxLevel): Promise<{ text: string, podHome: st
     const credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: bytes => bytes.toString() })
     const connections = { podConnection: async () => ({ issuer: 'https://unused.example.test', subject: 'fixture@example.test', accessToken: async () => 'synthetic' }) } as unknown as ConnectionManager
     const executable = join(root, 'az'); await writeFile(executable, '#!/bin/sh\nexit 0\n', { mode: 0o700 })
-    const adapter = join(root, 'az.toml'); await writeFile(adapter, 'synthetic')
     const digest = async (path: string) => createHash('sha256').update(await readFile(path)).digest('hex')
     const stateId = await new ProgramState(credentials).create({ podId, applicationId })
-    const configuration = { type: 'program', name: 'az', cliId: 'az', executable, executableHash: await digest(executable), adapterPath: adapter, adapterHash: await digest(adapter), stateId, capability: 'tool.az.invoke', networkHosts: [], entryFiles: [], environment: {} }
+    const configuration = { type: 'program', name: 'az', cliId: 'az', executable, executableHash: await digest(executable), stateId, capability: 'tool.az.invoke', networkHosts: [], entryFiles: [], environment: {} }
     const resources = { epoch: 1, resources: [{ id: applicationId, podId, revision: 1, kind: 'tool', state: 'ready', name: 'az', configuration }] } as unknown as ResourceState
     const session = new ExternalShell(podId, root, runtime, resources, credentials, connections, async () => {}, async () => {}, level)
     try {
