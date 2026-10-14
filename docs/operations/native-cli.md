@@ -78,3 +78,11 @@ An empty, unreadable or invalid explicit file fails without using the owner's id
 Outside Pods, the helper uses `$HOME/.config/apes/auth.json` from `apes login`.
 Install it with `install -m 755 apps/openape-pods/scripts/git-credential-apes ~/.local/bin/git-credential-apes`
 when the host Git configuration uses the `apes` credential helper.
+
+Git smart-HTTP resolves the signing IdP from the direct token subject's DDISA domain.
+The configured IdP is used only when that domain has no DDISA record; lookup failures
+fail closed. Public HTTPS JWKS access, issuer, signature and audience checks precede
+repository authorization. A foreign IdP cannot replace the verified subject through
+email or delegation claims. Existing configured-IdP delegation trust is retained;
+this direct-agent fix does not introduce federated delegation. Repository grants and
+token scope caps still determine read/write access.
