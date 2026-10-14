@@ -45,11 +45,7 @@ describe('shapes adapter: TOML parsing', () => {
     expect(prList!.required_options).toEqual(['repo'])
     expect(prList!.action).toBe('list')
     expect(prList!.risk).toBe('low')
-    // The mini TOML parser splits on commas inside arrays, so
-    // "repo:owner={repo|owner},name={repo|name}" becomes two entries
-    expect(prList!.resource_chain.length).toBe(3)
-    expect(prList!.resource_chain[0]).toBe('repo:owner={repo|owner}')
-    expect(prList!.resource_chain[2]).toBe('pr:*')
+    expect(prList!.resource_chain).toEqual(['owner:login={repo|owner}', 'repo:name={repo|name}', 'pr:*'])
   })
 
   it('parses grep.toml with empty-command operations', async () => {
@@ -106,15 +102,34 @@ describe('shapes adapter: command resolution', () => {
     expect(resolved.detail.action).toBe('list')
     expect(resolved.detail.cli_id).toBe('gh')
     expect(resolved.detail.type).toBe('openape_cli')
-    // Verify resource chain contains repo with owner selector
-    expect(resolved.detail.resource_chain.length).toBeGreaterThanOrEqual(2)
-    expect(resolved.detail.resource_chain[0]!.resource).toBe('repo')
-    expect(resolved.detail.resource_chain[0]!.selector).toEqual({ owner: 'openape-ai' })
-    // Last entry should be pr
-    expect(resolved.detail.resource_chain.at(-1)!.resource).toBe('pr')
-    // Permission should be a canonicalized string
-    expect(resolved.permission).toBeTruthy()
-    expect(typeof resolved.permission).toBe('string')
+    expect(resolved.detail.resource_chain).toEqual([
+      { resource: 'owner', selector: { login: 'openape-ai' } },
+      { resource: 'repo', selector: { name: 'openape' } },
+      { resource: 'pr' },
+    ])
+    expect(resolved.permission).toBe('gh.owner[login=openape-ai].repo[name=openape].pr[*]#list')
+  })
+
+  it('binds both owner and name, so two repositories of one owner never share a permission', async () => {
+    const { parseAdapterToml } = await import('../src/toml')
+    const { resolveCommand } = await import('../src/parser')
+    const adapter = parseAdapterToml(readFileSync(join(FIXTURES_DIR, 'gh.toml'), 'utf-8'))
+    const loaded = { adapter, source: join(FIXTURES_DIR, 'gh.toml'), digest: 'test-digest' }
+
+    const first = await resolveCommand(loaded, ['gh', 'repo', 'delete', 'openape-ai/openape'])
+    const second = await resolveCommand(loaded, ['gh', 'repo', 'delete', 'openape-ai/other'])
+
+    expect(first.permission).toBe('gh.owner[login=openape-ai].repo[name=openape]#delete')
+    expect(second.permission).toBe('gh.owner[login=openape-ai].repo[name=other]#delete')
+  })
+
+  it('fails closed on a resource chain whose comma split leaves a template as resource name', async () => {
+    const { parseAdapterToml } = await import('../src/toml')
+    const { resolveCommand } = await import('../src/parser')
+    const content = readFileSync(join(FIXTURES_DIR, 'gh.toml'), 'utf-8').replaceAll('"owner:login={repo|owner}", "repo:name={repo|name}"', '"repo:owner={repo|owner},name={repo|name}"')
+    const loaded = { adapter: parseAdapterToml(content), source: 'gh.toml', digest: 'test-digest' }
+
+    await expect(resolveCommand(loaded, ['gh', 'repo', 'delete', 'openape-ai/openape'])).rejects.toThrow(/Invalid resource chain entry: name=\{repo\|name\}/)
   })
 
   it('resolves "gh repo view owner/repo" with owner/name split', async () => {

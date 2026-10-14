@@ -1,14 +1,10 @@
-import { createHash } from 'node:crypto'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { basename, join } from 'node:path'
 import type { LoadedAdapter, ResolvedCommand } from './types.js'
+import { adapterFileDigest, semanticAdapterDigest } from './digest.js'
 import { parseAdapterToml } from './toml.js'
 import { buildGenericResolved } from './generic.js'
-
-function digest(content: string): string {
-  return `SHA-256:${createHash('sha256').update(content).digest('hex')}`
-}
 
 function adapterDirs(): string[] {
   return [
@@ -60,7 +56,7 @@ export function resolveAdapterPath(cliId: string, explicitPath?: string): string
   throw new Error(`No adapter found for ${cliId}`)
 }
 
-export function loadAdapter(cliId: string, explicitPath?: string): LoadedAdapter {
+export function loadAdapter(cliId: string, explicitPath?: string): LoadedAdapter & { fileDigest: string } {
   const source = resolveAdapterPath(cliId, explicitPath)
   const content = readFileSync(source, 'utf-8')
   const adapter = parseAdapterToml(content)
@@ -75,7 +71,8 @@ export function loadAdapter(cliId: string, explicitPath?: string): LoadedAdapter
   return {
     adapter,
     source,
-    digest: digest(content),
+    digest: semanticAdapterDigest(adapter),
+    fileDigest: adapterFileDigest(content),
   }
 }
 

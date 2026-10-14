@@ -1,150 +1,118 @@
+import { parseShapeCliVersions, parseShapePresentation, presentationBindings } from '@openape/grants'
+import { parse } from 'smol-toml'
 import type { ShapesAdapter, ShapesOperation } from './types.js'
 
-interface AdapterTomlFile {
-  schema?: string
-  cli?: ShapesAdapter['cli']
-  operation?: ShapesOperation[]
-}
+type Raw = Record<string, unknown>
 
-function parseKeyValue(line: string): { key: string, value: string } | null {
-  const eqIndex = line.indexOf('=')
-  if (eqIndex === -1)
-    return null
-  const key = line.slice(0, eqIndex).trim()
-  const value = line.slice(eqIndex + 1).trim()
-  if (!key || !value)
-    return null
-  return { key, value }
-}
-
-function parseTomlValue(raw: string): unknown {
-  const trimmed = raw.trim()
-
-  if (trimmed.startsWith('"') && trimmed.endsWith('"'))
-    return trimmed.slice(1, -1)
-  if (trimmed === 'true')
-    return true
-  if (trimmed === 'false')
-    return false
-  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
-    const inner = trimmed.slice(1, -1).trim()
-    if (!inner)
-      return []
-    return inner.split(',').map(value => value.trim().replace(/^"|"$/g, ''))
-  }
-
-  return trimmed
-}
-
+const ROOT_KEYS = ['schema', 'cli', 'operation']
+const CLI_KEYS = ['id', 'executable', 'audience', 'version', 'global_options', 'tested_versions', 'version_command', 'version_pattern']
+const OPERATION_KEYS = ['id', 'command', 'positionals', 'required_options', 'value_options', 'flag_options', 'display', 'action', 'risk', 'resource_chain', 'exact_command', 'presentation']
+const RISKS = ['low', 'medium', 'high', 'critical']
 const OPTION_NAME = /^[\w-]+$/
 const GLOBAL_OPTION = /^[\w-]+(?:=[\w-]+)?$/
 
-function optionalOptionList(value: unknown, field: string, owner: string, pattern: RegExp): string[] | undefined {
+function isRecord(value: unknown): value is Raw {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+// Unknown keys fail closed: an adapter must never carry rules this parser would silently drop.
+function assertKnownKeys(value: Raw, allowed: string[], owner: string): void {
+  const unknown = Object.keys(value).filter(key => !allowed.includes(key))
+  if (unknown.length)
+    throw new Error(`${owner} has unknown key(s): ${unknown.join(', ')}`)
+}
+
+function isStringList(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every(token => typeof token === 'string')
+}
+
+/**
+ * The original line-based parser split every array string at commas, and
+ * stored grants carry permissions derived that way, so matching fields keep
+ * that reading. A selector with two keys (`repo:owner={o},name={n}`) therefore
+ * cannot be written; the matcher rejects the template resource it leaves
+ * (`name={n}`) instead of granting every repository of the owner.
+ */
+function legacyList(value: string[]): string[] {
+  return value.flatMap(entry => entry.split(',').map(part => part.trim()))
+}
+
+function optionalStringList(value: unknown, field: string, owner: string): string[] | undefined {
   if (value === undefined)
     return undefined
-  if (!Array.isArray(value) || value.some(entry => typeof entry !== 'string' || !pattern.test(entry)))
+  if (!isStringList(value))
     throw new Error(`${owner} has an invalid ${field}[]`)
-  return value as string[]
+  return legacyList(value)
+}
+
+function optionalOptionList(value: unknown, field: string, owner: string, pattern: RegExp): string[] | undefined {
+  const list = optionalStringList(value, field, owner)
+  if (list?.some(entry => !pattern.test(entry)))
+    throw new Error(`${owner} has an invalid ${field}[]`)
+  return list
+}
+
+function parseOperation(operation: unknown, globalOptions: string[] | undefined): ShapesOperation {
+  if (!isRecord(operation))
+    throw new Error('Adapter [[operation]] entries must be tables')
+  const owner = `Operation ${typeof operation.id === 'string' ? operation.id : '<unknown>'}`
+  assertKnownKeys(operation, OPERATION_KEYS, owner)
+  if (!isStringList(operation.command))
+    throw new Error(`${owner} is missing command[]`)
+  if (!isStringList(operation.resource_chain))
+    throw new Error(`${owner} is missing resource_chain[]`)
+  if (typeof operation.id !== 'string' || typeof operation.display !== 'string' || typeof operation.action !== 'string')
+    throw new TypeError('Operation must define id, display, and action')
+  if (operation.risk !== undefined && !RISKS.includes(operation.risk as string))
+    throw new Error(`${owner} has an invalid risk`)
+  if (operation.exact_command !== undefined && typeof operation.exact_command !== 'boolean')
+    throw new Error(`${owner} has an invalid exact_command`)
+
+  const parsed: ShapesOperation = {
+    id: operation.id,
+    command: legacyList(operation.command),
+    ...(operation.positionals === undefined ? {} : { positionals: optionalStringList(operation.positionals, 'positionals', owner) }),
+    ...(operation.required_options === undefined ? {} : { required_options: optionalStringList(operation.required_options, 'required_options', owner) }),
+    ...(operation.value_options === undefined ? {} : { value_options: optionalOptionList(operation.value_options, 'value_options', owner, OPTION_NAME) }),
+    ...(operation.flag_options === undefined ? {} : { flag_options: optionalOptionList(operation.flag_options, 'flag_options', owner, OPTION_NAME) }),
+    // Global options are declared once on [cli] and apply to every operation.
+    ...(globalOptions?.length ? { global_options: globalOptions } : {}),
+    display: operation.display,
+    action: operation.action,
+    risk: (operation.risk as ShapesOperation['risk'] | undefined) ?? 'low',
+    resource_chain: legacyList(operation.resource_chain),
+    ...(operation.exact_command === undefined ? {} : { exact_command: operation.exact_command }),
+  }
+  if (operation.presentation !== undefined)
+    parsed.presentation = parseShapePresentation(operation.presentation, owner, presentationBindings(parsed))
+  return parsed
 }
 
 export function parseAdapterToml(content: string): ShapesAdapter {
-  const result: AdapterTomlFile = {}
-  const operations: ShapesOperation[] = []
-  let currentSection: 'root' | 'cli' | 'operation' = 'root'
-  let currentEntry: Record<string, unknown> = {}
+  const file = parse(content) as Raw
+  assertKnownKeys(file, ROOT_KEYS, 'Adapter')
 
-  const flushOperation = () => {
-    if (currentSection === 'operation' && Object.keys(currentEntry).length > 0) {
-      operations.push(currentEntry as unknown as ShapesOperation)
-      currentEntry = {}
-    }
-  }
-
-  for (const rawLine of content.split('\n')) {
-    const line = rawLine.trim()
-    if (!line || line.startsWith('#'))
-      continue
-
-    if (line === '[cli]') {
-      flushOperation()
-      currentSection = 'cli'
-      result.cli = {} as ShapesAdapter['cli']
-      continue
-    }
-
-    if (line === '[[operation]]') {
-      flushOperation()
-      currentSection = 'operation'
-      currentEntry = {}
-      continue
-    }
-
-    const kv = parseKeyValue(line)
-    if (!kv)
-      continue
-
-    const value = parseTomlValue(kv.value)
-    if (currentSection === 'root') {
-      ;(result as Record<string, unknown>)[kv.key] = value
-    }
-    else if (currentSection === 'cli') {
-      ;(result.cli as Record<string, unknown>)[kv.key] = value
-    }
-    else {
-      currentEntry[kv.key] = value
-    }
-  }
-
-  flushOperation()
-  result.operation = operations
-
-  if (result.schema !== 'openape-shapes/v1') {
-    throw new Error(`Unsupported adapter schema: ${result.schema ?? 'missing'}`)
-  }
-  if (!result.cli?.id || !result.cli.executable) {
+  if (file.schema !== 'openape-shapes/v1')
+    throw new Error(`Unsupported adapter schema: ${typeof file.schema === 'string' ? file.schema : 'missing'}`)
+  const cli = file.cli
+  if (!isRecord(cli) || !cli.id || !cli.executable)
     throw new Error('Adapter is missing cli.id or cli.executable')
-  }
-  if (!result.operation?.length) {
+  assertKnownKeys(cli, CLI_KEYS, 'Adapter cli')
+  if (!Array.isArray(file.operation) || file.operation.length === 0)
     throw new Error('Adapter must define at least one [[operation]] entry')
-  }
 
-  const globalOptions = optionalOptionList((result.cli as Record<string, unknown>).global_options, 'global_options', 'Adapter cli', GLOBAL_OPTION)
+  const globalOptions = optionalOptionList(cli.global_options, 'global_options', 'Adapter cli', GLOBAL_OPTION)
+  const versions = parseShapeCliVersions(cli, 'Adapter cli')
 
   return {
-    schema: result.schema,
+    schema: file.schema,
     cli: {
-      id: String(result.cli.id),
-      executable: String(result.cli.executable),
-      ...(result.cli.audience ? { audience: String(result.cli.audience) } : {}),
-      ...(result.cli.version ? { version: String(result.cli.version) } : {}),
+      id: String(cli.id),
+      executable: String(cli.executable),
+      ...(cli.audience ? { audience: String(cli.audience) } : {}),
+      ...(cli.version ? { version: String(cli.version) } : {}),
+      ...versions,
     },
-    operations: result.operation.map((operation) => {
-      if (!Array.isArray(operation.command) || operation.command.some(token => typeof token !== 'string')) {
-        throw new Error(`Operation ${String(operation.id ?? '<unknown>')} is missing command[]`)
-      }
-      if (!Array.isArray(operation.resource_chain) || operation.resource_chain.some(token => typeof token !== 'string')) {
-        throw new Error(`Operation ${String(operation.id ?? '<unknown>')} is missing resource_chain[]`)
-      }
-      if (typeof operation.id !== 'string' || typeof operation.display !== 'string' || typeof operation.action !== 'string') {
-        throw new TypeError('Operation must define id, display, and action')
-      }
-      const valueOptions = optionalOptionList(operation.value_options, 'value_options', `Operation ${operation.id}`, OPTION_NAME)
-      const flagOptions = optionalOptionList(operation.flag_options, 'flag_options', `Operation ${operation.id}`, OPTION_NAME)
-      return {
-        id: operation.id,
-        command: operation.command as string[],
-        ...(Array.isArray(operation.positionals) ? { positionals: operation.positionals as string[] } : {}),
-        ...(Array.isArray(operation.required_options) ? { required_options: operation.required_options as string[] } : {}),
-        ...(valueOptions ? { value_options: valueOptions } : {}),
-        ...(flagOptions ? { flag_options: flagOptions } : {}),
-        // Global options are declared once on [cli] and apply to every operation.
-        ...(globalOptions?.length ? { global_options: globalOptions } : {}),
-        display: operation.display,
-        action: operation.action,
-        risk: (operation.risk as ShapesOperation['risk']) || 'low',
-        resource_chain: operation.resource_chain as string[],
-        ...(operation.exact_command !== undefined ? { exact_command: Boolean(operation.exact_command) } : {}),
-      }
-    }),
+    operations: file.operation.map(operation => parseOperation(operation, globalOptions)),
   }
 }
