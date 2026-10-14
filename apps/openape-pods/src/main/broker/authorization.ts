@@ -12,7 +12,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 
 export type GrantProgress = RunApproval
 export type GrantObserver = (progress: GrantProgress) => Promise<void>
-export interface Grant { brokered?: BrokeredGrant, id: string, status: string, decided_by?: string, request: { requester: string, audience: string, target_host: string, grant_type: string, duration?: number, waits_until?: number, authorization_details?: { type: string }[], execution_context?: { argv_hash?: string } }, created_at?: number }
+export interface Grant { brokered?: BrokeredGrant, id: string, status: string, decided_by?: string, request: { requester: string, audience: string, target_host: string, grant_type: string, duration?: number, waits_until?: number, authorization_details?: { type: string }[], execution_context?: { argv_hash?: string, adapter_digest?: string } }, created_at?: number }
 /**
  * The Pod grant ledger as the authority sees it: `find` selects the newest recorded grant whose details cover a call,
  * `record` keeps every grant this Pod requested or observed, so a pending request is reused instead of asked again.
@@ -32,6 +32,12 @@ export function ownGrant(grant: Grant, id: string, connection: AgentConnection):
   return grant?.id === id && ['pending', 'approved', 'used', 'expired', 'denied', 'revoked'].includes(grant.status) && grant.request?.requester === connection.subject && grant.request.audience === 'shapes' && grant.request.target_host === connection.targetHost && sameBrokeredGrant(grant.brokered, connection.brokered)
 }
 /** With `argvHash` the call runs only with an exact approval: a grant requested for this very argv (issue 1473). */
+/** A grant issued for another adapter version: its tokens never authorize the current adapter, so it is asked again (issue 1470). */
+function staleAdapter(grant: Grant, adapterDigest: string | undefined): boolean {
+  const recorded = grant.request.execution_context?.adapter_digest
+  return Boolean(recorded && adapterDigest && recorded !== adapterDigest)
+}
+
 function covers(grant: Grant, detail: OpenApeCliAuthorizationDetail, argvHash?: string): boolean {
   const coverage = grantCoverage(grant)
   if (argvHash !== undefined && grant.request.execution_context?.argv_hash !== argvHash) return false
@@ -187,20 +193,22 @@ export class AgentAuthority {
   async acquire(assignment: AssignedAuthorization, signal: AbortSignal): Promise<string> {
     const resolved = await this.resolve(assignment)
     const exact = assignment.command.exact ? resolved.executionContext.argv_hash : undefined
+    const digest = resolved.executionContext.adapter_digest
     let grant = assignment.grantId ? await this.grant(assignment.grantId, signal) : undefined
+    if (grant && staleAdapter(grant, digest)) grant = undefined
     if (grant && !covers(grant, resolved.detail, exact)) throw new AuthorityError('The assigned grant does not cover this command')
     if (!grant || ['used', 'expired'].includes(grant.status)) {
       const recorded = await this.ledger?.find(resolved.detail, this.connection)
       if (recorded && recorded !== grant?.id) {
         const candidate = await this.grant(recorded, signal)
-        if (covers(candidate, resolved.detail, exact)) grant = candidate
+        if (covers(candidate, resolved.detail, exact) && !staleAdapter(candidate, digest)) grant = candidate
       }
     }
     // A grant this identity received before the ledger recorded it (schema 43 moved them out of the resources) is
     // adopted instead of asking the owner again; the IdP does not return it for a new brokered request.
     if (!grant || ['used', 'expired'].includes(grant.status)) {
       const adopted = await this.ledger?.adopt(resolved.detail, this.connection, id => this.candidate(id, signal))
-      if (adopted && covers(adopted, resolved.detail, exact)) grant = adopted
+      if (adopted && covers(adopted, resolved.detail, exact) && !staleAdapter(adopted, digest)) grant = adopted
     }
     // A pending request is reused, so an interrupted wait never asks again; a single-use request whose caller
     // stopped waiting can no longer run anything (DDISA grants §3.4) and is replaced.

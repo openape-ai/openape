@@ -371,3 +371,16 @@ it('runs a command of an exact-only adapter only with a grant requested for its 
   await expect(authority.authorize({ command: { ...f.command, exact: true }, grantId: 'old' }, new AbortController().signal)).rejects.toThrow('The assigned grant does not cover this command')
   expect(f.state.approvals).toEqual([])
 })
+
+// Issue 1470: a grant issued for another adapter version is asked again instead of failing every run.
+it('requests a new grant when the recorded grant was issued for another adapter digest', async () => {
+  const f = await fixture('approved', 'approved'); f.state.grantType = 'always'; f.state.lifetime = 3600
+  f.state.contexts.set('old', { ...f.resolved.executionContext, adapter_digest: `SHA-256:${'0'.repeat(64)}` })
+  const run = runAuthority(f)
+  const assignment = { command: f.command, grantId: 'old' }
+  await run.authorize(assignment, signal())
+  expect(assignment.grantId).toBe('fresh-1')
+  expect(f.state.creates).toBe(1)
+  expect(f.state.tokens).toEqual(['fresh-1'])
+  expect(f.state.approvals).toEqual([])
+})
