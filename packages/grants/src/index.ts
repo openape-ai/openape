@@ -15,7 +15,10 @@ export {
   widenCliAuthorizationDetail,
 } from './cli-permissions.js'
 export {
+  COMMAND_TOKEN_LIFETIME_SECONDS,
+  type CommandTokenCall,
   issueAuthzJWT,
+  issueCommandJWT,
   verifyAuthzJWT,
   type VerifyAuthzOptions,
 } from './authz-jwt.js'
@@ -64,6 +67,16 @@ export {
   type ShapeStore,
 } from './shape-registry.js'
 export {
+  InvalidProgramAuthorizeRequestError,
+  parseProgramAuthorizeRequest,
+  PROGRAM_AUTHORIZE_LIMITS,
+  type ProgramShapeSelection,
+  resolveProgramCall,
+  type ResolvedProgramCall,
+  selectProgramShape,
+} from './program-authorization.js'
+export {
+  buildGenericResolvedServer,
   GENERIC_OPERATION_ID,
   resolveServerShape,
   type ServerResolvedCommand,
