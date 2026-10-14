@@ -2,7 +2,9 @@ import { hasBrokerStore } from '../../utils/broker-store'
 import type { GrantStatus, OpenApeGrant } from '@openape/core'
 import { createError, defineEventHandler, getQuery } from 'h3'
 import { expireStaleGrants } from '../../utils/expire-stale-grants'
+import { GRANTS_READ_SCOPE } from '@openape/core'
 import { tryBearerAuth } from '../../utils/agent-auth'
+import { tryGrantsDelegate } from '../../utils/grants-delegation'
 import { useGrantStores } from '../../utils/grant-stores'
 import { getAppSession } from '../../utils/session'
 import { useIdpStores } from '../../utils/stores'
@@ -26,10 +28,15 @@ export default defineEventHandler(async (event) => {
 
   // Authenticate FIRST — every list path requires it. (Historically the
   // `?requester=` branch short-circuited above this and leaked any user's
-  // grants without auth.) Bearer token first, then session cookie.
+  // grants without auth.) A `grants:read` delegate sees what its delegator
+  // sees; otherwise bearer token first, then session cookie.
   let email: string | undefined
-  const bearerPayload = await tryBearerAuth(event)
-  if (bearerPayload) {
+  const delegate = await tryGrantsDelegate(event, GRANTS_READ_SCOPE)
+  const bearerPayload = delegate ? null : await tryBearerAuth(event)
+  if (delegate) {
+    email = delegate.delegator
+  }
+  else if (bearerPayload) {
     email = bearerPayload.sub
   }
   else {
@@ -59,7 +66,7 @@ export default defineEventHandler(async (event) => {
   const brokerVisibility: { brokerOwner?: string | null } = {}
   if (hasBrokerStore()) {
     const owner = await userStore.findByEmail(email)
-    brokerVisibility.brokerOwner = owner?.isActive && owner.type !== 'agent' && !owner.owner && !bearerPayload?.delegation_grant && bearerPayload?.act !== 'agent' ? email : null
+    brokerVisibility.brokerOwner = owner?.isActive && owner.type !== 'agent' && !owner.owner && !delegate && !bearerPayload?.delegation_grant && bearerPayload?.act !== 'agent' ? email : null
   }
   // Batch ids are scoped to their requester (grants.md §4.2).
   if (batch && !requester) {
