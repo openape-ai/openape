@@ -18,7 +18,7 @@
 
 ## Generic grant cards and self-improving Shapes — issue 1473
 
-> **Release state (issue 1473, October 14):** IdP prod-e85625a0 (free-idp + pods-idp) and the signed Pods desktop from main 58118fe1 (schema 52) are live; the IdP deploy gate is lifted. apes 2.0 (PR 418) is merged but not published: publish only together with the Pods desktop that no longer tells owners to run `apes adapter install` (already on main).
+> **Release state (issue 1473, October 14):** IdP prod-e85625a0 (free-idp + pods-idp) and the signed Pods desktop from main 58118fe1 (schema 52) are live; the IdP deploy gate is lifted. apes 2.0.0 is published with its dependency chain (version PR 422, October 14).
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1473. Plan revision 3, approved October 14, 2026 ("… wir ziehen das jetzt von Anfang bis Ende in dieser Session durch"): https://report.openape.ai/d/01M4VAP3E4WHRB6SRGCJJ8E6CD; source `.claude/plans/2026-10-13-structured-grant-summary.json`. Revision 4, approved October 14 ("Revision 4 freigegeben, Entscheidung 10 wie empfohlen"), report version 6; progress version 7.
 - Milestones: M1 protocol summary {title, description, origin, link} + migration (protocol repo, @openape/core, IdP, apes); M2 shapes-registry as the only adapter source; M3 generic IdP grant card (PodRunGrant removed); M4 Pods pass-through + signed build; M5 delegation scopes (read own grants, request for own agents, never approve); M6 personal grant upgrade Pod; M7 registry upkeep via issues/PRs without user data.
