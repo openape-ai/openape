@@ -6,6 +6,8 @@ export { buildExactCommandGrantRequest, buildStructuredCliGrantRequest } from '.
 export { parseShellCommand, extractShellCommandString, loadOrInstallAdapter } from './shell-parser.js'
 export type { ParsedShellCommand } from './shell-parser.js'
 export { resolveCommand } from './parser.js'
+export { adapterFileDigest, semanticAdapterDigest } from './digest.js'
+export { parseAdapterToml } from './toml.js'
 export { fetchRegistry, findAdapter, searchAdapters } from './registry.js'
 export { findConflictingAdapters, getInstalledDigest, installAdapter, isInstalled, removeAdapter } from './installer.js'
 export { discoverEndpoints, apiFetch, getGrantsEndpoint } from './http.js'

@@ -1,13 +1,15 @@
 import type { OpenApeCliAuthorizationDetail, OpenApeExecutionContext, OpenApeGrantRequest, ScopeRiskLevel } from '@openape/core'
+import type { ShapeCliVersions, ShapePresentation } from '@openape/grants'
 
 export interface ShapesAdapter {
   schema: string
+  /** Version fields are set together (see `ShapeCliVersions`) or not at all. */
   cli: {
     id: string
     executable: string
     audience?: string
     version?: string
-  }
+  } & Partial<ShapeCliVersions>
   operations: ShapesOperation[]
 }
 
@@ -42,12 +44,20 @@ export interface ShapesOperation {
   risk: ScopeRiskLevel
   resource_chain: string[]
   exact_command?: boolean
+  /** Approval card content from `[operation.presentation]`. */
+  presentation?: ShapePresentation
 }
 
 export interface LoadedAdapter {
   adapter: ShapesAdapter
   source: string
+  /**
+   * Semantic digest (`semanticAdapterDigest`) that grants bind in
+   * `execution_context.adapter_digest`; presentation and texts do not change it.
+   */
   digest: string
+  /** `SHA-256:` digest of the file bytes, for file integrity checks; set by `loadAdapter`. */
+  fileDigest?: string
   /**
    * True when this adapter was synthesized in-memory for a CLI that has no
    * registered shape. Synthetic adapters bypass `resolveCommand()` and are

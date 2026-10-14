@@ -41,7 +41,7 @@ async function resolveCandidate(requirement: PortableApplication, candidate: App
   if (cli.version !== String(requirement.adapter.version)) return { status: 'incompatible', reason: 'Local application adapter version differs from the package requirement' }
   if (requirement.testedVersions.length) return { status: 'setupRequired', reason: 'Application version cannot be verified without an approved execution' }
   const definition = await programDefinition(candidate.path, candidate.adapterPath, requirement.application, candidate.runtimePath)
-  if (definition.adapterHash !== loaded.digest.replace('SHA-256:', '')) throw new Error('Application adapter changed during resolution')
+  if (definition.adapterHash !== loaded.fileDigest.replace('SHA-256:', '')) throw new Error('Application adapter changed during resolution')
   return { status: 'available', software: { kind: 'program', definition }, version: null, identitySource: 'local-adapter', testedVersion: false }
 }
 
