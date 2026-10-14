@@ -352,6 +352,8 @@ export const brokerRequests = sqliteTable('broker_requests', {
   connectionId: text('connection_id').notNull(),
   jti: text('jti').notNull(),
   expiresAt: integer('expires_at').notNull(),
+  // The agent of a program call or status poll, which has its own budget; null for connection-wide operations
+  subject: text('subject'),
 }, table => [primaryKey({ columns: [table.connectionId, table.jti] })])
 
 export const brokerAgents = sqliteTable('broker_agents', {

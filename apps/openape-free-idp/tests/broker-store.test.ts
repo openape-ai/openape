@@ -44,7 +44,7 @@ beforeEach(async () => {
     CREATE TABLE ssh_keys(key_id TEXT PRIMARY KEY, user_email TEXT NOT NULL, public_key TEXT NOT NULL, name TEXT NOT NULL, created_at INTEGER NOT NULL);
     CREATE TABLE grants(id TEXT PRIMARY KEY, status TEXT NOT NULL, type TEXT, requester TEXT NOT NULL, brokered TEXT, broker_owner TEXT, target_host TEXT NOT NULL, audience TEXT NOT NULL, grant_type TEXT NOT NULL, request TEXT NOT NULL, created_at INTEGER NOT NULL, decided_at INTEGER, decided_by TEXT, expires_at INTEGER, used_at INTEGER, decided_by_standing_grant TEXT, auto_approval_kind TEXT);
     CREATE TABLE broker_connections(id TEXT PRIMARY KEY, owner TEXT NOT NULL, owner_issuer TEXT NOT NULL, broker_issuer TEXT NOT NULL, agent_domain TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL);
-    CREATE TABLE broker_requests(connection_id TEXT NOT NULL, jti TEXT NOT NULL, expires_at INTEGER NOT NULL, PRIMARY KEY(connection_id,jti));
+    CREATE TABLE broker_requests(connection_id TEXT NOT NULL, jti TEXT NOT NULL, expires_at INTEGER NOT NULL, subject TEXT, PRIMARY KEY(connection_id,jti));
     CREATE TABLE broker_audit(id INTEGER PRIMARY KEY AUTOINCREMENT, grant_id TEXT NOT NULL, owner TEXT NOT NULL, agent TEXT NOT NULL, broker_issuer TEXT NOT NULL, connection_id TEXT NOT NULL, event TEXT NOT NULL, created_at INTEGER NOT NULL);
     CREATE TABLE broker_agents(subject TEXT PRIMARY KEY, key_id TEXT NOT NULL, owner TEXT NOT NULL, decision_issuer TEXT NOT NULL, connection_id TEXT NOT NULL);
   `)
@@ -93,6 +93,36 @@ describe('durable grant brokering', () => {
     await expect(bounded.acceptRequest(assertion)).resolves.toEqual(connection)
     await database.delete(schema.brokerRequests).where(eq(schema.brokerRequests.jti, records[1]!.jti))
     await expect(bounded.acceptRequest(assertion)).rejects.toMatchObject({ statusCode: 409 })
+  })
+
+  it('spends a single-use grant once in one conditional update and audits it', async () => {
+    const value = grant()
+    await grantStore.save(value)
+    // The update is conditional on `approved`, so the second claim finds nothing to spend.
+    expect(await grantStore.claimOnce(value.id, 7)).toBe(true)
+    expect(await grantStore.claimOnce(value.id, 8)).toBe(false)
+    expect(await grantStore.findById(value.id)).toMatchObject({ status: 'used' })
+    expect(await grantStore.claimOnce(randomUUID(), 7)).toBe(false)
+    const audit = await database.select().from(schema.brokerAudit).where(eq(schema.brokerAudit.grantId, value.id))
+    expect(audit.map(row => row.event)).toEqual(['created', 'consumed'])
+  })
+
+  it('gives program calls and status polls a budget per agent apart from the connection-wide one (issue 1473)', async () => {
+    vi.stubEnv('OPENAPE_RATE_LIMIT_MAX_AGENT', '2')
+    vi.stubEnv('OPENAPE_RATE_LIMIT_MAX_AUTHORIZE', '3')
+    const bounded = createDrizzleBrokerStore()
+    const call = (sub = subject, operation: 'authorize' | 'get' = 'authorize') => ({ ...request(), operation, sub, key_id: 'key-one', ...(operation === 'get' ? { grant_id: randomUUID() } : { request: {} }) }) as BrokerRequest
+    await bounded.acceptRequest(call())
+    await bounded.acceptRequest(call(subject, 'get'))
+    await bounded.acceptRequest(call())
+    const limited = await bounded.acceptRequest(call()).catch((error: unknown) => error)
+    expect(limited).toMatchObject({ statusCode: 429, data: { retry_after: expect.any(Number) } })
+    expect((limited as { data: { retry_after: number } }).data.retry_after).toBeGreaterThan(0)
+    // Another agent of the same connection and connection-wide operations keep their own budgets.
+    await expect(bounded.acceptRequest(call('other@pods.provider.test'))).resolves.toEqual(connection)
+    await bounded.acceptRequest(request())
+    await bounded.acceptRequest(request())
+    await expect(bounded.acceptRequest(request())).rejects.toMatchObject({ statusCode: 429 })
   })
 
   it('lists foreign grants for the owner without creating a local agent or leaking to another owner', async () => {

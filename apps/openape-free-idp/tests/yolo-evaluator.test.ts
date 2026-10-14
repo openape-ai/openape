@@ -1,9 +1,25 @@
 import { describe, expect, it, vi } from 'vitest'
 
 // Pure-logic tests — no server spawn needed.
-import { containsCommandSubstitution, evaluateYoloPolicy, explainYoloMiss, matchesGlob, splitCommandSegments, targetFromRequest } from '../server/utils/yolo-evaluator'
+import { containsCommandSubstitution, evaluateYoloPolicy, explainYoloMiss, idpResolvedRisk, matchesGlob, splitCommandSegments, targetFromRequest } from '../server/utils/yolo-evaluator'
 
 type Risk = 'low' | 'medium' | 'high' | 'critical'
+
+describe('idpResolvedRisk (issue 1473)', () => {
+  const detail = (risk: Risk) => ({ type: 'openape_cli' as const, cli_id: 'git', operation_id: 'git.status', resource_chain: [], action: 'read', permission: 'git.#read', display: 'x', risk })
+  const context = { argv: ['git', 'status'], adapter_id: 'git', adapter_version: 'server', adapter_digest: 'd', resolved_executable: 'git' }
+  const request = (extra: object) => ({ requester: 'a@example.test', target_host: 'h', audience: 'shapes', command: ['git', 'status'], ...extra })
+
+  it('takes the highest risk of the IdP\'s own details', () => {
+    expect(idpResolvedRisk(request({ authorization_details: [detail('low'), detail('medium')], execution_context: { ...context, program_sha256: 'a'.repeat(64) } }))).toBe('medium')
+    expect(idpResolvedRisk(request({ authorization_details: [], execution_context: { ...context, program_sha256: 'a'.repeat(64) } }))).toBe('high')
+  })
+
+  it('ignores the risk a client claims in a request it resolved itself', () => {
+    expect(idpResolvedRisk(request({ authorization_details: [detail('low')], execution_context: context }))).toBeNull()
+    expect(idpResolvedRisk(request({}))).toBeNull()
+  })
+})
 
 function policy(overrides: Partial<{
   mode: 'deny-list' | 'allow-list'

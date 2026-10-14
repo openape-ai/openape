@@ -10,6 +10,7 @@ interface ExtendedGrantStore extends GrantStore {
   findAll: () => Promise<OpenApeGrant[]>
   findByDelegate: (delegate: string) => Promise<OpenApeGrant[]>
   findByDelegator: (delegator: string) => Promise<OpenApeGrant[]>
+  claimOnce: NonNullable<GrantStore['claimOnce']>
 }
 
 type GrantRow = typeof grants.$inferSelect
@@ -165,6 +166,16 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
 
         await tx.update(grants).set(updates).where(eq(grants.id, id))
         if (existing.brokered) await tx.insert(brokerAudit).values(brokerAuditRow(rowToGrant(existing), status))
+      }, { behavior: 'immediate' })
+    },
+
+    async claimOnce(id, usedAt) {
+      return await db.transaction(async (tx) => {
+        const claimed = await tx.update(grants).set({ status: 'used', usedAt }).where(and(eq(grants.id, id), eq(grants.status, 'approved'))).returning()
+        const row = claimed[0]
+        if (!row) return false
+        if (row.brokered) await tx.insert(brokerAudit).values(brokerAuditRow(rowToGrant(row), 'consumed'))
+        return true
       }, { behavior: 'immediate' })
     },
 
