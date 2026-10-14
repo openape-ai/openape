@@ -1,9 +1,12 @@
 import type { H3Event } from 'h3'
-import type { GrantsDelegationScope, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
+import type { BrokeredGrant, GrantsDelegationScope, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
 import { GRANTS_DELEGATION_SCOPES } from '@openape/core'
 import { introspectGrant } from '@openape/grants'
 import { getHeader } from 'h3'
 import { verifyAuthToken } from './agent-token'
+import { parseBrokerGrantRequest } from './broker-grant-request'
+import { brokerInput } from './broker-input'
+import { hasBrokerStore, useBrokerStore } from './broker-store'
 import { useGrantStores } from './grant-stores'
 import { createProblemError } from './problem'
 import { getIdpIssuer, useIdpStores } from './stores'
@@ -63,17 +66,43 @@ async function delegationProblem(grant: OpenApeGrant | null, caller: { delegator
 }
 
 /**
- * A delegate may only ask for one of its delegator's own active agents and
- * never for a delegation (no chaining, delegation.md §7.3).
+ * The broker binding of a brokered identity (for example a Pod identity of an
+ * agent provider) that belongs to `owner`: taken from the identity's newest
+ * brokered grant here whose broker connection is still active and owned by
+ * `owner`. Null when this IdP does not know the identity as the owner's.
  */
-export async function assertDelegatedRequest(request: OpenApeGrantRequest, delegate: GrantsDelegate): Promise<void> {
+async function ownedBrokeredIdentity(event: H3Event, requester: string, owner: string): Promise<BrokeredGrant | null> {
+  if (!hasBrokerStore()) return null
+  const grants = await useGrantStores().grantStore.findByRequester(requester)
+  const newest = grants.filter(grant => grant.brokered?.owner === owner).sort((a, b) => b.created_at - a.created_at)[0]?.brokered
+  if (!newest) return null
+  const connection = await useBrokerStore(event).getConnection(newest.connection_id)
+  const domain = requester.split('@')[1]
+  if (connection?.status !== 'active' || connection.owner.subject !== owner || connection.broker_issuer !== newest.broker_issuer || connection.agent_domain !== domain) return null
+  return newest
+}
+
+/**
+ * A delegate may only ask for one of its delegator's own active agents, or
+ * for a brokered identity of the delegator, and never for a delegation (no
+ * chaining, delegation.md §7.3). A brokered identity's request keeps its
+ * broker binding and the checks of a brokered request.
+ */
+export async function assertDelegatedRequest(event: H3Event, request: OpenApeGrantRequest, delegate: GrantsDelegate): Promise<{ brokered?: BrokeredGrant }> {
   if (request.delegator !== undefined || request.delegate !== undefined || request.scopes !== undefined) {
     throw createProblemError({ status: 400, title: 'A delegate cannot request a delegation' })
   }
-  const requester = typeof request.requester === 'string' ? await useIdpStores().userStore.findByEmail(request.requester) : null
-  if (!requester?.isActive || requester.owner !== delegate.delegator) {
-    throw createProblemError({ status: 403, title: 'A delegate can only request grants for its delegator\'s own agents' })
+  const refused = () => createProblemError({ status: 403, title: 'A delegate can only request grants for its delegator\'s own agents' })
+  if (typeof request.requester !== 'string') throw refused()
+  const requester = await useIdpStores().userStore.findByEmail(request.requester)
+  if (requester) {
+    if (!requester.isActive || requester.owner !== delegate.delegator) throw refused()
+    return {}
   }
+  const brokered = await ownedBrokeredIdentity(event, request.requester, delegate.delegator)
+  if (!brokered) throw refused()
+  await brokerInput(() => parseBrokerGrantRequest(request, request.requester))
+  return { brokered }
 }
 
 /**

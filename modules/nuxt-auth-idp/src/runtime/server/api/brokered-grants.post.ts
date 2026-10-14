@@ -8,6 +8,7 @@ import { useBrokerStore } from '../utils/broker-store'
 import { getIdpIssuer, useIdpStores } from '../utils/stores'
 import { useGrantStores } from '../utils/grant-stores'
 import { parseBrokerGrantRequest } from '../utils/broker-grant-request'
+import { findReusableGrant } from '../utils/grant-reuse'
 import { runGrantPendingHooks } from '../utils/grant-pending-hooks'
 import { createProblemError } from '../utils/problem'
 
@@ -34,6 +35,12 @@ export default defineEventHandler(async (event) => {
     catch (error) {
       if (!(error instanceof InvalidGrantBatchError)) throw error
       throw createProblemError({ status: 400, title: `Invalid batch: ${error.message}`, type: 'https://openape.org/errors/broker_request_invalid' })
+    }
+    // A continuing request that an approved grant of this binding already covers (for example a standing grant the
+    // owner approved for a broader permission) needs no new decision. Single-use and batch requests always ask.
+    if (grantRequest.grant_type !== 'once' && !grantRequest.batch) {
+      const reusable = findReusableGrant(await grantStore.findByRequester(request.sub), grantRequest, provenance)
+      if (reusable) return reusable
     }
     const grant = { id: crypto.randomUUID(), status: 'pending' as const, type: 'command' as const, request: grantRequest, brokered: provenance, created_at: Math.floor(Date.now() / 1000) }
     await grantStore.save(grant)
