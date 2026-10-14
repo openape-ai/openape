@@ -114,6 +114,8 @@ export async function mapPortablePod(root: string, source: PortablePodSource, ch
     }
     else if (configuration.type === 'http') {
       const authentication = configuration.authentication === undefined ? null : parseHttpAuthentication(configuration.authentication)
+      // A delegation is the owner's personal permission for one agent; each recipient creates their own.
+      if (authentication?.type === 'ddisaDelegation') throw new Error('A Pod that acts with a personal delegation cannot be exported; remove that HTTP destination first')
       pod.access.push({ kind: 'http', alias, origin: inputs.add(`http:${resource.id}:origin`, `${alias} origin`, 'string', configuration.origin), methods: structuredClone(configuration.methods) as string[], authentication: authentication ? { type: 'ddisaAgent', credential: authentication.credential, subject: inputs.add(`http:${resource.id}:subject`, `${alias} agent identity`, 'string'), issuer: inputs.add(`http:${resource.id}:issuer`, `${alias} identity issuer`, 'string', authentication.issuer), ...(authentication.exchange ? { exchange: authentication.exchange } : {}) } : null })
       capabilities.set(String(configuration.capability), `tool.${alias}.request`)
     }

@@ -1,6 +1,7 @@
 import { join } from 'node:path'
 import { grantView } from '../../contracts/grants'
-import type { GrantDeclaration, GrantsCommand, PodGrant } from '../../contracts/grants'
+import type { DelegateCommand, GrantDeclaration, GrantsCommand, PodGrant } from '../../contracts/grants'
+import { readJSON } from '../connections/http'
 import type { HttpPermission } from '../../contracts/http'
 import type { ProgramAssignment, ProgramDefinition } from '../../contracts/programs'
 import type { DirectoryAccess, PodResource, ResourceState } from '../../contracts/resources'
@@ -70,8 +71,26 @@ function listed(grant: PodGrant) {
   return { ...grantView(grant), ...(grant.state === 'pending' ? { approval: new URL(`/grant-approval?grant_id=${encodeURIComponent(grant.id)}`, grant.issuer).href } : {}) }
 }
 
+/**
+ * Creates a continuing delegation as the signed-in owner, like the owner's own `apes grants delegate`. The IdP decides
+ * which delegate, audience and scopes are allowed; the owner revokes it at the IdP.
+ */
+async function delegate(command: DelegateCommand, owner: OwnerSession | null, signal: AbortSignal): Promise<unknown> {
+  if (!owner) throw new Error('Creating a delegation needs an active owner session (the MCP sign-in)')
+  const response = await fetch(`${owner.issuer}/api/delegations`, { method: 'POST', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${await owner.bearer(signal)}` }, body: JSON.stringify({ delegate: command.delegate, audience: command.audience, scopes: command.scopes, grant_type: 'always' }) })
+  if (!response.ok) {
+    const problem = await response.json().catch(() => null) as { title?: unknown } | null
+    const reason = typeof problem?.title === 'string' ? problem.title.replace(/[\p{Cc}\p{Cf}]+/gu, ' ').slice(0, 300) : 'no reason given'
+    throw new Error(`The identity provider refused the delegation (${response.status}): ${reason}`)
+  }
+  const created = await readJSON(response)
+  if (typeof created.id !== 'string' || created.status !== 'approved') throw new Error('The identity provider did not create the delegation')
+  return { delegation: created.id, issuer: owner.issuer, delegate: command.delegate, audience: command.audience, scopes: command.scopes }
+}
+
 export async function administerGrants(command: GrantsCommand, owner: OwnerSession | null, admin: Administration): Promise<unknown> {
   const signal = AbortSignal.timeout(170000)
+  if (command.type === 'delegate') return delegate(command, owner, signal)
   if (command.type === 'list') return { grants: (await admin.grants.list({ podId: command.podId })).map(listed), session: owner ? { active: true, endsAt: owner.endsAt } : { active: false } }
   if (command.type === 'request') {
     return { outcomes: await requestGrants(command.target.podId, command.grants, command.approve !== false, owner, admin, signal) }
