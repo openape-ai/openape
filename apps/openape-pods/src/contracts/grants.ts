@@ -43,8 +43,14 @@ export type GrantsCommand
     | { type: 'deny', podId: string, grantId: string }
     | { type: 'revoke', podId: string, grantId: string }
     | DelegateCommand
-/** A continuing DDISA delegation of the signed-in owner to `delegate` for `audience`, limited to `scopes`; the IdP checks all three. */
-export interface DelegateCommand { type: 'delegate', delegate: string, audience: string, scopes: string[] }
+/**
+ * A DDISA delegation of the signed-in owner, for at most `days`, to the agent one of this desktop's Pods authenticates
+ * as at the owner's IdP, with the IdP itself as audience and only the grants scopes a Pod may hold.
+ */
+export interface DelegateCommand { type: 'delegate', podId: string, scopes: DelegationScope[], days: number }
+export const delegationScopes = ['grants:read', 'grants:request'] as const
+export type DelegationScope = typeof delegationScopes[number]
+export const maxDelegationDays = 90
 
 const uuid = /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/
 const grantId = /^[\w-]{1,128}$/
@@ -90,14 +96,16 @@ export function parseGrantDeclaration(value: unknown): GrantDeclaration {
 
 export function parseGrantsCommand(value: unknown): GrantsCommand {
   const command = value as Record<string, unknown>
-  const keys: Record<GrantsCommand['type'], string[]> = { list: ['podId'], request: ['target', 'grants', 'approve'], approve: ['podId', 'grantId', 'grantType'], deny: ['podId', 'grantId'], revoke: ['podId', 'grantId'], delegate: ['delegate', 'audience', 'scopes'] }
+  const keys: Record<GrantsCommand['type'], string[]> = { list: ['podId'], request: ['target', 'grants', 'approve'], approve: ['podId', 'grantId', 'grantType'], deny: ['podId', 'grantId'], revoke: ['podId', 'grantId'], delegate: ['podId', 'scopes', 'days'] }
   if (!command || typeof command !== 'object' || Array.isArray(command) || typeof command.type !== 'string' || !Object.hasOwn(keys, command.type)) throw new Error('Unsupported grants command')
   const type = command.type as GrantsCommand['type']
   object(command, ['type', ...keys[type]], 'Invalid grants command fields')
   if (type === 'delegate') {
-    if (typeof command.delegate !== 'string' || command.delegate.length > 320 || !/^[^\s@]+@[^\s@]+$/.test(command.delegate)) throw new Error('A delegation names the delegate agent email')
-    if (!Array.isArray(command.scopes) || !command.scopes.length || command.scopes.length > 16 || command.scopes.some(scope => typeof scope !== 'string' || !/^[\w:.-]{1,64}$/.test(scope)) || new Set(command.scopes).size !== command.scopes.length) throw new Error('A delegation names 1 to 16 distinct scopes')
-    return { type, delegate: command.delegate, audience: parseHttpPermission({ origin: command.audience, methods: ['GET'] }).origin, scopes: [...command.scopes] as string[] }
+    if (typeof command.podId !== 'string' || !uuid.test(command.podId)) throw new Error('A delegation names the podId whose agent receives it')
+    if (!Array.isArray(command.scopes) || !command.scopes.length || command.scopes.some(scope => !(delegationScopes as readonly unknown[]).includes(scope)) || new Set(command.scopes).size !== command.scopes.length) throw new Error('A delegation names grants:read, grants:request or both')
+    const days = command.days ?? maxDelegationDays
+    if (!Number.isInteger(days) || (days as number) < 1 || (days as number) > maxDelegationDays) throw new Error(`A delegation lasts 1 to ${maxDelegationDays} days`)
+    return { type, podId: command.podId, scopes: [...command.scopes] as DelegationScope[], days: days as number }
   }
   if (type === 'list') {
     if (command.podId !== undefined && (typeof command.podId !== 'string' || !uuid.test(command.podId))) throw new Error('Invalid grants filter')

@@ -61,7 +61,7 @@ export function identityProvider(options: { brokered?: typeof brokered } = {}) {
       if (bearer !== ownerToken) return json({ title: 'Only humans can create delegations' }, 403)
       if (request.audience !== issuer) return json({ title: 'Grants scopes require the IdP issuer as the delegation audience' }, 400)
       state.delegations.push(request)
-      return json({ id: `delegation-${state.delegations.length}`, type: 'delegation', status: 'approved', request: { ...request, delegator: owner } }, 201)
+      return json({ id: `delegation-${state.delegations.length}`, type: 'delegation', status: 'approved', request: { ...request, delegator: owner }, ...(typeof request.duration === 'number' ? { expires_at: 1_000_000 + request.duration } : {}) }, 201)
     }
     if (url.pathname.startsWith('/api/pods/agents/')) return json({ email: decodeURIComponent(url.pathname.split('/')[4]!), owner, active: true, keyIds: ['key'], grantId: url.searchParams.get('grant'), grantActive: true })
     if (url.pathname === '/api/grants' && init?.method === 'POST') {
