@@ -1,3 +1,11 @@
+import { readFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+
+/** Stands in for the connected account's default model: any model of the bundled catalog the build produced. */
+export async function bundledModel(): Promise<string> {
+  const catalog = JSON.parse(await readFile(resolve('dist/vendor/models.json'), 'utf8')) as { models: { slug: string }[] }
+  return catalog.models[0]!.slug
+}
 export function recordedResponse(item: unknown = { type: 'message', id: 'fixture-message', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: 'SYNTHETIC_RESPONSE_COMPLETE', annotations: [] }] }): Response {
   const response = { id: 'fixture-response', object: 'response', status: 'in_progress', output: [] }
   const events = [{ type: 'response.created', response }, { type: 'response.output_item.added', output_index: 0, item }, { type: 'response.output_item.done', output_index: 0, item }, { type: 'response.completed', response: { ...response, status: 'completed', output: [item], usage: { input_tokens: 0, output_tokens: 0, total_tokens: 0 } } }]

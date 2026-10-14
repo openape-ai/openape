@@ -3,10 +3,12 @@ import type { AgentRuntime } from '../agent/executor'
 import type { AgentGatewayServices } from '../agent/gateway'
 import type { PodDatabase } from '../storage/database'
 import { inspectDomainRecords } from '../recovery/domains'
+import { assignedModel } from '../agent/model'
 import { MasterTransport } from './transport'
 
-export async function summarizeConversation(store: PodDatabase, runtime: AgentRuntime, provider: AgentGatewayServices['provider'] | undefined, input: string, signal: AbortSignal): Promise<string> {
-  if (!provider) throw new Error('Connect Codex to update the description')
+export type ModelServices = Required<Pick<AgentGatewayServices, 'provider' | 'model'>>
+export async function summarizeConversation(store: PodDatabase, runtime: AgentRuntime, services: ModelServices | undefined, input: string, signal: AbortSignal): Promise<string> {
+  if (!services) throw new Error('Connect Codex to update the description')
   const root = join(store.root, 'summaries')
   await inspectDomainRecords(store.db.prepare('SELECT * FROM summary_domains').all(), root, runtime.helper)
   store.db.prepare('DELETE FROM summary_domains').run()
@@ -19,7 +21,8 @@ export async function summarizeConversation(store: PodDatabase, runtime: AgentRu
   let transport: MasterTransport | null = null
   try {
     activeSignal.throwIfAborted()
-    transport = await MasterTransport.start(runtime, root, { provider, tool: async () => { throw new Error('Description generation has no tools') } }, (path, pid) => { store.db.prepare('INSERT INTO summary_domains VALUES(?,?)').run(path, pid) }, (frame) => {
+    const model = await assignedModel(runtime, services.model, activeSignal)
+    transport = await MasterTransport.start(runtime, root, { provider: services.provider, tool: async () => { throw new Error('Description generation has no tools') } }, (path, pid) => { store.db.prepare('INSERT INTO summary_domains VALUES(?,?)').run(path, pid) }, (frame) => {
       if (frame.id !== undefined) { fail('Description generation attempted a tool call'); return }
       if (frame.method === 'transport/failed') { fail('Description model connection failed'); return }
       const params = frame.params ?? {}
@@ -34,7 +37,7 @@ export async function summarizeConversation(store: PodDatabase, runtime: AgentRu
         output = item.text
       }
     })
-    threadId = await transport.thread(runtime, root)
+    threadId = await transport.thread(runtime, root, model)
     activeSignal.throwIfAborted()
     await transport.request('turn/start', { threadId, input: [{ type: 'text', text: input }], outputSchema: { type: 'object', properties: { description: { type: 'string' } }, required: ['description'], additionalProperties: false } })
     await completed

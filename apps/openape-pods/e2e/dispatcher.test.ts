@@ -81,11 +81,11 @@ it('routes a script tool call with a frozen lease and rejects scope substitution
 it.each([false, true])('combines credential reads, files, variables and Codex; secret forwarding requires explicit source (forward=%s)', async (forward) => {
   const { ScriptCredentials } = await import('../src/worker/resources/script-credentials')
   const { authorizeCredentialService } = await import('../src/worker/mail/authorization')
-  const { recordedResponse } = await import('./fixtures/responses')
+  const { bundledModel, recordedResponse } = await import('./fixtures/responses')
   const requests: unknown[] = []; const secret = 'SYNTHETIC_DIRECT_CREDENTIAL'
   const f = await setup({
     credential: async (alias, _signal, scope) => { authorizeCredentialService(f.store, f.resources, f.dispatcher.runs, { scope: { podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities } }, alias); return secret },
-    provider: async (body) => { requests.push(body); return requests.length === 1 ? recordedResponse({ type: 'function_call', id: 'credential-attempt', call_id: 'credential-attempt', namespace: 'mcp__pod', name: 'ape_shell', arguments: JSON.stringify({ toolId: 'credentials', argv: ['get', 'crm'] }) }) : recordedResponse() },
+    model: bundledModel, provider: async (body) => { requests.push(body); return requests.length === 1 ? recordedResponse({ type: 'function_call', id: 'credential-attempt', call_id: 'credential-attempt', namespace: 'mcp__pod', name: 'ape_shell', arguments: JSON.stringify({ toolId: 'credentials', argv: ['get', 'crm'] }) }) : recordedResponse() },
   })
   f.resources.assignCredential(f.pod.id, 'crm', randomUUID(), 0)
   await f.dispatcher.install(f.pod.id, 'deterministic')

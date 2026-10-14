@@ -29,12 +29,9 @@ export function bundleCodex() {
     copyFileSync('runtime-sources/master-protocol.json', join(destination, 'master-protocol.json'))
     const raw = execFileSync(binary, ['debug', 'models', '--bundled'], { encoding: 'utf8', timeout: 10000, maxBuffer: 8 * 1024 * 1024, env: { HOME: home, CODEX_HOME: home, PATH: '/usr/bin:/bin' } })
     const catalog = JSON.parse(raw)
-    const selected = ['gpt-6-astra', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.6-luna', 'gpt-5.5']
-    const models = selected.map((slug) => {
-      const model = catalog.models.find(item => item.slug === slug)
-      if (!model) throw new Error(`The selected model ${slug} is missing from the bundled catalog`)
-      return { ...model, apply_patch_tool_type: null, experimental_supported_tools: [] }
-    })
+    // Every bundled model: the connected account chooses its default at runtime, so none is selected here.
+    if (!Array.isArray(catalog.models) || catalog.models.length === 0 || catalog.models.some(model => typeof model?.slug !== 'string')) throw new Error('The bundled Codex model catalog is empty or invalid')
+    const models = catalog.models.map(model => ({ ...model, apply_patch_tool_type: null, experimental_supported_tools: [] }))
     const content = JSON.stringify({ models })
     writeFileSync(join(destination, 'models.json'), content)
     writeFileSync(join(destination, 'manifest.json'), JSON.stringify({ dependencyLockHash: createHash('sha256').update(readFileSync('../../pnpm-lock.yaml')).digest('hex'), sdk: '0.153.4', cli: metadata.version, binaryHash: createHash('sha256').update(readFileSync(binary)).digest('hex'), catalogHash: createHash('sha256').update(content).digest('hex'), origin: '@openai/codex npm platform package; catalog extracted with debug models --bundled' }, null, 2))

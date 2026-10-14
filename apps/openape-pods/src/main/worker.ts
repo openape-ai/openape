@@ -247,7 +247,7 @@ export class FixtureWorker {
       const ready = await this.connections!.providerReady()
       await this.dispatch({ provider: ready && this.providerGateway ? { port: this.providerGateway.port, capability: this.providerGateway.capability } : null })
     }, !!process.env.OPENAPE_PODS_FIXTURE_DIR && process.env.NODE_ENV === 'test')
-    this.providerGateway = await startAgentGateway({ provider: (body, signal) => this.connections!.provider(body, signal), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
+    this.providerGateway = await startAgentGateway({ provider: (body, signal) => this.connections!.provider(body, signal), model: signal => this.connections!.model(signal), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
     const connections = this.connections
     const grants = this.podGrants()!
     this.programs = new ProgramManager(join(this.root, 'authentication'), runtime.helper, this.credentials!, this.connections, podId => this.resources({ type: 'list', podId }), command => this.dispatch({ program: command }), podId => ({ connection: () => connections.podConnection(podId), ledger: grants.port(podId), reach: () => this.sandboxReach(podId), origin: () => this.podName(podId) }))

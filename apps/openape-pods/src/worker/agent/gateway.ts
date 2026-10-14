@@ -3,7 +3,12 @@ import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
 
-export interface AgentGatewayServices { provider: (body: unknown, signal: AbortSignal) => Promise<Response>, tool?: (body: unknown, signal: AbortSignal) => Promise<unknown> }
+export interface AgentGatewayServices {
+  provider: (body: unknown, signal: AbortSignal) => Promise<Response>
+  /** The connected account's default model; only the desktop's model connection gateway offers it. */
+  model?: (signal: AbortSignal) => Promise<string>
+  tool?: (body: unknown, signal: AbortSignal) => Promise<unknown>
+}
 async function body(request: IncomingMessage): Promise<unknown> {
   let bytes = 0; const chunks: Buffer[] = []
   for await (const chunk of request) { bytes += chunk.length; if (bytes > 2 * 1024 * 1024) throw new Error('Agent request exceeds its limit'); chunks.push(Buffer.from(chunk)) }
@@ -16,11 +21,12 @@ export async function startAgentGateway(services: AgentGatewayServices, signal: 
     const received = Buffer.from(request.headers.authorization ?? '')
     const expected = Buffer.from(`Bearer ${capability}`)
     if (received.length !== expected.length || !timingSafeEqual(received, expected) || signal.aborted || request.headers.origin) { response.statusCode = 403; json(response, { error: 'Run capability rejected' }); return }
-    if (request.method !== 'POST' || !['/mcp', '/v1/responses'].includes(request.url ?? '')) { response.statusCode = 405; json(response, { error: 'Unsupported agent endpoint' }); return }
+    if (request.method !== 'POST' || !['/mcp', '/v1/responses', ...(services.model ? ['/v1/model'] : [])].includes(request.url ?? '')) { response.statusCode = 405; json(response, { error: 'Unsupported agent endpoint' }); return }
     const closed = new AbortController()
     response.once('close', () => closed.abort(new Error('Agent connection closed')))
     const activeSignal = AbortSignal.any([signal, closed.signal])
     const value = await body(request)
+    if (request.url === '/v1/model' && services.model) { json(response, { model: await services.model(activeSignal) }); return }
     if (request.url === '/v1/responses') {
       if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid provider request')
       const providerRequest = services.tool ? value : { ...value, tools: [], tool_choice: 'none', parallel_tool_calls: false }

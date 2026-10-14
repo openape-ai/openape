@@ -31,7 +31,7 @@ export class AuthProcess {
   static async recover(root: string, helper: string): Promise<void> { await recoverAuthDomains(root, helper) }
 
   request(method: string, params: unknown): Promise<unknown> {
-    if (!['initialize', 'account/login/start', 'account/login/cancel', 'account/read'].includes(method)) return Promise.reject(new Error('Authentication process cannot execute model or tool requests'))
+    if (!['initialize', 'account/login/start', 'account/login/cancel', 'account/read', 'model/list'].includes(method)) return Promise.reject(new Error('Authentication process cannot execute model or tool requests'))
     this.signal.throwIfAborted(); const id = ++this.sequence
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Authentication service timed out')); this.stop() }, 30000)
