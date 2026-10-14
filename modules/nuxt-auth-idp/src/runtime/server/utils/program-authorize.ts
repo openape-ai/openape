@@ -1,7 +1,7 @@
 import type { BrokeredGrant, OpenApeGrant, OpenApeGrantRequest, OpenApeProgramAuthorizeRequest, OpenApeProgramAuthorizeResponse } from '@openape/core'
 import type { ResolvedProgramCall } from '@openape/grants'
 import { computeCmdHash } from '@openape/core'
-import { assertGrantBatchMember, createGrant, evaluateStandingGrants, InvalidGrantBatchError, issueCommandJWT, resolveProgramCall } from '@openape/grants'
+import { assertGrantBatchMember, createGrant, evaluateStandingGrants, InvalidGrantBatchError, InvalidProgramAuthorizeRequestError, issueCommandJWT, resolveProgramCall } from '@openape/grants'
 import type { H3Event } from 'h3'
 import { setResponseHeader, setResponseStatus } from 'h3'
 import { runGrantPendingHooks } from './grant-pending-hooks'
@@ -118,6 +118,14 @@ async function requestDecision(request: OpenApeGrantRequest, brokered: BrokeredG
   return grant
 }
 
+async function resolveCall(request: OpenApeProgramAuthorizeRequest): Promise<ResolvedProgramCall> {
+  try { return await resolveProgramCall(useShapeStore(), request) }
+  catch (error) {
+    if (!(error instanceof InvalidProgramAuthorizeRequestError)) throw error
+    throw createProblemError({ status: 400, title: error.message })
+  }
+}
+
 /**
  * Decides one program call (issue 1473): the IdP resolves the command with
  * its own shapes, answers with a command token when an approved or standing
@@ -138,7 +146,7 @@ export async function authorizeProgramCall(event: H3Event, input: ProgramAuthori
 async function decideProgramCall(event: H3Event, input: ProgramAuthorizeInput): Promise<ProgramAuthorizeResult | null> {
   const { requester, request, brokered, onToken } = input
   const { grantStore } = useGrantStores()
-  const call = await resolveProgramCall(useShapeStore(), request)
+  const call = await resolveCall(request)
   const grantRequest = grantRequestFor(requester, request, call, await computeCmdHash(call.executionArgv.join(' ')))
   try { await assertGrantBatchMember(grantRequest, grantStore) }
   catch (error) {

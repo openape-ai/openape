@@ -32,6 +32,7 @@ export function createDrizzleShapeStore(): ShapeStore {
         digest: shape.digest,
         versions: shape.versions ?? null,
         testedDigests: shape.tested_digests ?? null,
+        virtual: shape.virtual ?? null,
         createdAt: shape.createdAt,
         updatedAt: shape.updatedAt,
       }
@@ -45,6 +46,7 @@ export function createDrizzleShapeStore(): ShapeStore {
           digest: values.digest,
           versions: values.versions,
           testedDigests: values.testedDigests,
+          virtual: values.virtual,
           updatedAt: values.updatedAt,
         },
       })
@@ -66,6 +68,7 @@ function rowToShape(row: typeof shapes.$inferSelect): ServerShape {
     digest: row.digest,
     ...(row.versions ? { versions: row.versions as ShapeCliVersions } : {}),
     ...(row.testedDigests ? { tested_digests: row.testedDigests as string[] } : {}),
+    ...(row.virtual ? { virtual: true } : {}),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   }
