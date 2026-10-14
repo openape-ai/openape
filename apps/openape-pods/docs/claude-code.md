@@ -100,16 +100,17 @@ the session ends approvals fail and pending grants wait for the IdP page.
 | `grants` command | Effect |
 | --- | --- |
 | `{ "type": "list", "podId": "…" }` | Recorded grants with state and `approvedInSession` |
-| `{ "type": "request", "target": { "podId": "…" }, "grants": { "runtime": true, "programs": [{ "application": "gh" }], "http": [{ "origin": "https://api.example.com", "methods": ["POST"] }] } }` | Requests each grant as the Pod and approves it as `always`; `"approve": false` only requests |
+| `{ "type": "request", "target": { "podId": "…" }, "grants": { "runtime": true, "programs": [{ "application": "gh", "argv": ["pr", "list"] }], "http": [{ "origin": "https://api.example.com", "methods": ["POST"] }] } }` | Requests each grant as the Pod and approves it as `always`; `"approve": false` only requests |
 | `{ "type": "approve", "podId": "…", "grantId": "…" }` | Approves one pending grant as the type the Pod requested (a timed grant with its duration), also a waiting runtime approval; an explicit `"grantType": "once"` or `"always"` is your choice and the result reports `widened` |
 | `{ "type": "deny", … }`, `{ "type": "revoke", … }` | Denies a pending grant, or revokes a grant: a brokered Pod grant (the usual case) as you in this session, a direct one as the requesting Pod. A grant already ended at the IdP only updates the recorded state |
 
-A program without `argv` is the whole program: one detail per action and first
-resource, so a new command of that program is covered without another request;
-operations the adapter marks as exact commands keep needing their own grant (bound
-to their argv), and generic execution is never granted. Moving or archiving mail
-is never part of a whole-program grant and never callable from a script, agent
-or terminal; it runs only through the archive port with its approved batch. An origin without methods covers every
+A program command is asked at the IdP with its exact `argv` (issue 1473,
+revision 4): the IdP resolves it with the shapes registry, a command an approved
+grant already covers needs nothing, otherwise its pending request is approved in
+the session. The desktop no longer builds whole-program grants; broader grants
+are decided and widened at the IdP. Moving or archiving mail is never callable
+from a script, agent or terminal, whatever grant covers it; it runs only through
+the archive port with its approved batch. An origin without methods covers every
 method of that origin. `runtime` is the grant to run the Pod's stored script, so
 the first run does not wait. Repeating a request reuses the pending or approved
 grant instead of asking again.
