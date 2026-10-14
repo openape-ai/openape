@@ -121,6 +121,18 @@ export interface OpenApeExecutionContext {
   resolved_executable: string
   /** Captured bindings used to render the resource chain */
   context_bindings?: Record<string, string>
+  /**
+   * Set by the IdP, never by a client: the SHA-256 (64 lowercase hex) of the
+   * program file the requester runs, when the IdP resolved the command itself
+   * (`POST /api/grants/authorize`).
+   */
+  program_sha256?: string
+  /**
+   * Set by the IdP together with `program_sha256`: true when the program hash
+   * is one of the adapter's tested digests, false when the adapter was chosen
+   * by the executable name only (or no adapter matched).
+   */
+  version_tested?: boolean
 }
 
 /** RFC 9396 Rich Authorization Request — OpenApe Grant type */
@@ -341,6 +353,10 @@ export interface OpenApeAuthZClaims {
   approval?: GrantType
   /** Run command as this user */
   run_as?: string
+  /** Command tokens (`POST /api/grants/authorize`): hash of the exact execution argv the token allows. */
+  argv_hash?: string
+  /** Command tokens: SHA-256 (64 lowercase hex) of the program file the token allows. */
+  program_sha256?: string
 }
 
 // --- openape.json SP Capability Manifest (Prompt 15) ---

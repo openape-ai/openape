@@ -16,6 +16,8 @@ export const grants = sqliteTable('grants', {
   decidedBy: text('decided_by'),
   expiresAt: integer('expires_at'),
   usedAt: integer('used_at'),
+  // jti of the command token whose /consume confirmed a single-use grant spent at issuance (issue 1473)
+  consumedJti: text('consumed_jti'),
   // When this grant was auto-approved by matching a standing grant, this
   // column records the standing grant's id for audit-trail purposes.
   // Null for grants decided via the normal manual approval path.
@@ -46,6 +48,8 @@ export const shapes = sqliteTable('shapes', {
   digest: text('digest').notNull(),
   // JSON-encoded ShapeCliVersions (tested CLI versions and how to probe them); null for virtual executables
   versions: text('versions', { mode: 'json' }),
+  // JSON-encoded file digests (SHA-256:<hex>) of tested executables; null when the adapter lists none
+  testedDigests: text('tested_digests', { mode: 'json' }),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 }, table => [
@@ -350,6 +354,8 @@ export const brokerRequests = sqliteTable('broker_requests', {
   connectionId: text('connection_id').notNull(),
   jti: text('jti').notNull(),
   expiresAt: integer('expires_at').notNull(),
+  // The agent of a program call or status poll, which has its own budget; null for connection-wide operations
+  subject: text('subject'),
 }, table => [primaryKey({ columns: [table.connectionId, table.jti] })])
 
 export const brokerAgents = sqliteTable('broker_agents', {

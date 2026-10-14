@@ -6,7 +6,7 @@ import { resolveServerShape } from '@openape/grants'
 import { useDb } from '../database/drizzle'
 import { useYoloPolicyStore  } from '../utils/yolo-policy-store'
 import type { RiskLevel } from '../utils/yolo-policy-store'
-import { commandFromRequest, evaluateYoloPolicy, explainYoloMiss, targetFromRequest } from '../utils/yolo-evaluator'
+import { commandFromRequest, evaluateYoloPolicy, explainYoloMiss, idpResolvedRisk, targetFromRequest } from '../utils/yolo-evaluator'
 
 export default defineNitroPlugin(async () => {
   // Idempotent schema ensure — safe on every boot, needed under OPENAPE_E2E=1
@@ -120,8 +120,9 @@ export default defineNitroPlugin(async () => {
     // for Commands/Root grants. Web grants (ape-proxy) carry no command —
     // the evaluator just match-globs against target_host instead.
     const cmd = commandFromRequest(request)
-    let resolvedRisk: RiskLevel | null = null
-    if (policy.denyRiskThreshold && cmd && cmd.length > 0) {
+    // The IdP's own resolution names the shape it used; re-resolving by cmd[0] could pick another one.
+    let resolvedRisk: RiskLevel | null = idpResolvedRisk(request)
+    if (resolvedRisk === null && policy.denyRiskThreshold && cmd && cmd.length > 0) {
       try {
         const shapeStore = useShapeStore()
         const resolved = await resolveServerShape(shapeStore, cmd[0]!, cmd)
@@ -154,8 +155,8 @@ export default defineNitroPlugin(async () => {
 
     const policy = await store.get(request.requester, request.audience)
     const cmd = commandFromRequest(request)
-    let resolvedRisk: RiskLevel | null = null
-    if (policy?.denyRiskThreshold && cmd && cmd.length > 0) {
+    let resolvedRisk: RiskLevel | null = idpResolvedRisk(request)
+    if (resolvedRisk === null && policy?.denyRiskThreshold && cmd && cmd.length > 0) {
       try {
         const shapeStore = useShapeStore()
         const resolved = await resolveServerShape(shapeStore, cmd[0]!, cmd)

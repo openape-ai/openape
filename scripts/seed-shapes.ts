@@ -45,7 +45,7 @@ function loadShape(dir: string, cliId: string): ServerShape | null {
   const meta: AdapterMeta | null = existsSync(metaPath)
     ? (JSON.parse(readFileSync(metaPath, 'utf-8')) as AdapterMeta)
     : null
-  const { tested_versions, version_command, version_pattern } = adapter.cli
+  const { tested_versions, version_command, version_pattern, tested_digests } = adapter.cli
 
   const now = Math.floor(Date.now() / 1000)
   return {
@@ -56,6 +56,7 @@ function loadShape(dir: string, cliId: string): ServerShape | null {
     source: 'builtin',
     digest,
     ...(tested_versions && version_command && version_pattern ? { versions: { tested_versions, version_command, version_pattern } } : {}),
+    ...(tested_digests ? { tested_digests } : {}),
     createdAt: now,
     updatedAt: now,
   }
@@ -97,6 +98,7 @@ async function main() {
       source: shape.source,
       digest: shape.digest,
       versions: shape.versions ?? null,
+      testedDigests: shape.tested_digests ?? null,
       createdAt: shape.createdAt,
       updatedAt: shape.updatedAt,
     }).onConflictDoUpdate({
@@ -107,6 +109,7 @@ async function main() {
         operations: shape.operations,
         digest: shape.digest,
         versions: shape.versions ?? null,
+        testedDigests: shape.tested_digests ?? null,
         updatedAt: shape.updatedAt,
         source: 'builtin',
       },

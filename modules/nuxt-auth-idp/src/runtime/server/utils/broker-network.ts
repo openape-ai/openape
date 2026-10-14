@@ -12,7 +12,13 @@ import type { JSONWebKeySet } from 'jose'
 const publicIpv6 = new BlockList()
 publicIpv6.addSubnet('2000::', 3, 'ipv6')
 
-interface BrokerHttpOptions { method?: string, headers?: Record<string, string>, body?: string }
+interface BrokerHttpOptions {
+  method?: string
+  headers?: Record<string, string>
+  body?: string
+  /** Return a 403 body that carries an owner's denial or revocation (`authorize`) instead of failing. */
+  relayRefusal?: boolean
+}
 export async function brokerFetch(raw: string, init: BrokerHttpOptions = {}): Promise<unknown> {
   try { return await fetchPublicBroker(raw, init) }
   catch (error) {
@@ -40,18 +46,37 @@ async function fetchPublicBroker(raw: string, init: BrokerHttpOptions): Promise<
     outgoing.end(init.body)
   })
   try {
-    if (!response.statusCode || response.statusCode < 200 || response.statusCode >= 300) throw createProblemError({ status: response.statusCode && [400, 401, 403, 404, 409, 429].includes(response.statusCode) ? response.statusCode : 503, title: `Broker service returned HTTP ${response.statusCode ?? 'unknown'}` })
-    const chunks: Buffer[] = []
-    let size = 0
-    for await (const chunk of response) {
-      const data = Buffer.from(chunk)
-      size += data.length
-      if (size > 256 * 1024) throw new Error('Broker service response is too large')
-      chunks.push(data)
+    const status = response.statusCode
+    const retryAfter = status === 429 ? Number(response.headers['retry-after']) : Number.NaN
+    const failed = () => createProblemError({ status: status && [400, 401, 403, 404, 409, 429].includes(status) ? status : 503, title: `Broker service returned HTTP ${status ?? 'unknown'}`, ...(status === 429 && Number.isInteger(retryAfter) && retryAfter > 0 ? { retryAfter } : {}) })
+    if (status === 403 && init.relayRefusal) {
+      const refusal = await readBrokerJson(response)
+      if (isOwnerRefusal(refusal)) return refusal
+      throw failed()
     }
-    return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
+    if (!status || status < 200 || status >= 300) throw failed()
+    return await readBrokerJson(response)
   }
   finally { response.destroy() }
+}
+
+async function readBrokerJson(response: IncomingMessage): Promise<unknown> {
+  const chunks: Buffer[] = []
+  let size = 0
+  for await (const chunk of response) {
+    const data = Buffer.from(chunk)
+    size += data.length
+    if (size > 256 * 1024) throw new Error('Broker service response is too large')
+    chunks.push(data)
+  }
+  return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown
+}
+
+/** A decision IdP's 403 that carries the owner's denial or revocation of a program call. */
+function isOwnerRefusal(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const state = (value as Record<string, unknown>).state
+  return state === 'denied' || state === 'revoked'
 }
 
 function readBrokerMetadata<T>(read: () => T): T {

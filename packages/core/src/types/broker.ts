@@ -1,4 +1,4 @@
-import type { OpenApeGrantRequest } from './index.js'
+import type { OpenApeGrantBatch, OpenApeGrantRequest, OpenApeGrantSummary } from './index.js'
 
 export interface BrokeredGrant {
   connection_id: string
@@ -40,5 +40,29 @@ interface BrokerRequestBase {
 export type BrokerRequest = BrokerRequestBase & (
   | { operation: 'connection' }
   | { operation: 'create', sub: string, key_id: string, request: OpenApeGrantRequest }
+  | { operation: 'authorize', sub: string, key_id: string, request: OpenApeProgramAuthorizeRequest }
   | { operation: 'get' | 'token', sub: string, key_id: string, grant_id: string }
 )
+
+/**
+ * Body of `POST /api/grants/authorize` and of the `authorize` broker
+ * operation: one program call the IdP resolves and decides itself. The
+ * requester never sends authorization details for programs.
+ */
+export interface OpenApeProgramAuthorizeRequest {
+  target_host: string
+  audience: string
+  /** `name` is the basename of the executable, `sha256` the 64 lowercase hex digest of its file. */
+  program: { name: string, sha256: string }
+  /** Arguments without the executable, exactly as executed. */
+  argv: string[]
+  grant_type: 'always' | 'once'
+  summary?: OpenApeGrantSummary
+  batch?: OpenApeGrantBatch
+}
+
+/** Answer of `POST /api/grants/authorize` (200, 202 or 403 by `state`). */
+export type OpenApeProgramAuthorizeResponse =
+  | { state: 'approved', grant_id: string, authz_jwt: string, expires_at: number }
+  | { state: 'pending', grant_id: string, approval_url: string }
+  | { state: 'denied' | 'revoked', grant_id: string }

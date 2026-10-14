@@ -27,6 +27,7 @@ function actor(event: H3Event) {
   if (subject === 'delegated-owner') return { sub: owner, act: 'human', delegation_grant: 'scoped-only' }
   return subject ? { sub: subject, act: subject === agent ? 'agent' : 'human', ...(subject === 'delegated' ? { delegation_grant: 'not-owner' } : {}) } : null
 }
+vi.mock('nitropack/runtime', () => ({ useRuntimeConfig: () => ({}), useEvent: () => undefined, useStorage: () => ({}) }))
 vi.mock('../src/runtime/server/utils/agent-auth', () => ({ tryBearerAuth: async (event: H3Event) => actor(event) }))
 vi.mock('../src/runtime/server/utils/admin', () => ({ requireAuth: async (event: H3Event) => actor(event)?.sub ?? 'anonymous' }))
 vi.mock('../src/runtime/server/utils/session', () => ({ getAppSession: async (event: H3Event) => ({ data: { userId: getHeader(event, 'x-session') } }) }))

@@ -19,10 +19,21 @@ export interface GrantStore {
   findByDelegate?: (delegate: string) => Promise<OpenApeGrant[]>
   findByDelegator?: (delegator: string) => Promise<OpenApeGrant[]>
   listGrants: (params?: GrantListParams) => Promise<PaginatedResponse<OpenApeGrant>>
+  /**
+   * Marks an approved grant `used` in one step and returns true, or returns
+   * false when it is no longer approved, so a single-use grant is spent once.
+   */
+  claimOnce?: (id: string, usedAt: number) => Promise<boolean>
+  /**
+   * Records the one redemption (`/consume`) of a single-use grant spent by
+   * its command token: true for the first call only, whatever the `jti`.
+   */
+  markConsumed?: (id: string, jti: string) => Promise<boolean>
 }
 
 export class InMemoryGrantStore implements GrantStore {
   private grants = new Map<string, OpenApeGrant>()
+  private consumed = new Map<string, string>()
 
   async save(grant: OpenApeGrant): Promise<void> {
     this.grants.set(grant.id, { ...grant })
@@ -43,6 +54,19 @@ export class InMemoryGrantStore implements GrantStore {
       throw new Error(`Grant not found: ${id}`)
     }
     this.grants.set(id, { ...grant, status, ...extra })
+  }
+
+  async claimOnce(id: string, usedAt: number): Promise<boolean> {
+    const grant = this.grants.get(id)
+    if (grant?.status !== 'approved') return false
+    this.grants.set(id, { ...grant, status: 'used', used_at: usedAt })
+    return true
+  }
+
+  async markConsumed(id: string, jti: string): Promise<boolean> {
+    if (!this.grants.has(id) || this.consumed.has(id)) return false
+    this.consumed.set(id, jti)
+    return true
   }
 
   async findPending(): Promise<OpenApeGrant[]> {

@@ -20,6 +20,19 @@ const RISK_ORDER: Record<RiskLevel, number> = {
   critical: 4,
 }
 
+/**
+ * The risk of a request the IdP resolved itself (`POST /api/grants/authorize`,
+ * marked by `execution_context.program_sha256`, which clients cannot send):
+ * the highest risk of its own details. Null for client-resolved requests,
+ * whose details are the client's claim and are resolved again instead.
+ */
+export function idpResolvedRisk(request: OpenApeGrantRequest): RiskLevel | null {
+  if (typeof request.execution_context?.program_sha256 !== 'string') return null
+  const risks = (request.authorization_details ?? []).flatMap(detail => detail.type === 'openape_cli' ? [detail.risk] : [])
+  if (!risks.length) return 'high'
+  return risks.reduce((highest, risk) => RISK_ORDER[risk] > RISK_ORDER[highest] ? risk : highest)
+}
+
 export interface YoloDecision {
   kind: 'yolo'
   decidedBy: string
