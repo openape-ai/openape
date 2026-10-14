@@ -1,0 +1,196 @@
+[
+  {
+    "id": "5e600dc6-a559-4c1a-9220-6aca0c771040",
+    "status": "approved",
+    "type": "command",
+    "request": {
+      "requester": "pod@pods.provider.test",
+      "target_host": "pods:00000000-0000-4000-8000-000000000001",
+      "audience": "shapes",
+      "grant_type": "always",
+      "permissions": [
+        "az.http[method=POST].audience[id=499b84ac-1321-427f-aa17-267ca6975798].endpoint[url=https://dev.azure.com/acme1/_apis/Contribution/HierarchyQuery/project/11111111-2222-4333-8444-555555555555?api-version=5.0-preview.1]#read"
+      ],
+      "authorization_details": [
+        {
+          "type": "openape_cli",
+          "cli_id": "az",
+          "operation_id": "pr.activity.read",
+          "resource_chain": [
+            {
+              "resource": "http",
+              "selector": {
+                "method": "POST"
+              }
+            },
+            {
+              "resource": "audience",
+              "selector": {
+                "id": "499b84ac-1321-427f-aa17-267ca6975798"
+              }
+            },
+            {
+              "resource": "endpoint",
+              "selector": {
+                "url": "https://dev.azure.com/acme1/_apis/Contribution/HierarchyQuery/project/11111111-2222-4333-8444-555555555555?api-version=5.0-preview.1"
+              }
+            }
+          ],
+          "action": "read",
+          "permission": "az.http[method=POST].audience[id=499b84ac-1321-427f-aa17-267ca6975798].endpoint[url=https://dev.azure.com/acme1/_apis/Contribution/HierarchyQuery/project/11111111-2222-4333-8444-555555555555?api-version=5.0-preview.1]#read",
+          "display": "Read pull request activity statistics via POST https://dev.azure.com/acme1/_apis/Contribution/HierarchyQuery/project/11111111-2222-4333-8444-555555555555?api-version=5.0-preview.1",
+          "risk": "low"
+        }
+      ],
+      "execution_context": {
+        "argv": [
+          "az",
+          "rest",
+          "--method",
+          "POST",
+          "--resource",
+          "499b84ac-1321-427f-aa17-267ca6975798",
+          "--url",
+          "https://dev.azure.com/acme1/_apis/Contribution/HierarchyQuery/project/11111111-2222-4333-8444-555555555555?api-version=5.0-preview.1",
+          "--body",
+          "{\"contributionIds\":[\"ms.vss-code-web.pullrequests-artifact-stats-data-provider\"]}",
+          "--output",
+          "json",
+          "--only-show-errors"
+        ],
+        "argv_hash": "SHA-256:c590d84c0d9209e73a09bbe1f78c88010fcb8e29fd8c14efbdf7714fbb60d230",
+        "adapter_id": "az",
+        "adapter_version": "acme1-setup-2",
+        "adapter_digest": "SHA-256:640cc998ef2e6d7ecf2ce41ccdee9baea611debc6833601691ff18a63e419257",
+        "resolved_executable": "az",
+        "context_bindings": {
+          "method": "POST",
+          "resource": "499b84ac-1321-427f-aa17-267ca6975798",
+          "url": "https://dev.azure.com/acme1/_apis/Contribution/HierarchyQuery/project/11111111-2222-4333-8444-555555555555?api-version=5.0-preview.1",
+          "body": "{\"contributionIds\":[\"ms.vss-code-web.pullrequests-artifact-stats-data-provider\"]}",
+          "output": "json",
+          "only-show-errors": "true"
+        }
+      },
+      "reason": "Owner-assigned program or HTTPS permission for pod 00000000-0000-4000-8000-000000000001",
+      "command": [
+        "az",
+        "rest",
+        "--method",
+        "POST",
+        "--resource",
+        "499b84ac-1321-427f-aa17-267ca6975798",
+        "--url",
+        "https://dev.azure.com/acme1/_apis/Contribution/HierarchyQuery/project/11111111-2222-4333-8444-555555555555?api-version=5.0-preview.1",
+        "--body",
+        "{\"contributionIds\":[\"ms.vss-code-web.pullrequests-artifact-stats-data-provider\"]}",
+        "--output",
+        "json",
+        "--only-show-errors"
+      ],
+      "cmd_hash": "3bbbf9a4732025d9505dbdbbec2848e31fea173bcb365902ea95d82b69e9d36e"
+    },
+    "created_at": 1790581936,
+    "decided_at": 1790581936,
+    "decided_by": "human@owner.test"
+  },
+  {
+    "id": "fe2988b1-9c65-4443-803d-b7fee74482fb",
+    "status": "approved",
+    "type": "command",
+    "request": {
+      "requester": "pod@pods.provider.test",
+      "target_host": "pods:00000000-0000-4000-8000-000000000001",
+      "audience": "shapes",
+      "grant_type": "always",
+      "permissions": [
+        "az.http[method=POST].audience[id=499b84ac-1321-427f-aa17-267ca6975798].endpoint[url=https://dev.azure.com/acme1/_apis/Contribution/HierarchyQuery/project/11111111-2222-4333-8444-555555555555?api-version=5.0-preview.1]#request"
+      ],
+      "authorization_details": [
+        {
+          "type": "openape_cli",
+          "cli_id": "az",
+          "operation_id": "rest.post",
+          "resource_chain": [
+            {
+              "resource": "http",
+              "selector": {
+                "method": "POST"
+              }
+            },
+            {
+              "resource": "audience",
+              "selector": {
+                "id": "499b84ac-1321-427f-aa17-267ca6975798"
+              }
+            },
+            {
+              "resource": "endpoint",
+              "selector": {
+                "url": "https://dev.azure.com/acme1/_apis/Contribution/HierarchyQuery/project/11111111-2222-4333-8444-555555555555?api-version=5.0-preview.1"
+              }
+            }
+          ],
+          "action": "request",
+          "permission": "az.http[method=POST].audience[id=499b84ac-1321-427f-aa17-267ca6975798].endpoint[url=https://dev.azure.com/acme1/_apis/Contribution/HierarchyQuery/project/11111111-2222-4333-8444-555555555555?api-version=5.0-preview.1]#request",
+          "display": "Azure REST POST to https://dev.azure.com/acme1/_apis/Contribution/HierarchyQuery/project/11111111-2222-4333-8444-555555555555?api-version=5.0-preview.1 with audience 499b84ac-1321-427f-aa17-267ca6975798",
+          "risk": "medium"
+        }
+      ],
+      "command": [
+        "az",
+        "rest",
+        "--method",
+        "POST",
+        "--resource",
+        "499b84ac-1321-427f-aa17-267ca6975798",
+        "--url",
+        "https://dev.azure.com/acme1/_apis/Contribution/HierarchyQuery/project/11111111-2222-4333-8444-555555555555?api-version=5.0-preview.1",
+        "--body",
+        "{\"contributionIds\":[\"ms.vss-code-web.pullrequests-artifact-stats-data-provider\"],\"dataProviderContext\":{\"properties\":{\"artifactIds\":[{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F884\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F884\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F883\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F883\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F881\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F881\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F874\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F874\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F862\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F862\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F859\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F859\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F857\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F857\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F854\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F854\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F847\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F847\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F835\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F835\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F798\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F798\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F771\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F771\"}],\"sourcePage\":{\"routeId\":\"ms.vss-code-web.lwp-prs-route\",\"routeValues\":{\"project\":\"acmeService\",\"GitRepositoryName\":\"acmeService\"}}}}}",
+        "--output",
+        "json",
+        "--only-show-errors"
+      ],
+      "cmd_hash": "9faf0537ddc04b0da6f87c5c058a9c4b13485e35090ed4dc923a3a9c8cb8a704",
+      "execution_context": {
+        "argv": [
+          "az",
+          "rest",
+          "--method",
+          "POST",
+          "--resource",
+          "499b84ac-1321-427f-aa17-267ca6975798",
+          "--url",
+          "https://dev.azure.com/acme1/_apis/Contribution/HierarchyQuery/project/11111111-2222-4333-8444-555555555555?api-version=5.0-preview.1",
+          "--body",
+          "{\"contributionIds\":[\"ms.vss-code-web.pullrequests-artifact-stats-data-provider\"],\"dataProviderContext\":{\"properties\":{\"artifactIds\":[{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F884\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F884\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F883\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F883\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F881\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F881\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F874\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F874\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F862\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F862\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F859\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F859\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F857\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F857\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F854\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F854\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F847\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F847\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F835\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F835\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F798\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F798\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F771\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F771\"}],\"sourcePage\":{\"routeId\":\"ms.vss-code-web.lwp-prs-route\",\"routeValues\":{\"project\":\"acmeService\",\"GitRepositoryName\":\"acmeService\"}}}}}",
+          "--output",
+          "json",
+          "--only-show-errors"
+        ],
+        "argv_hash": "SHA-256:143a90461a481a92508e3dee96f1887dd0eafeab0b54e15e425d1c23b915bff3",
+        "adapter_id": "az",
+        "adapter_version": "server",
+        "adapter_digest": "SHA-256:e6e0461e97fcfa947834f7a8f2a2fb4367ab3509179ab36de7c95a45a34830e2",
+        "resolved_executable": "az",
+        "context_bindings": {
+          "resource": "499b84ac-1321-427f-aa17-267ca6975798",
+          "url": "https://dev.azure.com/acme1/_apis/Contribution/HierarchyQuery/project/11111111-2222-4333-8444-555555555555?api-version=5.0-preview.1",
+          "body": "{\"contributionIds\":[\"ms.vss-code-web.pullrequests-artifact-stats-data-provider\"],\"dataProviderContext\":{\"properties\":{\"artifactIds\":[{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F884\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F884\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F883\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F883\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F881\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F881\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F874\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F874\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F862\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F862\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F859\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F859\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F857\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F857\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F854\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F854\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F847\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F847\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F835\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F835\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F798\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F798\"},{\"artifactId\":\"vstfs:///Git/PullRequestId/11111111-2222-4333-8444-555555555555%2F66666666-7777-4888-9999-aaaaaaaaaaaa%2F771\",\"discussionArtifactId\":\"vstfs:///CodeReview/ReviewId/11111111-2222-4333-8444-555555555555%2F771\"}],\"sourcePage\":{\"routeId\":\"ms.vss-code-web.lwp-prs-route\",\"routeValues\":{\"project\":\"acmeService\",\"GitRepositoryName\":\"acmeService\"}}}}}",
+          "output": "json",
+          "only-show-errors": "true"
+        },
+        "program_sha256": "7eb79dbdb36ccb6f3f008afd5780b8da06e6cb46c5cc4441dad19b2926100f82",
+        "version_tested": true
+      },
+      "summary": {
+        "title": "az rest --method POST --resource 499b84ac-1321-427f-aa17-267ca6975798 --url 'https://dev.azure.com/acme1/_apis/Contribu…",
+        "origin": "PR monitor"
+      }
+    },
+    "created_at": 1791989289,
+    "decided_at": 1791989327,
+    "decided_by": "human@owner.test"
+  }
+]

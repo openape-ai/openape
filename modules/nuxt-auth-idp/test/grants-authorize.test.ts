@@ -13,6 +13,7 @@ import type { ServerShape } from '@openape/grants'
 import { approveGrant, computeArgvHash, createInMemoryShapeStore, denyGrant, InMemoryGrantStore, revokeGrant, verifyAuthzJWT } from '@openape/grants'
 import { createApp, createError, createRouter, getHeader, toNodeListener } from 'h3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import activityGrants from './fixtures/issue-1476-activity-grants.json'
 
 const issuer = 'https://id.owner.test'
 const broker = 'https://pods.provider.test'
@@ -419,5 +420,110 @@ describe('brokered identities', () => {
   it('rejects a malformed brokered call at the broker before forwarding', async () => {
     expect((await viaBroker({ ...body(), authorization_details: [] })).status).toBe(400)
     expect(await grantStore.findByRequester(podAgent)).toEqual([])
+  })
+})
+
+// Issue 1476: the PR monitor's Azure DevOps activity query, with the two grants production holds for it
+// (an old-desktop `pr.activity.read` grant and an IdP-resolved `rest.post` grant), identifiers replaced.
+describe('a long command approved before and after IdP resolution (issue 1476)', () => {
+  const azSha = '7eb79dbdb36ccb6f3f008afd5780b8da06e6cb46c5cc4441dad19b2926100f82'
+  const azShape: ServerShape = {
+    ...gitShape,
+    cli_id: 'az',
+    executable: 'az',
+    operations: [
+      { id: 'rest.get', command: ['rest', '--method', 'GET'], positionals: [], required_options: ['resource', 'url'], value_options: ['output'], flag_options: ['only-show-errors'], display: 'Azure REST GET {url} with audience {resource}', action: 'read', risk: 'medium', resource_chain: ['http:method=GET', 'audience:id={resource}', 'endpoint:url={url}'] },
+      { id: 'rest.post', command: ['rest', '--method', 'POST'], positionals: [], required_options: ['resource', 'url', 'body'], value_options: ['output'], flag_options: ['only-show-errors'], display: 'Azure REST POST to {url} with audience {resource}', action: 'request', risk: 'medium', resource_chain: ['http:method=POST', 'audience:id={resource}', 'endpoint:url={url}'] },
+    ],
+    tested_digests: [`SHA-256:${azSha}`],
+  }
+  const [readGrant, requestGrant] = activityGrants as unknown as [OpenApeGrant, OpenApeGrant]
+  const targetHost = requestGrant.request.target_host
+  const activityArgv = requestGrant.request.command!.slice(1)
+  const activity = (argv = activityArgv) => body({ name: 'az', sha256: azSha, argv, target_host: targetHost })
+  async function store(...grants: OpenApeGrant[]) {
+    for (const grant of grants) await grantStore.save({ ...structuredClone(grant), brokered: { connection_id: connection.id, broker_issuer: broker, agent_issuer: broker, owner, key_id: 'pod-key' } })
+  }
+
+  beforeEach(() => { shapeStore = createInMemoryShapeStore([gitShape, azShape]) })
+
+  it('relays the command token of the IdP-resolved grant through the broker', async () => {
+    await store(readGrant, requestGrant)
+    const answer = await viaBroker(activity())
+    expect(answer.status).toBe(200)
+    const claims = await verified(answer.json.authz_jwt)
+    expect(claims).toMatchObject({ grant_id: requestGrant.id, sub: podAgent, argv_hash: await computeArgvHash(requestGrant.request.command!), program_sha256: azSha, authorization_details: [{ operation_id: 'rest.post', action: 'request' }] })
+  })
+
+  it('never lets the old read grant authorize the POST: the call asks the owner instead', async () => {
+    await store(readGrant)
+    const answer = await viaBroker(activity())
+    expect(answer.status).toBe(202)
+    expect(answer.json.grant_id).not.toBe(readGrant.id)
+    expect(tokensRecorded).not.toHaveBeenCalled()
+  })
+
+  it('refuses a command too large for any command token as definite, without spending a single-use grant', async () => {
+    const huge = activityArgv.map((item, index) => activityArgv[index - 1] === '--body' ? JSON.stringify({ padding: 'x'.repeat(40_000) }) : item)
+    const asked = await viaBroker(activity(huge))
+    expect(asked.status).toBe(202)
+    const single = (await grantStore.findById(asked.json.grant_id))!
+    await grantStore.save({ ...single, request: { ...single.request, grant_type: 'once' } })
+    await approveGrant(asked.json.grant_id, owner, grantStore)
+    const refused = await viaBroker(activity(huge))
+    expect(refused.status).toBe(413)
+    expect(refused.json.authz_jwt).toBeUndefined()
+    expect(tokensRecorded).not.toHaveBeenCalled()
+    expect((await grantStore.findById(asked.json.grant_id))!.status).toBe('approved')
+  })
+
+  it('logs an unexpected failure at broker and decision IdP with a request id, naming only program and operation', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    try {
+      vi.spyOn(grantStore, 'findByRequester').mockRejectedValue(new TypeError(`broken row ${activityArgv.join(' ')}`))
+      const failed = await viaBroker(activity())
+      expect(failed.status).toBeGreaterThanOrEqual(500)
+      const lines = logged.mock.calls.map(args => args.join(' '))
+      expect(lines).toHaveLength(2)
+      expect(lines[0]).toMatch(/^\[grants\/authorize\] request [\da-f-]{36} failed with HTTP 500 .* cli="az" operation="rest.post" cause=TypeError at /)
+      expect(lines[1]).toMatch(/^\[grants\/authorize\] request [\da-f-]{36} failed with HTTP 5\d\d .* cli="az"$/)
+      for (const line of lines) expect(line).not.toContain('HierarchyQuery')
+      expect(failed.json.data.request_id).toBe(lines[1]!.split(' ')[2])
+    }
+    finally { logged.mockRestore() }
+  })
+})
+
+// Issue 1476: grants approved by older desktops carry details the IdP never wrote. A malformed one covers nothing.
+describe('stored grants of older clients', () => {
+  const malformed: unknown[] = [
+    null,
+    'git.status',
+    { type: 'openape_cli', cli_id: 'git', operation_id: 'git.status', action: 'read', permission: 'git#read', display: 'x', risk: 'low' },
+    { type: 'openape_cli', cli_id: 'git', operation_id: 'git.status', action: 'read', permission: 'git#read', display: 'x', risk: 'low', resource_chain: [null] },
+    { type: 'openape_cli', cli_id: 'git', operation_id: 'git.status', action: 'read', permission: 'git#read', display: 'x', risk: 'low', resource_chain: [{ resource: 'repo', selector: { name: 7 } }] },
+    { type: 'openape_cli', cli_id: 'git', operation_id: 'git.status', action: 'read', permission: 'git#read', display: 'x', risk: 'low', resource_chain: 'repo' },
+  ]
+  async function stored(details: unknown, extra: Record<string, unknown> = {}) {
+    const grant = { id: randomUUID(), type: 'command', status: 'approved', decided_by: owner, created_at: 1, request: { requester: direct, target_host: 'macmini', audience: 'shapes', grant_type: 'always', authorization_details: details, ...extra } }
+    await grantStore.save(grant as unknown as OpenApeGrant)
+    return grant.id
+  }
+
+  it('decides calls next to malformed details instead of failing, and never lets them cover a call', async () => {
+    for (const detail of malformed) await stored([detail])
+    await stored({ not: 'a list' })
+    await stored([{ ...gitShape, type: 'openape_cli', cli_id: 'git', operation_id: 'git.push', action: 'write', permission: 'git.remote[name=origin]#write', display: 'x', risk: 'high', resource_chain: [{ resource: 'remote', selector: { name: 'origin' } }], constraints: { exact_command: true } }], { execution_context: null })
+    const asked = await call(direct)
+    expect(asked.status).toBe(202)
+    expect((await call(direct, body({ argv: ['push', 'origin', 'main'] }))).status).toBe(202)
+  })
+
+  it('still lets a well-formed old grant cover the call it describes', async () => {
+    await stored([malformed[3]])
+    const covering = await stored([{ type: 'openape_cli', cli_id: 'git', operation_id: 'git.status', action: 'read', permission: 'git.#read', display: 'Show git status', risk: 'low', resource_chain: [] }], { execution_context: { argv: ['git', 'status'] } })
+    const answer = await call(direct)
+    expect(answer.status).toBe(200)
+    expect(answer.json.grant_id).toBe(covering)
   })
 })

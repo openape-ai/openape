@@ -1,12 +1,13 @@
-import type { BrokeredGrant, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
-import { canonicalizeCliPermission, cliAuthorizationDetailsCover, GENERIC_OPERATION_ID, isCliAuthorizationDetailExact, sameBrokeredGrant } from '@openape/grants'
+import type { BrokeredGrant, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
+import { canonicalizeCliPermission, cliAuthorizationDetailsCover, coverableCliDetails, GENERIC_OPERATION_ID, isCliAuthorizationDetailExact, isCoverableCliDetail, sameBrokeredGrant } from '@openape/grants'
 
-function cliDetails(details?: OpenApeAuthorizationDetail[]): OpenApeCliAuthorizationDetail[] {
-  return (details ?? []).filter((detail): detail is OpenApeCliAuthorizationDetail => detail.type === 'openape_cli')
+// Grants approved by older clients may store any JSON here (issue 1476).
+function storedList(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : []
 }
 
-function detailSignature(detail: OpenApeAuthorizationDetail): string {
-  if (detail.type !== 'openape_cli')
+function detailSignature(detail: unknown): string {
+  if (!isCoverableCliDetail(detail))
     return JSON.stringify(detail)
 
   const normalizedChain = detail.resource_chain.map(resource => ({
@@ -25,7 +26,7 @@ function detailSignature(detail: OpenApeAuthorizationDetail): string {
 }
 
 function hasExactStructuredDetail(request: Pick<OpenApeGrantRequest, 'authorization_details'>): boolean {
-  return cliDetails(request.authorization_details).some(isCliAuthorizationDetailExact)
+  return coverableCliDetails(request.authorization_details).some(isCliAuthorizationDetailExact)
 }
 
 function reusable(grant: OpenApeGrant, request: OpenApeGrantRequest, brokered: BrokeredGrant | undefined, now: number): boolean {
@@ -40,8 +41,8 @@ function reusable(grant: OpenApeGrant, request: OpenApeGrantRequest, brokered: B
   if (request.delegator !== (grant.request.delegator ?? undefined)) return false
   if (request.delegate !== (grant.request.delegate ?? undefined)) return false
 
-  const incoming = cliDetails(request.authorization_details)
-  const existing = cliDetails(grant.request.authorization_details)
+  const incoming = coverableCliDetails(request.authorization_details)
+  const existing = coverableCliDetails(grant.request.authorization_details)
   if (incoming.length || existing.length) {
     if (!incoming.length || !existing.length) return false
     if ((grant.request.execution_context?.adapter_digest ?? undefined) !== (request.execution_context?.adapter_digest ?? undefined)) return false
@@ -55,11 +56,11 @@ function reusable(grant: OpenApeGrant, request: OpenApeGrantRequest, brokered: B
   // Exact command grants reuse only on exact command binding.
   if ((request.cmd_hash || grant.request.cmd_hash) && grant.request.cmd_hash !== request.cmd_hash) return false
   if (request.permissions || grant.request.permissions) {
-    if ((request.permissions ?? []).toSorted().join(',') !== (grant.request.permissions ?? []).toSorted().join(',')) return false
+    if (storedList(request.permissions).toSorted().join(',') !== storedList(grant.request.permissions).toSorted().join(',')) return false
   }
   if (request.authorization_details || grant.request.authorization_details) {
-    const requested = (request.authorization_details ?? []).map(detailSignature).toSorted().join(',')
-    const granted = (grant.request.authorization_details ?? []).map(detailSignature).toSorted().join(',')
+    const requested = storedList(request.authorization_details).map(detailSignature).toSorted().join(',')
+    const granted = storedList(grant.request.authorization_details).map(detailSignature).toSorted().join(',')
     if (requested !== granted) return false
   }
   return true
@@ -115,7 +116,7 @@ export function findCoveringGrant(existing: OpenApeGrant[], call: ProgramCallSco
   const covering = existing.filter((grant) => {
     if (grant.status !== 'approved' || (grant.expires_at && grant.expires_at <= now)) return false
     if (!commandGrantFor(grant, call, brokered)) return false
-    const granted = cliDetails(grant.request.authorization_details)
+    const granted = coverableCliDetails(grant.request.authorization_details)
     return granted.length > 0 && cliAuthorizationDetailsCover(granted, [call.detail]) && bindsCall(grant, call)
   })
   return covering.find(grant => (grant.request.grant_type ?? 'once') !== 'once') ?? covering[0]
@@ -143,7 +144,7 @@ function sameDetail(a: OpenApeCliAuthorizationDetail, b: OpenApeCliAuthorization
 export function findLatestRequest(existing: OpenApeGrant[], call: ProgramCallScope, brokered?: BrokeredGrant): OpenApeGrant | undefined {
   return existing
     .filter(grant => commandGrantFor(grant, call, brokered)
-      && cliDetails(grant.request.authorization_details).some(detail => sameDetail(detail, call.detail))
+      && coverableCliDetails(grant.request.authorization_details).some(detail => sameDetail(detail, call.detail))
       && bindsCall(grant, call))
     .toSorted((a, b) => b.created_at - a.created_at)[0]
 }

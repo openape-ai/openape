@@ -84,6 +84,8 @@ export const diagnosticPatterns = [
   'Desktop registration failed ({p0})',
   'Broker revocation failed ({p0}); review the connection at your identity provider',
   'The permission service rejected the request ({p0}); inspect the grant before retrying',
+  'Permission service temporarily unavailable ({p0})',
+  'HTTP service temporarily unavailable ({p0})',
   'Permission {p0}; review this Pod\'s permissions before retrying',
   'Dependency preparation failed: {p0}',
   'Invalid {p0}',

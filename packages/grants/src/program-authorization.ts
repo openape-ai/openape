@@ -10,9 +10,12 @@ export class InvalidProgramAuthorizeRequestError extends Error {}
 
 /**
  * Upper bounds of `POST /api/grants/authorize` (issue 1473). A maximal body
- * still fits the 128 KiB broker assertion that forwards it.
+ * still fits the 128 KiB broker assertion that forwards it. A command token
+ * repeats the argv several times, so it has its own bound (issue 1476): the
+ * answer that carries it still fits the 128 KiB identity response the Pods
+ * desktop reads and the 256 KiB a broker reads from the decision IdP.
  */
-export const PROGRAM_AUTHORIZE_LIMITS = { bodyBytes: 64 * 1024, argvItems: 256 } as const
+export const PROGRAM_AUTHORIZE_LIMITS = { bodyBytes: 64 * 1024, argvItems: 256, tokenChars: 120 * 1024 } as const
 
 const FIELDS = ['target_host', 'audience', 'program', 'argv', 'grant_type', 'summary', 'batch']
 const PROGRAM_FIELDS = ['name', 'sha256']

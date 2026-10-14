@@ -59,6 +59,18 @@ it('keeps the provider\'s Retry-After on a rate-limit refusal', async () => {
   expect(unparsable.data.retry_after).toBeUndefined()
 })
 
+it('relays a definite refusal of a too large request, but reports provider failures as unavailable', async () => {
+  dns.mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
+  let statusCode = 413
+  outgoing.mockImplementation((_url, _options, receive) => {
+    const reply = Object.assign(new PassThrough(), { statusCode })
+    return Object.assign(new EventEmitter(), { end: () => { receive(reply); reply.end('{}') } })
+  })
+  await expect(brokerFetch('https://provider.example.test/brokered', { method: 'POST', relayRefusal: true })).rejects.toMatchObject({ statusCode: 413 })
+  statusCode = 500
+  await expect(brokerFetch('https://provider.example.test/brokered', { method: 'POST', relayRefusal: true })).rejects.toMatchObject({ statusCode: 503 })
+})
+
 it('relays a 403 body only when it carries an owner refusal of a program call', async () => {
   dns.mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
   let body = '{"state":"denied","grant_id":"g-1"}'

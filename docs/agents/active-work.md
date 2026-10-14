@@ -1,5 +1,12 @@
 # Active work
 
+## Long program calls through the broker — issue 1476
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1476. Branch `bugfix/issue-1476-authorize-activity-failure`, base `4a1fa8eb`.
+- The PR monitor Pod's Azure DevOps activity query (`az rest --method POST` with a ~3.5 KB JSON body) failed every run with "Permission service temporarily unavailable". id.openape.ai covered it with grant `fe2988b1` and issued a ~16.6 KB command token, because the token repeats the argv (`command`, `execution_context.argv`, `context_bindings`). pods.openape.ai checked the forwarded token with a 16 KiB string limit and answered 503 `broker_unavailable`, which the desktop retries. The same 503 never reached a log.
+- Fix: `PROGRAM_AUTHORIZE_LIMITS.tokenChars` (120 KiB) bounds forwarded tokens. The decision IdP refuses a larger token with a definite 413 `command_too_large` before it spends a single-use grant, and brokers relay 413. Unexpected 5xx of authorize are logged with a request id and cli/operation only, and the answer carries `request_id`. The desktop's authorization errors name HTTP status, problem type/title and request id, and it isolates 413 as non-retryable. Coverage ignores malformed stored details (`isCoverableCliDetail`). 14,277 production grants were checked read-only and none is malformed.
+- Rollout: IdP deploy (free-idp + pods-idp) fixes the Pod without a desktop build; the desktop diagnostics ship with the next signed build.
+
 ## Pods agent model from the connected account — issue 1475
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1475. Branch `bugfix/issue-1475-pods-agent-model`, base `6c028398`.
