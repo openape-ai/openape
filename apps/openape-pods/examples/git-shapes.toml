@@ -25,6 +25,9 @@ executable = "git"
 audience = "shapes"
 version = "2"
 # `git -C <path> …` before the subcommand, bound as {repo}. Repeating it never matches.
+# Resource chains keep repo:* on purpose: the Pod sandbox and directory policy limit which
+# repositories are reachable, per-worktree grants would multiply approvals, and every exact
+# push approval shows the full -C path.
 global_options = ["C=repo"]
 tested_versions = ["2.54"]
 version_command = ["--version"]

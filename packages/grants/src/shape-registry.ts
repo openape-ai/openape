@@ -94,8 +94,9 @@ export interface ServerShape {
    */
   source: 'builtin' | 'custom'
   /**
-   * `SHA-256:<hex>` digest of the adapter file, as `loadAdapter()` computes
-   * it and grants carry it in `execution_context.adapter_digest`.
+   * Semantic adapter digest (`semanticAdapterDigest()` in `@openape/shapes`):
+   * covers only matching rules, so presentation and texts never change it.
+   * Grants carry it in `execution_context.adapter_digest`.
    */
   digest: string
   /** CLI versions the adapter was checked against; absent for virtual executables. */

@@ -51,7 +51,13 @@ export interface ShapesOperation {
 export interface LoadedAdapter {
   adapter: ShapesAdapter
   source: string
+  /**
+   * Semantic digest (`semanticAdapterDigest`) that grants bind in
+   * `execution_context.adapter_digest`; presentation and texts do not change it.
+   */
   digest: string
+  /** `SHA-256:` digest of the file bytes, for file integrity checks; set by `loadAdapter`. */
+  fileDigest?: string
   /**
    * True when this adapter was synthesized in-memory for a CLI that has no
    * registered shape. Synthetic adapters bypass `resolveCommand()` and are
