@@ -1,4 +1,6 @@
 import type { OpenApeGrant } from '@openape/core'
+import type { CompactCommand } from './command-structure'
+import { distinctCompactCommands } from './command-structure'
 import type { BindingLine, CardLanguage, GrantWithCard } from './grant-card'
 import { grantBindingLine } from './grant-card'
 
@@ -6,10 +8,14 @@ export interface GrantBatchRow {
   id: string
   /** What approving this member binds: registry title or exact command. Always the row's primary line. */
   line: BindingLine
+  /** Short form of an exact command's line, distinct from the other rows; null shows `line.text` as it is. */
+  compact: CompactCommand | null
   /** The member's own summary title, shown only as its labeled claim. */
   claim: string | null
   status: OpenApeGrant['status']
   decidable: boolean
+  /** When the member was used, decided or expired; null when no time is recorded. */
+  decidedAt: number | null
 }
 
 export interface GrantBatchOperation {
@@ -26,10 +32,34 @@ export interface GrantBatchOperation {
 export function grantBatchRows(members: GrantWithCard[], language: CardLanguage): GrantBatchRow[] {
   const scope = grantBatchScope(members)
   const uniform = (grant: OpenApeGrant) => (grant.request.grant_type ?? 'once') === 'once' && !grant.request.run_as && !grant.request.delegate && grant.request.audience === scope?.audience && grant.request.target_host === scope?.targetHost
-  return members
-    .map(grant => ({ grant, row: { id: grant.id, line: grantBindingLine(grant, language), claim: grant.request.summary?.title?.trim() || null, status: grant.status, decidable: grant.status === 'pending' && uniform(grant) } }))
-    .toSorted((a, b) => a.grant.created_at - b.grant.created_at || a.row.line.text.localeCompare(b.row.line.text))
-    .map(({ row }) => row)
+  const ordered = members
+    .map(grant => ({ grant, line: grantBindingLine(grant, language) }))
+    .toSorted((a, b) => a.grant.created_at - b.grant.created_at || a.line.text.localeCompare(b.line.text))
+  // Short forms only need to tell apart the rows shown together: open members, and the history.
+  const compacts = new Map([true, false].flatMap((open) => {
+    const shown = ordered.filter(({ grant }) => (grant.status === 'pending') === open)
+    return distinctCompactCommands(shown.map(({ line }) => line.structure)).map((compact, index) => [shown[index]!.grant.id, compact] as const)
+  }))
+  return ordered.map(({ grant, line }) => ({ id: grant.id, line, compact: compacts.get(grant.id) ?? null, claim: grant.request.summary?.title?.trim() || null, status: grant.status, decidable: grant.status === 'pending' && uniform(grant), decidedAt: grant.used_at ?? grant.decided_at ?? grant.expires_at ?? null }))
+}
+
+export interface GrantBatchSections {
+  /** Pending members decided together on the batch page, in submission order. */
+  open: GrantBatchRow[]
+  /** Pending members that need their single approval view. */
+  separate: GrantBatchRow[]
+  /** Members no longer pending, newest first (by use, decision or expiry, then submission). */
+  decided: GrantBatchRow[]
+}
+
+/** Only open members take part in the decision; everything else is history. */
+export function grantBatchSections(rows: GrantBatchRow[]): GrantBatchSections {
+  const latest = (row: GrantBatchRow) => row.decidedAt ?? 0
+  return {
+    open: rows.filter(row => row.decidable),
+    separate: rows.filter(row => row.status === 'pending' && !row.decidable),
+    decided: rows.filter(row => row.status !== 'pending').toReversed().toSorted((a, b) => latest(b) - latest(a)),
+  }
 }
 
 /** Selected decidable members are approved, every other decidable member is denied. */
