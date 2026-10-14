@@ -3,7 +3,7 @@
 import type { OpenApeGrant } from '@openape/core'
 import { generateKeyPair } from '@openape/core'
 import { describe, expect, it } from 'vitest'
-import { COMMAND_TOKEN_LIFETIME_SECONDS, issueCommandJWT, verifyAuthzJWT } from '../src/authz-jwt.js'
+import { COMMAND_TOKEN_LIFETIME_SECONDS, issueCommandJWT, spentByCommandToken, verifyAuthzJWT } from '../src/authz-jwt.js'
 import { computeArgvHash } from '../src/cli-permissions.js'
 import { InvalidProgramAuthorizeRequestError, parseProgramAuthorizeRequest, resolveProgramCall, selectProgramShape } from '../src/program-authorization.js'
 import { GENERIC_OPERATION_ID } from '../src/server-resolver.js'
@@ -28,7 +28,8 @@ const gitShape: ServerShape = {
 }
 // A single-file script whose registry entry names it only by digest.
 const scriptShape: ServerShape = { ...gitShape, cli_id: 'mail-sync', executable: 'mail-sync', operations: [{ ...gitShape.operations[0]!, id: 'sync', command: ['sync'] }], tested_digests: [`SHA-256:${'c'.repeat(64)}`] }
-const store = createInMemoryShapeStore([gitShape, scriptShape])
+const toolShape: ServerShape = { ...gitShape, cli_id: 'tool', executable: 'tool', operations: [{ id: 'tool.view', command: ['view'], positionals: ['repo'], display: 'View {repo}', action: 'read', risk: 'low', resource_chain: ['repo:name={repo}'] }], tested_digests: undefined }
+const store = createInMemoryShapeStore([gitShape, scriptShape, toolShape])
 const valid = { target_host: 'macmini', audience: 'shapes', program: { name: 'git', sha256: tested }, argv: ['status'] }
 
 describe('parseProgramAuthorizeRequest', () => {
@@ -93,6 +94,41 @@ describe('resolveProgramCall', () => {
     const unmatched = await resolveProgramCall(store, { program: { name: 'git', sha256: tested }, argv: ['bisect'] })
     expect(unmatched.detail).toMatchObject({ cli_id: 'git', operation_id: GENERIC_OPERATION_ID })
     expect(unmatched.executionContext.version_tested).toBe(true)
+  })
+})
+
+describe('wildcards in argv values', () => {
+  it('never turns a `*` in an argument into a selector glob', async () => {
+    const plain = await resolveProgramCall(store, { program: { name: 'tool', sha256: untested }, argv: ['view', 'org/repo'] })
+    expect(plain.detail.resource_chain).toEqual([{ resource: 'repo', selector: { name: 'org/repo' } }])
+    const glob = await resolveProgramCall(store, { program: { name: 'tool', sha256: untested }, argv: ['view', 'org/*'] })
+    expect(glob.detail).toMatchObject({ cli_id: 'tool', operation_id: GENERIC_OPERATION_ID, constraints: { exact_command: true } })
+    expect(glob.detail.resource_chain[1]).toEqual({ resource: 'argv', selector: { hash: glob.argvHash } })
+  })
+})
+
+describe('spentByCommandToken', () => {
+  it('recognizes only the command token of a single-use grant spent at issuance', () => {
+    const grant: OpenApeGrant = { id: 'g', status: 'used', created_at: 1, request: { requester: 'a', target_host: 'h', audience: 'shapes', grant_type: 'once' } }
+    const claims = { iss: 'i', sub: 'a', aud: 'shapes', target_host: 'h', iat: 1, exp: 2, jti: 'j', grant_id: 'g', grant_type: 'once' as const, argv_hash: 'SHA-256:x', program_sha256: tested }
+    expect(spentByCommandToken(grant, claims)).toBe(true)
+    expect(spentByCommandToken({ ...grant, status: 'approved' }, claims)).toBe(false)
+    expect(spentByCommandToken({ ...grant, request: { ...grant.request, grant_type: 'always' } }, claims)).toBe(false)
+    expect(spentByCommandToken(grant, { ...claims, sub: 'b' })).toBe(false)
+    expect(spentByCommandToken(grant, { ...claims, grant_id: 'other' })).toBe(false)
+    expect(spentByCommandToken(grant, { ...claims, argv_hash: undefined })).toBe(false)
+  })
+})
+
+describe('InMemoryGrantStore.claimOnce', () => {
+  it('spends an approved grant exactly once', async () => {
+    const { InMemoryGrantStore } = await import('../src/stores.js')
+    const grants = new InMemoryGrantStore()
+    await grants.save({ id: 'g', status: 'approved', created_at: 1, request: { requester: 'a', target_host: 'h', audience: 'shapes', grant_type: 'once' } })
+    const claims = await Promise.all([grants.claimOnce('g', 5), grants.claimOnce('g', 6)])
+    expect(claims.toSorted()).toEqual([false, true])
+    expect(await grants.findById('g')).toMatchObject({ status: 'used', used_at: 5 })
+    expect(await grants.claimOnce('missing', 5)).toBe(false)
   })
 })
 

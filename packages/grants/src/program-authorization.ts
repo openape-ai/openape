@@ -8,8 +8,11 @@ import type { ServerShape, ShapeStore } from './shape-registry.js'
 /** A program call that violates the authorize contract; callers answer it with 400. */
 export class InvalidProgramAuthorizeRequestError extends Error {}
 
-/** Upper bounds of `POST /api/grants/authorize` (issue 1473). */
-export const PROGRAM_AUTHORIZE_LIMITS = { bodyBytes: 128 * 1024, argvItems: 256 } as const
+/**
+ * Upper bounds of `POST /api/grants/authorize` (issue 1473). A maximal body
+ * still fits the 128 KiB broker assertion that forwards it.
+ */
+export const PROGRAM_AUTHORIZE_LIMITS = { bodyBytes: 64 * 1024, argvItems: 256 } as const
 
 const FIELDS = ['target_host', 'audience', 'program', 'argv', 'grant_type', 'summary', 'batch']
 const PROGRAM_FIELDS = ['name', 'sha256']
@@ -104,6 +107,10 @@ export async function selectProgramShape(store: ShapeStore, program: OpenApeProg
   return named ? { shape: named, versionTested: false } : null
 }
 
+function hasWildcardSelector(detail: OpenApeCliAuthorizationDetail): boolean {
+  return detail.resource_chain.some(resource => Object.values(resource.selector ?? {}).some(value => value.includes('*')))
+}
+
 /** One program call as the IdP resolved it. */
 export interface ResolvedProgramCall {
   /** `[program.name, ...argv]`, the argv the requester executes. */
@@ -122,9 +129,11 @@ export interface ResolvedProgramCall {
 export async function resolveProgramCall(store: ShapeStore, request: Pick<OpenApeProgramAuthorizeRequest, 'program' | 'argv'>): Promise<ResolvedProgramCall> {
   const executionArgv = [request.program.name, ...request.argv]
   const selection = await selectProgramShape(store, request.program)
-  const resolved = selection
-    ? await resolveServerShape(store, selection.shape.cli_id, executionArgv)
-    : await buildGenericResolvedServer(request.program.name, executionArgv)
+  const structured = selection ? await resolveServerShape(store, selection.shape.cli_id, executionArgv) : null
+  // A `*` in a selector is a glob for coverage (selectorValueMatches): an argv value must never widen what it asks for.
+  const resolved = structured && !hasWildcardSelector(structured.detail)
+    ? structured
+    : await buildGenericResolvedServer(selection?.shape.cli_id ?? request.program.name, executionArgv)
   const argvHash = await computeArgvHash(executionArgv)
   return {
     executionArgv,
