@@ -5,6 +5,7 @@ import type { GrantWithCard } from '../utils/grant-card'
 import { grantBindingLine, grantValidity } from '../utils/grant-card'
 import { formatCliResourceChain, getCliAuthorizationDetails } from '../utils/cli-grants'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
+import { commandBlocks } from '../utils/command-structure'
 import { grantBatchPath } from '../utils/grant-batch'
 import GrantClaims from './GrantClaims.vue'
 import GrantRequestedMarker from './GrantRequestedMarker.vue'
@@ -20,6 +21,8 @@ const program = computed(() => props.grant.card?.program ?? null)
 const requesterName = computed(() => requester.value?.name || formatRequesterName(request.value.requester))
 const line = computed(() => grantBindingLine(props.grant, language.value))
 const command = computed(() => unwrapShellCommand(request.value.command))
+const structure = computed(() => line.value.structure ?? null)
+const blocks = computed(() => structure.value ? commandBlocks(structure.value) : [])
 const cliDetails = computed(() => getCliAuthorizationDetails(request.value.authorization_details))
 // An exact-command grant binds the whole command line, options included, so it stays visible.
 const exactCommand = computed(() => line.value.kind === 'registry' && cliDetails.value.some(detail => detail.constraints?.exact_command) ? command.value : null)
@@ -33,8 +36,8 @@ const showsRequested = computed(() => {
 })
 
 const text = computed(() => props.german
-  ? { language: 'English', exactCommand: 'Genauer Befehl', permission: 'Angefragte Berechtigung', requestedBy: 'Angefragt von', owner: 'Owner', unregistered: 'Nicht bei diesem IdP registriert', submittedBy: 'Eingereicht über Delegation von', validity: 'Gültigkeit', expires: 'Gültig bis', runAs: 'Ausführen als', batch: 'Teil einer Sammelanfrage', reviewBatch: 'Gemeinsam prüfen', show: (label: string) => `${label} anzeigen`, more: 'Weitere Angaben anzeigen', technical: 'Technische Details', target: 'Ziel', audience: 'Audience', permissions: 'Berechtigungen', hash: 'Befehls-Hash', adapter: 'Adapter', program: 'Programmversion', untested: 'Version nicht getestet', untestedNote: 'Der Adapter wurde mit dieser Programmdatei nicht geprüft und liest den Befehl nach dem Programmnamen.', programHash: 'Programm-Hash', requested: 'Mit „laut Anfrage“ markierte Werte gibt die anfragende Anwendung an; diese Freigabe bindet sie nicht.' }
-  : { language: 'Deutsch', exactCommand: 'Exact command', permission: 'Requested permission', requestedBy: 'Requested by', owner: 'Owner', unregistered: 'Not registered at this IdP', submittedBy: 'Submitted via delegation by', validity: 'Validity', expires: 'Valid until', runAs: 'Run as', batch: 'Part of a batch request', reviewBatch: 'Review together', show: (label: string) => `Show ${label.charAt(0).toLowerCase()}${label.slice(1)}`, more: 'Show more details', technical: 'Technical request details', target: 'Target', audience: 'Audience', permissions: 'Permissions', hash: 'Command hash', adapter: 'Adapter', program: 'Program version', untested: 'Version not tested', untestedNote: 'The adapter was not checked against this program file; it reads the command by the program name.', programHash: 'Program hash', requested: 'Values marked "as requested" are stated by the requesting application; this approval does not bind them.' })
+  ? { language: 'English', exactCommand: 'Genauer Befehl', jsonArgument: 'JSON-Argument', arguments: 'Argumente', rawCommand: 'Genauer Befehl als Zeile', permission: 'Angefragte Berechtigung', requestedBy: 'Angefragt von', owner: 'Owner', unregistered: 'Nicht bei diesem IdP registriert', submittedBy: 'Eingereicht über Delegation von', validity: 'Gültigkeit', expires: 'Gültig bis', runAs: 'Ausführen als', batch: 'Teil einer Sammelanfrage', reviewBatch: 'Gemeinsam prüfen', show: (label: string) => `${label} anzeigen`, more: 'Weitere Angaben anzeigen', technical: 'Technische Details', target: 'Ziel', audience: 'Audience', permissions: 'Berechtigungen', hash: 'Befehls-Hash', adapter: 'Adapter', program: 'Programmversion', untested: 'Version nicht getestet', untestedNote: 'Der Adapter wurde mit dieser Programmdatei nicht geprüft und liest den Befehl nach dem Programmnamen.', programHash: 'Programm-Hash', requested: 'Mit „laut Anfrage“ markierte Werte gibt die anfragende Anwendung an; diese Freigabe bindet sie nicht.' }
+  : { language: 'Deutsch', exactCommand: 'Exact command', jsonArgument: 'JSON argument', arguments: 'Arguments', rawCommand: 'Exact command as one line', permission: 'Requested permission', requestedBy: 'Requested by', owner: 'Owner', unregistered: 'Not registered at this IdP', submittedBy: 'Submitted via delegation by', validity: 'Validity', expires: 'Valid until', runAs: 'Run as', batch: 'Part of a batch request', reviewBatch: 'Review together', show: (label: string) => `Show ${label.charAt(0).toLowerCase()}${label.slice(1)}`, more: 'Show more details', technical: 'Technical request details', target: 'Target', audience: 'Audience', permissions: 'Permissions', hash: 'Command hash', adapter: 'Adapter', program: 'Program version', untested: 'Version not tested', untestedNote: 'The adapter was not checked against this program file; it reads the command by the program name.', programHash: 'Program hash', requested: 'Values marked "as requested" are stated by the requesting application; this approval does not bind them.' })
 
 const detailsSummary = computed(() => {
   const details = registry.value?.details ?? []
@@ -63,6 +66,7 @@ function formatTime(seconds: number): string {
             <span v-if="line.shell" class="rounded border border-default px-1">via {{ line.shell }}</span>
           </p>
           <pre
+            v-if="!structure"
             class="font-mono text-sm rounded px-3 py-2 overflow-x-auto whitespace-pre-wrap break-words"
             style="background-color: #0b1220; color: #4ade80;"
             :data-binding-line="line.kind"
@@ -72,6 +76,39 @@ function formatTime(seconds: number): string {
       <button type="button" class="shrink-0 text-xs underline" @click="$emit('language', !german)">
         {{ text.language }}
       </button>
+    </div>
+
+    <!-- Below the header row, so long arguments use the full card width. -->
+    <div v-if="structure" class="-mt-2 rounded border border-default bg-default px-3 py-2 space-y-3" data-binding-line="command">
+      <p class="font-mono text-sm font-semibold break-all" data-command-head>
+        {{ [structure.program, ...structure.subcommands].join(' ') }}
+      </p>
+      <div v-for="(block, index) in blocks" :key="index" :data-command-block="block.kind">
+        <p class="text-xs text-muted">
+          {{ block.kind === 'object' ? (block.option ?? text.jsonArgument) : text.arguments }}
+        </p>
+        <dl v-if="block.kind === 'object'" class="mt-1 grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)] gap-x-3 gap-y-0.5 font-mono text-xs">
+          <template v-for="entry in block.entries" :key="entry.key">
+            <dt class="text-muted break-all" :class="{ 'col-span-2': entry.entries?.length }">
+              {{ entry.key }}
+            </dt>
+            <dd v-if="entry.entries?.length" class="col-span-2 ml-1 grid grid-cols-[minmax(0,max-content)_minmax(0,1fr)] gap-x-3 gap-y-0.5 border-l border-default pl-3">
+              <template v-for="inner in entry.entries" :key="inner.key">
+                <span class="text-muted break-all">{{ inner.key }}</span>
+                <span class="break-all">{{ inner.value }}</span>
+              </template>
+            </dd>
+            <dd v-else class="break-all">
+              {{ entry.value }}
+            </dd>
+          </template>
+        </dl>
+        <ul v-else class="mt-1 space-y-0.5 font-mono text-xs">
+          <li v-for="(item, itemIndex) in block.items" :key="itemIndex" class="break-all">
+            {{ item }}
+          </li>
+        </ul>
+      </div>
     </div>
 
     <template v-if="registry">
@@ -207,11 +244,11 @@ function formatTime(seconds: number): string {
         {{ text.technical }}
       </summary>
       <dl class="mt-2 space-y-2 text-xs">
-        <div v-if="command && line.kind !== 'command' && !exactCommand">
+        <div v-if="command && (line.kind !== 'command' || structure) && !exactCommand" data-raw-command>
           <dt class="text-muted">
-            {{ text.exactCommand }}
+            {{ structure ? text.rawCommand : text.exactCommand }}
           </dt>
-          <dd class="font-mono whitespace-pre-wrap break-all">
+          <dd class="font-mono whitespace-pre-wrap break-all select-all">
             {{ command.text }}
           </dd>
         </div>
@@ -235,7 +272,9 @@ function formatTime(seconds: number): string {
           <dt class="text-muted">
             {{ detail.cli_id }} · {{ detail.operation_id }} · {{ detail.risk }}{{ detail.constraints?.exact_command ? ' · exact-only' : '' }}
           </dt>
-          <dd>{{ detail.display }}</dd>
+          <dd class="break-all">
+            {{ detail.display }}
+          </dd>
           <dd class="font-mono break-all">
             {{ detail.permission }}
           </dd>

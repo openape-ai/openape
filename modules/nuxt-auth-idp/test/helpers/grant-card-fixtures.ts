@@ -52,12 +52,39 @@ export async function shapedRequest(loaded: LoadedAdapter, argv: string[], extra
 
 export const podArgv = ['pod-runtime', 'run', '--pod', POD_ID, '--name', 'Mail digest', '--script', '/Users/owner/Pods/mail-digest/run.mjs', '--workspace', '/Users/owner/Pods/mail-digest/workspace', '--environment', '{"HOME":"/Users/owner/Pods/mail-digest/home","LANG":"de_AT.UTF-8"}']
 export const pushArgv = ['git', '-C', '/Users/owner/repos/iurio', 'push', '--force-with-lease', 'origin', 'feature/rebase']
+// The Pods graph gate decision from the owner's batch approval screenshot (issue 1477); no registry adapter describes it.
+export const graphGateArgv = ['pods-graph-gate', 'approve', JSON.stringify({
+  action: 'mail.archive',
+  batchId: 'ed50790c-7d3b-4f0e-9c51-2a8b4f7c9a0e',
+  expiresAt: 1792478942037,
+  hash: 'fac5678a9e0d4c7b8f2e1a3d5c6b9e0f4a7d2c1b8e3f6a9d0c5b2e7f4a7f8091',
+  object: 'phofmann@delta-mind.at:AAkALgAAAAAAHYQDEapmEc2byACqAC-EWg0Aihx0qtzv3k_XDmEEfSdYlgAJOdNU0wAA',
+  owner: { issuer: 'https://id.openape.ai', subject: 'patrick@hofmann.eco' },
+  podId: '129579b8-e03d-44b5-a44b-4de9f8cd7f89',
+  version: 5,
+})]
 
 function pending(id: string, request: OpenApeGrantRequest): OpenApeGrant {
   return { id, status: 'pending', created_at: 1_791_960_000, request }
 }
 
-export type CardFixtures = Record<'podRun' | 'gitPush' | 'unknown' | 'gitUntested', GrantWithCard>
+/** A command no adapter describes, as apes requests it: bound by its exact argv hash. */
+function unshapedRequest(argv: string[], hash: string, extra: Partial<OpenApeGrantRequest>): OpenApeGrantRequest {
+  const cli = argv[0]!
+  const permission = `${cli}.cli[name=${cli}].argv[hash=${hash}]#exec`
+  return {
+    requester: 'agent@example.com',
+    target_host: 'macmini',
+    audience: 'shapes',
+    grant_type: 'once',
+    command: argv,
+    permissions: [permission],
+    authorization_details: [{ type: 'openape_cli', cli_id: cli, operation_id: '_generic.exec', resource_chain: [{ resource: 'cli', selector: { name: cli } }, { resource: 'argv', selector: { hash } }], action: 'exec', permission, display: `Execute (unshaped): \`${argv.join(' ')}\``, risk: 'high', constraints: { exact_command: true } }],
+    ...extra,
+  }
+}
+
+export type CardFixtures = Record<'podRun' | 'gitPush' | 'unknown' | 'gitUntested' | 'graphGate', GrantWithCard>
 
 export async function buildCardFixtures(): Promise<CardFixtures> {
   const podRun = pending('grant-pod-run', await shapedRequest(podRuntimeAdapter, podArgv, {
@@ -72,20 +99,19 @@ export async function buildCardFixtures(): Promise<CardFixtures> {
     command: pushArgv,
     summary: { title: 'Read-only status check', description: 'Rebased feature/rebase onto main; 12 commits replayed.', origin: 'IURIO rebase Pod', link: 'https://repos.example.com/iurio/pulls/42' },
   }))
-  const unknown = pending('grant-unknown', {
-    requester: 'agent@example.com',
-    target_host: 'macmini',
-    audience: 'shapes',
-    grant_type: 'once',
-    command: ['acme-cli', 'deploy', '--env', 'production'],
-    permissions: ['acme-cli.cli[name=acme-cli].argv[hash=SHA-256:9f]#exec'],
-    authorization_details: [{ type: 'openape_cli', cli_id: 'acme-cli', operation_id: '_generic.exec', resource_chain: [{ resource: 'cli', selector: { name: 'acme-cli' } }, { resource: 'argv', selector: { hash: 'SHA-256:9f' } }], action: 'exec', permission: 'acme-cli.cli[name=acme-cli].argv[hash=SHA-256:9f]#exec', display: 'Execute (unshaped): `acme-cli deploy --env production`', risk: 'high', constraints: { exact_command: true } }],
+  const unknown = pending('grant-unknown', unshapedRequest(['acme-cli', 'deploy', '--env', 'production'], 'SHA-256:9f', {
     summary: { title: 'Deploy the hotfix', description: 'Ticket 7: roll out the login fix.' },
-  })
+  }))
   const gitUntested = pending('grant-git-untested', await idpResolvedRequest({ name: 'git', sha256: UNTESTED_GIT_SHA256 }, pushArgv.slice(1), {
     requester: 'rebase-agent+owner+example_com@id.example.com',
     summary: { title: 'Push the rebased branch', origin: 'IURIO rebase Pod' },
   }))
-  const [podRunCard, gitPushCard, unknownCard, gitUntestedCard] = await withGrantCards([podRun, gitPush, unknown, gitUntested], { getShape, findUser })
-  return { podRun: podRunCard!, gitPush: gitPushCard!, unknown: unknownCard!, gitUntested: gitUntestedCard! }
+  const graphGate = pending('grant-graph-gate', unshapedRequest(graphGateArgv, 'SHA-256:3c', {
+    requester: 'mail-triage+owner+example_com@id.example.com',
+    target_host: 'pods:129579b8-e03d-44b5-a44b-4de9f8cd7f89',
+    audience: 'pods-graph-gate',
+    summary: { title: '62 Personen haben sich Ihr Profil angesehen' },
+  }))
+  const [podRunCard, gitPushCard, unknownCard, gitUntestedCard, graphGateCard] = await withGrantCards([podRun, gitPush, unknown, gitUntested, graphGate], { getShape, findUser })
+  return { podRun: podRunCard!, gitPush: gitPushCard!, unknown: unknownCard!, gitUntested: gitUntestedCard!, graphGate: graphGateCard! }
 }

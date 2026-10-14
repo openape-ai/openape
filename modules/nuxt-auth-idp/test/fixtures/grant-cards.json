@@ -437,5 +437,60 @@
         "version_tested": false
       }
     }
+  },
+  "graphGate": {
+    "id": "grant-graph-gate",
+    "status": "pending",
+    "created_at": 1791960000,
+    "request": {
+      "requester": "mail-triage+owner+example_com@id.example.com",
+      "target_host": "pods:129579b8-e03d-44b5-a44b-4de9f8cd7f89",
+      "audience": "pods-graph-gate",
+      "grant_type": "once",
+      "command": [
+        "pods-graph-gate",
+        "approve",
+        "{\"action\":\"mail.archive\",\"batchId\":\"ed50790c-7d3b-4f0e-9c51-2a8b4f7c9a0e\",\"expiresAt\":1792478942037,\"hash\":\"fac5678a9e0d4c7b8f2e1a3d5c6b9e0f4a7d2c1b8e3f6a9d0c5b2e7f4a7f8091\",\"object\":\"phofmann@delta-mind.at:AAkALgAAAAAAHYQDEapmEc2byACqAC-EWg0Aihx0qtzv3k_XDmEEfSdYlgAJOdNU0wAA\",\"owner\":{\"issuer\":\"https://id.openape.ai\",\"subject\":\"patrick@hofmann.eco\"},\"podId\":\"129579b8-e03d-44b5-a44b-4de9f8cd7f89\",\"version\":5}"
+      ],
+      "permissions": [
+        "pods-graph-gate.cli[name=pods-graph-gate].argv[hash=SHA-256:3c]#exec"
+      ],
+      "authorization_details": [
+        {
+          "type": "openape_cli",
+          "cli_id": "pods-graph-gate",
+          "operation_id": "_generic.exec",
+          "resource_chain": [
+            {
+              "resource": "cli",
+              "selector": {
+                "name": "pods-graph-gate"
+              }
+            },
+            {
+              "resource": "argv",
+              "selector": {
+                "hash": "SHA-256:3c"
+              }
+            }
+          ],
+          "action": "exec",
+          "permission": "pods-graph-gate.cli[name=pods-graph-gate].argv[hash=SHA-256:3c]#exec",
+          "display": "Execute (unshaped): `pods-graph-gate approve {\"action\":\"mail.archive\",\"batchId\":\"ed50790c-7d3b-4f0e-9c51-2a8b4f7c9a0e\",\"expiresAt\":1792478942037,\"hash\":\"fac5678a9e0d4c7b8f2e1a3d5c6b9e0f4a7d2c1b8e3f6a9d0c5b2e7f4a7f8091\",\"object\":\"phofmann@delta-mind.at:AAkALgAAAAAAHYQDEapmEc2byACqAC-EWg0Aihx0qtzv3k_XDmEEfSdYlgAJOdNU0wAA\",\"owner\":{\"issuer\":\"https://id.openape.ai\",\"subject\":\"patrick@hofmann.eco\"},\"podId\":\"129579b8-e03d-44b5-a44b-4de9f8cd7f89\",\"version\":5}`",
+          "risk": "high",
+          "constraints": {
+            "exact_command": true
+          }
+        }
+      ],
+      "summary": {
+        "title": "62 Personen haben sich Ihr Profil angesehen"
+      }
+    },
+    "card": {
+      "registry": null,
+      "requester": null,
+      "program": null
+    }
   }
 }

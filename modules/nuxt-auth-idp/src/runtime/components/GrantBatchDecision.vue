@@ -2,8 +2,8 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { GrantWithCard } from '../utils/grant-card'
 import { formatRequesterName } from '../utils/command-display'
-import { grantBatchInfo, grantBatchOperations, grantBatchRows, grantBatchScope } from '../utils/grant-batch'
-import GrantRequestedMarker from './GrantRequestedMarker.vue'
+import { grantBatchInfo, grantBatchOperations, grantBatchRows, grantBatchScope, grantBatchSections } from '../utils/grant-batch'
+import GrantBatchMemberRow from './GrantBatchMemberRow.vue'
 
 const props = defineProps<{ requester: string, batchId: string }>()
 
@@ -17,18 +17,18 @@ const german = ref(false)
 const nowSec = ref(Math.floor(Date.now() / 1000))
 let clock: ReturnType<typeof setInterval> | undefined
 
-const rows = computed(() => grantBatchRows(members.value, german.value ? 'de' : 'en'))
+const sections = computed(() => grantBatchSections(grantBatchRows(members.value, german.value ? 'de' : 'en')))
 const info = computed(() => grantBatchInfo(members.value))
 const scope = computed(() => grantBatchScope(members.value))
-const decidable = computed(() => rows.value.filter(row => row.decidable))
+const decidable = computed(() => sections.value.open)
 const selectedCount = computed(() => decidable.value.filter(row => selected.value.has(row.id)).length)
 const allSelected = computed(() => decidable.value.length > 0 && selectedCount.value === decidable.value.length)
 // grants.md §3.4: after waits_until an approval can no longer make the action happen.
 const stopped = computed(() => info.value.waitsUntil !== null && nowSec.value >= info.value.waitsUntil)
 
 const text = computed(() => german.value
-  ? { heading: 'Sammelfreigabe', scope: (target: string, audience: string) => `Einmalige Freigaben für ${target} · ${audience}`, separate: 'Einzeln prüfen', quoted: (value: string) => `„${value}“`, by: 'angefragt von', own: 'Beschreibung des Anfragenden', received: (n: number, size: number) => `${n} von ${size} Anfragen eingegangen`, missing: (n: number) => `${n} Anfragen fehlen noch. Eine Entscheidung gilt nur für die angezeigten.`, notice: 'Jede Zeile zeigt, was die Freigabe bindet; Angaben des Anfragenden sind gekennzeichnet. „Details“ zeigt die ganze Anfrage.', all: 'Alle auswählen', details: 'Details', approve: (n: number, m: number) => m ? `${n} ausgewählte freigeben, ${m} ablehnen` : `${n} freigeben`, deny: 'Alle ablehnen', stopped: 'Der Anfragende wartet nicht mehr. Eine Freigabe hätte keine Wirkung mehr.', done: 'Keine offene Anfrage in diesem Batch.', empty: 'Keine Anfragen zu diesem Batch gefunden.', failed: 'Entscheidung fehlgeschlagen', language: 'English', status: { approved: 'freigegeben', denied: 'abgelehnt', revoked: 'widerrufen', expired: 'abgelaufen', used: 'verwendet', pending: 'offen' } as Record<string, string> }
-  : { heading: 'Batch approval', scope: (target: string, audience: string) => `Single-use approvals for ${target} · ${audience}`, separate: 'Review individually', quoted: (value: string) => `"${value}"`, by: 'requested by', own: 'requester\'s description', received: (n: number, size: number) => `${n} of ${size} requests received`, missing: (n: number) => `${n} requests have not arrived. A decision covers only the requests shown.`, notice: 'Each row shows what the approval binds; the requester\'s own descriptions are labeled. "Details" shows the full request.', all: 'Select all', details: 'Details', approve: (n: number, m: number) => m ? `Approve ${n} selected, deny ${m}` : `Approve ${n}`, deny: 'Deny all', stopped: 'The requester has stopped waiting. An approval would have no effect.', done: 'No open request in this batch.', empty: 'No requests found for this batch.', failed: 'Decision failed', language: 'Deutsch', status: { approved: 'approved', denied: 'denied', revoked: 'revoked', expired: 'expired', used: 'used', pending: 'pending' } as Record<string, string> })
+  ? { heading: 'Sammelfreigabe', scope: (target: string, audience: string) => `Einmalige Freigaben für ${target} · ${audience}`, separate: 'Einzeln prüfen', quoted: (value: string) => `„${value}“`, by: 'angefragt von', own: 'Beschreibung des Anfragenden', received: (n: number, size: number) => `${n} von ${size} Anfragen eingegangen`, missing: (n: number) => `${n} Anfragen fehlen noch. Eine Entscheidung gilt nur für die angezeigten.`, notice: 'Jede Zeile zeigt, was die Freigabe bindet; Angaben des Anfragenden sind gekennzeichnet. „Details“ zeigt die ganze Anfrage.', all: 'Alle auswählen', history: (n: number) => `Bereits entschieden (${n})`, approve: (n: number, m: number) => m ? `${n} ausgewählte freigeben, ${m} ablehnen` : `${n} freigeben`, deny: 'Alle ablehnen', stopped: 'Der Anfragende wartet nicht mehr. Eine Freigabe hätte keine Wirkung mehr.', done: 'Keine offene Anfrage in diesem Batch.', empty: 'Keine Anfragen zu diesem Batch gefunden.', failed: 'Entscheidung fehlgeschlagen', language: 'English', status: { approved: 'freigegeben', denied: 'abgelehnt', revoked: 'widerrufen', expired: 'abgelaufen', used: 'verwendet', pending: 'offen' } as Record<string, string> }
+  : { heading: 'Batch approval', scope: (target: string, audience: string) => `Single-use approvals for ${target} · ${audience}`, separate: 'Review individually', quoted: (value: string) => `"${value}"`, by: 'requested by', own: 'requester\'s description', received: (n: number, size: number) => `${n} of ${size} requests received`, missing: (n: number) => `${n} requests have not arrived. A decision covers only the requests shown.`, notice: 'Each row shows what the approval binds; the requester\'s own descriptions are labeled. "Details" shows the full request.', all: 'Select all', history: (n: number) => `Already decided (${n})`, approve: (n: number, m: number) => m ? `Approve ${n} selected, deny ${m}` : `Approve ${n}`, deny: 'Deny all', stopped: 'The requester has stopped waiting. An approval would have no effect.', done: 'No open request in this batch.', empty: 'No requests found for this batch.', failed: 'Decision failed', language: 'Deutsch', status: { approved: 'approved', denied: 'denied', revoked: 'revoked', expired: 'expired', used: 'used', pending: 'pending' } as Record<string, string> })
 
 async function load() {
   loading.value = true
@@ -62,7 +62,7 @@ async function decide(approveSelected: boolean) {
   error.value = ''
   failures.value = {}
   try {
-    const operations = grantBatchOperations(rows.value, approveSelected ? selected.value : new Set())
+    const operations = grantBatchOperations(decidable.value, approveSelected ? selected.value : new Set())
     const result = await $fetch<{ results: { id: string, success: boolean, error?: { title?: string } }[] }>('/api/grants/batch', { method: 'POST', body: { operations } })
     failures.value = Object.fromEntries(result.results.filter(item => !item.success).map(item => [item.id, item.error?.title ?? text.value.failed]))
     await load()
@@ -130,10 +130,9 @@ onUnmounted(() => clearInterval(clock))
             <input type="checkbox" class="size-4 shrink-0" :checked="allSelected" :disabled="processing" @change="toggleAll(($event.target as HTMLInputElement).checked)">
             {{ text.all }}
           </label>
-          <ul class="divide-y divide-default" data-batch-rows>
-            <li v-for="row in rows" :key="row.id" class="flex items-start gap-3 py-2" :data-batch-row="row.id">
+          <ul v-if="decidable.length" class="divide-y divide-default" data-batch-rows>
+            <GrantBatchMemberRow v-for="row in decidable" :key="row.id" :row="row" :german="german" :input-id="`batch-${row.id}`" :failure="failures[row.id]">
               <input
-                v-if="row.decidable"
                 :id="`batch-${row.id}`"
                 type="checkbox"
                 class="mt-1 size-4 shrink-0"
@@ -141,20 +140,18 @@ onUnmounted(() => clearInterval(clock))
                 :disabled="processing"
                 @change="toggle(row.id, ($event.target as HTMLInputElement).checked)"
               >
-              <span v-else class="mt-0.5 w-24 shrink-0 rounded border border-default px-1.5 text-center text-xs text-muted">{{ row.status === 'pending' ? text.separate : (text.status[row.status] ?? row.status) }}</span>
-              <label :for="row.decidable ? `batch-${row.id}` : undefined" class="min-w-0 flex-1 text-sm break-words">
-                <span :class="row.line.kind === 'registry' ? 'font-medium' : 'font-mono text-xs break-all'" :data-binding-line="row.line.kind">{{ row.line.text }}</span><GrantRequestedMarker v-if="row.line.requested" :german="german" />
-                <span v-if="row.claim" class="block text-xs text-muted" data-row-claim>{{ text.own }}: {{ text.quoted(row.claim) }}</span>
-                <span v-if="failures[row.id]" class="block text-xs text-error">{{ failures[row.id] }}</span>
-              </label>
-              <a :href="`/grant-approval?grant_id=${encodeURIComponent(row.id)}`" class="shrink-0 text-sm underline">{{ text.details }} →</a>
-            </li>
+            </GrantBatchMemberRow>
+          </ul>
+          <ul v-if="sections.separate.length" class="divide-y divide-default" data-batch-separate>
+            <GrantBatchMemberRow v-for="row in sections.separate" :key="row.id" :row="row" :german="german" :failure="failures[row.id]">
+              <span class="mt-0.5 w-24 shrink-0 rounded border border-default px-1.5 text-center text-xs text-muted">{{ text.separate }}</span>
+            </GrantBatchMemberRow>
           </ul>
 
-          <p v-if="!decidable.length" class="text-sm text-muted">
+          <p v-if="!decidable.length && !sections.separate.length" class="text-sm text-muted">
             {{ text.done }}
           </p>
-          <div v-else class="sticky bottom-0 flex flex-col sm:flex-row gap-2 bg-default pt-2">
+          <div v-if="decidable.length" class="sticky bottom-0 flex flex-col sm:flex-row gap-2 bg-default pt-2">
             <UButton color="primary" class="justify-center" :loading="processing" :disabled="processing || stopped || !selectedCount" @click="decide(true)">
               {{ text.approve(selectedCount, decidable.length - selectedCount) }}
             </UButton>
@@ -162,6 +159,15 @@ onUnmounted(() => clearInterval(clock))
               {{ text.deny }}
             </UButton>
           </div>
+
+          <details v-if="sections.decided.length" class="border-t border-default pt-3" data-batch-history>
+            <summary class="cursor-pointer text-sm text-muted">
+              {{ text.history(sections.decided.length) }}
+            </summary>
+            <ul class="mt-2 divide-y divide-default">
+              <GrantBatchMemberRow v-for="row in sections.decided" :key="row.id" :row="row" :german="german" :failure="failures[row.id]" :status="text.status[row.status] ?? row.status" />
+            </ul>
+          </details>
         </template>
       </div>
     </UCard>
