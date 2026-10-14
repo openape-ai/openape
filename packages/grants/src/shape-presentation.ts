@@ -34,6 +34,15 @@ export interface ShapePresentationConsequence {
 }
 
 /**
+ * Conditions a request must meet for its card to use this presentation; a
+ * request that does not meet them gets the generic card. `target_host` is a
+ * template over always-bound bindings that must equal the request's target.
+ */
+export interface ShapePresentationRequirements {
+  target_host?: string
+}
+
+/**
  * Card content of one operation. Texts may reference bindings that every
  * match binds as `{name}`; `facts` are shown directly, `details` behind a
  * disclosure with an optional `details_note` below them.
@@ -45,6 +54,7 @@ export interface ShapePresentation {
   facts?: ShapePresentationField[]
   details?: ShapePresentationField[]
   details_note?: LocalizedText
+  requires?: ShapePresentationRequirements
 }
 
 /**
@@ -157,7 +167,13 @@ export function parseShapePresentation(value: unknown, owner: string, bindings: 
   const { always, any } = bindings
   const presentationOwner = `${owner} presentation`
   if (!isRecord(value)) throw new Error(`${presentationOwner} must be a table`)
-  assertKnownKeys(value, ['title', 'statement', 'consequence', 'facts', 'details', 'details_note'], presentationOwner)
+  assertKnownKeys(value, ['title', 'statement', 'consequence', 'facts', 'details', 'details_note', 'requires'], presentationOwner)
+  let requires: ShapePresentationRequirements | undefined
+  if (value.requires !== undefined) {
+    if (!isRecord(value.requires)) throw new Error(`${presentationOwner}.requires must be a table`)
+    assertKnownKeys(value.requires, ['target_host'], `${presentationOwner}.requires`)
+    requires = value.requires.target_host === undefined ? {} : { target_host: parseText(value.requires.target_host, `${presentationOwner}.requires.target_host`, always) }
+  }
   let consequence: ShapePresentationConsequence | undefined
   if (value.consequence !== undefined) {
     if (!isRecord(value.consequence)) throw new Error(`${presentationOwner}.consequence must be a table`)
@@ -174,6 +190,7 @@ export function parseShapePresentation(value: unknown, owner: string, bindings: 
     ...(value.facts === undefined ? {} : { facts: parseFields(value.facts, `${presentationOwner}.facts`, any) }),
     ...(value.details === undefined ? {} : { details: parseFields(value.details, `${presentationOwner}.details`, any) }),
     ...(value.details_note === undefined ? {} : { details_note: parseLocalized(value.details_note, `${presentationOwner}.details_note`, always) }),
+    ...(requires ? { requires } : {}),
   }
 }
 

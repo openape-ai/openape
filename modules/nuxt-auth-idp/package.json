@@ -30,7 +30,8 @@
     "prepare": "nuxt-module-build build --stub && nuxi prepare playground",
     "typecheck": "vue-tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run --coverage"
+    "test": "vitest run --coverage",
+    "test:browser": "vitest run --config vitest.browser.config.ts"
   },
   "dependencies": {
     "@nuxt/kit": "catalog:",
@@ -49,8 +50,11 @@
   "devDependencies": {
     "@nuxt/module-builder": "catalog:",
     "@nuxt/ui": "catalog:",
+    "@openape/shapes": "workspace:*",
     "@types/node": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
+    "@vitest/browser": "catalog:",
+    "@vitest/browser-playwright": "catalog:",
     "@vue/test-utils": "catalog:",
     "h3": "catalog:",
     "happy-dom": "catalog:",

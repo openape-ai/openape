@@ -1,6 +1,6 @@
 import { resolve } from 'node:path'
 import vue from '@vitejs/plugin-vue'
-import { defineConfig } from 'vitest/config'
+import { configDefaults, defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [vue()],
@@ -15,6 +15,8 @@ export default defineConfig({
     retry: 2,
     testTimeout: 15000,
     environment: 'happy-dom',
+    // Screenshot checks run in a real browser: vitest.browser.config.ts.
+    exclude: [...configDefaults.exclude, 'test/browser/**'],
     coverage: {
       provider: 'istanbul',
       include: ['src/**/*.ts'],

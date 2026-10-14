@@ -4,6 +4,7 @@ import type { OpenApeCliAuthorizationDetail } from '@openape/core'
 import { buildWideningSuggestionsForGrant, evaluateStandingGrants, findSimilarCliGrants, introspectGrant } from '@openape/grants'
 import { defineEventHandler, getRequestHeader, getRouterParam, setResponseHeader, setResponseStatus } from 'h3'
 import { runApprovalDiagnosticHooks } from '../../utils/approval-diagnostic-hooks'
+import { withGrantCards } from '../../utils/grant-card'
 import { useGrantStores } from '../../utils/grant-stores'
 import { createProblemError } from '../../utils/problem'
 
@@ -43,6 +44,7 @@ export default defineEventHandler(async (event) => {
     setResponseStatus(event, 304)
     return ''
   }
+  const [carded] = await withGrantCards([grant])
 
   // Why is this still pending? Every auto-approval mechanism can explain its
   // own miss (see approval-diagnostic-hooks). Answering this took a
@@ -81,12 +83,12 @@ export default defineEventHandler(async (event) => {
       : undefined
 
     return {
-      ...grant,
+      ...carded,
       ...(similarResult ? { similar_grants: similarResult } : {}),
       ...(wideningSuggestions ? { widening_suggestions: wideningSuggestions } : {}),
       ...(pendingDiagnostics.length ? { pending_diagnostics: pendingDiagnostics } : {}),
     }
   }
 
-  return pendingDiagnostics.length ? { ...grant, pending_diagnostics: pendingDiagnostics } : grant
+  return pendingDiagnostics.length ? { ...carded, pending_diagnostics: pendingDiagnostics } : carded
 })

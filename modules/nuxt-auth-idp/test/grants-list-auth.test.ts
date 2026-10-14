@@ -18,6 +18,8 @@ vi.mock('h3', () => ({
 }))
 vi.mock('../src/runtime/server/utils/agent-auth', () => ({ tryBearerAuth: (...a: any[]) => bearerMock(...a) }))
 vi.mock('../src/runtime/server/utils/grants-delegation', () => ({ tryGrantsDelegate: async () => null }))
+// Card enrichment (registry adapters, registrations) is covered in grant-card.test.ts.
+vi.mock('../src/runtime/server/utils/grant-card', () => ({ withGrantCards: async (grants: unknown[]) => grants }))
 vi.mock('../src/runtime/server/utils/grant-stores', () => ({ useGrantStores: () => ({ grantStore: { listGrants: listGrantsMock } }) }))
 vi.mock('../src/runtime/server/utils/session', () => ({ getAppSession: (...a: any[]) => sessionMock(...a) }))
 vi.mock('../src/runtime/server/utils/stores', () => ({ useIdpStores: () => ({ userStore: { findByOwner: findByOwnerMock, findByApprover: findByApproverMock } }) }))

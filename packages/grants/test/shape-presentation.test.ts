@@ -33,6 +33,13 @@ describe('presentationBindings', () => {
 })
 
 describe('parseShapePresentation', () => {
+  it('accepts a target host requirement over always-bound bindings and refuses other bindings or keys', () => {
+    const withTarget = { ...pushPresentation, requires: { target_host: 'git:{remote}' } }
+    expect(parseShapePresentation(withTarget, 'Operation push', declared).requires).toEqual({ target_host: 'git:{remote}' })
+    expect(() => parseShapePresentation({ ...pushPresentation, requires: { target_host: 'git:{onto}' } }, 'Operation push', declared)).toThrow(/does not always bind/)
+    expect(() => parseShapePresentation({ ...pushPresentation, requires: { audience: 'x' } }, 'Operation push', declared)).toThrow(/unknown key/)
+  })
+
   it('accepts a complete presentation and keeps it unchanged', () => {
     expect(parseShapePresentation(pushPresentation, 'Operation push', declared)).toEqual(pushPresentation)
   })

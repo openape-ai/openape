@@ -45,6 +45,8 @@ vi.mock('../src/runtime/server/utils/stores', () => ({
   useIdpStores: () => ({ userStore: { findByOwner: async () => [], findByApprover: async () => [] } }),
 }))
 vi.mock('../src/runtime/server/utils/admin', () => ({ requireAuth: (...a: any[]) => requireAuthMock(...a) }))
+// Card enrichment (registry adapters, registrations) is covered in grant-card.test.ts.
+vi.mock('../src/runtime/server/utils/grant-card', () => ({ withGrantCards: async (grants: unknown[]) => grants }))
 vi.mock('../src/runtime/server/utils/grant-stores', () => ({
   useGrantStores: () => ({
     grantStore: {

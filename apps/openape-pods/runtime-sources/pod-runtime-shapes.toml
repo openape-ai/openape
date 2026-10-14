@@ -5,7 +5,8 @@ schema = "openape-shapes/v1"
 # Pod to run its stored script. This registry file is the single source; the
 # OpenApe monorepo ships a byte-identical copy in
 # apps/openape-pods/runtime-sources/pod-runtime-shapes.toml, and grants bind
-# its digest. The presentation reproduces the IdP Pod run card (PodRunGrant.vue).
+# its digest. The presentation reproduces the former IdP Pod run card; the IdP
+# uses it only for requests whose target is this Pod (`requires`).
 
 [cli]
 id = "pod-runtime"
@@ -26,6 +27,7 @@ resource_chain = ["pod:id={pod}"]
 title = { de = "{name}", en = "{name}" }
 statement = { de = "Gespeichertes Pod-Skript ausführen", en = "Run the stored Pod script" }
 details_note = { de = "Die angezeigten Pfade und Werte sind Angaben der anfragenden Anwendung. Geheimniswerte werden nicht angefordert.", en = "Paths and values are supplied by the requesting application. Secret values are not requested." }
+requires = { target_host = "pods:{pod}" }
 
 [operation.presentation.consequence]
 allows = { de = "Erlaubt diesem Pod, seine gespeicherten Skripte innerhalb der separat vergebenen Zugriffsrechte auszuführen. Skriptänderungen benötigen keine erneute Ausführungserlaubnis.", en = "Allows this Pod to execute its stored scripts within its separately assigned permissions. Script changes do not require a new execution permission." }

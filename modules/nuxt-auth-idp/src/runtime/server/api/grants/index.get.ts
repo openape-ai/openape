@@ -5,6 +5,7 @@ import { expireStaleGrants } from '../../utils/expire-stale-grants'
 import { GRANTS_READ_SCOPE } from '@openape/core'
 import { tryBearerAuth } from '../../utils/agent-auth'
 import { tryGrantsDelegate } from '../../utils/grants-delegation'
+import { withGrantCards } from '../../utils/grant-card'
 import { useGrantStores } from '../../utils/grant-stores'
 import { getAppSession } from '../../utils/session'
 import { useIdpStores } from '../../utils/stores'
@@ -79,13 +80,13 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 403, message: 'Not authorized to list grants for this requester' })
     }
     const page = await grantStore.listGrants({ limit, cursor, status, batch, ...(hasBrokerStore() ? { requester: requesters, requesterFilter: requester, ...brokerVisibility } : { requester }) })
-    return { ...page, data: await expireStaleGrants(page.data, grantStore) }
+    return { ...page, data: await withGrantCards(await expireStaleGrants(page.data, grantStore)) }
   }
 
   // Default paginated case: delegate to DB-level query with IN clause
   if (!section) {
     const page = await grantStore.listGrants({ limit, cursor, status, requester: requesters, ...brokerVisibility })
-    return { ...page, data: await expireStaleGrants(page.data, grantStore) }
+    return { ...page, data: await withGrantCards(await expireStaleGrants(page.data, grantStore)) }
   }
 
   // Section queries need all user grants, then filter in-memory
@@ -95,7 +96,7 @@ export default defineEventHandler(async (event) => {
   // section=active
   if (section === 'active') {
     const active = owned.filter(isActiveGrant)
-    return { data: active, pagination: { cursor: null, has_more: false } }
+    return { data: await withGrantCards(active), pagination: { cursor: null, has_more: false } }
   }
 
   // section=history
@@ -115,7 +116,7 @@ export default defineEventHandler(async (event) => {
   const hasMore = history.length > limit
 
   return {
-    data: page,
+    data: await withGrantCards(page),
     pagination: {
       cursor: page.length > 0 ? String(page.at(-1)!.created_at) : null,
       has_more: hasMore,
