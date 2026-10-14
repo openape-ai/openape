@@ -121,11 +121,29 @@ export function findCoveringGrant(existing: OpenApeGrant[], call: ProgramCallSco
   return covering.find(grant => (grant.request.grant_type ?? 'once') !== 'once') ?? covering[0]
 }
 
-/** The newest request of the requester (and broker binding) for exactly this call's permission. */
+function selectorKey(selector: Record<string, string> | undefined): string {
+  return JSON.stringify(Object.entries(selector ?? {}).toSorted(([a], [b]) => a.localeCompare(b)))
+}
+
+/**
+ * Same CLI, operation, action and resource chain with equal selectors. The
+ * permission string is not compared: selector values containing `,` or `=`
+ * can make two different details print the same permission.
+ */
+function sameDetail(a: OpenApeCliAuthorizationDetail, b: OpenApeCliAuthorizationDetail): boolean {
+  if (a.cli_id !== b.cli_id || a.operation_id !== b.operation_id || a.action !== b.action) return false
+  if (a.resource_chain.length !== b.resource_chain.length) return false
+  return a.resource_chain.every((resource, index) => {
+    const other = b.resource_chain[index]!
+    return resource.resource === other.resource && selectorKey(resource.selector) === selectorKey(other.selector)
+  })
+}
+
+/** The newest request of the requester (and broker binding) for exactly this call's detail. */
 export function findLatestRequest(existing: OpenApeGrant[], call: ProgramCallScope, brokered?: BrokeredGrant): OpenApeGrant | undefined {
   return existing
     .filter(grant => commandGrantFor(grant, call, brokered)
-      && cliDetails(grant.request.authorization_details).some(detail => detail.permission === call.detail.permission)
+      && cliDetails(grant.request.authorization_details).some(detail => sameDetail(detail, call.detail))
       && bindsCall(grant, call))
     .toSorted((a, b) => b.created_at - a.created_at)[0]
 }

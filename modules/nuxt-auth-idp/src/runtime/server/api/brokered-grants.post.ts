@@ -12,7 +12,7 @@ import { useGrantStores } from '../utils/grant-stores'
 import { parseBrokerGrantRequest } from '../utils/broker-grant-request'
 import { findReusableGrant } from '../utils/grant-reuse'
 import { runGrantPendingHooks } from '../utils/grant-pending-hooks'
-import { createProblemError } from '../utils/problem'
+import { createProblemError, relayRetryAfter } from '../utils/problem'
 
 export default defineEventHandler(async (event) => {
   setHeader(event, 'Cache-Control', 'no-store')
@@ -27,7 +27,11 @@ export default defineEventHandler(async (event) => {
   const discovery = await discoverBroker(connection.broker_issuer, connection.agent_domain)
   const verificationKey = await brokerVerificationKey(discovery)
   const request = await brokerInput(() => verifyBrokerToken(assertion, verificationKey, connection.broker_issuer, getIdpIssuer(), BROKER_REQUEST_TYPE), 401)
-  await store.acceptRequest(request)
+  try { await store.acceptRequest(request) }
+  catch (error) {
+    relayRetryAfter(event, error)
+    throw error
+  }
   if (request.operation === 'connection') return connection
   const provenance: BrokeredGrant = { connection_id: connection.id, broker_issuer: connection.broker_issuer, agent_issuer: connection.broker_issuer, owner: connection.owner.subject, key_id: request.key_id }
   const { grantStore } = useGrantStores()

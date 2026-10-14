@@ -1,7 +1,8 @@
 import type { H3Event } from 'h3'
 import type { NitroApp } from 'nitropack'
-import { getRequestIP } from 'h3'
+import { getRequestIP, setResponseHeader } from 'h3'
 import { renderErrorPage, wantsHtmlErrorPage } from '../utils/error-page'
+import { createProblemError } from '../utils/problem'
 
 interface RateLimitEntry {
   count: number
@@ -92,8 +93,9 @@ const RE_QR_PATHS = /^\/api\/session\/qr\b/
 // Per-call program authorization (issue 1473) is limited per verified
 // requester inside its handler (utils/authorize-rate-limit), not per IP:
 // one agent's program calls must never drain an IP bucket another agent or
-// the owner's browser shares.
-const RE_SUBJECT_LIMITED_PATHS = /^\/api\/grants\/authorize\b/
+// the owner's browser shares. The handler charges requests without a valid
+// bearer token to the per-IP agent bucket (chargeUnauthenticatedRequest).
+const RE_SUBJECT_LIMITED_PATHS = /^\/api\/grants\/authorize(?:$|\?)/
 
 const store = new Map<string, RateLimitEntry>()
 
@@ -197,6 +199,32 @@ function resolveClientIp(event: H3Event, trustedProxies: string[]): string {
   return peer
 }
 
+function charge(key: string, now: number): RateLimitEntry {
+  let entry = store.get(key)
+  if (!entry || entry.resetAt <= now) {
+    entry = { count: 0, resetAt: now + WINDOW_MS }
+    store.set(key, entry)
+  }
+  entry.count++
+  return entry
+}
+
+/**
+ * Charges a request to a subject-limited path that carries no valid bearer
+ * token to the per-IP agent bucket, and refuses it with 429 once that bucket
+ * is spent.
+ */
+export function chargeUnauthenticatedRequest(event: H3Event): void {
+  if (process.env.OPENAPE_E2E === '1') return
+  cleanup()
+  const now = Date.now()
+  const entry = charge(`${resolveClientIp(event, parseTrustedProxies())}:agent`, now)
+  if (entry.count <= parseMaxAgentRequests()) return
+  const retryAfter = Math.ceil((entry.resetAt - now) / 1000)
+  setResponseHeader(event, 'Retry-After', retryAfter)
+  throw createProblemError({ status: 429, title: 'Too Many Requests', detail: `Rate limit exceeded. Try again in ${retryAfter} seconds.` })
+}
+
 export default (nitroApp: NitroApp) => {
   // Skip rate limiting entirely in E2E test mode
   if (process.env.OPENAPE_E2E === '1') return
@@ -237,16 +265,8 @@ export default (nitroApp: NitroApp) => {
       bucket = 'auth'
       maxRequests = maxAuth
     }
-    const key = `${ip}:${bucket}`
     const now = Date.now()
-
-    let entry = store.get(key)
-    if (!entry || entry.resetAt <= now) {
-      entry = { count: 0, resetAt: now + WINDOW_MS }
-      store.set(key, entry)
-    }
-
-    entry.count++
+    const entry = charge(`${ip}:${bucket}`, now)
 
     const res = event.node.res
     res.setHeader('X-RateLimit-Limit', String(maxRequests))
@@ -278,4 +298,4 @@ export default (nitroApp: NitroApp) => {
 }
 
 // Exported for unit tests.
-export const _internals = { ipv4ToInt, ipMatches, ipInTrustedList, resolveClientIp, parseMaxRequests, parseMaxManagementRequests }
+export const _internals = { ipv4ToInt, ipMatches, ipInTrustedList, resolveClientIp, parseMaxRequests, parseMaxManagementRequests, reset: () => store.clear() }

@@ -5,7 +5,7 @@ import { BROKER_REQUEST_TYPE, signBrokerToken } from '@openape/grants'
 import { tryBearerAuth } from './agent-auth'
 import { brokerEndpoint, brokerFetch, discoverBroker } from './broker-network'
 import { hasBrokerStore, useBrokerStore } from './broker-store'
-import { createProblemError } from './problem'
+import { createProblemError, relayRetryAfter } from './problem'
 import { getIdpIssuer, useIdpStores } from './stores'
 
 export type BrokerOperation = 'connection' | 'create' | 'authorize' | 'get' | 'token'
@@ -36,5 +36,9 @@ export async function maybeForwardBrokerGrant(event: H3Event, operation: Exclude
   const { userStore, sshKeyStore } = useIdpStores()
   const [user, keys] = await Promise.all([userStore.findByEmail(caller.sub), sshKeyStore.findByUser(caller.sub)])
   if (!user?.isActive || user.type !== 'agent' || keys.length !== 1 || keys[0]?.keyId !== binding.key_id) throw createProblemError({ status: 403, title: 'Brokered agent identity or key is inactive' })
-  return await forwardBrokerOperation(binding, operation, input)
+  try { return await forwardBrokerOperation(binding, operation, input) }
+  catch (error) {
+    relayRetryAfter(event, error)
+    throw error
+  }
 }

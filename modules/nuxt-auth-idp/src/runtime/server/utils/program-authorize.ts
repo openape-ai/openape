@@ -77,10 +77,15 @@ function grantRequestFor(requester: string, request: OpenApeProgramAuthorizeRequ
   }
 }
 
-async function approvedAnswer(grant: OpenApeGrant, call: ResolvedProgramCall, onToken: ProgramAuthorizeInput['onToken']): Promise<ProgramAuthorizeResult> {
+/**
+ * A command token for the grant, or null when it is single-use and another
+ * call spent it first: issuing the token consumes a single-use grant.
+ */
+async function approvedAnswer(grant: OpenApeGrant, call: ResolvedProgramCall, onToken: ProgramAuthorizeInput['onToken']): Promise<ProgramAuthorizeResult | null> {
   const key = await useIdpStores().keyStore.getSigningKey()
   const { token, expiresAt } = await issueCommandJWT(grant, { argvHash: call.argvHash, programSha256: call.executionContext.program_sha256, detail: call.detail, executionContext: call.executionContext }, getIdpIssuer(), key.privateKey, key.kid)
   await onToken?.(grant)
+  if ((grant.request.grant_type ?? 'once') === 'once' && !await useGrantStores().grantStore.claimOnce(grant.id, Math.floor(Date.now() / 1000))) return null
   return { status: 200, body: { state: 'approved', grant_id: grant.id, authz_jwt: token, expires_at: expiresAt } }
 }
 
@@ -122,6 +127,15 @@ async function requestDecision(request: OpenApeGrantRequest, brokered: BrokeredG
  * standing grants and pre-approval hooks never decide for them.
  */
 export async function authorizeProgramCall(event: H3Event, input: ProgramAuthorizeInput): Promise<ProgramAuthorizeResult> {
+  // A lost race for a single-use grant decides again with the grant spent.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const result = await decideProgramCall(event, input)
+    if (result) return result
+  }
+  throw createProblemError({ status: 409, title: 'Concurrent calls spent the single-use grants for this command; retry the call' })
+}
+
+async function decideProgramCall(event: H3Event, input: ProgramAuthorizeInput): Promise<ProgramAuthorizeResult | null> {
   const { requester, request, brokered, onToken } = input
   const { grantStore } = useGrantStores()
   const call = await resolveProgramCall(useShapeStore(), request)
