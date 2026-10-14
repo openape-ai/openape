@@ -38,6 +38,8 @@ export class ConnectionManager {
   private typesafeSession = new AbortController()
   private typesafeChanging = false
   private providerSession = new AbortController()
+  private accountModel: { key: string, model: string, expiresAt: number, afterRejection: boolean } | null = null
+  private modelRejected = false
   private codex: CodexConnection
   private owner: OwnerConnection
   constructor(private readonly root: string, private readonly runtime: AgentRuntime, private readonly credentials: CredentialCache, private readonly dispatch: (command: SetupInternal) => Promise<unknown>, private readonly availability: () => Promise<void>, private readonly directAgents = false) {
@@ -157,7 +159,7 @@ export class ConnectionManager {
           this.typesafeSession.abort(new Error('TypeSafe connection removed')); this.typesafeSession = new AbortController()
           await this.credentials.eraseConnection(item.id)
         }
-        if (item.provider === 'chatgpt') { this.providerSession.abort(new Error('ChatGPT connection removed')); this.providerSession = new AbortController() }
+        if (item.provider === 'chatgpt') { this.providerSession.abort(new Error('ChatGPT connection removed')); this.providerSession = new AbortController(); this.accountModel = null }
         await this.dispatch({ type: 'revoke', id: item.id }); await this.save({ ...item, state: 'revoked', error: null }, await this.metadata(item.id))
         await this.availability()
       }
@@ -223,6 +225,7 @@ export class ConnectionManager {
           connection.account = account
         }
         controller.signal.throwIfAborted(); await this.save({ ...connection, state: 'ready' }, metadata)
+        if (connection.provider === 'chatgpt') this.accountModel = null
         await this.availability()
       }
       catch (error) {
@@ -337,17 +340,45 @@ export class ConnectionManager {
   }
 
   async providerReady(): Promise<boolean> { return this.runtimeState.ready && (await this.state()).connections.some(item => item.provider === 'chatgpt' && item.state === 'ready') }
-  async provider(body: unknown, signal: AbortSignal): Promise<Response> {
-    signal = AbortSignal.any([signal, this.providerSession.signal])
+  private async chatgpt(): Promise<{ item: ConnectionView, metadata: Record<string, unknown>, accountId: string }> {
     const item = (await this.state()).connections.find(item => item.provider === 'chatgpt' && item.state === 'ready')
     if (!this.runtimeState.ready || !item) throw new Error('Connect ChatGPT before running the model')
     const metadata = await this.metadata(item.id)
     if (typeof metadata.accountId !== 'string') throw new Error('ChatGPT account binding is missing')
-    const bearer = await this.codex.bearer(item.id, metadata.accountId, signal)
-    const response = await fetch('https://chatgpt.com/backend-api/codex/responses', { method: 'POST', redirect: 'error', headers: { Authorization: `Bearer ${bearer}`, 'ChatGPT-Account-ID': metadata.accountId, 'Content-Type': 'application/json', Accept: 'text/event-stream', originator: 'codex_cli_rs' }, body: JSON.stringify(body), signal })
+    return { item, metadata, accountId: metadata.accountId }
+  }
+
+  /** The connected account's default model from the bundled Codex app-server; read again after sign-in and at most hourly. */
+  async model(signal: AbortSignal): Promise<string> {
+    signal = AbortSignal.any([signal, this.providerSession.signal])
+    const { item, accountId } = await this.chatgpt()
+    const key = `${item.id}:${accountId}`
+    if (this.accountModel?.key === key && this.accountModel.expiresAt > Date.now()) return this.accountModel.model
+    const afterRejection = this.modelRejected
+    const model = await this.codex.defaultModel(item.id, accountId, signal)
+    this.modelRejected = false
+    this.accountModel = { key, model, expiresAt: Date.now() + 60 * 60 * 1000, afterRejection }
+    return model
+  }
+
+  /** A provider refusal of the cached default reads the account default again, once per refusal of a fresh value. */
+  private async inspectModelRefusal(body: unknown, response: Response): Promise<Response> {
+    if (response.status !== 400 && response.status !== 404) return response
+    const text = await response.text()
+    const requested = body && typeof body === 'object' ? (body as { model?: unknown }).model : undefined
+    const cached = this.accountModel
+    if (/model.{0,200}not supported/i.test(text) && cached && cached.model === requested && !cached.afterRejection) { this.accountModel = null; this.modelRejected = true }
+    return new Response(text, { status: response.status, statusText: response.statusText, headers: response.headers })
+  }
+
+  async provider(body: unknown, signal: AbortSignal): Promise<Response> {
+    signal = AbortSignal.any([signal, this.providerSession.signal])
+    const { item, metadata, accountId } = await this.chatgpt()
+    const bearer = await this.codex.bearer(item.id, accountId, signal)
+    const response = await fetch('https://chatgpt.com/backend-api/codex/responses', { method: 'POST', redirect: 'error', headers: { Authorization: `Bearer ${bearer}`, 'ChatGPT-Account-ID': accountId, 'Content-Type': 'application/json', Accept: 'text/event-stream', originator: 'codex_cli_rs' }, body: JSON.stringify(body), signal })
     signal.throwIfAborted()
     if ([401, 403].includes(response.status)) { await this.save({ ...item, state: 'expired', error: 'ChatGPT sign-in expired or access was denied; reconnect' }, metadata); await this.availability() }
-    return response
+    return this.inspectModelRefusal(body, response)
   }
 
   async stop(): Promise<void> { this.typesafeSession.abort(); this.providerSession.abort(); for (const job of this.jobs.values()) job.controller.abort(); await Promise.all(Array.from(this.jobs.values(), job => job.work)) }

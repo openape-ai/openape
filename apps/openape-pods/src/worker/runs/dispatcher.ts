@@ -68,6 +68,7 @@ export interface RunServices {
   http?: (request: HttpRequest, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary) => Promise<HttpReply>
   credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
   provider?: AgentGatewayServices['provider']
+  model?: AgentGatewayServices['model']
   /** `summary` is the script's own account of the call; the IdP shows it only if the call needs a new grant. */
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary) => Promise<unknown>
   /** Authorizes one application command at the IdP before it runs and tells whether it writes (issue 1473, revision 4). */
@@ -275,7 +276,7 @@ export class RunDispatcher {
             if (!this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
             const request = parseAgentRequest(payload)
             if (agentCalls++ >= maxAgentCallsPerRun) throw new Error('A run can start at most 50 agent calls')
-            const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, tool: scriptTool }, operationSignal, (event) => { assertCurrent(); appendEvent('agent', event) }, request.tools, request.timeoutSeconds)
+            const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, model: this.services.model, tool: scriptTool }, operationSignal, (event) => { assertCurrent(); appendEvent('agent', event) }, request.tools, request.timeoutSeconds)
             pendingAgents.add(operation); if (activeAgentCalls++ === 0) agentSince = Date.now()
             try { const reply = await operation; assertCurrent(); operationSignal.throwIfAborted(); return reply }
             finally { pendingAgents.delete(operation); if (--activeAgentCalls === 0) agentPausedMs += Date.now() - agentSince }

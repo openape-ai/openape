@@ -3088,5 +3088,10 @@
   "A program approval needs the description of its command": "Eine Programmfreigabe braucht die Beschreibung ihres Befehls",
   "Program authorization service is unavailable": "Die Programmfreigabe ist nicht verfügbar",
   "Assign a program by its path and optional runtimePath; the IdP decides what its commands mean, so adapterPath and commandName are not accepted": "Weise ein Programm über seinen Pfad und optional runtimePath zu; der IdP entscheidet, was seine Befehle bedeuten, daher werden adapterPath und commandName nicht angenommen",
-  "Application command names pod-runtime, pod-http and pod-ssh are reserved for Pods itself": "Die Befehlsnamen pod-runtime, pod-http und pod-ssh sind für Pods selbst reserviert"
+  "Application command names pod-runtime, pod-http and pod-ssh are reserved for Pods itself": "Die Befehlsnamen pod-runtime, pod-http und pod-ssh sind für Pods selbst reserviert",
+  "Invalid model list from the ChatGPT connection": "Ungültige Modellliste von der ChatGPT-Verbindung",
+  "The connected ChatGPT account reports no default model; reconnect Codex or check the account's Codex access": "Das verbundene ChatGPT-Konto meldet kein Standardmodell; verbinde Codex erneut oder prüfe den Codex-Zugang des Kontos",
+  "The model connection returned an invalid model name": "Die Modellverbindung hat einen ungültigen Modellnamen geliefert",
+  "Connect Codex before running the model": "Verbinde Codex, bevor du das Modell ausführst",
+  "The default model of the connected ChatGPT account ({p0}) is not in the bundled Codex model catalog. Update OpenApe Pods to a version whose bundled Codex supports this model.": "Das Standardmodell des verbundenen ChatGPT-Kontos ({p0}) fehlt im mitgelieferten Codex-Modellkatalog. Aktualisiere OpenApe Pods auf eine Version, deren mitgeliefertes Codex dieses Modell unterstützt."
 }
