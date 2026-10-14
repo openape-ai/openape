@@ -1,5 +1,132 @@
 # @openape/apes
 
+## 2.0.0
+
+### Major Changes
+
+- 8aec8c7: `apes run`, `ape-shell` and the MCP server authorize every program call at the
+  IdP instead of resolving it with local Shapes adapters (issue 1473, plan
+  revision 4, milestone M11). apes sends the program name (basename of the
+  executable found on `PATH`), the SHA-256 of that file and the exact arguments to
+  `POST {idp}/api/grants/authorize`. On `approved` it verifies the command token
+  (signature via the IdP's JWKS, issuer, audience `shapes`, own identity as
+  subject, target host, argv hash of exactly this command, hash of the file it is
+  about to run) and runs that file with these arguments; `pending` keeps the
+  existing behaviour (async info block and exit 75, or `--wait` / `APE_WAIT=1` for
+  up to 5 minutes, then authorize again; a wait that runs out never runs the
+  command); `denied` and `revoked` refuse. A single-use grant is consumed at
+  `POST /api/grants/{id}/consume` before the command runs (anything but `consumed`
+  refuses); identical calls reuse a reusable token until it expires. The
+  authorization endpoint comes from discovery
+  (`openape_program_authorization_endpoint`, default `/api/grants/authorize`). Nothing below
+  `~/.openape/shapes` is read while authorizing or running a command.
+
+  Major because local adapter execution is removed:
+
+  - `apes adapter install|update|verify|remove` are gone; `apes adapter
+list|info|search` show the adapters the IdP knows (`GET /api/shapes`).
+    Installed files below `~/.openape/shapes` are no longer used by apes and can
+    be deleted once the Pods desktop no longer reads them.
+  - `apes run --adapter <file>` and `apes explain --adapter` are refused.
+    `apes explain` previews through the IdP's public `POST /api/shapes/resolve`.
+  - `--approval timed` is refused for program calls (use `once` or `always`); it
+    stays available for `--as` and audience mode.
+  - `ape-shell`: a line that is exactly one program call (plain words, an
+    executable file on `PATH`, no builtin) goes to the IdP; compound lines,
+    expansions, redirections and builtins use the unchanged ape-shell session
+    grant. An authorized program line is not handed to bash: the interactive
+    shell starts the authorized file itself with exactly the authorized argv, in
+    the working directory and exported environment bash recorded at its last
+    prompt (so aliases, functions and traps of the session cannot replace it);
+    relative program paths are refused there. Programs are located with symlinks
+    resolved (the resolved file is hashed and run, the invoked path is argv[0]).
+    Every path (`apes run`, `ape-shell -c`, REPL, MCP) re-hashes the file right
+    before starting it and refuses a changed file or one that is not a regular
+    file. The program name is a requester claim; the file
+    that runs is bound by `program_sha256`. Gated agents must not have an
+    agent-writable directory on their `PATH` or as a program location.
+    Local segment-wise resolution of compound lines is removed. Audit
+    entries record `grant_mode: "program"` instead of `"adapter"`.
+  - `apes grants run <id>` runs a program grant by locating and hashing the
+    recorded program again (refused if the file changed) and authorizing at the
+    IdP.
+  - The MCP server replaces its per-adapter `apes.run.<cli>.<operation>` tools
+    with one `apes.run` tool (pending answers are returned; call again after
+    approval).
+  - The `[generic]` config section (generic fallback switch and its audit log) is
+    removed: the IdP approves programs without a registry shape as exact commands.
+  - Library exports `createShapesGrant`, `fetchGrantToken`, `findExistingGrant`,
+    `verifyAndExecute` and `waitForGrantStatus` are removed. The Shapes re-exports
+    and `@openape/apes/assigned` used by the Pods desktop are unchanged.
+
+  `apes run --as` (escapes), audience mode, ape-shell self-dispatch and the sudo
+  hint are unchanged. Requires an IdP that serves `POST /api/grants/authorize`
+  (M8); rollback is publishing the previous apes version.
+
+### Minor Changes
+
+- b51b761: Authorize an assigned command by the coverage of its grant: `AssignedCommand.coverage`
+  carries the grant's authorization details instead of one exact `permission`, so a
+  grant for a whole program or HTTPS origin covers each of its operations. Generic
+  execution stays refused.
+- 40aeb4b: Support federated agent identities through owner-authorized grant brokering. Preserve the decision provider's original authorization signature, require immutable owner/agent/connection bindings, and enforce revocation during consumption. Direct grants retain their existing behavior.
+- 2eca3af: Add assigned-command authorization that binds grants to a specific pod identity,
+  host, pinned adapter and operation without creating grants or executing a shell.
+  Add owner-scoped pod identity provisioning with an explicit transactional store
+  contract, current identity/key/grant status, and active-requester enforcement at
+  existing grant consumption.
+- ea20fbb: Registry adapters can be loaded as the only accepted adapters.
+  `loadRegistryAdapter(index, cliId)` returns the installed adapter of a
+  shapes-registry entry only when its file bytes match the entry's `digest` and,
+  when the index records it, its semantic digest matches `grant_digest`; otherwise
+  it throws a `RegistryAdapterError` (`not_in_registry`, `not_installed`,
+  `digest_mismatch`) that names the `apes adapter install` step.
+  `[cli] tested_digests` lists SHA-256 file digests of tested executables for
+  tools without a version command. `checkCliVersion` treats a listed digest or a
+  `version_command` output naming one of `tested_versions` as tested;
+  `bindsExecutable` accepts an executable only by the adapter's executable name or
+  a tested digest; `exactCommand` binds a resolved command to its exact argv
+  (`exact_command`). `RegistryEntry` gains the optional `grant_digest`;
+  `installedAdapterPath` names where `apes adapter install` keeps an adapter.
+
+  `authorizeAssignedCommand` accepts `exact: true` on an assigned command: the
+  grant token must then carry the command's argv hash, also when a wider grant
+  covers the operation.
+
+- a419dad: Grant request summaries are structured (grants.md §3.4, issue 1473):
+  `summary` is `{ title, description?, origin?, link? }` with a one-line title of
+  at most 120 characters, a description of at most 2000 characters and a
+  one-line origin set by the requester's runtime. `summary.text` is removed. The
+  IdP refuses requests that still send `text`, unknown members, oversized fields
+  or Unicode control, format and line/paragraph separator characters (line feeds
+  are allowed in the description) and renders title, description, origin and
+  link as the requester's statement. `@openape/grants` exports
+  `parseGrantSummary` and `migrateLegacyGrantSummary`. `apes run` replaces
+  `--summary` with `--summary-title`, `--summary-description` and
+  `--summary-origin`; `--summary-link` stays.
+
+### Patch Changes
+
+- be10b17: Allow assigned command callers to supply a scoped authorization transport and fetched verification keys so temporary identity-service outages preserve their retry classification without weakening grant verification.
+- eb6dfdc: Support an explicit Pod target host, clean interactive bash startup, and an opt-in socket descriptor for supervised script execution through ape-shell. Add explicit suppression of writable HOME configuration for managed runtimes. Preserve the ordinary CLI defaults.
+- Updated dependencies [8baa724]
+- Updated dependencies [40aeb4b]
+- Updated dependencies [f2d7850]
+- Updated dependencies [a020cb3]
+- Updated dependencies [a766839]
+- Updated dependencies [59bf5ed]
+- Updated dependencies [be10b17]
+- Updated dependencies [9214ee1]
+- Updated dependencies [1ab4dbd]
+- Updated dependencies [ea20fbb]
+- Updated dependencies [a419dad]
+  - @openape/cli-auth@0.6.0
+  - @openape/core@1.0.0
+  - @openape/grants@0.14.0
+  - @openape/shapes@0.10.0
+  - @openape/agent-runtime@0.2.10
+  - @openape/proxy@0.4.11
+
 ## 1.36.0
 
 ### Minor Changes
@@ -1917,14 +2044,14 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
 
   export async function pollGrantUntilResolved(
     idp: string,
-    grantId: string,
+    grantId: string
   ): Promise<PollOutcome> {
     const intervalMs = getPollIntervalSeconds() * 1000;
     const maxMs = getPollMaxMinutes() * 60_000;
     const start = Date.now();
     while (Date.now() - start < maxMs) {
       const grant = await apiFetch<{ status: string }>(
-        `${grantsEndpoint}/${grantId}`,
+        `${grantsEndpoint}/${grantId}`
       );
       if (grant.status === "approved") return { kind: "approved" };
       if (
@@ -2023,6 +2150,7 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   ## Test-Manifest
 
   ### Neue Tests in `commands-grants-run.test.ts` (7 Tests)
+
   1. **Regression guard**: ohne `--wait` bleibt pending → error Verhalten
   2. `--wait` + pending → poll → approved → dispatch shapes grant
   3. `--wait` + pending → poll → denied → CliError
@@ -2036,6 +2164,7 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   8 existierende "async info block audience mode" Tests geupdated: die alten `expect(out).toContain('every 10s')` Assertions werden durch Assertions auf die neue Text-Struktur ersetzt (`For agents:`, `apes grants run X --wait`, `exit code 75`, `EX_TEMPFAIL`). Zusätzliche Regression-Guard: `APES_GRANT_POLL_INTERVAL` darf NICHT mehr in den agent-text leaken (da es jetzt internes CLI-Detail ist).
 
   ### Regression
+
   - `shell-grant-dispatch.test.ts`: 27/27 green (unberührt)
   - `commands-run-async.test.ts`: 43/43 green
   - `commands-grants-run.test.ts`: 15/15 green (8 baseline + 7 neu)
@@ -2111,6 +2240,7 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   Valid range ist POSIX exit code space (0–255).
 
   ## Warum 75 und nicht 1, 2, oder -1
+
   - **1** = POSIX "general error". Agenten und CI-Pipelines lesen das als "etwas ist schiefgegangen" ohne Spezifität. Falsches Signal — es ist kein Fehler, es ist ein erwarteter pending state.
   - **2** = lose Konvention für "shell usage error" oder "misuse of shell builtins" (bash, git). Würde als user's fault interpretiert. Auch falsch.
   - **-1** ist in POSIX nicht gültig — shells truncieren zu 255. Nicht portabel.
@@ -2162,6 +2292,7 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   ```
 
   ## Test plan
+
   - [x] 11 new tests in `packages/apes/test/commands-run-async.test.ts` `async exit code (APES_ASYNC_EXIT_CODE)` describe block:
     - default 75 (EX_TEMPFAIL)
     - `APES_ASYNC_EXIT_CODE=0` restores legacy
@@ -2180,6 +2311,7 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   - [x] Pre-commit hook (turbo lint + typecheck): green
 
   ## Files touched
+
   - `packages/apes/src/commands/run.ts` — new `getAsyncExitCode()` helper, `throw new CliExit(getAsyncExitCode())` at all four async-exit sites (`runShellMode` session, `tryAdapterModeFromShell`, `runAdapterMode`, `runAudienceMode`)
   - `packages/apes/src/config.ts` — new `defaults.async_exit_code?: string` field in `ApesConfig` interface
   - `packages/apes/test/commands-run-async.test.ts` — new `expectCliExit` helper + 20 existing tests wrapped + 11 new exit code tests
@@ -2267,6 +2399,7 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   **11 neue Tests** in `packages/apes/test/commands-run-async.test.ts` in zwei neuen describe-Blöcken:
 
   ### `runShellMode apes self-dispatch shortcut` (9 Tests)
+
   1. `apes grants status <id>` bypasses grant flow, execs directly
   2. `apes grants run <id>` bypasses (the bootstrap case)
   3. `apes whoami` bypasses
@@ -2278,6 +2411,7 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   9. `curl example.com` (non-apes) does NOT self-dispatch
 
   ### `execShellCommand APES_SHELL_WRAPPER env strip` (2 Tests)
+
   10. Strips `APES_SHELL_WRAPPER` from the bash child env when self-dispatching
   11. Strips `APES_SHELL_WRAPPER` from the escapes pipe in `runAudienceMode --wait` mode
 
@@ -2552,6 +2686,7 @@ https://api.github.com/...` waits for human approval. Identical UX semantics
   Status-Gates: `pending` → Hinweis + approve-URL, `denied`/`revoked` → Error, `used` → Error ("already been used — request a new one"), `approved` → dispatch.
 
   ### Override für Legacy-Workflows
+
   - **`apes run --wait`** / **`ape-shell -c --wait ...`** (CLI flag): erzwingt altes blockierendes Verhalten.
   - **`APE_WAIT=1`** (env var): gleiches Ergebnis aus der Umgebung heraus, für Fälle wo Flags nicht durchgereicht werden können (z.B. sshd-login-shell, cron, `$SHELL -c` aus einem Binary).
 

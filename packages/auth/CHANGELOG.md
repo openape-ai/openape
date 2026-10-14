@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.13.4
+
+### Patch Changes
+
+- Updated dependencies [40aeb4b]
+- Updated dependencies [f2d7850]
+- Updated dependencies [59bf5ed]
+- Updated dependencies [a419dad]
+  - @openape/core@1.0.0
+
 ## 0.13.3
 
 ### Patch Changes

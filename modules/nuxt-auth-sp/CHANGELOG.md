@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.17.0
+
+### Minor Changes
+
+- 2873623: Allow services to explicitly publish reviewed alias callback URLs while preserving their canonical client identity and host-only sessions.
+
+### Patch Changes
+
+- c5e12ce: Add opt-in verified principals with preserved delegation provenance and exact catalog scope enforcement for sensitive resource handlers. Reject non-string entries in exchanged token scope arrays.
+- 0c35914: Provide an opt-in product reporting link that sends only a product key to the native issue service and suppresses the referring app URL.
+- Updated dependencies [40aeb4b]
+- Updated dependencies [f2d7850]
+- Updated dependencies [59bf5ed]
+- Updated dependencies [a419dad]
+  - @openape/core@1.0.0
+  - @openape/auth@0.13.4
+
 ## 0.16.0
 
 ### Minor Changes

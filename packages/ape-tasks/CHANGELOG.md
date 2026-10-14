@@ -1,5 +1,13 @@
 # @openape/ape-tasks
 
+## 1.3.5
+
+### Patch Changes
+
+- Updated dependencies [8baa724]
+  - @openape/cli-auth@0.6.0
+  - @openape/proof-cli@0.2.1
+
 ## 1.3.4
 
 ### Patch Changes

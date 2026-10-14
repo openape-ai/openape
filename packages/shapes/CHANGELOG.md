@@ -1,5 +1,70 @@
 # @openape/shapes
 
+## 0.10.0
+
+### Minor Changes
+
+- 9214ee1: Shapes adapters can declare their options and global options. An operation with
+  `value_options` or `flag_options` accepts only declared options: value options
+  bind the next token, flag options are flags, and any other option makes the
+  operation not match (fail closed for options such as git `--upload-pack`).
+  Declared and global options must use their exact dash form (`--name`, `-x`;
+  bundles only of declared one-letter flags), so
+  `merge-base --is-ancestor A B` keeps both positionals. `[cli] global_options`
+  (for example `["C=repo"]` for `git -C <path>`) are accepted once before the
+  command prefix and bound for every operation. Operations without these fields
+  derive the same permissions as before.
+- 1ab4dbd: Shapes adapters can carry approval presentation and tested CLI versions.
+  `[operation.presentation]` holds German and English card texts (`title`,
+  `statement`, `consequence`, `facts`, `details`, `details_note`) that may only
+  reference bindings the operation produces; `[cli] tested_versions`,
+  `version_command` and `version_pattern` name the checked CLI versions.
+  `parseAdapterToml` (now exported) reads adapters with a TOML parser and rejects
+  unknown keys at every level; derived permissions stay unchanged, including the
+  original comma split of array strings. `ServerShape` gains `versions` and
+  operations their `presentation`. The matcher rejects a resource name that is
+  not a plain identifier, so a two-key selector split at its comma (the former gh
+  `repo:owner=…,name=…` chain, which granted every repository of an owner) fails
+  closed instead of producing a permission with an unbound template.
+
+  `LoadedAdapter.digest`, which grants bind as `adapter_digest`, is now the
+  semantic digest (`semanticAdapterDigest`) over the matching rules only, so
+  presentation, display texts, tested versions and comments can change without
+  invalidating grants. `loadAdapter` adds `fileDigest` (file bytes) for integrity
+  checks; the installer keeps verifying registry downloads by file digest.
+
+- ea20fbb: Registry adapters can be loaded as the only accepted adapters.
+  `loadRegistryAdapter(index, cliId)` returns the installed adapter of a
+  shapes-registry entry only when its file bytes match the entry's `digest` and,
+  when the index records it, its semantic digest matches `grant_digest`; otherwise
+  it throws a `RegistryAdapterError` (`not_in_registry`, `not_installed`,
+  `digest_mismatch`) that names the `apes adapter install` step.
+  `[cli] tested_digests` lists SHA-256 file digests of tested executables for
+  tools without a version command. `checkCliVersion` treats a listed digest or a
+  `version_command` output naming one of `tested_versions` as tested;
+  `bindsExecutable` accepts an executable only by the adapter's executable name or
+  a tested digest; `exactCommand` binds a resolved command to its exact argv
+  (`exact_command`). `RegistryEntry` gains the optional `grant_digest`;
+  `installedAdapterPath` names where `apes adapter install` keeps an adapter.
+
+  `authorizeAssignedCommand` accepts `exact: true` on an assigned command: the
+  grant token must then carry the command's argv hash, also when a wider grant
+  covers the operation.
+
+### Patch Changes
+
+- Updated dependencies [40aeb4b]
+- Updated dependencies [f2d7850]
+- Updated dependencies [a020cb3]
+- Updated dependencies [a766839]
+- Updated dependencies [59bf5ed]
+- Updated dependencies [be10b17]
+- Updated dependencies [9214ee1]
+- Updated dependencies [1ab4dbd]
+- Updated dependencies [a419dad]
+  - @openape/core@1.0.0
+  - @openape/grants@0.14.0
+
 ## 0.9.1
 
 ### Patch Changes
