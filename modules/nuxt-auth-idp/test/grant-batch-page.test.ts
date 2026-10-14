@@ -25,7 +25,7 @@ function member(id: string, index: number, overrides: Record<string, unknown> = 
       audience: 'pods-graph-gate',
       grant_type: 'once',
       command: ['pods-graph-gate', 'approve', `{"item":"${id}"}`],
-      summary: { text: `"Newsletter XY" <news@xy.example> – Issue ${index}\nmore detail` },
+      summary: { title: `"Newsletter XY" <news@xy.example> – Issue ${index}`, description: 'more detail' },
       waits_until: future,
       batch: { id: 'b-1', title: 'Newsletters, October 7', size: 3 },
     },
@@ -90,7 +90,7 @@ describe('grant batch approval', () => {
   })
 
   it('keeps members of the same second in a stable label order', async () => {
-    const same = (id: string, subject: string) => member(id, 0, { request: { ...member(id, 0).request, summary: { text: subject } } })
+    const same = (id: string, subject: string) => member(id, 0, { request: { ...member(id, 0).request, summary: { title: subject } } })
     const { wrapper } = await mountBatch([same('g-c', 'Newsletter – What is new'), same('g-a', 'Bank – Statement'), same('g-b', 'Newsletter – What else')])
     expect(wrapper.findAll('[data-batch-row]').map(row => row.attributes('data-batch-row'))).toEqual(['g-a', 'g-b', 'g-c'])
   })

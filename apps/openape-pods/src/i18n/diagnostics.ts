@@ -108,7 +108,11 @@ export const diagnosticPatterns = [
   'Upgrade of {p0} lost rows',
   'The command passes {p0}, which its adapter operation does not declare; an approved command runs only with declared options',
   'The command is too long for a program approval; the owner must see it complete (at most {p0} characters)',
-  'A program approval headline is printable ASCII of at most {p0} characters',
   'Draft returned {p0} after validation refused a service request: {p1}',
   'Archived Pods cannot be selected: {p0}. Inspect them without selection.',
+  'summary.{p0} must not contain control or format characters other than line feeds',
+  'summary.{p0} must not contain control or format characters',
+  'summary.{p0} must be at most {p1} characters',
+  'summary.{p0} must be a string',
+  'summary has unknown fields: {p0}',
 ] as const satisfies readonly MessageKey[]

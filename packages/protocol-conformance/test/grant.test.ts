@@ -1,5 +1,5 @@
 import type { OpenApeGrant } from '@openape/core'
-import { approveGrant, createGrant, InMemoryGrantStore } from '@openape/grants'
+import { approveGrant, createGrant, InMemoryGrantStore, parseGrantSummary } from '@openape/grants'
 import { describe, expect, it } from 'vitest'
 import { getValidator } from './harness.js'
 
@@ -58,5 +58,31 @@ describe('grant object — grant.json', () => {
     }
     const { valid, errors } = validate(standingGrant)
     expect(valid, `Schema errors:\n${errors}`).toBe(true)
+  })
+})
+
+describe('request summary — grant-request.json', () => {
+  const { validate } = getValidator('grant-request.json')
+  const request = { requester: 'agent@example.com', target_host: 'macmini.local', audience: 'apes', grant_type: 'once' }
+  const accepts = (summary: unknown) => {
+    try { return parseGrantSummary(summary) !== undefined }
+    catch { return false }
+  }
+
+  it.each([
+    ['all four fields', { title: 'Rebase PR 395', description: 'Two commits\nNo conflicts', origin: 'Rebase Pod', link: 'https://example.com/pulls/395' }, true],
+    ['a title only', { title: 'x'.repeat(120) }, true],
+    ['the removed text field', { text: 'Rebase PR 395' }, false],
+    ['text next to a title', { title: 'Rebase', text: 'Rebase PR 395' }, false],
+    ['a blank title', { title: '  ' }, false],
+    ['a long title', { title: 'x'.repeat(121) }, false],
+    ['a two-line title', { title: 'a\nb' }, false],
+    ['a bidi override', { title: 'Archive \u202Eexe.txt' }, false],
+    ['a zero-width space in the origin', { title: 'x', origin: 'Pod\u200B' }, false],
+    ['a carriage return in the description', { title: 'x', description: 'a\r\nb' }, false],
+    ['a long description', { title: 'x', description: 'x'.repeat(2001) }, false],
+  ])('schema and IdP parser agree on %s', (_name, summary, accepted) => {
+    expect(validate({ ...request, summary }).valid).toBe(accepted)
+    expect(accepts(summary)).toBe(accepted)
   })
 })

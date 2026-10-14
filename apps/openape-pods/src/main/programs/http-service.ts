@@ -1,4 +1,4 @@
-import type { AgentConnection, GrantObserver, GrantLedgerPort, RunGrantTokens } from '../broker/authorization'
+import type { AgentConnection, GrantObserver, GrantLedgerPort, GrantPresentation, RunGrantTokens } from '../broker/authorization'
 import { join } from 'node:path'
 import { loadAdapter, resolveCommand } from '@openape/apes'
 import type { PodResource } from '../../contracts/resources'
@@ -28,12 +28,12 @@ export function assignedHttp(resources: PodResource[], scope: Pick<ServiceScope,
 }
 
 /** Sends one request inside the sandbox; the Pod identity needs a grant that covers this origin and method. */
-export async function executeHttp(resources: PodResource[], scope: ServiceScope, request: HttpRequest, vendor: string, connection: AgentConnection, signal: AbortSignal, observe?: GrantObserver, ledger?: GrantLedgerPort, bearer?: AgentBearer, tokens?: RunGrantTokens): Promise<HttpReply> {
+export async function executeHttp(resources: PodResource[], scope: ServiceScope, request: HttpRequest, vendor: string, connection: AgentConnection, signal: AbortSignal, observe?: GrantObserver, ledger?: GrantLedgerPort, bearer?: AgentBearer, tokens?: RunGrantTokens, presentation?: GrantPresentation): Promise<HttpReply> {
   const configured = assignedHttp(resources, scope, request).configuration.authentication
   const authentication = configured === undefined ? undefined : parseHttpAuthentication(configured)
   if (authentication && Object.keys(request.headers).some(name => name.toLowerCase() === 'authorization')) throw new Error('This HTTP destination authenticates as its assigned DDISA agent; remove the Authorization header')
   if (authentication && !bearer) throw new Error('DDISA agent authentication is unavailable')
-  const authority = new AgentAuthority(connection, observe, ledger, tokens)
+  const authority = new AgentAuthority(connection, observe, ledger, tokens, presentation)
   const adapterPath = join(vendor, 'pod-http-shapes.toml')
   const adapter = loadAdapter('pod-http', adapterPath)
   const argv = httpArgv(new URL(request.url).origin, request.method)

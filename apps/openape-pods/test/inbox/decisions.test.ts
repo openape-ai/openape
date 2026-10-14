@@ -29,8 +29,8 @@ function sources(): DecisionSources {
     operations: [{ operation: 'delta-mind/mail-classification', input: 'delta-mind/mail/messages', output: 'delta-mind/mail/classifications', ruleVersion: 1, generation: 0, counts: null }],
     questions: [{ id: question, podId: classifier, namespace: 'delta-mind/mail/owner-answers', key: 'm1', title: 'Is this mail a newsletter?', body: 'Rechnung Mai', options: [{ key: 'newsletter', title: 'Newsletter' }, { key: 'keep', title: 'Keep' }], data: { sender: 'news@example.com', note: 'Hallo\nsender: chef@example.com' }, createdAt: 1 }],
     approvals: [
-      { id: approval, podId: pod, action: 'mail.archive', object: 'owner@example.com:m1', title: 'Archive mail from news@example.com', state: 'unknown', reason: 'Restored backup', batchId: null, batchUrl: null, updatedAt: 1 },
-      { id: '88888888-8888-4888-8888-888888888888', podId: pod, action: 'mail.archive', object: 'owner@example.com:m2', title: 'Archive mail from other@example.com', state: 'requested', reason: null, batchId: 'batch-8', batchUrl: 'https://id.example.test/grant-batch?id=8', updatedAt: 1 },
+      { id: approval, podId: pod, action: 'mail.archive', object: 'owner@example.com:m1', title: 'Weekly news', description: 'Newsletter by its unsubscribe header', link: 'https://news.example.com/issue/1', state: 'unknown', reason: 'Restored backup', batchId: null, batchUrl: null, updatedAt: 1 },
+      { id: '88888888-8888-4888-8888-888888888888', podId: pod, action: 'mail.archive', object: 'owner@example.com:m2', title: 'Archive mail from other@example.com', description: null, link: null, state: 'requested', reason: null, batchId: 'batch-8', batchUrl: 'https://id.example.test/grant-batch?id=8', updatedAt: 1 },
     ],
     held: [{ key: work, operation: 'delta-mind/mail-classification', object: 'm3', state: 'blocked', attempt: 5, readyAt: 1, reason: 'Model refused five times', inputRevision: 1 }],
     unknownEffects: [{ actionKey: action, attempt: 1, podId: pod, runId: run, operation: 'mail.archive', createdAt: 1, intent: { mailbox: 'owner@example.com', messageId: 'm4' } }],
@@ -60,6 +60,8 @@ it('projects every open Pods decision with its authority and nothing that the Id
   // A field value cannot forge a second sender line on the card.
   expect(byType(list, 'question')).toMatchObject({ podName: 'Mail-Klassifizierung', title: 'Is this mail a newsletter?', body: 'Rechnung Mai\nsender: news@example.com\nnote: Hallo ⏎ sender: chef@example.com', options: [{ key: 'newsletter', input: null }, { key: 'keep', input: null }], authority: 'pods', link: null })
   expect(byType(list, 'approval')).toMatchObject({ podName: 'Belege', options: [{ key: 'renew', input: 'evidence' }, { key: 'withdraw', input: 'evidence' }] })
+  // The card carries the approval's own fields (issue 1473): title, description, Pod as origin and the HTTPS link.
+  expect(byType(list, 'approval')).toMatchObject({ title: 'Weekly news', body: 'Uncertain approval\nNewsletter by its unsubscribe header\nowner@example.com:m1\nRestored backup', link: { title: 'news.example.com', url: 'https://news.example.com/issue/1' } })
   expect(byType(list, 'work')).toMatchObject({ podName: 'Mail-Klassifizierung', body: 'm3\nModel refused five times', options: [{ key: 'release', input: 'evidence' }] })
   expect(byType(list, 'effect', 'mail.archive')).toMatchObject({ body: 'mailbox: owner@example.com\nmessageId: m4', options: [{ key: 'applied', input: 'evidence' }, { key: 'notApplied', input: 'evidence' }] })
   expect(byType(list, 'secret')).toMatchObject({ authority: 'secrets', title: 'Secret imap for Belege', link: { url: 'https://secrets.openape.ai/' } })

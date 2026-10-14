@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { grantSummaryText, safeSummaryLink } from '../src/runtime/utils/grant-summary'
+import { grantSummaryView, safeSummaryLink } from '../src/runtime/utils/grant-summary'
 
 describe('safeSummaryLink', () => {
   it('passes plain http and https through', () => {
@@ -23,14 +23,15 @@ describe('safeSummaryLink', () => {
   })
 })
 
-describe('grantSummaryText', () => {
-  it('keeps the requester line breaks', () => {
-    expect(grantSummaryText({ text: 'Merge PR #1307\nCI: 4/4 grün' }))
-      .toBe('Merge PR #1307\nCI: 4/4 grün')
+describe('grantSummaryView', () => {
+  it('keeps the description line breaks and links only http(s)', () => {
+    expect(grantSummaryView({ title: 'Merge PR #1307', description: 'CI: 4/4 grün\nNo conflicts', origin: 'Merge Pod', link: 'javascript:alert(1)' }))
+      .toEqual({ title: 'Merge PR #1307', description: 'CI: 4/4 grün\nNo conflicts', origin: 'Merge Pod', link: null })
   })
 
-  it('treats an empty or blank summary as none', () => {
-    expect(grantSummaryText({ text: '   \n ' })).toBeNull()
-    expect(grantSummaryText(undefined)).toBeNull()
+  it('treats a missing or blank title as no summary and blank optional fields as absent', () => {
+    expect(grantSummaryView({ title: '   ' })).toBeNull()
+    expect(grantSummaryView(undefined)).toBeNull()
+    expect(grantSummaryView({ title: 'x', description: ' \n ', origin: '' })).toEqual({ title: 'x', description: null, origin: null, link: null })
   })
 })

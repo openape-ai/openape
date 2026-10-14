@@ -39,6 +39,11 @@ export {
   validateDelegation,
 } from './grants.js'
 export {
+  InvalidGrantSummaryError,
+  migrateLegacyGrantSummary,
+  parseGrantSummary,
+} from './grant-summary.js'
+export {
   type LocalizedText,
   parseShapeCliVersions,
   parseShapePresentation,
