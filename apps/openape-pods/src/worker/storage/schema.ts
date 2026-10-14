@@ -1,12 +1,13 @@
 /**
- * The complete control database of schema 51: Pods, scripts, runs and grants, and the shared domain data, work
+ * The complete control database of schema 52: Pods, scripts, runs and grants, and the shared domain data, work
  * ledger, owner questions, object approvals and external effects of autonomous Pods (issue 1465); owner groups are
  * tags and object approvals also name exact program commands since issue 1468, and carry the script's summary
- * (title, description, link) since issue 1473. A fresh profile is created from it; convert.ts converts schema-46 to
- * schema-50 profiles and backups, archiving every row of the retired network runtime and of the retired groups in
+ * (title, description, link) since issue 1473. Schema 52 has the tables of schema 51; its program assignments carry no
+ * adapter fields (issue 1473, revision 4). A fresh profile is created from it; convert.ts converts schema-46 to
+ * schema-51 profiles and backups, archiving every row of the retired network runtime and of the retired groups in
  * legacy_records. Older profiles and backups are refused.
  */
-export const schemaVersion = 51
+export const schemaVersion = 52
 
 export const baselineSchema = `
 -- Pods, scripts and knowledge

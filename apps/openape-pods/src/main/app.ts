@@ -279,8 +279,8 @@ async function start(): Promise<void> {
       if (executable.canceled || executable.filePaths.length !== 1) return unchanged()
       const path = executable.filePaths[0]
       const icon = (await app.getFileIcon(path, { size: 'normal' })).resize({ width: 32, height: 32 }).toDataURL()
-      if (path.endsWith('.app')) return worker.program(command, { ...await applicationDefinition(path, join(app.getPath('userData'), 'application-definitions')), icon })
-      return worker.program(command, { ...await worker.registryProgram(path), icon })
+      if (path.endsWith('.app')) return worker.program(command, { ...await applicationDefinition(path), icon })
+      return worker.program(command, { ...await worker.installedProgram(path), icon })
     }
     if (command.type === 'importState') {
       const selected = await dialog.showOpenDialog(window, { title: t('Import an existing application state file'), properties: ['openFile', 'showHiddenFiles'] })

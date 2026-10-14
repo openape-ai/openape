@@ -9,6 +9,10 @@ import { createBackup, restoreBackup } from '../../src/worker/data/backup'
 import { DomainData } from '../../src/worker/data/domain'
 import { digest, PodDatabase, schemaVersion } from '../../src/worker/storage/database'
 import { StorageError } from '../../src/worker/storage/errors'
+import { programIdentity } from '../../src/contracts/programs'
+import type { ProgramAssignment } from '../../src/contracts/programs'
+import { programRequest } from '../../src/main/programs/invoke'
+import type { PodResource } from '../../src/contracts/resources'
 
 const roots: string[] = []; const stores: PodDatabase[] = []
 afterEach(() => { for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
@@ -18,6 +22,8 @@ const schema47 = readFileSync(join(import.meta.dirname, 'fixtures/schema-47.sql'
 const schema49 = readFileSync(join(import.meta.dirname, 'fixtures/schema-49.sql'), 'utf8')
 // The exact schema 50 of the releases with program approvals (issue 1468, main 1dabba88).
 const schema50 = readFileSync(join(import.meta.dirname, 'fixtures/schema-50.sql'), 'utf8')
+// The exact schema 51 of the releases with registry-adapter program assignments (issue 1473 revision 3, main 5cedbaf6).
+const schema51 = readFileSync(join(import.meta.dirname, 'fixtures/schema-51.sql'), 'utf8')
 function directory(): string {
   const root = mkdtempSync(join(tmpdir(), 'pods-upgrade-')); roots.push(root); return root
 }
@@ -186,6 +192,44 @@ it('converts schema-50 approvals to summaries, keeping a long composed title as 
   ])
   expect(JSON.parse(String(store.db.prepare('SELECT body FROM storage_receipts WHERE kind=\'conversion\' AND json_extract(body,\'$.from\')=50').get()!.body))).toMatchObject({ from: 50, rebuilt: ['action_approvals'], rows: 2, shortened: 1 })
   expect(() => store.db.prepare('UPDATE action_approvals SET title=? WHERE id=?').run('t'.repeat(121), ids.short)).toThrow('CHECK')
+  store.close(); stores.pop()
+  expect(objects(join(root, 'control.sqlite'))).toEqual(objects(join(fresh, 'control.sqlite')))
+})
+
+// Issue 1473, revision 4: programs are assigned by path and file hash; adapter fields leave without owner action.
+it('removes the adapter fields of schema-51 program assignments, keeps everything else and the programs callable', () => {
+  const fresh = directory(); open(fresh).close(); stores.pop()
+  const root = directory(); const ids = { pod: randomUUID(), registry: randomUUID(), local: randomUUID(), http: randomUUID(), grant: 'grant-approved' }
+  const database = new DatabaseSync(join(root, 'control.sqlite'))
+  database.exec(schema51)
+  database.exec('INSERT INTO settings VALUES(1,1,2); INSERT INTO data_settings VALUES(1,10737418240,0,NULL); INSERT INTO onboarding VALUES(1,0,NULL); INSERT INTO data_sequence VALUES(1,0);')
+  database.prepare('INSERT INTO pods VALUES(?,\'Mail\',1,\'active\',NULL,1)').run(ids.pod)
+  const kept = { executableHash: 'a'.repeat(64), entryFiles: [], environment: { PROFILE: 'work' }, networkHosts: ['graph.microsoft.com'], stateId: randomUUID() }
+  // Assigned with a shapes-registry adapter (revision 3) and, before it, with a local adapter whose command name differs from the file name.
+  const registry = { type: 'program', name: 'gh', cliId: 'gh', executable: '/opt/homebrew/Cellar/gh/2.80.0/bin/gh', ...kept, adapterPath: '/profile/registry-adapters/gh-1.toml', adapterHash: 'b'.repeat(64), registry: { id: 'gh', digest: `SHA-256:${'b'.repeat(64)}` }, cliVersion: { version: '2.80.0', tested: true }, capability: `tool.app_${ids.registry.replaceAll('-', '')}.invoke` }
+  const local = { type: 'program', name: 'Mail CLI', cliId: 'pods-mail', executable: '/opt/tools/o365', ...kept, runtime: { executable: '/usr/bin/env', executableHash: 'c'.repeat(64), arguments: [], readDirectories: [], environment: {}, descriptor: { path: '/opt/tools/runtime.json', hash: 'd'.repeat(64) } }, adapterPath: '/Users/owner/adapters/pods-mail.toml', adapterHash: 'e'.repeat(64), commands: [{ id: 'read' }], capability: `tool.app_${ids.local.replaceAll('-', '')}.invoke` }
+  const http = { type: 'http', origin: 'https://api.example.invalid', methods: ['GET'], capability: 'tool.http_fixture.request' }
+  for (const [id, name, configuration] of [[ids.registry, 'gh', registry], [ids.local, 'Mail CLI', local], [ids.http, 'API', http]] as const) database.prepare('INSERT INTO resources VALUES(?,?,1,\'tool\',\'ready\',?,?)').run(id, ids.pod, name, JSON.stringify(configuration))
+  database.prepare('INSERT INTO pod_grants(id,pod_id,issuer,subject,cli_id,details,display,grant_type,state,approved_in_session,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,0,1,1)').run(ids.grant, ids.pod, 'https://id.example.invalid', 'pod@pods.example.invalid', 'gh', JSON.stringify([{ type: 'openape_cli', cli_id: 'gh', operation_id: '*', resource_chain: [{ resource: 'repo' }], action: 'read', permission: 'gh.repo[]#read', display: 'Every read', risk: 'low' }]), 'Every read', 'always', 'approved')
+  database.exec('PRAGMA user_version=51'); database.close()
+  const store = open(root)
+  expect(store.db.prepare('PRAGMA user_version').get()!.user_version).toBe(schemaVersion)
+  expect(readdirSync(root).filter(file => file.startsWith('before-v51-'))).toHaveLength(1)
+  const configuration = (id: string) => JSON.parse(String(store.db.prepare('SELECT configuration FROM resources WHERE id=?').get(id)!.configuration)) as Record<string, unknown>
+  const { adapterPath: _registryPath, adapterHash: _registryHash, registry: _registry, cliVersion: _version, ...registryKept } = registry
+  const { adapterPath: _localPath, adapterHash: _localHash, commands: _commands, ...localKept } = local
+  expect(configuration(ids.registry)).toEqual(registryKept)
+  expect(configuration(ids.local)).toEqual(localKept)
+  expect(configuration(ids.http)).toEqual(http)
+  // Both programs stay callable: each names the program the IdP receives, by its former command name and file hash.
+  const resources = store.db.prepare('SELECT id,pod_id AS podId,revision,kind,state,name,configuration FROM resources').all().map(row => ({ ...row, configuration: JSON.parse(String(row.configuration)) })) as unknown as PodResource[]
+  for (const [application, capability, name] of [['gh', registry.capability, 'gh'], ['Mail CLI', local.capability, 'pods-mail']] as const) {
+    const { assignment } = programRequest(resources, ids.pod, [capability], { application, argv: ['read'] })
+    expect(programIdentity(assignment as ProgramAssignment)).toEqual({ name, sha256: kept.executableHash })
+  }
+  // The grant ledger is untouched; program calls no longer look into it, so it causes no new request.
+  expect(store.db.prepare('SELECT id,state FROM pod_grants').all()).toEqual([{ id: ids.grant, state: 'approved' }])
+  expect(JSON.parse(String(store.db.prepare('SELECT body FROM storage_receipts WHERE kind=\'conversion\' AND json_extract(body,\'$.from\')=51').get()!.body))).toMatchObject({ from: 51, programs: 2, converted: 2 })
   store.close(); stores.pop()
   expect(objects(join(root, 'control.sqlite'))).toEqual(objects(join(fresh, 'control.sqlite')))
 })

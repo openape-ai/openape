@@ -1,23 +1,23 @@
-import { join } from 'node:path'
 import { grantView } from '../../contracts/grants'
 import type { DelegateCommand, GrantDeclaration, GrantsCommand, PodGrant } from '../../contracts/grants'
 import { readJSON } from '../connections/http'
 import type { HttpPermission } from '../../contracts/http'
 import { parseHttpAuthentication } from '../../contracts/http'
+import { programIdentity } from '../../contracts/programs'
 import type { ProgramAssignment, ProgramDefinition } from '../../contracts/programs'
 import type { DirectoryAccess, PodResource, ResourceState } from '../../contracts/resources'
 import type { SandboxCommand, SandboxDeclaration, SandboxView } from '../../contracts/sandbox'
 import type { GrantLedgerCommand } from '../../worker/resources/grants'
 import { modelResources } from '../../worker/master/resources'
 import type { OwnerSession } from '../connections/owner-session'
-import { httpSpec, programSpec, runtimeSpec } from './pod-grants'
-import type { GrantSpec, PodGrants } from './pod-grants'
+import { verifyProgram } from '../programs/session'
+import { httpSpec, runtimeSpec } from './pod-grants'
+import type { PodGrants } from './pod-grants'
 
 type ProgramEntry = NonNullable<SandboxDeclaration['programs']>[number]
 /** The desktop operations the MCP grant and sandbox actions reuse; each one keeps its own checks. */
 export interface Administration {
   grants: PodGrants
-  vendor: string
   resources: (podId: string) => Promise<ResourceState>
   podName: (podId: string) => Promise<string>
   ledger: (command: GrantLedgerCommand) => Promise<unknown>
@@ -33,16 +33,34 @@ const ready = (resources: PodResource[]) => resources.filter(item => item.state 
 
 function application(resources: PodResource[], name: string): ProgramAssignment {
   const matches = ready(resources).filter(item => item.configuration.type === 'program' && (item.id === name || item.name === name || item.configuration.cliId === name))
-  if (matches.length !== 1) throw new Error(matches.length ? `Application ${name} is ambiguous; use its resource ID` : `Application ${name} is not in this Pod's sandbox; a program grant needs its adapter`)
+  if (matches.length !== 1) throw new Error(matches.length ? `Application ${name} is ambiguous; use its resource ID` : `Application ${name} is not in this Pod's sandbox; assign it before granting its commands`)
   return matches[0]!.configuration as unknown as ProgramAssignment
 }
 
-async function grantSpecs(podId: string, declaration: GrantDeclaration, admin: Administration): Promise<{ display: string, spec: () => Promise<GrantSpec> }[]> {
+/** One declared grant: what it shows and how it is requested as the Pod; the result carries the grant and, when pending, its IdP page. */
+interface DeclaredGrant { display: string, request: (signal: AbortSignal) => Promise<{ grantId: string, state: string, approvedInSession: boolean, display: string, approval: string | null }> }
+
+async function declaredGrants(podId: string, declaration: GrantDeclaration, admin: Administration): Promise<DeclaredGrant[]> {
   const { resources } = await admin.resources(podId)
+  const permission = (spec: () => Promise<ReturnType<typeof runtimeSpec>>) => async (signal: AbortSignal) => {
+    const { grant, approval } = await admin.grants.request(podId, await spec(), signal)
+    return { grantId: grant.id, state: grant.state, approvedInSession: grant.approvedInSession, display: grant.display, approval }
+  }
   return [
-    ...(declaration.runtime ? [{ display: 'Run the stored Pod script', spec: async () => runtimeSpec(join(admin.vendor, 'pod-runtime-shapes.toml'), podId, await admin.podName(podId)) }] : []),
-    ...(declaration.programs ?? []).map(entry => ({ display: entry.argv ? `${entry.application} ${entry.argv.join(' ')}` : `${entry.application} (whole program)`, spec: async () => programSpec(application(resources, entry.application), entry.argv) })),
-    ...(declaration.http ?? []).map(entry => ({ display: `${entry.origin}${entry.methods ? ` ${entry.methods.join(',')}` : ''}`, spec: async () => httpSpec(join(admin.vendor, 'pod-http-shapes.toml'), entry.origin, entry.methods) })),
+    ...(declaration.runtime ? [{ display: 'Run the stored Pod script', request: permission(async () => runtimeSpec(podId, await admin.podName(podId))) }] : []),
+    ...(declaration.programs ?? []).map(entry => ({
+      display: entry.argv ? `${entry.application} ${entry.argv.join(' ')}` : `${entry.application} (whole program)`,
+      // The IdP decides what a command means and which grant covers it (issue 1473, revision 4); a whole program is granted there.
+      request: async (signal: AbortSignal) => {
+        if (!entry.argv) throw new Error(`A grant for every ${entry.application} command is decided at the IdP; declare one command with argv, or widen an approved command there`)
+        const assignment = application(resources, entry.application)
+        await verifyProgram(assignment)
+        const display = `${assignment.cliId} ${entry.argv.join(' ')}`
+        const { grantId, approval } = await admin.grants.requestProgram(podId, { program: programIdentity(assignment), argv: entry.argv }, signal)
+        return { grantId, state: approval ? 'pending' : 'approved', approvedInSession: false, display, approval }
+      },
+    })),
+    ...(declaration.http ?? []).map(entry => ({ display: `${entry.origin}${entry.methods ? ` ${entry.methods.join(',')}` : ''}`, request: permission(async () => httpSpec(entry.origin, entry.methods)) })),
   ]
 }
 
@@ -52,15 +70,15 @@ async function grantSpecs(podId: string, declaration: GrantDeclaration, admin: A
  */
 async function requestGrants(podId: string, declaration: GrantDeclaration, approve: boolean, owner: OwnerSession | null, admin: Administration, signal: AbortSignal): Promise<Outcome[]> {
   const outcomes: Outcome[] = []
-  for (const item of await grantSpecs(podId, declaration, admin)) {
+  for (const item of await declaredGrants(podId, declaration, admin)) {
     try {
-      const { grant, approval } = await admin.grants.request(podId, await item.spec(), signal)
-      if (approval && approve && owner) {
-        const decision = await admin.grants.approve(owner, podId, grant.id, 'always', signal)
-        outcomes.push({ podId, display: grant.display, grantId: grant.id, state: decision.state, approvedInSession: true })
+      const requested = await item.request(signal)
+      if (requested.approval && approve && owner) {
+        const decision = await admin.grants.approve(owner, podId, requested.grantId, 'always', signal)
+        outcomes.push({ podId, display: requested.display, grantId: requested.grantId, state: decision.state, approvedInSession: true })
       }
       else {
-        outcomes.push({ podId, display: grant.display, grantId: grant.id, state: grant.state, approvedInSession: grant.approvedInSession, ...(approval ? { approval } : {}) })
+        outcomes.push({ podId, display: requested.display, grantId: requested.grantId, state: requested.state, approvedInSession: requested.approvedInSession, ...(requested.approval ? { approval: requested.approval } : {}) })
       }
     }
     catch (error) { outcomes.push({ podId, display: item.display, error: error instanceof Error ? error.message : 'Grant request failed' }) }
@@ -160,7 +178,8 @@ async function show(podId: string, admin: Administration) {
 /**
  * The sandbox (what a Pod CAN reach). With `grants`, the same call
  * requests the grants (what they MAY do) and approves them in the owner session; `grants: 'sandbox'` grants exactly
- * the declared programs as whole programs and the declared HTTP origins with their methods.
+ * the Pod script and the declared HTTP origins with their methods; program commands are authorized by the IdP per call
+ * (issue 1473, revision 4), so their first call asks the owner.
  */
 export async function administerSandbox(command: SandboxCommand, owner: OwnerSession | null, admin: Administration): Promise<unknown> {
   const { podId } = command.target
@@ -169,7 +188,7 @@ export async function administerSandbox(command: SandboxCommand, owner: OwnerSes
   const kept = result.kept.map(entry => ({ podId, entry }))
   if (!command.grants) return { pods: [await show(podId, admin)], kept }
   const declaration: GrantDeclaration = command.grants === 'sandbox'
-    ? { runtime: true, programs: result.applications.map(id => ({ application: id })), http: (command.sandbox.http ?? []).map(entry => ({ origin: entry.origin, methods: entry.methods })) }
+    ? { runtime: true, http: (command.sandbox.http ?? []).map(entry => ({ origin: entry.origin, methods: entry.methods })) }
     : command.grants
   const outcomes = await requestGrants(podId, declaration, command.approve !== false, owner, admin, AbortSignal.timeout(170000))
   return { pods: [await show(podId, admin)], kept, outcomes }

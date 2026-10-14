@@ -128,7 +128,7 @@ describe('pod tabs with the production stylesheet', () => {
       epoch: 3, directories: { home: '/Users/fixture/Library/Application Support/OpenApe Pods/pods/pod/home', workspace: '/Users/fixture/Library/Application Support/OpenApe Pods/pods/pod/workspace' },
       resources: [
         { id: '00000000-0000-4000-8000-000000000051', podId, revision: 1, kind: 'directory', state: 'ready', name: 'Invoices', configuration: { path: '/Users/fixture/Documents/Customers/Northwind Trading Company/Invoices/2026', access: 'read' } },
-        { id: '00000000-0000-4000-8000-000000000052', podId, revision: 1, kind: 'tool', state: 'ready', name: 'Synthetic application', configuration: { type: 'program', executable: '/Applications/Synthetic Application.app/Contents/MacOS/synthetic', grants: [{ permission: 'read', display: 'Read assigned data' }] } },
+        { id: '00000000-0000-4000-8000-000000000052', podId, revision: 1, kind: 'tool', state: 'ready', name: 'Synthetic application', configuration: { type: 'program', cliId: 'synthetic-reporting-cli', executable: '/opt/homebrew/bin/synthetic-reporting-cli', executableHash: 'a'.repeat(64), networkHosts: [] } },
         { id: '00000000-0000-4000-8000-000000000053', podId, revision: 1, kind: 'tool', state: 'ready', name: 'https://api.example.com', configuration: { type: 'http', origin: 'https://api.example.com', methods: ['GET', 'POST'] } },
       ],
     }
@@ -151,10 +151,11 @@ describe('pod tabs with the production stylesheet', () => {
     await show(560, 800, 'dark')
     expect(pageFits()).toBe(true)
     expect(document.querySelector('.directory-select .directory-label')!.getBoundingClientRect().width).toBeGreaterThan(120)
-    // The assigned program has no registry adapter (issue 1473): its exact-approval note wraps inside the card.
-    const note = document.querySelector('.application-card .adapter-note')!
-    expect(note.textContent).toContain('exakte Freigabe')
+    // Issue 1473, revision 4: a CLI shows the command name the IdP decides it by, inside the card, and no adapter note.
+    const note = document.querySelector('.application-card .command-note')!
+    expect(note.textContent).toBe('Befehl synthetic-reporting-cli')
     expect(note.getBoundingClientRect().right).toBeLessThanOrEqual(document.querySelector('.application-card .play-button')!.getBoundingClientRect().left)
+    expect(document.querySelector('.application-card')!.textContent).not.toMatch(/Adapter|Registry|exakte Freigabe/)
     await page.screenshot({ path: artifact('program-permissions-de-dark.png'), element: document.querySelector('.application-card')! })
     await page.screenshot({ path: artifact('external-terminal-de-dark.png'), element: document.querySelector('.program-permissions')! })
   })

@@ -1,5 +1,5 @@
 /**
- * Mail moves belong to owner approvals: an adapter operation with one of these actions runs only through the approved
+ * Mail moves belong to owner approvals: a command whose grant carries one of these actions runs only through the approved
  * archive service (context.mail.archiveApproved), bound to one approved message. A whole-program grant never covers
  * it, and scripts, agents and terminals cannot call it, whatever grant the Pod holds.
  */

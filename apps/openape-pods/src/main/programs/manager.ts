@@ -1,4 +1,4 @@
-import { parseNetworkHosts } from '../../contracts/programs'
+import { parseNetworkHosts, programIdentity } from '../../contracts/programs'
 import { assignedDirectories, directoryPolicy } from '../../runtime/directories'
 import { ApplicationLaunch } from './launch'
 import { ExternalShell } from '../shell/session'
@@ -7,18 +7,14 @@ import { randomUUID } from 'node:crypto'
 import { dirname, basename, join  } from 'node:path'
 import { constants } from 'node:fs'
 import { open, writeFile } from 'node:fs/promises'
-import { loadAdapter, resolveCommand } from '@openape/apes'
-import { cliAuthorizationDetailsCover } from '@openape/grants'
 import type { ProgramAssignment, ProgramCommand, ProgramDefinition, TerminalView } from '../../contracts/programs'
 import type { PodResource, ResourceState } from '../../contracts/resources'
 import type { ProgramInternal } from '../../worker/resources/programs'
 import type { ConnectionManager } from '../connections/manager'
 import type { CredentialCache } from '../connections/cache'
-import { verifyExecutable } from '../../worker/runtime/sandbox'
-import { ProgramSession } from './session'
+import { ProgramSession, verifyProgram } from './session'
 import type { ProgramAccess } from './session'
-import { programSpec } from '../grants/pod-grants'
-import type { PodGrants } from '../grants/pod-grants'
+import type { ProgramCall } from '../broker/authorization'
 import { ProgramState } from './state'
 import { prepareConsole, podWorkspace } from './console'
 
@@ -26,7 +22,7 @@ export class ProgramManager {
   private launches = new Map<string, ApplicationLaunch>()
   private shells = new Map<string, ExternalShell>()
   private sessions = new Map<string, ProgramSession>()
-  constructor(private readonly root: string, private readonly helper: string, private readonly credentials: CredentialCache, private readonly connections: ConnectionManager, private readonly resources: (podId: string) => Promise<ResourceState>, private readonly dispatch: (command: ProgramInternal) => Promise<unknown>, private readonly grants: PodGrants, private readonly access: (podId: string) => ProgramAccess) {}
+  constructor(private readonly root: string, private readonly helper: string, private readonly credentials: CredentialCache, private readonly connections: ConnectionManager, private readonly resources: (podId: string) => Promise<ResourceState>, private readonly dispatch: (command: ProgramInternal) => Promise<unknown>, private readonly access: (podId: string) => ProgramAccess) {}
   private async assignment(podId: string, id: string, epoch: number): Promise<ProgramAssignment> {
     const state = await this.resources(podId)
     const resource = state.resources.find(item => item.id === id && item.podId === podId && item.state === 'ready' && item.configuration.type === 'program')
@@ -52,20 +48,14 @@ export class ProgramManager {
   }
 
   async prepare(podId: string, line: string) {
-    const grants = (await this.grants.list({ podId })).filter(grant => grant.state === 'approved')
-    return prepareConsole(dirname(this.root), podId, await this.resources(podId), line, async detail => grants.some(grant => cliAuthorizationDetailsCover(grant.details, [detail])))
+    return prepareConsole(dirname(this.root), podId, await this.resources(podId), line)
   }
 
-  async preview(podId: string, id: string, epoch: number, argv: string[]) {
-    const assignment = await this.assignment(podId, id, epoch)
-    await verifyExecutable(assignment.adapterPath, assignment.adapterHash)
-    const adapter = loadAdapter(assignment.cliId, assignment.adapterPath)
-    return resolveCommand(adapter, [assignment.cliId, ...argv])
-  }
-
-  /** What a grant for one command of an assigned application asks for; the grant is recorded apart from the application. */
-  async grantSpec(command: Extract<ProgramCommand, { type: 'grant' }>) {
-    return programSpec(await this.assignment(command.podId, command.applicationId, command.epoch), command.argv)
+  /** The call a grant for one command of an assigned application is requested for; the IdP decides what it covers. */
+  async grantCall(command: Extract<ProgramCommand, { type: 'grant' }>): Promise<ProgramCall> {
+    const assignment = await this.assignment(command.podId, command.applicationId, command.epoch)
+    await verifyProgram(assignment)
+    return { program: programIdentity(assignment), argv: command.argv }
   }
 
   async importFile(podId: string, applicationId: string, epoch: number, source: string): Promise<void> {

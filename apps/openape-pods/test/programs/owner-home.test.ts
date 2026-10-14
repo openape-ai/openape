@@ -25,8 +25,7 @@ import { launchTerminal } from '../../src/worker/runtime/terminal'
 vi.mock('../../src/worker/runtime/sandbox', async original => ({ ...await original<typeof import('../../src/worker/runtime/sandbox')>(), launchSandbox: vi.fn() }))
 vi.mock('../../src/worker/runtime/terminal', () => ({ launchTerminal: vi.fn() }))
 vi.mock('../../src/worker/recovery/domains', () => ({ inspectDomainRecords: vi.fn(async () => {}) }))
-vi.mock('../../src/main/broker/authorization', () => ({ AgentAuthority: class { async authorize() {} async assertActive() {} } }))
-vi.mock('@openape/apes', () => ({ loadAdapter: () => ({ digest: 'synthetic' }), resolveCommand: async () => ({ detail: { action: 'list' } }), exactCommand: (resolved: unknown) => resolved }))
+vi.mock('../../src/main/broker/authorization', () => ({ AgentAuthority: class { async authorizeProgram() { return { grantId: 'fixture', actions: ['list'] } } async assertActive() {} } }))
 
 interface Launch { policy: RuntimePolicy, environment: Record<string, string>, temporaryExisted: boolean }
 const podId = randomUUID(); const applicationId = randomUUID()
@@ -55,9 +54,9 @@ const applicationState = expect.stringMatching(/\/credentials\/temporary\/.+\/ap
 
 async function brokerCall(level: SandboxLevel, identityConnection?: AgentConnection) {
   const program = await executable(); const stateId = await new ProgramState(credentials).create({ podId, applicationId })
-  const argv = ['az', 'repos', 'pr', 'list']
-  const assignment: ToolAssignment = { id: applicationId, identityConnection, grantId: '', command: { cliId: 'az', adapterPath: '/fixture/az.toml', adapterDigest: 'synthetic', argv, coverage: [] }, reach: reach(level), programState: { id: stateId, podId, applicationId }, capability: 'tool.az.invoke', executable: program.path, executableHash: program.hash, entryFiles: [], prefix: [], runtimeDirectories: [], environment: {}, runtimeEnvironment: { HOME: '/descriptor/home' }, networkPorts: [] }
-  const broker = new PodToolBroker('/fixture/helper', join(root, 'broker'), { authorize: async () => {} } as never, credentials)
+  const argv = ['repos', 'pr', 'list']
+  const assignment: ToolAssignment = { id: applicationId, identityConnection, program: { path: program.path, name: 'az', sha256: program.hash }, argv, reach: reach(level), programState: { id: stateId, podId, applicationId }, capability: 'tool.az.invoke', executable: program.path, executableHash: program.hash, entryFiles: [], prefix: [], runtimeDirectories: [], environment: {}, runtimeEnvironment: { HOME: '/descriptor/home' }, networkPorts: [] }
+  const broker = new PodToolBroker('/fixture/helper', join(root, 'broker'), async () => {}, credentials)
   const reply = await broker.execute(assignment, { toolId: applicationId, argv }, { capabilities: ['tool.az.invoke'], assertCurrent: () => {}, signal: AbortSignal.timeout(5000) })
   return { reply, launch: launches.at(-1)! }
 }
@@ -86,8 +85,7 @@ it('keeps an isolated program in its private application state for HOME and temp
 
 async function terminal(level: SandboxLevel) {
   const program = await executable(); const stateId = await new ProgramState(credentials).create({ podId, applicationId })
-  const adapter = join(root, 'az.toml'); await writeFile(adapter, 'synthetic')
-  const assignment = { type: 'program', name: 'az', cliId: 'az', executable: program.path, executableHash: program.hash, adapterPath: adapter, adapterHash: createHash('sha256').update('synthetic').digest('hex'), stateId, capability: 'tool.az.invoke', networkHosts: [], entryFiles: [], environment: {} } as unknown as ProgramAssignment
+  const assignment = { type: 'program', name: 'az', cliId: 'az', executable: program.path, executableHash: program.hash, stateId, capability: 'tool.az.invoke', networkHosts: [], entryFiles: [], environment: {} } as unknown as ProgramAssignment
   const workspace = join(root, 'workspace'); await mkdir(workspace)
   const sessionId = randomUUID()
   const session = new ProgramSession(sessionId, podId, applicationId, assignment, ['login'], '/fixture/helper', join(root, 'authentication'), credentials, async () => {}, async () => {}, workspace, { readDirectories: [], writeDirectories: [] }, { connection: async () => ({}) as never, ledger: {} as never, origin: async () => 'Pod', reach: async () => reach(level) })

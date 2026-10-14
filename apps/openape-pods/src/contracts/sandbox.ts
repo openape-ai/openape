@@ -3,7 +3,7 @@ import { parseCredentialAlias } from './credentials'
 import { parseGrantDeclaration, parseGrantTarget } from './grants'
 import type { GrantDeclaration, GrantTarget } from './grants'
 import { parseHttpPermission } from './http'
-import { registryAdaptersOnly } from './programs'
+import { programsByPath } from './programs'
 import type { HttpPermission } from './http'
 import type { DirectoryAccess } from './resources'
 
@@ -20,14 +20,17 @@ export const sandboxLevels: readonly SandboxLevel[] = ['isolated', 'owner']
 /** Owner files are named by absolute path; their content never passes through MCP. */
 export interface SandboxDeclaration {
   level?: SandboxLevel
-  programs?: { path: string, commandName?: string, runtimePath?: string }[]
+  programs?: { path: string, runtimePath?: string }[]
   http?: HttpPermission[]
   directories?: { path: string, access: DirectoryAccess }[]
   secrets?: { alias: string, path: string }[]
   /** Replaces the Pod's denylist; an empty list clears it. */
   deny?: string[]
 }
-/** `grants: 'sandbox'` grants exactly what the declaration makes reachable: each program whole and each HTTP origin with its methods. */
+/**
+ * `grants: 'sandbox'` grants what the declaration makes reachable: running the Pod script and each HTTP origin with its
+ * methods. Program commands are authorized by the IdP per call, so the first call of a command asks the owner.
+ */
 export type SandboxCommand
   = | { type: 'show', target: GrantTarget }
     | { type: 'apply', target: GrantTarget, sandbox: SandboxDeclaration, grants?: GrantDeclaration | 'sandbox', approve?: boolean }
@@ -89,10 +92,9 @@ export function parseSandboxDeclaration(value: unknown): SandboxDeclaration {
   if (input.level !== undefined) result.level = parseSandboxLevel(input.level)
   if (input.programs !== undefined) {
     result.programs = list(input.programs, 'programs').map((entry) => {
-      const item = object(entry, ['path', 'adapterPath', 'commandName', 'runtimePath'], 'Invalid sandbox program')
-      if (item.adapterPath !== undefined) throw new Error(registryAdaptersOnly)
-      if (item.commandName !== undefined && (typeof item.commandName !== 'string' || !/^[\w.-]{1,100}$/.test(item.commandName))) throw new Error('Invalid command name')
-      return { path: path(item.path), ...(item.commandName === undefined ? {} : { commandName: item.commandName as string }), ...(item.runtimePath === undefined ? {} : { runtimePath: path(item.runtimePath) }) }
+      if (entry && typeof entry === 'object' && ('adapterPath' in entry || 'commandName' in entry)) throw new Error(programsByPath)
+      const item = object(entry, ['path', 'runtimePath'], 'Invalid sandbox program')
+      return { path: path(item.path), ...(item.runtimePath === undefined ? {} : { runtimePath: path(item.runtimePath) }) }
     })
   }
   if (input.http !== undefined) result.http = list(input.http, 'HTTP origins').map(parseHttpPermission)
