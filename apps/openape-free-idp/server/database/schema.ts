@@ -50,6 +50,8 @@ export const shapes = sqliteTable('shapes', {
   versions: text('versions', { mode: 'json' }),
   // JSON-encoded file digests (SHA-256:<hex>) of tested executables; null when the adapter lists none
   testedDigests: text('tested_digests', { mode: 'json' }),
+  // 1 for an executable no program provides (the Pods desktop performs the operation itself)
+  virtual: integer('virtual', { mode: 'boolean' }),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 }, table => [

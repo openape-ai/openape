@@ -27,6 +27,18 @@ interface AdapterMeta {
   description: string
 }
 
+/**
+ * Adapters of operations the Pods desktop performs itself (pod-runtime,
+ * pod-http, pod-ssh). Pods pins exactly these registry copies, so its pin file
+ * is the one list of virtual executables; the IdP never reads a program call
+ * with them (issue 1473).
+ */
+function virtualAdapterIds(): Set<string> {
+  const pins = resolve(import.meta.dirname ?? __dirname, '..', 'apps', 'openape-pods', 'runtime-sources', 'registry-adapters.json')
+  const { adapters } = JSON.parse(readFileSync(pins, 'utf-8')) as { adapters: Record<string, unknown> }
+  return new Set(Object.keys(adapters))
+}
+
 function resolveRegistryPath(): string {
   if (process.env.SHAPES_REGISTRY_PATH) return resolve(process.env.SHAPES_REGISTRY_PATH)
   return resolve(import.meta.dirname ?? __dirname, '..', '..', 'shapes-registry')
@@ -36,7 +48,7 @@ function resolveRegistryPath(): string {
  * Parses with the same strict parser as apes and Pods, so the stored
  * operations, presentation, versions and digest equal what they compute.
  */
-function loadShape(dir: string, cliId: string): ServerShape | null {
+function loadShape(dir: string, cliId: string, virtualIds: Set<string>): ServerShape | null {
   const adapterPath = join(dir, 'adapter.toml')
   const metaPath = join(dir, 'meta.json')
   if (!existsSync(adapterPath)) return null
@@ -57,6 +69,7 @@ function loadShape(dir: string, cliId: string): ServerShape | null {
     digest,
     ...(tested_versions && version_command && version_pattern ? { versions: { tested_versions, version_command, version_pattern } } : {}),
     ...(tested_digests ? { tested_digests } : {}),
+    ...(virtualIds.has(adapter.cli.id) ? { virtual: true } : {}),
     createdAt: now,
     updatedAt: now,
   }
@@ -86,7 +99,8 @@ async function main() {
   })
 
   // Parse every adapter before writing, so one invalid adapter leaves the table untouched.
-  const loaded = entries.map(entry => loadShape(join(adaptersDir, entry), entry)).filter(shape => shape !== null)
+  const virtualIds = virtualAdapterIds()
+  const loaded = entries.map(entry => loadShape(join(adaptersDir, entry), entry, virtualIds)).filter(shape => shape !== null)
   console.log(`Seeding ${loaded.length} shape(s) from ${registryPath}...`)
 
   for (const shape of loaded) {
@@ -99,6 +113,7 @@ async function main() {
       digest: shape.digest,
       versions: shape.versions ?? null,
       testedDigests: shape.tested_digests ?? null,
+      virtual: shape.virtual ?? null,
       createdAt: shape.createdAt,
       updatedAt: shape.updatedAt,
     }).onConflictDoUpdate({
@@ -110,6 +125,7 @@ async function main() {
         digest: shape.digest,
         versions: shape.versions ?? null,
         testedDigests: shape.tested_digests ?? null,
+        virtual: shape.virtual ?? null,
         updatedAt: shape.updatedAt,
         source: 'builtin',
       },
