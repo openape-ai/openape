@@ -1,6 +1,6 @@
 {
   "name": "@openape/ape-secrets",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "CLI for secrets.openape.ai — hand a secret to a machine without it passing through a chat",
   "type": "module",
   "license": "MIT",

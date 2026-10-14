@@ -1,5 +1,13 @@
 # @openape/ape-chat
 
+## 0.4.7
+
+### Patch Changes
+
+- 0c35914: Provide an opt-in product reporting link that sends only a product key to the native issue service and suppresses the referring app URL.
+- Updated dependencies [8baa724]
+  - @openape/cli-auth@0.6.0
+
 ## 0.4.6
 
 ### Patch Changes

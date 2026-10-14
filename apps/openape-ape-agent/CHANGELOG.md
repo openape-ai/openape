@@ -1,5 +1,22 @@
 # @openape/ape-agent
 
+## 2.11.17
+
+### Patch Changes
+
+- 0c35914: Provide an opt-in product reporting link that sends only a product key to the native issue service and suppresses the referring app URL.
+- Updated dependencies [8aec8c7]
+- Updated dependencies [b51b761]
+- Updated dependencies [8baa724]
+- Updated dependencies [40aeb4b]
+- Updated dependencies [2eca3af]
+- Updated dependencies [be10b17]
+- Updated dependencies [ea20fbb]
+- Updated dependencies [a419dad]
+- Updated dependencies [eb6dfdc]
+  - @openape/apes@2.0.0
+  - @openape/cli-auth@0.6.0
+
 ## 2.11.16
 
 ### Patch Changes

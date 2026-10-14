@@ -1,5 +1,14 @@
 # @openape-question-service/app
 
+## 0.0.6
+
+### Patch Changes
+
+- Updated dependencies [c5e12ce]
+- Updated dependencies [2873623]
+- Updated dependencies [0c35914]
+  - @openape/nuxt-auth-sp@0.17.0
+
 ## 0.0.5
 
 ### Patch Changes

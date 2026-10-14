@@ -1,5 +1,15 @@
 # @openape/nest
 
+## 2.4.17
+
+### Patch Changes
+
+- 0c35914: Provide an opt-in product reporting link that sends only a product key to the native issue service and suppresses the referring app URL.
+- Updated dependencies [8baa724]
+- Updated dependencies [0c35914]
+  - @openape/cli-auth@0.6.0
+  - @openape/ape-agent@2.11.17
+
 ## 2.4.16
 
 ### Patch Changes

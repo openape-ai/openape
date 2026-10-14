@@ -1,5 +1,12 @@
 # @openape/ape-troop
 
+## 0.2.3
+
+### Patch Changes
+
+- Updated dependencies [8baa724]
+  - @openape/cli-auth@0.6.0
+
 ## 0.2.2
 
 ### Patch Changes
