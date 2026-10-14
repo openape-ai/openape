@@ -1,5 +1,13 @@
 # Active work
 
+## Readable exact-command fallback and batch history — issue 1477
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1477. Branch `feature/issue-1477-readable-command-fallback`, base `49fef2b3`. Follow-up to issue 1473 from the owner's phone screenshot of a pods-graph-gate batch ("Aber auch ohne shape muss das schöner gehen").
+- Generic rules in `modules/nuxt-auth-idp/src/runtime/utils/command-structure.ts`, no program special cases: program + leading subcommand words as head; only canonical JSON objects (`JSON.stringify` round trip, no hidden characters after decoding) become key/value lists, nested one level; ambiguous strings keep JSON quotes; `--name value` options; `--name=value` stays one token. Unsafe argv (control/format characters, over 4096 characters) and `bash -c` lines keep the raw rendering.
+- Batch rows: head + facts within a character budget, middle-truncated values, "+N more". Rows whose short forms read the same while binding different commands add the first differing fact, then full values, else keep the raw line. Card: head + key/value blocks; the raw line sits under the technical details.
+- Owner addition: the batch decision list holds only open decidable members; pending members needing their own view stay visible with "Review individually"; decided members move into a closed "Already decided (N)" history, newest first.
+- Rollout: IdP deploy only (free-idp + pods-idp); no desktop change. Checks and screenshots are recorded on the PR.
+
 ## Long program calls through the broker — issue 1476
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1476. Branch `bugfix/issue-1476-authorize-activity-failure`, base `4a1fa8eb`.
