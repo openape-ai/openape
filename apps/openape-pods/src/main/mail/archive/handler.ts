@@ -5,7 +5,7 @@ import type { ArchiveRecord } from '../../../contracts/mail-archive'
 import { parseArchiveProposal } from '../../../contracts/mail-archive'
 import type { CredentialCache } from '../../connections/cache'
 import type { ConnectionManager } from '../../connections/manager'
-import type { GrantLedgerPort, GrantObserver } from '../../broker/authorization'
+import type { GrantLedgerPort, GrantObserver, GrantPresentation } from '../../broker/authorization'
 import { invokeProgram } from '../../programs/invoke'
 import type { SandboxReach } from '../../../contracts/sandbox'
 import { podWorkspace } from '../../programs/console'
@@ -27,6 +27,7 @@ interface Request {
   observe: GrantObserver
   ledger?: GrantLedgerPort
   reach: () => Promise<SandboxReach>
+  presentation?: GrantPresentation
 }
 export async function handleMailArchive(input: Request): Promise<unknown> {
   const { scope, signal, check, service } = input
@@ -34,7 +35,7 @@ export async function handleMailArchive(input: Request): Promise<unknown> {
   if (!body || typeof body !== 'object' || Array.isArray(body) || !['prepare', 'process'].includes(body.operation) || Object.keys(body).some(key => !['operation', ...(body.operation === 'prepare' ? ['proposal'] : [])].includes(key))) throw new Error('Invalid archive operation')
   return service.run(scope.podId, async () => {
     const connection = await input.connections.podConnection(scope.podId)
-    const authority = createArchiveAuthority(connection, signal, check)
+    const authority = createArchiveAuthority(connection, signal, check, input.presentation?.origin)
     const state = await check()
     const workspace = await podWorkspace(input.root, scope.podId)
     const directories = directoryPolicy(await assignedDirectories(input.root, scope.podId, state.resources))
@@ -45,7 +46,7 @@ export async function handleMailArchive(input: Request): Promise<unknown> {
       return archiveProvider(selected.id, selected.assignment, mailbox, {
         read: async (argv) => {
           const current = await check()
-          return invokeProgram(current.resources, scope.podId, { applicationId: selected.id, argv }, input.helper, root, input.credentials, lease, { connection, ledger: input.ledger, reach: await input.reach(), observe: input.observe })
+          return invokeProgram(current.resources, scope.podId, { applicationId: selected.id, argv }, input.helper, root, input.credentials, lease, { connection, ledger: input.ledger, reach: await input.reach(), observe: input.observe, presentation: input.presentation })
         },
         move: async (argv) => {
           if (!record) throw new Error('Preparation cannot move mail')

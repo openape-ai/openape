@@ -73,6 +73,11 @@ const batches = computed(() => {
   }))
 })
 const uncertain = computed(() => approvals.value.filter(item => item.state === 'unknown'))
+/** A script's summary link is shown by its host and opened only as http(s) (issue 1473). */
+function summaryLink(value: string | null): { href: string, host: string } | null {
+  const url = value ? URL.parse(value) : null
+  return url && ['http:', 'https:'].includes(url.protocol) ? { href: url.href, host: url.host } : null
+}
 const held = computed(() => props.domain?.held ?? [])
 const effects = computed(() => props.domain?.unknownEffects ?? [])
 const rights = computed(() => rightsRows(props.view))
@@ -181,8 +186,10 @@ defineExpose({ total })
             {{ t('Show objects') }}
           </summary>
           <ul class="plainlist">
-            <li v-for="item in batch.items" :key="item.id">
+            <li v-for="item in batch.items" :key="item.id" data-approval>
               {{ item.title }} <span class="meta">· {{ label(item.state) }}</span>
+              <span v-if="item.description" class="approval-description meta">{{ item.description }}</span>
+              <a v-if="summaryLink(item.link)" class="meta" :href="summaryLink(item.link)!.href" target="_blank" rel="noopener noreferrer">{{ summaryLink(item.link)!.host }}</a>
             </li>
           </ul>
         </details>
@@ -191,6 +198,10 @@ defineExpose({ total })
         <div class="row">
           <span class="pill warn">{{ label(approval.state) }}</span><span class="subj">{{ approval.title }}</span><span class="meta">{{ podName(approval.podId) }} · {{ stamp(approval.updatedAt, language) }}</span>
         </div>
+        <p v-if="approval.description" class="approval-description meta">
+          {{ approval.description }}
+        </p>
+        <a v-if="summaryLink(approval.link)" class="meta" :href="summaryLink(approval.link)!.href" target="_blank" rel="noopener noreferrer">{{ summaryLink(approval.link)!.host }}</a>
         <p v-if="approval.reason" class="meta">
           {{ diagnostic(approval.reason) }}
         </p>
@@ -331,5 +342,5 @@ defineExpose({ total })
 .decisions-inbox .idp{border-color:var(--idp);background:var(--idp-soft);color:var(--idp);font-weight:600}
 .decisions-inbox .gatehead{padding:4px 0}.decisions-inbox .grp{display:grid;gap:8px;padding:10px 12px;border:1px dashed var(--border);border-radius:8px}
 .decisions-inbox .raw{font-family:ui-monospace,Menlo,monospace;font-size:11px;white-space:pre-wrap;background:var(--tint);border-radius:6px;padding:8px 10px;margin:0;color:var(--muted)}
-.decisions-inbox .plainlist{margin:0;padding-left:18px;font-size:13px}.decisions-inbox label input[type=text],.decisions-inbox label input:not([type]){font:inherit;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);min-width:240px}
+.decisions-inbox .plainlist{margin:0;padding-left:18px;font-size:13px}.decisions-inbox .approval-description{display:block;margin:0;white-space:pre-line;overflow-wrap:anywhere}.decisions-inbox [data-approval] a{display:inline-block;margin-right:8px}.decisions-inbox label input[type=text],.decisions-inbox label input:not([type]){font:inherit;padding:4px 8px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);min-width:240px}
 </style>

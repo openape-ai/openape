@@ -3020,7 +3020,6 @@
   "The command passes {p0}, which its adapter operation does not declare; an approved command runs only with declared options": "Der Befehl übergibt {p0}, das seine Adapter-Operation nicht deklariert; ein freigegebener Befehl läuft nur mit deklarierten Optionen",
   "A program approval shows only printable ASCII; this command contains other characters and runs only with a grant": "Eine Programmfreigabe zeigt nur druckbares ASCII; dieser Befehl enthält andere Zeichen und läuft nur mit einer Berechtigung",
   "The command is too long for a program approval; the owner must see it complete (at most {p0} characters)": "Der Befehl ist für eine Programmfreigabe zu lang; der Eigentümer muss ihn vollständig sehen (höchstens {p0} Zeichen)",
-  "The adapter description of this command cannot be shown complete; it runs only with a grant": "Die Adapterbeschreibung dieses Befehls kann nicht vollständig angezeigt werden; er läuft nur mit einer Berechtigung",
   "running now": "läuft gerade",
   "on new shared data": "bei neuen gemeinsamen Daten",
   "manual only": "nur manuell",
@@ -3053,7 +3052,15 @@
   "Access": "Zugriffe",
   "Archived ({count})": "Archivierte ({count})",
   "Request sent to OpenApe Secrets.": "Anfrage an OpenApe Secrets gesendet.",
-  "The baseline lacks a schema-50 approval check": "Dem Basisschema fehlt eine Freigabeprüfung von Schema 50",
-  "A program approval headline is printable ASCII of at most {p0} characters": "Die Überschrift einer Programmfreigabe besteht aus höchstens {p0} druckbaren ASCII-Zeichen",
-  "The headline and the complete command do not fit one approval; shorten the headline": "Überschrift und vollständiger Befehl passen nicht in eine Freigabe; kürze die Überschrift"
+  "A summary names only title, description and link": "Eine Angabe nennt nur Titel, Beschreibung und Link",
+  "The baseline lacks a known approval schema change": "Dem Basisschema fehlt eine bekannte Änderung des Freigabeschemas",
+  "summary.{p0} must not contain control or format characters other than line feeds": "summary.{p0} darf außer Zeilenumbrüchen keine Steuer- oder Formatzeichen enthalten",
+  "summary.{p0} must not contain control or format characters": "summary.{p0} darf keine Steuer- oder Formatzeichen enthalten",
+  "summary.{p0} must be at most {p1} characters": "summary.{p0} darf höchstens {p1} Zeichen haben",
+  "summary.{p0} must be a string": "summary.{p0} muss Text sein",
+  "summary has unknown fields: {p0}": "summary hat unbekannte Felder: {p0}",
+  "A summary link is an http or https URL without credentials": "Ein Angabe-Link ist eine http- oder https-URL ohne Zugangsdaten",
+  "summary must be an object": "summary muss ein Objekt sein",
+  "summary.title is required and must not be blank": "summary.title ist Pflicht und darf nicht leer sein",
+  "summary.text is no longer supported; send title and description": "summary.text wird nicht mehr unterstützt; sende title und description"
 }

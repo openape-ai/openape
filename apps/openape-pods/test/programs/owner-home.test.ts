@@ -87,7 +87,7 @@ async function terminal(level: SandboxLevel) {
   const assignment = { type: 'program', name: 'az', cliId: 'az', executable: program.path, executableHash: program.hash, adapterPath: adapter, adapterHash: createHash('sha256').update('synthetic').digest('hex'), stateId, capability: 'tool.az.invoke', networkHosts: [], entryFiles: [], environment: {} } as unknown as ProgramAssignment
   const workspace = join(root, 'workspace'); await mkdir(workspace)
   const sessionId = randomUUID()
-  const session = new ProgramSession(sessionId, podId, applicationId, assignment, ['login'], '/fixture/helper', join(root, 'authentication'), credentials, async () => {}, async () => {}, workspace, { readDirectories: [], writeDirectories: [] }, { connection: async () => ({}) as never, ledger: {} as never, reach: async () => reach(level) })
+  const session = new ProgramSession(sessionId, podId, applicationId, assignment, ['login'], '/fixture/helper', join(root, 'authentication'), credentials, async () => {}, async () => {}, workspace, { readDirectories: [], writeDirectories: [] }, { connection: async () => ({}) as never, ledger: {} as never, origin: async () => 'Pod', reach: async () => reach(level) })
   await session.completed
   expect(session.view().error).toBeNull()
   return { launch: launches.at(-1)!, sessionDirectory: join(root, 'authentication', sessionId) }

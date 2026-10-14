@@ -65,6 +65,8 @@ it('renews consumed once grants and verifies/consumes two independently authoriz
   expect(f.state.tokens).toEqual(['fresh-1', 'fresh-2'])
   expect(f.state.consumes).toEqual(['fresh-1', 'fresh-2'])
   expect(f.state.bodies[0]).toMatchObject({ permissions: [f.resolved.permission], target_host: f.connection.targetHost, grant_type: 'always' })
+  // Without a script summary the IdP gets the adapter's description as title, nothing composed.
+  expect(f.state.bodies[0].summary).toEqual({ title: f.resolved.detail.display })
   // A continuing request waits for the owner's decision instead of a caller deadline.
   expect(f.state.bodies[0]).not.toHaveProperty('waits_until')
   expect(f.resolved.executionContext.context_bindings).toMatchObject({ name: 'Synthetic Pod', script: '/fixture/run.mjs', environment: '{"HOME":"/fixture/home"}' })
@@ -77,10 +79,12 @@ it('requests a continuing grant for a program command that has no recorded grant
   const argv = ['pod-http', 'request', '--origin', 'https://api.example.test', '--method', 'GET']
   const resolved = await resolveCommand(adapter, argv)
   const controller = new AbortController()
-  const work = f.authority.authorize({ command: { cliId: 'pod-http', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] }, grantId: '' }, controller.signal)
+  // Issue 1473: the script's summary of the call and the Pod's name reach the IdP as they are, only with a new request.
+  const authority = new AgentAuthority(f.connection, async (progress) => { f.state.progress.push(progress) }, undefined, undefined, { origin: 'Rebase Pod', summary: { title: 'Read the pull request state', link: 'https://repos.example.test/pr/7' } })
+  const work = authority.authorize({ command: { cliId: 'pod-http', adapterPath, adapterDigest: adapter.digest, argv, coverage: [resolved.detail] }, grantId: '' }, controller.signal)
   const cancelled = expect(work).rejects.toThrow()
   await expect.poll(() => f.state.creates).toBe(1)
-  expect(f.state.bodies[0]).toMatchObject({ grant_type: 'always', permissions: [resolved.permission] })
+  expect(f.state.bodies[0]).toMatchObject({ grant_type: 'always', permissions: [resolved.permission], summary: { title: 'Read the pull request state', origin: 'Rebase Pod', link: 'https://repos.example.test/pr/7' } })
   expect(f.state.bodies[0]).not.toHaveProperty('waits_until')
   controller.abort(); await cancelled
 })

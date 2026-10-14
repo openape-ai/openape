@@ -49,9 +49,8 @@ it('freezes provider metadata and binds one grant to each message', async () => 
   expect(prepared).toMatchObject({ state: 'pending', count: 1 })
   expect(record!.grants).toEqual([{ id: f.mail.id, grantId: expect.any(String) }])
   const item = record!.manifest.items[0]!
-  const summary = archiveItemSummary(item)
-  expect(summary.split('\n')[0]).toBe(`${f.mail.sender} – ${f.mail.subject}`)
-  for (const text of [f.mail.receivedAt, f.mail.url, f.proposal.items[0]!.reason]) expect(summary).toContain(text)
+  // The IdP shows data and the script's reason as they are, with the Pod as origin (issue 1473).
+  expect(archiveItemSummary(item, 'Newsletter Pod')).toEqual({ title: f.mail.subject, description: f.proposal.items[0]!.reason, origin: 'Newsletter Pod', link: f.mail.url })
   for (const text of [f.mail.version, f.proposal.mailbox, record!.manifest.id]) expect(archiveItemCommand(record!.manifest, item).join(' ')).toContain(text)
   expect(f.provider.move).not.toHaveBeenCalled()
   expect(f.authority.consume).not.toHaveBeenCalled()

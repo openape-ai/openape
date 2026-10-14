@@ -22,10 +22,10 @@ export const domain: DomainOverview = {
   namespaces: [], operations: [],
   questions: [...choiceEvents].sort((a, b) => Date.parse(a[6]) - Date.parse(b[6])).map(recorded => ({ id: `${recorded[0]}-0000-4000-8000-000000000000`.slice(0, 36), podId: classification.id, namespace: 'delta-mind/mail/owner-answers', key: recorded[0], title: 'Review uncertain mail', body: String(choicePayload(recorded).subject), options, data: { sender: recorded[2], category: recorded[4], confidence: recorded[5] }, createdAt: Date.parse(recorded[6]) })),
   approvals: [
-    { id: '00000000-0000-4000-8000-0000000000a1', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n1', title: 'Archive mail from news@shop.example', state: 'requested', reason: null, batchId: 'batch-1', batchUrl: 'https://id.openape.ai/grant-batch?id=1', updatedAt: view.at },
-    { id: '00000000-0000-4000-8000-0000000000a3', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n3', title: 'Archive mail from deals@shop.example', state: 'requested', reason: null, batchId: 'batch-1', batchUrl: 'https://id.openape.ai/grant-batch?id=1', updatedAt: view.at },
-    { id: '00000000-0000-4000-8000-0000000000a4', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n4', title: 'Archive mail from digest@social.example', state: 'approved', reason: null, batchId: 'batch-1', batchUrl: 'https://id.openape.ai/grant-batch?id=1', updatedAt: view.at },
-    { id: '00000000-0000-4000-8000-0000000000a2', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n2', title: 'Archive mail from hello@saas.example', state: 'unknown', reason: 'Restored backup: the owner decision after the backup is unknown; request the approval again', batchId: null, batchUrl: null, updatedAt: view.at },
+    { id: '00000000-0000-4000-8000-0000000000a1', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n1', title: 'Spring sale at Shop', description: 'Newsletter: the sender offers an unsubscribe link', link: 'https://shop.example/newsletter/spring', state: 'requested', reason: null, batchId: 'batch-1', batchUrl: 'https://id.openape.ai/grant-batch?id=1', updatedAt: view.at },
+    { id: '00000000-0000-4000-8000-0000000000a3', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n3', title: 'Archive mail from deals@shop.example', description: null, link: null, state: 'requested', reason: null, batchId: 'batch-1', batchUrl: 'https://id.openape.ai/grant-batch?id=1', updatedAt: view.at },
+    { id: '00000000-0000-4000-8000-0000000000a4', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n4', title: 'Archive mail from digest@social.example', description: null, link: null, state: 'approved', reason: null, batchId: 'batch-1', batchUrl: 'https://id.openape.ai/grant-batch?id=1', updatedAt: view.at },
+    { id: '00000000-0000-4000-8000-0000000000a2', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n2', title: 'Your SaaS digest', description: 'Weekly product digest', link: 'https://saas.example/digest', state: 'unknown', reason: 'Restored backup: the owner decision after the backup is unknown; request the approval again', batchId: null, batchUrl: null, updatedAt: view.at },
   ],
   held: [{ key: 'c'.repeat(64), operation: 'delta-mind/mail-classification', object: 'm3', state: 'blocked', attempt: 5, readyAt: view.at, reason: 'Model refused five times', inputRevision: 1 }],
   unknownEffects: [{ actionKey: 'd'.repeat(64), attempt: 1, podId: newsletters.id, runId: null, operation: 'mail.archive', createdAt: view.at, intent: { mailbox: 'phofmann@delta-mind.at', messageId: 'm4' } }],
@@ -101,9 +101,16 @@ describe('Entscheidungen', () => {
     const bot = view.pods.find(pod => pod.unknown.length)!
     await mountInbox()
     const approvals = wrapper!.find('[data-testid="approvals"]')
-    expect(approvals.text()).toContain('Archive mail from news@shop.example')
+    expect(approvals.text()).toContain('Archive mail from deals@shop.example')
     // One batch request is one card with one decision link; approved members need nothing from the owner.
     const batch = approvals.find('[data-batch]')
+    // Each object shows the fields the Pod's script gave (issue 1473): title, description and a link shown by its host.
+    const claimed = batch.findAll('[data-approval]')[0]!
+    expect(claimed.text()).toContain('Spring sale at Shop')
+    expect(claimed.get('.approval-description').text()).toBe('Newsletter: the sender offers an unsubscribe link')
+    expect(claimed.get('a').attributes()).toMatchObject({ href: 'https://shop.example/newsletter/spring', target: '_blank', rel: 'noopener noreferrer' })
+    expect(claimed.get('a').text()).toBe('shop.example')
+    expect(batch.findAll('[data-approval]')[1]!.find('a').exists()).toBe(false)
     expect(approvals.findAll('[data-batch]')).toHaveLength(1)
     expect(batch.findAll('button.idp')).toHaveLength(1)
     expect(batch.text()).toContain('3 Objekte in einer Sammelanfrage')
@@ -112,6 +119,9 @@ describe('Entscheidungen', () => {
     await approvals.find('button.idp').trigger('click')
     expect(wrapper!.emitted('domain')).toEqual([[{ type: 'openApproval', id: '00000000-0000-4000-8000-0000000000a1' }]])
     const uncertain = approvals.findAll('.item')[1]!
+    expect(uncertain.text()).toContain('Your SaaS digest')
+    expect(uncertain.get('.approval-description').text()).toBe('Weekly product digest')
+    expect(uncertain.get('a').attributes('href')).toBe('https://saas.example/digest')
     expect(uncertain.findAll('button').every(item => item.attributes('disabled') !== undefined)).toBe(true)
     await uncertain.find('label input').setValue('Nicht am IdP entschieden')
     await uncertain.findAll('button')[0]!.trigger('click')

@@ -1,11 +1,12 @@
 /**
- * The complete control database of schema 50: Pods, scripts, runs and grants, and the shared domain data, work
+ * The complete control database of schema 51: Pods, scripts, runs and grants, and the shared domain data, work
  * ledger, owner questions, object approvals and external effects of autonomous Pods (issue 1465); owner groups are
- * tags and object approvals also name exact program commands since issue 1468. A fresh profile is created from it;
- * convert.ts converts schema-46 to schema-49 profiles and backups, archiving every row of the retired network runtime
- * and of the retired groups in legacy_records. Older profiles and backups are refused.
+ * tags and object approvals also name exact program commands since issue 1468, and carry the script's summary
+ * (title, description, link) since issue 1473. A fresh profile is created from it; convert.ts converts schema-46 to
+ * schema-50 profiles and backups, archiving every row of the retired network runtime and of the retired groups in
+ * legacy_records. Older profiles and backups are refused.
  */
-export const schemaVersion = 50
+export const schemaVersion = 51
 
 export const baselineSchema = `
 -- Pods, scripts and knowledge
@@ -639,7 +640,9 @@ CREATE TABLE action_approvals(
   object TEXT NOT NULL CHECK(length(object) BETWEEN 1 AND 500),
   payload TEXT NOT NULL CHECK(json_valid(payload) AND json_type(payload)='object'),
   payload_hash TEXT NOT NULL CHECK(length(payload_hash)=64),
-  title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 720),
+  title TEXT NOT NULL CHECK(length(title) BETWEEN 1 AND 120),
+  description TEXT CHECK(description IS NULL OR length(description)<=2000),
+  link TEXT CHECK(link IS NULL OR length(link) BETWEEN 1 AND 2048),
   authority TEXT NOT NULL CHECK(json_valid(authority) AND json_type(authority)='object'),
   batch_id TEXT REFERENCES approval_batches(id),
   grant_id TEXT CHECK(grant_id IS NULL OR length(grant_id) BETWEEN 1 AND 128),
