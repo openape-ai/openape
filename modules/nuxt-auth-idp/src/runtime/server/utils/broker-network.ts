@@ -48,7 +48,7 @@ async function fetchPublicBroker(raw: string, init: BrokerHttpOptions): Promise<
   try {
     const status = response.statusCode
     const retryAfter = status === 429 ? Number(response.headers['retry-after']) : Number.NaN
-    const failed = () => createProblemError({ status: status && [400, 401, 403, 404, 409, 429].includes(status) ? status : 503, title: `Broker service returned HTTP ${status ?? 'unknown'}`, ...(status === 429 && Number.isInteger(retryAfter) && retryAfter > 0 ? { retryAfter } : {}) })
+    const failed = () => createProblemError({ status: status && [400, 401, 403, 404, 409, 413, 429].includes(status) ? status : 503, title: `Broker service returned HTTP ${status ?? 'unknown'}`, ...(status === 429 && Number.isInteger(retryAfter) && retryAfter > 0 ? { retryAfter } : {}) })
     if (status === 403 && init.relayRefusal) {
       const refusal = await readBrokerJson(response)
       if (isOwnerRefusal(refusal)) return refusal

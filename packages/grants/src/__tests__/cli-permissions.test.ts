@@ -6,6 +6,7 @@ import {
   cliAuthorizationDetailIsSimilar,
   cliAuthorizationDetailsCover,
   computeArgvHash,
+  coverableCliDetails,
   findDifferingSelectors,
   isCliAuthorizationDetailExact,
   mergeCliAuthorizationDetails,
@@ -71,6 +72,16 @@ describe('cli grant helpers', () => {
     expect(cliAuthorizationDetailCovers(required, granted)).toBe(false)
     expect(cliAuthorizationDetailsCover([granted], [required])).toBe(true)
     expect(cliAuthorizationDetailsCover([required], [granted])).toBe(false)
+  })
+
+  it('lets a malformed stored detail cover nothing instead of failing the comparison', () => {
+    const malformed: unknown[] = [null, 'gh', { ...detail, resource_chain: undefined }, { ...detail, resource_chain: [null] }, { ...detail, resource_chain: [{ resource: 'owner', selector: { login: 1 } }] }, { ...detail, operation_id: undefined }]
+    for (const stored of malformed) {
+      expect(cliAuthorizationDetailsCover([stored as OpenApeCliAuthorizationDetail], [detail])).toBe(false)
+      expect(cliAuthorizationDetailsCover([stored as OpenApeCliAuthorizationDetail, detail], [detail])).toBe(true)
+    }
+    expect(coverableCliDetails([...malformed, detail, { type: 'other' }])).toEqual([detail])
+    expect(coverableCliDetails({ 0: detail })).toEqual([])
   })
 
   it('detects exact-command constraints', () => {
