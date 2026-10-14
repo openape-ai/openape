@@ -111,6 +111,9 @@ export default defineNitroPlugin(async () => {
     // Tested CLI versions of registry adapters (issue 1473).
     try { await db.run(sql`ALTER TABLE shapes ADD COLUMN versions TEXT`) }
     catch { /* already present */ }
+    // File digests of tested executables; the IdP selects shapes by program hash (issue 1473).
+    try { await db.run(sql`ALTER TABLE shapes ADD COLUMN tested_digests TEXT`) }
+    catch { /* already present */ }
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_shapes_source ON shapes(source)`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_shapes_executable ON shapes(executable)`)
 
