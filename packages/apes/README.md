@@ -160,6 +160,11 @@ only the IdP knows the Shapes registry and decides:
 A program without a registry shape is approved as its exact command. `--approval`
 accepts `once` (default) or `always`.
 
+The program name is a claim of the requester; the file that runs is bound by its
+hash in the token and checked again right before it runs. A grant answers a
+permission question, not a capability one: for gated agents, keep every
+agent-writable directory off their `PATH` and never use one as a program location.
+
 ## Commands
 
 ### Authentication
