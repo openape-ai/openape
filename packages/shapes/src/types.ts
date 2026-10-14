@@ -113,7 +113,10 @@ export interface RegistryEntry {
   author: string
   executable: string
   min_shapes_version: string
+  /** `SHA-256:` digest of the adapter file bytes. */
   digest: string
+  /** Semantic digest grants bind (`semanticAdapterDigest`); registry indexes since issue 1473 record it. */
+  grant_digest?: string
   download_url: string
 }
 
