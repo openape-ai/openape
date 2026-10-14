@@ -254,6 +254,31 @@ it('revokes a direct Pod grant as the requesting Pod without an owner session', 
   expect(idp.state.decisions.filter(decision => decision.action === 'revoke')).toEqual([{ action: 'revoke', id: 'grant-1', bearer: 'SYNTHETIC_POD_AGENT', body: {} }])
 })
 
+it('delegates only grants scopes for the IdP, for at most 90 days, to the agent of an own Pod and only as the signed-in owner (issue 1473)', async () => {
+  const assigned: Record<string, unknown>[] = [program]
+  const f = await workerFixture({ resources: () => assigned })
+  const delegate = (fields: Record<string, unknown> = {}) => ({ action: 'grants', command: { type: 'delegate', podId, scopes: ['grants:read', 'grants:request'], ...fields } })
+  const assignAgent = (subject: string, agentIssuer = issuer) => assigned.push({ id: randomUUID(), podId, revision: 1, kind: 'tool', state: 'ready', name: agentIssuer, configuration: { type: 'http', origin: agentIssuer, methods: ['GET', 'POST'], capability: 'tool.http_idp.request', authentication: { type: 'ddisaAgent', credential: 'agent_key', subject, issuer: agentIssuer } } })
+
+  // Refused before any IdP call: other scopes, a chosen audience or delegate, an unbounded or too long lifetime.
+  for (const fields of [{ scopes: ['grants:approve'] }, { scopes: ['grants:read', 'profile'] }, { audience: 'https://sp.example.test' }, { delegate: 'stranger@example.test' }, { days: 91 }, { days: 0 }]) {
+    await expect(mcp(f, delegate(fields), session())).rejects.toThrow(/grants:read, grants:request or both|Invalid grants command fields|1 to 90 days/)
+  }
+  // The delegate is the agent the Pod authenticates as at the owner's IdP, never a free choice.
+  await expect(mcp(f, delegate(), session())).rejects.toThrow('exactly one such HTTP destination')
+  assignAgent('foreign-agent@example.test', 'https://id.foreign.test')
+  await expect(mcp(f, delegate(), session())).rejects.toThrow('exactly one such HTTP destination')
+  expect(idp.state.delegations).toEqual([])
+
+  assignAgent('upgrader@example.test')
+  await expect(mcp(f, delegate(), null)).rejects.toThrow('active owner session')
+  const created = await mcp(f, delegate({ days: 30 }), session())
+  expect(created).toEqual({ delegation: 'delegation-1', issuer, podId, delegate: 'upgrader@example.test', audience: issuer, scopes: ['grants:read', 'grants:request'], expiresAt: 1_000_000 + 30 * 86400 })
+  expect(idp.state.delegations).toEqual([{ delegate: 'upgrader@example.test', audience: issuer, scopes: ['grants:read', 'grants:request'], grant_type: 'timed', duration: 30 * 86400 }])
+  await mcp(f, delegate({ scopes: ['grants:read'] }), session())
+  expect(idp.state.delegations[1]).toMatchObject({ scopes: ['grants:read'], duration: 90 * 86400 })
+})
+
 it('accepts only declared options for approved commands, including declared global options (issue 1468)', () => {
   const push = { command: ['push'], required_options: ['force-with-lease'], value_options: ['repo'], flag_options: ['atomic'], global_options: ['C=repository'] }
   expect(() => assertDeclaredOptions(push, ['-C', '/repo', 'push', '--force-with-lease=x:1', '--repo', 'origin', '--atomic', 'origin', 'main'])).not.toThrow()

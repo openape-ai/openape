@@ -1,5 +1,13 @@
 # Active work
 
+## Scheduled Pod identity — issue 1474
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1474. Branch `bugfix/issue-1474-scheduled-pod-identity`, base `013faf3e`.
+- Scheduled program calls receive the same refreshed Pod identity file as Pod terminals through `APES_AUTH_FILE`; the broker permits reading that file, redacts all issued tokens and removes it on completion or failure. The owner's protected apes login remains closed.
+- `apps/openape-pods/scripts/git-credential-apes` honors the explicit identity file and refuses an unreadable file without switching to the owner. The host helper is installed from this source.
+- Validation: full lint/typecheck, Pods build, focused program/approval tests and a native program invocation. Permanent tests protect credential routing, redaction, renewal and cleanup; full Pods results and signed local rollout will be recorded on the PR.
+- The four-project audit Pod is paused until a real canonical Git audit succeeds; target schedule is daily 08:00 Europe/Vienna. Deployment and activation receipts belong on the issue/PR and in Test Runs.
+
 ## Generic grant cards and self-improving Shapes — issue 1473
 
 > **⚠️ IdP deploy gate (issue 1473, since October 14):** main contains the summary migration (PR 405). Do NOT deploy `free-idp` or `pods-idp` from main until the coordinated release with the new signed Pods desktop: installed desktops still send `summary.text`, which the new IdP refuses. The release owner is the issue 1473 session.
@@ -12,6 +20,7 @@
 - M1: branch `feature/issue-1473-summary-fields` (protocol PR on `patrick/protocol`, same branch name). The free IdP migrates stored `summary.text` on startup (`server/plugins/02.database.ts`); take an IdP database backup before deploying it.
 - M4: branch `feature/issue-1473-pods-pass-through` (contains M1 `a419dade`). Pods schema 51 rebuilds `action_approvals` (summary columns; long composed titles keep their full text as description). Scripts pass `title/description/link` on `approvals.request` and `summary` on `tools.invoke`/`http.request`; the desktop adds the Pod name as `origin`. Deploy the M1 IdP before installing this desktop; the desktop sends no `summary.text`.
 - M5 IdP part: branch `feature/issue-1473-delegation-scopes`; scopes `grants:read`/`grants:request` on delegations with audience = IdP issuer, delegated tokens refused everywhere else; protocol branch `feature/issue-1473-delegation-scopes` (delegation.md §8). Pods side (running a Pod with the delegation) is open.
+- M5 Pods side + M6: branch `feature/issue-1473-grant-upgrade-pod`; HTTP authentication `ddisaDelegation` (runtime mints a delegated token per destination origin, scripts never see it), MCP `grants {type:"delegate",podId,scopes,days≤90}` in the owner session (delegate = the Pod's own agent at the owner IdP, audience = IdP, scopes only grants:read/request), IdP lets grants delegates read and request for the owner's brokered Pod identities (binding from the newest grant over an active connection) and brokered continuing requests reuse covering approved grants; example `apps/openape-pods/examples/grant-upgrade-pod.mjs` (deterministic read-only proposals, checkpointed). Its summary {title, description} needs M1 at the IdP for brokered identities.
 
 ## Intake category version recovery — issue 1472
 

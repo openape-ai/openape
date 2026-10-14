@@ -1,7 +1,11 @@
 // @vitest-environment node
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
+import { podIdentityFile } from '../../src/main/connections/identity-file'
+import type { AgentConnection } from '../../src/main/broker/authorization'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
@@ -50,10 +54,10 @@ async function executable(): Promise<{ path: string, hash: string }> {
 /** The private application state folder: opened from the encrypted record below the credential store for one session. */
 const applicationState = expect.stringMatching(/\/credentials\/temporary\/.+\/application$/)
 
-async function brokerCall(level: SandboxLevel) {
+async function brokerCall(level: SandboxLevel, identityConnection?: AgentConnection) {
   const program = await executable(); const stateId = await new ProgramState(credentials).create({ podId, applicationId })
   const argv = ['az', 'repos', 'pr', 'list']
-  const assignment: ToolAssignment = { id: applicationId, grantId: '', command: { cliId: 'az', adapterPath: '/fixture/az.toml', adapterDigest: 'synthetic', argv, coverage: [] }, reach: reach(level), programState: { id: stateId, podId, applicationId }, capability: 'tool.az.invoke', executable: program.path, executableHash: program.hash, entryFiles: [], prefix: [], runtimeDirectories: [], environment: {}, runtimeEnvironment: { HOME: '/descriptor/home' }, networkPorts: [] }
+  const assignment: ToolAssignment = { id: applicationId, identityConnection, grantId: '', command: { cliId: 'az', adapterPath: '/fixture/az.toml', adapterDigest: 'synthetic', argv, coverage: [] }, reach: reach(level), programState: { id: stateId, podId, applicationId }, capability: 'tool.az.invoke', executable: program.path, executableHash: program.hash, entryFiles: [], prefix: [], runtimeDirectories: [], environment: {}, runtimeEnvironment: { HOME: '/descriptor/home' }, networkPorts: [] }
   const broker = new PodToolBroker('/fixture/helper', join(root, 'broker'), { authorize: async () => {} } as never, credentials)
   const reply = await broker.execute(assignment, { toolId: applicationId, argv }, { capabilities: ['tool.az.invoke'], assertCurrent: () => {}, signal: AbortSignal.timeout(5000) })
   return { reply, launch: launches.at(-1)! }
@@ -107,4 +111,62 @@ it('keeps the isolated application terminal in the private application state', a
   expect(launch.environment.HOME).toEqual(applicationState)
   expect(launch.environment.TMPDIR).toBe(launch.environment.HOME)
   expect(launch.policy.writeDirectories).toEqual([launch.environment.HOME])
+})
+
+const connection = (accessToken = async () => 'SYNTHETIC_POD_TOKEN'): AgentConnection => ({ issuer: 'https://id.example.test', subject: 'pod@example.test', owner: 'owner@example.test', keyId: 'key', targetHost: 'pods:fixture', accessToken })
+
+it.each(['owner', 'isolated'] as const)('passes only the Pod identity file to a %s program, redacts its token, and removes the file', async (level) => {
+  let path = ''
+  vi.mocked(launchSandbox).mockImplementation(async (_helper, _directory, policy, _args, environment = {}) => {
+    path = environment.APES_AUTH_FILE!
+    expect(JSON.parse(await readFile(path, 'utf8'))).toMatchObject({ email: 'pod@example.test', access_token: 'SYNTHETIC_POD_TOKEN' })
+    expect((await stat(path)).mode & 0o777).toBe(0o600)
+    expect(policy.readFiles).toContain(path)
+    expect(policy.writeDirectories).not.toContain(path)
+    const process = domain()
+    process.completed = new Promise(resolve => setImmediate(() => { process.stdout.write('SYNTHETIC_POD_TOKEN'); process.stderr.write('SYNTHETIC_POD_TOKEN'); resolve(0) }))
+    return process as never
+  })
+  const { reply } = await brokerCall(level, connection())
+  expect(reply).toMatchObject({ stdout: '[REDACTED]', stderr: '[REDACTED]' })
+  expect(existsSync(path)).toBe(false)
+})
+
+it('removes the Pod identity when the native program cannot start', async () => {
+  let path = ''
+  vi.mocked(launchSandbox).mockImplementation(async (_helper, _directory, _policy, _args, environment = {}) => {
+    path = environment.APES_AUTH_FILE!
+    throw new Error('Synthetic launch failure')
+  })
+  await expect(brokerCall('owner', connection())).rejects.toThrow('Synthetic launch failure')
+  expect(path).not.toBe('')
+  expect(existsSync(path)).toBe(false)
+})
+
+it('refreshes the managed Pod identity and signals refresh failure without falling back to the owner', async () => {
+  vi.useFakeTimers()
+  const accessToken = vi.fn().mockResolvedValueOnce('FIRST_POD_TOKEN').mockResolvedValueOnce('SECOND_POD_TOKEN').mockRejectedValueOnce(new Error('Identity revoked'))
+  const identity = await podIdentityFile(root, connection(accessToken))
+  try {
+    await vi.advanceTimersByTimeAsync(30000)
+    await vi.waitFor(async () => expect(JSON.parse(await readFile(identity.path, 'utf8')).access_token).toBe('SECOND_POD_TOKEN'))
+    expect(identity.secrets).toContain('FIRST_POD_TOKEN')
+    expect(identity.secrets).toContain('SECOND_POD_TOKEN')
+    await vi.advanceTimersByTimeAsync(30000)
+    expect(identity.signal.aborted).toBe(true)
+    expect(() => identity.assertActive()).toThrow('Identity revoked')
+  }
+  finally { await identity.close(); vi.useRealTimers() }
+  expect(existsSync(identity.path)).toBe(false)
+})
+
+it('uses APES_AUTH_FILE in the Git helper and fails for a missing Pod file instead of falling back', async () => {
+  const file = join(root, 'pod-auth.json')
+  await writeFile(file, JSON.stringify({ access_token: 'SYNTHETIC_GIT_POD' }))
+  const helper = join(process.cwd(), 'scripts/git-credential-apes')
+  const execute = promisify(execFile)
+  const env = { ...process.env, HOME: join(root, 'no-owner-home'), APES_AUTH_FILE: file }
+  expect((await execute('/bin/sh', [helper, 'get'], { env })).stdout).toBe('username=x-access-token\npassword=SYNTHETIC_GIT_POD\n')
+  await expect(execute('/bin/sh', [helper, 'get'], { env: { ...env, APES_AUTH_FILE: join(root, 'missing') } })).rejects.toThrow()
+  expect((await execute('/bin/sh', [helper, 'store'], { env })).stdout).toBe('')
 })
