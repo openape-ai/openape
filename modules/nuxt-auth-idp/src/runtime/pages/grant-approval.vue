@@ -1,14 +1,12 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { navigateTo, useIdpAuth, useRoute } from '#imports'
-import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
+import { formatWidenedPreview, getCliAuthorizationDetails } from '../utils/cli-grants'
 import { buildRuleProposals, ruleTemplatePreview, suggestAllowPattern } from '../utils/rule-suggestions'
 import { callerState, formatCountdown, formatWaited } from '../utils/caller-liveness'
-import PodRunGrant from '../components/PodRunGrant.vue'
 import GrantBatchDecision from '../components/GrantBatchDecision.vue'
-import { podRunPresentation } from '../utils/pod-run-grant'
-import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
-import { grantSummaryView } from '../utils/grant-summary'
+import GrantCard from '../components/GrantCard.vue'
+import { unwrapShellCommand } from '../utils/command-display'
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
@@ -35,17 +33,13 @@ const EXTEND_MODE_OPTIONS = [
   { label: 'Add this value', value: 'merge', description: 'Merge into single grant keeping specific selectors' },
   { label: 'Approve as separate', value: 'separate', description: 'Create a new independent grant' },
 ]
-const podGerman = ref(false)
-onMounted(() => { podGerman.value = navigator.language.startsWith('de') })
-const podRun = computed(() => podRunPresentation(grant.value?.request))
+const german = ref(false)
+onMounted(() => { german.value = navigator.language.startsWith('de') })
 const cliDetails = computed(() => getCliAuthorizationDetails(grant.value?.request?.authorization_details))
 // Why is this still pending? Filled by the IdP's diagnostic hooks — one entry
 // per auto-approval mechanism that could have fired and didn't.
 const pendingDiagnostics = computed(() => grant.value?.pending_diagnostics ?? [])
-const cliSummary = computed(() => summarizeCliGrant(grant.value?.request?.authorization_details))
 const commandDisplay = computed(() => unwrapShellCommand(grant.value?.request?.command))
-const summary = computed(() => grantSummaryView(grant.value?.request?.summary))
-const requesterName = computed(() => grant.value?.request?.requester ? formatRequesterName(grant.value.request.requester) : '')
 /**
  * True when this grant was requested via the `apes` generic-fallback path.
  * Such CLIs have no registered shape — the approver should see a prominent
@@ -337,9 +331,6 @@ async function handleDeny() {
     processing.value = false
   }
 }
-function isExactCommand(detail) {
-  return detail.constraints?.exact_command === true
-}
 </script>
 
 <template>
@@ -351,7 +342,7 @@ function isExactCommand(detail) {
     <UCard class="w-full max-w-lg">
       <template #header>
         <h1 class="text-2xl font-bold text-center">
-          {{ podRun && podGerman ? 'Freigabe' : 'Permission Request' }}
+          {{ german ? 'Freigabe' : 'Permission Request' }}
         </h1>
       </template>
 
@@ -402,144 +393,12 @@ function isExactCommand(detail) {
             <p><strong>{{ grant.request?.requester }}</strong> uses the agent provider <strong>{{ grant.brokered.agent_issuer }}</strong>.</p>
             <p>The request is addressed to {{ grant.brokered.owner }}. Only this account can approve it; the provider cannot decide.</p>
           </div>
-          <PodRunGrant v-if="podRun" :pod="podRun" :german="podGerman" @language="podGerman = $event" />
-          <details v-if="podRun">
-            <summary class="cursor-pointer text-sm">
-              {{ podGerman ? 'Technische Details' : 'Technical request details' }}
-            </summary><pre class="mt-2 text-xs whitespace-pre-wrap break-all">{{ commandDisplay?.text }}</pre><p class="text-xs break-all">
-              {{ grant.request?.requester }} · {{ grant.request?.target_host }}
-            </p><p class="text-xs break-all">
-              {{ grant.request?.permissions?.join(' · ') }}
-            </p>
-          </details>
-          <UAlert v-else :color="isDelegate ? 'error' : 'warning'" title="An application is requesting permission:">
-            <template #description>
-              <dl class="text-sm space-y-2 mt-2">
-                <div>
-                  <dt class="text-muted">
-                    Requester
-                  </dt>
-                  <dd class="text-sm font-semibold">
-                    {{ requesterName }}
-                  </dd>
-                  <dd v-if="requesterName !== grant.request?.requester" class="font-mono text-xs text-dimmed break-all">
-                    {{ grant.request?.requester }}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="text-muted">
-                    Target
-                  </dt>
-                  <dd class="font-mono text-sm">
-                    {{ grant.request?.target_host }}
-                  </dd>
-                </div>
-                <div v-if="cliSummary">
-                  <dt class="text-muted">
-                    Request
-                  </dt>
-                  <dd class="text-sm">
-                    {{ cliSummary }}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="text-muted">
-                    Type
-                  </dt>
-                  <dd class="font-mono text-sm">
-                    {{ grant.request?.grant_type }}
-                  </dd>
-                </div>
-                <div v-if="grant.request?.run_as">
-                  <dt class="text-muted">
-                    Run as
-                  </dt>
-                  <dd class="font-mono text-sm">
-                    {{ grant.request.run_as }}
-                  </dd>
-                </div>
-                <div v-if="summary">
-                  <dt class="text-muted mb-1">
-                    Requester-provided summary
-                  </dt>
-                  <dd class="text-sm font-medium break-words">
-                    {{ summary.title }}
-                  </dd>
-                  <dd v-if="summary.description" class="text-sm whitespace-pre-wrap break-words">
-                    {{ summary.description }}
-                  </dd>
-                  <dd v-if="summary.origin" class="text-xs text-muted break-words">
-                    Origin: {{ summary.origin }}
-                  </dd>
-                  <dd v-if="summary.link" class="text-sm">
-                    <a :href="summary.link" target="_blank" rel="noopener noreferrer" class="underline break-all">{{ summary.link }}</a>
-                  </dd>
-                </div>
-                <div v-if="commandDisplay">
-                  <dt class="text-muted mb-1 flex items-center gap-2">
-                    Command
-                    <UBadge v-if="commandDisplay.shell" color="neutral" variant="outline" size="xs" :label="`via ${commandDisplay.shell}`" />
-                  </dt>
-                  <dd
-                    class="font-mono text-sm rounded px-3 py-2 overflow-x-auto whitespace-pre-wrap break-words"
-                    style="background-color: #0b1220; color: #4ade80;"
-                  >
-                    {{ commandDisplay.text }}
-                  </dd>
-                </div>
-                <div v-if="grant.request?.reason">
-                  <dt class="text-muted">
-                    Reason
-                  </dt>
-                  <dd>{{ grant.request?.reason }}</dd>
-                </div>
-                <div v-if="grant.request?.permissions?.length">
-                  <dt class="text-muted">
-                    Permissions
-                  </dt>
-                  <dd class="font-mono text-sm">
-                    {{ grant.request?.permissions?.join(", ") }}
-                  </dd>
-                </div>
-                <div v-if="cliDetails.length" class="space-y-2">
-                  <dt class="text-muted">
-                    Structured Permissions
-                  </dt>
-                  <dd class="space-y-2">
-                    <div
-                      v-for="detail in cliDetails"
-                      :key="`${detail.cli_id}:${detail.operation_id}:${detail.permission}`"
-                      class="rounded border border-gray-700 bg-gray-950/50 px-3 py-2"
-                    >
-                      <div class="flex flex-wrap items-center gap-2 mb-1">
-                        <UBadge color="primary" variant="soft" :label="detail.cli_id" />
-                        <UBadge color="neutral" variant="soft" :label="detail.action" />
-                        <UBadge color="secondary" variant="soft" :label="detail.risk" />
-                        <UBadge :color="isExactCommand(detail) ? 'warning' : 'success'" variant="soft" :label="isExactCommand(detail) ? 'exact-only' : 'reusable'" />
-                      </div>
-                      <p class="text-sm">
-                        {{ detail.display }}
-                      </p>
-                      <p class="font-mono text-xs text-dimmed break-all">
-                        {{ detail.permission }}
-                      </p>
-                      <p class="font-mono text-xs text-dimmed">
-                        {{ formatCliResourceChain(detail) }}
-                      </p>
-                    </div>
-                  </dd>
-                </div>
-              </dl>
-            </template>
-          </UAlert>
+          <GrantCard :grant="grant" :german="german" @language="german = $event" />
 
-          <component :is="podRun ? 'details' : 'div'" v-if="pendingDiagnostics.length" class="rounded-lg border border-default p-4 space-y-3">
-            <summary v-if="podRun" class="cursor-pointer text-sm">
-              {{ podGerman ? 'Technische Freigabeprüfung' : 'Technical approval checks' }}
+          <details v-if="pendingDiagnostics.length" class="rounded-lg border border-default p-4 space-y-3">
+            <summary class="cursor-pointer text-sm">
+              {{ german ? 'Warum die Anfrage wartet' : 'Why this is waiting' }}
             </summary>
-            <h3 v-else class="text-sm font-semibold">
-              Why this is waiting
-            </h3>
             <div v-for="d in pendingDiagnostics" :key="d.source" class="space-y-1">
               <p class="text-sm">
                 <span class="text-dimmed">{{ d.source }}:</span> {{ d.summary }}
@@ -560,7 +419,7 @@ function isExactCommand(detail) {
                 Contains command substitution — a pattern must spell the construct out to allow it.
               </p>
             </div>
-          </component>
+          </details>
 
           <UAlert
             v-if="liveness.kind === 'abandoned'"
@@ -576,19 +435,9 @@ function isExactCommand(detail) {
             Der Prozess wartet noch — {{ formatCountdown(liveness.secondsLeft) }}
           </p>
 
-          <UAlert v-if="podRun && ruleError" color="error" :title="ruleError" />
-          <div v-if="podRun" class="flex flex-wrap gap-2">
-            <UButton color="error" variant="soft" :loading="processing" @click="handleDeny">
-              {{ podGerman ? 'Ablehnen' : 'Deny' }}
-            </UButton><UButton color="success" :loading="ruleBusy || processing" :disabled="processing || ruleBusy" @click="createRuleAndApproveOnce">
-              {{ podGerman ? 'Pod-Ausführung erlauben' : 'Allow Pod execution' }}
-            </UButton><UButton v-if="liveness.kind !== 'abandoned'" variant="outline" :loading="processing" :disabled="ruleBusy" @click="handleApprove('once')">
-              {{ podGerman ? 'Einmal' : 'Once' }}
-            </UButton>
-          </div>
-          <div v-else class="flex gap-2">
+          <div class="flex gap-2">
             <UButton color="error" variant="soft" :loading="processing" class="flex-1" @click="handleDeny">
-              Deny
+              {{ german ? 'Ablehnen' : 'Deny' }}
             </UButton>
             <UButton
               v-if="liveness.kind !== 'abandoned'"
@@ -597,14 +446,14 @@ function isExactCommand(detail) {
               class="flex-1"
               @click="handleApprove('once')"
             >
-              Just this once
+              {{ german ? 'Nur dieses Mal' : 'Just this once' }}
             </UButton>
             <UButton color="success" variant="outline" class="flex-1" @click="toggleAlwaysPanel">
-              Always allow
+              {{ german ? 'Immer erlauben' : 'Always allow' }}
             </UButton>
           </div>
 
-          <div v-if="alwaysOpen && !podRun" class="rounded border border-success/30 bg-success/5 px-3 py-2 space-y-2">
+          <div v-if="alwaysOpen" class="rounded border border-success/30 bg-success/5 px-3 py-2 space-y-2">
             <p class="text-xs text-muted">
               Make a rule so future requests like this auto-approve. This request itself runs once.
             </p>
@@ -639,7 +488,6 @@ function isExactCommand(detail) {
           </div>
 
           <button
-            v-if="!podRun"
             type="button"
             class="flex items-center gap-2 text-xs text-muted hover:text-default"
             @click="moreOptionsOpen = !moreOptionsOpen"
@@ -648,7 +496,7 @@ function isExactCommand(detail) {
             <UBadge v-if="hasSimilarGrants" color="info" variant="soft" size="xs" label="similar grants exist" />
           </button>
 
-          <div v-if="moreOptionsOpen && !podRun" class="space-y-3">
+          <div v-if="moreOptionsOpen" class="space-y-3">
             <p class="font-mono text-xs text-dimmed break-all">
               Grant {{ grantId.slice(0, 8) }}… · Audience: {{ grant.request?.audience }}
             </p>
@@ -774,76 +622,11 @@ function isExactCommand(detail) {
             :color="grant.status === 'approved' ? 'success' : grant.status === 'denied' ? 'error' : 'neutral'"
             :title="`Grant ${grant.status}`"
           >
-            <template #description>
-              <dl class="text-sm space-y-2 mt-2">
-                <div>
-                  <dt class="text-muted">
-                    Requester
-                  </dt>
-                  <dd class="font-mono text-sm break-all">
-                    {{ grant.request?.requester }}
-                  </dd>
-                </div>
-                <div>
-                  <dt class="text-muted">
-                    Target
-                  </dt>
-                  <dd class="font-mono text-sm">
-                    {{ grant.request?.target }}
-                  </dd>
-                </div>
-                <div v-if="grant.request?.run_as">
-                  <dt class="text-muted">
-                    Run as
-                  </dt>
-                  <dd class="font-mono text-sm">
-                    {{ grant.request.run_as }}
-                  </dd>
-                </div>
-                <div v-if="summary">
-                  <dt class="text-muted mb-1">
-                    Requester-provided summary
-                  </dt>
-                  <dd class="text-sm font-medium break-words">
-                    {{ summary.title }}
-                  </dd>
-                  <dd v-if="summary.description" class="text-sm whitespace-pre-wrap break-words">
-                    {{ summary.description }}
-                  </dd>
-                  <dd v-if="summary.origin" class="text-xs text-muted break-words">
-                    Origin: {{ summary.origin }}
-                  </dd>
-                  <dd v-if="summary.link" class="text-sm">
-                    <a :href="summary.link" target="_blank" rel="noopener noreferrer" class="underline break-all">{{ summary.link }}</a>
-                  </dd>
-                </div>
-                <div v-if="commandDisplay">
-                  <dt class="text-muted flex items-center gap-2">
-                    Command
-                    <UBadge v-if="commandDisplay.shell" color="neutral" variant="outline" size="xs" :label="`via ${commandDisplay.shell}`" />
-                  </dt>
-                  <dd
-                    class="font-mono text-sm rounded px-3 py-2 mt-0.5 overflow-x-auto whitespace-pre-wrap break-words"
-                    style="background-color: #0b1220; color: #4ade80;"
-                  >
-                    {{ commandDisplay.text }}
-                  </dd>
-                </div>
-                <div v-if="grant.request?.reason">
-                  <dt class="text-muted">
-                    Reason
-                  </dt>
-                  <dd>{{ grant.request?.reason }}</dd>
-                </div>
-                <div v-if="grant.decided_by">
-                  <dt class="text-muted">
-                    Decided by
-                  </dt>
-                  <dd>{{ grant.decided_by }}</dd>
-                </div>
-              </dl>
+            <template v-if="grant.decided_by" #description>
+              {{ german ? 'Entschieden von' : 'Decided by' }} {{ grant.decided_by }}
             </template>
           </UAlert>
+          <GrantCard :grant="grant" :german="german" @language="german = $event" />
 
           <div class="flex gap-3">
             <UButton to="/grants" variant="soft" color="primary" block class="flex-1">

@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import GrantApprovalPage from '../src/runtime/pages/grant-approval.vue'
 import GrantsPage from '../src/runtime/pages/grants.vue'
+import cardFixtures from './fixtures/grant-cards.json'
 import { __resetNuxtImportsMocks, __setFetchUser, __setRouteQuery, __setUser } from './mocks/nuxt-imports'
 
 const stubs = {
@@ -89,10 +90,27 @@ describe('grant batch approval', () => {
     expect(calls.find(call => call.url === '/api/grants/batch')?.opts?.body).toEqual({ operations: [{ id: 'g-1', action: 'approve' }] })
   })
 
-  it('keeps members of the same second in a stable label order', async () => {
+  it('keeps members of the same second in a stable binding-line order', async () => {
+    // Subjects sort the other way round; the order follows what each approval binds.
     const same = (id: string, subject: string) => member(id, 0, { request: { ...member(id, 0).request, summary: { title: subject } } })
-    const { wrapper } = await mountBatch([same('g-c', 'Newsletter – What is new'), same('g-a', 'Bank – Statement'), same('g-b', 'Newsletter – What else')])
+    const { wrapper } = await mountBatch([same('g-c', 'A – first by title'), same('g-a', 'C – last by title'), same('g-b', 'B')])
     expect(wrapper.findAll('[data-batch-row]').map(row => row.attributes('data-batch-row'))).toEqual(['g-a', 'g-b', 'g-c'])
+  })
+
+  it('marks a registry row line that contains values the approval does not bind', async () => {
+    const pod = { ...cardFixtures.podRun, id: 'g-1', request: { ...cardFixtures.podRun.request, requester: 'pod-agent@example.com', batch: { id: 'b-1', size: 1 } } }
+    const { wrapper } = await mountBatch([pod])
+    const row = wrapper.find('[data-batch-row="g-1"]')
+    expect(row.find('[data-binding-line="registry"]').text()).toBe('Mail digest')
+    expect(row.find('[data-requested-marker]').text()).toBe('as requested')
+  })
+
+  it('shows what each approval binds as the row line and the requester title only as its labeled claim', async () => {
+    const misleading = member('g-1', 1, { request: { ...member('g-1', 1).request, summary: { title: 'Read-only status check' } } })
+    const { wrapper } = await mountBatch([misleading])
+    const row = wrapper.find('[data-batch-row="g-1"]')
+    expect(row.find('[data-binding-line="command"]').text()).toBe('pods-graph-gate approve {"item":"g-1"}')
+    expect(row.find('[data-row-claim]').text()).toBe('requester\'s description: "Read-only status check"')
   })
 
   it('approves the selected members and denies the rest in one batch call', async () => {
