@@ -20,8 +20,8 @@ const audience = 'pods-graph-gate'
 async function fixture(type: 'once' | 'always' | 'timed') {
   const podId = randomUUID()
   const connection = { subject: 'agent@example.test', owner: 'owner@example.test', issuer, targetHost: `pods:${podId}`, keyId: 'key', accessToken: async () => 'synthetic-only' }
-  const binding: GrantBinding & { key: string } = { key: 'delivery-1', grantId: 'grant-1', expiresAt: Date.now() + 60000, command: ['pods', 'network-gate', 'archive one message'], summary: 'Newsletter 1' }
-  const grant = { id: 'grant-1', status: 'approved', decided_by: connection.owner, request: { requester: connection.subject, target_host: connection.targetHost, audience, grant_type: type, waits_until: Math.floor(binding.expiresAt / 1000), command: binding.command, summary: { text: binding.summary } } }
+  const binding: GrantBinding & { key: string } = { key: 'delivery-1', grantId: 'grant-1', expiresAt: Date.now() + 60000, command: ['pods', 'network-gate', 'archive one message'] }
+  const grant = { id: 'grant-1', status: 'approved', decided_by: connection.owner, request: { requester: connection.subject, target_host: connection.targetHost, audience, grant_type: type, waits_until: Math.floor(binding.expiresAt / 1000), command: binding.command, summary: { title: 'Newsletter 1' } } }
   Object.assign(claims, { sub: connection.subject, target_host: connection.targetHost, grant_id: 'grant-1', grant_type: type, decided_by: connection.owner, cmd_hash: await computeCmdHash(binding.command.join(' ')), command: binding.command })
   const consumed: string[] = []; const revoked: string[] = []
   vi.stubGlobal('fetch', vi.fn(async (url: unknown) => {

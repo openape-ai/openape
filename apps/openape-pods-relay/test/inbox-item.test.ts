@@ -37,3 +37,11 @@ it('shows an actionable failure heading and keeps raw diagnostics inside the rep
   expect(wrapper.get('h1').text()).toBe('Pod Intake braucht Hilfe')
   expect(wrapper.find('.inbox-body').exists()).toBe(false)
 })
+
+it('shows the reference link of a decision Pods settles and leaves an IdP handoff to the decision (issue 1473)', async () => {
+  const decision = (authority: 'pods' | 'idp') => ({ type: 'approval', sourceId: 'approval:1', runtimeId: crypto.randomUUID(), authority, digest: 'a'.repeat(64), options: [] })
+  const pods = await open(item({ kind: 'decision', title: 'Weekly news', pod: { id: crypto.randomUUID(), name: 'Newsletter' }, links: [{ title: 'news.example.com', url: 'https://news.example.com/issue/1' }], decision: decision('pods') }))
+  expect(pods.get('.links a').attributes()).toMatchObject({ href: 'https://news.example.com/issue/1', rel: 'noopener noreferrer' })
+  const idp = await open(item({ kind: 'decision', title: 'Grant', links: [{ title: 'Decide', url: 'https://id.example.com/grant' }], decision: decision('idp') }))
+  expect(idp.find('.links').exists()).toBe(false)
+})

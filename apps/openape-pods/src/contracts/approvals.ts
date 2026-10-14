@@ -1,6 +1,8 @@
 import { parseOwner } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
 import { canonicalJson } from './canonical-json'
+import { parseSummary } from './grant-summary'
+import type { GrantSummary } from './grant-summary'
 
 /**
  * Owner approvals of single object actions (issue 1465), decided at the owner's IdP. Each item is one once-or-always
@@ -14,10 +16,11 @@ export type ApprovalAction = typeof approvalActions[number]
 export type ApprovalState = 'collecting' | 'requested' | 'approved' | 'denied' | 'expired' | 'consumed' | 'withdrawn' | 'unknown'
 /** The frozen binding of one item; its canonical JSON is the IdP command, so it never changes after the request. */
 export interface ApprovalAuthority { version: 5, podId: string, owner: Owner, batchId: string, expiresAt: number, action: ApprovalAction, object: string, hash: string }
-export interface ApprovalItem { key: string, authority: ApprovalAuthority, summary: string }
+/** `summary` is what the IdP shows about the item (issue 1473); the authority alone binds what it allows. */
+export interface ApprovalItem { key: string, authority: ApprovalAuthority, summary: GrantSummary }
 /** What the worker sends the desktop for one batch operation; `grants` name the item grants of status/consume. */
 export interface ApprovalManifest { podId: string, owner: Owner, batchId: string, title: string, expiresAt: number, items: ApprovalItem[] }
-export interface ApprovalView { id: string, action: ApprovalAction, object: string, title: string, state: ApprovalState, reason: string | null, batchId: string | null, batchUrl: string | null, updatedAt: number }
+export interface ApprovalView { id: string, action: ApprovalAction, object: string, title: string, description: string | null, link: string | null, state: ApprovalState, reason: string | null, batchId: string | null, batchUrl: string | null, updatedAt: number }
 
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value)
 const hash = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value)
@@ -40,10 +43,11 @@ export function parseApprovalManifest(value: unknown): ApprovalManifest {
   const owner = parseOwner(input.owner)
   const items = input.items.map((entry) => {
     const item = entry as Record<string, unknown>
-    if (!item || typeof item !== 'object' || Object.keys(item).some(key => !['key', 'authority', 'summary'].includes(key)) || !uuid(item.key) || typeof item.summary !== 'string' || !item.summary.trim() || item.summary.length > 720) throw new Error('Invalid approval item')
+    if (!item || typeof item !== 'object' || Object.keys(item).some(key => !['key', 'authority', 'summary'].includes(key)) || !uuid(item.key)) throw new Error('Invalid approval item')
     const authority = parseApprovalAuthority(item.authority)
+    const summary = parseSummary(item.summary)
     if (authority.podId !== input.podId || authority.batchId !== input.batchId || authority.expiresAt !== input.expiresAt || canonicalJson(authority.owner) !== canonicalJson(owner)) throw new Error('Approval item differs from its batch')
-    return { key: item.key, authority, summary: item.summary }
+    return { key: item.key, authority, summary }
   })
   if (new Set(items.map(item => item.key)).size !== items.length) throw new Error('Duplicate approval item')
   return { podId: input.podId, owner, batchId: input.batchId, title: input.title, expiresAt: Number(input.expiresAt), items }

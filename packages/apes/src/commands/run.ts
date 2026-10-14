@@ -24,6 +24,7 @@ import {
   waitForGrantStatus,
 } from '../shapes/index.js'
 import type { OpenApeGrantSummary } from '@openape/core'
+import { InvalidGrantSummaryError, parseGrantSummary } from '@openape/grants'
 import type { ResolvedCommand } from '../shapes/index.js'
 import consola from 'consola'
 import { getIdpUrl, isGenericFallbackEnabled, loadAuth, loadConfig } from '../config'
@@ -261,15 +262,27 @@ async function printPendingGrantInfo(grant: CreatedGrantInfo, idp: string): Prom
 }
 
 /**
- * The requester's own account of the request, for the approval card (#1310).
- * Absent unless the caller passes `--summary` — an empty field would only
- * add a heading with nothing under it.
+ * The requester's own account of the request, for the approval card (#1310,
+ * fields since #1473). Absent unless the caller passes `--summary-title`.
+ * Checked here with the IdP's own rules so a bad value fails before anything
+ * is requested.
  */
-function summaryFrom(args: Record<string, unknown>): { summary: OpenApeGrantSummary } | Record<string, never> {
-  const text = (args.summary as string | undefined)?.trim()
-  if (!text) return {}
-  const link = (args['summary-link'] as string | undefined)?.trim()
-  return { summary: { text, ...(link ? { link } : {}) } }
+export function summaryFrom(args: Record<string, unknown>): { summary: OpenApeGrantSummary } | Record<string, never> {
+  if (args.summary !== undefined) throw new CliError('--summary was replaced by --summary-title and --summary-description.')
+  const value = (name: string) => (args[`summary-${name}`] as string | undefined)?.trim() || undefined
+  const title = value('title')
+  if (!title) {
+    if (['description', 'origin', 'link'].some(value)) throw new CliError('--summary-title is required when other --summary-* options are given.')
+    return {}
+  }
+  try {
+    const summary = parseGrantSummary({ title, description: value('description'), origin: value('origin'), link: value('link') })
+    return summary ? { summary } : {}
+  }
+  catch (error) {
+    if (error instanceof InvalidGrantSummaryError) throw new CliError(`Invalid summary: ${error.message}`)
+    throw error
+  }
 }
 
 export const runCommand = defineCommand({
@@ -287,9 +300,17 @@ export const runCommand = defineCommand({
       type: 'string',
       description: 'Reason for the grant request',
     },
-    'summary': {
+    'summary-title': {
       type: 'string',
-      description: 'Executive summary shown on the approval card (multi-line)',
+      description: 'One-line headline shown on the approval card (at most 120 characters)',
+    },
+    'summary-description': {
+      type: 'string',
+      description: 'Details shown under the headline (multi-line, at most 2000 characters)',
+    },
+    'summary-origin': {
+      type: 'string',
+      description: 'Where the request comes from, e.g. the automation that runs this command (one line)',
     },
     'summary-link': {
       type: 'string',
