@@ -1,5 +1,13 @@
 # Active work
 
+## Canonical Git Pod authentication — issue 1474
+
+- The installed Pods runtime is `567876ea` (compatible backport of PR 409); host helper hardening is PR 413, source `267ced8d`.
+- The real Pod run `319f3a30-c50d-45ea-80fc-89b60f65c04e` proves the identity reaches all assigned programs, but Git returned 401 because it verified only its configured `id.openape.ai` issuer. DDISA publishes `pods.openape.ai` for the Pod subject.
+- Owner approved correcting the production Git service and completing the audit. Branch `bugfix/issue-1474-git-pod-issuer`, base `fb99b386`.
+- Direct identities use subject-domain discovery with public-URL checks and verified issuer/signature/audience. Foreign issuers cannot substitute an email or delegated actor. Existing configured-IdP delegation compatibility and repository grants remain.
+- Permanent cryptographic boundary tests extend the existing Git suite because forged foreign identities could otherwise disclose repositories. Final gates, deployment, live read/write-denial and daily activation receipts belong on the PR and report.
+
 ## Scheduled Pod identity — issue 1474
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1474. Branch `bugfix/issue-1474-scheduled-pod-identity`, base `013faf3e`.
