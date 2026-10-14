@@ -12,7 +12,8 @@ import { CredentialCache } from '../src/main/connections/cache'
 import { ProgramState } from '../src/main/programs/state'
 import type { Grant, ProgramCall } from '../src/main/broker/authorization'
 import { PodToolBroker } from '../src/main/broker/tools'
-import { AuthorityError, InfrastructureError } from '../src/contracts/infrastructure'
+import { AuthorityError, InfrastructureError, infrastructureFailure, NonRetryableError } from '../src/contracts/infrastructure'
+import { translateDiagnostic } from '../src/i18n'
 import type { RunApproval } from '../src/contracts/activity'
 import { callEffect } from '../src/main/programs/session'
 
@@ -37,7 +38,7 @@ async function idp(options: { brokered?: typeof brokered } = {}) {
     // The IdP's resolution of exactly this call, which the command token carries (IdP PR 417): action per argv.
     resolve: (_argv: string[]) => ['read'],
     // The covering grant: a whole-program grant over reads and writes, which never decides the classification.
-    grantActions: ['read', 'edit'], grantType: 'always', lifetime: 300, tamper: {} as Tamper, unavailable: 0,
+    grantActions: ['read', 'edit'], grantType: 'always', lifetime: 300, tamper: {} as Tamper, unavailable: 0, problem: undefined as unknown,
   }
   let origin = ''
   const token = async (grantId: string, body: { program: { name: string, sha256: string }, argv: string[] }) => {
@@ -57,7 +58,7 @@ async function idp(options: { brokered?: typeof brokered } = {}) {
       let text = ''; for await (const chunk of request) text += chunk
       const body = JSON.parse(text)
       state.authorizations.push(body)
-      if (state.unavailable) { response.setHeader('Retry-After', '1'); reply(state.unavailable, { statusCode: state.unavailable, data: { type: 'https://openape.org/errors/rate_limited', title: 'Too many requests' } }); return }
+      if (state.unavailable) { response.setHeader('Retry-After', '1'); reply(state.unavailable, state.problem ?? { statusCode: state.unavailable, data: { type: 'https://openape.org/errors/rate_limited', title: 'Too many requests' } }); return }
       if (Object.keys(body).some(key => !allowedFields.includes(key))) { reply(400, { statusCode: 400, data: { title: 'Unknown field' } }); return }
       const key = await computeArgvHash([body.program.name, ...body.argv])
       const grant = state.grants.get(key) ?? { id: `grant-${state.grants.size + 1}`, status: state.initial }
@@ -231,6 +232,28 @@ it('treats a rate limit as transient and an IdP without the endpoint as an updat
   await expect(f.authority().authorizeProgram(call(), signal())).rejects.toBeInstanceOf(InfrastructureError)
   f.state.unavailable = 404
   await expect(f.authority().authorizeProgram(call(), signal())).rejects.toThrow('does not authorize program calls yet')
+})
+
+// Issue 1476: a failed call names what the identity service answered, never more than status, problem and request id.
+it('names the HTTP status, problem and request id of a failed authorization, and refuses a too large command definitely', async () => {
+  const f = await idp(); f.state.unavailable = 503
+  f.state.problem = { statusCode: 503, statusMessage: 'ignored', data: { type: 'https://openape.org/errors/broker_unavailable', title: 'The decision identity provider returned an invalid authorization answer', request_id: 'req-1', argv: ['secret'] } }
+  const unavailable = await f.authority().authorizeProgram(call(), signal()).catch((error: unknown) => error)
+  expect(unavailable).toBeInstanceOf(InfrastructureError)
+  expect((unavailable as InfrastructureError).message).toBe('Permission service temporarily unavailable (HTTP 503 broker_unavailable: The decision identity provider returned an invalid authorization answer; request req-1)')
+  // The detail survives the worker boundary and is translated with its frame.
+  expect(new InfrastructureError(infrastructureFailure(JSON.parse(JSON.stringify((unavailable as InfrastructureError).failure)))).message).toBe((unavailable as InfrastructureError).message)
+  expect(translateDiagnostic('de', (unavailable as InfrastructureError).message)).toMatch(/^Berechtigungsdienst vorübergehend nicht verfügbar \(HTTP 503 broker_unavailable: /)
+  expect(() => infrastructureFailure({ phase: 'authorization', retryAfterMs: 0, detail: 'line\nbreak' })).toThrow('Invalid infrastructure detail')
+
+  f.state.problem = 'not json'
+  await expect(f.authority().authorizeProgram(call(), signal())).rejects.toThrow('Permission service temporarily unavailable (HTTP 503)')
+
+  f.state.unavailable = 413
+  f.state.problem = { type: 'https://openape.org/errors/command_too_large', title: 'The command is too large to authorize', status: 413 }
+  const tooLarge = await f.authority().authorizeProgram(call(), signal()).catch((error: unknown) => error)
+  expect(tooLarge).toBeInstanceOf(NonRetryableError)
+  expect((tooLarge as Error).message).toBe('The permission service rejected the request (HTTP 413 command_too_large: The command is too large to authorize); inspect the grant before retrying')
 })
 
 // The coordinator's rule (issue 1473): classify by the IdP's resolution of the call, never by the covering grant.
