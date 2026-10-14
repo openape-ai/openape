@@ -87,3 +87,13 @@ it('shows the Pod tags as chips on message and decision cards, and nothing witho
   expect(cards[0]!.get('.tags').text()).toBe('Tags: finanzen mail')
   expect(cards[2]!.find('.tags').exists()).toBe(false)
 })
+
+it.each(['work', 'effect', 'approval'])('presents %s failures as a Pod needing help instead of recovery choices', (type) => {
+  const item = decision({ type, options: [{ key: 'release', title: 'Release after review', input: 'evidence' }] }, { title: 'Held work · technical-operation', body: 'Opaque technical identifier', pod: { id: crypto.randomUUID(), name: 'Intake' } })
+  const wrapper = list([item])
+  expect(wrapper.get('.title').text()).toBe('Pod Intake braucht Hilfe')
+  expect(wrapper.find('.excerpt').exists()).toBe(false)
+  expect(wrapper.find('.quick').exists()).toBe(false)
+  expect(wrapper.findAll('button').map(button => button.text())).toEqual(['Prompt kopieren'])
+  expect(wrapper.get('textarea').element.value).toContain('Opaque technical identifier')
+})

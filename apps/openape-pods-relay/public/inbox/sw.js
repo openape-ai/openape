@@ -1,7 +1,7 @@
 // Pods Inbox service worker (plan issue 1446, M4).
 // Caches only the public app shell and versioned static assets; private API responses never enter a cache.
 // A new version waits until the page asks it to take over, so an update never reloads during a decision.
-const version = 'badge-1'
+const version = 'repair-prompt-1'
 const cacheName = `pods-inbox-${version}`
 const shell = '/inbox/'
 const precache = [shell, '/inbox/manifest.webmanifest', '/inbox/icon-180.png', '/inbox/icon-192.png', '/inbox/icon-512.png']
