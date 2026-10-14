@@ -155,7 +155,7 @@ export async function workerFixture(options: { pods?: string[], resources?: () =
   const credentials = { readScriptSecret: vi.fn(async () => 'SYNTHETIC_SECRET') }
   Object.assign(worker, { root: '/fixture', connections, credentials, dispatch })
   const grants = (worker as unknown as { podGrants: () => import('../../src/main/grants/pod-grants').PodGrants }).podGrants()
-  Object.assign(worker, { programs: new ProgramManager('/fixture/authentication', '/fixture/helper', credentials as never, connections, async () => resources() as never, command => dispatch({ program: command }), grants, id => ({ connection: async () => connection(id) as never, ledger: grants.port(id), reach: async () => ({ level: 'isolated' as const, protectedPaths: [] }) })) })
+  Object.assign(worker, { programs: new ProgramManager('/fixture/authentication', '/fixture/helper', credentials as never, connections, async () => resources() as never, command => dispatch({ program: command }), grants, id => ({ connection: async () => connection(id) as never, ledger: grants.port(id), origin: async () => 'Pod', reach: async () => ({ level: 'isolated' as const, protectedPaths: [] }) })) })
   const service = worker as unknown as { executeService: (request: ServiceRequest) => Promise<unknown> }
   const call = (scope: ServiceRequest['scope'], kind: ServiceRequest['kind'], body: unknown = {}) => service.executeService({ id: randomUUID(), kind, scope, body })
   const start = (id: string, runId = randomUUID(), reason = 'schedule', name?: string) => {

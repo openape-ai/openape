@@ -1,5 +1,5 @@
 import { programLaunch } from './runtime'
-import type { AgentConnection, GrantObserver, GrantLedgerPort, RunGrantTokens } from '../broker/authorization'
+import type { AgentConnection, GrantObserver, GrantLedgerPort, GrantPresentation, RunGrantTokens } from '../broker/authorization'
 import type { PodResource } from '../../contracts/resources'
 import { parseProgramArgv } from '../../contracts/programs'
 import type { ProgramAssignment } from '../../contracts/programs'
@@ -26,13 +26,13 @@ export function programRequest(resources: PodResource[], podId: string, capabili
  * How one call reaches the Pod identity, its grants and its sandbox reach. `approval` replaces the grant check for one
  * command whose program approval the worker consumed (issue 1468): it confirms that approval right before the start.
  */
-export interface ProgramCallAccess { connection: AgentConnection, ledger?: GrantLedgerPort, reach: SandboxReach, observe?: GrantObserver, tokens?: RunGrantTokens, approval?: () => Promise<void> }
+export interface ProgramCallAccess { connection: AgentConnection, ledger?: GrantLedgerPort, reach: SandboxReach, observe?: GrantObserver, tokens?: RunGrantTokens, approval?: () => Promise<void>, presentation?: GrantPresentation }
 
 /** Runs one application command: the sandbox must contain the application and a grant or a consumed approval must cover the command. */
 export async function invokeProgram(resources: PodResource[], podId: string, body: unknown, helper: string, root: string, credentials: CredentialCache, lease: BrokerLease, access: ProgramCallAccess, action?: 'move') {
   const { id, assignment, argv } = programRequest(resources, podId, lease.capabilities, body)
   // Authorization runs before any process starts; for the archive port a refusal here is evidence that nothing moved.
-  const prepared = await prepareProgramAuthorization(assignment, access.connection, argv, access.observe, access.ledger, action, access.tokens).catch((error: unknown) => { throw action ? archiveRefusal(error) : error })
+  const prepared = await prepareProgramAuthorization(assignment, access.connection, argv, access.observe, access.ledger, action, access.tokens, access.presentation).catch((error: unknown) => { throw action ? archiveRefusal(error) : error })
   // An approved command is checked like at its request: a declared operation with only declared options.
   if (access.approval) await approvableCommand(assignment, argv)
   const { authorization } = prepared

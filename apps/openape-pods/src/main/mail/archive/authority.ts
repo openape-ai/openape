@@ -9,13 +9,14 @@ function binding(manifest: ArchiveManifest, record: Pick<ArchiveRecord, 'grants'
   const item = manifest.items.find(entry => entry.id === id)
   const grant = record.grants?.find(entry => entry.id === id)
   if (!item || !grant) throw new Error('Archive message has no approval grant')
-  return { key: id, grantId: grant.grantId, expiresAt: manifest.expiresAt, command: archiveItemCommand(manifest, item), summary: archiveItemSummary(item) }
+  return { key: id, grantId: grant.grantId, expiresAt: manifest.expiresAt, command: archiveItemCommand(manifest, item) }
 }
-export function createArchiveAuthority(connection: AgentConnection, signal: AbortSignal, check: () => Promise<unknown>): ArchiveAuthority {
+/** `origin` is the Pod's name, shown by the IdP with each message's summary. */
+export function createArchiveAuthority(connection: AgentConnection, signal: AbortSignal, check: () => Promise<unknown>, origin?: string): ArchiveAuthority {
   const authority = createGrantAuthority(connection, signal, check, 'pods-mail-archive')
   return {
     async create(manifest) {
-      const reply = await authority.createBatch({ id: manifest.id, title: `${manifest.items.length} E-Mails aus ${manifest.mailbox} archivieren`, expiresAt: manifest.expiresAt, reason: `E-Mail aus ${manifest.mailbox} archivieren`, permissions: [`mail.archive:${manifest.id}`], members: manifest.items.map(item => ({ key: item.id, command: archiveItemCommand(manifest, item), summary: archiveItemSummary(item) })) })
+      const reply = await authority.createBatch({ id: manifest.id, title: manifest.mailbox, expiresAt: manifest.expiresAt, permissions: [`mail.archive:${manifest.id}`], members: manifest.items.map(item => ({ key: item.id, command: archiveItemCommand(manifest, item), summary: archiveItemSummary(item, origin) })) })
       return { id: manifest.id, url: reply.url, grants: reply.grants.map(grant => ({ id: grant.key, grantId: grant.id })) }
     },
     statuses: record => authority.statuses(record.manifest.id, record.manifest.items.map(item => binding(record.manifest, record, item.id))),
