@@ -31,3 +31,15 @@ export const DOH_PROVIDERS = [
 
 /** DNS TXT record type number */
 export const DNS_TXT_TYPE = 16
+
+/**
+ * Delegation scopes for an IdP's own grants API (delegation.md §8). A
+ * delegation whose audience is the IdP issuer and that carries these scopes
+ * lets the delegate read the delegator's grants (`grants:read`) or submit
+ * grant requests for the delegator's agents (`grants:request`). There is
+ * deliberately no scope for deciding grants: requester ≠ approver.
+ */
+export const GRANTS_READ_SCOPE = 'grants:read' as const
+export const GRANTS_REQUEST_SCOPE = 'grants:request' as const
+export const GRANTS_DELEGATION_SCOPES = [GRANTS_READ_SCOPE, GRANTS_REQUEST_SCOPE] as const
+export type GrantsDelegationScope = typeof GRANTS_DELEGATION_SCOPES[number]
