@@ -1,5 +1,13 @@
 # Active work
 
+## Pods agent model from the connected account — issue 1475
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1475. Branch `bugfix/issue-1475-pods-agent-model`, base `6c028398`.
+- Every agent run and description thread failed because the desktop hard-coded `gpt-5.5`, which ChatGPT accounts reject. Owner rule: the desktop is a generic runtime; a model change at OpenAI needs no code change or signed build.
+- The desktop reads the account default through the bundled Codex app-server `model/list` (`isDefault`, paged by `nextCursor`) with the ChatGPT sign-in, caches it per connection for one hour, reads it again after sign-in and once after a provider "model … not supported" refusal. The worker asks the desktop's model gateway (`POST /v1/model`) per agent run and description thread.
+- The bundled `models.json` holds every model from `codex debug models --bundled` (hash-pinned in the manifest). An account default missing there fails the run with an update-Pods error; no other model is chosen. ESLint refuses `gpt-` slug literals in `apps/openape-pods/src`.
+- Validation and rollout receipts (signed build, live agent run) belong on the PR; this change needs a new signed desktop build once.
+
 ## Canonical Git Pod authentication — issue 1474
 
 - The installed Pods runtime is `567876ea` (compatible backport of PR 409); host helper hardening is PR 413, source `267ced8d`.

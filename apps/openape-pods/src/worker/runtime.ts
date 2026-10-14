@@ -51,6 +51,7 @@ import { MasterService } from './master/service'
 import { CodexControl } from './codex/control'
 import { parseCodexRequest } from '../contracts/codex'
 import type { AgentRuntime } from './agent/executor'
+import { endpointModel } from './agent/model'
 import { authorizeRunService, authorizeCredentialService, assertMailHistory } from './mail/authorization'
 import { MailBridge } from './mail/bridge'
 import { assignedMail } from '../main/mail/assigned'
@@ -130,13 +131,14 @@ const data = new DataControl(store, runtime.helper)
 const setup = new SetupControl(store, registry)
 const details = new WorkspaceDetails(store, registry)
 const scheduler = new Scheduler(store, dispatcher, Date.now, false, podId => !dispatcher.approvals.due(podId) && !dispatcher.work.pending(podId))
-const fixtureProvider = process.env.PODS_FIXTURE_MODEL_PORT ? async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${process.env.PODS_FIXTURE_MODEL_PORT}/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }) : undefined
-runServices.provider = fixtureProvider
+const fixturePort = process.env.PODS_FIXTURE_MODEL_PORT
+const fixtureServices = fixturePort ? { provider: async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${fixturePort}/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }), model: endpointModel(`http://127.0.0.1:${fixturePort}/model`) } : undefined
+runServices.provider = fixtureServices?.provider; runServices.model = fixtureServices?.model
 const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
 const masterControl = new MasterControl(store, registry, dispatcher, scheduler, runtime, startControlledRun)
 const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
-const master = new MasterService(store, runtime, masterControl, fixtureProvider)
+const master = new MasterService(store, runtime, masterControl, fixtureServices)
 const ownerOperations = new AsyncLocalStorage<boolean>()
 const codex = new CodexControl(store, masterControl, dispatcher)
 
@@ -283,9 +285,9 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'provider' in request.command) {
       const endpoint = request.command.provider as { port: number, capability: string } | null
       if (endpoint && (!Number.isInteger(endpoint.port) || endpoint.port < 1024 || endpoint.port > 65535 || !/^[a-f0-9]{64}$/.test(endpoint.capability))) throw new Error('Invalid trusted provider endpoint')
-      const provider = endpoint ? async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${endpoint.port}/v1/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${endpoint.capability}` }, body: JSON.stringify(body), signal }) : fixtureProvider
-      const removed = !!runServices.provider && !provider
-      runServices.provider = provider; master.setProvider(provider); providerReady = true; startupReady = processesReady
+      const services = endpoint ? { provider: async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${endpoint.port}/v1/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${endpoint.capability}` }, body: JSON.stringify(body), signal }), model: endpointModel(`http://127.0.0.1:${endpoint.port}/v1/model`, endpoint.capability) } : fixtureServices
+      const removed = !!runServices.provider && !services
+      runServices.provider = services?.provider; runServices.model = services?.model; master.setProvider(services); providerReady = true; startupReady = processesReady
       if (removed) {
         for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, 'Model connection was removed')
       }

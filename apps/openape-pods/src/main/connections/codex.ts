@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type { AgentRuntime } from '../../worker/agent/executor'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
+import { parseModelSlug } from '../../worker/agent/model'
 import type { CredentialCache } from './cache'
 import { AuthProcess } from './process'
 import type { AuthFrame } from './process'
@@ -47,6 +48,21 @@ export class CodexConnection {
     }, signal)
   }
 
+  /** The account's default model as the bundled Codex app-server lists it for this ChatGPT sign-in. */
+  async defaultModel(id: string, accountId: string, signal: AbortSignal): Promise<string> {
+    return this.credentials.withCache(id, async (file) => {
+      const raw = await readFile(file, 'utf8')
+      if (tokens(raw).account_id !== accountId) throw new Error('ChatGPT account changed; review and reconnect')
+      const home = join(dirname(file), 'codex'); await mkdir(home, { mode: 0o700 }); await writeFile(join(home, 'auth.json'), raw, { mode: 0o600 })
+      const process = await this.process(home, signal, () => {})
+      try { return await listedDefault(process) }
+      finally {
+        await process.close()
+        await persistRefresh(home, file, accountId)
+      }
+    }, signal)
+  }
+
   async bearer(id: string, accountId: string, signal: AbortSignal): Promise<string> {
     return this.credentials.withCache(id, async (file) => {
       let raw = await readFile(file, 'utf8'); let value = tokens(raw)
@@ -72,6 +88,20 @@ export class CodexConnection {
       return value.access_token
     }, signal)
   }
+}
+
+/** Pages through the app-server `model/list` (Codex 0.153.4 `ModelListResponse`) to the entry marked `isDefault`. */
+async function listedDefault(process: AuthProcess): Promise<string> {
+  let cursor: string | null = null
+  for (let page = 0; page < 20; page++) {
+    const reply = await process.request('model/list', { cursor, includeHidden: false }) as { data?: unknown, nextCursor?: unknown }
+    if (!Array.isArray(reply.data) || (reply.nextCursor !== undefined && reply.nextCursor !== null && typeof reply.nextCursor !== 'string')) throw new Error('Invalid model list from the ChatGPT connection')
+    const selected = (reply.data as { model?: unknown, isDefault?: unknown }[]).find(entry => entry?.isDefault === true)
+    if (selected) return parseModelSlug(selected.model)
+    cursor = (reply.nextCursor as string | null | undefined) ?? null
+    if (!cursor) break
+  }
+  throw new Error('The connected ChatGPT account reports no default model; reconnect Codex or check the account\'s Codex access')
 }
 
 async function persistRefresh(home: string, file: string, accountId: string): Promise<void> {
