@@ -5,7 +5,7 @@ import { generateKeyPair } from '@openape/core'
 import { describe, expect, it } from 'vitest'
 import { COMMAND_TOKEN_LIFETIME_SECONDS, issueCommandJWT, spentByCommandToken, verifyAuthzJWT } from '../src/authz-jwt.js'
 import { computeArgvHash } from '../src/cli-permissions.js'
-import { InvalidProgramAuthorizeRequestError, parseProgramAuthorizeRequest, resolveProgramCall, selectProgramShape } from '../src/program-authorization.js'
+import { InvalidProgramAuthorizeRequestError, isVirtualShape, parseProgramAuthorizeRequest, resolveProgramCall, selectProgramShape } from '../src/program-authorization.js'
 import { GENERIC_OPERATION_ID } from '../src/server-resolver.js'
 import type { ServerShape } from '../src/shape-registry.js'
 import { createInMemoryShapeStore } from '../src/shape-registry.js'
@@ -74,6 +74,28 @@ describe('selectProgramShape', () => {
     // A tested digest selects its shape under any file name.
     expect((await selectProgramShape(store, { name: 'renamed', sha256: 'c'.repeat(64) }))?.shape.cli_id).toBe('mail-sync')
     expect(await selectProgramShape(store, { name: 'kubectl', sha256: untested })).toBeNull()
+  })
+})
+
+describe('desktop-own (virtual) shapes', () => {
+  const podRuntime: ServerShape = { ...gitShape, cli_id: 'pod-runtime', executable: 'pod-runtime', operations: [{ id: 'run', command: ['run'], positionals: [], value_options: ['pod'], display: 'Run Pod {pod}', action: 'run', risk: 'high', resource_chain: ['pod:id={pod}'] }], tested_digests: undefined, virtual: true }
+  const virtualStore = createInMemoryShapeStore([gitShape, podRuntime])
+
+  it('refuses a program named like a desktop-own executable', async () => {
+    for (const name of ['pod-runtime']) {
+      await expect(resolveProgramCall(virtualStore, { program: { name, sha256: untested }, argv: ['run', '--pod', 'p-1'] })).rejects.toThrow(InvalidProgramAuthorizeRequestError)
+    }
+    expect(isVirtualShape(podRuntime)).toBe(true)
+    // Real programs keep their shapes.
+    expect((await resolveProgramCall(virtualStore, { program: { name: 'git', sha256: untested }, argv: ['status'] })).detail.operation_id).toBe('git.status')
+  })
+
+  it('never selects a virtual shape, by name or by digest', async () => {
+    expect(await selectProgramShape(virtualStore, { name: 'pod-runtime', sha256: untested })).toBeNull()
+    // A shape with real tested versions is no virtual executable, whatever its marker says.
+    expect(isVirtualShape({ ...podRuntime, tested_digests: [`SHA-256:${tested}`] })).toBe(false)
+    expect(isVirtualShape({ ...podRuntime, versions: { tested_versions: ['1'], version_command: ['--version'], version_pattern: '(\\d+)' } })).toBe(false)
+    expect(isVirtualShape({ ...podRuntime, virtual: undefined })).toBe(false)
   })
 })
 

@@ -69,6 +69,7 @@ export {
 } from './shape-registry.js'
 export {
   InvalidProgramAuthorizeRequestError,
+  isVirtualShape,
   parseProgramAuthorizeRequest,
   PROGRAM_AUTHORIZE_LIMITS,
   type ProgramShapeSelection,

@@ -98,8 +98,17 @@ export interface ProgramShapeSelection {
  * the program hash, else the shape for the executable name, which then reads
  * an untested version. Shapes are considered in `cli_id` order.
  */
+/**
+ * A shape for an operation the Pods desktop performs itself (pod-runtime,
+ * pod-http, pod-ssh): marked virtual by the registry seed and checked against
+ * no real program version. No program call may ever be read with it.
+ */
+export function isVirtualShape(shape: ServerShape): boolean {
+  return shape.virtual === true && !shape.versions && !shape.tested_digests?.length
+}
+
 export async function selectProgramShape(store: ShapeStore, program: OpenApeProgramAuthorizeRequest['program']): Promise<ProgramShapeSelection | null> {
-  const shapes = await store.listShapes()
+  const shapes = (await store.listShapes()).filter(shape => !isVirtualShape(shape))
   const digest = `SHA-256:${program.sha256}`
   const tested = shapes.find(shape => shape.tested_digests?.includes(digest))
   if (tested) return { shape: tested, versionTested: true }
@@ -128,6 +137,9 @@ export interface ResolvedProgramCall {
  */
 export async function resolveProgramCall(store: ShapeStore, request: Pick<OpenApeProgramAuthorizeRequest, 'program' | 'argv'>): Promise<ResolvedProgramCall> {
   const executionArgv = [request.program.name, ...request.argv]
+  const shapes = await store.listShapes()
+  if (shapes.some(shape => isVirtualShape(shape) && (shape.executable === request.program.name || shape.cli_id === request.program.name)))
+    throw new InvalidProgramAuthorizeRequestError(`program.name ${request.program.name} names an operation of the Pods desktop, not a program`)
   const selection = await selectProgramShape(store, request.program)
   const structured = selection ? await resolveServerShape(store, selection.shape.cli_id, executionArgv) : null
   // A `*` in a selector is a glob for coverage (selectorValueMatches): an argv value must never widen what it asks for.

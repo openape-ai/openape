@@ -107,6 +107,11 @@ export interface ServerShape {
    * is a tested version of this shape.
    */
   tested_digests?: string[]
+  /**
+   * True for an executable no program provides: the Pods desktop performs the
+   * operation itself (pod-runtime, pod-http, pod-ssh). Set by the registry seed.
+   */
+  virtual?: boolean
   /** Unix seconds. */
   createdAt: number
   /** Unix seconds. */

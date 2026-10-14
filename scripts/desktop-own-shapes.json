@@ -1,0 +1,4 @@
+{
+  "readme": "Registry adapters of operations the OpenApe Pods desktop performs itself; they name no program. pnpm seed:shapes marks them virtual, and POST /api/grants/authorize never reads a program call with them (issue 1473).",
+  "cli_ids": ["pod-runtime", "pod-http", "pod-ssh"]
+}
