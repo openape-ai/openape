@@ -1,6 +1,6 @@
 import { AuthorityError, transientNetwork, transientResponse  } from '../../contracts/infrastructure'
 import type { BrokeredGrant, OpenApeCliAuthorizationDetail } from '@openape/core'
-import { cliAuthorizationDetailsCover, sameBrokeredGrant } from '@openape/grants'
+import { cliAuthorizationDetailsCover, migrateLegacyGrantSummary, sameBrokeredGrant } from '@openape/grants'
 import type { VerifyAuthzOptions } from '@openape/grants'
 import { authorizeAssignedCommand } from '@openape/apes/assigned'
 import type { AssignedCommand } from '@openape/apes/assigned'
@@ -192,7 +192,7 @@ export class AgentAuthority {
     if (grant && ['denied', 'revoked'].includes(grant.status)) throw new AuthorityError(`Permission ${grant.status}; review this Pod's permissions before retrying`)
     if (!grant || grant.status === 'used' || grant.status === 'expired') {
       // Every Pod grant is a continuing grant (owner decision October 10, 2026); per-item approvals are gate batches.
-      const create = async () => await this.request('/api/grants', 'POST', signal, { requester: this.connection.subject, target_host: this.connection.targetHost, audience: 'shapes', grant_type: 'always', command: assignment.command.argv, permissions: [resolved.permission], authorization_details: [resolved.detail], execution_context: resolved.executionContext, reason: resolved.detail.display, ...(summary ? { summary: { text: summary } } : {}) }) as { id?: unknown }
+      const create = async () => await this.request('/api/grants', 'POST', signal, { requester: this.connection.subject, target_host: this.connection.targetHost, audience: 'shapes', grant_type: 'always', command: assignment.command.argv, permissions: [resolved.permission], authorization_details: [resolved.detail], execution_context: resolved.executionContext, reason: resolved.detail.display, ...(summary ? { summary: migrateLegacyGrantSummary({ text: summary }) } : {}) }) as { id?: unknown }
       // Parallel calls of one run ask once.
       const created = await this.share(`request:${resolved.permission}`, create, signal)
       if (typeof created?.id !== 'string') throw new Error('Permission service returned an invalid grant')

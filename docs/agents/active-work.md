@@ -5,6 +5,7 @@
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1473. Plan revision 3, approved October 14, 2026 ("… wir ziehen das jetzt von Anfang bis Ende in dieser Session durch"): https://report.openape.ai/d/01M4VAP3E4WHRB6SRGCJJ8E6CD; source `.claude/plans/2026-10-13-structured-grant-summary.json`.
 - Milestones: M1 protocol summary {title, description, origin, link} + migration (protocol repo, @openape/core, IdP, apes); M2 shapes-registry as the only adapter source; M3 generic IdP grant card (PodRunGrant removed); M4 Pods pass-through + signed build; M5 delegation scopes (read own grants, request for own agents, never approve); M6 personal grant upgrade Pod; M7 registry upkeep via issues/PRs without user data.
 - Rules: Patrick's "desktop is a generic runtime"; UI checks in Vitest browser mode; no push without owner approval at the IdP; IdP, Pods and apes ship the summary change together.
+- M1: branch `feature/issue-1473-summary-fields` (protocol PR on `patrick/protocol`, same branch name). The free IdP migrates stored `summary.text` on startup (`server/plugins/02.database.ts`); take an IdP database backup before deploying it.
 
 ## Intake category version recovery — issue 1472
 

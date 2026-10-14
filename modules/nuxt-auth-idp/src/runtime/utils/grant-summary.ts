@@ -1,13 +1,17 @@
-/**
- * The requester's own account of what it is asking for (#1310) — the thing
- * that turns "curl -X POST .../merge" into a decision an owner can make from
- * a phone. Self-reported by design: the card labels it as such, the command
- * stays the ground truth, and the link is the way to check.
- */
+import type { OpenApeGrantSummary } from '@openape/core'
 
-export interface GrantSummary {
-  text: string
-  link?: string
+/**
+ * The requester's own account of what it is asking for (#1310, fields since
+ * #1473) — the thing that turns "curl -X POST .../merge" into a decision an
+ * owner can make from a phone. Self-reported by design: the card labels every
+ * field as the requester's statement, the command stays the ground truth, and
+ * the link is the way to check.
+ */
+export interface GrantSummaryView {
+  title: string
+  description: string | null
+  origin: string | null
+  link: string | null
 }
 
 /**
@@ -26,7 +30,14 @@ export function safeSummaryLink(link: string | undefined): string | null {
   }
 }
 
-/** Nothing to render for an empty or whitespace-only summary. */
-export function grantSummaryText(summary: GrantSummary | undefined): string | null {
-  return summary?.text?.trim() || null
+/** Nothing to render without a title; empty optional fields render as absent. */
+export function grantSummaryView(summary: OpenApeGrantSummary | undefined): GrantSummaryView | null {
+  const title = summary?.title?.trim()
+  if (!summary || !title) return null
+  return {
+    title,
+    description: summary.description?.trim() || null,
+    origin: summary.origin?.trim() || null,
+    link: safeSummaryLink(summary.link),
+  }
 }

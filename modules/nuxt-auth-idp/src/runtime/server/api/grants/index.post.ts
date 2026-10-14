@@ -1,7 +1,7 @@
 import { maybeForwardBrokerGrant } from '../../utils/broker-forward'
 import type { GrantType, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDetail, OpenApeGrantRequest } from '@openape/core'
 import { computeCmdHash } from '@openape/core'
-import { assertGrantBatchMember, canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, createGrant, evaluateStandingGrants, findSimilarCliGrants, InvalidGrantBatchError, isCliAuthorizationDetailExact, parseGrantBatch, validateCliAuthorizationDetail } from '@openape/grants'
+import { assertGrantBatchMember, canonicalizeCliPermission, cliAuthorizationDetailsCover, computeArgvHash, createGrant, evaluateStandingGrants, findSimilarCliGrants, InvalidGrantBatchError, InvalidGrantSummaryError, isCliAuthorizationDetailExact, parseGrantBatch, parseGrantSummary, validateCliAuthorizationDetail } from '@openape/grants'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { hasValidManagementToken } from '../../utils/admin'
 import { tryBearerAuth } from '../../utils/agent-auth'
@@ -105,6 +105,14 @@ export default defineEventHandler(async (event) => {
 
   if (body.grant_type === 'timed' && !body.duration) {
     throw createProblemError({ status: 400, title: 'Duration is required for timed grants', type: 'https://openape.org/errors/missing_duration' })
+  }
+
+  try {
+    body.summary = parseGrantSummary(body.summary)
+  }
+  catch (error) {
+    if (!(error instanceof InvalidGrantSummaryError)) throw error
+    throw createProblemError({ status: 400, title: `Invalid summary: ${error.message}` })
   }
 
   try {

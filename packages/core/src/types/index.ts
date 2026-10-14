@@ -168,9 +168,18 @@ export interface OpenApeGrantBatch {
   size?: number
 }
 
+/**
+ * grants.md §3.4. Every member is the requester's own statement. No member
+ * may contain Unicode control, format or line/paragraph separator characters,
+ * except a line feed in `description`.
+ */
 export interface OpenApeGrantSummary {
-  /** Free text, rendered with its line breaks intact. */
-  text: string
+  /** One line, 1–120 code points, naming what the request is about. */
+  title: string
+  /** At most 2000 code points; line breaks are kept. */
+  description?: string
+  /** One line, at most 120 code points, set by the requester's runtime (e.g. the Pod name). */
+  origin?: string
   /** Where to verify the claim. Only http(s) is linked by the approval UI. */
   link?: string
 }
