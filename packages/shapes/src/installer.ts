@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto'
 import { existsSync, mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { adapterFileDigest as sha256 } from './digest.js'
 import type { RegistryEntry } from './types.js'
 
 function adapterDir(local: boolean): string {
@@ -11,10 +11,6 @@ function adapterDir(local: boolean): string {
 
 function adapterPath(id: string, local: boolean): string {
   return join(adapterDir(local), `${id}.toml`)
-}
-
-function sha256(content: string): string {
-  return `SHA-256:${createHash('sha256').update(content).digest('hex')}`
 }
 
 export interface InstallResult {

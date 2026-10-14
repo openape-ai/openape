@@ -14,7 +14,7 @@ export function modelResources(resources: PodResource[], includeCommands = false
     if (Array.isArray(configuration.methods)) visible.methods = configuration.methods.filter(value => typeof value === 'string')
     if (includeCommands && state === 'ready' && configuration.type === 'program') {
       const adapter = loadAdapter(String(configuration.cliId), String(configuration.adapterPath))
-      if (adapter.digest.replace('SHA-256:', '') !== configuration.adapterHash) throw new Error('Application command reference changed; reassign the application in Permissions')
+      if (adapter.fileDigest.replace('SHA-256:', '') !== configuration.adapterHash) throw new Error('Application command reference changed; reassign the application in Permissions')
       visible.commands = adapter.adapter.operations
       visible.runtimeConfigured = Boolean(configuration.runtime)
     }

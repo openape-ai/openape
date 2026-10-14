@@ -15,3 +15,9 @@ operations their `presentation`. The matcher rejects a resource name that is
 not a plain identifier, so a two-key selector split at its comma (the former gh
 `repo:owner=…,name=…` chain, which granted every repository of an owner) fails
 closed instead of producing a permission with an unbound template.
+
+`LoadedAdapter.digest`, which grants bind as `adapter_digest`, is now the
+semantic digest (`semanticAdapterDigest`) over the matching rules only, so
+presentation, display texts, tested versions and comments can change without
+invalidating grants. `loadAdapter` adds `fileDigest` (file bytes) for integrity
+checks; the installer keeps verifying registry downloads by file digest.

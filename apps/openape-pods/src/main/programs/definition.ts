@@ -15,7 +15,7 @@ export async function programDefinition(executablePath: string, adapterFile?: st
   const adapterPath = await realpath(adapter.source)
   const entryFiles: ProgramDefinition['entryFiles'] = []
   const environment: Record<string, string> = {}
-  return { ...(runtimePath ? { runtime: await loadProgramRuntime(runtimePath) } : {}), name: cliId, executable, executableHash: createHash('sha256').update(await readFile(executable)).digest('hex'), cliId: adapter.adapter.cli.executable, adapterPath, adapterHash: adapter.digest.replace('SHA-256:', ''), entryFiles, environment, networkHosts: [] }
+  return { ...(runtimePath ? { runtime: await loadProgramRuntime(runtimePath) } : {}), name: cliId, executable, executableHash: createHash('sha256').update(await readFile(executable)).digest('hex'), cliId: adapter.adapter.cli.executable, adapterPath, adapterHash: adapter.fileDigest.replace('SHA-256:', ''), entryFiles, environment, networkHosts: [] }
 }
 
 export async function suggestedProgram(name: string, searchPath: string): Promise<string | undefined> {

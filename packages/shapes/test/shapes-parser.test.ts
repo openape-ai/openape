@@ -224,7 +224,25 @@ format = "code"
     const withoutPresentation = await resolveCommand(loadAdapter('git', plain), argv)
 
     expect(withPresentation.detail).toEqual(withoutPresentation.detail)
-    expect(withPresentation.digest).not.toBe(withoutPresentation.digest)
+    expect(withPresentation.digest).toBe(withoutPresentation.digest)
+  })
+
+  it('keeps the grant digest for text-only changes and changes it with the matching rules', () => {
+    const write = (content: string) => {
+      const file = join(mkdtempSync(join(tmpdir(), 'shapes-digest-')), 'git.toml')
+      writeFileSync(file, content)
+      return loadAdapter('git', file)
+    }
+    const base = write(adapter(versions, presentation))
+    const texts = write(`# reworded\n${adapter(versions.replace('"2.54"', '"2.55"'), presentation.replace('Erlaubt genau diesen Push.', 'Erlaubt nur diesen Push.'))}`.replace('display = "Push {refspec} to {remote}"', 'display = "Push {refspec} → {remote}"'))
+    const option = write(adapter(versions, presentation).replace('flag_options = ["force-with-lease"]', 'flag_options = ["force-with-lease", "atomic"]'))
+    const exact = write(adapter(versions, presentation).replace('exact_command = true\n', ''))
+
+    expect(texts.digest).toBe(base.digest)
+    expect(texts.fileDigest).not.toBe(base.fileDigest)
+    expect(option.digest).not.toBe(base.digest)
+    expect(exact.digest).not.toBe(base.digest)
+    expect(base.digest).toMatch(/^SHA-256:[a-f0-9]{64}$/)
   })
 
   it.each([
