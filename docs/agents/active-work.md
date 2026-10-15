@@ -5,9 +5,10 @@
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1487. Branch `feature/issue-1487-pods-messages`, base `5150cdc2`, checkout `.claude/worktrees/openape-pods-ui-redesign-7b2382`.
 - Owner approved Plan revision 4 on October 15, 2026 ("ja - du kannst mit der umsetzung starten"): https://report.openape.ai/d/01M4ZCQTG2AZM49A5GW2AAWX4T?v=4. The design was iterated in the Vite demo and accepted by the owner.
 - Adds a Mitteilungen tab to the shared workspace, relay endpoints for the owner session and the signed desktop runtime (all of the account's messages, never decisions), a shared message parser, the desktop `messages` channel and the browser client.
-- Rollout: relay first, then a signed desktop build; a new desktop against the old relay would show the tab with an update error. Not deployed.
+- Rollout: relay first, then a signed desktop build; a new desktop against the old relay would show the tab with an update error. Done on October 15, 2026 after separate owner approvals: relay `prod-2d24afe9` (previous `prod-3b31e751`), signed desktop from `2d24afe9` installed with paired backup `~/Library/Application Support/OpenApe Pods Rollback/20261015-130832-issue-1487-messages`.
 - PR: https://repos.openape.ai/patrick/monorepo/pulls/448 (head `7c7cb7cf`, merged with main `01ea0ac9`). Local affected gate (Pods 1802, relay 101), Pods browser suite 64/64 and relay e2e 2/2 passed: https://report.openape.ai/d/01M4ZJ5P0Q9B6CA57CGM35D2HP?v=1. Plan v5: https://report.openape.ai/d/01M4ZCQTG2AZM49A5GW2AAWX4T?v=5.
-- Next: owner review and merge; relay deployment before a signed desktop build; packaged-desktop acceptance with a real notify.
+- Merged as `2d24afe9`. Live acceptance (real notify in desktop and browser tab, read state lowers the server badge count 47→46 and reaches the desktop): https://report.openape.ai/d/01M4ZW16SJ0EK0VM09VZZQ3PCW?v=1. Plan v6 done (achieved): https://report.openape.ai/d/01M4ZCQTG2AZM49A5GW2AAWX4T?v=6. The physical phone icon was not observed.
+- Next: none for this issue. Follow-ups: `scripts/verify-distribution.mjs` navigation is stale since #1468; a failed MCP `run` keeps returning its recorded "no execution slot" result for the same requestId; the old GUI relaunched itself during the install backup copy.
 
 ## CI instruction reconciliation — issue 1483
 
