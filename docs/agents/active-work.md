@@ -1,6 +1,14 @@
 # Active work
 
 
+## Parallel UI verification proposal — issue 1481
+
+- Plan revision 1 (draft, implementation not approved): https://report.openape.ai/d/01M4ZB1XK5995C4Z79BDPKTD7R?v=1. Source: `.claude/plans/ui-test-migration/plan.json`; publication receipt alongside it.
+- Three independently owned implementation sessions are proposed: Git/Issues (`apps/openape-git`), Inbox/PWA (`apps/openape-pods-relay`) and Reports (`apps/openape-testrun`). Each needs a separate issue, branch and worktree from the coordinator's frozen post-preparation base. Shared files, lockfile, Plan updates, heavy-check scheduling and merges belong to coordination.
+- Troop is excluded by the owner's October 15 correction because another worktree is extracting it into a legacy repository. That worktree is not part of this plan. IdP/login are references; Tasks/CRM are optional future scope.
+- Next: owner approval of proposal revision 1 and a launch request, then M0 dependency/setup reconciliation and three separate user-owned chats. No implementation sessions or product changes have started. The planning PR is documentation only and does not approve implementation.
+
+
 ## Affected selection and local gates — issue 1480
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1480. Branch `bugfix/issue-1480-check-gates`, base `c5b02ac94777f2562d329e659d50685c97b1c43e`, isolated checkout `openape-monorepo.worktrees/check-gates-1480`.
