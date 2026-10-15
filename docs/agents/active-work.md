@@ -2130,3 +2130,10 @@ are implied by merging this preparation increment.
 - Activate classification rule version 5 for both declared operations after activating the new script. The bounded `refresh-message-ids` variable refreshes up to five selected Inbox messages per Intake run; its checkpoint makes retries resumable. Remove the variable after recovery. No mailbox mutations bypass the existing approval service.
 - Verification: the focused autonomous mail suite passes 16 tests, including multi-run long content, resumable targeted refresh, exact approval before a move, HTML normalization, incomplete-content visibility and an invoice found in the last section. The Pods application build also passes. Retain these regressions because silent completion and premature archival have consequential effects. The mandatory pre-push affected gate and live acceptance follow; receipts belong on the PR and issue.
 - Limit: assigned-program output is still capped by the native transport at 200,000 bytes. A provider response beyond that boundary fails visibly; this recipe fix does not claim unlimited transport. Original messages remain in the mailbox.
+
+## Issue 1496 — mail question context
+
+- Source: `bugfix/issue-1496-mail-question-context`, worktree `openape-monorepo.worktrees/mail-processing-1492`.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1496
+- Extend Sent Items coverage to match Inbox, reconcile sent replies and identical invoice notices, separate attachment review from owner category questions. Preserve explicit content-bound archive approvals.
+- Verification: focused autonomous mail regression suite; required affected and full deployment gates before activating the canonical recipes. Live acceptance reconciles the 35 audited questions and checks mailbox/category/approval state.
