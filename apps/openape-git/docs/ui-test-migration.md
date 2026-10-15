@@ -29,7 +29,10 @@ Unexpected transport requests fail instead of returning a catch-all response.
 The existing unit suite remains in the automatic unit gate; browser cases are
 excluded from it and belong to the explicit manual layout command.
 
-The browser API owns port 5481 and HMR port 5491, with strict collision failure.
+The browser API binds `127.0.0.1:5481` and HMR uses port 5491, with strict
+collision failure. A listener on that exact IPv4 address caused an explicit
+`Port 5481 is already in use` failure before tests; after releasing the listener,
+the creation case passed. No fallback port or foreign process cleanup is used.
 Chromium uses a disposable browser context/profile. Each case unmounts its Vue
 root and resets globals; no real account, backend, database or identity is read.
 Screenshots and failure attachments are ignored local artifacts. Geometry is
