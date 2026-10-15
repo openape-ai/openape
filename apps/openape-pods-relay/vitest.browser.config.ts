@@ -6,14 +6,14 @@ import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
   plugins: [vue()],
-  server: { port: 5482, strictPort: true, hmr: { port: 5492 } },
+  server: { host: '127.0.0.1', port: 5482, strictPort: true, hmr: { port: 5492 } },
   test: {
     include: ['test/layout/**/*.test.ts'],
     fileParallelism: false,
     maxWorkers: 1,
     browser: {
       enabled: true,
-      api: { port: 5482, strictPort: true },
+      api: { host: '127.0.0.1', port: 5482, strictPort: true },
       headless: true,
       commands: {
         async captureInbox({ frame, page }, name: string) {

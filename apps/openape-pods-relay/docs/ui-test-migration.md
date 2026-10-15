@@ -27,7 +27,9 @@ Activate the repository Node/pnpm toolchain and run `pnpm run doctor` in each sh
   Client tests retain the real SQLite InboxStore; worker tests retain cache and
   account separation contracts. Server/session/receipt/store tests remain intact.
 
-Browser runner ports are 5482 (strict; collisions fail) and 5492 (HMR). Screenshots
+Browser runner ports are 127.0.0.1:5482 (strict; collisions fail) and 5492 (HMR).
+A temporary listener on 127.0.0.1:5482 makes the browser command exit 1 before
+any test runs; after releasing that listener, the full layout suite passes. Screenshots
 are in app-local `.artifacts/layout`; `PODS_INBOX_SCREENSHOTS` overrides the path.
 Each run owns a fresh Playwright browser context, no persistent browser profile.
 Unmount clears shell timers/listeners; fixtures are recreated per test. The real
