@@ -181,6 +181,9 @@ defineExpose({ total })
           </button>
           <a v-else class="secondary idp" :href="batch.requested.batchUrl!" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
         </div>
+        <p v-if="!batch.requested" class="meta">
+          {{ t('Historical record; reconcile in the external tool journal before releasing held work.') }}
+        </p>
         <details :open="batch.items.length <= 5">
           <summary class="meta">
             {{ t('Show objects') }}
@@ -205,15 +208,9 @@ defineExpose({ total })
         <p v-if="approval.reason" class="meta">
           {{ diagnostic(approval.reason) }}
         </p>
-        <label class="meta">{{ t('Observation') }} <input v-model="evidence[approval.id]" maxlength="2000"></label>
-        <div class="opts">
-          <button class="secondary" type="button" :disabled="!evidence[approval.id]?.trim()" @click="emit('domain', { type: 'resolveApproval', id: approval.id, decision: 'renew', evidence: evidence[approval.id] ?? '' })">
-            {{ t('Ask again') }}
-          </button>
-          <button class="secondary" type="button" :disabled="!evidence[approval.id]?.trim()" @click="emit('domain', { type: 'resolveApproval', id: approval.id, decision: 'withdraw', evidence: evidence[approval.id] ?? '' })">
-            {{ t('Withdraw') }}
-          </button>
-        </div>
+        <p class="meta">
+          {{ t('Historical record; reconcile in the external tool journal before releasing held work.') }}
+        </p>
       </div>
     </div>
 
@@ -273,15 +270,9 @@ defineExpose({ total })
         <p class="meta mono">
           {{ intent(effect.intent) }}
         </p>
-        <label class="meta">{{ t('Observation') }} <input v-model="evidence[effect.actionKey]" maxlength="2000"></label>
-        <div class="opts">
-          <button class="secondary" type="button" :disabled="!evidence[effect.actionKey]?.trim()" @click="emit('domain', { type: 'resolveEffect', actionKey: effect.actionKey, attempt: effect.attempt, applied: true, evidence: evidence[effect.actionKey] ?? '' })">
-            {{ t('It happened') }}
-          </button>
-          <button class="secondary" type="button" :disabled="!evidence[effect.actionKey]?.trim()" @click="emit('domain', { type: 'resolveEffect', actionKey: effect.actionKey, attempt: effect.attempt, applied: false, evidence: evidence[effect.actionKey] ?? '' })">
-            {{ t('It did not happen') }}
-          </button>
-        </div>
+        <p class="meta">
+          {{ t('Historical record; reconcile in the external tool journal before releasing held work.') }}
+        </p>
       </div>
       <div v-for="item in unknown" :key="item.runId + item.key" class="item">
         <div class="row">

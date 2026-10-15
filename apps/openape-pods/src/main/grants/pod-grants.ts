@@ -152,6 +152,7 @@ export class PodGrants {
    */
   async approve(owner: OwnerSession | null, podId: string, grantId: string, grantType: GrantType | undefined, signal: AbortSignal): Promise<GrantDecision> {
     const { connection, issuer, bearer, grant } = await this.decidable(owner, podId, grantId, signal)
+    if (grant.request.audience !== 'shapes') throw new Error('Historical execution grants cannot be approved; migrate the recipe and request the exact call through ape-shell')
     const requested = typeOf(grant.request.grant_type)
     if (grant.status === 'approved') return this.decided(podId, connection, grant, false, requested)
     if (grant.status !== 'pending') throw new Error(`This grant is ${grant.status}; request it again instead`)

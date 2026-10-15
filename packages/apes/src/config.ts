@@ -1,8 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import type { BrokeredGrant } from '@openape/core'
 
 export interface AuthData {
+  agent_key_id?: string
+  decision_issuer?: string
+  brokered?: BrokeredGrant
   idp: string
   access_token: string
   refresh_token?: string

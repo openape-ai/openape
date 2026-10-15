@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { promisify } from 'node:util'
-import { launchSandbox } from '../src/worker/runtime/sandbox'
+import { launchSandbox } from './fixtures/sandbox'
 import type { ProcessDomain } from '../src/worker/runtime/sandbox'
 
 const execute = promisify(execFile)

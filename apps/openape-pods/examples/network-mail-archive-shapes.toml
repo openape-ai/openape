@@ -4,27 +4,23 @@ id = "o365-cli"
 executable = "o365-cli"
 audience = "shapes"
 version = "network-archive-1"
+# Example only. Production uses the protected o365 registry adapter.
 [[operation]]
-id = "workflow.read"
-command = ["workflow", "read"]
-required_options = ["account", "message"]
-display = "Read one approved message of {account} before archiving it"
+id = "workflow.review-archive"
+command = ["workflow", "review-archive"]
+required_options = ["account", "message", "operation"]
+display = "Review {message} of {account}"
 action = "read"
 risk = "low"
-resource_chain = ["account:email={account}", "mail:*"]
+exact_command = true
+resource_chain = ["account:email={account}", "mail:id={message}"]
 [[operation]]
-id = "workflow.move"
-command = ["workflow", "move"]
-required_options = ["account", "message", "expected-version", "source-folder", "destination"]
-display = "Move one owner-approved message of {account} into its Archive folder"
+id = "workflow.archive"
+command = ["workflow", "archive"]
+required_options = ["account", "message", "content-version", "sender", "subject", "source-folder", "destination", "operation", "journal"]
+display = "Archive {subject} from {sender} in {account}"
 action = "move"
+decision = "once"
 risk = "high"
-resource_chain = ["account:email={account}", "mail:*"]
-[[operation]]
-id = "auth.login"
-command = ["auth", "login"]
-required_options = ["account"]
-display = "Sign in {account} in the Pod terminal"
-action = "login"
-risk = "medium"
-resource_chain = ["account:email={account}"]
+exact_command = true
+resource_chain = ["account:email={account}", "mail:id={message}"]

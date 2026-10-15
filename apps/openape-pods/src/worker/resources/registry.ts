@@ -152,17 +152,6 @@ export class ResourceRegistry {
     this.revokeActive(podId)
   }
 
-  replaceMail(podId: string, resources: { kind: 'tool' | 'connection', name: string, configuration: Record<string, unknown> }[]): void {
-    this.store.getPod(podId)
-    this.store.transaction(() => {
-      this.store.db.prepare('UPDATE resources SET state=\'revoked\',revision=revision+1 WHERE pod_id=? AND (json_extract(configuration,\'$.capability\')=\'mail.read\' OR kind=\'connection\') AND state!=\'revoked\'').run(podId)
-      for (const resource of resources) this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), podId, resource.kind, 'ready', resource.name, JSON.stringify(resource.configuration))
-      this.advance(podId)
-      this.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(podId)
-    })
-    this.revokeActive(podId)
-  }
-
   // A portable alias is a stable script-facing name for one local resource; changing it changes what a script addresses.
   // One assignment may serve several aliases, for example two declared folders the recipient keeps in one place.
   alias(podId: string, alias: string, resourceId: string): void {

@@ -52,7 +52,7 @@ it('validates aliases and an exact bounded capability set', () => {
 
 it('authorizes any assigned alias without declarations under a current pinned run lease', async () => {
   const { RunStore } = await import('../../src/worker/runs/store')
-  const { authorizeCredentialService, authorizeMailService } = await import('../../src/worker/mail/authorization')
+  const { authorizeCredentialService, authorizeRunService } = await import('../../src/worker/runtime/service-authorization')
   const f = fixture(); const key = randomUUID(); f.registry.assignCredential(f.pod.id, 'crm', key, 0)
   const second = randomUUID(); f.registry.assignCredential(f.pod.id, 'another', second, 1)
   const hash = version(f)
@@ -63,7 +63,7 @@ it('authorizes any assigned alias without declarations under a current pinned ru
   expect(read()).toBe(key); expect(read({}, 'another')).toBe(second)
   for (const changes of [{ podId: randomUUID() }, { runId: randomUUID() }, { epoch: 0 }, { assignmentRevision: 2 }, { capabilities: ['credential.other'] }]) expect(() => read(changes)).toThrow()
   expect(() => read({}, 'other')).toThrow('missing, revoked')
-  expect(() => authorizeMailService(f.store, f.registry, runs, { scope })).toThrow('capability')
+  expect(authorizeRunService(f.store, f.registry, runs, { scope }).epoch).toBe(scope.epoch)
   f.registry.assignCredential(f.pod.id, 'crm', randomUUID(), 2); expect(() => read()).toThrow()
   runs.finish(run.id, 'completed', 'Synthetic', null); expect(() => read()).toThrow('lease')
 })

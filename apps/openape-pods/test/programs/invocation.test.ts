@@ -16,3 +16,9 @@ it('rejects foreign, revoked, undeclared, ambiguous and conflicting application 
   expect(() => invoke([resource, { ...resource, id: 'other' }])).toThrow('ambiguous')
   expect(() => programRequest([resource], podId, ['tool.mail.invoke'], { application: 'o365-cli', applicationId: resource.id, argv: ['read'] })).toThrow()
 })
+
+it('allows bounded artifact output but cannot increase the program execution time limit', () => {
+  const invoke = (options: object) => programRequest([resource], podId, ['tool.mail.invoke'], { application: 'o365-cli', argv: ['read'], ...options })
+  expect(invoke({ output: 'artifact', timeoutMs: 15000 })).toMatchObject({ output: 'artifact', timeoutMs: 15000 })
+  for (const options of [{ output: '/outside' }, { timeoutMs: 0 }, { timeoutMs: 60001 }, { timeoutMs: Infinity }]) expect(() => invoke(options)).toThrow()
+})

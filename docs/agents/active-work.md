@@ -1,5 +1,13 @@
 # Active work
 
+## Unified Pods execution — issue 1497
+
+- Approved proposal revision 2: https://report.openape.ai/d/01M4ZXED8YT88G56VGCG9C9JR7?v=2. Current progress: https://report.openape.ai/d/01M4ZXED8YT88G56VGCG9C9JR7.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1497. Branch `feature/issue-1497-pods-ape-shell`, checkout `openape-monorepo.worktrees/pods-ape-shell-1497`, base `748782ce21e1079b39941284e4dd4156b8dba60d`.
+- M0–M4 implementation and rehearsals are complete. Pods passes 1714 unit tests, typecheck and all 141 native cases in a fresh fixture package. External automation passes 22 tests; Go all/race and Windows build pass. Registry checks pass for 32 adapters and the real candidate CLI. Mail PR 19 and registry PR 5 are open. The affected repository gate, monorepo PR and final Reports evidence remain in progress. Production release and activation remain separately gated in M5; no installed state changed.
+- Preserve the complete safety matrix and remove domain code only after equivalent external protections exist. Installed Pods, active scripts, schedules and decisions remain untouched. Production rollout is a separate boundary in the approved plan.
+- Source: `.claude/plans/2026-10-15-pods-ape-shell/plan.json`. Keep this source and its complete German translation synchronized with implementation evidence.
+
 ## Mail choices and decision notifications — issue 1495
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1495. Branch `bugfix/issue-1495-decision-push`, checkout `openape-monorepo.worktrees/mail-processing-1492`, base `cac6db13`.

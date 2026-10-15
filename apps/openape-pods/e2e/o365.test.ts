@@ -3,7 +3,8 @@ import { mkdtemp, realpath, readFile, rm, mkdir, writeFile } from 'node:fs/promi
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, expect, it } from 'vitest'
-import { launchSandbox, verifyExecutable } from '../src/worker/runtime/sandbox'
+import { launchSandbox } from './fixtures/sandbox'
+import { verifyExecutable } from '../src/worker/runtime/sandbox'
 import type { ProcessDomain } from '../src/worker/runtime/sandbox'
 
 let root = ''; const domains: ProcessDomain[] = []

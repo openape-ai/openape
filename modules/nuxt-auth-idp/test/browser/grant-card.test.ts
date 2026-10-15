@@ -164,3 +164,20 @@ for (const dark of [false, true]) {
     })
   }
 }
+
+it('renders protected exact-call decisions without a reusable approval control', async () => {
+  const grant = structuredClone(cardFixtures.gitPush)
+  Object.assign(grant.request.authorization_details[0]!, { cli_id: 'o365', operation_id: 'workflow.archive', action: 'move', display: 'Archive the reviewed message', constraints: { exact_command: true, single_use: true } })
+  grant.request.command = ['o365-cli', 'workflow', 'archive', '--account', 'owner@example.test', '--message', 'synthetic-message', '--content-version', `content-v2:${'a'.repeat(64)}`, '--destination', 'archive']
+  grant.request.execution_context.argv = grant.request.command
+  grant.card.registry.title = { de: 'Geprüfte Nachricht archivieren', en: 'Archive the reviewed message' }
+  grant.card.registry.allows = { de: 'Verschiebt genau diese geprüfte Nachricht einmal ins Archiv.', en: 'Moves this exact reviewed message to the archive once.' }
+  grant.card.registry.does_not_allow = { de: 'Gilt nicht für andere Nachrichten oder geänderte Inhalte.', en: 'Does not cover other messages or changed content.' }
+  grant.card.registry.facts = [{ label: { de: 'Postfach', en: 'Mailbox' }, value: 'owner@example.test', format: 'code', provenance: 'bound' }]
+  grant.request.summary = { title: 'Synthetic newsletter', description: 'Script-provided context', origin: 'External mail recipe', link: 'https://example.test/review' }
+  const card = await mountPage({ grant_id: grant.id }, grant, 'de-AT')
+  expect(card.get('[data-binding-line]').text()).toBe('Geprüfte Nachricht archivieren')
+  expect(card.text()).not.toContain('Immer erlauben')
+  expect(card.text()).toContain('Script-provided context')
+  await capture('protected-once-de')
+})

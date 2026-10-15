@@ -6,7 +6,7 @@ type Raw = Record<string, unknown>
 
 const ROOT_KEYS = ['schema', 'cli', 'operation']
 const CLI_KEYS = ['id', 'executable', 'audience', 'version', 'global_options', 'tested_versions', 'version_command', 'version_pattern', 'tested_digests']
-const OPERATION_KEYS = ['id', 'command', 'positionals', 'required_options', 'value_options', 'flag_options', 'display', 'action', 'risk', 'resource_chain', 'exact_command', 'presentation']
+const OPERATION_KEYS = ['id', 'command', 'positionals', 'required_options', 'value_options', 'flag_options', 'display', 'action', 'risk', 'resource_chain', 'exact_command', 'decision', 'presentation']
 const RISKS = ['low', 'medium', 'high', 'critical']
 const OPTION_NAME = /^[\w-]+$/
 const GLOBAL_OPTION = /^[\w-]+(?:=[\w-]+)?$/
@@ -78,6 +78,11 @@ function parseOperation(operation: unknown, globalOptions: string[] | undefined)
   if (operation.exact_command !== undefined && typeof operation.exact_command !== 'boolean')
     throw new Error(`${owner} has an invalid exact_command`)
 
+  if (operation.decision !== undefined && operation.decision !== 'once' && operation.decision !== 'deny')
+    throw new Error(`${owner} has an invalid decision policy`)
+  if (operation.decision === 'once' && operation.exact_command !== true)
+    throw new Error(`${owner} requires exact_command for a single-use decision`)
+
   const parsed: ShapesOperation = {
     id: operation.id,
     command: legacyList(operation.command),
@@ -91,6 +96,7 @@ function parseOperation(operation: unknown, globalOptions: string[] | undefined)
     action: operation.action,
     risk: (operation.risk as ShapesOperation['risk'] | undefined) ?? 'low',
     resource_chain: legacyList(operation.resource_chain),
+    ...(operation.decision === undefined ? {} : { decision: operation.decision as 'once' | 'deny' }),
     ...(operation.exact_command === undefined ? {} : { exact_command: operation.exact_command }),
   }
   if (operation.presentation !== undefined)

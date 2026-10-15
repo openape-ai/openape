@@ -1,9 +1,10 @@
+import { machineRuntime } from './fixtures/machine'
 import { createHash, randomUUID } from 'node:crypto'
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { executeScript } from '../src/worker/runs/runner'
+import { executeScript as executeScriptRuntime } from '../src/worker/runs/runner'
 import type { RunInput } from '../src/contracts/runs'
 
 let root = ''
@@ -13,7 +14,7 @@ async function setup(source: string, timeMs = 5000) {
   const workspace = join(root, 'workspace'); await mkdir(workspace)
   const artifact = join(root, 'run.mjs'); await writeFile(artifact, source)
   const input: RunInput = { version: 1, runId: randomUUID(), podId: randomUUID(), scriptHash: createHash('sha256').update(source).digest('hex'), assignmentRevision: 1, reason: 'manual', eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: 0, workspace, references: [], limits: { timeMs, frameBytes: 256 * 1024 } }
-  const runtime = { helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {} }
+  const runtime = { ...await machineRuntime(), helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {} }
   return { input, runtime, artifact, directory: join(root, 'private') }
 }
 const result = `{status:'completed',summary:'Local example completed',completedInputIds:[],gapIds:[]}`
@@ -88,3 +89,8 @@ it('runs the Jev helper through the native script bridge without starting an LLM
   })
   expect(reply.status).toBe('completed'); expect(operations).toEqual(['jev.evaluate'])
 })
+
+function executeScript(...args: Parameters<typeof executeScriptRuntime>) {
+  args[5] = { ...args[5], execution: { authorized: async () => {} } }
+  return executeScriptRuntime(...args)
+}

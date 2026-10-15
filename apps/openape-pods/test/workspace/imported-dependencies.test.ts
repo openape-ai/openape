@@ -8,14 +8,15 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { validateImportedLock, verifyImportedTree } from '../../src/worker/dependencies/imported-lock'
 import { installPackages } from '../../src/worker/dependencies/install'
 import { DependencyStore, removePackageTree } from '../../src/worker/dependencies/store'
-import { launchSandbox } from '../../src/worker/runtime/sandbox'
-import { startMailProxy } from '../../src/main/mail/proxy'
+import { launchApeShell } from '../../src/worker/runtime/ape-shell'
+import { startNetworkProxy } from '../../src/main/network/proxy'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { packageDigest, packageFiles } from '../../src/worker/dependencies/tree'
 import type { ScriptRuntime } from '../../src/worker/runs/runner'
 
-vi.mock('../../src/worker/runtime/sandbox', () => ({ launchSandbox: vi.fn() }))
-vi.mock('../../src/main/mail/proxy', () => ({ startMailProxy: vi.fn() }))
+vi.mock('../../src/worker/runtime/ape-shell', () => ({ launchApeShell: vi.fn() }))
+vi.mock('../../src/main/programs/execution', () => ({ observeExecution: async () => ({ kind: 'completed', exitCode: 0 }) }))
+vi.mock('../../src/main/network/proxy', () => ({ startNetworkProxy: vi.fn() }))
 const npmRoot = dirname(createRequire(import.meta.url).resolve('npm/package.json'))
 const manifest = { dependencies: { fixture: '1.0.0' } }
 const integrity = `sha512-${Buffer.alloc(64, 1).toString('base64')}`
@@ -35,7 +36,8 @@ const roots: string[] = []
 async function runtimeFixture(): Promise<ScriptRuntime> {
   const root = await mkdtemp(join(tmpdir(), 'pods-imported-runtime-')); roots.push(root)
   await mkdir(join(root, 'vendor')); await symlink(npmRoot, join(root, 'vendor/npm'))
-  return { entry: join(root, 'runtime/script-entry.mjs'), executable: '/synthetic-node', helper: '/synthetic-helper', runtimeDirectories: [] } as unknown as ScriptRuntime
+  await writeFile(join(root, 'node'), 'synthetic node')
+  return { machine: { runtime: { executable: process.execPath, cli: '/fixture/apes', environment: {} }, targetHost: 'pods:fixture' }, entry: join(root, 'runtime/script-entry.mjs'), executable: join(root, 'node'), helper: '/synthetic-helper', runtimeDirectories: [] } as unknown as ScriptRuntime
 }
 afterEach(async () => { vi.resetAllMocks(); for (const root of roots.splice(0)) await removePackageTree(root) })
 
@@ -72,15 +74,15 @@ it('rejects invalid imported locks before creating a proxy or sandbox', async ()
   const root = await mkdtemp(join(tmpdir(), 'pods-imported-lock-')); roots.push(root)
   const runtime = { entry: join(root, 'runtime/entry.mjs') } as ScriptRuntime
   await expect(installPackages(runtime, root, manifest, new AbortController().signal, () => {}, '{"lockfileVersion":2,"packages":{}}')).rejects.toThrow('version 3')
-  expect(startMailProxy).not.toHaveBeenCalled(); expect(launchSandbox).not.toHaveBeenCalled()
+  expect(startNetworkProxy).not.toHaveBeenCalled(); expect(launchApeShell).not.toHaveBeenCalled()
   await expect(readFile(join(root, 'project/package.json'))).rejects.toThrow('ENOENT')
 })
 it('runs npm ci alone with the imported lock and existing sandbox restrictions', async () => {
   const root = await mkdtemp(join(tmpdir(), 'pods-imported-lock-')); roots.push(root)
   const runtime = await runtimeFixture()
   const close = vi.fn(async () => {})
-  vi.mocked(startMailProxy).mockResolvedValue({ port: 12345, environment: { HTTPS_PROXY: 'http://fixture:synthetic@127.0.0.1:12345' }, close } as never)
-  vi.mocked(launchSandbox).mockImplementation(async (_helper, _stage, _policy, args) => {
+  vi.mocked(startNetworkProxy).mockResolvedValue({ port: 12345, environment: { HTTPS_PROXY: 'http://fixture:synthetic@127.0.0.1:12345' }, close } as never)
+  vi.mocked(launchApeShell).mockImplementation(async (_helper, _stage, _policy, args) => {
     expect(args[1]).toBe('ci')
     expect(args).toContain('--ignore-scripts'); expect(args).toContain('--bin-links=false')
     expect(JSON.parse(await readFile(join(root, 'project/package-lock.json'), 'utf8'))).toEqual(fixture())
@@ -91,7 +93,7 @@ it('runs npm ci alone with the imported lock and existing sandbox restrictions',
     return { processId: Promise.resolve(1), completed: Promise.resolve(0), cancel: vi.fn(), stdout: new PassThrough(), stderr: new PassThrough() } as never
   })
   expect(await installPackages(runtime, root, manifest, new AbortController().signal, () => {}, JSON.stringify(fixture()))).toBe(join(root, 'project'))
-  expect(launchSandbox).toHaveBeenCalledTimes(1); expect(close).toHaveBeenCalledTimes(1)
+  expect(launchApeShell).toHaveBeenCalledTimes(1); expect(close).toHaveBeenCalledTimes(1)
 })
 
 it('does not trust an optional package flag to omit a required transitive', async () => {
@@ -135,7 +137,7 @@ it('reuses only the exact imported lock and leaves an existing dependency set in
     const different = fixture(); different.packages['node_modules/child'] = packageEntry('child', '2.2.0')
     await expect(dependencies.prepare(runtime, pod.id, manifest, new AbortController().signal, () => {}, JSON.stringify(different))).rejects.toThrow('different dependency lock')
     expect(await dependencies.verify(pod.id, hash)).toBe(await realpath(destination))
-    expect(launchSandbox).not.toHaveBeenCalled(); expect(startMailProxy).not.toHaveBeenCalled()
+    expect(launchApeShell).not.toHaveBeenCalled(); expect(startNetworkProxy).not.toHaveBeenCalled()
   }
   finally { store.close() }
 })

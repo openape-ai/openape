@@ -1,3 +1,8 @@
+import { ApprovalHistory } from '../data/approval-history'
+import { isProgramCall } from '../../contracts/program-execution'
+import type { ScriptRuntime, ScriptServices } from './runner'
+import { executeRecordedProgram } from '../../main/programs/effect-execution'
+import { recordProgramExecution } from './program-execution'
 import { InboxOutbox, parseNotify } from '../inbox/outbox'
 import { RunCancellation, unresolvedOperation } from '../recovery/policy'
 import type { RecoveryFailure } from '../recovery/policy'
@@ -15,16 +20,9 @@ import type { HttpRequest, HttpReply } from '../../contracts/http'
 import { assignedHttp } from '../../main/programs/http-service'
 import { EffectLedger } from '../recovery/effects'
 import { executeHttpEffect } from './http'
-import { describeProgram, executeProgramEffect, invokeApproved, isProgramCall } from './program-effects'
-import { parseApprovedInvocation } from '../../contracts/programs'
-import type { ApprovedInvocation } from '../../contracts/programs'
 import { PodVariables } from '../resources/variables'
 import { parseCredentialRead } from '../../contracts/credentials'
 import { ScriptCredentials } from '../resources/script-credentials'
-import { MailRecipeSession, mailToolRequest } from '../mail/recipe'
-import { extractSource } from '../mail/extraction'
-import { assignedMail } from '../../main/mail/assigned'
-import type { MailPage } from '../mail/ingestion'
 import { confirmDomainsStopped } from '../recovery/domains'
 import { runAliases, scriptTimeLimitMs } from '../../contracts/runs'
 import type { RunState, RunInput, RunView  } from '../../contracts/runs'
@@ -45,10 +43,6 @@ import { DomainData } from '../data/domain'
 import { WorkLedger } from '../data/work'
 import { OwnerQuestions } from '../data/questions'
 import { dataOperations, handleDataOperation } from '../data/ports'
-import { Approvals } from '../data/approvals'
-import type { ApprovalService } from '../data/approvals'
-import { archiveApproved, parseArchiveTarget } from '../data/mail-archive'
-import { parseOwner } from '@openape/pods-protocol'
 
 export interface RunServiceScope {
   podId: string
@@ -61,9 +55,8 @@ export interface RunServiceScope {
   registerDomain: (path: string, ownerPid: number) => void
 }
 export interface RunServices {
-  mailArchive?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
   jev?: (request: JevRequest, signal: AbortSignal, scope: RunServiceScope) => Promise<JevEvaluation>
-  shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ home: string, environment: Record<string, string>, shell?: { cli: string, environment: Record<string, string> } }>
+  shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ home: string, environment: Record<string, string>, shell?: { cli: string, environment: Record<string, string> }, machine?: ScriptRuntime['machine'] }>
   closeShell?: (scope: RunServiceScope) => Promise<void>
   http?: (request: HttpRequest, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary) => Promise<HttpReply>
   credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
@@ -71,12 +64,6 @@ export interface RunServices {
   model?: AgentGatewayServices['model']
   /** `summary` is the script's own account of the call; the IdP shows it only if the call needs a new grant. */
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary) => Promise<unknown>
-  /** Authorizes one application command at the IdP before it runs and tells whether it writes (issue 1473, revision 4). */
-  programEffect?: (body: unknown, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary) => Promise<{ write: boolean }>
-  mailMove?: (body: unknown, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
-  /** One exact command whose program approval the worker consumed; it runs without a continuing grant. */
-  approvedProgram?: (body: ApprovedInvocation, signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
-  approval?: (body: Parameters<ApprovalService>[0], signal: AbortSignal, scope: RunServiceScope) => Promise<unknown>
 }
 
 const maxAgentCallsPerRun = 50
@@ -86,23 +73,18 @@ export class RunDispatcher {
   readonly data: DomainData
   readonly work: WorkLedger
   readonly questions: OwnerQuestions
-  readonly approvals: Approvals
+  readonly approvals: ApprovalHistory
   private active = new Map<string, { controller: AbortController, work: Promise<void> }>()
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly runtime: AgentRuntime, private readonly services?: RunServices) {
     this.runs = new RunStore(store)
     this.data = new DomainData(store)
     this.work = new WorkLedger(store, this.data)
     this.questions = new OwnerQuestions(store, this.data)
-    this.approvals = new Approvals(store, () => {
-      const registration = store.db.prepare('SELECT body FROM remote_registration WHERE id=1').get()
-      if (!registration) throw new Error('Owner approvals require an initialized owner identity')
-      return parseOwner((JSON.parse(String(registration.body)) as { owner: unknown }).owner)
-    })
+    this.approvals = new ApprovalHistory(store)
     store.transaction(() => {
       store.db.prepare('UPDATE runs SET state=\'interrupted\',error=\'Previous worker stopped; explicit recovery is required\',checkpoint_revision=(SELECT revision FROM checkpoints WHERE pod_id=runs.pod_id) WHERE state=\'running\' AND id IN (SELECT run_id FROM run_leases)').run()
       store.db.prepare('UPDATE run_leases SET boot_id=?').run(`fenced:${this.runs.bootId}`)
       store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE state=\'intent\'').run()
-      store.db.prepare('UPDATE effect_attempts SET state=\'unknown\' WHERE state=\'intent\'').run()
     })
   }
 
@@ -197,7 +179,7 @@ export class RunDispatcher {
       const manifest = parseManifest(JSON.parse(manifestRow.manifest as string))
       if (!manifest.triggers.includes(trigger.reason)) throw new Error('Script does not allow this trigger')
       const assigned = this.resources.list(pod.id).filter(resource => resource.kind === 'tool' && resource.state === 'ready').map(resource => resource.configuration.capability)
-      if (manifest.capabilities.filter(capability => !capability.startsWith('credential.')).some(capability => !assigned.includes(capability)) || (manifest.capabilities.includes('mail.read') && !this.services?.tool)) throw new Error('No tool assignments are available for this script')
+      if (manifest.capabilities.filter(capability => !capability.startsWith('credential.')).some(capability => !assigned.includes(capability))) throw new Error('No tool assignments are available for this script')
       const artifact = join(directory, 'run.mjs'); await writeFile(artifact, this.store.readBlob(run.scriptHash), { flag: 'wx', mode: 0o400 })
       const snapshots = await this.resources.capture(pod.id, this.runtime.helper)
       assertCurrent()
@@ -213,43 +195,34 @@ export class RunDispatcher {
       const dependencyRoot = dependencyHash ? await dependencies.verify(pod.id, dependencyHash) : undefined
       const runtime = { ...this.runtime, dependencyRoot, registerDomain: (path: string, ownerPid: number) => this.runs.registerDomain(id, path, ownerPid) }
       const scope: RunServiceScope = { podId: pod.id, runId: id, epoch, assignmentRevision: pod.bindingRevision, capabilities: manifest.capabilities, root: directory, assertCurrent, registerDomain: runtime.registerDomain }
-      let programWrites = 0
       const invokeTool = async (body: unknown, toolSignal: AbortSignal, summary?: ScriptSummary) => {
         assertCurrent()
-        if (!manifest.capabilities.some(capability => capability === 'mail.read' || capability.startsWith('tool.app_') || capability.startsWith('tool.ssh_')) || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
+        if (!manifest.capabilities.some(capability => capability.startsWith('tool.app_') || capability.startsWith('tool.ssh_')) || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
+        const artifactOutput = isProgramCall(body) && (body as { output?: unknown }).output === 'artifact'
+        if (artifactOutput) this.store.assertStorage(32 * 1024 * 1024)
         const call = async () => retryService('tool authorization', async () => { assertCurrent(); return this.services!.tool!(body, toolSignal, scope, summary) }, toolSignal)
-        // A read can be replayed; an application write is recorded like an HTTP effect and keeps the run from automatic replay.
-        // Only the IdP knows what a command does: it authorizes the call first, and its grant tells whether it writes.
-        if (isProgramCall(body) && !this.services.programEffect) throw new Error('Program authorization service is unavailable')
-        const write = isProgramCall(body) ? (await retryService('tool authorization', async () => { assertCurrent(); return this.services!.programEffect!(body, toolSignal, scope, summary) }, toolSignal)).write : false
-        if (!write) appendEvent('recovery-boundary', { kind: 'read', operation: 'tools.invoke' })
-        const operation = write ? executeProgramEffect(new EffectLedger(this.store), pod.id, id, `program:${id}:${programWrites++}`, body, call) : call()
+        if (!isProgramCall(body)) appendEvent('recovery-boundary', { kind: 'read', operation: 'tools.invoke' })
+        // The private ape-shell lifecycle records program intent before acknowledging dispatch.
+        const operation = call()
         pendingAgents.add(operation)
-        try { const reply = await operation; assertCurrent(); return reply }
+        try {
+          const reply = await operation; assertCurrent()
+          if (artifactOutput && !(reply as { pending?: unknown }).pending && !(reply as { refusal?: unknown }).refusal) {
+            const bytes = (reply as { stdoutArtifact?: { bytes?: number } }).stdoutArtifact?.bytes
+            if (!Number.isSafeInteger(bytes) || bytes! < 0 || bytes! > 32 * 1024 * 1024) throw new Error('Invalid output artifact receipt')
+            this.store.db.prepare('UPDATE data_settings SET used_bytes=used_bytes+? WHERE id=1').run(bytes!)
+          }
+          return reply
+        }
         finally { pendingAgents.delete(operation) }
       }
       const scriptTool = async (payload: unknown, toolSignal: AbortSignal, summary?: ScriptSummary) => invokeTool(payload, toolSignal, summary)
       if (this.services?.shell) {
         const environment = await retryService('runtime authorization', () => this.services!.shell!(scope, signal), signal, 30000)
-        Object.assign(runtime, { home: environment.home, shell: environment.shell, environment: { ...environment.environment, ...runtime.environment } })
+        Object.assign(runtime, { home: environment.home, machine: environment.machine, environment: { ...environment.environment, ...runtime.environment } })
         shellScope = scope
       }
-      // Approval requests and decisions are exchanged with the IdP inside the Pod's own run, after its run authority
-      // exists, and finish before the script starts; a slow exchange is aborted, never left running beside the script.
-      if (this.services?.approval && this.approvals.due(pod.id)) {
-        const service: ApprovalService = (body, serviceSignal) => this.services!.approval!(body, serviceSignal, scope)
-        const exchange = new AbortController()
-        const stop = () => exchange.abort()
-        const timer = setTimeout(stop, 30000)
-        signal.addEventListener('abort', stop, { once: true })
-        try { await this.approvals.sync(pod.id, service, exchange.signal) }
-        catch (error) { appendEvent('approvals', { error: error instanceof Error ? error.message.slice(0, 2000) : 'Approval exchange failed' }) }
-        finally { clearTimeout(timer); signal.removeEventListener('abort', stop) }
-        assertCurrent()
-      }
-      let mail: MailRecipeSession | undefined
-      appendEvent('environment', { script: artifact, workspace: input.workspace, values: Object.fromEntries(Object.entries(runtime.environment).filter(([key]) => ['HOME', 'TMPDIR', 'PATH', 'SHELL', 'PODS_POD_ID', 'LANG', 'TERM'].includes(key))) })
-      const result = await executeScript(runtime, directory, artifact, input, signal, {
+      const scriptServices: ScriptServices = {
         budgetPaused: () => infrastructureWaiting > 0 || agentBudgetPaused() || this.runs.approvals(pod.id).some(item => item.runId === id),
         event: (type, data) => { assertCurrent(); appendEvent(type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, call, operationSignal) => {
@@ -286,62 +259,10 @@ export class RunDispatcher {
             const receipt = new InboxOutbox(this.store).queue(pod, id, parseNotify(payload))
             appendEvent('notify', receipt); return receipt
           }
-          if (operation === 'approvals.request') {
-            const asked = payload as { action?: unknown, payload?: { application?: unknown, argv?: unknown } } | null
-            // A program approval shows the owner the exact command line.
-            const display = asked?.action === 'program.run' ? describeProgram(this.resources.list(pod.id), pod.id, scope.capabilities, { application: String(asked.payload?.application ?? ''), argv: asked.payload?.argv }) : undefined
-            assertCurrent()
-            const view = this.approvals.request({ podId: pod.id, runId: id }, payload, display); appendEvent('approval-request', { id: view.id, state: view.state }); return view
-          }
-          if (operation === 'approvals.get') return this.approvals.get(pod.id, String((payload as { id?: unknown } | null)?.id ?? ''))
-          if (operation === 'mail.archiveApproved') {
-            if (!this.services?.mailMove || !this.services.approval) throw new Error('Mail archive service is unavailable')
-            const target = parseArchiveTarget(payload)
-            const service: ApprovalService = (body, serviceSignal) => this.services!.approval!(body, serviceSignal, scope)
-            const body = (argv: string[]) => ({ application: target.application, argv })
-            const tools = { read: async (argv: string[]) => invokeTool(body(argv), operationSignal), move: async (argv: string[]) => { appendEvent('recovery-boundary', { kind: 'effect', operation: 'mail.archive' }); return this.services!.mailMove!(body(argv), operationSignal, scope) } }
-            // Archive work pauses the script budget like other bounded service waits, and the run waits for it.
-            infrastructureWaiting++
-            const work = archiveApproved(this.store, this.approvals, service, { podId: pod.id, runId: id }, target, tools, assertCurrent, operationSignal)
-            pendingAgents.add(work)
-            try { const outcome = await work; appendEvent('mail-archive', outcome); return outcome }
-            finally { pendingAgents.delete(work); infrastructureWaiting-- }
-          }
           if (dataOperations.has(operation)) {
             const reply = handleDataOperation(this, operation, payload, { podId: pod.id, runId: id }, manifest)
             if (operation.startsWith('work.') && operation !== 'work.find' && operation !== 'work.contract') appendEvent('work', { operation, ...(reply && typeof reply === 'object' && 'key' in reply ? { key: (reply as { key: unknown }).key } : {}) })
             return reply
-          }
-          if (operation === 'mail.archive') {
-            if (!this.services?.mailArchive) throw new Error('Mail archive service is unavailable')
-            // Standalone archives record each move in the archive store, which holds only its own unresolved batch.
-            appendEvent('recovery-boundary', { kind: 'effect', operation })
-            const work = this.services.mailArchive(payload, operationSignal, scope)
-            pendingAgents.add(work)
-            try { const result = await work; assertCurrent(); return result }
-            finally { pendingAgents.delete(work) }
-          }
-          // Channel contracts and emits belonged to the retired network runtime (issue 1465).
-          if (operation === 'graph.contract') throw new Error('Network contracts (takes/gives) are retired; declare work and use shared data instead')
-          if (operation === 'mail.next' || operation === 'mail.commit') {
-            if (!manifest.capabilities.includes('mail.read')) throw new Error('Mail recipe permission is not assigned')
-            if (!mail) {
-              const assignment = assignedMail(this.resources.list(pod.id)).mail
-              mail = new MailRecipeSession(this.store, pod.id, assignment, async request => await invokeTool(mailToolRequest(assignment, request), operationSignal) as MailPage, async (source) => {
-                const extraction = extractSource(runtime, directory, source, operationSignal, runtime.registerDomain)
-                pendingAgents.add(extraction)
-                try { return await extraction }
-                finally { pendingAgents.delete(extraction) }
-              }, assertCurrent, run.scriptHash)
-            }
-            if (operation === 'mail.commit') {
-              const result = mail.commit(payload)
-              appendEvent('checkpoint', { revision: result.revision, kind: 'mail-knowledge', gaps: result.gapIds.length })
-              return result
-            }
-            const result = await mail.next() as { type: string, hash?: string, sources?: number, omissions?: string[], revision?: number, count?: number }
-            appendEvent('mail-progress', { type: result.type, contextHash: result.hash, sources: result.sources, omissions: result.omissions, revision: result.revision, retrieved: result.count })
-            return result
           }
           if (operation === 'http.request') {
             if (!this.services?.http) throw new Error('HTTP service is unavailable')
@@ -368,24 +289,29 @@ export class RunDispatcher {
             try { const value = await request; assertCurrent(); operationSignal.throwIfAborted(); return value }
             finally { pendingAgents.delete(request) }
           }
-          if (operation === 'tools.invoke' && payload && typeof payload === 'object' && 'approval' in payload) {
-            if (!this.services?.approvedProgram || !this.services.approval) throw new Error('Approved program service is unavailable')
-            const request = parseApprovedInvocation(payload)
-            // The application must still be assigned and declared before the approval is used up.
-            describeProgram(this.resources.list(pod.id), pod.id, scope.capabilities, { application: request.application, argv: request.argv })
-            assertCurrent()
-            const service: ApprovalService = (body, serviceSignal) => this.services!.approval!(body, serviceSignal, scope)
-            // The IdP exchange and the command pause the script budget like other bounded service waits.
-            infrastructureWaiting++
-            const work = invokeApproved(this.store, this.approvals, service, { podId: pod.id, runId: id }, request, command => this.services!.approvedProgram!({ ...command, approval: request.approval }, operationSignal, scope), assertCurrent, operationSignal)
-            pendingAgents.add(work)
-            try { const reply = await work; assertCurrent(); appendEvent('approved-command', { approval: request.approval, exitCode: (reply as { exitCode?: unknown } | null)?.exitCode ?? null }); return reply }
-            finally { pendingAgents.delete(work); infrastructureWaiting-- }
-          }
           if (operation === 'tools.invoke') return scriptTool(payload, operationSignal, summary)
           throw new Error('Unsupported script operation')
         },
-      })
+      }
+      const execute = async (execution?: ScriptServices['execution']) => executeScript(runtime, directory, artifact, input, signal, { ...scriptServices, execution })
+      const result = runtime.machine
+        ? (await executeRecordedProgram({ scriptHash: run.scriptHash, dependencyHash, assignmentRevision: pod.bindingRevision }, async observer => ({
+            exitCode: 0,
+            result: await execute({
+              ...observer,
+              authorized: async (value) => {
+                assertCurrent()
+                if (dependencyHash) await dependencies.verify(pod.id, dependencyHash)
+                assertCurrent()
+                await observer.authorized(value)
+                appendEvent('approval', { grantId: value.grantId, issuer: runtime.machine!.issuer, title: 'Pod script execution', state: 'approved' })
+              },
+            }),
+          }), async (record) => {
+            assertCurrent()
+            recordProgramExecution(this.store, this.runs, { scope, operationId: id, record })
+          }, async (grantId, url) => { appendEvent('approval', { grantId, issuer: new URL(url).origin, title: 'Pod script execution', state: 'pending' }) })).result
+        : await execute()
       assertCurrent()
       if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE run_id=? AND state IN (\'intent\',\'unknown\')').get(id)) throw new Error('An HTTP delivery needs review before this pod can run again')
       for (const gap of result.gapIds) {

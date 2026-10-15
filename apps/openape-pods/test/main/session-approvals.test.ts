@@ -4,12 +4,9 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { computeArgvHash } from '@openape/grants'
 import { OwnerSession } from '../../src/main/connections/owner-session'
-import { invokeProgram } from '../../src/main/programs/invoke'
 import { AgentAuthority } from '../../src/main/broker/authorization'
 import { programCall } from '../../src/main/programs/session'
-import { programIdentity } from '../../src/contracts/programs'
 import type { ProgramAssignment } from '../../src/contracts/programs'
 import { brokered, brokerRejections, closeProfiles, deniedPodId, identityProvider, issuer, owner, ownerToken, podId, podSubject, program, workerFixture } from './idp-fixture'
 
@@ -77,17 +74,6 @@ it('after the session ends approvals fail, pending grants keep waiting and the s
   await vi.waitFor(() => expect(idp.state.revokedTokens).toEqual(['SESSION_REFRESH']))
 })
 
-it('approves a waiting runtime grant in the session so the run continues without the human', async () => {
-  const f = await workerFixture(); const owner = session()
-  const run = f.start(podId)
-  await expect.poll(() => f.approvals.find(item => item.state === 'pending')?.grantId).toBe('grant-1')
-  const decision = await mcp(f, { action: 'grants', command: { type: 'approve', podId, grantId: 'grant-1' } }, owner)
-  expect(decision).toMatchObject({ id: 'grant-1', state: 'approved', approvedInSession: true })
-  await expect(run.run).resolves.toEqual({ home: '/fixture/home', environment: {} })
-  await run.call('shellClose')
-  expect(idp.state.decisions).toEqual([{ action: 'approve', id: 'grant-1', bearer: ownerToken, body: { grant_type: 'always' } }])
-})
-
 it('applies a Pod sandbox with its level and denylist and requests its grants as the Pod in the session', async () => {
   const f = await workerFixture(); const owner = session()
   const result = await mcp(f, { action: 'sandbox', command: { type: 'apply', target: { podId }, sandbox: { level: 'owner', http: [{ origin: 'https://chat.example.test', methods: ['POST'] }], deny: ['~/.ssh'] }, grants: 'sandbox' } }, owner) as { outcomes: { podId: string, display: string, state: string }[] }
@@ -111,7 +97,7 @@ function approvedGrant(details: Record<string, unknown>[], extra: Record<string,
   const id = idp.foreign({ requester: podSubject(podId), target_host: `pods:${podId}`, authorization_details: details, ...extra }); idp.decide(id, 'approved'); return id
 }
 
-it('runs new commands under a grant the IdP finds, refuses whole-program requests from the desktop and asks for another program', async () => {
+it('previews exact commands at the IdP and refuses whole-program requests from the desktop', async () => {
   const gh = ghApplication()
   const f = await workerFixture({ resources: () => [program, gh.resource] })
   // A whole program is granted at the IdP, never resolved by the desktop.
@@ -120,90 +106,16 @@ it('runs new commands under a grant the IdP finds, refuses whole-program request
   const grant = approvedGrant([{ type: 'openape_cli', cli_id: 'gh', operation_id: '*', resource_chain: [], action: 'read', permission: 'gh.*#read', display: 'Every gh read', risk: 'low' }])
   const authority = new AgentAuthority(f.connection(podId), undefined, f.grants.port(podId))
   for (const argv of [['issue', 'list', '--repo', 'openape/monorepo'], ['run', 'list', '--repo', 'another/repository']]) {
-    await expect(authority.authorizeProgram(programCall(gh.assignment, argv), AbortSignal.timeout(5000))).resolves.toEqual({ grantId: grant, actions: ['read'], programs: ['gh'] })
+    await expect(authority.requestProgram(programCall(gh.assignment, argv), AbortSignal.timeout(5000))).resolves.toEqual({ grantId: grant, state: 'approved' })
   }
   expect(idp.state.tokens).toEqual([grant, grant])
   // The desktop sent only the program and the exact command; the IdP made no new request.
   expect(idp.state.authorizations.map(body => Object.keys(body).sort())).toEqual([['argv', 'audience', 'grant_type', 'program', 'summary', 'target_host'], ['argv', 'audience', 'grant_type', 'program', 'summary', 'target_host']])
   expect(idp.state.creates).toEqual([])
-  // Another program finds no covering grant; without an owner waiting it is refused and nothing is minted.
+  // Another program finds no covering grant; its preview stays pending.
   const other = { ...program.configuration } as unknown as ProgramAssignment
-  await expect(authority.authorizeProgram(programCall(other, ['request', '--origin', 'https://api.example.test']), AbortSignal.timeout(5000))).rejects.toThrow('owner approval')
+  await expect(authority.requestProgram(programCall(other, ['request', '--origin', 'https://api.example.test']), AbortSignal.timeout(5000))).resolves.toMatchObject({ state: 'pending' })
   expect(idp.state.tokens).toEqual([grant, grant])
-})
-
-it('runs a program only when the sandbox allows it and the IdP authorizes the command', async () => {
-  const gh = ghApplication()
-  const f = await workerFixture({ resources: () => [program, gh.resource] })
-  const lease = (capabilities: string[]) => ({ capabilities, signal: AbortSignal.timeout(5000), assertCurrent: () => {} })
-  const call = (resources: Record<string, unknown>[], capabilities: string[]) => invokeProgram(resources as never, podId, { application: 'gh', argv: ['issue', 'list', '--repo', 'openape/monorepo'] }, '/fixture/helper', root, {} as never, lease(capabilities), { connection: f.connection(podId), ledger: f.grants.port(podId), reach: { level: 'isolated', protectedPaths: [] } })
-  // Sandbox allows, no grant: the IdP opens a request and the call is refused while nobody approves; nothing is minted.
-  await expect(call([gh.resource], [gh.assignment.capability])).rejects.toThrow('owner approval')
-  expect(idp.state.tokens).toEqual([])
-  // The owner approves this exact command in the session.
-  await mcp(f, { action: 'grants', command: { type: 'request', target: { podId }, grants: { programs: [{ application: 'gh', argv: ['issue', 'list', '--repo', 'openape/monorepo'] }] } } }, session())
-  const asked = idp.state.authorizations.length
-  // Grant present, sandbox denies (application not assigned or not declared): refused before any authorization.
-  await expect(call([program], [gh.assignment.capability])).rejects.toThrow('not declared and assigned')
-  await expect(call([gh.resource], [])).rejects.toThrow('not declared and assigned')
-  expect(idp.state.authorizations).toHaveLength(asked); expect(idp.state.tokens).toEqual([])
-  // Sandbox and IdP allow: the token is verified and the call proceeds to the sandbox launch (the fixture has no helper).
-  await expect(call([gh.resource], [gh.assignment.capability])).rejects.not.toThrow(/approval|grant|not declared/i)
-  expect(idp.state.tokens).toEqual(['grant-1'])
-})
-
-it('runs an exact command with its consumed program approval instead of a grant, and nothing without either (issue 1468)', async () => {
-  const gh = ghApplication()
-  const f = await workerFixture({ resources: () => [program, gh.resource] })
-  const lease = { capabilities: [gh.assignment.capability], signal: AbortSignal.timeout(5000), assertCurrent: () => {} }
-  const call = (approval?: () => Promise<void>) => invokeProgram([gh.resource] as never, podId, { application: 'gh', argv: ['repo', 'create', 'openape/new'] }, '/fixture/helper', root, {} as never, lease, { connection: f.connection(podId), ledger: f.grants.port(podId), reach: { level: 'isolated', protectedPaths: [] }, ...(approval ? { approval } : {}) })
-  // Neither a grant nor an approval: unchanged, the IdP opens a request and the call is refused while nobody approves.
-  await expect(call()).rejects.toThrow('owner approval')
-  const asked = idp.state.authorizations.length
-  // The worker's check of the consumed approval refuses: nothing starts.
-  await expect(call(async () => { throw new Error('No consumed approval of this Pod names this exact command') })).rejects.toThrow('No consumed approval')
-  // A confirmed approval replaces the IdP authorization: no request and no token; the call proceeds to the sandbox.
-  const confirmed = vi.fn(async () => {})
-  await expect(call(confirmed)).rejects.not.toThrow(/approval|grant/i)
-  expect(confirmed).toHaveBeenCalledTimes(1)
-  expect(idp.state.authorizations).toHaveLength(asked)
-  expect(idp.state.tokens).toEqual([])
-})
-
-it('approves the runtime grant ahead of the first run, so the run starts without any approval wait', async () => {
-  const f = await workerFixture()
-  await mcp(f, { action: 'grants', command: { type: 'request', target: { podId }, grants: { runtime: true } } }, session())
-  const run = f.start(podId)
-  await expect(run.run).resolves.toEqual({ home: '/fixture/home', environment: {} })
-  await run.call('shellClose')
-  expect(f.approvals.filter(item => item.state === 'pending')).toEqual([])
-  expect(idp.state.creates).toHaveLength(1); expect(idp.state.tokens).toEqual(['grant-1'])
-})
-
-it('never lets a script call move mail, whatever grant covers it; only the archive port runs the move', async () => {
-  const mail = application('o365-cli')
-  const f = await workerFixture({ resources: () => [program, mail.resource] })
-  const move = ['workflow', 'move', '--account', 'owner@example.test', '--message', 'm1', '--expected-version', 'v1', '--source-folder', 'inbox', '--destination', 'archive']
-  approvedGrant([{ type: 'openape_cli', cli_id: 'o365-cli', operation_id: 'workflow.move', resource_chain: [], action: 'move', permission: 'o365-cli.mail[*]#move', display: 'Move mail', risk: 'high' }], { execution_context: { argv_hash: await computeArgvHash(['o365-cli', ...move]) } })
-  const lease = { capabilities: [mail.assignment.capability], signal: AbortSignal.timeout(5000), assertCurrent: () => {} }
-  const call = (port?: 'move') => invokeProgram([mail.resource] as never, podId, { application: 'o365-cli', argv: move }, '/fixture/helper', root, {} as never, lease, { connection: f.connection(podId), ledger: f.grants.port(podId), reach: { level: 'isolated', protectedPaths: [] } }, port)
-  // A script or its agent tool call: the IdP covers the move, yet the desktop refuses it before anything starts.
-  await expect(call()).rejects.toThrow('approved archive service')
-  // The archive port names the move explicitly and passes this check; it then reaches the sandbox launch.
-  await expect(call('move')).rejects.not.toThrow(/archive service|move operation/)
-  expect(programIdentity(mail.assignment)).toEqual({ name: 'o365-cli', sha256: mail.assignment.executableHash })
-  // Fail closed (review finding): an exact-command fallback of the same move, resolved without a shape, is refused too.
-  const fallback = ['workflow', 'move', '--account', 'owner@example.test', '--message', 'm2', '--expected-version', 'v1', '--source-folder', 'inbox', '--destination', 'archive']
-  approvedGrant([{ type: 'openape_cli', cli_id: 'o365-cli', operation_id: '_exact', resource_chain: [], action: 'exec', permission: 'o365-cli.command#exec', display: 'Exact command', risk: 'high', constraints: { exact_command: true } }], { execution_context: { argv_hash: await computeArgvHash(['o365-cli', ...fallback]) } })
-  await expect(invokeProgram([mail.resource] as never, podId, { application: 'o365-cli', argv: fallback }, '/fixture/helper', root, {} as never, lease, { connection: f.connection(podId), ledger: f.grants.port(podId), reach: { level: 'isolated', protectedPaths: [] } })).rejects.toThrow('approved archive service')
-  // A mail binary assigned under another name: the IdP resolves its hash to the o365 shape, so the move stays refused.
-  const renamed = application('renamed-mail')
-  approvedGrant([{ type: 'openape_cli', cli_id: 'o365', operation_id: '_exact', resource_chain: [], action: 'exec', permission: 'o365.command#exec', display: 'Exact command', risk: 'high' }], { execution_context: { argv_hash: await computeArgvHash(['renamed-mail', ...move]) } })
-  await expect(invokeProgram([renamed.resource] as never, podId, { application: 'renamed-mail', argv: move }, '/fixture/helper', root, {} as never, { ...lease, capabilities: [renamed.assignment.capability] }, { connection: f.connection(podId), ledger: f.grants.port(podId), reach: { level: 'isolated', protectedPaths: [] } })).rejects.toThrow('approved archive service')
-  // A known non-moving effect of the mail program still runs.
-  const categorize = ['workflow', 'categorize', '--account', 'owner@example.test', '--message', 'm1', '--add', 'Newsletter']
-  approvedGrant([{ type: 'openape_cli', cli_id: 'o365-cli', operation_id: 'workflow.categorize', resource_chain: [], action: 'categorize', permission: 'o365-cli.mail[*]#categorize', display: 'Categorize mail', risk: 'medium' }], { execution_context: { argv_hash: await computeArgvHash(['o365-cli', ...categorize]) } })
-  await expect(invokeProgram([mail.resource] as never, podId, { application: 'o365-cli', argv: categorize }, '/fixture/helper', root, {} as never, lease, { connection: f.connection(podId), ledger: f.grants.port(podId), reach: { level: 'isolated', protectedPaths: [] } })).rejects.not.toThrow(/archive service|approval/)
 })
 
 it('approves the requested grant type unless the owner session explicitly chooses another one', async () => {
@@ -216,7 +128,7 @@ it('approves the requested grant type unless the owner session explicitly choose
   expect(idp.state.decisions.map(decision => decision.body)).toEqual([{ grant_type: 'once' }, { grant_type: 'timed', duration: 900 }, { grant_type: 'always' }])
 })
 
-it('asks the IdP about one exact command, approves it in the session and then runs it with a token for exactly that command', async () => {
+it('previews and approves one exact command; a different argv still requires its own decision', async () => {
   const gh = ghApplication()
   const f = await workerFixture({ resources: () => [program, gh.resource] })
   const argv = ['repo', 'create', 'example']
@@ -225,10 +137,10 @@ it('asks the IdP about one exact command, approves it in the session and then ru
   expect(idp.state.authorizations[0]).toMatchObject({ program: { name: 'gh', sha256: gh.assignment.executableHash }, argv })
   expect(idp.state.creates).toEqual([])
   const authority = new AgentAuthority(f.connection(podId), undefined, f.grants.port(podId))
-  await expect(authority.authorizeProgram(programCall(gh.assignment, argv), AbortSignal.timeout(5000))).resolves.toMatchObject({ grantId: 'grant-1' })
+  await expect(authority.requestProgram(programCall(gh.assignment, argv), AbortSignal.timeout(5000))).resolves.toMatchObject({ grantId: 'grant-1' })
   expect(idp.state.tokens).toEqual(['grant-1'])
-  // The exact grant covers no other argv: that command asks again and is refused while nobody approves.
-  await expect(authority.authorizeProgram(programCall(gh.assignment, [...argv, '--private']), AbortSignal.timeout(5000))).rejects.toThrow('owner approval')
+  // The exact grant covers no other argv: its preview asks again and stays pending.
+  await expect(authority.requestProgram(programCall(gh.assignment, [...argv, '--private']), AbortSignal.timeout(5000))).resolves.toMatchObject({ state: 'pending' })
 })
 
 it('keeps a Pod\'s own HTTP destination when a sandbox declares the same origin again', async () => {

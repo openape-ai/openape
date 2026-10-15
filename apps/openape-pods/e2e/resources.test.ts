@@ -7,7 +7,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createSnapshotSet } from '../src/worker/resources/snapshots'
-import { launchSandbox, verifyExecutable } from '../src/worker/runtime/sandbox'
+import { launchSandbox } from './fixtures/sandbox'
+import { verifyExecutable } from '../src/worker/runtime/sandbox'
 import type { ProcessDomain, RuntimePolicy } from '../src/worker/runtime/sandbox'
 
 const roots: string[] = []
@@ -100,7 +101,7 @@ describe('native resource boundary', () => {
   it('kills its owned domain after the actual controlling process crashes', async () => {
     const root = await fixture()
     const file = join(root.broker, 'wait.mjs'); await writeFile(file, 'setInterval(()=>{},1000)')
-    await build({ entry: { supervisor: resolve('src/worker/runtime/sandbox.ts') }, outDir: root.broker, format: ['esm'], platform: 'node', target: 'node24', silent: true, outExtension: () => ({ js: '.mjs' }) })
+    await build({ entry: { supervisor: resolve('e2e/fixtures/sandbox.ts') }, outDir: root.broker, format: ['esm'], platform: 'node', target: 'node24', silent: true, outExtension: () => ({ js: '.mjs' }) })
     const module = join(root.broker, 'supervisor.mjs')
     const script = `import {launchSandbox} from ${JSON.stringify(module)};
       const domain=await launchSandbox(${JSON.stringify(helper)},${JSON.stringify(root.broker)},${JSON.stringify({ executable: process.execPath, workspace: root.workspace, readFiles: [file], runtimeDirectories: [] })},[${JSON.stringify(file)}]);

@@ -44,68 +44,32 @@ async function fixture(type: 'once' | 'always' | 'timed') {
   return { authority, legacy, binding, grant, consumed, revoked }
 }
 
-describe('approve-route grants decided as once or always', () => {
-  it('releases an item the owner approved as always and keeps it bound to that item while approved', async () => {
-    const { authority, legacy, binding, consumed } = await fixture('always')
-    // Legacy workflow gates keep accepting only once grants.
-    await expect(legacy.statuses('batch', [binding])).rejects.toThrow('differs from the reviewed item')
-    expect(await authority.statuses('batch', [binding])).toEqual({ 'delivery-1': 'approved' })
-    await authority.consume(binding)
-    expect(consumed).toEqual(['always'])
-    await expect(authority.assertActive(binding)).resolves.toBeUndefined()
-    // The grant authorizes only the exact reviewed item command.
-    await expect(authority.consume({ ...binding, command: ['pods', 'network-gate', 'archive another message'] })).rejects.toThrow('differs from the reviewed item')
+describe('historical grant retirement', () => {
+  it.each(['once', 'always'] as const)('revokes approved %s grants idempotently without consuming or executing', async (type) => {
+    const f = await fixture(type)
+    expect(Object.keys(f.authority)).toEqual(['release'])
+    expect(await f.authority.release('batch', [f.binding])).toBe(1)
+    expect(await f.authority.release('batch', [f.binding])).toBe(0)
+    expect(f.consumed).toEqual([])
+    expect(f.revoked).toEqual(['grant-1'])
   })
-
-  it('moves nothing once the owner revokes or denies an always grant', async () => {
-    const revoked = await fixture('always')
-    await revoked.authority.consume(revoked.binding)
-    revoked.grant.status = 'revoked'
-    expect(await revoked.authority.statuses('batch', [revoked.binding])).toEqual({ 'delivery-1': 'denied' })
-    await expect(revoked.authority.assertActive(revoked.binding)).rejects.toThrow()
-    await expect(revoked.authority.consume(revoked.binding)).rejects.toThrow('not current')
-    const denied = await fixture('always')
-    denied.grant.status = 'denied'
-    expect(await denied.authority.statuses('batch', [denied.binding])).toEqual({ 'delivery-1': 'denied' })
-    await expect(denied.authority.consume(denied.binding)).rejects.toThrow('not current')
-    await expect(denied.authority.assertActive(denied.binding)).rejects.toThrow()
-    expect(denied.consumed).toEqual([])
+  it('withdraws pending requests but leaves already used grants alone', async () => {
+    const f = await fixture('once'); f.grant.status = 'pending'
+    expect(await f.authority.release('batch', [f.binding])).toBe(1)
+    f.grant.status = 'used'
+    expect(await f.authority.release('batch', [f.binding])).toBe(0)
   })
-
-  it('still uses up a once grant and refuses a timed decision', async () => {
-    const once = await fixture('once')
-    await once.authority.consume(once.binding)
-    expect(once.grant.status).toBe('used')
-    await expect(once.authority.assertActive(once.binding)).resolves.toBeUndefined()
-    const timed = await fixture('timed')
-    await expect(timed.authority.statuses('batch', [timed.binding])).rejects.toThrow('differs from the reviewed item')
+  it('checks the exact historical command and requester before revocation', async () => {
+    const f = await fixture('once')
+    await expect(f.authority.release('batch', [{ ...f.binding, command: ['another command'] }])).rejects.toThrow('differs')
+    f.grant.request.requester = 'foreign@example.test'
+    await expect(f.authority.release('batch', [f.binding])).rejects.toThrow('differs')
+    expect(f.revoked).toEqual([])
   })
-
-  it('revokes an always grant once its batch is finished and leaves used once grants alone', async () => {
-    const always = await fixture('always')
-    await always.authority.consume(always.binding)
-    expect(await always.authority.release('batch', [always.binding])).toBe(1)
-    expect(always.revoked).toEqual(['grant-1'])
-    expect(always.grant.status).toBe('revoked')
-    // A repeated sweep finds nothing left to revoke.
-    expect(await always.authority.release('batch', [always.binding])).toBe(0)
-    const once = await fixture('once')
-    await once.authority.consume(once.binding)
-    expect(await once.authority.release('batch', [once.binding])).toBe(0)
-    expect(once.revoked).toEqual([])
-    // An unanswered request of a finished batch is withdrawn, so it leaves the owner's IdP list (issue 1458).
-    const unanswered = await fixture('once')
-    unanswered.grant.status = 'pending'
-    expect(await unanswered.authority.release('batch', [unanswered.binding])).toBe(1)
-    expect(unanswered.grant.status).toBe('revoked')
-  })
-
-  it('revokes through the given owner revoke for a brokered Pod, never with the Pod token (issue 1462)', async () => {
-    const brokered = await fixture('once')
-    brokered.grant.status = 'pending'
-    const owner: string[] = []
-    expect(await brokered.authority.release('batch', [brokered.binding], async (grantId) => { owner.push(grantId); return { status: 'revoked' } })).toBe(1)
-    expect(owner).toEqual(['grant-1'])
-    expect(brokered.revoked).toEqual([])
+  it('uses the owner revoke for a brokered grant', async () => {
+    const f = await fixture('once'); const owner = vi.fn(async () => ({ status: 'revoked' }))
+    expect(await f.authority.release('batch', [f.binding], owner)).toBe(1)
+    expect(owner).toHaveBeenCalledWith('grant-1')
+    expect(f.revoked).toEqual([])
   })
 })

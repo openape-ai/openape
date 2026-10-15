@@ -1,6 +1,5 @@
 import { mailTLSFixture } from './fixtures/mail-tls'
-import { MailService } from '../src/main/mail/service'
-import { startMailProxy } from '../src/main/mail/proxy'
+import { startNetworkProxy } from '../src/main/network/proxy'
 import { createServer } from 'node:http'
 import type { Server } from 'node:http'
 import { createHash, generateKeyPairSync, randomUUID, sign } from 'node:crypto'
@@ -10,9 +9,7 @@ import { join, resolve } from 'node:path'
 import { computeArgvHash } from '@openape/grants'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CredentialCache } from '../src/main/connections/cache'
-import { AgentAuthority } from '../src/main/broker/authorization'
 import { PodToolBroker } from '../src/main/broker/tools'
-import { callEffect } from '../src/main/programs/session'
 import type { ToolAssignment } from '../src/main/broker/tools'
 
 let root = ''
@@ -48,28 +45,29 @@ ${slow ? 'setInterval(()=>{},1000);' : ''}`)
     if (request.url === '/.well-known/jwks.json') { response.end(JSON.stringify({ keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'key', alg: 'EdDSA', use: 'sig' }] })); return }
     if (request.url === '/api/grants/authorize' && request.method === 'POST') {
       let text = ''; for await (const chunk of request) text += chunk
-      const body = JSON.parse(text) as { program: { name: string, sha256: string }, argv: string[] }
+      const body = JSON.parse(text) as { program: { name: string, sha256: string }, argv: string[], files?: { path: string, sha256: string }[] }
       if (!state.active || !state.grantActive) { response.statusCode = 403; response.end(JSON.stringify({ statusCode: 403, data: { title: 'Agent is not active' } })); return }
       state.executions++
       const now = Math.floor(Date.now() / 1000)
       const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')
-      const payload = Buffer.from(JSON.stringify({ iss: origin, sub: state.subject, aud: 'shapes', target_host: 'fixture-mac', grant_id: 'assigned', grant_type: 'always', iat: now, exp: now + 60, jti: randomUUID(), authorization_details: state.actions.map(action => ({ type: 'openape_cli', cli_id: body.program.name, operation_id: 'fixture', resource_chain: [], action, permission: `${body.program.name}.fixture#${action}`, display: 'Synthetic', risk: 'low' })), argv_hash: await computeArgvHash([body.program.name, ...body.argv]), program_sha256: body.program.sha256 })).toString('base64url')
+      const payload = Buffer.from(JSON.stringify({ iss: origin, sub: state.subject, aud: 'shapes', target_host: 'fixture-mac', grant_id: 'assigned', grant_type: 'always', iat: now, exp: now + 60, jti: randomUUID(), decided_by: 'owner@example.test', ...(body.files ? { execution_context: { files: body.files } } : {}), authorization_details: state.actions.map(action => ({ type: 'openape_cli', cli_id: body.program.name, operation_id: 'fixture', resource_chain: [], action, permission: `${body.program.name}.fixture#${action}`, display: 'Synthetic', risk: 'low' })), argv_hash: await computeArgvHash([body.program.name, ...body.argv]), program_sha256: body.program.sha256 })).toString('base64url')
       const signature = sign(null, Buffer.from(`${head}.${payload}`), keys.privateKey).toString('base64url')
       response.end(JSON.stringify({ state: 'approved', grant_id: 'assigned', authz_jwt: `${head}.${payload}.${signature}`, expires_at: now + 60 })); return
     }
     if (request.url?.startsWith('/api/pods/agents/')) { response.end(JSON.stringify({ email: 'pod@example.test', owner: 'owner@example.test', active: state.active, keyIds: ['pod-key'], grantId: 'assigned', grantActive: state.grantActive })); return }
+    if (request.url === '/api/grants/assigned') { response.end(JSON.stringify({ id: 'assigned', status: state.grantActive ? 'approved' : 'revoked', request: { requester: 'pod@example.test', target_host: 'fixture-mac', audience: 'shapes', grant_type: 'always' } })); return }
     response.statusCode = 404; response.end('{}')
   })
   await new Promise<void>(resolve => server!.listen(0, '127.0.0.1', resolve))
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('Missing fixture address')
   origin = `http://127.0.0.1:${address.port}`
-  const authority = new AgentAuthority({ issuer: origin, subject: 'pod@example.test', owner: 'owner@example.test', keyId: 'pod-key', targetHost: 'fixture-mac', accessToken: async () => 'SYNTHETIC_AGENT_BEARER' })
+  const identityConnection = { issuer: origin, subject: 'pod@example.test', owner: 'owner@example.test', keyId: 'pod-key', targetHost: 'fixture-mac', accessToken: async () => 'SYNTHETIC_AGENT_BEARER' }
   const bundle = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents')
   const executable = packaged ? join(bundle, 'MacOS/OpenApe Pods Fixture') : process.execPath
   const helper = packaged ? join(bundle, 'Resources/app.asar.unpacked/dist/native/pods-helper') : resolve('dist/native/pods-helper')
-  const assignment: ToolAssignment = { id: 'fixture', capability: 'fixture.read', executable, executableHash: sha(await readFile(executable)), entryFiles: [{ path: toolFile, hash: sha(await readFile(toolFile)) }], prefix: [toolFile], connectionId, runtimeDirectories: packaged ? [bundle] : [], environment: packaged ? { ELECTRON_RUN_AS_NODE: '1' } : {}, networkPorts: [], program: { path: toolFile, name: 'fixture', sha256: sha(await readFile(toolFile)) }, argv: ['read'] }
-  const broker = new PodToolBroker(helper, privateRoot, async (call, signal) => callEffect(await authority.authorizeProgram(call, signal), call.program.name), cache)
-  return { assignment, broker, cache, connectionId, credentialRoot, state, authority, helper, privateRoot, lease: { capabilities: ['fixture.read'], assertCurrent: () => {}, signal: new AbortController().signal }, request: { toolId: 'fixture', argv: ['read'] } }
+  const assignment: ToolAssignment = { identityConnection, id: 'fixture', capability: 'fixture.read', executable, executableHash: sha(await readFile(executable)), entryFiles: [{ path: toolFile, hash: sha(await readFile(toolFile)) }], prefix: [toolFile], connectionId, runtimeDirectories: packaged ? [bundle] : [], environment: packaged ? { ELECTRON_RUN_AS_NODE: '1' } : {}, networkPorts: [], program: { path: toolFile, name: 'fixture', sha256: sha(await readFile(toolFile)) }, argv: ['read'] }
+  const broker = new PodToolBroker(helper, privateRoot, { operationId: randomUUID(), targetHost: identityConnection.targetHost, runtime: { executable, cli: packaged ? join(bundle, 'Resources/apes/ape-shell.mjs') : resolve('dist/vendor/apes/ape-shell.mjs') }, observer: { authorized: async () => {} } }, cache)
+  return { assignment, broker, cache, connectionId, credentialRoot, state, identityConnection, helper, privateRoot, lease: { capabilities: ['fixture.read'], assertCurrent: () => {}, signal: new AbortController().signal }, request: { toolId: 'fixture', argv: ['read'] } }
 }
 describe('ape-shell broker native boundary', () => {
   it('preserves UTF-8 split across process output chunks', async () => {
@@ -91,7 +89,7 @@ describe('ape-shell broker native boundary', () => {
   it('rejects foreign identities, script capability expansion, stale assignments and changed artifacts before execution', async () => {
     const fixture = await setup()
     fixture.state.subject = 'owner@example.test'
-    await expect(fixture.broker.execute(fixture.assignment, fixture.request, fixture.lease)).rejects.toThrow('does not match this Pod')
+    await expect(fixture.broker.execute(fixture.assignment, fixture.request, fixture.lease)).rejects.toThrow('another identity')
     fixture.state.subject = 'pod@example.test'
     await expect(fixture.broker.execute(fixture.assignment, fixture.request, { ...fixture.lease, capabilities: [] })).rejects.toThrow('capability')
     await expect(fixture.broker.execute(fixture.assignment, fixture.request, { ...fixture.lease, assertCurrent: () => { throw new Error('Stale resource epoch') } })).rejects.toThrow('Stale')
@@ -112,7 +110,7 @@ describe('ape-shell broker native boundary', () => {
     run.abort()
     await assertion
     expect(await readdir(join(fixture.credentialRoot, 'temporary'))).toEqual([])
-    await expect(fixture.broker.execute(fixture.assignment, fixture.request, fixture.lease)).rejects.toThrow('rejected this Pod identity')
+    await expect(fixture.broker.execute(fixture.assignment, fixture.request, fixture.lease)).rejects.toThrow('403 Forbidden')
     expect(fixture.state.executions).toBe(1)
   })
 })
@@ -127,16 +125,20 @@ it('composes signed ape-shell authorization, scoped cache, TLS refresh and the a
   manifest.rootsHash = sha(await readFile(tls.certificate)); await writeFile(join(vendor, 'o365-manifest.json'), JSON.stringify(manifest))
   await fixture.cache.connect(fixture.connectionId, await readFile(resolve('e2e/fixtures/msal-synthetic.json'), 'utf8'))
   const argv = ['o365-cli', 'pods', 'read', '--operation', 'messages', '--account', 'pod@example.invalid', '--folder', 'inbox']
-  const service = new MailService(fixture.helper, vendor, fixture.authority, fixture.cache, signal => startMailProxy(signal, tls.dial))
+  const proxy = await startNetworkProxy(fixture.lease.signal, ['graph.microsoft.com', 'login.microsoftonline.com'], tls.dial)
   const records: string[] = []
   try {
-    const artifact = await service.execute({ account: 'pod@example.invalid', folders: ['inbox'], attachments: false, connectionId: fixture.connectionId, grants: { messages: 'assigned' } }, { toolId: 'o365-mail', argv }, fixture.privateRoot, { ...fixture.lease, capabilities: ['mail.read'], registerDomain: async (path) => { records.push(path) } })
-    const raw = await readFile(artifact.path, 'utf8'); expect(sha(raw)).toBe(artifact.hash)
+    const executable = join(vendor, 'o365-cli'); const rootsFile = join(vendor, 'mail-roots.pem')
+    const assignment: ToolAssignment = { id: 'o365', identityConnection: fixture.identityConnection, capability: 'fixture.read', program: { path: executable, name: 'o365-cli', sha256: sha(await readFile(executable)) }, executable, executableHash: sha(await readFile(executable)), argv: argv.slice(1), prefix: [], entryFiles: [{ path: rootsFile, hash: sha(await readFile(rootsFile)) }], connectionId: fixture.connectionId, cacheArgument: '--cache-dir', runtimeDirectories: [], environment: { ...proxy.environment, PODS_CA_FILE: rootsFile }, networkPorts: [proxy.port], maxOutputBytes: 32 * 1024 * 1024, stdoutArtifact: true }
+    const reply = await fixture.broker.execute(assignment, { toolId: 'o365', argv: argv.slice(1) }, { ...fixture.lease, workspace: fixture.privateRoot, registerDomain: async (path) => { records.push(path) } })
+    expect(reply.exitCode, reply.stderr).toBe(0)
+    const artifact = reply.stdoutArtifact!
+    const raw = await readFile(artifact.path, 'utf8'); expect(sha(raw)).toBe(artifact.sha256)
     expect(JSON.parse(raw)).toMatchObject({ account: 'pod@example.invalid', complete: false })
     expect(fixture.state.executions).toBe(1); expect(records).toHaveLength(1)
     expect(tls.state).toMatchObject({ refreshes: 1, reads: 1 })
     expect(await readdir(join(fixture.credentialRoot, 'temporary'))).toEqual([])
     await fixture.cache.withCache(fixture.connectionId, async file => expect(await readFile(file, 'utf8')).toContain('SYNTHETIC_TLS_REFRESH'))
   }
-  finally { await tls.close() }
+  finally { await proxy.close(); await tls.close() }
 })

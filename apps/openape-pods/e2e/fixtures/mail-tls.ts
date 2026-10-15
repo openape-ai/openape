@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { startMailProxy } from '../../src/main/mail/proxy'
+import { startNetworkProxy } from '../../src/main/network/proxy'
 
 const execute = promisify(execFile)
 export async function mailTLSFixture(root: string) {
@@ -55,6 +55,6 @@ export async function mailTLSFixture(root: string) {
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('Missing TLS fixture address')
   const controller = new AbortController()
-  const proxy = await startMailProxy(controller.signal, () => connect({ host: '127.0.0.1', port: address.port }))
+  const proxy = await startNetworkProxy(controller.signal, ['graph.microsoft.com', 'login.microsoftonline.com'], () => connect({ host: '127.0.0.1', port: address.port }))
   return { certificate, state, requests, proxy, dial: () => connect({ host: '127.0.0.1', port: address.port }), close: async () => { controller.abort(); await proxy.close(); server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())) } }
 }

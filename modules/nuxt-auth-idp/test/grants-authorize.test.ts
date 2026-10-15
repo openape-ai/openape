@@ -10,7 +10,7 @@ import { randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
 import { generateKeyPair } from '@openape/core'
 import type { ServerShape } from '@openape/grants'
-import { approveGrant, computeArgvHash, createInMemoryShapeStore, denyGrant, InMemoryGrantStore, revokeGrant, verifyAuthzJWT } from '@openape/grants'
+import { approveGrant, approveGrantWithWidening, approveGrantWithExtension, computeArgvHash, createInMemoryShapeStore, denyGrant, InMemoryGrantStore, revokeGrant, verifyAuthzJWT } from '@openape/grants'
 import { createApp, createError, createRouter, getHeader, toNodeListener } from 'h3'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import activityGrants from './fixtures/issue-1476-activity-grants.json'
@@ -160,6 +160,24 @@ beforeEach(async () => {
 afterEach(async () => { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())) })
 
 describe('direct identities', () => {
+  it('binds approval and command tokens to script content, not only its path', async () => {
+    const files = [{ path: '/scripts/task.cjs', sha256: tested }]
+    const request = body({ name: 'node', argv: ['/scripts/task.cjs'], files })
+    const pending = await call(direct, request)
+    expect(pending.status).toBe(202)
+    await approveGrant(pending.json.grant_id, owner, grantStore)
+
+    const approved = await call(direct, request)
+    expect(approved.status).toBe(200)
+    expect((await verified(approved.json.authz_jwt)).execution_context?.files).toEqual(files)
+    const changed = await call(direct, { ...request, files: [{ path: '/scripts/task.cjs', sha256: untested }] })
+    expect(changed.status).toBe(202)
+    expect(changed.json.grant_id).not.toBe(pending.json.grant_id)
+    const omitted = await call(direct, body({ name: 'node', argv: ['/scripts/task.cjs'] }))
+    expect(omitted.status).toBe(202)
+    expect(omitted.json.grant_id).not.toBe(pending.json.grant_id)
+  })
+
   it('asks once, then answers a covered call with a token bound to its argv and program', async () => {
     const first = await call(direct)
     expect(first.status).toBe(202)
@@ -338,6 +356,32 @@ describe('direct identities', () => {
     expect(Number(limited.headers.get('retry-after'))).toBeGreaterThan(0)
     // Verified requesters keep their own budget.
     expect((await call(direct)).status).toBe(202)
+  })
+
+  it('requires one exact human approval despite broad grants, standing rules and auto-approval hooks', async () => {
+    const existing = await call(direct)
+    await approveGrant(existing.json.grant_id, owner, grantStore)
+    await shapeStore.saveShape({ ...gitShape, operations: gitShape.operations.map(operation => operation.id === 'git.status' ? { ...operation, exact_command: true, decision: 'once' } : { ...operation, decision: 'deny' }) })
+    const standing = { id: randomUUID(), type: 'standing', status: 'approved', decided_by: owner, created_at: 1, request: { type: 'standing', owner, delegate: direct, requester: direct, audience: 'shapes', target_host: '*', cli_id: 'git', action: 'read', resource_chain_template: [], grant_type: 'always' } }
+    await grantStore.save(standing as unknown as OpenApeGrant)
+    const pending = await call(direct)
+    expect(pending.status).toBe(202)
+    expect(pending.json.grant_id).not.toBe(existing.json.grant_id)
+    expect((await grantStore.findById(pending.json.grant_id))?.request.grant_type).toBe('once')
+    await expect(approveGrant(pending.json.grant_id, owner, grantStore, { grant_type: 'always' })).rejects.toThrow('single-use')
+    await expect(approveGrantWithWidening(pending.json.grant_id, owner, grantStore, [])).rejects.toThrow('cannot be widened')
+    await expect(approveGrantWithExtension(pending.json.grant_id, owner, grantStore, { extend_mode: 'merge', extend_grant_ids: [existing.json.grant_id] })).rejects.toThrow('cannot be widened')
+    expect((await call(yolo)).status).toBe(202)
+    expect((await viaBroker()).status).toBe(202)
+    await approveGrant(pending.json.grant_id, owner, grantStore)
+    const approved = await call(direct)
+    expect(approved.status).toBe(200)
+    expect((await verified(approved.json.authz_jwt)).grant_type).toBe('once')
+    const repeated = await call(direct)
+    expect(repeated.status).toBe(202)
+    expect(repeated.json.grant_id).not.toBe(pending.json.grant_id)
+    expect((await call(direct, body({ argv: ['push', 'origin', 'main'] }))).status).toBe(400)
+    expect((await call(direct, body({ argv: ['unknown'] }))).status).toBe(400)
   })
 
   it('lets a standing grant and a pre-approval hook decide for direct identities', async () => {

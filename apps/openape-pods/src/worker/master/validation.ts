@@ -5,9 +5,8 @@ import { parseAgentRequest } from '../../contracts/agent'
 import { DependencyStore } from '../dependencies/store'
 import { verifyProgram } from '../../main/programs/session'
 import { programRequest } from '../../main/programs/invoke'
-import { describeProgram } from '../runs/program-effects'
 import { parseHttpRequest, isHttpEffect } from '../../contracts/http'
-import { parseScriptSummary, splitScriptSummary } from '../../contracts/grant-summary'
+import { splitScriptSummary } from '../../contracts/grant-summary'
 import { assignedHttp } from '../../main/programs/http-service'
 import { PodVariables } from '../resources/variables'
 import { parseCredentialRead } from '../../contracts/credentials'
@@ -24,8 +23,6 @@ import { inputSchema, resultSchema } from '../runs/examples'
 import type { AgentRuntime } from '../agent/executor'
 import type { ResourceRegistry } from '../resources/registry'
 import { assertImportSetupFinished } from '../sharing/setup'
-import { assignedMail } from '../../main/mail/assigned'
-import { parseMailRequest } from '../../main/mail/contract'
 import { parseWorkDeclarations } from '../../contracts/work'
 import type { WorkDeclaration } from '../../contracts/work'
 import type { ScriptResult } from '../../contracts/runs'
@@ -48,7 +45,6 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
   const capabilities = JSON.parse(draft.capabilities as string) as string[]
   const assignedTools = resources.list(pod.id).filter(resource => resource.kind === 'tool' && resource.state === 'ready').map(resource => resource.configuration.capability)
   if (capabilities.some(capability => capability.startsWith('tool.') && !assignedTools.includes(capability))) throw new Error('No tool assignments are available for this script')
-  if (capabilities.includes('mail.read')) assignedMail(resources.list(pod.id))
   const manifest = JSON.parse(await readFile(runtime.manifest, 'utf8')) as { dependencyLockHash: string }
   const dependencies = new DependencyStore(store); const packages = dependencies.manifest(draftId)
   const dependencyHash = dependencies.prepared(pod.id, packages)
@@ -68,7 +64,9 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
   await mkdir(root, { recursive: true, mode: 0o700 }); const artifact = join(root, 'run.mjs'); await writeFile(artifact, code, { mode: 0o400, flag: 'wx' })
   const fixture = new PodDatabase(join(root, 'control'))
   const fixturePod = fixture.createPod({ name: 'Validation fixture' })
+  let preparation: Awaited<ReturnType<NonNullable<AgentRuntime['prepareExecution']>>> | undefined
   try {
+    preparation = await runtime.prepareExecution?.(pod.id, 'validation', signal)
     const home = join(root, 'home'); await mkdir(home, { mode: 0o700 })
     const input = { home, directories: [], variables, version: 1 as const, runId: randomUUID(), podId: pod.id, scriptHash: hash, assignmentRevision: pod.bindingRevision, reason: 'manual' as const, eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: epoch, workspace: join(root, 'workspace'), references: [], limits: { timeMs: 5000, frameBytes: 256 * 1024 }, validation: true as const }
     let work: WorkDeclaration[] | undefined
@@ -78,7 +76,6 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       // A summary of a tool or HTTP call is checked like at run time and leaves the call itself unchanged.
       const { payload } = operation === 'tools.invoke' || operation === 'http.request' ? splitScriptSummary(input) : { payload: input }
       if (operation === 'graph.contract') throw new Error('Network contracts (takes/gives) are retired; declare work and use shared data instead')
-      if (operation === 'mail.archive' || operation === 'mail.archiveApproved') throw new Error('Archive proposals require live provider data; synthetic validation never creates grants or moves mail')
       if (operation === 'work.contract') {
         if (work) throw new Error('Invalid work declaration')
         work = parseWorkDeclarations(payload)
@@ -96,13 +93,6 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       if (operation === 'data.set' || operation === 'data.delete') return { revision: 1 }
       if (operation === 'decisions.ask') return { id: randomUUID(), state: 'pending', option: null }
       if (operation === 'decisions.withdraw') return { withdrawn: 0 }
-      if (operation === 'approvals.request') {
-        // A program approval is checked like at run time: an assigned, declared application and an approvable command.
-        const asked = payload as { action?: unknown, title?: unknown, description?: unknown, link?: unknown, payload?: { application?: unknown, argv?: unknown } } | null
-        parseScriptSummary(Object.fromEntries(Object.entries(asked ?? {}).filter(([key]) => ['title', 'description', 'link'].includes(key))))
-        if (asked?.action === 'program.run') describeProgram(resources.list(pod.id), pod.id, capabilities, { application: String(asked.payload?.application ?? ''), argv: asked.payload?.argv })
-        return { id: randomUUID(), state: 'collecting' }
-      }
       if (operation === 'notify') { parseNotify(payload); return { eventId: `${pod.id}:synthetic`, queued: false } }
       if (operation === 'credentials.get') {
         const alias = parseCredentialRead(payload)
@@ -118,7 +108,6 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
         return { status: 200, headers: { 'content-type': 'application/json' }, body: '{}' }
       }
       if (operation === 'progress.commit') return { revision: fixture.commitProgress({ ...parseProgress(payload), podId: fixturePod.id }) }
-      if (operation === 'mail.next' && capabilities.includes('mail.read')) return { type: 'done' }
       if (operation === 'agent.run') {
         parseAgentRequest(payload)
         return { threadId: 'synthetic-validation', response: '{"claims":[]}' }
@@ -129,22 +118,29 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
         throw new Error('Synthetic validation has no SSH host observations; handle collection failures explicitly')
       }
       if (operation === 'tools.invoke' && payload && typeof payload === 'object' && ('applicationId' in payload || 'application' in payload)) {
-        const { assignment, argv } = programRequest(resources.list(pod.id), pod.id, capabilities, payload)
+        const { assignment } = programRequest(resources.list(pod.id), pod.id, capabilities, payload)
         // Synthetic validation checks the assigned program; what its command may do is decided by the IdP when it runs.
         await verifyProgram(assignment)
-        const argument = (name: string) => argv[argv.indexOf(name) + 1]
-        const output = assignment.cliId === 'o365-cli' && argv[0] === 'mail' && argv[1] === 'list' ? [] : assignment.cliId === 'o365-cli' ? { account: argument('--account'), operation: argument('--operation'), items: [], complete: true, nextCursor: null } : {}
-        return { exitCode: 0, stdout: JSON.stringify(output), stderr: '' }
-      }
-      if (operation === 'tools.invoke' && capabilities.includes('mail.read')) {
-        const scope = assignedMail(resources.list(pod.id)).mail
-        const { read } = parseMailRequest(payload, scope)
-        return { version: 1, operation: read.operation, account: scope.account, folder: read.folder, items: [], complete: true, nextCursor: null }
+        throw new Error('Synthetic validation has no application observations; handle context.input.validation before invoking tools')
       }
       throw new Error('Validation rejected an undeclared service request')
     }
-    const result = await executeScript({ ...runtime, dependencyRoot }, root, artifact, input, signal, {
+    let executing = !preparation
+    const result = await executeScript({ ...runtime, dependencyRoot, ...(preparation ? { machine: preparation.machine } : {}) }, root, artifact, input, signal, {
       event: () => {},
+      budgetPaused: () => !executing,
+      ...(preparation
+        ? {
+            execution: {
+              authorized: async () => {
+                signal.throwIfAborted()
+                if (store.getPod(pod.id).bindingRevision !== pod.bindingRevision || resources.epoch(pod.id) !== epoch || store.db.prepare('SELECT revision FROM script_drafts WHERE id=?').get(draftId)?.revision !== revision) throw new Error('Validation inputs changed during approval')
+                if (dependencyHash) await dependencies.verify(pod.id, dependencyHash)
+                executing = true
+              },
+            },
+          }
+        : {}),
       request: async (operation, payload) => {
         try { return await synthetic(operation, payload) }
         catch (error) {
@@ -157,7 +153,7 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
     assertValidationResult(result, refusal)
     if (result.gapIds.some(id => !fixture.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(fixturePod.id, id))) throw new Error('Draft returned an uncommitted validation gap')
     signal.throwIfAborted()
-    const evidence = JSON.stringify({ kind: 'native-synthetic-contract', variablesHash, draftRevision: revision, assignmentRevision: pod.bindingRevision, resourceEpoch: epoch, dependencyLockHash, services: 'synthetic credentials, empty synthetic mail and recorded agent output', limits: input.limits, result: result.status, summary: result.summary.slice(0, 500) })
+    const evidence = JSON.stringify({ kind: 'native-synthetic-contract', variablesHash, draftRevision: revision, assignmentRevision: pod.bindingRevision, resourceEpoch: epoch, dependencyLockHash, services: 'synthetic credentials and recorded agent output; external observations are unavailable', limits: input.limits, result: result.status, summary: result.summary.slice(0, 500) })
     store.transaction(() => {
       if (JSON.stringify(new PodVariables(store).list(pod.id)) !== variableState) throw new Error('Variables changed during validation; validate again')
       if (store.getPod(pod.id).lifecycle === 'archived' || store.getPod(pod.id).bindingRevision !== pod.bindingRevision || resources.epoch(pod.id) !== epoch || store.db.prepare('SELECT revision FROM script_drafts WHERE id=?').get(draftId)?.revision !== revision) throw new Error('Draft, script binding or permissions changed during validation')
@@ -171,5 +167,5 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
     })
     return { hash, evidence, status: result.status }
   }
-  finally { fixture.close() }
+  finally { await preparation?.close(); fixture.close() }
 }

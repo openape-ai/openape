@@ -31,6 +31,8 @@ export interface ShapeMatchOperation {
   risk: ScopeRiskLevel
   resource_chain: string[]
   exact_command?: boolean
+  /** Registry policy: one exact human decision, or an operation that must never execute. */
+  decision?: 'once' | 'deny'
 }
 
 function optionName(token: string): string | null {
@@ -350,7 +352,7 @@ export function buildCliAuthDetail(
     permission: '',
     display: renderTemplate(operation.display, bindings),
     risk: operation.risk,
-    ...(operation.exact_command ? { constraints: { exact_command: true } } : {}),
+    ...(operation.exact_command ? { constraints: { exact_command: true, ...(operation.decision === 'once' ? { single_use: true } : {}) } } : {}),
   }
   detail.permission = canonicalizeCliPermission(detail)
   return detail

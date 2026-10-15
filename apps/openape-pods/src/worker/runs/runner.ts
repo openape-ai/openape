@@ -1,13 +1,18 @@
+import { NonRetryableError } from '../../contracts/infrastructure'
+import type { PreparedMachine, PreparationPurpose } from '../runtime/execution-identity'
+import { launchApeShell } from '../runtime/ape-shell'
+import type { MachineLaunch } from '../runtime/ape-shell'
+import { observeExecution } from '../../main/programs/execution'
+import type { ExecutionObserver } from '../../main/programs/execution'
 import { createHash } from 'node:crypto'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { mkdir, readFile, writeFile, realpath, lstat } from 'node:fs/promises'
+import { join, dirname } from 'node:path'
 import { parseFrame, parseResult } from '../../contracts/runs'
 import type { RunInput, ScriptResult } from '../../contracts/runs'
-import { launchSandbox } from '../runtime/sandbox'
-import type { RuntimePolicy, ShellLaunch } from '../runtime/sandbox'
+import type { RuntimePolicy } from '../runtime/sandbox'
 
-export interface ScriptRuntime { dependencyRoot?: string, shell?: ShellLaunch, home?: string, registerDomain?: (path: string, ownerPid: number) => void | Promise<void>, helper: string, executable: string, entry: string, runtimeDirectories: string[], environment: Record<string, string> }
-export interface ScriptServices { budgetPaused?: () => boolean,  request: (operation: string, payload: unknown, signal: AbortSignal) => Promise<unknown>, event: (type: string, data: unknown) => void }
+export interface ScriptRuntime { prepareExecution?: (podId: string, purpose: PreparationPurpose, signal: AbortSignal) => Promise<{ machine: PreparedMachine, close: () => Promise<void> }>, machine?: Omit<MachineLaunch, 'operationId' | 'executableHash' | 'files'> & { issuer?: string }, dependencyRoot?: string, home?: string, registerDomain?: (path: string, ownerPid: number) => void | Promise<void>, helper: string, executable: string, entry: string, runtimeDirectories: string[], environment: Record<string, string> }
+export interface ScriptServices { execution?: ExecutionObserver, budgetPaused?: () => boolean,  request: (operation: string, payload: unknown, signal: AbortSignal) => Promise<unknown>, event: (type: string, data: unknown) => void }
 async function interruptible<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted()
   let stop: () => void = () => {}
@@ -17,22 +22,43 @@ async function interruptible<T>(operation: () => Promise<T>, signal: AbortSignal
 }
 export async function executeScript(runtime: ScriptRuntime, directory: string, artifact: string, input: RunInput, signal: AbortSignal, services: ScriptServices): Promise<ScriptResult> {
   await mkdir(directory, { recursive: true, mode: 0o700 }); await mkdir(input.workspace, { recursive: true, mode: 0o700 })
-  const config = join(directory, 'input.json')
-  await writeFile(config, JSON.stringify({ entry: artifact, input, dependencyRoot: runtime.dependencyRoot }), { flag: 'wx', mode: 0o400 })
+  if (!runtime.machine) throw new Error('Script execution requires ape-shell and its assigned identity')
   if (createHash('sha256').update(await readFile(artifact)).digest('hex') !== input.scriptHash) throw new Error('Script artifact does not match the selected source')
+  if (runtime.machine) {
+    const scripts = join(await realpath(dirname(directory)), 'script-artifacts'); await mkdir(scripts, { recursive: true, mode: 0o700 })
+    const stable = join(scripts, `${input.scriptHash}.mjs`)
+    try { await writeFile(stable, await readFile(artifact), { flag: 'wx', mode: 0o400 }) }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
+    if (!(await lstat(stable)).isFile() || await realpath(stable) !== stable || createHash('sha256').update(await readFile(stable)).digest('hex') !== input.scriptHash) throw new Error('Immutable script artifact changed')
+    artifact = stable
+  }
   const home = runtime.home ?? input.home ?? input.workspace
-  const policy: RuntimePolicy = { executable: runtime.executable, workspace: input.workspace, readFiles: [artifact, runtime.entry, config, ...input.references.map(reference => reference.path)], runtimeDirectories: runtime.runtimeDirectories, readDirectories: [...(runtime.dependencyRoot ? [runtime.dependencyRoot] : []), ...(input.directories ?? []).filter(item => item.access === 'read').map(item => item.path)], writeDirectories: [home, ...(input.directories ?? []).filter(item => item.access === 'readWrite').map(item => item.path)] }
-  const domain = await launchSandbox(runtime.helper, directory, policy, [runtime.entry, config], { ...runtime.environment, HOME: home, TMPDIR: runtime.environment.TMPDIR ?? home }, runtime.registerDomain, runtime.shell)
+  const policy: RuntimePolicy = { executable: runtime.executable, workspace: input.workspace, readFiles: [artifact, runtime.entry, ...input.references.map(reference => reference.path)], runtimeDirectories: runtime.runtimeDirectories, readDirectories: [...(runtime.dependencyRoot ? [runtime.dependencyRoot] : []), ...(input.directories ?? []).filter(item => item.access === 'read').map(item => item.path)], writeDirectories: [home, ...(input.directories ?? []).filter(item => item.access === 'readWrite').map(item => item.path)] }
+  if (runtime.machine && !services.execution) throw new Error('Script execution requires its durable lifecycle observer')
+  const environment = { ...runtime.environment, HOME: home, TMPDIR: runtime.environment.TMPDIR ?? home }
+  const domain = await launchApeShell(runtime.helper, directory, policy, [runtime.entry, '--input-channel', artifact, runtime.dependencyRoot ?? '', input.scriptHash], environment, {
+    ...runtime.machine,
+    operationId: input.runId,
+    forwardChannel: true,
+    executableHash: createHash('sha256').update(await readFile(runtime.executable)).digest('hex'),
+    files: [{ path: runtime.entry, sha256: createHash('sha256').update(await readFile(runtime.entry)).digest('hex') }, { path: artifact, sha256: input.scriptHash }],
+  }, runtime.registerDomain)
+  if (runtime.machine) {
+    const frame = `${JSON.stringify(input)}\n`
+    if (Buffer.byteLength(frame) > 256 * 1024) { domain.cancel(); await domain.completed; throw new Error('Script input exceeds its size bound') }
+    domain.channel.write(frame)
+  }
   const local = new AbortController()
   const activeSignal = AbortSignal.any([signal, local.signal])
   let requesting = false
   domain.channel.setEncoding('utf8'); domain.stdout.setEncoding('utf8'); domain.stderr.setEncoding('utf8')
   const stop = () => domain.cancel()
   signal.addEventListener('abort', stop, { once: true }); if (signal.aborted) stop()
+  let executing = false
   let remaining = input.limits.timeMs; let checkedAt = Date.now()
   const timeout = setInterval(() => {
     const now = Date.now()
-    if (!services.budgetPaused?.()) remaining -= now - checkedAt
+    if (executing && !services.budgetPaused?.()) remaining -= now - checkedAt
     checkedAt = now
     if (remaining <= 0) { local.abort(new Error('Script exceeded its time limit')); stop() }
   }, 250)
@@ -83,7 +109,13 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
   })()
   try {
     const pid = await domain.processId; services.event('process', { pid })
-    const code = await domain.completed
+    const observed = await observeExecution(domain, input.runId, { ...services.execution!, starting: () => { checkedAt = Date.now(); executing = true; services.execution!.starting?.() } }, activeSignal).catch((error: unknown) => {
+      // Keep the script diagnostic without treating a missing execution receipt as safe to replay.
+      if (failure) throw new NonRetryableError(`${failure.message}; ${error instanceof Error ? error.message : 'Execution receipt is unavailable'}`)
+      throw error
+    })
+    if (observed?.kind === 'pending') throw new Error('Script execution approval is pending')
+    const code = observed?.exitCode ?? await domain.completed
     if (requesting) local.abort(new Error('Script exited during a pending operation'))
     await frames
     activeSignal.throwIfAborted()
