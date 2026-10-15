@@ -122,11 +122,6 @@
       "entry": ["*.config.ts", "sw.ts", "**/*.{test,spec}.ts", "{scripts,tests,e2e}/**/*.{ts,mjs}"],
       "project": "**/*.{ts,vue}"
     },
-    "apps/openape-question-service": {
-      // Nuxt-plugin entry points only — no scripts, tests or service worker.
-      "entry": ["*.config.ts"],
-      "project": "**/*.{ts,vue}"
-    },
     "apps/docs": {
       // @nuxtjs/mcp-toolkit registers server/mcp/tools/** by directory
       // convention, the same way Nitro picks up server/api.

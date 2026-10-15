@@ -79,7 +79,7 @@ describe('authenticated single-file HTML delivery', () => {
       }
     }
   })
-  it('keeps application identity outside active HTML and renders offline in desktop, narrow and dark shells', async () => {
+  it('keeps application identity outside active HTML and runs embedded controls offline', async () => {
     const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, colorScheme: 'light' }); const page = await context.newPage(); const diagnostics: string[] = []
     page.on('pageerror', error => diagnostics.push(error.message))
     page.on('console', (message) => { if (message.type() === 'error') diagnostics.push(message.text()) })
@@ -119,17 +119,6 @@ describe('authenticated single-file HTML delivery', () => {
       await context.setOffline(false)
       timings.push({ title: document.title, html_bytes: Buffer.byteLength(document.source), ready_ms: Date.now() - start })
       await page.screenshot({ path: join(artifacts, `${document.id}-desktop.png`), fullPage: true })
-      if (document === documents[0]) {
-        for (const theme of ['light', 'dark'] as const) {
-          await page.setViewportSize({ width: 390, height: 844 }); await page.emulateMedia({ colorScheme: theme })
-          expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-          await page.evaluate(() => window.scrollTo(0, 0)); await inner.evaluate(() => window.scrollTo(0, 0))
-          expect(await page.locator('.reader').evaluate(element => getComputedStyle(element).backgroundColor)).toBe(theme === 'dark' ? 'rgb(18, 21, 24)' : 'rgb(236, 238, 234)')
-          expect(await page.evaluate(() => document.documentElement.scrollHeight <= innerHeight)).toBe(true)
-          await page.screenshot({ path: join(artifacts, `narrow-${theme}.png`) })
-        }
-        await page.setViewportSize({ width: 1440, height: 1000 }); await page.emulateMedia({ colorScheme: 'light' })
-      }
     }
     writeFileSync(join(artifacts, 'measurements.json'), JSON.stringify({ browser: browser.version(), timings }, null, 2))
     await context.close()

@@ -18,11 +18,12 @@
 
 ## Parallel UI verification — issue 1481
 
-- Patrick approved proposal revision 1 on October 15 and authorized three sessions, coordination messages and sequential merges. Current private Plan: https://report.openape.ai/d/01M4ZB1XK5995C4Z79BDPKTD7R?v=3.
-- Shared preparation PR 435 merged as `95d1083abfb9de07ad8edf5bb16c71e06207c5fd`. Its 52-workspace local gate passed; additional Opus review could not run because Claude OAuth expired. All three area installs and doctor checks passed independently.
-- Git/Issues #1484, Inbox/PWA #1485 and Reports #1486 run from that frozen SHA in separate worktrees and user-owned chats. Exact ownership, branches, chat IDs, ports and heavy-check slot history: `.claude/plans/ui-test-migration/launch-ledger.md`.
-- Coordinator branch `feature/issue-1481-ui-test-integration` owns shared metadata, plan updates and merges. Area acceptance and final integration remain open. Existing assertions may be retired only after replacement and counter-proof; real system boundaries stay integrated.
-- Troop is excluded. No deployment or CI reactivation. Actual merge receipts and evidence belong on the native PRs/issues.
+- Patrick approved proposal revision 1 on October 15 and authorized three sessions, coordination messages and sequential merges. Current private Plan: https://report.openape.ai/d/01M4ZB1XK5995C4Z79BDPKTD7R. The published Plan and native issue receipts hold the latest integration status after this repository snapshot.
+- Shared preparation PR 435 merged as `95d1083a`; all three independent installs and doctor checks passed. Shared fixture PR 437 merged as `b248ac15`, fixing invalid high HMR ports with a real regression and IdP readiness proof. It incorporates the separate legacy extraction without restoring retired workspaces.
+- Git/Issues PR 439 merged as `5cba821b`, issue 1484 closed: 13 browser cases, 12 real integration cases, 197 unit tests, production build and normal affected gate passed. Inbox/PWA #1485 and Reports #1486 are in final acceptance. Exact ownership, branches, chat IDs and heavy-check history: `.claude/plans/ui-test-migration/launch-ledger.md`.
+- Coordinator branch `feature/issue-1481-ui-test-closeout` owns shared documentation and sequential reviews/merges. Central documentation joins an implementing area PR; final merge receipts do not require a receipt-only PR. Every removed assertion needs replacement and counter-proof; real system boundaries remain integrated.
+- Inbox large-text fixtures now preserve production German language and real counters. Actual label/content visibility passes with unchanged production CSS; speculative padding/label changes were removed.
+- Additional Opus review could not start because Claude OAuth expired; no independent review result is claimed. Troop is excluded. No deployment or CI reactivation.
 
 
 ## Affected selection and local gates — issue 1480
@@ -2081,3 +2082,18 @@ are implied by merging this preparation increment.
 - Checkout: `openape-monorepo.releases/release-1479`; preserved source: https://repos.openape.ai/patrick/legacy.
 - Scope: eight legacy workspaces; source/history preservation and independent builds. Production data/services retained.
 - Verification and final PR receipts are recorded on the issue and linked Reports plan; no deployment is included.
+
+## Question Service extraction — issue 1488
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1488
+- Branch: `feature/issue-1488-question-service-legacy`; checkout `openape-monorepo.releases/release-1479`.
+- Read-only usage audit found three completed July questions, no pending work and no reference in the 16 active Pods. The uptime monitor still checks the existing service; access logs are unavailable.
+- Preserve source/history in `patrick/legacy`; remove active workspace/check/build/deploy targets. Keep production service/data/monitoring, shared sp-tasks and the zaz Pod unchanged.
+- Final native PR, exact-source validation and Reports receipts are recorded on the issue.
+
+## Question Service runtime retirement — issue 1489
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1489
+- Branch: `feature/issue-1489-retire-question-service`; checkout `openape-monorepo.releases/release-1479`.
+- Owner explicitly authorized container/monitor/data removal after source preservation. Remove this Compose service and its live proxy route; use the monitor owner API for its record/history, then remove the exact container and three-question SQLite database.
+- Preserve unrelated services, monitors and the legacy source. Final object counts, configuration comparisons, gate and runtime receipts belong on the native PR and issue.

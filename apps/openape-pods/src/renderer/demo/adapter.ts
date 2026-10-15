@@ -174,6 +174,11 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
         if (failChoice) { failChoice = false; throw new Error('Demo: Saving failed. Try the same decision again.') }
         state.domain.questions.splice(index, 1); changed()
       }
+      else if (command.type === 'resolveEffect') {
+        const index = state.domain.unknownEffects.findIndex(effect => effect.actionKey === command.actionKey && effect.attempt === command.attempt)
+        if (index < 0) throw new Error('Only an uncertain effect can be reconciled')
+        state.domain.unknownEffects.splice(index, 1); changed()
+      }
       else if (command.type === 'openApproval') { notify(t('Demo: This approval would be decided at the IdP. No permission was granted.')); return null }
       else if (command.type !== 'list') {
         return unavailable(command.type)

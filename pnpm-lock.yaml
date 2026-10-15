@@ -809,52 +809,6 @@ importers:
         specifier: 'catalog:'
         version: 4.1.10(@opentelemetry/api@1.9.1)(@types/node@26.0.1)(@vitest/browser-playwright@4.1.10)(@vitest/coverage-istanbul@4.1.10)(happy-dom@20.11.1)(vite@8.2.1(@types/node@26.0.1)(esbuild@0.28.1)(jiti@2.7.0)(terser@5.48.0)(tsx@4.22.4)(yaml@2.9.0))
 
-  apps/openape-question-service:
-    dependencies:
-      '@iconify-json/lucide':
-        specifier: 'catalog:'
-        version: 1.2.114
-      '@libsql/client':
-        specifier: ^0.14.0
-        version: 0.14.0
-      '@nuxt/ui':
-        specifier: 'catalog:'
-        version: 4.9.0(0da694eb9a2797bec1a1d969bda7e714)
-      '@openape/nuxt-auth-sp':
-        specifier: workspace:*
-        version: link:../../modules/nuxt-auth-sp
-      '@openape/sp-tasks':
-        specifier: workspace:*
-        version: link:../../packages/sp-tasks
-      drizzle-orm:
-        specifier: '>=0.45.2'
-        version: 0.45.2(@libsql/client@0.14.0)(@opentelemetry/api@1.9.1)(@types/pg@8.15.6)(better-sqlite3@12.11.1)(bun-types@1.3.14)(kysely@0.29.5)
-      h3:
-        specifier: 'catalog:'
-        version: 1.15.11
-      nuxt:
-        specifier: 'catalog:'
-        version: 4.5.2(1ef50897fb051fd8d814d3c77e03c7af)
-      tailwindcss:
-        specifier: 'catalog:'
-        version: 4.3.1
-    devDependencies:
-      '@playwright/test':
-        specifier: 'catalog:'
-        version: 1.62.1
-      openape-e2e:
-        specifier: workspace:*
-        version: link:../../examples/e2e
-      test2docs:
-        specifier: ^0.1.0
-        version: 0.1.0(@playwright/test@1.62.1)
-      typescript:
-        specifier: 'catalog:'
-        version: 5.9.3
-      vue-tsc:
-        specifier: 'catalog:'
-        version: 3.3.5(typescript@5.9.3)
-
   apps/openape-secrets:
     dependencies:
       '@iconify-json/lucide':

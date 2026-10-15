@@ -2,25 +2,13 @@
 import { computed } from 'vue'
 import type { MapView } from '../../contracts/map-view'
 import type { SecretRequestRow } from '../../contracts/secrets'
-import { diagnostic, t } from '../i18n'
+import { label, t } from '../i18n'
 import { kpiFacts } from '../utils/kpis'
 
 const props = defineProps<{ view: MapView, requests?: SecretRequestRow[] }>()
+const emit = defineEmits<{ open: [id: string] }>()
 const facts = computed(() => kpiFacts(props.view, props.requests ?? []))
-const pausedDetail = computed(() => {
-  const { drafts, archived } = facts.value.paused
-  const parts = [drafts ? t('{count} drafts', { count: drafts }) : '', archived ? t('{count} archived', { count: archived }) : ''].filter(Boolean)
-  return parts.length ? t('of which {parts}', { parts: parts.join(', ') }) : t('nothing paused')
-})
-// The Pods with the most failed runs first; a Pod that is degraded without a failed run (gaps, a blocked queue) follows.
-const errorDetail = computed(() => {
-  const { failures, degraded } = facts.value
-  const pods = failures.pods.slice(0, 2).map(pod => `${pod.name} ${pod.count}`)
-  if (failures.pods.length > 2) pods.push(t('{count} more', { count: failures.pods.length - 2 }))
-  const now = degraded.name && !failures.pods.some(pod => pod.name === degraded.name) ? [t('now: {name} · {reason}', { name: degraded.name, reason: diagnostic(degraded.reason) })] : []
-  const parts = [...pods, ...now]
-  return parts.length ? parts.join(', ') : t('no errors in 24 h')
-})
+const shownErrors = computed(() => facts.value.errors.slice(0, 2))
 const decisionDetail = computed(() => {
   const { questions, approvals, rights, reconcile, secrets } = facts.value.decisions
   const parts = [
@@ -36,20 +24,18 @@ const decisionDetail = computed(() => {
 
 <template>
   <div class="kpi-row" role="list">
-    <div class="kpi" role="listitem">
-      <b>{{ facts.active }}</b><span>{{ t('active') }}</span><small>{{ t('Pods with a running schedule') }}</small>
+    <div class="kpi" role="listitem" data-kpi="active">
+      <b>{{ facts.active.running }} / {{ facts.active.total }}</b><span>{{ t('active') }}</span><small>{{ t('Pods with a running schedule') }}</small>
     </div>
-    <div class="kpi" role="listitem">
-      <b>{{ facts.paused.total }}</b><span>{{ t('paused') }}</span><small>{{ pausedDetail }}</small>
-    </div>
-    <div class="kpi" :class="{ alert: facts.failures.runs || facts.degraded.count }" role="listitem" data-kpi="errors">
-      <b>{{ facts.failures.runs }}</b><span>{{ t('errors in 24 h') }}</span><small>{{ errorDetail }}</small>
+    <div class="kpi" :class="{ alert: facts.errors.length }" role="listitem" data-kpi="errors">
+      <b>{{ facts.errors.length }}</b><span>{{ t('current errors') }}</span>
+      <small v-if="!facts.errors.length">{{ t('no current errors') }}</small>
+      <small v-else>
+        <template v-for="(error, index) in shownErrors" :key="error.podId">{{ index ? ', ' : '' }}<button type="button" class="kpi-pod" @click="emit('open', error.podId)">{{ error.name }}</button>{{ facts.errors.length === 1 && error.reason ? ` · ${label(error.reason)}` : '' }}</template>{{ facts.errors.length > 2 ? `, ${t('{count} more', { count: facts.errors.length - 2 })}` : '' }}
+      </small>
     </div>
     <div class="kpi" role="listitem" data-kpi="decisions">
       <b>{{ facts.decisions.count }}</b><span>{{ t('decisions waiting for you') }}</span><small>{{ decisionDetail }}</small>
-    </div>
-    <div class="kpi" role="listitem">
-      <b>{{ facts.unknownDeliveries }}</b><span>{{ t('unknown deliveries') }}</span><small>{{ facts.unknownDeliveries ? t('{count} deliveries to reconcile', { count: facts.unknownDeliveries }) : t('nothing to reconcile') }}</small>
     </div>
   </div>
 </template>
@@ -61,4 +47,6 @@ const decisionDetail = computed(() => {
 .kpi span{font-size:12px;color:var(--muted)}
 .kpi small{display:block;font-size:11px;color:var(--muted);opacity:.8;margin-top:2px;overflow-wrap:anywhere}
 .kpi.alert{border-color:var(--bad)}.kpi.alert b{color:var(--bad)}
+.kpi-pod{all:unset;cursor:pointer;color:inherit;text-decoration:underline;text-underline-offset:2px}
+.kpi-pod:focus-visible{outline:2px solid var(--accent);outline-offset:1px;border-radius:2px}
 </style>

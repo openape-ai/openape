@@ -46,11 +46,11 @@ export const RUN = {
 // The page reaches for Nuxt's auto-imports, which resolve through the global
 // scope at call time. Outside a Nuxt build nothing puts them there, so the
 // tests do — a route, a resolved fetch and a no-op head.
-export function installNuxtGlobals() {
+export function installNuxtGlobals(report: unknown = RUN) {
   Object.assign(globalThis, {
     computed,
     useRoute: () => ({ params: { slug: 'demo' }, query: {}, path: '/r/demo' }),
-    useFetch: async () => ({ data: ref(RUN), error: ref(null) }),
+    useFetch: async () => ({ data: ref(report), error: ref(null) }),
     useSeoMeta: () => {},
   })
 }
