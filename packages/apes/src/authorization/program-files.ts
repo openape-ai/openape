@@ -55,7 +55,7 @@ export function nodeProgramFiles(call: ProgramCall, context: { cwd: string, env:
     if (option === '--input-type') { if (inline === undefined) index++; continue }
     if (['--version', '-v', '--help', '-h'].includes(argument)) return []
     if (inline !== undefined && ['--max-old-space-size', '--max-semi-space-size', '--stack-size'].includes(option!)) continue
-    if (['--no-warnings', '--enable-source-maps', '--use-strict', '--check', '-c'].includes(argument)) continue
+    if (['--no-warnings', '--enable-source-maps', '--use-strict', '--use-env-proxy', '--check', '-c'].includes(argument)) continue
     throw new Error(`Node option ${argument} needs an explicit execution binding before it can run`)
   }
   if (!inlineCode && !scriptFile) throw new Error('Node stdin execution needs an explicit code argument')
