@@ -106,7 +106,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
         {{ t('Loading workspace…') }}
       </p>
       <template v-else>
-        <KpiRow :view="view" :requests="secrets?.requests ?? []" />
+        <KpiRow :view="view" :requests="secrets?.requests ?? []" @open="emit('openPod', $event)" />
         <div class="automations-toolbar">
           <div class="tb-left">
             <div class="seg" role="group" :aria-label="t('View')">
