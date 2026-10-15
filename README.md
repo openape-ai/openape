@@ -38,3 +38,9 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 ## License
 
 MIT
+
+## Preserved legacy applications
+
+Nest, Troop, ape-agent, CRM and Chat with their CLIs are maintained separately in
+[OpenApe Legacy](https://repos.openape.ai/patrick/legacy). See the
+[extraction and runtime boundary](docs/operations/legacy-apps.md).

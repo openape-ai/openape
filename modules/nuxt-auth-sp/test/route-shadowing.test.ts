@@ -43,10 +43,6 @@ vi.mock('@nuxt/kit', () => ({
  * undeclared duplicate — and a declared one that is gone — fails the test.
  */
 const DECLARED_DUPLICATES: Record<string, string> = {
-  'openape-troop GET /.well-known/openape.json':
-    'deliberate override: injects TROOP_SCOPES into the manifest without forking the module (see the file header)',
-  'openape-chat POST /api/cli/exchange':
-    're-exports the module factory createCliExchangeHandler(), so both handlers behave identically — removal tracked in #1305',
   'openape-pods-relay GET /.well-known/oauth-client-metadata':
     'deliberate override: the relay publishes its own client metadata (client_name "OpenApe Pods", mobile-auth and workspace-auth callbacks); verified live on pods.openape.ai 2026-10-06',
 }
