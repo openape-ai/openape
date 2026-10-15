@@ -16,8 +16,8 @@ export interface SpawnDispatchOptions {
   name: string
   /** Pick a specific connected nest; omitted = first. */
   hostId?: string
-  /** Runtime that executes the agent: 'bridge' (default) or 'openclaw'. */
-  runtimeType?: 'bridge' | 'openclaw'
+  /** Runtime that executes the agent: 'bridge' (the only supported runtime). */
+  runtimeType?: 'bridge'
   bridge?: {
     key?: string
     baseUrl?: string

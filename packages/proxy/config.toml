@@ -1,7 +1,7 @@
 [proxy]
 listen = "127.0.0.1:9090"
 idp_url = "https://id.test.openape.at"
-agent_email = "openclaw@macmini.local"
+agent_email = "agent@example.test"
 default_action = "block"
 audit_log = "/tmp/openape-proxy-audit.log"
 

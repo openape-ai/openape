@@ -63,8 +63,8 @@ describe('skills loader', () => {
       expect(fm?.requiresTools).toEqual(['time.now', 'http.get'])
     })
 
-    it('reads openclaw-namespaced requires.bins from nested metadata', () => {
-      const fm = parseFrontmatter('---\nname: foo\ndescription: d\nmetadata:\n  openclaw:\n    requires:\n      bins: [o365-cli]\n---')
+    it('reads openape-namespaced requires.bins from nested metadata', () => {
+      const fm = parseFrontmatter('---\nname: foo\ndescription: d\nmetadata:\n  openape:\n    requires:\n      bins: [o365-cli]\n---')
       expect(fm?.requiresBins).toEqual(['o365-cli'])
     })
 
@@ -73,20 +73,24 @@ describe('skills loader', () => {
       expect(fm?.requiresTools).toEqual(['winner'])
     })
 
-    it('accepts both openclaw + openape blocks side-by-side (the cross-runtime case)', () => {
+    it('reads binary and tool requirements from the same namespace', () => {
       const fm = parseFrontmatter(`---
 name: foo
 description: d
 metadata:
-  openclaw:
+  openape:
     emoji: 📊
     requires:
       bins: [o365-cli]
-  openape:
     requires_tools: [mail.list]
 ---`)
       expect(fm?.requiresTools).toEqual(['mail.list'])
       expect(fm?.requiresBins).toEqual(['o365-cli'])
+    })
+
+    it('refuses retired metadata instead of losing its binary requirements', () => {
+      expect(() => parseFrontmatter('---\nname: legacy\ndescription: d\nmetadata:\n  openclaw:\n    requires:\n      bins: [missing]\n---'))
+        .toThrow('move its requirements to metadata.openape')
     })
 
     it('returns null when no frontmatter or required fields missing', () => {
@@ -176,13 +180,13 @@ metadata:
       writeFileSync(
         join(skillsDir(home), 'needs-fictional-binary', 'SKILL.md'),
         // A binary that obviously won't be on PATH — `which` will fail.
-        '---\nname: needs-fictional-binary\ndescription: D\nmetadata:\n  openclaw:\n    requires:\n      bins: [openape-not-a-real-bin-zz9plural9z]\n---',
+        '---\nname: needs-fictional-binary\ndescription: D\nmetadata:\n  openape:\n    requires:\n      bins: [openape-not-a-real-bin-zz9plural9z]\n---',
       )
       mkdirSync(join(skillsDir(home), 'has-shell'), { recursive: true })
       writeFileSync(
         join(skillsDir(home), 'has-shell', 'SKILL.md'),
         // `sh` is on every macOS / Linux box → eligibility passes.
-        '---\nname: has-shell\ndescription: D\nmetadata:\n  openclaw:\n    requires:\n      bins: [sh]\n---',
+        '---\nname: has-shell\ndescription: D\nmetadata:\n  openape:\n    requires:\n      bins: [sh]\n---',
       )
       const skills = composeSkills(home, [])
       const names = skills.map(s => s.name)

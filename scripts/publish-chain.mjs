@@ -40,12 +40,8 @@ const PACKAGES = [
   { name: '@openape/shapes', dir: 'packages/shapes' },
   { name: '@openape/agent-runtime', dir: 'packages/agent-runtime' },
   { name: '@openape/apes', dir: 'packages/apes' },
-  { name: '@openape/apes-openclaw', dir: 'packages/apes-openclaw' },
   { name: '@openape/unstorage-s3-driver', dir: 'packages/s3-driver' },
   { name: '@openape/prompt-injection-detector', dir: 'packages/prompt-injection-detector' },
-  // Depends on @openape/cli-auth and @openape/shapes, both published above.
-  // Nothing depends on it: OpenClaw loads it as a plugin, never as a dep.
-  { name: '@openape/openclaw-grant-gate', dir: 'packages/openclaw-grant-gate' },
   // Leaf package, but a workspace dep of @openape/ape-agent — must publish
   // before it so ape-agent's resolved version range exists on npm.
   { name: '@openape/sp-tasks', dir: 'packages/sp-tasks' },

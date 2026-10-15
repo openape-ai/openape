@@ -18,6 +18,12 @@ const ctx = {
 }
 
 describe('createAgentRuntimeSession', () => {
+  it('refuses persisted retired runtimes before resolving identity or starting a session', () => {
+    const legacy: AgentEntry = JSON.parse(JSON.stringify({ ...entry('legacy'), runtimeType: 'openclaw' }))
+    expect(() => resolveAgentRuntimeContext(legacy, {})).toThrow('unsupported runtime')
+    expect(() => createAgentRuntimeSession(legacy, ctx, () => {})).toThrow('unsupported runtime')
+  })
+
   it('constructs a real AgentSession and logs its identity on start', async () => {
     const lines: string[] = []
     const session = createAgentRuntimeSession(entry('backend'), ctx, line => lines.push(line))

@@ -1,5 +1,10 @@
 # 0001 — Single-Process Nest (collapse ~26 processes to 1)
 
+> Update (October 15, 2026, issue 1479): OpenClaw support has been retired.
+> The Nest supports only the bridge runtime, through pm2 or the existing opt-in
+> in-process path. The OpenClaw implementation and default-runtime question below
+> are historical; they do not authorize restoring that integration.
+
 - Status: Accepted (owner-approved direction, 2026-06-14; M2 code merged + M3 openclaw tool-drop on main, #815; M4 cutover + native ThreadSession tool-drop pending)
 - Deciders: Patrick Hofmann (owner)
 - Related: `.claude/plans/single-process-nest.md`

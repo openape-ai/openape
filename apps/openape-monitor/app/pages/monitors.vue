@@ -170,7 +170,7 @@ onUnmounted(() => {
           />
           <UInput
             v-model="name"
-            :placeholder="kind === 'heartbeat' ? 'Name, e.g. OpenClaw scheduler' : 'Name (optional)'"
+            :placeholder="kind === 'heartbeat' ? 'Name, e.g. nightly backup' : 'Name (optional)'"
             size="lg"
             :class="kind === 'heartbeat' ? 'flex-1' : 'sm:w-40'"
           />

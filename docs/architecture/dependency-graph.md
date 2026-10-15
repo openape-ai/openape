@@ -18,27 +18,25 @@ graph LR
     w23["@openape/ape-timetrack"]
     w24["@openape/ape-troop"]
     w25["@openape/apes"]
-    w26["@openape/apes-openclaw"]
-    w27["@openape/attention-events"]
-    w28["@openape/auth"]
-    w30["@openape/cli-auth"]
-    w31["@openape/codex-proxy"]
-    w32["@openape/core"]
-    w33["@openape/grants"]
-    w37["@openape/openclaw-grant-gate"]
-    w39["@openape/pods-protocol"]
-    w40["@openape/prompt-injection-detector"]
-    w41["@openape/proof-cli"]
-    w42["@openape/protocol-conformance"]
-    w43["@openape/proxy"]
-    w44["@openape/report-contracts"]
-    w45["@openape/shapes"]
-    w46["@openape/sp-tasks"]
-    w48["@openape/unstorage-s3-driver"]
+    w26["@openape/attention-events"]
+    w27["@openape/auth"]
+    w29["@openape/cli-auth"]
+    w30["@openape/codex-proxy"]
+    w31["@openape/core"]
+    w32["@openape/grants"]
+    w37["@openape/pods-protocol"]
+    w38["@openape/prompt-injection-detector"]
+    w39["@openape/proof-cli"]
+    w40["@openape/protocol-conformance"]
+    w41["@openape/proxy"]
+    w42["@openape/report-contracts"]
+    w43["@openape/shapes"]
+    w44["@openape/sp-tasks"]
+    w46["@openape/unstorage-s3-driver"]
   end
   subgraph modules
-    w35["@openape/nuxt-auth-idp"]
-    w36["@openape/nuxt-auth-sp"]
+    w34["@openape/nuxt-auth-idp"]
+    w35["@openape/nuxt-auth-sp"]
   end
   subgraph apps
     w0["@openape-crm/app"]
@@ -55,126 +53,124 @@ graph LR
     w11["@openape-timetrack/app"]
     w13["@openape/ape-agent"]
     w15["@openape/ape-chat"]
-    w29["@openape/chat"]
-    w34["@openape/nest"]
-    w38["@openape/pods"]
-    w47["@openape/troop"]
-    w49["docs"]
-    w51["openape-free-idp"]
+    w28["@openape/chat"]
+    w33["@openape/nest"]
+    w36["@openape/pods"]
+    w45["@openape/troop"]
+    w47["docs"]
+    w49["openape-free-idp"]
   end
   subgraph examples
-    w50["openape-e2e"]
-    w52["openape-idp-example"]
-    w53["openape-sp-example"]
+    w48["openape-e2e"]
+    w50["openape-idp-example"]
+    w51["openape-sp-example"]
   end
-  w0 --> w32
-  w0 --> w36
-  w1 --> w36
+  w0 --> w31
+  w0 --> w35
+  w1 --> w35
+  w2 --> w31
   w2 --> w32
-  w2 --> w33
-  w2 --> w36
-  w2 --> w50
-  w3 --> w32
-  w3 --> w36
+  w2 --> w35
+  w2 --> w48
+  w3 --> w31
+  w3 --> w35
   w4 --> w18
-  w4 --> w36
-  w4 --> w44
-  w4 --> w50
-  w5 --> w28
-  w5 --> w32
+  w4 --> w35
+  w4 --> w42
+  w4 --> w48
+  w5 --> w27
+  w5 --> w31
+  w5 --> w35
   w5 --> w36
-  w5 --> w38
-  w5 --> w39
-  w5 --> w50
-  w6 --> w36
-  w6 --> w50
-  w7 --> w36
-  w7 --> w46
-  w7 --> w50
-  w8 --> w32
-  w8 --> w36
-  w9 --> w36
-  w10 --> w36
-  w10 --> w44
-  w10 --> w50
-  w11 --> w36
-  w12 --> w30
-  w12 --> w32
+  w5 --> w37
+  w5 --> w48
+  w6 --> w35
+  w6 --> w48
+  w7 --> w35
+  w7 --> w44
+  w7 --> w48
+  w8 --> w31
+  w8 --> w35
+  w9 --> w35
+  w10 --> w35
+  w10 --> w42
+  w10 --> w48
+  w11 --> w35
+  w12 --> w29
+  w12 --> w31
   w13 --> w25
-  w13 --> w30
-  w13 --> w40
-  w13 --> w46
-  w14 --> w30
-  w14 --> w41
-  w15 --> w30
-  w16 --> w30
-  w16 --> w41
-  w17 --> w30
-  w17 --> w41
-  w18 --> w30
-  w18 --> w41
-  w19 --> w30
-  w19 --> w41
-  w20 --> w30
-  w20 --> w41
-  w21 --> w30
-  w21 --> w41
-  w22 --> w30
-  w22 --> w41
-  w22 --> w44
-  w23 --> w30
-  w23 --> w41
-  w24 --> w30
+  w13 --> w29
+  w13 --> w38
+  w13 --> w44
+  w14 --> w29
+  w14 --> w39
+  w15 --> w29
+  w16 --> w29
+  w16 --> w39
+  w17 --> w29
+  w17 --> w39
+  w18 --> w29
+  w18 --> w39
+  w19 --> w29
+  w19 --> w39
+  w20 --> w29
+  w20 --> w39
+  w21 --> w29
+  w21 --> w39
+  w22 --> w29
+  w22 --> w39
+  w22 --> w42
+  w23 --> w29
+  w23 --> w39
+  w24 --> w29
   w25 --> w12
-  w25 --> w30
+  w25 --> w29
+  w25 --> w31
   w25 --> w32
-  w25 --> w33
+  w25 --> w41
   w25 --> w43
-  w25 --> w45
-  w25 --> w50
-  w28 --> w32
-  w29 --> w32
-  w29 --> w36
-  w29 --> w50
-  w33 --> w32
-  w34 --> w13
-  w34 --> w30
-  w35 --> w28
-  w35 --> w32
-  w35 --> w33
-  w35 --> w45
-  w36 --> w28
+  w25 --> w48
+  w27 --> w31
+  w28 --> w31
+  w28 --> w35
+  w28 --> w48
+  w32 --> w31
+  w33 --> w13
+  w33 --> w29
+  w34 --> w27
+  w34 --> w31
+  w34 --> w32
+  w34 --> w43
+  w35 --> w27
+  w35 --> w31
+  w36 --> w25
+  w36 --> w29
+  w36 --> w31
   w36 --> w32
-  w37 --> w30
-  w37 --> w45
-  w38 --> w25
-  w38 --> w30
-  w38 --> w32
-  w38 --> w33
-  w38 --> w39
-  w41 --> w30
-  w42 --> w32
-  w42 --> w33
+  w36 --> w37
+  w39 --> w29
+  w40 --> w31
+  w40 --> w32
+  w41 --> w31
+  w43 --> w31
   w43 --> w32
-  w45 --> w32
-  w45 --> w33
-  w47 --> w27
-  w47 --> w32
-  w47 --> w36
-  w47 --> w40
-  w47 --> w50
-  w50 --> w35
-  w50 --> w36
-  w51 --> w28
+  w45 --> w26
+  w45 --> w31
+  w45 --> w35
+  w45 --> w38
+  w45 --> w48
+  w48 --> w34
+  w48 --> w35
+  w49 --> w27
+  w49 --> w31
+  w49 --> w32
+  w49 --> w34
+  w49 --> w48
+  w50 --> w34
+  w50 --> w46
+  w50 --> w48
+  w51 --> w27
+  w51 --> w31
   w51 --> w32
-  w51 --> w33
   w51 --> w35
-  w51 --> w50
-  w52 --> w35
-  w52 --> w48
-  w52 --> w50
-  w53 --> w28
-  w53 --> w32
-  w53 --> w33
-  w53 --> w36
 ```
