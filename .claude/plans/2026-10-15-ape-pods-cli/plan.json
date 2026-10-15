@@ -74,7 +74,7 @@
         "Existing Pod identity material can be consumed securely without credential-format migration or owner-login changes. Missing or revoked identity is refused; list/create/edit do not initialize run identity or application-secret services."
       ],
       "rollback": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback.",
-      "proof": "Node transport and runtime-only assets execute without Electron. Native fixtures prove exclusive CLI ownership and both HOME contexts; metadata commands do not initialize identity services. The independent v10 vector passes. Real owner keychain ACL access remains untested.",
+      "proof": "Node transport and runtime-only assets execute without Electron. Native fixtures prove exclusive CLI ownership and both HOME contexts; metadata commands do not initialize identity services. The independent v10 vector passes. Real owner keychain ACL access remains untested. A native SIGINT case additionally proves that terminal cancellation retains the profile lease until the worker closes its pipe; the unpatched helper exits immediately in the counterproof.",
       "evidenceIds": [
         "acceptance"
       ]
@@ -136,7 +136,7 @@
         "The native PR, maintained plan and verified Test Runs document state the source SHA, remaining compatibility requirements and next action."
       ],
       "rollback": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback.",
-      "proof": "Runtime build, native acceptance and required affected gate passed on source f652d6de. Pods: 1729 unit tests; relay: 104. Private report edition 1 was exported and compared byte-for-byte. Native PR 463 is open with explicit issue relation. The local command prints help; the development guide documents setup and limits.",
+      "proof": "Runtime build, native acceptance and required affected gate passed on source 564bda42. Pods: 1729 unit tests; relay: 104. Private report edition 2 was exported and compared byte-for-byte. Native PR 463 is open with explicit issue relation. The local command prints help; the development guide documents setup and limits.",
       "evidenceIds": [
         "acceptance"
       ]
@@ -203,10 +203,10 @@
     "Retain focused desktop host and worker-entry coverage, runtime build and the affected unit gate. Publish source SHA, exact commands and actual identity/context evidence. Isolated fixtures can test identity compatibility; do not unlock or mutate the real owner keychain or run owner Pods as fixtures. Distinguish protocol fixtures from live-provider acceptance.",
     "Use real shared-data tables and runtime operations in disposable production-schema fixtures: allowed reader/writer, refused namespace, stale expected revision, claim ownership and durable result after restart. Verify that owner HOME never switches the data principal to owner, and that only the requested Pod starts."
   ],
-  "handoff": "Ready for review in PR 463. Verified executable source: f652d6de6d2616da7d4e6d861019aac1dba1cf96; documentation-only handoff follows. Local ape-pods points to this worktree runtime build. Close the desktop before commands against the real profile. No owner Pod was used as a fixture. The owner may review and use the CLI; merge or release remains separate.",
+  "handoff": "Ready for review in PR 463. Verified executable source: 564bda422dbe6590b4386516fbcaa2c0a14168b6; documentation-only handoff follows. Local ape-pods points to this worktree runtime build. Close the desktop before commands against the real profile. No owner Pod was used as a fixture. The owner may review and use the CLI; merge or release remains separate.",
   "completion": {
     "result": "achieved",
-    "summary": "Implemented the four commands as a standalone Node CLI and installed the local executable link. Runtime-only build, 33 focused cases, four native cases, 12 targeted regression cases and the complete affected unit gate pass. PR 463 is open and explicitly related to issue 1499. Actual private Test Runs evidence is published and its exported bytes verified. Existing owner keychain ACL and live-provider acceptance were not exercised. No merge, release or desktop installation occurred."
+    "summary": "Implemented the four commands as a standalone Node CLI and installed the local executable link. Runtime-only build, 33 focused cases, five native cases, 12 targeted regression cases and the complete affected unit gate pass. PR 463 is open and explicitly related to issue 1499. Actual private Test Runs evidence is published and its exported bytes verified. Existing owner keychain ACL and live-provider acceptance were not exercised. No merge, release or desktop installation occurred."
   },
   "changelog": [
     {
@@ -236,6 +236,10 @@
     {
       "date": "2026-10-15",
       "text": "Completed standalone implementation, native fixture acceptance and required local gate. Published verified Test Runs evidence and opened PR 463; no merge or release."
+    },
+    {
+      "date": "2026-10-15",
+      "text": "Final signal review found that terminal Ctrl+C could reach the lock helper before worker cleanup. The helper now ignores SIGINT; native exclusivity/cancellation acceptance and the full affected gate pass again. Test Runs edition 2 records source 564bda42 and the counterproof."
     }
   ],
   "targets": [
@@ -278,7 +282,7 @@
       "title": "Actual CLI acceptance and required affected gate",
       "kind": "link",
       "role": "evidence",
-      "url": "https://report.openape.ai/d/01M50P2TGQ0JVAGAVC95KGDFGY?v=1"
+      "url": "https://report.openape.ai/d/01M50P2TGQ0JVAGAVC95KGDFGY?v=2"
     }
   ],
   "translations": {
@@ -631,13 +635,13 @@
       },
       {
         "path": "handoff",
-        "source": "Ready for review in PR 463. Verified executable source: f652d6de6d2616da7d4e6d861019aac1dba1cf96; documentation-only handoff follows. Local ape-pods points to this worktree runtime build. Close the desktop before commands against the real profile. No owner Pod was used as a fixture. The owner may review and use the CLI; merge or release remains separate.",
-        "text": "Bereit zur Durchsicht in PR 463. Geprüfter ausführbarer Quellstand: f652d6de6d2616da7d4e6d861019aac1dba1cf96; danach folgt nur die Übergabedokumentation. Der lokale Befehl ape-pods verweist auf den Runtime-Build dieses Worktrees. Vor Befehlen gegen das echte Profil den Desktop schließen. Kein Eigentümer-Pod wurde als Fixture verwendet. Der Eigentümer kann CLI und PR prüfen; Merge oder Release bleiben separat."
+        "source": "Ready for review in PR 463. Verified executable source: 564bda422dbe6590b4386516fbcaa2c0a14168b6; documentation-only handoff follows. Local ape-pods points to this worktree runtime build. Close the desktop before commands against the real profile. No owner Pod was used as a fixture. The owner may review and use the CLI; merge or release remains separate.",
+        "text": "Bereit zur Durchsicht in PR 463. Geprüfter ausführbarer Quellstand: 564bda422dbe6590b4386516fbcaa2c0a14168b6; danach folgt nur die Übergabedokumentation. Der lokale Befehl ape-pods verweist auf den Runtime-Build dieses Worktrees. Vor Befehlen gegen das echte Profil den Desktop schließen. Kein Eigentümer-Pod wurde als Fixture verwendet. Der Eigentümer kann CLI und PR prüfen; Merge oder Release bleiben separat."
       },
       {
         "path": "completion.summary",
-        "source": "Implemented the four commands as a standalone Node CLI and installed the local executable link. Runtime-only build, 33 focused cases, four native cases, 12 targeted regression cases and the complete affected unit gate pass. PR 463 is open and explicitly related to issue 1499. Actual private Test Runs evidence is published and its exported bytes verified. Existing owner keychain ACL and live-provider acceptance were not exercised. No merge, release or desktop installation occurred.",
-        "text": "Die vier Befehle sind als eigenständige Node-CLI umgesetzt und der lokale Befehlslink ist eingerichtet. Runtime-Build, 33 fokussierte Fälle, vier native Fälle, zwölf gezielte Regressionstests und der vollständige betroffene Prüflauf bestehen. PR 463 ist offen und ausdrücklich mit Issue 1499 verknüpft. Tatsächliche private Testnachweise sind veröffentlicht; die exportierten Bytes wurden verglichen. Bestehende Eigentümer-Keychain-ACL und Live-Provider wurden nicht geprüft. Es erfolgten weder Merge noch Release oder Desktop-Installation."
+        "source": "Implemented the four commands as a standalone Node CLI and installed the local executable link. Runtime-only build, 33 focused cases, five native cases, 12 targeted regression cases and the complete affected unit gate pass. PR 463 is open and explicitly related to issue 1499. Actual private Test Runs evidence is published and its exported bytes verified. Existing owner keychain ACL and live-provider acceptance were not exercised. No merge, release or desktop installation occurred.",
+        "text": "Die vier Befehle sind als eigenständige Node-CLI umgesetzt und der lokale Befehlslink ist eingerichtet. Runtime-Build, 33 fokussierte Fälle, fünf native Fälle, zwölf gezielte Regressionstests und der vollständige betroffene Prüflauf bestehen. PR 463 ist offen und ausdrücklich mit Issue 1499 verknüpft. Tatsächliche private Testnachweise sind veröffentlicht; die exportierten Bytes wurden verglichen. Bestehende Eigentümer-Keychain-ACL und Live-Provider wurden nicht geprüft. Es erfolgten weder Merge noch Release oder Desktop-Installation."
       },
       {
         "path": "changelog.0.text",
@@ -736,8 +740,8 @@
       },
       {
         "path": "milestones.0.proof",
-        "source": "Node transport and runtime-only assets execute without Electron. Native fixtures prove exclusive CLI ownership and both HOME contexts; metadata commands do not initialize identity services. The independent v10 vector passes. Real owner keychain ACL access remains untested.",
-        "text": "Node-Transport und Runtime-Assets funktionieren ohne Electron. Native Fixtures belegen exklusive CLI-Verantwortung und beide HOME-Kontexte; Metadatenbefehle initialisieren keine Identitätsdienste. Der unabhängige v10-Testvektor besteht. Der Zugriff über die echte Eigentümer-Keychain-ACL bleibt ungeprüft."
+        "source": "Node transport and runtime-only assets execute without Electron. Native fixtures prove exclusive CLI ownership and both HOME contexts; metadata commands do not initialize identity services. The independent v10 vector passes. Real owner keychain ACL access remains untested. A native SIGINT case additionally proves that terminal cancellation retains the profile lease until the worker closes its pipe; the unpatched helper exits immediately in the counterproof.",
+        "text": "Node-Transport und Runtime-Assets funktionieren ohne Electron. Native Fixtures belegen exklusive CLI-Verantwortung und beide HOME-Kontexte; Metadatenbefehle initialisieren keine Identitätsdienste. Der unabhängige v10-Testvektor besteht. Der Zugriff über die echte Eigentümer-Keychain-ACL bleibt ungeprüft. Ein nativer SIGINT-Fall belegt zusätzlich, dass ein Terminal-Abbruch die Profilsperre erhält, bis der Worker seine Pipe schließt; der unveränderte Helfer beendet sich im Gegenbeweis sofort."
       },
       {
         "path": "milestones.1.proof",
@@ -751,13 +755,18 @@
       },
       {
         "path": "milestones.3.proof",
-        "source": "Runtime build, native acceptance and required affected gate passed on source f652d6de. Pods: 1729 unit tests; relay: 104. Private report edition 1 was exported and compared byte-for-byte. Native PR 463 is open with explicit issue relation. The local command prints help; the development guide documents setup and limits.",
-        "text": "Runtime-Build, native Abnahme und vorgeschriebener betroffener Prüflauf bestehen auf Quellstand f652d6de. Pods: 1729 Unit-Tests; Relay: 104. Edition 1 des privaten Berichts wurde exportiert und bytegenau verglichen. Nativer PR 463 ist offen und ausdrücklich mit dem Issue verknüpft. Der lokale Befehl zeigt Hilfe; die Entwicklungsanleitung beschreibt Einrichtung und Grenzen."
+        "source": "Runtime build, native acceptance and required affected gate passed on source 564bda42. Pods: 1729 unit tests; relay: 104. Private report edition 2 was exported and compared byte-for-byte. Native PR 463 is open with explicit issue relation. The local command prints help; the development guide documents setup and limits.",
+        "text": "Runtime-Build, native Abnahme und vorgeschriebener betroffener Prüflauf bestehen auf Quellstand 564bda42. Pods: 1729 Unit-Tests; Relay: 104. Edition 2 des privaten Berichts wurde exportiert und bytegenau verglichen. Nativer PR 463 ist offen und ausdrücklich mit dem Issue verknüpft. Der lokale Befehl zeigt Hilfe; die Entwicklungsanleitung beschreibt Einrichtung und Grenzen."
       },
       {
         "path": "changelog.6.text",
         "source": "Completed standalone implementation, native fixture acceptance and required local gate. Published verified Test Runs evidence and opened PR 463; no merge or release.",
         "text": "Eigenständige Umsetzung, native Fixture-Abnahme und vorgeschriebener lokaler Prüflauf abgeschlossen. Verifizierte Testnachweise veröffentlicht und PR 463 geöffnet; kein Merge oder Release."
+      },
+      {
+        "path": "changelog.7.text",
+        "source": "Final signal review found that terminal Ctrl+C could reach the lock helper before worker cleanup. The helper now ignores SIGINT; native exclusivity/cancellation acceptance and the full affected gate pass again. Test Runs edition 2 records source 564bda42 and the counterproof.",
+        "text": "Die abschließende Signalprüfung zeigte, dass Ctrl+C den Sperrhelfer vor der Worker-Bereinigung erreichen kann. Der Helfer ignoriert jetzt SIGINT; native Prüfung von Exklusivität und Abbruch sowie der vollständige betroffene Prüflauf bestehen erneut. Testbericht-Edition 2 hält Quellstand 564bda42 und den Gegenbeweis fest."
       }
     ]
   },
