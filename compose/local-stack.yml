@@ -18,8 +18,6 @@ networks:
 
 volumes:
   caddy-data:
-  nest-data:
-
 services:
   # Local DNS: serves the DDISA discovery TXT for openape.test and forwards the
   # rest (incl. *.openape.test A records via the proxy's aliases) to docker DNS.
@@ -59,7 +57,7 @@ services:
     healthcheck:
       # 127.0.0.1, not localhost — Caddy's admin API binds IPv4-only and
       # `localhost` resolves to ::1 first inside the container.
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/"]
+      test: [ "CMD", "wget", "-qO-", "http://127.0.0.1:2019/config/" ]
       interval: 5s
       timeout: 3s
       retries: 20
@@ -121,76 +119,14 @@ services:
     networks:
       - openape-test
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3003/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-
-  troop:
-    build:
-      context: ..
-      dockerfile: compose/Nuxt.Dockerfile
-      args:
-        APP_FILTER: "@openape/troop"
-        APP_DIR: openape-troop
-        PORT: "3010"
-    image: openape-troop:local
-    depends_on:
-      proxy:
-        condition: service_healthy
-    dns:
-      - 172.30.0.53
-    volumes:
-      - caddy-data:/caddy-data:ro
-    environment:
-      # nuxt-auth-sp module runtimeConfig (configKey openapeSp) → NUXT_OPENAPE_SP_*.
-      # client_id = this SP's own https host, so the IdP fetches its local
-      # /.well-known/oauth-client-metadata. No openapeUrl → real DDISA discovery.
-      NUXT_OPENAPE_SP_CLIENT_ID: troop.openape.test
-      NUXT_OPENAPE_SP_SP_NAME: OpenApe Troop
-      NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
-      NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
-      NUXT_PUBLIC_IDP_URL: https://id.openape.test
-      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
-      NITRO_PORT: "3010"
-      HOST: 0.0.0.0
-    networks:
-      - openape-test
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3010/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-
-  chat:
-    build:
-      context: ..
-      dockerfile: compose/Nuxt.Dockerfile
-      args:
-        APP_FILTER: "@openape/chat"
-        APP_DIR: openape-chat
-        PORT: "3007"
-    image: openape-chat:local
-    depends_on:
-      proxy:
-        condition: service_healthy
-    dns:
-      - 172.30.0.53
-    volumes:
-      - caddy-data:/caddy-data:ro
-    environment:
-      NUXT_OPENAPE_SP_CLIENT_ID: chat.openape.test
-      NUXT_OPENAPE_SP_SP_NAME: OpenApe Chat
-      NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
-      NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
-      NUXT_PUBLIC_IDP_URL: https://id.openape.test
-      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
-      NITRO_PORT: "3007"
-      HOST: 0.0.0.0
-    networks:
-      - openape-test
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3007/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3003/').then(r=>process.exit(r.ok?0:1)).ca\
+            tch(()=>process.exit(1))"
+        ]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -226,7 +162,14 @@ services:
     networks:
       - openape-test
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3005/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3005/').then(r=>process.exit(r.ok?0:1)).ca\
+            tch(()=>process.exit(1))"
+        ]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -259,7 +202,14 @@ services:
     networks:
       - openape-test
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3004/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3004/').then(r=>process.exit(r.ok?0:1)).ca\
+            tch(()=>process.exit(1))"
+        ]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -292,7 +242,14 @@ services:
     networks:
       - openape-test
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3006/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3006/').then(r=>process.exit(r.ok?0:1)).ca\
+            tch(()=>process.exit(1))"
+        ]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -325,42 +282,14 @@ services:
     networks:
       - openape-test
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3011/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 5s
-      timeout: 3s
-      retries: 30
-
-  crm:
-    build:
-      context: ..
-      dockerfile: compose/Nuxt.Dockerfile
-      args:
-        APP_FILTER: "@openape-crm/app"
-        APP_DIR: openape-crm
-        PORT: "3024"
-    image: openape-crm:local
-    depends_on:
-      proxy:
-        condition: service_healthy
-    dns:
-      - 172.30.0.53
-    volumes:
-      - caddy-data:/caddy-data:ro
-    environment:
-      NUXT_OPENAPE_SP_CLIENT_ID: crm.openape.test
-      NUXT_OPENAPE_SP_SP_NAME: OpenApe CRM
-      NUXT_OPENAPE_SP_SESSION_SECRET: *session-secret
-      NUXT_OPENAPE_SP_FALLBACK_IDP_URL: https://id.openape.test
-      NUXT_PUBLIC_IDP_URL: https://id.openape.test
-      # Schreibbarer Pfad im Container — das Image bringt kein beschreibbares cwd mit.
-      NUXT_TURSO_URL: file:/tmp/crm.db
-      NODE_EXTRA_CA_CERTS: /caddy-data/caddy/pki/authorities/local/root.crt
-      NITRO_PORT: "3024"
-      HOST: 0.0.0.0
-    networks:
-      - openape-test
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3024/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3011/').then(r=>process.exit(r.ok?0:1)).ca\
+            tch(()=>process.exit(1))"
+        ]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -393,7 +322,14 @@ services:
     networks:
       - openape-test
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3014/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3014/').then(r=>process.exit(r.ok?0:1)).ca\
+            tch(()=>process.exit(1))"
+        ]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -424,7 +360,14 @@ services:
     networks:
       - openape-test
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3015/').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3015/').then(r=>process.exit(r.ok?0:1)).ca\
+            tch(()=>process.exit(1))"
+        ]
       interval: 5s
       timeout: 3s
       retries: 30
@@ -438,13 +381,9 @@ services:
       context: ..
       dockerfile: compose/demo/Dockerfile
     image: openape-demo-playwright:local
-    profiles: ["demo"]
+    profiles: [ "demo" ]
     depends_on:
       idp:
-        condition: service_healthy
-      troop:
-        condition: service_healthy
-      chat:
         condition: service_healthy
     dns:
       - 172.30.0.53
@@ -453,71 +392,5 @@ services:
       - ../docs/local-stack:/demo/out
       # Live-mount the story scripts — iterate without an image rebuild.
       - ./demo:/demo/src:ro
-    networks:
-      - openape-test
-
-  # --- Agent lifecycle (spawn / run / destroy) — profile: agent-lifecycle ---
-  # Started by compose/agent/run.sh, not by a bare `up`.
-
-  # Mock OpenAI-compatible LLM so the nest's agents have an endpoint WITHOUT a
-  # ChatGPT subscription holder — a 2nd codex-proxy on a live account would
-  # hard-terminate the first. See compose/mock-llm/server.mjs.
-  mock-llm:
-    build:
-      context: ..
-      dockerfile: compose/mock-llm/Dockerfile
-    image: openape-mock-llm:local
-    profiles: ["agent-lifecycle"]
-    dns:
-      - 172.30.0.53
-    networks:
-      - openape-test
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:4000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
-
-  # The nest daemon, bound to the LOCAL troop. HOST_ID + DEVICE_SECRET come from
-  # `POST /api/nests/bind` — compose/agent/run.sh binds as demo@openape.test and
-  # injects them. Agents it spawns register at the local IdP and use the mock LLM.
-  nest:
-    build:
-      context: ..
-      dockerfile: apps/openape-nest/Dockerfile
-    image: openape-nest:latest
-    profiles: ["agent-lifecycle"]
-    depends_on:
-      proxy:
-        condition: service_healthy
-      troop:
-        condition: service_healthy
-      mock-llm:
-        condition: service_healthy
-    dns:
-      - 172.30.0.53
-    volumes:
-      - caddy-data:/caddy-data:ro
-      - nest-data:/var/lib/openape/nest
-    environment:
-      OPENAPE_NEST_HOST_ID: ${OPENAPE_NEST_HOST_ID:-}
-      OPENAPE_NEST_DEVICE_SECRET: ${OPENAPE_NEST_DEVICE_SECRET:-}
-      OPENAPE_TROOP_WS_URL: wss://troop.openape.test
-      # The var the agent bridge actually reads for its troop endpoint
-      # (ape-agent bridge.ts readConfig). Without it the bridge defaults to
-      # the PRODUCTION https://troop.openape.ai and its local-IdP-issued token
-      # is meaningless there — the WS just hangs. Point it at the local troop.
-      OPENAPE_TROOP_URL: https://troop.openape.test
-      LITELLM_BASE_URL: http://mock-llm:4000/v1
-      LITELLM_API_KEY: sk-mock
-      APE_CHAT_BRIDGE_MODEL: gpt-5.5
-      OPENAPE_BYPASS_APE_SHELL: "1"
-      HOME: /var/lib/openape/nest
-      NEST_DATA_DIR: /var/lib/openape/nest
-      OPENAPE_NEST_REGISTRY_PATH: /var/lib/openape/nest/agents.json
-      # The world-readable CA copy the entrypoint writes from the root-only
-      # /caddy-data PKI — readable by the nest AND by spawned agent uids (the
-      # bridge + sync), which the raw /caddy-data path is not.
-      NODE_EXTRA_CA_CERTS: /var/lib/openape/local-ca.crt
     networks:
       - openape-test

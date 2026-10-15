@@ -10,11 +10,11 @@
 
 ## Parallel UI verification — issue 1481
 
-- Patrick approved Plan revision 1 on October 15 and authorized three sessions, coordination messages and merges: https://report.openape.ai/d/01M4ZB1XK5995C4Z79BDPKTD7R?v=1.
-- M0 preparation branch: `feature/issue-1481-ui-test-base`, checkout `openape-monorepo.worktrees/ui-test-plan-1481`, base `7d0caa8b67a939284d008761efe977dc76fbe288`.
-- Add the existing browser-test catalog dependencies to Git and Inbox. Reports already has them. Preserve all existing tests and commands until replacement evidence exists.
-- After preparation merges, freeze its SHA for separate Git/Issues, Inbox/PWA and Reports worktrees. The coordinator owns shared files, the launch ledger, one heavy-check slot and sequential merges. Area sessions own only their assigned app.
-- Troop is excluded. No deployment or CI reactivation. Launch details and actual validation receipts follow in the coordinator ledger and native PR comments.
+- Patrick approved proposal revision 1 on October 15 and authorized three sessions, coordination messages and sequential merges. Current private Plan: https://report.openape.ai/d/01M4ZB1XK5995C4Z79BDPKTD7R?v=3.
+- Shared preparation PR 435 merged as `95d1083abfb9de07ad8edf5bb16c71e06207c5fd`. Its 52-workspace local gate passed; additional Opus review could not run because Claude OAuth expired. All three area installs and doctor checks passed independently.
+- Git/Issues #1484, Inbox/PWA #1485 and Reports #1486 run from that frozen SHA in separate worktrees and user-owned chats. Exact ownership, branches, chat IDs, ports and heavy-check slot history: `.claude/plans/ui-test-migration/launch-ledger.md`.
+- Coordinator branch `feature/issue-1481-ui-test-integration` owns shared metadata, plan updates and merges. Area acceptance and final integration remain open. Existing assertions may be retired only after replacement and counter-proof; real system boundaries stay integrated.
+- Troop is excluded. No deployment or CI reactivation. Actual merge receipts and evidence belong on the native PRs/issues.
 
 
 ## Affected selection and local gates — issue 1480
@@ -2065,3 +2065,11 @@ are implied by merging this preparation increment.
 - M6 merged (PR 274): secrets through the detail page. `SecretForm` (type, private file, OpenApe Secrets request); `src/contracts/secrets.ts`, IPC channel `secrets` (desktop only), worker table `secret_requests` (schema 39, additive); `src/main/secrets/gate.ts` registers this Mac as consumer at https://secrets.openape.ai with a P-256 key in the encrypted store, raises requests as the owner, polls every 60 s, collects the envelope once and stores the value through the existing `saveCredential` path; `src/main/secrets/box.ts` ports the service's seal/open algorithm. MCP administration `requestSecret {podId, alias, purpose, epoch}`. Tested against a synthetic service in `test/secrets/gate.test.ts`.
 - M7 (PR 276): one shell. `WorkspaceFrame` without sidebar; `central/LocalShell.vue` hosts the shell for the registered desktop (`DesktopWorkspace`) and the local `App.vue`; `BrowserWorkspace` renders the same shell from the published map. The Pod editor, portable packages and the advanced desktop settings open from the shell and return with one button. Deleted: `GraphPanel`, `GraphOverview`, `GraphView`, `GraphInspector`, `WorkflowPanel`, `NetworkDetail`, `NetworkCreate`, `NetworkReplacement`, `NetworkConversion`, `NetworkRetirement`, `GateReview`, `ItemTrace`, `PodInventory`, `PodNavigation`, `MailWorkflowReview`, `MailWorkflowSettings`, `CollectionDescription` and their utilities and tests. Parity proof in `test/layout/shell-parity.test.ts`.
 - M8 (this branch): handbook rewritten for the two tabs in both editions (new chapters `automations` and `decisions`, secrets by form, file or OpenApe Secrets, creation only through Codex, navigation through the gear and account menus); runtime reference names `view=map` and `requestSecret`; `docs/graphs.md` reads networks on the map; `e2e/handbook-capture.test.ts` follows the new navigation. M9 (signed release, relay deploy, acceptance) is an owner gate.
+
+## Legacy extraction — issue 1482
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1482
+- Branch: `feature/issue-1482-extract-legacy` from `bc6fa362e84614c5a12352849d6875dc2c215e4c`.
+- Checkout: `openape-monorepo.releases/release-1479`; preserved source: https://repos.openape.ai/patrick/legacy.
+- Scope: eight legacy workspaces; source/history preservation and independent builds. Production data/services retained.
+- Verification and final PR receipts are recorded on the issue and linked Reports plan; no deployment is included.

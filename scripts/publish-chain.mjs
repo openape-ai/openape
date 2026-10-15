@@ -42,15 +42,9 @@ const PACKAGES = [
   { name: '@openape/apes', dir: 'packages/apes' },
   { name: '@openape/unstorage-s3-driver', dir: 'packages/s3-driver' },
   { name: '@openape/prompt-injection-detector', dir: 'packages/prompt-injection-detector' },
-  // Leaf package, but a workspace dep of @openape/ape-agent — must publish
-  // before it so ape-agent's resolved version range exists on npm.
   { name: '@openape/sp-tasks', dir: 'packages/sp-tasks' },
   { name: '@openape/nuxt-auth-sp', dir: 'modules/nuxt-auth-sp' },
   { name: '@openape/nuxt-auth-idp', dir: 'modules/nuxt-auth-idp' },
-  { name: '@openape/ape-chat', dir: 'apps/openape-chat-cli' },
-  { name: '@openape/ape-agent', dir: 'apps/openape-ape-agent' },
-  { name: '@openape/nest', dir: 'apps/openape-nest' },
-  { name: '@openape/ape-troop', dir: 'packages/ape-troop' },
   { name: '@openape/ape-testruns', dir: 'packages/ape-testruns' },
   { name: '@openape/ape-calls', dir: 'packages/ape-calls' },
   { name: '@openape/ape-tasks', dir: 'packages/ape-tasks' },
@@ -58,7 +52,6 @@ const PACKAGES = [
   { name: '@openape/ape-plans', dir: 'packages/ape-plans' },
   { name: '@openape/ape-timetrack', dir: 'packages/ape-timetrack' },
   { name: '@openape/ape-kpi', dir: 'packages/ape-kpi' },
-  { name: '@openape/ape-crm', dir: 'packages/ape-crm' },
 ]
 
 const { dryRun, filter } = releaseOptions(process.argv.slice(2))
