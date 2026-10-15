@@ -90,8 +90,7 @@ function ownerPolicy(policy: RuntimePolicy, executable: string): string {
 (deny file-read* file-write* ${subpaths(protectedPaths)})
 (allow file-read* file-write* ${writes})
 (allow file-read* file-map-executable ${files} ${reads})
-${metadata ? `(allow file-read-metadata ${metadata})` : ''}
-${ancestorRule(closed)}
+${metadata ? `(allow file-read-metadata ${metadata})\n` : ''}${ancestorRule(closed)}
 (deny network-outbound ${closed.map(path => `(remote unix-socket (subpath ${literal(path)}))`).join(' ')})
 ${deny.length ? `(deny file-read* file-write* ${subpaths(deny)})` : ''}
 `
