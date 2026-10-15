@@ -168,19 +168,17 @@ Ablauf pro Target: turbo build (.output, Mac, warme Caches) → COPY-only amd64-
 
 ## Workflow: Definition of Done
 
-Jede Implementierung gilt erst als abgeschlossen, wenn sowohl Lint als auch Typecheck erfolgreich durchlaufen sind. Vor einem Commit oder Deploy **müssen** diese beiden Checks bestanden sein:
+Use focused checks while editing. Commits run branch and lockfile guards only.
+The pre-push hook runs the complete affected unit contract once, including lint,
+typecheck and tests for changed workspaces and their transitive consumers. Do
+not add a second repository-wide lint/typecheck or affected run before commits.
+For handoff without a push, run the affected unit contract explicitly once.
 
-1. `pnpm lint` — alle Projekte clean
-2. `pnpm typecheck` — keine Fehler
-
-**Bei Änderungen an Nuxt-Modulen**: auch die Playground-Applikation typechecken:
-```bash
-pnpm turbo run typecheck --filter=@openape/nuxt-auth-idp
-```
-
-**Bei Änderungen an Apps**: `pnpm turbo run build --filter=<app>` ausführen und lokal testen.
-
-Ohne bestandene Checks: kein Commit, kein Deploy.
+For Nuxt module changes, include the module's playground typecheck through the
+existing workspace scripts. For app changes, build the changed app and exercise
+its relevant tests. E2E/layout acceptance stays explicit and manual.
+Deployments require full `pnpm check:ci`; failed gates still block delivery.
+See [the check contract](../operations/checks.md) for scope and evidence.
 
 ## Policy: UI wird mit Komponenten-Tests entwickelt
 
