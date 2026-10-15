@@ -1,13 +1,11 @@
 # Active work
 
-## Complete mail processing — issue 1492
+## Load-sensitive unit test timeouts — issue 1493
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1492. Branch `bugfix/issue-1492-mail-processing`, checkout `openape-monorepo.worktrees/mail-processing-1492`, base `01ea0ac93240f92b354c4ad453c3d35711c6ccad`.
-- Owner authorized fixing the silent newsletter routing failure and reprocessing the 33 identified messages; every archive still requires exact owner approval. No invoice filing or Outlook draft delivery is added.
-- Intake refetches inflated text, stores complete long text in immutable `delta-mind/mail/body-parts` records, and keeps its existing bounded preview. Define this namespace with Intake as writer and Triage as reader before activation. Triage checkpoints bounded section analysis, aggregates positive invoice/reply/security evidence, and distinguishes newsletter labels from archive eligibility. Unexamined attachments remain visible for review.
-- Activate classification rule version 5 for both declared operations after activating the new script. The bounded `refresh-message-ids` variable refreshes up to five selected Inbox messages per Intake run; its checkpoint makes retries resumable. Remove the variable after recovery. No mailbox mutations bypass the existing approval service.
-- Verification: the focused autonomous mail suite passes 16 tests, including multi-run long content, resumable targeted refresh, exact approval before a move, HTML normalization, incomplete-content visibility and an invoice found in the last section. The Pods application build also passes. Retain these regressions because silent completion and premature archival have consequential effects. The mandatory pre-push affected gate and live acceptance follow; receipts belong on the PR and issue.
-- Limit: assigned-program output is still capped by the native transport at 200,000 bytes. A provider response beyond that boundary fails visibly; this recipe fix does not claim unlimited transport. Original messages remain in the mailbox.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1493. Branch `bugfix/issue-1493-test-timeouts`, base `01ea0ac93240f92b354c4ad453c3d35711c6ccad`, checkout `openape-monorepo.worktrees/test-timeouts-1493`.
+- Owner first requested a relay fix and a gate worker limit, separate from PR 447 (issue 1491), then kept only the relay fix. The relay quota test filled 10,000 items with a per-write `count(*)` (quadratic, ~3 s unloaded); `InboxStore` now takes the quota and the test uses 20 items with unchanged assertions (1–2 ms; a disabled quota check makes it fail).
+- A gate-wide Vitest worker limit was tried and dropped: in a full uncached `--concurrency=4` comparison it turned `apes` and `openape-e2e` red three times with `403 Invalid management token` while the unlimited run passed; that IdP fixture cross-talk is tracked in https://repos.openape.ai/patrick/monorepo/issues/1494. `VITEST_MAX_WORKERS` must not be used either: Vitest 4.1.10 applies it after `fileParallelism: false`.
+- Next: native PR review and merge.
 
 ## Pods workspace messages tab — issue 1487
 
@@ -2107,3 +2105,12 @@ are implied by merging this preparation increment.
 - Branch: `feature/issue-1489-retire-question-service`; checkout `openape-monorepo.releases/release-1479`.
 - Owner explicitly authorized container/monitor/data removal after source preservation. Remove this Compose service and its live proxy route; use the monitor owner API for its record/history, then remove the exact container and three-question SQLite database.
 - Preserve unrelated services, monitors and the legacy source. Final object counts, configuration comparisons, gate and runtime receipts belong on the native PR and issue.
+
+## Complete mail processing — issue 1492
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1492. Branch `bugfix/issue-1492-mail-processing`, checkout `openape-monorepo.worktrees/mail-processing-1492`, base `01ea0ac93240f92b354c4ad453c3d35711c6ccad`.
+- Owner authorized fixing the silent newsletter routing failure and reprocessing the 33 identified messages; every archive still requires exact owner approval. No invoice filing or Outlook draft delivery is added.
+- Intake refetches inflated text, stores complete long text in immutable `delta-mind/mail/body-parts` records, and keeps its existing bounded preview. Define this namespace with Intake as writer and Triage as reader before activation. Triage checkpoints bounded section analysis, aggregates positive invoice/reply/security evidence, and distinguishes newsletter labels from archive eligibility. Unexamined attachments remain visible for review.
+- Activate classification rule version 5 for both declared operations after activating the new script. The bounded `refresh-message-ids` variable refreshes up to five selected Inbox messages per Intake run; its checkpoint makes retries resumable. Remove the variable after recovery. No mailbox mutations bypass the existing approval service.
+- Verification: the focused autonomous mail suite passes 16 tests, including multi-run long content, resumable targeted refresh, exact approval before a move, HTML normalization, incomplete-content visibility and an invoice found in the last section. The Pods application build also passes. Retain these regressions because silent completion and premature archival have consequential effects. The mandatory pre-push affected gate and live acceptance follow; receipts belong on the PR and issue.
+- Limit: assigned-program output is still capped by the native transport at 200,000 bytes. A provider response beyond that boundary fails visibly; this recipe fix does not claim unlimited transport. Original messages remain in the mailbox.
