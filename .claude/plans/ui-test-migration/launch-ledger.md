@@ -104,3 +104,45 @@ before further real acceptance; their original frozen baseline remains recorded.
 
 Coordinator holds the heavy slot for the fixture correction and its normal push
 gate. Area browser work remains independent.
+
+## Shared integration base and current queue
+
+PR 437 merged as `b248ac1594c8f83aff24d705eff5df4c1c818a42`, incorporating
+legacy extraction target `5150cdc2`. Final source `43f65967` passed the 11-workspace
+local contract and nine lifecycle tests. Actual IdP readiness on app port 60000
+returned HTTP 200 after 4776 ms. Evidence:
+https://report.openape.ai/d/01M4ZE04YKGC4C8TG11BV2B8X3?v=2.
+All three sessions are instructed to merge this exact integration base while
+retaining their original launch base in evidence. No retired workspace is restored.
+
+Coordinator released the slot. Git now owns a coherent final block: prerequisite
+builds, valid baseline, retained integration, app build and normal push. Inbox and
+Reports follow. Inbox's central manual layout registration and generated map are
+already committed as `af8571e7` on its branch, before its final push gate.
+
+Git completed its final block: build, 12 E2E, 13 browser and 197 unit tests plus
+normal gate passed on `002fee0f`; processes released. Inbox now holds the final
+acceptance slot. Coordinator will reconcile root native-issues test guidance and
+final Plan/active-work notes inside the last implementing PR, not a receipt-only PR.
+
+Git/Issues merged via PR 439 as `5cba821ba4b502bcc148e9070b0f906f6971a63e`;
+issue 1484 closed. Source `002fee0f`, final target `3f913273` inspected after a
+correct stale-review rejection. Target-only Pods UI changes left the Git diff
+unchanged. Inbox is instructed to integrate this main before its final push.
+
+## Final acceptance coordination
+
+Reports holds the next heavy block after Inbox released it with its final real
+acceptance and normal push still pending. Git has merged; Inbox follows Reports
+for the remaining heavy block. Root native-issues guidance now separates the
+browser-only layout command from retained real journeys.
+
+Inbox's corrected fixture uses production German document language and realistic
+counters. Actual label containment and final-content visibility pass with original
+CSS at 375/390px. The proposed label/inset changes and an implementation-specific
+padding-height assertion were removed. Source `af6513e7` passes 14 browser cases
+and 48 focused unit tests; final integrated acceptance remains explicit.
+
+Published Plan and native PR/issue receipts carry later exact merge/completion
+state. This source snapshot is integrated with an implementing area PR; no
+additional PR is created solely to record post-merge receipts.
