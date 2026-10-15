@@ -31,7 +31,7 @@ export default defineConfig({
         browser: 'chromium', name: colorScheme, viewport: { width: 390, height: 844 },
         provider: playwright({
           launchOptions: { executablePath: process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
-          contextOptions: { viewport: { width: 1440, height: 1000 }, colorScheme },
+          contextOptions: { viewport: { width: 1440, height: 1000 }, colorScheme, locale: 'de-AT' },
         }),
       })),
     },

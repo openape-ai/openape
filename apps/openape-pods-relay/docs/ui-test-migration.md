@@ -13,7 +13,7 @@ Activate the repository Node/pnpm toolchain and run `pnpm run doctor` in each sh
   InboxList, InboxDecision, InboxTags and settings in installed Chromium. Vue's
   normal SFC plugin loads their production scoped/global CSS. The relay has no
   Tailwind stylesheet pipeline. Both light and dark media preferences are real
-  browser contexts; narrow/wide viewports and large text are measured.
+  browser contexts; 375/390/1280px viewports and large text are measured.
 - The fixture uses the production `createInbox` client, deterministic HTTP replies,
   an explicit undo-clock boundary and disposable browser contexts. Nuxt navigation
   and head/config APIs are adapters. Service-worker registration is disabled at
@@ -63,7 +63,10 @@ and synthetic-desktop application semantics.
 The frozen integrated scenario uses `type: effect` for a freely answerable
 business decision. Current `needsRepair()` deliberately renders `work`, `effect`
 and Pods `approval` as a repair prompt. Existing repair tests assert this behavior.
-The scenario must use a supported business-question fixture for its evidence and
+The scenario also publishes obsolete `proposal` and `network-choice` types,
+which the current server parser rejects. All three business-question fixtures
+now use the supported `question` type and matching source-ID prefix, with
+`satisfies InboxDecision` checking the real shared contract. The scenario must use a supported business-question fixture for its evidence and
 receipt journey; product semantics remain unchanged. The original baseline and
 any corrected-fixture measurement must be distinguished. No speedup is claimed
 from a failing baseline or fewer assertions.
@@ -76,12 +79,15 @@ deployment. Additional Opus review is coordinated centrally and is not claimed.
 
 ### Large-text navigation correction
 
-The initial 390px / 28px-font settings screenshot preserved the old value-width
-criterion but exposed overlapping fixed bottom-tab labels. The approved app-local
+The initial 390px / 28px-font fixture screenshot preserved the old value-width
+criterion but lacked the real German document language, so its overlapping labels
+were not sufficient proof of the production behavior. The final fixture uses
+`lang=de`, real German hyphenation and open/unread tab counters at 375/390px.
+Those counters make the navigation taller than the original 84px content padding. The approved app-local
 correction lets labels wrap and scales content/update-banner clearance with text.
 The browser regression measures each rendered text line inside its own link,
 checks navigation height against bottom padding, and scrolls the final content
-above the fixed navigation. Removing wrapping or reducing clearance makes this
+above the fixed navigation. Forcing unwrapped labels or restoring the original 84px clearance makes this
 regression fail; restored light/dark tests pass. Native Safari Dynamic Type is
 outside this Chromium acceptance.
 
@@ -93,3 +99,23 @@ harness configured HMR port 72572 (`port + 10000`), outside the TCP range; its
 captured log only reported an HMR deprecation. A causal recovery still needs
 real acceptance after the coordinator's shared fixture correction. This failed
 baseline is not a speedup denominator.
+
+
+### Isolated integration setup and comparable baseline
+
+The first post-HMR-fix start also stalled with an app-local `TMPDIR` (134 bytes).
+Nitro's development worker normally creates a Unix socket there; macOS has a
+shorter socket-path limit. The own test process was interrupted after 175.533s.
+Using the installed Nitro option `NITRO_NO_UNIX_SOCKET=1` only in the test-process
+environment allowed the IdP to start. No product or shared fixture code was changed
+for this setup correction. A subsequent 16.047s failed run reached the actual API
+and exposed the obsolete `proposal`/`network-choice` fixture types described above.
+
+The corrected legacy scenario (all original UI assertions retained, valid question
+fixtures, current production components/CSS) passed in 34.808s wall clock. This is
+a characterization run from a temporary test-file replacement, not the frozen
+original source passing unchanged. Both comparison commands use one Vitest worker,
+`TURBO_ENV_MODE=loose`, synthetic app-local HOME/TMPDIR and the Nitro TCP option.
+Dependencies and Nuxt generated caches are warm; each command still builds the
+relay and starts fresh local services, browser contexts and databases. No competing
+heavy check runs. The recorded Git diff digest identifies the temporary source.
