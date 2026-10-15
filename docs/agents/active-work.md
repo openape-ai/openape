@@ -9,6 +9,15 @@
 - Verification: the focused autonomous mail suite passes 16 tests, including multi-run long content, resumable targeted refresh, exact approval before a move, HTML normalization, incomplete-content visibility and an invoice found in the last section. The Pods application build also passes. Retain these regressions because silent completion and premature archival have consequential effects. The mandatory pre-push affected gate and live acceptance follow; receipts belong on the PR and issue.
 - Limit: assigned-program output is still capped by the native transport at 200,000 bytes. A provider response beyond that boundary fails visibly; this recipe fix does not claim unlimited transport. Original messages remain in the mailbox.
 
+## Pods workspace messages tab — issue 1487
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1487. Branch `feature/issue-1487-pods-messages`, base `5150cdc2`, checkout `.claude/worktrees/openape-pods-ui-redesign-7b2382`.
+- Owner approved Plan revision 4 on October 15, 2026 ("ja - du kannst mit der umsetzung starten"): https://report.openape.ai/d/01M4ZCQTG2AZM49A5GW2AAWX4T?v=4. The design was iterated in the Vite demo and accepted by the owner.
+- Adds a Mitteilungen tab to the shared workspace, relay endpoints for the owner session and the signed desktop runtime (all of the account's messages, never decisions), a shared message parser, the desktop `messages` channel and the browser client.
+- Rollout: relay first, then a signed desktop build; a new desktop against the old relay would show the tab with an update error. Not deployed.
+- PR: https://repos.openape.ai/patrick/monorepo/pulls/448 (head `7c7cb7cf`, merged with main `01ea0ac9`). Local affected gate (Pods 1802, relay 101), Pods browser suite 64/64 and relay e2e 2/2 passed: https://report.openape.ai/d/01M4ZJ5P0Q9B6CA57CGM35D2HP?v=1. Plan v5: https://report.openape.ai/d/01M4ZCQTG2AZM49A5GW2AAWX4T?v=5.
+- Next: owner review and merge; relay deployment before a signed desktop build; packaged-desktop acceptance with a real notify.
+
 ## CI instruction reconciliation — issue 1483
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1483; the native implementation PR is linked there. Branch `bugfix/issue-1483-knowledge-ci-guidance`, checkout `openape-monorepo.worktrees/knowledge-ci-1483`, base `7d0caa8b67a939284d008761efe977dc76fbe288`.

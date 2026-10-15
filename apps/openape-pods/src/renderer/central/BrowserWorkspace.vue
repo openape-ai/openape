@@ -59,7 +59,7 @@ const access = browserWorkspaceAccess(() => runtime.value, async (command: Centr
   const result = await workspace.value.command(command.channel, command.body, runtime.value)
   await workspace.value.refresh()
   return result
-})
+}, command => props.client.messages(command))
 function expired() { subject.value = ''; runtimes.value = []; emit('login') }
 function logout() { workspace.value?.requestNavigation(() => emit('logout')) }
 onMounted(signIn)
