@@ -295,6 +295,7 @@ services:
       retries: 6
       start_period: 10s
 
+  # Legacy source: https://repos.openape.ai/patrick/legacy (existing image/data retained).
   question-service:
     image: registry.openape.ai/openape-question-service:${QUESTION_SERVICE_TAG:-unset}
     restart: unless-stopped

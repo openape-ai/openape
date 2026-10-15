@@ -18,7 +18,7 @@ const monorepoRoot = join(docsRoot, '..', '..')
 
 // dir under apps/ → { slug, title } for the guide page + screenshot folder.
 // An app only appears here once it has captured guides (apps/<app>/docs/
-// stories.json). openape-monitor, openape-question-service and
+// stories.json). openape-monitor and
 // openape-dashboard run in prod but have no story-kit story and no local-stack
 // service yet, so they have no page in this section — add
 // compose/demo/stories/<app>.mjs and a local-stack service first, then list

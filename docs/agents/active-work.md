@@ -2073,3 +2073,11 @@ are implied by merging this preparation increment.
 - Checkout: `openape-monorepo.releases/release-1479`; preserved source: https://repos.openape.ai/patrick/legacy.
 - Scope: eight legacy workspaces; source/history preservation and independent builds. Production data/services retained.
 - Verification and final PR receipts are recorded on the issue and linked Reports plan; no deployment is included.
+
+## Question Service extraction — issue 1488
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1488
+- Branch: `feature/issue-1488-question-service-legacy`; checkout `openape-monorepo.releases/release-1479`.
+- Read-only usage audit found three completed July questions, no pending work and no reference in the 16 active Pods. The uptime monitor still checks the existing service; access logs are unavailable.
+- Preserve source/history in `patrick/legacy`; remove active workspace/check/build/deploy targets. Keep production service/data/monitoring, shared sp-tasks and the zaz Pod unchanged.
+- Final native PR, exact-source validation and Reports receipts are recorded on the issue.
