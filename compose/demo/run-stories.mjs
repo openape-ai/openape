@@ -9,16 +9,13 @@ import { mkdirSync } from 'node:fs'
 import process from 'node:process'
 import { chromium } from 'playwright'
 import { createStoryKit, installDeterminism } from './story-kit.mjs'
-import chatStories from './stories/chat.mjs'
 import idpRecoveryStories from './stories/idp-recovery.mjs'
 import idpStories from './stories/idp.mjs'
 import prStories from './stories/pr.mjs'
 import plansStories from './stories/plans.mjs'
 import tasksStories from './stories/tasks.mjs'
-import crmStories from './stories/crm.mjs'
 import timetrackStories from './stories/timetrack.mjs'
 import testrunStories from './stories/testrun.mjs'
-import troopStories from './stories/troop.mjs'
 
 const OUT = '/demo/out'
 mkdirSync(OUT, { recursive: true })
@@ -49,18 +46,15 @@ const ctx = {
   page,
   EMAIL: 'demo@openape.test',
   IDP: 'https://id.openape.test',
-  TROOP: 'https://troop.openape.test',
-  CHAT: 'https://chat.openape.test',
   TESTRUN: 'https://testrun.openape.test',
   PR: 'https://pr.openape.test',
   TASKS: 'https://tasks.openape.test',
   PLANS: 'https://plans.openape.test',
   TIMETRACK: 'https://timetrack.openape.test',
-  CRM: 'https://crm.openape.test',
   REG_TOKEN: process.env.REG_TOKEN || '',
 }
 
-for (const run of [idpStories, idpRecoveryStories, troopStories, chatStories, testrunStories, prStories, tasksStories, plansStories, timetrackStories, crmStories])
+for (const run of [idpStories, idpRecoveryStories, testrunStories, prStories, tasksStories, plansStories, timetrackStories])
   await run(ctx)
 
 const failures = kit.finish('demo')
