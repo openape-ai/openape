@@ -23,7 +23,10 @@ export default defineEventHandler(async (event) => {
 
   await db.insert(companies).values({ id, name, createdBy: caller.email, createdAt: now })
   await db.insert(companyMembers).values({
-    companyId: id, userEmail: caller.email, role: 'owner', joinedAt: now,
+    companyId: id,
+    userEmail: caller.email,
+    role: 'owner',
+    joinedAt: now,
   })
 
   setResponseStatus(event, 201)

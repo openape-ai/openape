@@ -80,18 +80,27 @@ export class PodIdentityManager {
   connection(reference: PodIdentityReference, targetHost: string): AgentConnection {
     if (Boolean(reference.decisionIssuer) !== Boolean(reference.brokerConnectionId)) throw new Error('Incomplete brokered identity binding')
     if (reference.decisionIssuer) origin(reference.decisionIssuer)
-    return { decisionIssuer: reference.decisionIssuer, ...(reference.decisionIssuer ? { brokered: { connection_id: reference.brokerConnectionId!, broker_issuer: reference.issuer, agent_issuer: reference.issuer, owner: reference.owner, key_id: reference.keyId } } : {}), issuer: reference.issuer, subject: reference.subject, owner: reference.owner, keyId: reference.keyId, targetHost, accessToken: async () => this.credentials.withCache(reference.connectionId, async (file) => {
-      const identity = JSON.parse(await readFile(file, 'utf8')) as IdentityCache
-      if (identity.podId !== reference.podId || identity.issuer !== reference.issuer || identity.owner !== reference.owner || identity.subject !== reference.subject || identity.keyId !== reference.keyId || identity.decisionIssuer !== reference.decisionIssuer || identity.brokerConnectionId !== reference.brokerConnectionId) throw new Error('Pod identity cache binding mismatch')
-      if (identity.accessToken && (identity.expiresAt ?? 0) > Date.now() / 1000 + 60) return identity.accessToken
-      const challenge = await post(identity.issuer, '/api/auth/challenge', { id: identity.subject })
-      if (typeof challenge.challenge !== 'string' || challenge.challenge.length > 4096) throw new Error('Invalid pod identity challenge')
-      const signature = sign(null, Buffer.from(challenge.challenge), identity.privateKey).toString('base64')
-      const reply = await post(identity.issuer, '/api/auth/authenticate', { id: identity.subject, challenge: challenge.challenge, signature, public_key: identity.publicKey })
-      if (reply.act !== 'agent' || reply.email !== identity.subject || typeof reply.token !== 'string' || typeof reply.expires_in !== 'number' || reply.expires_in <= 60 || reply.expires_in > 28800) throw new Error('Pod authentication returned a different identity or invalid lifetime')
-      identity.accessToken = reply.token; identity.expiresAt = Math.floor(Date.now() / 1000) + reply.expires_in
-      await writeFile(file, JSON.stringify(identity), { mode: 0o600 })
-      return identity.accessToken
-    }) }
+    return {
+      decisionIssuer: reference.decisionIssuer,
+      ...(reference.decisionIssuer ? { brokered: { connection_id: reference.brokerConnectionId!, broker_issuer: reference.issuer, agent_issuer: reference.issuer, owner: reference.owner, key_id: reference.keyId } } : {}),
+      issuer: reference.issuer,
+      subject: reference.subject,
+      owner: reference.owner,
+      keyId: reference.keyId,
+      targetHost,
+      accessToken: async () => this.credentials.withCache(reference.connectionId, async (file) => {
+        const identity = JSON.parse(await readFile(file, 'utf8')) as IdentityCache
+        if (identity.podId !== reference.podId || identity.issuer !== reference.issuer || identity.owner !== reference.owner || identity.subject !== reference.subject || identity.keyId !== reference.keyId || identity.decisionIssuer !== reference.decisionIssuer || identity.brokerConnectionId !== reference.brokerConnectionId) throw new Error('Pod identity cache binding mismatch')
+        if (identity.accessToken && (identity.expiresAt ?? 0) > Date.now() / 1000 + 60) return identity.accessToken
+        const challenge = await post(identity.issuer, '/api/auth/challenge', { id: identity.subject })
+        if (typeof challenge.challenge !== 'string' || challenge.challenge.length > 4096) throw new Error('Invalid pod identity challenge')
+        const signature = sign(null, Buffer.from(challenge.challenge), identity.privateKey).toString('base64')
+        const reply = await post(identity.issuer, '/api/auth/authenticate', { id: identity.subject, challenge: challenge.challenge, signature, public_key: identity.publicKey })
+        if (reply.act !== 'agent' || reply.email !== identity.subject || typeof reply.token !== 'string' || typeof reply.expires_in !== 'number' || reply.expires_in <= 60 || reply.expires_in > 28800) throw new Error('Pod authentication returned a different identity or invalid lifetime')
+        identity.accessToken = reply.token; identity.expiresAt = Math.floor(Date.now() / 1000) + reply.expires_in
+        await writeFile(file, JSON.stringify(identity), { mode: 0o600 })
+        return identity.accessToken
+      }),
+    }
   }
 }

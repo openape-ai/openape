@@ -35,7 +35,9 @@ export function sanitizeDocument(document: ReportDocument) {
   const html = sanitizeHtml(document.html, {
     allowedTags: ['main', 'article', 'section', 'header', 'footer', 'nav', 'aside', 'div', 'span', 'p', 'br', 'hr', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'blockquote', 'pre', 'code', 'strong', 'b', 'em', 'i', 'u', 's', 'small', 'sub', 'sup', 'mark', 'ul', 'ol', 'li', 'dl', 'dt', 'dd', 'table', 'thead', 'tbody', 'tfoot', 'tr', 'th', 'td', 'caption', 'figure', 'figcaption', 'img', 'a', 'details', 'summary', 'time'],
     allowedAttributes: { '*': ['class', 'title', 'lang', 'dir'], img: ['src', 'alt', 'width', 'height'], th: ['colspan', 'rowspan', 'scope'], td: ['colspan', 'rowspan'], ol: ['start'], details: ['open'], time: ['datetime'] },
-    allowedSchemes: [], allowedSchemesByTag: { img: ['data'] }, allowProtocolRelative: false,
+    allowedSchemes: [],
+    allowedSchemesByTag: { img: ['data'] },
+    allowProtocolRelative: false,
     nonTextTags: ['style', 'script', 'textarea', 'option', 'noscript', 'iframe', 'object', 'template', 'svg', 'math'],
     transformTags: {
       img: (tagName, attributes) => ({ tagName, attribs: { ...attributes, src: assets.get(attributes.src ?? '') ?? '' } }),

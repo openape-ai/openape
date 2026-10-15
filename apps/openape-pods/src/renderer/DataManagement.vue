@@ -11,7 +11,10 @@ export default defineComponent({
   data() { return { view: null as DataView | null, limitGiB: 10, busy: false, error: '', notice: '', evidence: '' } },
   async mounted() { await this.perform({ type: 'status' }) },
   methods: {
-    t, diagnostic, label, number,
+    t,
+    diagnostic,
+    label,
+    number,
     size(bytes: number): string { return `${number(bytes / 1024 ** 3, 2)} GiB` },
     async perform(command: DataCommand) {
       this.busy = true; this.error = ''; this.notice = ''

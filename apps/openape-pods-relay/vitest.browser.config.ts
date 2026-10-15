@@ -28,7 +28,9 @@ export default defineConfig({
         },
       },
       instances: (['light', 'dark'] as const).map(colorScheme => ({
-        browser: 'chromium', name: colorScheme, viewport: { width: 390, height: 844 },
+        browser: 'chromium',
+        name: colorScheme,
+        viewport: { width: 390, height: 844 },
         provider: playwright({
           launchOptions: { executablePath: process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
           contextOptions: { viewport: { width: 1440, height: 1000 }, colorScheme, locale: 'de-AT' },

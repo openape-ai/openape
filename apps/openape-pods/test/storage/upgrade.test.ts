@@ -112,7 +112,9 @@ it('turns the groups of a schema-48 profile into tags after a verified backup', 
   })
   // Nothing of the groups is lost: every row stays as history, the receipt names what could not become a tag.
   expect(store.db.prepare('SELECT source,count(*) AS rows FROM legacy_records GROUP BY source ORDER BY source').all()).toEqual([
-    { source: 'pod_groups', rows: 3 }, { source: 'pod_memberships', rows: 4 }, { source: 'pod_organization', rows: 1 },
+    { source: 'pod_groups', rows: 3 },
+    { source: 'pod_memberships', rows: 4 },
+    { source: 'pod_organization', rows: 1 },
   ])
   const receipt = JSON.parse(String(store.db.prepare('SELECT body FROM storage_receipts WHERE kind=\'conversion\' AND json_extract(body,\'$.from\')=48').get()!.body)) as { from: number, tags: Record<string, number>, skipped: unknown[] }
   expect(receipt).toMatchObject({ from: 48, tags: { 'delta-mind-gmbh': 1, 'mail': 1 } })
@@ -242,7 +244,12 @@ it('converts the network runtime into standalone Pods, keeping history, effects,
   expect(store.db.prepare('SELECT summary FROM runs WHERE id=?').get(ids.run)).toEqual({ summary: 'archived one message' })
   // Every retired row is archived unchanged and counted; nothing of the network runtime remains executable.
   expect(store.db.prepare('SELECT source,count(*) AS rows FROM legacy_records WHERE source IN (\'networks\',\'network_members\',\'network_invocations\',\'pod_grants\',\'pod_sandbox_deny\',\'item_tags\') GROUP BY source ORDER BY source').all()).toEqual([
-    { source: 'item_tags', rows: 1 }, { source: 'network_invocations', rows: 1 }, { source: 'network_members', rows: 1 }, { source: 'networks', rows: 1 }, { source: 'pod_grants', rows: 1 }, { source: 'pod_sandbox_deny', rows: 1 },
+    { source: 'item_tags', rows: 1 },
+    { source: 'network_invocations', rows: 1 },
+    { source: 'network_members', rows: 1 },
+    { source: 'networks', rows: 1 },
+    { source: 'pod_grants', rows: 1 },
+    { source: 'pod_sandbox_deny', rows: 1 },
   ])
   expect(store.db.prepare('SELECT name FROM sqlite_schema WHERE name LIKE \'network%\'').all()).toEqual([])
   // The archive move keeps its identity and receipts, so the message is never moved again.

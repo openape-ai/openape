@@ -22,7 +22,8 @@ export default defineComponent({
   async mounted() { if (!this.access.remote) await this.refreshLaunch() },
   beforeUnmount() { this.disposed = true; clearTimeout(this.pollTimer) },
   methods: {
-    t, diagnostic,
+    t,
+    diagnostic,
     /** The command name a CLI is called by and the IdP decides it by (issue 1473); graphical applications have none to show. */
     commandNote(application: PodResource): string {
       const command = application.configuration.cliId

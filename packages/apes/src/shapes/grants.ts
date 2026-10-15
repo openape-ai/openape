@@ -50,8 +50,7 @@ function grantedCliDetails(claims: Record<string, unknown>): OpenApeCliAuthoriza
   return details.filter((detail): detail is OpenApeCliAuthorizationDetail =>
     typeof detail === 'object'
     && detail !== null
-    && (detail as Record<string, unknown>).type === 'openape_cli',
-  )
+    && (detail as Record<string, unknown>).type === 'openape_cli')
 }
 
 function hasStructuredCliGrant(claims: Record<string, unknown>): boolean {
@@ -140,8 +139,7 @@ export async function verifyAndConsume(token: string, resolved: ResolvedCommand,
     }
 
     const exactRequired = details.some(detail =>
-      cliAuthorizationDetailCovers(detail, resolved.detail) && detail.constraints?.exact_command,
-    )
+      cliAuthorizationDetailCovers(detail, resolved.detail) && detail.constraints?.exact_command)
 
     const isOnce = claims.grant_type === 'once' || claims.approval === 'once'
     const enforceArgvHash = exactRequired || scope?.exactCommand === true || (isOnce && !!claims.execution_context?.argv_hash)

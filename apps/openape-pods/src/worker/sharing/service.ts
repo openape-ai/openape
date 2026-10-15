@@ -25,7 +25,8 @@ export class SharingService {
     return {
       selection,
       pods: source.pods.map(pod => ({
-        podId: pod.pod.id, name: pod.pod.name,
+        podId: pod.pod.id,
+        name: pod.pod.name,
         references: pod.resources.filter(resource => resource.kind === 'reference' && resource.state !== 'revoked').map(resource => ({ id: resource.id, name: resource.name })),
         aliasable: pod.resources.filter(resource => resource.state === 'ready' && (resource.kind === 'directory' || (resource.kind === 'tool' && resource.configuration.capability !== 'mail.read' && resource.configuration.type !== 'jev'))).map(resource => ({ id: resource.id, kind: resource.kind === 'directory' ? 'directory' : String(resource.configuration.type), name: resource.name })),
         variables: pod.variables.map(variable => variable.name),

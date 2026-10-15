@@ -74,9 +74,17 @@ export function parseInboxDecision(value: unknown): InboxDecision {
     link = { title: text(entry.title, inboxDecisionLimits.option), url: url.href }
   }
   return {
-    sourceId: item.sourceId, type: item.type as InboxDecisionType, digest: item.digest, podId: item.podId as string | null,
-    podName: item.podName === null ? null : text(item.podName, 200), ...(item.podTags === undefined ? {} : { podTags: parseInboxTags(item.podTags) }), title: text(item.title, inboxDecisionLimits.title), body: text(item.body, inboxDecisionLimits.body, true),
-    authority: item.authority as InboxAuthority, options, link,
+    sourceId: item.sourceId,
+    type: item.type as InboxDecisionType,
+    digest: item.digest,
+    podId: item.podId as string | null,
+    podName: item.podName === null ? null : text(item.podName, 200),
+    ...(item.podTags === undefined ? {} : { podTags: parseInboxTags(item.podTags) }),
+    title: text(item.title, inboxDecisionLimits.title),
+    body: text(item.body, inboxDecisionLimits.body, true),
+    authority: item.authority as InboxAuthority,
+    options,
+    link,
   }
 }
 
@@ -167,8 +175,15 @@ export function parseInboxMessage(value: unknown): InboxMessage {
     return { title: messageText(entry.title, inboxMessageLimits.linkTitle), url: url.href }
   })
   return {
-    id: messageId(item.id), title: messageText(item.title, inboxMessageLimits.title), body: messageText(item.body, inboxMessageLimits.bodyBytes),
-    pod, runId: item.runId === null ? null : messageId(item.runId), links, created: stamp(item.created, false)!, read: stamp(item.read, true), archived: stamp(item.archived, true),
+    id: messageId(item.id),
+    title: messageText(item.title, inboxMessageLimits.title),
+    body: messageText(item.body, inboxMessageLimits.bodyBytes),
+    pod,
+    runId: item.runId === null ? null : messageId(item.runId),
+    links,
+    created: stamp(item.created, false)!,
+    read: stamp(item.read, true),
+    archived: stamp(item.archived, true),
   }
 }
 

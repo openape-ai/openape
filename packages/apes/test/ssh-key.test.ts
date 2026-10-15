@@ -76,10 +76,14 @@ describe('loadEd25519PrivateKey', () => {
 
     // Padding
     const privContent = Buffer.concat([
-      checkInt, checkInt, // two matching check integers
-      privKeyTypeLen, privKeyType,
-      privPubKeyLen, pubBytes,
-      privKeyDataLen, privKeyData,
+      checkInt,
+      checkInt, // two matching check integers
+      privKeyTypeLen,
+      privKeyType,
+      privPubKeyLen,
+      pubBytes,
+      privKeyDataLen,
+      privKeyData,
       comment,
     ])
     // Add padding to make length a multiple of 8
@@ -93,12 +97,16 @@ describe('loadEd25519PrivateKey', () => {
 
     const fullKey = Buffer.concat([
       magic,
-      cipherLen, cipherName,
-      kdfLen, kdfName,
+      cipherLen,
+      cipherName,
+      kdfLen,
+      kdfName,
       kdfOpts,
       numKeys,
-      pubSectionLen, pubSection,
-      privSectionLen, privSection,
+      pubSectionLen,
+      pubSection,
+      privSectionLen,
+      privSection,
     ])
 
     const pem = `-----BEGIN OPENSSH PRIVATE KEY-----\n${fullKey.toString('base64').match(/.{1,70}/g)!.join('\n')}\n-----END OPENSSH PRIVATE KEY-----\n`

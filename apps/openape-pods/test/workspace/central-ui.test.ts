@@ -157,11 +157,15 @@ it('warns when a scheduler step timed out although the desktop is online', async
 it('opens Jev, language, accounts and data through the active desktop settings entry point', async () => {
   const onboarding = vi.fn(async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }))
   const data = vi.fn(async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }))
-  installWorkspace({ onboarding, data, central: async (command) => {
-    if (command.type === 'status') return { enabled: false }
-    if (command.type === 'inventory') return []
-    return { requestError: { status: 400, message: 'No fixture change feed' } }
-  } })
+  installWorkspace({
+    onboarding,
+    data,
+    central: async (command) => {
+      if (command.type === 'status') return { enabled: false }
+      if (command.type === 'inventory') return []
+      return { requestError: { status: 400, message: 'No fixture change feed' } }
+    },
+  })
   wrapper = mount(DesktopWorkspace); await flushPromises()
   await wrapper.get('.account-status').trigger('click'); await flushPromises()
   expect(wrapper.get('.app-settings h1').text()).toBe('App settings')
@@ -223,12 +227,15 @@ it('mounts native editors only for this desktop and never sends another runtime 
   const fixture = centralFixture()
   const details = vi.fn(async () => fixture.view.details)
   const localId = '00000000-0000-4000-8000-000000000199'
-  installWorkspace({ details, central: async (command) => {
-    if (command.type === 'status') return { enabled: true, state: 'online', runtimeId: localId }
-    if (command.type === 'inventory') return [fixture.host]
-    if (command.type === 'read') return { revision: 1, total: 1, pod: fixture.view }
-    return { requestError: { status: 400, message: 'No fixture change feed' } }
-  } })
+  installWorkspace({
+    details,
+    central: async (command) => {
+      if (command.type === 'status') return { enabled: true, state: 'online', runtimeId: localId }
+      if (command.type === 'inventory') return [fixture.host]
+      if (command.type === 'read') return { revision: 1, total: 1, pod: fixture.view }
+      return { requestError: { status: 400, message: 'No fixture change feed' } }
+    },
+  })
   wrapper = mount(DesktopWorkspace); await flushPromises()
   // The shell opens local Pods only; another runtime's Pod is selected in the central editor itself.
   await (wrapper.findComponent(CentralWorkspace).vm as unknown as { select: (runtime: string, pod: string) => Promise<void> }).select(fixture.host.id, fixture.host.workspace.pods[0]!.id); await flushPromises()

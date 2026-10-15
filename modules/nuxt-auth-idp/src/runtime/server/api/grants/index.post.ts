@@ -61,8 +61,7 @@ async function createPendingGrant(event: H3Event, request: OpenApeGrantRequest, 
   }
   // Fire-and-forget so a slow notification doesn't delay the response.
   void runGrantPendingHooks(grant).catch(err =>
-    console.warn('[grants/post] pending-hook failed:', err),
-  )
+    console.warn('[grants/post] pending-hook failed:', err))
   setResponseStatus(event, 201)
   return grant
 }
@@ -136,8 +135,7 @@ export default defineEventHandler(async (event) => {
 
   if (body.authorization_details?.length) {
     body.permissions = body.authorization_details.map(detail =>
-      detail.type === 'openape_cli' ? canonicalizeCliPermission(detail) : detail.action,
-    )
+      detail.type === 'openape_cli' ? canonicalizeCliPermission(detail) : detail.action)
   }
 
   const executionContext = body.execution_context

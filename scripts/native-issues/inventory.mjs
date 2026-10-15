@@ -88,18 +88,27 @@ async function inventory(endpoint, repository, output, token) {
   const prefix = `/repos/${repository}`
   const startedAt = new Date().toISOString()
   const [version, repo, issues, comments, labels, collaborators, teams] = await Promise.all([
-    read('/version'), read(prefix), collectPages(read, `${prefix}/issues?state=all&type=issues&sort=oldest`),
-    collectPages(read, `${prefix}/issues/comments`), collectPages(read, `${prefix}/labels`),
-    collectPages(read, `${prefix}/collaborators`), read(`${prefix}/teams`),
+    read('/version'),
+    read(prefix),
+    collectPages(read, `${prefix}/issues?state=all&type=issues&sort=oldest`),
+    collectPages(read, `${prefix}/issues/comments`),
+    collectPages(read, `${prefix}/labels`),
+    collectPages(read, `${prefix}/collaborators`),
+    read(`${prefix}/teams`),
   ])
   const timeline = []
   for (let start = 0; start < issues.items.length; start += 4) {
     const batch = await Promise.all(issues.items.slice(start, start + 4).map(async (issue) => {
       const result = await collectPages(read, `${prefix}/issues/${issue.number}/timeline`, { headerCountsPage: true })
-      return { number: issue.number, pages: result.pages, events: result.items.map(event => ({
-        ...fields(event, ['id', 'type', 'created_at', 'updated_at', 'original_author', 'original_author_id']),
-        actor: actor(event.user), bodySha256: hash(event.body),
-      })) }
+      return {
+        number: issue.number,
+        pages: result.pages,
+        events: result.items.map(event => ({
+          ...fields(event, ['id', 'type', 'created_at', 'updated_at', 'original_author', 'original_author_id']),
+          actor: actor(event.user),
+          bodySha256: hash(event.body),
+        })),
+      }
     }))
     timeline.push(...batch)
     process.stderr.write(`Inventoried timelines: ${timeline.length}/${issues.items.length}\n`)
@@ -111,13 +120,19 @@ async function inventory(endpoint, repository, output, token) {
   const issueNumbers = new Set(issues.items.map(issue => issue.number))
   const issueComments = comments.items.filter(comment => !comment.pull_request_url && issueNumbers.has(Number(comment.issue_url?.split('/').at(-1))))
   const summary = {
-    repository, version: version.items.version, startedAt, finishedAt: new Date().toISOString(),
-    private: repo.items.private, issues: issues.items.length,
+    repository,
+    version: version.items.version,
+    startedAt,
+    finishedAt: new Date().toISOString(),
+    private: repo.items.private,
+    issues: issues.items.length,
     open: issues.items.filter(issue => issue.state === 'open').length,
     highWaterNumber: Math.max(0, ...issues.items.map(issue => issue.number)),
-    comments: issueComments.length, labels: labels.items.length,
+    comments: issueComments.length,
+    labels: labels.items.length,
     timelineEvents: timeline.reduce((sum, item) => sum + item.events.length, 0),
-    sourceStableDuringRead: stable, commentMismatches,
+    sourceStableDuringRead: stable,
+    commentMismatches,
     issueAssets: described.reduce((sum, item) => sum + item.assets.length, 0),
     commentAssets: issueComments.reduce((sum, item) => sum + (item.assets ?? []).length, 0),
     locked: described.filter(issue => issue.is_locked).map(issue => issue.number),

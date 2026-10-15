@@ -34,7 +34,10 @@ for (const result of summary?.results ?? []) {
 if (!summary) excerpts.push('No check summary: failure occurred before the contract ran (checkout, install or setup). See the workflow log.')
 const payload = JSON.stringify({ context: contexts[suite], state, description: `${suite} shared contract: ${state}`, targetUrl: url, log: excerpts.join('\n').slice(0, 60_000) })
 const response = await fetch(`https://repos.openape.ai/api/repos/patrick/monorepo/statuses/${sha}`, {
-  method: 'POST', headers: { 'content-type': 'application/json', 'x-ape-signature-256': `sha256=${createHmac('sha256', secret).update(payload).digest('hex')}` }, body: payload, signal: AbortSignal.timeout(30_000),
+  method: 'POST',
+  headers: { 'content-type': 'application/json', 'x-ape-signature-256': `sha256=${createHmac('sha256', secret).update(payload).digest('hex')}` },
+  body: payload,
+  signal: AbortSignal.timeout(30_000),
 })
 if (!response.ok) throw new Error(`Native status reporting failed: HTTP ${response.status}`)
 console.log(`Reported ${contexts[suite]} ${state} for ${sha}`)

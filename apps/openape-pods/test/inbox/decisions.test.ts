@@ -35,17 +35,23 @@ function sources(): DecisionSources {
     held: [{ key: work, operation: 'delta-mind/mail-classification', object: 'm3', state: 'blocked', attempt: 5, readyAt: 1, reason: 'Model refused five times', inputRevision: 1 }],
     unknownEffects: [{ actionKey: action, attempt: 1, podId: pod, runId: run, operation: 'mail.archive', createdAt: 1, intent: { mailbox: 'owner@example.com', messageId: 'm4' } }],
   }
-  const secrets = { consumer: null, origin: 'https://secrets.openape.ai', requests: [
-    { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', podId: pod, alias: 'imap', purpose: 'Postfach lesen', status: 'requested', expiresAt: 0, createdAt: 0, updatedAt: 0, error: null },
-    { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', podId: pod, alias: 'old', purpose: '', status: 'collected', expiresAt: 0, createdAt: 0, updatedAt: 0, error: null },
-  ] } as SecretsView
+  const secrets = {
+    consumer: null,
+    origin: 'https://secrets.openape.ai',
+    requests: [
+      { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', podId: pod, alias: 'imap', purpose: 'Postfach lesen', status: 'requested', expiresAt: 0, createdAt: 0, updatedAt: 0, error: null },
+      { id: 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', podId: pod, alias: 'old', purpose: '', status: 'collected', expiresAt: 0, createdAt: 0, updatedAt: 0, error: null },
+    ],
+  } as SecretsView
   return { map, domain, secrets }
 }
 
 function fixture(current = sources()) {
   const worker = {
     inboxSources: vi.fn(async () => current),
-    domain: vi.fn(async () => ({})), runs: vi.fn(async () => ({})), secrets: vi.fn(async () => ({})),
+    domain: vi.fn(async () => ({})),
+    runs: vi.fn(async () => ({})),
+    secrets: vi.fn(async () => ({})),
   } satisfies DecisionWorker
   const decisions = new InboxDecisions(worker, (key, parameters) => translate('en', key, parameters))
   return { worker, decisions, current }

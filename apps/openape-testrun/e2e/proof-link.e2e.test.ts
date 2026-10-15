@@ -134,7 +134,11 @@ describe('proof-link — CLI-track E2E (dev mode)', () => {
     expect(second.version).toBe(2)
 
     const latest = await (await fetch(`${base}/api/public/runs/${first.slug}`)).json() as {
-      title: string, status: string, version: number, latest_version: number, versions: { version: number, status: string }[]
+      title: string,
+      status: string,
+      version: number,
+      latest_version: number,
+      versions: { version: number, status: string }[]
     }
     expect(latest.title).toBe('Login flow (fixed)')
     expect(latest.status).toBe('passed')

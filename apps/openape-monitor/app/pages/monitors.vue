@@ -57,8 +57,7 @@ async function load() {
 }
 
 const canAdd = computed(() =>
-  kind.value === 'heartbeat' ? !!name.value.trim() : !!url.value.trim(),
-)
+  kind.value === 'heartbeat' ? !!name.value.trim() : !!url.value.trim())
 
 async function add() {
   if (!canAdd.value || adding.value) return

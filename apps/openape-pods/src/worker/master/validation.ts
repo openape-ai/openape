@@ -143,14 +143,17 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       }
       throw new Error('Validation rejected an undeclared service request')
     }
-    const result = await executeScript({ ...runtime, dependencyRoot }, root, artifact, input, signal, { event: () => {}, request: async (operation, payload) => {
-      try { return await synthetic(operation, payload) }
-      catch (error) {
+    const result = await executeScript({ ...runtime, dependencyRoot }, root, artifact, input, signal, {
+      event: () => {},
+      request: async (operation, payload) => {
+        try { return await synthetic(operation, payload) }
+        catch (error) {
         // A script may swallow or rephrase the refusal; the first refusal is what validation reports.
-        refusal ??= error instanceof Error ? error : new Error('Validation refused a service request')
-        throw error
-      }
-    } })
+          refusal ??= error instanceof Error ? error : new Error('Validation refused a service request')
+          throw error
+        }
+      },
+    })
     assertValidationResult(result, refusal)
     if (result.gapIds.some(id => !fixture.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(fixturePod.id, id))) throw new Error('Draft returned an uncommitted validation gap')
     signal.throwIfAborted()

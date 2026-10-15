@@ -33,7 +33,10 @@ beforeAll(async () => {
   process.env.OPENAPE_RATE_LIMIT_MAX_AUTH = '100'
   idp = await startIdp({ managementToken, ddisaMockRecords: { 'pods-inbox.test': { version: 'ddisa1', idp: 'https://identity.example', mode: 'open' } } })
   relay = await startServer({
-    cwd: process.cwd(), readyPath: '/api/health', timeoutMs: 300000, command: () => ['node', '.output/server/index.mjs'],
+    cwd: process.cwd(),
+    readyPath: '/api/health',
+    timeoutMs: 300000,
+    command: () => ['node', '.output/server/index.mjs'],
     env: ({ url, port }) => ({ PORT: String(port), HOST: '127.0.0.1', NUXT_WORKSPACE_ENABLED: 'true', NUXT_INBOX_ENABLED: 'true', NUXT_INBOX_DATABASE: `${makeTempDir('pods-inbox-app-')}/inbox.sqlite`, NUXT_WORKSPACE_DATABASE: `${makeTempDir('pods-inbox-app-')}/workspace.sqlite`, NUXT_WORKSPACE_SESSION_SECRET: 'synthetic-workspace-session-secret-1446', NUXT_OPENAPE_SP_SESSION_SECRET: 'synthetic-workspace-flow-secret-1446', NUXT_OPENAPE_SP_OPENAPE_URL: idp.url, NUXT_OPENAPE_SP_CLIENT_ID: new URL(url).host, NUXT_RELAY_ORIGIN: url, NUXT_RELAY_ENABLED: 'true', NUXT_RELAY_ENROLLMENT: 'pilot', NUXT_RELAY_OWNER_ALLOWLIST: JSON.stringify([owner, other].map(subject => ({ issuer: idp.url, subject }))), NUXT_RELAY_FIXTURE: 'true', NUXT_RELAY_IDP_URL: idp.url, NUXT_RELAY_DATABASE: `${makeTempDir('pods-inbox-app-')}/relay.sqlite` }),
   })
   for (const email of [owner, other]) {

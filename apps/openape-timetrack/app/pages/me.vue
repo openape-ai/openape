@@ -74,8 +74,7 @@ const projectOptions = computed(() => {
 
 const visibleEntries = computed(() => entries.value.filter(e =>
   (filterCompany.value === ALL || e.company_id === filterCompany.value)
-  && (filterProject.value === ALL || e.project_id === filterProject.value),
-))
+  && (filterProject.value === ALL || e.project_id === filterProject.value)))
 
 const byDay = computed(() => totalsByDay(visibleEntries.value))
 const dayEntries = computed(() => visibleEntries.value.filter(e => e.entry_date === selectedDay.value))

@@ -33,7 +33,8 @@ function desktop() {
   })
   const workspace = vi.fn(async (command: { type: string }) => command.type === 'map' ? { pods: structuredClone(pods), map: structuredClone(view) } : { pods: structuredClone(pods) })
   installWorkspace({
-    workspace, secrets,
+    workspace,
+    secrets,
     mcpSession: async () => ({ expiresAt: view.at + 3600000, pending: false }),
     onboarding: async () => ({ owner: 'owner', complete: true, runtime: { ready: true, error: null }, connections: [{ id: 'owner', provider: 'openape', account: 'owner@example.invalid', state: 'ready', error: null, login: null }] }),
     central: async (command: Record<string, unknown>) => command.type === 'status' ? { enabled: false } : { requestError: { status: 400, message: 'No fixture change feed' } },

@@ -22,15 +22,17 @@ function service(tasks: unknown[], pendingBody?: string) {
     variables: { tasks_url: 'https://service.example/api/agent/tasks' },
     progress: { commit: async () => ({ revision: 1 }) },
     agent: { run: async () => { agentCalls++; return { threadId: 't', response: '```json\n{"ok":true}\n```' } } },
-    http: { request: async (request: Request): Promise<Reply> => {
-      if (request.method === 'GET') return { status: 200, headers: {}, body: pendingBody ?? JSON.stringify({ pending: tasks.length }) }
-      const stored = ledger.get(request.key!)
-      if (stored) return stored
-      sent.push(request)
-      const body = request.url.endsWith('/next') ? JSON.stringify({ task: tasks.shift() ?? null }) : '{"task":{"status":{"state":"completed"}}}'
-      ledger.set(request.key!, { status: 200, headers: {}, body: '', receipt: { sha256: 'digest', bytes: body.length } })
-      return { status: 200, headers: {}, body }
-    } },
+    http: {
+      request: async (request: Request): Promise<Reply> => {
+        if (request.method === 'GET') return { status: 200, headers: {}, body: pendingBody ?? JSON.stringify({ pending: tasks.length }) }
+        const stored = ledger.get(request.key!)
+        if (stored) return stored
+        sent.push(request)
+        const body = request.url.endsWith('/next') ? JSON.stringify({ task: tasks.shift() ?? null }) : '{"task":{"status":{"state":"completed"}}}'
+        ledger.set(request.key!, { status: 200, headers: {}, body: '', receipt: { sha256: 'digest', bytes: body.length } })
+        return { status: 200, headers: {}, body }
+      },
+    },
   })
   return { context, sent, tasks, agentCalls: () => agentCalls }
 }

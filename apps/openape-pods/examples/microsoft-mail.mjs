@@ -135,8 +135,17 @@ export async function microsoftMail(argv = process.argv.slice(2), environment = 
     const sender = item.from?.emailAddress?.address
     if ([item.id, item.changeKey, item.parentFolderId, item.internetMessageId, sender, item.receivedDateTime, item.webLink].some(value => typeof value !== 'string' || !value)) throw new Error('Microsoft mail identity is incomplete')
     const content = item.body?.content ?? ''
-    return { id: item.id, version: item.changeKey, folder: item.parentFolderId, internetMessageId: item.internetMessageId, sender, subject: (item.subject ?? '').replace(/\s+/g, ' ').trim(), receivedAt: item.receivedDateTime, url: item.webLink,
-      ...(includeBody ? { conversation: item.conversationId, body: content.slice(0, 6000).toWellFormed(), truncated: content.length > 6000, hasAttachments: item.hasAttachments === true, flagged: item.flag?.flagStatus === 'flagged', important: item.importance === 'high', unread: item.isRead !== true, participants: participants(item), protected: Boolean(protection(item)), protectionReason: protection(item) } : {}) }
+    return {
+      id: item.id,
+      version: item.changeKey,
+      folder: item.parentFolderId,
+      internetMessageId: item.internetMessageId,
+      sender,
+      subject: (item.subject ?? '').replace(/\s+/g, ' ').trim(),
+      receivedAt: item.receivedDateTime,
+      url: item.webLink,
+      ...(includeBody ? { conversation: item.conversationId, body: content.slice(0, 6000).toWellFormed(), truncated: content.length > 6000, hasAttachments: item.hasAttachments === true, flagged: item.flag?.flagStatus === 'flagged', important: item.importance === 'high', unread: item.isRead !== true, participants: participants(item), protected: Boolean(protection(item)), protectionReason: protection(item) } : {}),
+    }
   }
   const output = { protocol: 'pods-mail-review/v1', account, operation }
   if (operation === 'protection') return { ...output, ...await syncContacts() }

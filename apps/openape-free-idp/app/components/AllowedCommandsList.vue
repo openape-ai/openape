@@ -49,12 +49,10 @@ const safeCommandByCliId = computed(() => {
 })
 
 const customSafeCommands = computed(() =>
-  props.standingGrants.filter(g => g.request?.reason === SAFE_COMMAND_REASON_CUSTOM),
-)
+  props.standingGrants.filter(g => g.request?.reason === SAFE_COMMAND_REASON_CUSTOM))
 
 const scopedCommands = computed(() =>
-  props.standingGrants.filter(g => !isSafeCommandGrant(g)),
-)
+  props.standingGrants.filter(g => !isSafeCommandGrant(g)))
 
 function scopeDescription(g: StandingGrant): string {
   const parts: string[] = []

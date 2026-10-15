@@ -66,8 +66,7 @@ export function suggestWideningsForDetail(
   // Also provide a full wildcard at the end (drop path selector entirely on target;
   // other chain entries keep their selectors)
   const wildcardChain = detail.resource_chain.map((r, i) =>
-    i === chainIdx ? { resource: r.resource } : { ...r },
-  )
+    i === chainIdx ? { resource: r.resource } : { ...r })
   const wildcard = makeSuggestion('wildcard', 'Any path (wildcard)', detail, wildcardChain)
 
   return [exact, ...suggestions, wildcard]

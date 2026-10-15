@@ -33,10 +33,16 @@ async function publishOnce(client: Client, document: ReportDocument, raw: string
     const version = Number(latest?.version ?? 0) + 1
     const category = document.category ? reportCategory(document.category) : null
     const id = ulid(); const slug = randomBytes(18).toString('base64url'); const now = Math.floor(Date.now() / 1000)
-    await tx.execute({ sql: `INSERT INTO runs (id, slug, report_type, visibility, title, status, manifest, created_by, created_by_act, created_at)
-      VALUES (?, ?, 'document', 'private', ?, NULL, '{}', ?, ?, ?)`, args: [id, slug, document.title, owner, publisher === owner ? 'human' : 'agent', now] })
-    await tx.execute({ sql: `INSERT INTO document_publications (id, series_id, version, owner, publisher, idempotency_key, digest, artifact_digest, policy_version, category, category_key, language, artifact, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, args: [id, document.seriesId ?? null, version, owner, publisher, key, digest, artifactDigest, policyVersion, category?.label ?? null, category?.key ?? null, document.language ?? null, artifact, now] })
+    await tx.execute({
+      sql: `INSERT INTO runs (id, slug, report_type, visibility, title, status, manifest, created_by, created_by_act, created_at)
+      VALUES (?, ?, 'document', 'private', ?, NULL, '{}', ?, ?, ?)`,
+      args: [id, slug, document.title, owner, publisher === owner ? 'human' : 'agent', now],
+    })
+    await tx.execute({
+      sql: `INSERT INTO document_publications (id, series_id, version, owner, publisher, idempotency_key, digest, artifact_digest, policy_version, category, category_key, language, artifact, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      args: [id, document.seriesId ?? null, version, owner, publisher, key, digest, artifactDigest, policyVersion, category?.label ?? null, category?.key ?? null, document.language ?? null, artifact, now],
+    })
     await tx.commit()
     return { id, slug, version, digest, artifactDigest, policyVersion, replayed: false }
   }

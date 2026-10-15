@@ -17,7 +17,10 @@ describe('validateAssertion', () => {
   it('validates a correct assertion', async () => {
     const { token, publicKey } = await makeAssertion({ nonce: 'test-nonce' })
     const result = await validateAssertion(token, {
-      expectedIss: 'https://idp.example.com', expectedAud: 'sp.example.com', publicKey, expectedNonce: 'test-nonce',
+      expectedIss: 'https://idp.example.com',
+      expectedAud: 'sp.example.com',
+      publicKey,
+      expectedNonce: 'test-nonce',
     })
     expect(result.valid).toBe(true)
     expect(result.claims?.sub).toBe('alice@example.com')

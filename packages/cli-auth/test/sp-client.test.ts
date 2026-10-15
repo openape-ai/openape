@@ -147,8 +147,7 @@ describe('apiCall', () => {
       new Response(
         JSON.stringify({ title: 'Not Found', detail: 'resource missing' }),
         { status: 404, headers: { 'Content-Type': 'application/json' } },
-      ),
-    )
+      ))
 
     let thrown: unknown
     try {

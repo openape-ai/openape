@@ -137,10 +137,14 @@ it.each(['before publication', 'after commit'])('reconciles a lost response %s w
     if (body.type === 'publish' && body.completion && failure === 'after commit' && !failed) { failed = true; now += 30001; throw new Error('Publication response lost') }
     return result
   }
-  const controller = new CentralController(root, request, { snapshot: async () => {
-    if (executed && failure === 'before publication' && !failed) { failed = true; now += 30001; throw new Error('Snapshot interrupted') }
-    return projection.snapshot(actor.owner)
-  }, execute, gate: async () => {} }, '/unused-no-artifacts')
+  const controller = new CentralController(root, request, {
+    snapshot: async () => {
+      if (executed && failure === 'before publication' && !failed) { failed = true; now += 30001; throw new Error('Snapshot interrupted') }
+      return projection.snapshot(actor.owner)
+    },
+    execute,
+    gate: async () => {},
+  }, '/unused-no-artifacts')
   cleanup.push(() => controller.stop()); controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
   const id = randomUUID()
@@ -208,10 +212,12 @@ it('keeps heartbeats and the scheduling lease alive while a large publication is
   let release!: () => void
   const hold = new Promise<void>((resolve) => { release = resolve })
   let holding = false
-  const { controller, details, pod, gates, requests } = connected({ request: async (forward, body) => {
-    if (body.type === 'parts' && holding) await hold
-    return forward(body)
-  } })
+  const { controller, details, pod, gates, requests } = connected({
+    request: async (forward, body) => {
+      if (body.type === 'parts' && holding) await hold
+      return forward(body)
+    },
+  })
   cleanup.push(() => release())
   controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
@@ -229,11 +235,13 @@ it('keeps heartbeats and the scheduling lease alive while a large publication is
 })
 
 it('refuses a service without the part format instead of publishing complete snapshots', async () => {
-  const { controller, requests } = connected({ request: async (forward, body) => {
-    const result = await forward(body)
-    if (body.type === 'begin') { const { format: _format, manifest: _manifest, runtimeId: _runtimeId, ...legacy } = result as Record<string, unknown>; return legacy }
-    return result
-  } })
+  const { controller, requests } = connected({
+    request: async (forward, body) => {
+      const result = await forward(body)
+      if (body.type === 'begin') { const { format: _format, manifest: _manifest, runtimeId: _runtimeId, ...legacy } = result as Record<string, unknown>; return legacy }
+      return result
+    },
+  })
   controller.start()
   await vi.waitFor(() => expect(controller.error).toContain('predates this desktop'))
   expect(controller.available).toBe(false)
@@ -243,12 +251,14 @@ it('refuses a service without the part format instead of publishing complete sna
 it('runs concurrent owner actions one at a time and resubmits busy or moved-revision refusals', async () => {
   let refusals = 0
   const order: string[] = []
-  const { controller, actor, server } = connected({ request: async (forward, body) => {
-    if (body.type !== 'submit') return forward(body)
-    if (refusals < 2) { refusals++; throw new ProtocolError(refusals === 1 ? 'workspace_busy' : 'workspace_revision_conflict', 409) }
-    // The desktop submits its own owner actions as the trusted runtime, as the service route does.
-    return server.submit(actor.owner, actor.id, Number(body.revision), body.command as Parameters<WorkspaceStore['submit']>[3], String(body.id), true)
-  } })
+  const { controller, actor, server } = connected({
+    request: async (forward, body) => {
+      if (body.type !== 'submit') return forward(body)
+      if (refusals < 2) { refusals++; throw new ProtocolError(refusals === 1 ? 'workspace_busy' : 'workspace_revision_conflict', 409) }
+      // The desktop submits its own owner actions as the trusted runtime, as the service route does.
+      return server.submit(actor.owner, actor.id, Number(body.revision), body.command as Parameters<WorkspaceStore['submit']>[3], String(body.id), true)
+    },
+  })
   controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
   const results = await Promise.all(['first', 'second', 'third'].map(name => controller.local(async () => { order.push(name); return name })))
@@ -260,13 +270,15 @@ it('runs concurrent owner actions one at a time and resubmits busy or moved-revi
 it('resubmits an MCP command refused as busy or moved at the current revision and keeps its receipt', async () => {
   let refusals = 0
   const submitted: number[] = []
-  const { controller, actor, pod, server } = connected({ request: async (forward, body) => {
-    if (body.type === 'submit') {
-      submitted.push(Number(body.revision))
-      if (refusals < 2) { refusals++; throw new ProtocolError(refusals === 1 ? 'workspace_busy' : 'workspace_revision_conflict', 409) }
-    }
-    return forward(body)
-  } })
+  const { controller, actor, pod, server } = connected({
+    request: async (forward, body) => {
+      if (body.type === 'submit') {
+        submitted.push(Number(body.revision))
+        if (refusals < 2) { refusals++; throw new ProtocolError(refusals === 1 ? 'workspace_busy' : 'workspace_revision_conflict', 409) }
+      }
+      return forward(body)
+    },
+  })
   controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true), { timeout: 10000 })
   const current = server.inventory(actor.owner)[0]!.revision
@@ -281,11 +293,13 @@ it('resubmits an MCP command refused as busy or moved at the current revision an
 
 it('stops resubmitting an MCP command after a bounded number of refusals', async () => {
   const submitted: unknown[] = []
-  const { controller, actor, pod } = connected({ request: async (forward, body) => {
-    if (body.type !== 'submit') return forward(body)
-    submitted.push(body.id)
-    throw new ProtocolError('workspace_busy', 409)
-  } })
+  const { controller, actor, pod } = connected({
+    request: async (forward, body) => {
+      if (body.type !== 'submit') return forward(body)
+      submitted.push(body.id)
+      throw new ProtocolError('workspace_busy', 409)
+    },
+  })
   controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true), { timeout: 10000 })
   const submit = { type: 'submit', runtimeId: actor.id, revision: 1, command: { channel: 'runs', body: { type: 'start', podId: pod.id } }, id: randomUUID() }
@@ -294,10 +308,12 @@ it('stops resubmitting an MCP command after a bounded number of refusals', async
 }, 20000)
 
 it('reports other submit refusals immediately', async () => {
-  const { controller } = connected({ request: async (forward, body) => {
-    if (body.type === 'submit') throw new ProtocolError('workspace_operation_conflict', 409)
-    return forward(body)
-  } })
+  const { controller } = connected({
+    request: async (forward, body) => {
+      if (body.type === 'submit') throw new ProtocolError('workspace_operation_conflict', 409)
+      return forward(body)
+    },
+  })
   controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
   await expect(controller.local(async () => 'never')).rejects.toThrow('workspace_operation_conflict')

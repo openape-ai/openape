@@ -61,7 +61,8 @@ async function addProject() {
 async function makeInvite() {
   try {
     const r = await apiFetch(`/api/companies/${companyId}/invite`, {
-      method: 'POST', body: { role: 'member' },
+      method: 'POST',
+      body: { role: 'member' },
     }) as { url: string }
     inviteUrl.value = r.url
   }

@@ -24,7 +24,15 @@ export const spawnNestCommand = defineCommand({
   async run({ args }) {
     const name = String(args.name)
     const apesArgs = [
-      'run', '--as', 'root', '--wait', '--', 'apes', 'agents', 'spawn', name,
+      'run',
+      '--as',
+      'root',
+      '--wait',
+      '--',
+      'apes',
+      'agents',
+      'spawn',
+      name,
     ]
     // Inner `apes agents spawn` installs the bridge by default; pass the
     // opt-out through when the user gave us --no-bridge here.

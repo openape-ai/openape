@@ -102,11 +102,13 @@ describe('additional coverage tests', () => {
 
     // Login
     const { loginCommand } = await import('../src/commands/auth/login')
-    await loginCommand.run!({ args: {
-      idp: idpBase,
-      key: join(testHome, 'test_key'),
-      email: AGENT_EMAIL,
-    } } as any)
+    await loginCommand.run!({
+      args: {
+        idp: idpBase,
+        key: join(testHome, 'test_key'),
+        email: AGENT_EMAIL,
+      },
+    } as any)
 
     // Save agent config for auto-refresh tests
     const { saveConfig, loadConfig } = await import('../src/config')
@@ -181,11 +183,13 @@ describe('additional coverage tests', () => {
       savedAgentConfig = readFileSync(configFile, 'utf-8')
 
       const { loginCommand } = await import('../src/commands/auth/login')
-      await loginCommand.run!({ args: {
-        idp: idpBase,
-        key: join(testHome, 'human_key'),
-        email: HUMAN_EMAIL,
-      } } as any)
+      await loginCommand.run!({
+        args: {
+          idp: idpBase,
+          key: join(testHome, 'human_key'),
+          email: HUMAN_EMAIL,
+        },
+      } as any)
     })
 
     afterAll(() => {
@@ -200,11 +204,13 @@ describe('additional coverage tests', () => {
       const { delegateCommand } = await import('../src/commands/grants/delegate')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await delegateCommand.run!({ args: {
-        to: 'other@example.com',
-        at: 'api.example.com',
-        approval: 'once',
-      } } as any)
+      await delegateCommand.run!({
+        args: {
+          to: 'other@example.com',
+          at: 'api.example.com',
+          approval: 'once',
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalled()
       const msg = String(successSpy.mock.calls[0]![0])
@@ -215,13 +221,15 @@ describe('additional coverage tests', () => {
       const { delegateCommand } = await import('../src/commands/grants/delegate')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await delegateCommand.run!({ args: {
-        to: 'other@example.com',
-        at: 'api.example.com',
-        approval: 'timed',
-        scopes: 'read,write',
-        expires: '2030-01-01T00:00:00Z',
-      } } as any)
+      await delegateCommand.run!({
+        args: {
+          to: 'other@example.com',
+          at: 'api.example.com',
+          approval: 'timed',
+          scopes: 'read,write',
+          expires: '2030-01-01T00:00:00Z',
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalled()
 
@@ -420,24 +428,28 @@ describe('additional coverage tests', () => {
       const successSpy = vi.spyOn(consola, 'success')
 
       // Create two grants
-      await requestCommand.run!({ args: {
-        command: 'batch-revoke-1',
-        audience: 'escapes',
-        reason: 'test batch',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'batch-revoke-1',
+          audience: 'escapes',
+          reason: 'test batch',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
       const msg1 = String(successSpy.mock.calls[0]![0])
       const id1 = msg1.match(/Grant requested:\s+(\S+)/)![1]!
 
       successSpy.mockClear()
-      await requestCommand.run!({ args: {
-        command: 'batch-revoke-2',
-        audience: 'escapes',
-        reason: 'test batch 2',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'batch-revoke-2',
+          audience: 'escapes',
+          reason: 'test batch 2',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
       const msg2 = String(successSpy.mock.calls[0]![0])
       const id2 = msg2.match(/Grant requested:\s+(\S+)/)![1]!
 
@@ -596,13 +608,15 @@ describe('additional coverage tests', () => {
       const { requestCommand } = await import('../src/commands/grants/request')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await requestCommand.run!({ args: {
-        command: 'echo hello',
-        audience: 'escapes',
-        approval: 'once',
-        wait: false,
+      await requestCommand.run!({
+        args: {
+          command: 'echo hello',
+          audience: 'escapes',
+          approval: 'once',
+          wait: false,
         // No reason provided
-      } } as any)
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalled()
     })
@@ -617,14 +631,16 @@ describe('additional coverage tests', () => {
       const { requestCommand } = await import('../src/commands/grants/request')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await requestCommand.run!({ args: {
-        command: 'uname -a',
-        audience: 'escapes',
-        reason: 'test custom host',
-        approval: 'once',
-        host: 'custom-host.example.com',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'uname -a',
+          audience: 'escapes',
+          reason: 'test custom host',
+          approval: 'once',
+          host: 'custom-host.example.com',
+          wait: false,
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalled()
     })
@@ -640,13 +656,15 @@ describe('additional coverage tests', () => {
       const { statusCommand } = await import('../src/commands/grants/status')
 
       const successSpy = vi.spyOn(consola, 'success')
-      await requestCommand.run!({ args: {
-        command: 'test-approved-status',
-        audience: 'escapes',
-        reason: 'test approved status',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'test-approved-status',
+          audience: 'escapes',
+          reason: 'test approved status',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       const msg = String(successSpy.mock.calls[0]![0])
       const grantId = msg.match(/Grant requested:\s+(\S+)/)![1]!

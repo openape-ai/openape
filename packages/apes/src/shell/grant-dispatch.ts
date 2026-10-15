@@ -151,8 +151,7 @@ export async function requestGrantForShellLine(
     const sessionGrant = grants.data.find(g =>
       g.request.audience === 'ape-shell'
       && g.request.target_host === options.targetHost
-      && g.request.grant_type !== 'once',
-    )
+      && g.request.grant_type !== 'once')
     if (sessionGrant) {
       if (process.env.APES_QUIET_GRANT_REUSE !== '1')
         consola.info(`Reusing ape-shell session grant ${sessionGrant.id} on ${options.targetHost}`)

@@ -346,8 +346,7 @@ describe('requestGrantForShellLine', () => {
     await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
 
     const reuseCall = infoSpy.mock.calls.find(call =>
-      typeof call[0] === 'string' && call[0].includes('Reusing') && call[0].includes('existing-session'),
-    )
+      typeof call[0] === 'string' && call[0].includes('Reusing') && call[0].includes('existing-session'))
     expect(reuseCall).toBeDefined()
   })
 
@@ -372,8 +371,7 @@ describe('requestGrantForShellLine', () => {
       await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
 
       const reuseCall = infoSpy.mock.calls.find(call =>
-        typeof call[0] === 'string' && call[0].includes('Reusing'),
-      )
+        typeof call[0] === 'string' && call[0].includes('Reusing'))
       expect(reuseCall).toBeUndefined()
     }
     finally {
@@ -395,13 +393,11 @@ describe('requestGrantForShellLine', () => {
     await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
 
     const requestingCall = infoSpy.mock.calls.find(call =>
-      typeof call[0] === 'string' && call[0].includes('Requesting ape-shell session grant'),
-    )
+      typeof call[0] === 'string' && call[0].includes('Requesting ape-shell session grant'))
     expect(requestingCall).toBeDefined()
 
     const approvalCall = infoSpy.mock.calls.find(call =>
-      typeof call[0] === 'string' && /Grant .* approved/.test(call[0]),
-    )
+      typeof call[0] === 'string' && /Grant .* approved/.test(call[0]))
     expect(approvalCall).toBeDefined()
   })
 
@@ -464,13 +460,11 @@ describe('requestGrantForShellLine', () => {
     await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
 
     const reuseCall = infoSpy.mock.calls.find(call =>
-      typeof call[0] === 'string' && /Reusing/.test(call[0]),
-    )
+      typeof call[0] === 'string' && /Reusing/.test(call[0]))
     expect(reuseCall).toBeDefined()
 
     const approvalCall = infoSpy.mock.calls.find(call =>
-      typeof call[0] === 'string' && call[0].includes('approved — continuing'),
-    )
+      typeof call[0] === 'string' && call[0].includes('approved — continuing'))
     expect(approvalCall).toBeUndefined()
   })
 
@@ -490,8 +484,7 @@ describe('requestGrantForShellLine', () => {
       await requestGrantForShellLine('ls | grep foo', { targetHost: 'host.test' })
 
       const requestCall = infoSpy.mock.calls.find(call =>
-        typeof call[0] === 'string' && call[0].includes('Requesting ape-shell session grant'),
-      )
+        typeof call[0] === 'string' && call[0].includes('Requesting ape-shell session grant'))
       expect(requestCall).toBeDefined()
     }
     finally {
@@ -706,10 +699,23 @@ describe('requestGrantForShellLine', () => {
       // or in the exempt-by-default set (read-only / local config /
       // IdP-auth-gated).
       const KNOWN_APES_SUBCOMMANDS = [
-        'init', 'enroll', 'register-user', 'dns-check',
-        'login', 'logout', 'whoami', 'health',
-        'grants', 'admin', 'run', 'explain', 'adapter',
-        'config', 'fetch', 'mcp', 'workflows',
+        'init',
+        'enroll',
+        'register-user',
+        'dns-check',
+        'login',
+        'logout',
+        'whoami',
+        'health',
+        'grants',
+        'admin',
+        'run',
+        'explain',
+        'adapter',
+        'config',
+        'fetch',
+        'mcp',
+        'workflows',
       ].sort()
 
       // Exactly these three stay gated. Everything else is trusted

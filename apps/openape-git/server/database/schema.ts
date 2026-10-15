@@ -160,9 +160,13 @@ export const branchProtections = sqliteTable('branch_protections', {
 }, t => [uniqueIndex('idx_protection_branch').on(t.repoId, t.branch)])
 
 export const protectionEvents = sqliteTable('protection_events', {
-  id: text('id').primaryKey(), repoId: text('repo_id').notNull(), branch: text('branch').notNull(),
-  actor: text('actor').notNull(), reason: text('reason').notNull(),
-  configuration: text('configuration').notNull(), createdAt: integer('created_at').notNull(),
+  id: text('id').primaryKey(),
+  repoId: text('repo_id').notNull(),
+  branch: text('branch').notNull(),
+  actor: text('actor').notNull(),
+  reason: text('reason').notNull(),
+  configuration: text('configuration').notNull(),
+  createdAt: integer('created_at').notNull(),
 })
 
 export const issueCounters = sqliteTable('issue_counters', {

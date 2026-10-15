@@ -27,15 +27,21 @@ describe('pod workspace shell', () => {
     const podId = '00000000-0000-4000-8000-000000000001'
     const run = { id: '00000000-0000-4000-8000-000000000002', podId, scriptHash: 'a'.repeat(64), state: 'cancelled', startedAt: 1, finishedAt: 2, summary: '', error: 'Storage limit reached', checkpointRevision: 0 }
     const runs = vi.fn().mockResolvedValue({ runs: [run], events: [] })
-    window.pods = { mcpSession: async () => ({ expiresAt: null, pending: false }),
+    window.pods = {
+      mcpSession: async () => ({ expiresAt: null, pending: false }),
       codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }),
-      definitions: async () => ({ definitions: [], instances: [], provisioning: [] }), domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }),
-      runs, getStatus: async () => ready, onStatus: () => () => {},
+      definitions: async () => ({ definitions: [], instances: [], provisioning: [] }),
+      domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }),
+      runs,
+      getStatus: async () => ready,
+      onStatus: () => () => {},
       workspace: async () => ({ pods: [{ id: podId, name: 'Fixture', revision: 1, lifecycle: 'paused', activeScript: run.scriptHash }] }),
-      details: async () => ({ counts: {}, claims: [], versions: [] }), resources: async () => ({ resources: [] }),
+      details: async () => ({ counts: {}, claims: [], versions: [] }),
+      resources: async () => ({ resources: [] }),
       scheduling: async () => ({ enabled: false, pending: 0, blocked: 0 }),
       onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }),
       data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }),
+
     } as unknown as typeof window.pods
     const wrapper = mount(App, { props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
     await wrapper.findAll('button').find(button => button.text() === 'Prepare retry')!.trigger('click'); await flushPromises()
@@ -50,15 +56,21 @@ describe('pod workspace shell', () => {
     const podId = '00000000-0000-4000-8000-000000000001'
     const overview = async (summary: string) => {
       const run = { id: '00000000-0000-4000-8000-000000000002', podId, scriptHash: 'a'.repeat(64), state: 'completed', startedAt: 1, finishedAt: 2, summary, error: null, checkpointRevision: 0 }
-      window.pods = { mcpSession: async () => ({ expiresAt: null, pending: false }),
+      window.pods = {
+        mcpSession: async () => ({ expiresAt: null, pending: false }),
         codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }),
-        definitions: async () => ({ definitions: [], instances: [], provisioning: [] }), domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }),
-        runs: async () => ({ runs: [run], events: [] }), getStatus: async () => ready, onStatus: () => () => {},
+        definitions: async () => ({ definitions: [], instances: [], provisioning: [] }),
+        domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }),
+        runs: async () => ({ runs: [run], events: [] }),
+        getStatus: async () => ready,
+        onStatus: () => () => {},
         workspace: async () => ({ pods: [{ id: podId, name: 'Fixture', revision: 1, lifecycle: 'active', activeScript: run.scriptHash }] }),
-        details: async () => ({ counts: {}, claims: [], versions: [] }), resources: async () => ({ resources: [] }),
+        details: async () => ({ counts: {}, claims: [], versions: [] }),
+        resources: async () => ({ resources: [] }),
         scheduling: async () => ({ enabled: false, pending: 0, blocked: 0 }),
         onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }),
         data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }),
+
       } as unknown as typeof window.pods
       const wrapper = mount(App, { props: { initialPodId: podId } }); await flushPromises()
       const text = wrapper.get('#section-runs .run-outcome').text(); wrapper.unmount()

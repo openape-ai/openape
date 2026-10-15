@@ -24,23 +24,37 @@ if (signed) {
 if (distribution) writeDistribution(signed && !candidate && !local, review)
 const output = distribution ? 'release/distribution' : 'release'
 const productName = distribution ? 'OpenApe Pods' : 'OpenApe Pods Fixture'
-const artifacts = await build({ targets: Platform.MAC.createTarget(distribution ? ['dir', 'dmg', 'zip'] : ['dir'], Arch.arm64), publish: 'never', config: {
-  publish: distribution ? [{ provider: 'generic', url: 'https://pods.openape.ai/updates/stable/darwin-arm64/' }] : [], forceCodeSigning: signed, appId: distribution ? 'ai.openape.pods' : 'ai.openape.pods.fixture', productName, electronVersion: '40.9.3', directories: { output },
-  files: ['dist/**/*', '!dist/vendor/apes/**/*', 'package.json'], asar: true, asarUnpack: ['dist/worker/**', 'dist/native/**', 'dist/runtime/**', 'dist/vendor/**'], npmRebuild: false,
-  // node-pty rewrites app.asar paths even when already unpacked; keep its helper outside that tree.
-  extraResources: [{ from: 'dist/vendor/apes', to: 'apes' }, ...['node-pty', `node-pty-${process.platform}-${process.arch}`].map(name => ({ from: `dist/vendor/apes/node_modules/@lydell/${name}`, to: `apes/node_modules/@lydell/${name}` })), ...(distribution ? [{ from: 'dist/distribution', to: '.' }] : [])],
-  ...(distribution ? { artifactName: `OpenApe-Pods-\${version}-\${arch}-${local ? 'signed-local' : candidate ? 'signed-candidate' : signed ? 'signed' : 'unsigned'}.\${ext}` } : {}),
-  mac: { icon: 'build/openape-pods.icns', category: 'public.app-category.productivity', identity: signed ? identity.replace('Developer ID Application: ', '') : null, hardenedRuntime: signed, notarize: false, minimumSystemVersion: '14.0', ...(signed ? { entitlements: 'runtime-sources/entitlements.mac.plist', entitlementsInherit: 'runtime-sources/entitlements.mac.plist', signIgnore: ['dist/(native|vendor)/'] } : {}) },
-  ...(signed
-    ? { afterSign: async (context) => {
-        const bundle = join(context.appOutDir, `${productName}.app`); const archive = join(context.appOutDir, 'notarization.zip')
-        execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle], { stdio: 'inherit' })
-        execFileSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', bundle, archive], { stdio: 'inherit' })
-        execFileSync('/usr/bin/xcrun', ['notarytool', 'submit', archive, '--keychain-profile', process.env.OPENAPE_PODS_NOTARY_PROFILE, '--wait'], { stdio: 'inherit', timeout: 1800000 })
-        execFileSync('/usr/bin/xcrun', ['stapler', 'staple', bundle], { stdio: 'inherit' }); execFileSync('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=2', bundle], { stdio: 'inherit' })
-      } }
-    : {}),
-} })
+const artifacts = await build({
+  targets: Platform.MAC.createTarget(distribution ? ['dir', 'dmg', 'zip'] : ['dir'], Arch.arm64),
+  publish: 'never',
+  config: {
+    publish: distribution ? [{ provider: 'generic', url: 'https://pods.openape.ai/updates/stable/darwin-arm64/' }] : [],
+    forceCodeSigning: signed,
+    appId: distribution ? 'ai.openape.pods' : 'ai.openape.pods.fixture',
+    productName,
+    electronVersion: '40.9.3',
+    directories: { output },
+    files: ['dist/**/*', '!dist/vendor/apes/**/*', 'package.json'],
+    asar: true,
+    asarUnpack: ['dist/worker/**', 'dist/native/**', 'dist/runtime/**', 'dist/vendor/**'],
+    npmRebuild: false,
+    // node-pty rewrites app.asar paths even when already unpacked; keep its helper outside that tree.
+    extraResources: [{ from: 'dist/vendor/apes', to: 'apes' }, ...['node-pty', `node-pty-${process.platform}-${process.arch}`].map(name => ({ from: `dist/vendor/apes/node_modules/@lydell/${name}`, to: `apes/node_modules/@lydell/${name}` })), ...(distribution ? [{ from: 'dist/distribution', to: '.' }] : [])],
+    ...(distribution ? { artifactName: `OpenApe-Pods-\${version}-\${arch}-${local ? 'signed-local' : candidate ? 'signed-candidate' : signed ? 'signed' : 'unsigned'}.\${ext}` } : {}),
+    mac: { icon: 'build/openape-pods.icns', category: 'public.app-category.productivity', identity: signed ? identity.replace('Developer ID Application: ', '') : null, hardenedRuntime: signed, notarize: false, minimumSystemVersion: '14.0', ...(signed ? { entitlements: 'runtime-sources/entitlements.mac.plist', entitlementsInherit: 'runtime-sources/entitlements.mac.plist', signIgnore: ['dist/(native|vendor)/'] } : {}) },
+    ...(signed
+      ? {
+          afterSign: async (context) => {
+            const bundle = join(context.appOutDir, `${productName}.app`); const archive = join(context.appOutDir, 'notarization.zip')
+            execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle], { stdio: 'inherit' })
+            execFileSync('/usr/bin/ditto', ['-c', '-k', '--keepParent', bundle, archive], { stdio: 'inherit' })
+            execFileSync('/usr/bin/xcrun', ['notarytool', 'submit', archive, '--keychain-profile', process.env.OPENAPE_PODS_NOTARY_PROFILE, '--wait'], { stdio: 'inherit', timeout: 1800000 })
+            execFileSync('/usr/bin/xcrun', ['stapler', 'staple', bundle], { stdio: 'inherit' }); execFileSync('/usr/sbin/spctl', ['--assess', '--type', 'execute', '--verbose=2', bundle], { stdio: 'inherit' })
+          },
+        }
+      : {}),
+  },
+})
 if (distribution) {
   const files = artifacts.filter(path => path.endsWith('.dmg'))
   if (files.length !== 1) throw new Error('Expected one versioned DMG')

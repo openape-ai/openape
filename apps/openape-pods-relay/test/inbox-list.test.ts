@@ -9,7 +9,19 @@ beforeEach(() => chooseLanguage('de'))
 const digest = 'd'.repeat(64)
 function decision(change: Partial<NonNullable<InboxItem['decision']>> = {}, item: Partial<InboxItem> = {}): InboxItem {
   return {
-    id: crypto.randomUUID(), kind: 'decision', state: 'open', title: 'Newsletter freigeben?', body: 'Eine Mail wartet.', pod: null, runId: null, links: [], created: 1, sequence: 1, read: null, archived: null, deleted: null,
+    id: crypto.randomUUID(),
+    kind: 'decision',
+    state: 'open',
+    title: 'Newsletter freigeben?',
+    body: 'Eine Mail wartet.',
+    pod: null,
+    runId: null,
+    links: [],
+    created: 1,
+    sequence: 1,
+    read: null,
+    archived: null,
+    deleted: null,
     decision: { sourceId: 'network-choice:1', digest, type: 'network-choice', authority: 'pods', runtimeId: crypto.randomUUID(), options: [{ key: 'approve', title: 'Freigeben', input: null }, { key: 'reject', title: 'Ablehnen', input: null }], ...change },
     ...item,
   }

@@ -31,14 +31,20 @@ async function publishBriefingOnce(client: Client, briefing: Briefing, raw: stri
     const version = latest ? Number(latest.version) + 1 : 1
     const now = Math.floor(Date.now() / 1000)
     if (latest) {
-      await tx.execute({ sql: `INSERT INTO run_versions (id, run_id, version, report_type, title, project, summary, status, passed_count, failed_count, skipped_count, manifest, started_at, finished_at, created_at)
-        SELECT ?, id, version, report_type, title, project, summary, status, passed_count, failed_count, skipped_count, manifest, started_at, finished_at, created_at FROM runs WHERE id = ?`, args: [ulid(), briefing.seriesId] })
+      await tx.execute({
+        sql: `INSERT INTO run_versions (id, run_id, version, report_type, title, project, summary, status, passed_count, failed_count, skipped_count, manifest, started_at, finished_at, created_at)
+        SELECT ?, id, version, report_type, title, project, summary, status, passed_count, failed_count, skipped_count, manifest, started_at, finished_at, created_at FROM runs WHERE id = ?`,
+        args: [ulid(), briefing.seriesId],
+      })
       const updated = await tx.execute({ sql: 'UPDATE runs SET title = ?, summary = ?, manifest = ?, version = ?, created_at = ? WHERE id = ?', args: [briefing.title, briefing.overview, JSON.stringify(briefing), version, now, briefing.seriesId] })
       if (updated.rowsAffected !== 1) throw new Error('Latest report is missing; publication aborted')
     }
     else {
-      await tx.execute({ sql: `INSERT INTO runs (id, slug, report_type, visibility, title, summary, status, manifest, created_by, created_by_act, created_at, series, version)
-        VALUES (?, ?, 'briefing', 'private', ?, ?, NULL, ?, ?, 'agent', ?, ?, 1)`, args: [briefing.seriesId, series.slug!, briefing.title, briefing.overview, JSON.stringify(briefing), series.owner!, now, briefing.seriesId] })
+      await tx.execute({
+        sql: `INSERT INTO runs (id, slug, report_type, visibility, title, summary, status, manifest, created_by, created_by_act, created_at, series, version)
+        VALUES (?, ?, 'briefing', 'private', ?, ?, NULL, ?, ?, 'agent', ?, ?, 1)`,
+        args: [briefing.seriesId, series.slug!, briefing.title, briefing.overview, JSON.stringify(briefing), series.owner!, now, briefing.seriesId],
+      })
     }
     const id = ulid()
     await tx.execute({ sql: 'INSERT INTO report_publications (id, series_id, edition_date, version, digest, idempotency_key, publisher, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)', args: [id, briefing.seriesId, briefing.editionDate, version, digest, key, publisher, now] })

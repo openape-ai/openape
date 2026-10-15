@@ -176,11 +176,20 @@ const main = defineCommand({
 // pre-auth bootstrap; dns-check/utils/explain/workflows are diagnostic and
 // offline-safe.
 const NO_REFRESH_COMMANDS = new Set([
-  'login', 'logout',
-  'init', 'enroll', 'register-user',
-  'dns-check', 'utils', 'explain', 'workflows',
-  '--help', '-h', 'help',
-  '--version', '-v',
+  'login',
+  'logout',
+  'init',
+  'enroll',
+  'register-user',
+  'dns-check',
+  'utils',
+  'explain',
+  'workflows',
+  '--help',
+  '-h',
+  'help',
+  '--version',
+  '-v',
 ])
 
 async function maybeRefreshAuth(): Promise<void> {
