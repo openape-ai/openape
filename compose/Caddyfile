@@ -22,12 +22,6 @@ id.openape.test {
 	}
 }
 
-	}
-}
-
-	}
-}
-
 tasks.openape.test {
 	tls internal
 	reverse_proxy tasks:3005 {
@@ -57,9 +51,6 @@ timetrack.openape.test {
 	reverse_proxy timetrack:3011 {
 		header_up X-Forwarded-Proto https
 		header_up X-Forwarded-Host {host}
-	}
-}
-
 	}
 }
 
