@@ -1,3 +1,3 @@
-export default defineAppConfig({
-  ui: { colors: { primary: 'amber', neutral: 'zinc' } },
-})
+import { uiTheme } from './theme'
+
+export default defineAppConfig({ ui: uiTheme })
