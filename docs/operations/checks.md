@@ -2,10 +2,18 @@
 
 `scripts/check.mjs` and `.openape/checks.json` define the local and CI checks.
 
-- `pnpm check:affected --base origin/main --head HEAD` selects changed workspaces
-  and all transitive consumers, including local tracked and untracked changes.
-  Root configuration/tooling changes select every workspace. When base equals
-  head, the previous commit is used; an initial commit needs an explicit base.
+- `pnpm check:affected --base origin/main --head HEAD` compares HEAD with its
+  merge base with the requested base, then includes local tracked and untracked
+  changes. It selects changed workspaces and all transitive consumers. Changes
+  made only on main after the branch fork do not select unrelated workspaces.
+  When base equals HEAD, only local changes are selected; a clean checkout has
+  zero steps. An explicit `--base HEAD^` checks the latest commit when needed.
+  Root configuration/tooling changes still select every workspace.
+- Pre-commit runs only branch and lockfile guards. Pre-push runs the complete
+  affected unit contract once, including audit, tooling, lint, typecheck and
+  tests. Do not repeat that contract or repository-wide lint/typecheck before
+  committing. Use focused checks during iteration; for handoff without a push,
+  run the affected gate explicitly. Deployments retain full `pnpm check:ci`.
 - `pnpm check:ci` runs the complete automatic merge gate: audit, repository
   tooling, lint, typecheck and unit/component tests. `check:affected` defaults
   to the same unit suite for selected workspaces; the pre-push hook does too.

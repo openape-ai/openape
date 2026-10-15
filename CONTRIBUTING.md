@@ -15,18 +15,22 @@ link their canonical issue instead of copying its lifecycle.
 1. Select an issue and inspect the existing checkout status.
 2. Create a branch `<type>/issue-<number>-<description>` from canonical main,
    preferably in a dedicated worktree. Preserve other worktrees and local work.
-3. Select the installed Node pin with `. ./scripts/activate-node.sh`, install
-   using `pnpm install --frozen-lockfile`, then use
-   `pnpm check:affected --base origin/main --head HEAD --suite unit` while
-   developing (the pre-push hook runs the same); E2E and layout run externally.
-4. Run full lint/typecheck before committing; app changes also require an app
-   build and relevant tests. The shared merge gate is `pnpm check:ci` (unit,
-   E2E and layout). [Check details and logs](docs/operations/checks.md).
+3. Select the installed Node pin with `. ./scripts/activate-node.sh` and install
+   using `pnpm install --frozen-lockfile`. Run focused checks while developing.
+4. Commits run branch and lockfile guards only. The pre-push hook runs the
+   complete affected unit contract once, including lint/typecheck; do not add
+   a duplicate full or affected gate before commits. For handoff without a push,
+   run `pnpm check:affected --base origin/main --head HEAD --suite unit` once.
+   App changes also require an app build and relevant tests. E2E/layout remain
+   manual; deployments require full `pnpm check:ci`.
+   [Check details and logs](docs/operations/checks.md).
 5. Push the branch to the canonical remote and open a native PR. Include the
    complete native issue URL, behavior change and actual validation evidence.
    Add an explicit issue/PR relation; closing keywords do not change issue state.
-6. Review the exact source/target pair and wait for all required external
-   checks. Merge with that expected pair; if either changes, review again.
+6. Review the exact source/target pair and local check evidence. CI is paused
+   by owner decision (issue 1448); do not reactivate it or wait for external
+   checks while paused. Merge with the reviewed pair; if either changes,
+   review again.
    [Branch policy and recovery](docs/operations/branch-protection.md).
 7. Update the issue/plan and [active work](docs/agents/active-work.md) with the
    resulting commit, evidence and next step. Do not close an umbrella issue
