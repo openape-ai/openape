@@ -68,6 +68,44 @@ describe('startServer', () => {
     await expect(fetch(server.url, { signal: AbortSignal.timeout(1000) })).rejects.toThrow()
   })
 
+  it('allocates a bindable HMR port distinct from a high application port', async () => {
+    // Probe a high free app port: adding a fixed offset would exceed TCP's range.
+    let appPort = 60_000
+    for (; appPort <= 65_535; appPort++) {
+      const available = await new Promise<boolean>((resolve, reject) => {
+        const probe = createServer()
+        probe.once('error', (error: NodeJS.ErrnoException) => error.code === 'EADDRINUSE' ? resolve(false) : reject(error))
+        probe.listen(appPort, '127.0.0.1', () => probe.close(() => resolve(true)))
+      })
+      if (available) break
+    }
+    expect(appPort).toBeLessThanOrEqual(65_535)
+    const script = `
+      const http = require('node:http');
+      const net = require('node:net');
+      const hmr = Number(process.env.E2E_HMR_PORT);
+      const app = Number(process.env.PORT);
+      if (!Number.isInteger(hmr) || hmr < 1 || hmr > 65535 || hmr === app)
+        throw new Error('Invalid or shared HMR port: ' + hmr);
+      net.createServer().listen(hmr, '127.0.0.1', () => {
+        http.createServer((req, res) => res.end(String(hmr))).listen(app, '127.0.0.1');
+      });
+    `
+    const server = await startServer({
+      cwd: process.cwd(), port: appPort,
+      command: () => ['node', '-e', script],
+      env: ({ port }) => ({ PORT: String(port) }),
+      readyPath: '/', timeoutMs: 15_000,
+    })
+    try {
+      const hmr = Number(await (await fetch(server.url)).text())
+      expect(hmr).toBeGreaterThan(0)
+      expect(hmr).toBeLessThanOrEqual(65_535)
+      expect(hmr).not.toBe(appPort)
+    }
+    finally { await server.stop() }
+  })
+
   it('fails fast with the log tail when the process exits before readiness', async () => {
     await expect(startServer({
       cwd: process.cwd(),
