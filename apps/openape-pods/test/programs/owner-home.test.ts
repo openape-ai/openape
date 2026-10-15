@@ -144,16 +144,37 @@ it('refreshes the managed Pod identity and signals refresh failure without falli
   const accessToken = vi.fn().mockResolvedValueOnce('FIRST_POD_TOKEN').mockResolvedValueOnce('SECOND_POD_TOKEN').mockRejectedValueOnce(new Error('Identity revoked'))
   const identity = await podIdentityFile(root, connection(accessToken))
   try {
-    await vi.advanceTimersByTimeAsync(30000)
+    await vi.advanceTimersByTimeAsync(15000)
     await vi.waitFor(async () => expect(JSON.parse(await readFile(identity.path, 'utf8')).access_token).toBe('SECOND_POD_TOKEN'))
     expect(identity.secrets).toContain('FIRST_POD_TOKEN')
     expect(identity.secrets).toContain('SECOND_POD_TOKEN')
-    await vi.advanceTimersByTimeAsync(30000)
+    await vi.advanceTimersByTimeAsync(15000)
     expect(identity.signal.aborted).toBe(true)
     expect(() => identity.assertActive()).toThrow('Identity revoked')
   }
   finally { await identity.close(); vi.useRealTimers() }
   expect(existsSync(identity.path)).toBe(false)
+})
+
+it('keeps credentials usable across the CLI expiry buffer while refresh is asynchronous', async () => {
+  vi.useFakeTimers()
+  let finishRefresh!: (token: string) => void
+  const nextToken = new Promise<string>((resolve) => { finishRefresh = resolve })
+  const accessToken = vi.fn().mockResolvedValueOnce('FIRST_POD_TOKEN').mockReturnValue(nextToken)
+  const identity = await podIdentityFile(root, connection(accessToken))
+  try {
+    await vi.advanceTimersByTimeAsync(29000)
+    expect(accessToken).toHaveBeenCalledTimes(2)
+    const before = JSON.parse(await readFile(identity.path, 'utf8'))
+    expect(before.expires_at - Date.now() / 1000).toBeGreaterThan(30)
+    finishRefresh('REFRESHED_POD_TOKEN')
+    await vi.waitFor(async () => expect(JSON.parse(await readFile(identity.path, 'utf8')).access_token).toBe('REFRESHED_POD_TOKEN'))
+    await vi.advanceTimersByTimeAsync(2000)
+    const after = JSON.parse(await readFile(identity.path, 'utf8'))
+    expect(after.expires_at - Date.now() / 1000).toBeGreaterThan(30)
+    expect(identity.signal.aborted).toBe(false)
+  }
+  finally { finishRefresh('REFRESHED_POD_TOKEN'); await identity.close(); vi.useRealTimers() }
 })
 
 it('scopes Git credentials to the canonical HTTPS host and respects an explicit Pod identity', async () => {
