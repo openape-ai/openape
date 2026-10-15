@@ -116,10 +116,13 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   mkdirSync(shots, { recursive: true })
   const mac = await desktop(owner)
   const digest = (seed: string) => sha256(seed)
-  const effect = { sourceId: 'effect:mail-1', type: 'effect', digest: digest('effect-1'), podId: mac.podId, podName: 'Belege', podTags: ['finanzen'], title: 'Rechnung an Buchhaltung zustellen?', body: 'Die Zustellung der Rechnung R-2026-104 ist unklar.\nZustellen oder als bereits erledigt markieren.', authority: 'pods', options: [{ key: 'deliver', title: 'Erneut zustellen', input: null }, { key: 'seen', title: 'Bereits zugestellt', input: 'evidence' }], link: null }
+  const effect = { sourceId: 'question:mail-1', type: 'question', digest: digest('effect-1'), podId: mac.podId, podName: 'Belege', podTags: ['finanzen'], title: 'Rechnung an Buchhaltung zustellen?', body: 'Die Zustellung der Rechnung R-2026-104 ist unklar.\nZustellen oder als bereits erledigt markieren.', authority: 'pods', options: [{ key: 'deliver', title: 'Erneut zustellen', input: null }, { key: 'seen', title: 'Bereits zugestellt', input: 'evidence' }], link: null }
   const idpGrant = { sourceId: 'approval:grant-1', type: 'approval', digest: digest('grant-1'), podId: mac.podId, podName: 'Belege', title: 'Zugriff auf mail.example freigeben', body: 'Der Pod möchte Mails lesen.', authority: 'idp', options: [], link: { title: 'In OpenApe ID freigeben', url: 'https://id.openape.ai/grant-approval/1' } }
-  const desktopOnly = { sourceId: 'proposal:setup-1', type: 'proposal', digest: digest('setup-1'), podId: mac.podId, podName: 'Belege', title: 'Einrichtung prüfen', body: 'Die Einrichtung braucht einen lokalen Ordner.', authority: 'pods', options: [], link: null }
-  const mailChoice = { sourceId: 'network-choice:mail-3', type: 'network-choice', digest: digest('choice-3'), podId: null, podName: null, title: 'Ready to explore this?', body: 'Review uncertain mail · Synthetic company · Mail network\naccount: owner@pods-inbox.test\ncategory: newsletter\nconfidence: 0.87\nsender: news@example.com\nurgency: normal', authority: 'pods', options: [{ key: 'keep', title: 'Keep for review', input: null }, { key: 'newsletter', title: 'Newsletter candidate', input: null }, { key: 'invoice', title: 'Invoice review', input: null }, { key: 'reply', title: 'Reply preview', input: null }], link: null }
+  // Decision types since issue 1465. Pods work, effect and approval decisions became repair prompts on the phone
+  // (2a24fc9b, covered by the unit tests), so the decidable flows below use owner questions; a Pods step without
+  // options or link still needs the Mac.
+  const desktopOnly = { sourceId: 'question:setup-1', type: 'question', digest: digest('setup-1'), podId: mac.podId, podName: 'Belege', title: 'Einrichtung prüfen', body: 'Die Einrichtung braucht einen lokalen Ordner.', authority: 'pods', options: [], link: null }
+  const mailChoice = { sourceId: 'question:mail-3', type: 'question', digest: digest('choice-3'), podId: null, podName: null, title: 'Ready to explore this?', body: 'Review uncertain mail · Synthetic company · Mail network\naccount: owner@pods-inbox.test\ncategory: newsletter\nconfidence: 0.87\nsender: news@example.com\nurgency: normal', authority: 'pods', options: [{ key: 'keep', title: 'Keep for review', input: null }, { key: 'newsletter', title: 'Newsletter candidate', input: null }, { key: 'invoice', title: 'Invoice review', input: null }, { key: 'reply', title: 'Reply preview', input: null }], link: null }
   await mac.decisions([mailChoice, effect, idpGrant, desktopOnly])
   await mac.message('notify-1', 'Monatsabschluss bereit', 'Alle Belege für September sind abgelegt.', [{ title: 'Bericht öffnen', url: 'https://report.openape.ai/d/example' }], ['finanzen', 'monatsabschluss'])
   await mac.message('notify-2', 'Neue Rechnung', 'Eine Rechnung von Beispiel GmbH wurde erkannt.')
@@ -157,7 +160,7 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   await expect.poll(() => page.getByRole('status').filter({ hasText: 'Angenommen' }).textContent()).toContain('noch nicht angewendet')
   await shot(page, '03-decision-accepted')
   const operation = await mac.claim()
-  expect(operation!.command.body).toMatchObject({ type: 'decide', sourceId: 'effect:mail-1', digest: effect.digest, option: 'seen', input: 'Buchhaltung hat den Eingang telefonisch bestätigt.' })
+  expect(operation!.command.body).toMatchObject({ type: 'decide', sourceId: 'question:mail-1', digest: effect.digest, option: 'seen', input: 'Buchhaltung hat den Eingang telefonisch bestätigt.' })
   await mac.complete(operation!.id)
   await mac.decisions([idpGrant, desktopOnly])
   await expect.poll(() => page.getByText('Angewendet: Bereits zugestellt.').isVisible(), { timeout: 30000 }).toBe(true)
@@ -209,7 +212,7 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   await expect.poll(() => restarted.page.getByRole('link', { name: /Mitteilungen/ }).textContent()).toMatch(/Mitteilungen\s*1/)
 
   // Offline: the stored copy stays readable, with its time and account, and no active decision control.
-  await mac.decisions([idpGrant, desktopOnly, { ...effect, sourceId: 'effect:mail-2', digest: digest('effect-2'), title: 'Zweite Zustellung prüfen' }])
+  await mac.decisions([idpGrant, desktopOnly, { ...effect, sourceId: 'question:mail-2', digest: digest('effect-2'), title: 'Zweite Zustellung prüfen' }])
   await restarted.page.getByRole('button', { name: 'Aktualisieren' }).click()
   await restarted.page.goto(`${relay.url}/inbox/`)
   await expect.poll(() => restarted.page.getByRole('link', { name: /Zweite Zustellung/ }).isVisible()).toBe(true)
@@ -240,12 +243,12 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   await shot(restarted.page, '10-card-undo')
   await expect.poll(() => card.getByRole('status').textContent(), { timeout: 15000 }).toContain('noch nicht angewendet')
   // Neither the answer nor a decision arriving meanwhile moves any card: the new one waits behind a floating hint.
-  await mac.decisions([idpGrant, desktopOnly, { ...effect, sourceId: 'effect:mail-2', digest: digest('effect-2'), title: 'Zweite Zustellung prüfen' }, { ...mailChoice, sourceId: 'network-choice:mail-4', digest: digest('choice-4'), title: 'Neue Mail während der Arbeit' }])
+  await mac.decisions([idpGrant, desktopOnly, { ...effect, sourceId: 'question:mail-2', digest: digest('effect-2'), title: 'Zweite Zustellung prüfen' }, { ...mailChoice, sourceId: 'question:mail-4', digest: digest('choice-4'), title: 'Neue Mail während der Arbeit' }])
   await restarted.page.getByRole('button', { name: 'Aktualisieren' }).click()
   await expect.poll(() => restarted.page.getByRole('button', { name: '1 neue anzeigen' }).isVisible()).toBe(true)
   expect(await tops()).toEqual(before)
   await shot(restarted.page, '11-card-stable')
-  expect((await mac.claim())!.command.body).toMatchObject({ type: 'decide', sourceId: 'effect:mail-2', option: 'deliver' })
+  expect((await mac.claim())!.command.body).toMatchObject({ type: 'decide', sourceId: 'question:mail-2', option: 'deliver' })
   await restarted.page.getByRole('button', { name: '1 neue anzeigen' }).click()
   await expect.poll(() => restarted.page.locator('li.inbox-card', { hasText: 'Neue Mail während der Arbeit' }).isVisible()).toBe(true)
 
