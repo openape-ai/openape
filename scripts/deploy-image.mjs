@@ -3,7 +3,7 @@
 // them to registry.openape.ai, and chatty pulls + restarts the containers —
 // with an /api/health gate and tag rollback. No build on chatty.
 //
-//   pnpm run deploy:image <target...>     # free-idp | troop | chat | …
+//   pnpm run deploy:image <target...>     # free-idp | tasks | …
 //   pnpm run deploy:image --all
 //
 // PARALLEL flow (matters for multi-target / --all):
@@ -70,8 +70,6 @@ const TARGETS = {
   'free-idp': { filter: 'openape-free-idp', dir: 'apps/openape-free-idp', image: 'openape-free-idp', port: 3003, compose: 'idp', unit: 'openape-free-idp', domain: 'id.openape.ai', envVar: 'IDP_TAG' },
   'pods-idp': { filter: 'openape-free-idp', dir: 'apps/openape-free-idp', image: 'openape-pods-idp', port: 3027, compose: 'pods-idp', unit: 'openape-pods-idp', domain: 'pods.openape.ai', envVar: 'PODS_IDP_TAG' },
   'pods-relay': { filter: '@openape-pods-relay/app', dir: 'apps/openape-pods-relay', image: 'openape-pods-relay', port: 3028, compose: 'pods-relay', unit: 'openape-pods-relay', domain: 'pods.openape.ai', envVar: 'PODS_RELAY_TAG', dockerfile: 'compose/pods-relay-package.Dockerfile', healthPath: '/api/mobile/v1/health', healthService: 'openape-pods-relay', smokeRuntime: ['--user', '999:988', '--read-only', '--tmpfs', '/tmp:size=32m,mode=1777', '-e', 'NUXT_RELAY_ENABLED=true', '-e', 'NUXT_RELAY_DATABASE=/tmp/relay.sqlite'] },
-  'troop': { filter: '@openape/troop', dir: 'apps/openape-troop', image: 'openape-troop', port: 3010, compose: 'troop', unit: 'openape-troop', domain: 'troop.openape.ai', envVar: 'TROOP_TAG' },
-  'chat': { filter: '@openape/chat', dir: 'apps/openape-chat', image: 'openape-chat', port: 3007, compose: 'chat', unit: 'openape-chat', domain: 'chat.openape.ai', envVar: 'CHAT_TAG' },
   'testrun': { filter: '@openape-testrun/app', dir: 'apps/openape-testrun', image: 'openape-testrun', port: 3006, compose: 'testrun', unit: 'openape-testrun', domain: 'testrun.openape.ai', envVar: 'TESTRUN_TAG' },
   'tasks': { filter: '@openape-tasks/app', dir: 'apps/openape-tasks', image: 'openape-tasks', port: 3005, compose: 'tasks', unit: 'openape-tasks', domain: 'tasks.openape.ai', envVar: 'TASKS_TAG' },
   'pr': { filter: '@openape-pr/app', dir: 'apps/openape-pr', image: 'openape-pr', port: 3014, compose: 'pr', unit: 'openape-pr', domain: 'pr.openape.ai', envVar: 'PR_TAG' },
@@ -80,7 +78,6 @@ const TARGETS = {
   'monitor': { filter: '@openape-monitor/app', dir: 'apps/openape-monitor', image: 'openape-monitor', port: 3018, compose: 'monitor', unit: 'openape-monitor', domain: 'monitor.openape.ai', envVar: 'MONITOR_TAG' },
   'question-service': { filter: '@openape-question-service/app', dir: 'apps/openape-question-service', image: 'openape-question-service', port: 3017, compose: 'question-service', unit: 'openape-question-service', domain: 'question-service.openape.ai', envVar: 'QUESTION_SERVICE_TAG' },
   'dashboard': { filter: '@openape-dashboard/app', dir: 'apps/openape-dashboard', image: 'openape-dashboard', port: 3022, compose: 'dashboard', unit: 'openape-dashboard', domain: 'dashboard.openape.ai', envVar: 'DASHBOARD_TAG' },
-  'crm': { filter: '@openape-crm/app', dir: 'apps/openape-crm', image: 'openape-crm', port: 3024, compose: 'crm', unit: 'openape-crm', domain: 'crm.openape.ai', envVar: 'CRM_TAG' },
   'secrets': { filter: '@openape-secrets/app', dir: 'apps/openape-secrets', image: 'openape-secrets', port: 3025, compose: 'secrets', unit: 'openape-secrets', domain: 'secrets.openape.ai', envVar: 'SECRETS_TAG' },
   // ape-git needs git in the image (http-backend CGI) → own packaging Dockerfile.
   // `compose: 'git ci'` — the CI consumer runs from the same image and is
