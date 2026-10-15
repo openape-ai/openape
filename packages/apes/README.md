@@ -37,7 +37,7 @@ apes grants list
 
 `ape-shell` is a drop-in shell that routes every command through a DDISA grant. It has two modes:
 
-1. **One-shot mode** (`ape-shell -c "<command>"`) — the historical wrapper. Runs a single command through the grant flow and exits. Used by `$SHELL -c` patterns (e.g. `openclaw tui`, `xargs`, git hooks, sshd non-interactive sessions, etc.).
+1. **One-shot mode** (`ape-shell -c "<command>"`) — the historical wrapper. Runs a single command through the grant flow and exits. Used by `$SHELL -c` patterns (e.g. `xargs`, git hooks, sshd non-interactive sessions, etc.).
 2. **Interactive mode** (`ape-shell` with no args, or as a login shell) — a full interactive REPL with a persistent bash backend. Every line the user types is routed through the grant flow **before** bash sees it, and executed in bash's persistent state (so `cd`, `export`, aliases, functions, pipes, TUI apps like `vim`/`less`/`top` all work natively).
 
 ### How the one-shot mode works
@@ -73,9 +73,8 @@ Every line is audited in `~/.config/apes/audit.jsonl` (session id, line, grant i
 ### Setup for an AI agent session (one-shot mode)
 
 ```bash
-# Point the agent's SHELL at ape-shell — each spawned command
-# goes through the one-shot grant flow.
-SHELL=$(which ape-shell) openclaw tui
+# Configure the agent to invoke this wrapper explicitly for each command.
+ape-shell -c "git status"
 ```
 
 A line that is exactly one program call is authorized per call at the IdP (see [How commands are authorized](#how-commands-are-authorized)); an `always` approval covers later identical calls. Every other line (pipes, expansions, builtins) requests an ape-shell session grant; after the human approves it (with `grant_type: timed, duration: 8h`), later such lines reuse it without interaction.
@@ -86,15 +85,15 @@ A line that is exactly one program call is authorized per call at the IdP (see [
 # 1. Register ape-shell as a valid login shell (once per host)
 echo "$(which ape-shell)" | sudo tee -a /etc/shells
 
-# 2. Set it as the login shell for a user (e.g. openclaw)
-sudo chsh -s "$(which ape-shell)" openclaw
+# 2. Set it as the login shell for a user (e.g. agent)
+sudo chsh -s "$(which ape-shell)" agent
 ```
 
 After this:
 
-- `ssh openclaw@host` — sshd starts ape-shell as an interactive REPL (sshd passes the login shell with a `-` prefix on argv[0], which ape-shell detects)
-- `ssh openclaw@host "ls"` — sshd invokes `ape-shell -c "ls"`, which still flows through the **one-shot** path (no regression)
-- `su - openclaw` — drops into the interactive REPL
+- `ssh agent@host` — sshd starts ape-shell as an interactive REPL (sshd passes the login shell with a `-` prefix on argv[0], which ape-shell detects)
+- `ssh agent@host "ls"` — sshd invokes `ape-shell -c "ls"`, which still flows through the **one-shot** path (no regression)
+- `su - agent` — drops into the interactive REPL
 - Terminal / console login — same as SSH interactive
 
 ### Example (one-shot)

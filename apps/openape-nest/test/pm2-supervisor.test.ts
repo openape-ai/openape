@@ -1,6 +1,6 @@
 import type { AgentEntry } from '../src/lib/registry'
 import { afterEach, describe, expect, it } from 'vitest'
-import { ecosystemEnvLines } from '../src/lib/pm2-supervisor'
+import { ecosystemEnvLines, Pm2Supervisor } from '../src/lib/pm2-supervisor'
 
 const baseAgent: AgentEntry = {
   name: 'svc',
@@ -47,5 +47,16 @@ describe('ecosystemEnvLines dev recipe mount', () => {
   it('omits it when unset', () => {
     delete process.env.OPENAPE_RECIPE_DEV_DIR
     expect(ecosystemEnvLines(baseAgent)).not.toContain('OPENAPE_RECIPE_DEV_DIR')
+  })
+})
+
+describe('retired runtime isolation', () => {
+  it('reports a persisted OpenClaw entry without starting a process or writing an ecosystem', async () => {
+    const legacy: AgentEntry = JSON.parse(JSON.stringify({ ...baseAgent, runtimeType: 'openclaw', bridge: { model: 'test' } }))
+    const lines: string[] = []
+    const supervisor = new Pm2Supervisor({ apesBin: '/must-not-execute', log: line => lines.push(line) })
+    await supervisor.reconcile([legacy])
+    expect(lines).toHaveLength(1)
+    expect(lines[0]).toContain('unsupported runtime "openclaw"')
   })
 })

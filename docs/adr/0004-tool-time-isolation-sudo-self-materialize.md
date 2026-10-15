@@ -1,5 +1,10 @@
 # 0004 — Tool-Time Isolation via `sudo -u <agent>` + Secret Self-Materialization
 
+> Update (October 15, 2026, issue 1479): OpenClaw support has been retired.
+> The Nest supports only the bridge runtime, through pm2 or the existing opt-in
+> in-process path. The OpenClaw implementation and default-runtime question below
+> are historical; they do not authorize restoring that integration.
+
 - Status: Accepted (owner-approved direction, 2026-06-14; openclaw runtime path implemented on main, #769/#808/#815, 2026-06-19; native `ThreadSession` tool-drop pending, security-gated)
 - Deciders: Patrick Hofmann (owner)
 - Related: [0001 — Single-Process Nest](0001-single-process-nest.md), `.claude/plans/single-process-nest.md` (M0 spike, M3)
