@@ -115,9 +115,15 @@ export function demoState(scenario: DemoScenario, at: number): DemoState {
     [2, 7300, true, true, 'Neue Version 4.1 verfügbar', 'Kleinere Fehlerbehebungen ohne Auswirkungen.', []],
   ]
   state.messages = notes.map(([pod, minutes, read, archived, title, body, links], index) => ({
-    id: demoId(700 + index), title, body, pod: { id: demoId(pod + 1), name: examples[pod]![0], tags: state.tags[demoId(pod + 1)] }, runId: null,
-    links: links.map(link => ({ title: link, url: 'https://example.invalid/demo' })), created: at - minutes * 60000,
-    read: read ? at - minutes * 60000 + 60000 : null, archived: archived ? at - minutes * 60000 + 120000 : null,
+    id: demoId(700 + index),
+    title,
+    body,
+    pod: { id: demoId(pod + 1), name: examples[pod]![0], tags: state.tags[demoId(pod + 1)] },
+    runId: null,
+    links: links.map(link => ({ title: link, url: 'https://example.invalid/demo' })),
+    created: at - minutes * 60000,
+    read: read ? at - minutes * 60000 + 60000 : null,
+    archived: archived ? at - minutes * 60000 + 120000 : null,
   }))
   if (scenario === 'attention') {
     const run = state.views[demoId(3)]!.runs.runs[0]!
