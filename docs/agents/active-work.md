@@ -6,7 +6,7 @@
 - Follow-up branch: `feature/issue-1478-pods-test-cycles`, same isolated checkout. `test:layout` runs only browser tests; explicit `test:e2e` builds/packages and retains native acceptance in the shared manual E2E suite. Unit/pre-push policy is unchanged; no existing tests were removed.
 - Routing policy is recorded in root AGENTS.md and `apps/openape-pods/docs/testing.md`. Focus UI edits on browser cases, add adapter/backend checks for changed behavior, retain actual native boundaries and prove replacements before retiring assertions.
 - Verification: full repository lint/typecheck passed, 7 check-runner tests passed, all 63 browser tests passed through `test:layout` in 18.78 s. The self-contained native command built/packaged successfully and passed one selected real Electron renderer/IPC isolation test (6 other cases intentionally filtered). Full native suite was not rerun for this routing-only change.
-- Next: publish updated evidence, open/link the follow-up PR, review exact heads and merge under the owner's authorization. No production deployment or signed installation.
+- Follow-up PR: https://repos.openape.ai/patrick/monorepo/pulls/429. Implementation `6662a40d22fe64a07a776787776dd54731175960`; all configured commit/push stages passed. Verified private Test Run: https://report.openape.ai/d/01M4YEWD3A4VQXZWVGVR07GB8G. Next: merge the exact reviewed heads under the owner's authorization; record the receipt on the PR. No production deployment or signed installation.
 
 ## Standalone Pods UI development — issue 1478
 
