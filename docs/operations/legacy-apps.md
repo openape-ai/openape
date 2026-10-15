@@ -21,10 +21,14 @@ the legacy repository does not require this checkout to install or build.
 active here. Existing `apes nest` and agent compatibility commands remain; their
 runtime target is legacy. Moving source does not remove installed npm packages.
 
-Production `compose/chatty.yml` retains Troop, CRM and Chat image/data/router
-entries so an unrelated deployment cannot silently drop those services. Build
-and maintenance instructions belong to the legacy repository. No service shutdown,
-credential migration, database deletion or deployment is part of this extraction.
+Production Troop, CRM and Chat were separately retired with owner authorization
+on October 15, 2026 (issue 1498). Their Compose services, containers, proxy routes
+and associated monitors are removed. All application databases and environment
+files remain under `/home/openape/projects/<app>/shared`; source and history
+remain in the legacy repository. Troop schedules and hooks were disabled before
+shutdown, and the local operator support jobs were disabled and archived.
+Operational verification and provider-side webhook receipts are recorded on the
+issue and implementing PR. Do not restart these services from old recipes.
 
 The local demo stack covers active applications. Retired guides and historical
 recipes remain available through Git history and the legacy repository. Their
@@ -47,5 +51,5 @@ No access logs were available, so historical reads and unknown external clients
 cannot be excluded. Source/history and independent build instructions are
 preserved. In the separately authorized runtime retirement (issue 1489), the
 Question Service container, Compose service, reverse-proxy route, uptime monitor
-and its check history, and the obsolete question database were removed. Other
-legacy applications retain their previously documented runtime boundary.
+and its check history, and the obsolete question database were removed. Troop, CRM
+and Chat were subsequently retired under issue 1498 with their data retained.
