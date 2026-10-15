@@ -13,9 +13,9 @@ const owner = { issuer: 'https://owner.example', subject: 'opaque-owner' }
 const other = { ...owner, subject: 'another-owner' }
 const runtime = randomUUID()
 const message = (eventId: string, body = 'Rechnung abgelegt.') => parsePublication({ eventId, kind: 'message', title: 'Belege', body })
-function setup(path = ':memory:') {
+function setup(path = ':memory:', itemsPerOwner?: number) {
   let now = 1_000_000
-  const store = new InboxStore(path, () => now); cleanup.push(() => store.close())
+  const store = new InboxStore(path, () => now, itemsPerOwner); cleanup.push(() => store.close())
   return { store, advance: (ms: number) => { now += ms } }
 }
 
@@ -142,14 +142,15 @@ it('holds the push of an IdP approval until it stayed open for the delay and dro
 })
 
 it('keeps a deleted open decision deleted beyond tombstone purge and resolves decisions even with a full inbox', () => {
-  const { store, advance } = setup()
+  const itemsPerOwner = 20
+  const { store, advance } = setup(':memory:', itemsPerOwner)
   store.syncDecisions(owner, runtime, [decision('effect:a')])
   const [item] = store.list(owner, { kind: 'decision' }).items
   store.mark(owner, item!.id, { deleted: true })
   advance(inboxLimits.tombstoneMs + 1)
   store.retain()
   expect(store.syncDecisions(owner, runtime, [decision('effect:a')])).toEqual({ created: 0, updated: 0, resolved: 0, skipped: 0 })
-  for (let index = 0; index < inboxLimits.itemsPerOwner; index++) store.publish(owner, runtime, message(`fill-${index}`))
+  for (let index = 0; index < itemsPerOwner; index++) store.publish(owner, runtime, message(`fill-${index}`))
   expect(store.syncDecisions(owner, runtime, [decision('effect:b')])).toEqual({ created: 0, updated: 0, resolved: 1, skipped: 1 })
   // Once resolved, the tombstone may be purged like any other.
   advance(inboxLimits.tombstoneMs + 1)
