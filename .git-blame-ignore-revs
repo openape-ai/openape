@@ -3,3 +3,6 @@
 
 # style: apply consistent object and list newlines
 d5ac18b81cfeb11c71c947e1c0ff9bace5f73700
+
+# style: apply newline rules to code merged from main
+62087ae2cb836aba2b402b69c3a1c3dfcf6cab31
