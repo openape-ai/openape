@@ -53,9 +53,17 @@ it.each([
   await page.viewport(width, height)
   await commands.setColorScheme(theme)
   const report = sampleBriefing()
-  installNuxtGlobals({ type: 'briefing', briefing: report, version: 1, latest_version: 2,
+  installNuxtGlobals({
+    type: 'briefing',
+    briefing: report,
+    version: 1,
+    latest_version: 2,
     editions: [{ version: 1, date: report.editionDate }, { version: 2, date: '2026-09-28' }],
-    created_by: 'owner@example.test', created_by_act: 'agent', created_at: 1, visibility: 'private' })
+    created_by: 'owner@example.test',
+    created_by_act: 'agent',
+    created_at: 1,
+    visibility: 'private',
+  })
   wrapper = mount({ render: () => h(Suspense, null, { default: () => h(ReportPage) }) }, { global: routeBoundary, attachTo: document.body })
   await flushPromises()
   await wrapper.get('select[aria-label="Darstellung"]').setValue(theme)
