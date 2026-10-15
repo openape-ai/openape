@@ -38,7 +38,10 @@ and logs live under `.artifacts/ui-test-migration/` and are not committed.
 
 For integrated checks, set `TMPDIR` to a new directory beneath this worktree's
 `.artifacts/` so the shared lifecycle helper cannot clean another checkout's
-tracker or fixtures. Its disposable app/IdP databases, ports and browser contexts
+tracker or fixtures. Set `NITRO_NO_UNIX_SOCKET=1` for these test processes: long
+worktree-local temporary paths can exceed macOS Unix socket path limits. This
+uses Nitro's supported TCP worker transport without changing product configuration.
+Its disposable app/IdP databases, ports and browser contexts
 must stay local to this checkout. Close only processes started by this invocation.
 
 A temporary listener on `127.0.0.1:5483` caused the browser runner to exit 1
@@ -104,14 +107,15 @@ Retained integration commands (request the shared heavy-check slot first):
 ```sh
 mkdir -p "$PWD/apps/openape-testrun/.artifacts/integration-tmp"
 export TMPDIR="$PWD/apps/openape-testrun/.artifacts/integration-tmp"
-export TURBO_ENV_MODE=loose VITEST_MAX_WORKERS=1
+export TURBO_ENV_MODE=loose VITEST_MAX_WORKERS=1 NITRO_NO_UNIX_SOCKET=1
 pnpm exec turbo run build --filter=@openape/nuxt-auth-sp --filter=@openape/nuxt-auth-idp --filter=@openape/ape-testruns --concurrency=1
 pnpm --filter @openape-testrun/app build
-pnpm --filter @openape-testrun/app test:e2e e2e/briefing.e2e.test.ts e2e/html-documents.e2e.test.ts --maxWorkers=1 --fileParallelism=false
+pnpm --filter @openape-testrun/app test:e2e e2e/briefing.e2e.test.ts e2e/html-documents.e2e.test.ts e2e/cli-roundtrip.e2e.test.ts --maxWorkers=1 --fileParallelism=false
 ```
 
 Run the unchanged CLI/security suites through `test:e2e` when those boundaries
-change; the two named files above are the directly affected real acceptance.
+change; the first two named files are the directly affected real acceptance; the third
+retains a representative real CLI publication roundtrip.
 The normal push hook owns the affected unit/lint/typecheck gate. Do not run a
 second complete gate before it. No deployment or CI reactivation is part of this
 migration.
