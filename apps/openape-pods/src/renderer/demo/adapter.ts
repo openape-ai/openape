@@ -8,6 +8,7 @@ import { parseResourceCommand } from '../../contracts/resources'
 import { parseScheduleCommand } from '../../contracts/scheduling'
 import { parseRunCommand } from '../../contracts/runs'
 import { parseDomainCommand } from '../../contracts/domain-admin'
+import { inboxMessageLimits, parseInboxMessagePage } from '../../contracts/inbox'
 import { demoId, demoHash, demoState, demoMap } from './scenarios'
 import type { DemoScenario } from './scenarios'
 
@@ -174,8 +175,12 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
         if (command.read !== undefined) message.read = command.read ? Date.now() : null
         if (command.archived !== undefined) message.archived = command.archived ? Date.now() : null
         changed()
+        return null
       }
-      return structuredClone(state.messages)
+      // Pages like the relay, newest first; the demo's creation times are unique and serve as the cursor.
+      const view = state.messages.filter(item => !!item.archived === !!command.archived && item.created < (command.before ?? Infinity)).sort((a, b) => b.created - a.created)
+      const page = view.slice(0, inboxMessageLimits.page)
+      return parseInboxMessagePage(structuredClone({ messages: page, next: view.length > page.length ? page.at(-1)!.created : null }))
     },
     async domain(input) {
       const command = parseDomainCommand(input)

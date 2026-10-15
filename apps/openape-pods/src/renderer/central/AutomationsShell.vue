@@ -6,7 +6,7 @@ import { clock } from '../utils/cadence'
 import AutomationInfo from './AutomationInfo.vue'
 import DecisionsInbox from './DecisionsInbox.vue'
 import MessagesInbox from './MessagesInbox.vue'
-import type { InboxMessage, InboxMessagesCommand } from '../../contracts/inbox'
+import type { MessagesAccessCommand, MessagesView } from '../workspace-access'
 import type { DomainCommand, DomainOverview } from '../../contracts/domain-admin'
 import type { CentralCommand } from '../../contracts/central'
 import AutomationsList from './AutomationsList.vue'
@@ -23,8 +23,8 @@ import { allTags, tagCounts, untagged, withTags } from '../utils/tags'
  * host reads the account inbox, Mitteilungen. The gear opens the one settings page of the host; creation hands a brief to Codex.
  */
 type Tab = 'automations' | 'decisions' | 'messages'
-const props = defineProps<{ view: MapView | null, live: boolean, now: number, tab?: Tab, messages?: InboxMessage[] | null, desktop?: boolean, codex?: 'connected' | 'disconnected', domain?: DomainOverview | null, inboxUrl?: string, secrets?: SecretsView | null, sharing?: boolean }>()
-const emit = defineEmits<{ 'update:tab': [tab: Tab], 'messages': [command: InboxMessagesCommand], 'settings': [], 'codex': [pinned: string | null, tags: string[]], 'command': [command: CentralCommand], 'secrets': [command: SecretsCommand], 'openPod': [id: string], 'domain': [command: DomainCommand, settle?: (error: string | null) => void] }>()
+const props = defineProps<{ view: MapView | null, live: boolean, now: number, tab?: Tab, messages?: MessagesView | null, desktop?: boolean, codex?: 'connected' | 'disconnected', domain?: DomainOverview | null, inboxUrl?: string, secrets?: SecretsView | null, sharing?: boolean }>()
+const emit = defineEmits<{ 'update:tab': [tab: Tab], 'messages': [command: MessagesAccessCommand], 'settings': [], 'codex': [pinned: string | null, tags: string[]], 'command': [command: CentralCommand], 'secrets': [command: SecretsCommand], 'openPod': [id: string], 'domain': [command: DomainCommand, settle?: (error: string | null) => void] }>()
 const layers = ref<Layers>({ data: true, read: true, write: true, auth: true, paused: true })
 const playing = ref(true)
 // Archived Pods are listed on request; they have no other place in the app.
@@ -35,7 +35,7 @@ const hovered = ref<string | null>(null)
 const handoff = ref(false)
 // The tab badge, the KPI and the Entscheidungen counters share one computation.
 const waiting = computed(() => props.view ? decisionCounts(props.view, props.secrets?.requests ?? []).count : 0)
-const unread = computed(() => props.messages?.filter(item => !item.read && !item.archived).length ?? 0)
+const unread = computed(() => props.messages?.messages.filter(item => !item.read && !item.archived).length ?? 0)
 const current = computed(() => props.tab === 'messages' && !props.messages ? 'automations' : props.tab ?? 'automations')
 // The tag selection is a per-device preference; private windows or blocked storage start without one.
 const tagKey = 'pods.automations.tags'
@@ -173,7 +173,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
       </template>
     </section>
     <section v-else-if="current === 'messages' && messages" role="tabpanel">
-      <MessagesInbox :messages="messages" :now="now" @mark="emit('messages', $event)" @open-pod="emit('openPod', $event)" />
+      <MessagesInbox :messages="messages.messages" :more="messages.more" :error="messages.error" :now="now" @mark="emit('messages', $event)" @more="emit('messages', { type: 'more', archived: $event })" @open-pod="emit('openPod', $event)" />
     </section>
     <section v-else role="tabpanel">
       <p v-if="!view" class="muted" role="status">

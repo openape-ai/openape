@@ -21,6 +21,6 @@ export async function browserFixture() {
   ])
   Object.assign(fixture.view, { id: podId, details, scripts, resources, scheduling, runs })
   fixture.host.workspace.pods = pods.map(pod => ({ ...pod, online: true }))
-  const client: BrowserWorkspaceClient = { ...fixture.client, session: async () => ({ subject: 'owner@example.invalid' }) }
+  const client: BrowserWorkspaceClient = { ...fixture.client, session: async () => ({ subject: 'owner@example.invalid' }), messages: async command => command.type === 'list' ? { messages: [], next: null } : null }
   return { ...fixture, client, bridge, podId }
 }

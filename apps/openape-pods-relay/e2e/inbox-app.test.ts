@@ -58,10 +58,13 @@ async function desktop(email: string) {
   const exchanged = await post('/api/mobile/v1/session/exchange', { id: start.id, verifier, signature: signBytes(proofBytes('session-exchange', start.id, challenge(verifier)), key) })
   expect(exchanged.status, await exchanged.clone().text()).toBe(200)
   const { accessToken } = await exchanged.json() as { accessToken: string }
-  async function send(path: string, body: unknown) {
+  async function signed(path: string, body: unknown) {
     const encoded = JSON.stringify(body); const id = randomUUID(); const at = new Date().toISOString(); const digest = sha256(encoded)
     const proof = signBytes(proofBytes('api-request', id, JSON.stringify(['POST', path, sha256(accessToken), at, digest])), key)
-    const response = await fetch(`${relay.url}${path}`, { method: 'POST', headers: { 'authorization': `Bearer ${accessToken}`, 'x-pods-request-id': id, 'x-pods-request-at': at, 'x-pods-body-digest': digest, 'x-pods-proof': proof, 'content-type': 'application/json' }, body: encoded })
+    return fetch(`${relay.url}${path}`, { method: 'POST', headers: { 'authorization': `Bearer ${accessToken}`, 'x-pods-request-id': id, 'x-pods-request-at': at, 'x-pods-body-digest': digest, 'x-pods-proof': proof, 'content-type': 'application/json' }, body: encoded })
+  }
+  async function send(path: string, body: unknown) {
+    const response = await signed(path, body)
     expect([200, 201], await response.clone().text()).toContain(response.status)
     return response.json()
   }
@@ -79,6 +82,8 @@ async function desktop(email: string) {
     podId: fixture.view.id,
     message: (eventId: string, title: string, body: string, links: { title: string, url: string }[] = [], podTags?: string[]) => send('/api/runtime/v1/inbox', { eventId, kind: 'message', title, body, podId: fixture.view.id, podName: 'Belege', ...(podTags ? { podTags } : {}), links }),
     decisions: (decisions: unknown[]) => send('/api/runtime/v1/inbox/decisions', { decisions }),
+    // The account's messages as the desktop's Mitteilungen tab reads them (issue 1487); raw, so refusals stay visible.
+    messages: (command: unknown) => signed('/api/runtime/v1/inbox/messages', command),
     claim: () => send('/api/runtime/v1/workspace', { type: 'claim', lease }) as Promise<{ id: string, command: { body: Record<string, unknown> } } | null>,
     complete: (id: string) => publish(++revision, { id, result: { status: 'applied' }, error: null }),
   }
@@ -315,3 +320,48 @@ it('decides, reads, survives restart and reinstall, works offline and never mixe
   await shot(reinstalled.page, '15-settings-english')
   await Promise.all([restarted.context.close(), reinstalled.context.close()])
 }, 300000)
+
+it('shows the account messages in the workspace tab and keeps read, archive and delete in sync with desktop and phone (issue 1487)', async () => {
+  const mac = await desktop(owner)
+  await mac.message('workspace-1', 'Wochenbericht bereit', 'Der Bericht für KW 41 liegt bereit.', [{ title: 'Bericht öffnen', url: 'https://report.openape.ai/d/example' }], ['berichte'])
+  await mac.message('workspace-2', 'Rechnung erkannt', 'Eine Rechnung wurde erkannt.')
+  const listed = async (archived = false) => (await (await mac.messages({ type: 'list', archived })).json() as { messages: { id: string, title: string, read: number | null }[] }).messages
+  const item = (await listed()).find(entry => entry.title === 'Wochenbericht bereit')!
+  expect(item).toMatchObject({ read: null })
+
+  const { context, page } = await phone(owner)
+  await page.setViewportSize({ width: 1280, height: 900 })
+  await page.goto(`${relay.url}/workspace`)
+  await page.getByRole('tab', { name: /Mitteilungen/ }).click()
+  const card = page.locator(`[data-message="${item.id}"]`)
+  await card.waitFor()
+  expect(await card.textContent()).toContain('Der Bericht für KW 41 liegt bereit.')
+  expect(await card.locator('a').getAttribute('href')).toBe('https://report.openape.ai/d/example')
+  await shot(page, '20-workspace-messages')
+  const badge = async () => (await (await context.request.get(`${relay.url}/inbox/api/v1/badge`)).json() as { count: number }).count
+  const unreadBefore = await badge()
+  await card.getByRole('button', { name: 'Als gelesen markieren' }).click()
+  await expect.poll(async () => (await listed()).find(entry => entry.id === item.id)?.read).not.toBeNull()
+  expect(await badge()).toBe(unreadBefore - 1)
+
+  await card.getByRole('button', { name: 'Archivieren' }).click()
+  await expect.poll(async () => (await listed(true)).map(entry => entry.id)).toContain(item.id)
+  await page.locator('.messages-inbox .seg button').nth(1).click()
+  await card.getByRole('button', { name: 'Löschen' }).click()
+  await card.getByText('Endgültig löschen?').waitFor()
+  await shot(page, '21-workspace-delete-confirm')
+  await card.getByRole('button', { name: 'Löschen' }).click()
+  await expect.poll(async () => (await listed(true)).map(entry => entry.id)).not.toContain(item.id)
+  expect((await context.request.get(`${relay.url}/inbox/api/v1/items/${item.id}`)).status()).toBe(404)
+  expect(await noHorizontalScroll(page)).toBe(true)
+
+  // Refusals: another account's desktop, a missing session and a foreign origin read or change nothing.
+  const foreign = await desktop(other)
+  const another = (await listed()).find(entry => entry.title === 'Rechnung erkannt')!
+  expect((await foreign.messages({ type: 'mark', id: another.id, deleted: true })).status).toBe(404)
+  expect((await (await foreign.messages({ type: 'list' })).json() as { messages: unknown[] }).messages).toEqual([])
+  expect((await fetch(`${relay.url}/api/workspace/v1/messages`, { method: 'POST', headers: { 'content-type': 'application/json', origin: relay.url }, body: '{"type":"list"}' })).status).toBe(401)
+  expect((await context.request.post(`${relay.url}/api/workspace/v1/messages`, { data: { type: 'mark', id: another.id, deleted: true }, headers: { origin: 'https://attacker.example' } })).status()).toBe(403)
+  expect((await listed()).map(entry => entry.id)).toContain(another.id)
+  await context.close()
+})

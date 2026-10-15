@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type { InboxMessage, InboxMessagesCommand } from '../../contracts/inbox'
-import { t } from '../i18n'
+import { diagnostic, t } from '../i18n'
 import { ago } from '../utils/cadence'
 
 /**
  * What Pods told the owner (`context.notify`), newest first. Messages only inform: the owner marks them
  * read or archives them; anything that needs an answer is an Entscheidung instead.
  */
-const props = defineProps<{ messages: InboxMessage[], now: number }>()
-const emit = defineEmits<{ mark: [command: InboxMessagesCommand], openPod: [id: string] }>()
+/** `more` tells which view has older pages; `error` explains why the shown list may be outdated. */
+const props = defineProps<{ messages: InboxMessage[], now: number, more?: { inbox: boolean, archive: boolean }, error?: string | null }>()
+const emit = defineEmits<{ mark: [command: InboxMessagesCommand], more: [archived: boolean], openPod: [id: string] }>()
 const archive = ref(false)
 const shown = computed(() => props.messages.filter(item => !!item.archived === archive.value).sort((a, b) => b.created - a.created))
 const unread = computed(() => props.messages.filter(item => !item.archived && !item.read))
@@ -39,7 +40,7 @@ function remove(id: string) { confirming.value = null; emit('mark', { type: 'mar
         <button :aria-pressed="!archive" @click="archive = false">
           {{ t('Inbox') }}
         </button><button :aria-pressed="archive" @click="archive = true">
-          {{ t('Archive') }} <span v-if="archivedCount" class="count">{{ archivedCount }}</span>
+          {{ t('Archive') }} <span v-if="archivedCount" class="count">{{ archivedCount }}{{ more?.archive ? '+' : '' }}</span>
         </button>
       </div>
       <span v-if="bulk" class="bulk-confirm" role="group" :aria-label="t('Confirm')">
@@ -60,6 +61,9 @@ function remove(id: string) { confirming.value = null; emit('mark', { type: 'mar
         </button>
       </template>
     </div>
+    <p v-if="error" class="messages-error" role="alert">
+      {{ t('Messages could not be updated: {error}', { error: diagnostic(error) }) }}
+    </p>
     <p v-if="!shown.length" class="messages-empty" role="status">
       {{ archive ? t('No archived messages.') : t('No messages. Pods report results here.') }}
     </p>
@@ -105,6 +109,9 @@ function remove(id: string) { confirming.value = null; emit('mark', { type: 'mar
         </div>
       </li>
     </ul>
+    <button v-if="archive ? more?.archive : more?.inbox" class="secondary messages-more" type="button" @click="emit('more', archive)">
+      {{ t('Load older messages') }}
+    </button>
   </div>
 </template>
 
@@ -128,5 +135,7 @@ function remove(id: string) { confirming.value = null; emit('mark', { type: 'mar
 .messages-inbox .message-body{margin:0;white-space:pre-line;line-height:1.45;overflow-wrap:anywhere}
 .messages-inbox .actions .secondary{padding:4px 10px;font-size:13px;text-decoration:none;color:var(--accent)}
 .messages-inbox .actions .spacer{flex:1}
+.messages-inbox .messages-error{margin:0 0 10px;padding:8px 12px;border-radius:8px;background:var(--bad-soft);color:var(--bad);font-size:13px}
+.messages-inbox .messages-more{margin-top:10px;padding:6px 12px;font-size:13px}
 .messages-empty{padding:48px 16px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:8px}
 </style>
