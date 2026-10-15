@@ -25,14 +25,11 @@ const monorepoRoot = join(docsRoot, '..', '..')
 // them here.
 const APPS = [
   { dir: 'openape-free-idp', slug: 'idp', title: 'OpenApe ID' },
-  { dir: 'openape-troop', slug: 'troop', title: 'Troop' },
-  { dir: 'openape-chat', slug: 'chat', title: 'Chat' },
   { dir: 'openape-tasks', slug: 'tasks', title: 'Tasks' },
   { dir: 'openape-plans', slug: 'plans', title: 'Plans' },
   { dir: 'openape-testrun', slug: 'testrun', title: 'Testrun' },
   { dir: 'openape-timetrack', slug: 'timetrack', title: 'Timetrack' },
   { dir: 'openape-pr', slug: 'pr', title: 'PR' },
-  { dir: 'openape-crm', slug: 'crm', title: 'CRM' },
   { dir: 'openape-pods', slug: 'pods', title: 'Pods', source: 'handbook' },
 ]
 
