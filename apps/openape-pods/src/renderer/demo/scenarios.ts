@@ -3,6 +3,7 @@ import type { CentralPod } from '../../contracts/central'
 import type { DomainOverview } from '../../contracts/domain-admin'
 import type { MapView } from '../../contracts/map-view'
 import type { StoredPod } from '../../contracts/control'
+import type { InboxMessage } from '../../contracts/inbox'
 
 export const scenarioNames = ['everyday', 'attention', 'empty', 'loading-error'] as const
 export type DemoScenario = typeof scenarioNames[number]
@@ -14,6 +15,7 @@ export interface DemoState {
   views: Record<string, CentralPod>
   tags: Record<string, string[]>
   domain: DomainOverview
+  messages: InboxMessage[]
 }
 
 const examples = [
@@ -57,7 +59,7 @@ function podView(pod: StoredPod, description: string, topic: string, at: number,
 }
 
 export function demoState(scenario: DemoScenario, at: number): DemoState {
-  const state: DemoState = { pods: [], views: {}, tags: {}, domain: { namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] } }
+  const state: DemoState = { pods: [], views: {}, tags: {}, domain: { namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }, messages: [] }
   if (scenario === 'empty') return state
   examples.forEach(([name, description, company, topic], index) => {
     const pod: StoredPod = { id: demoId(index + 1), name, revision: 1, lifecycle: index === 4 ? 'paused' : 'active', activeScript: demoHash }
@@ -82,6 +84,20 @@ export function demoState(scenario: DemoScenario, at: number): DemoState {
     body: ['Soll die Rechnung von Bergblick Büroservice zur Belegablage?', 'Soll die Rechnung von Stadtrad Logistik zur Belegablage?', 'Wie soll der Newsletter von Design Weekly behandelt werden?', 'Wie soll der Newsletter von Product Notes behandelt werden?'][index]!,
     options: [{ key: 'keep', title: 'Behalten' }, { key: 'archive', title: 'Archivieren' }],
     data: { sender: ['billing@bergblick.invalid', 'invoice@stadtrad.invalid', 'news@design.invalid', 'team@product.invalid'][index]!, organization: 'Northwind', amount: index < 2 ? `${(index + 1) * 149},00 EUR` : '–' }, createdAt: at - (index + 1) * 60000,
+  }))
+  // Index of the sending Pod, minutes ago, read, archived, title, body, links.
+  const notes: [number, number, boolean, boolean, string, string, string[]][] = [
+    [3, 4, false, false, 'Morgenbriefing für heute', '3 Termine, davon 1 extern (10:30 Lieferantengespräch Bergblick).\n5 offene Aufgaben, 2 davon heute fällig.\nKeine Konflikte im Kalender.', ['Kalender öffnen']],
+    [2, 38, false, false, 'Neue Version 4.2 verfügbar', 'Die Demo-Bibliothek hat Version 4.2 veröffentlicht. Relevant: geänderte Standardwerte beim Export und ein Sicherheitsfix. Keine Aktion nötig, die Pods verwenden die Bibliothek nicht direkt.', ['Release Notes', 'Vergleich 4.1…4.2']],
+    [0, 95, true, false, '2 Rechnungen abgelegt', 'Bergblick Büroservice (149,00 EUR) und Stadtrad Logistik (298,00 EUR) wurden geprüft und in die Belegablage übernommen.', []],
+    [1, 260, true, false, 'Newsletter-Zusammenfassung', '14 Newsletter sortiert, 3 als wichtig markiert, 2 zur Entscheidung zurückgehalten.', []],
+    [5, 2900, true, false, 'Wochenbericht KW 41', '23 abgeschlossene Arbeiten, 2 offene Rückfragen. Der vollständige Bericht liegt im Demo-Ordner.', ['Bericht öffnen']],
+    [2, 7300, true, true, 'Neue Version 4.1 verfügbar', 'Kleinere Fehlerbehebungen ohne Auswirkungen.', []],
+  ]
+  state.messages = notes.map(([pod, minutes, read, archived, title, body, links], index) => ({
+    id: demoId(700 + index), title, body, pod: { id: demoId(pod + 1), name: examples[pod]![0], tags: state.tags[demoId(pod + 1)] }, runId: null,
+    links: links.map(link => ({ title: link, url: 'https://example.invalid/demo' })), created: at - minutes * 60000,
+    read: read ? at - minutes * 60000 + 60000 : null, archived: archived ? at - minutes * 60000 + 120000 : null,
   }))
   if (scenario === 'attention') {
     const run = state.views[demoId(3)]!.runs.runs[0]!

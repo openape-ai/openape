@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { WorkspaceAccess, WorkspaceSnapshot } from '../workspace-access'
+import type { MessagesAccessCommand, MessagesView, WorkspaceAccess, WorkspaceSnapshot } from '../workspace-access'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { diagnostic } from '../i18n'
 import type { CentralCommand } from '../../contracts/central'
@@ -15,7 +15,8 @@ const domain = ref<DomainOverview | null>(null)
 const codex = ref<WorkspaceSnapshot['codex']>()
 const live = ref(false)
 const secrets = ref<SecretsView | null>(null)
-const tab = ref<'automations' | 'decisions'>('automations')
+const messages = ref<MessagesView | null>(null)
+const tab = ref<'automations' | 'decisions' | 'messages'>('automations')
 const now = ref(Date.now())
 const error = ref('')
 const actionError = ref('')
@@ -29,7 +30,7 @@ async function poll() {
     const snapshot = await props.access.read()
     if (closed) return
     map.value = snapshot.map; domain.value = snapshot.domain; codex.value = snapshot.codex
-    secrets.value = snapshot.secrets; live.value = snapshot.live; now.value = Date.now(); error.value = ''
+    secrets.value = snapshot.secrets; messages.value = snapshot.messages ?? null; live.value = snapshot.live; now.value = Date.now(); error.value = ''
   }
   catch (cause) { error.value = cause instanceof Error ? cause.message : String(cause) }
   finally { polling = false }
@@ -50,6 +51,12 @@ function domainCommand(command: DomainCommand, settle?: (error: string | null) =
     await props.access.domain(command)
   }, settle)
 }
+function messagesCommand(command: MessagesAccessCommand) {
+  return void run(async () => {
+    if (!props.access.messages) throw new Error('Messages are unavailable on this host')
+    await props.access.messages(command)
+  })
+}
 function secretsCommand(command: SecretsCommand) {
   return void run(async () => {
     if (!props.access.secrets) throw new Error('Secret actions are unavailable on this host')
@@ -65,5 +72,5 @@ function secretsCommand(command: SecretsCommand) {
   <p v-if="actionError" role="alert" class="error-message" data-action-error>
     {{ diagnostic(actionError) }}
   </p>
-  <AutomationsShell :view="map" :live="live" :now="now" :desktop="access.desktop" :inbox-url="access.inboxUrl" :sharing="sharing" :codex="codex" :tab="tab" :domain="domain" :secrets="secrets" @update:tab="tab = $event" @domain="domainCommand" @command="localCommand" @secrets="secretsCommand" @open-pod="emit('openPod', $event)" @settings="emit('settings')" />
+  <AutomationsShell :view="map" :live="live" :now="now" :desktop="access.desktop" :inbox-url="access.inboxUrl" :sharing="sharing" :codex="codex" :tab="tab" :domain="domain" :secrets="secrets" :messages="messages" @update:tab="tab = $event" @domain="domainCommand" @command="localCommand" @secrets="secretsCommand" @messages="messagesCommand" @open-pod="emit('openPod', $event)" @settings="emit('settings')" />
 </template>
