@@ -11,7 +11,7 @@ export default defineConfig({
     setupFiles: ['tests/layout/setup.ts'],
     browser: {
       enabled: true,
-      api: { port: 5483, strictPort: true },
+      api: { host: '127.0.0.1', port: 5483, strictPort: true },
       fileParallelism: false,
       provider: playwright({
         launchOptions: { executablePath: process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
