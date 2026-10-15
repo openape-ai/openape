@@ -111,3 +111,21 @@ export function parseInboxDecide(value: unknown): InboxDecide {
   if (item.input === undefined) return { type: 'decide', sourceId: item.sourceId, digest: item.digest, option: item.option }
   return { type: 'decide', sourceId: item.sourceId, digest: item.digest, option: item.option, input: text(item.input, inboxDecisionLimits.input) }
 }
+
+/**
+ * An owner message from a Pod script (`context.notify`) as the account inbox keeps it: the relay's `InboxItem`
+ * of kind `message`. The workspace lists messages and marks them read or archived; it never sends one.
+ */
+export interface InboxMessage {
+  id: string
+  title: string
+  body: string
+  pod: { id: string, name: string | null, tags?: string[] } | null
+  runId: string | null
+  links: { title: string, url: string }[]
+  created: number
+  read: number | null
+  archived: number | null
+}
+/** `deleted` is final: the relay keeps only a tombstone so the message never reappears on another device. */
+export type InboxMessagesCommand = { type: 'list' } | { type: 'mark', id: string, read?: boolean, archived?: boolean, deleted?: true }

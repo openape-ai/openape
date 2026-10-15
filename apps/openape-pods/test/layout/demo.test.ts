@@ -100,3 +100,29 @@ it('renders all three areas narrowly with real CSS and restores empty/error scen
   expect(wrapper!.findAll('[role="alert"]').map(item => item.text())).toEqual([])
   vi.restoreAllMocks()
 })
+
+it('shows Pod messages in their own tab, confirms bulk actions and deletes only from the archive', async () => {
+  for (const width of [1440, 390]) {
+    await open('everyday', width)
+    await expect.poll(() => wrapper!.findAll('[role="tab"]').map(tab => tab.text())).toContain('Mitteilungen 2')
+    await wrapper!.get('[role="tablist"] button:nth-child(3)').trigger('click'); await flushPromises()
+    await expect.poll(() => wrapper!.findAll('[data-message]').length).toBe(5)
+    await click('Alle archivieren (5)')
+    expect(wrapper!.text()).toContain('Alle 5 Mitteilungen archivieren?')
+    await shot(`messages-confirm-${width}`)
+    await click('Abbrechen')
+    expect(wrapper!.findAll('[data-message]').length).toBe(5)
+    await click('Alle als gelesen markieren (2)')
+    await wrapper!.get('.bulk-confirm button').trigger('click'); await flushPromises()
+    await expect.poll(() => wrapper!.findAll('[role="tab"]').map(tab => tab.text())).toContain('Mitteilungen')
+    expect(wrapper!.findAll('[data-message].unread')).toHaveLength(0)
+    await wrapper!.findAll('.messages-inbox .seg button')[1]!.trigger('click'); await flushPromises()
+    const archived = wrapper!.get('[data-message]')
+    await archived.findAll('button').find(item => item.text() === 'Löschen')!.trigger('click'); await flushPromises()
+    await shot(`messages-delete-${width}`)
+    await archived.findAll('button').find(item => item.text() === 'Löschen')!.trigger('click'); await flushPromises()
+    await expect.poll(() => wrapper!.findAll('[data-message]').length).toBe(0)
+    expect(wrapper!.text()).toContain('Keine archivierten Mitteilungen.')
+    wrapper!.unmount(); wrapper = undefined
+  }
+})
