@@ -60,7 +60,8 @@ thin shells around exactly these modules (see their `nuxt.config.ts`).
 `openape-tasks`, `openape-plans`, `openape-testrun`, `openape-timetrack`,
 `openape-pr` and `openape-monitor` (uptime checks + mail alerts).
 The Question Service Q&A surface is preserved in the separate legacy repository;
-its existing production container is retained.
+its production container, route, monitoring and obsolete question database were
+retired with owner authorization on October 15, 2026.
 Beside them: `apps/openape-nest` (local daemon supervising agents on a
 machine), `apps/openape-ape-agent` (one runtime process per agent),
 `apps/openape-llm` (LLM proxy container), `apps/docs` (documentation site,
@@ -95,7 +96,6 @@ by `compose/chatty.yml` (compose project `openape-prod`), each publishing on
 | `testrun` | `testrun` | openape-testrun | 3006 | testrun.openape.ai |
 | `timetrack` | `timetrack` | openape-timetrack | 3011 | timetrack.openape.ai |
 | `pr` | `pr` | openape-pr | 3014 | pr.openape.ai |
-| Legacy source | `question-service` | openape-question-service | 3017 | question-service.openape.ai |
 | `monitor` | `monitor` | openape-monitor | 3018 | monitor.openape.ai |
 | `dashboard` | `dashboard` | openape-dashboard | 3022 | dashboard.openape.ai |
 | `crm` | `crm` | openape-crm | 3024 | crm.openape.ai |
