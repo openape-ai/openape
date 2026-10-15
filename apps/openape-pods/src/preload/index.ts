@@ -10,6 +10,7 @@ import { parseDomainCommand } from '../contracts/domain-admin'
 import { parsePackageSearch, parsePackageOptions } from '../contracts/package-catalog'
 import { parseProgramCommand, parseTerminalView, parseConsoleView } from '../contracts/programs'
 import { parseSecretsCommand, parseSecretsView } from '../contracts/secrets'
+import { parseInboxMessagePage, parseInboxMessagesCommand } from '../contracts/inbox'
 import { parseLanguage, parseLanguageCommand } from '../contracts/language'
 import { parseScriptCommand, parseScriptView } from '../contracts/scripts'
 import { parseDataCommand, parseDataView } from '../contracts/data'
@@ -48,6 +49,10 @@ const bridge: PodsBridge = {
   async onboarding(command) { return parseOnboardingView(await ipcRenderer.invoke(channels.onboarding, parseOnboardingCommand(command))) },
   async master(command) { return parseMasterView(await ipcRenderer.invoke(channels.master, parseMasterCommand(command))) },
   async details(command) { return parsePodDetails(await ipcRenderer.invoke(channels.details, parseDetailsCommand(command))) },
+  async messages(command) {
+    const result: unknown = await ipcRenderer.invoke(channels.messages, parseInboxMessagesCommand(command))
+    return result === null ? null : parseInboxMessagePage(result)
+  },
   async secrets(command) { return parseSecretsView(await ipcRenderer.invoke(channels.secrets, parseSecretsCommand(command))) },
   async scheduling(command) { return parseScheduleView(await ipcRenderer.invoke(channels.scheduling, parseScheduleCommand(command))) },
   async runs(command) { return parseRunView(await ipcRenderer.invoke(channels.runs, parseRunCommand(command))) },

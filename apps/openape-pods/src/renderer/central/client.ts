@@ -2,11 +2,17 @@ import type { CentralClient, CentralOperation, CentralPod, CentralRunDetail, Cen
 import type { RunRecord } from '../../contracts/runs'
 import type { ScriptView } from '../../contracts/scripts'
 import type { MapView } from '../../contracts/map-view'
+import { parseInboxMessagePage } from '../../contracts/inbox'
+import type { InboxMessagePage, InboxMessagesCommand } from '../../contracts/inbox'
 
 export class WorkspaceRequestError extends Error {
   constructor(readonly status: number, message: string) { super(message) }
 }
-export interface BrowserWorkspaceClient extends CentralClient { session: () => Promise<{ subject: string }> }
+export interface BrowserWorkspaceClient extends CentralClient {
+  session: () => Promise<{ subject: string }>
+  /** The account inbox's messages through the owner's session (issue 1487): a page for a list, null for a mark. */
+  messages: (command: InboxMessagesCommand) => Promise<InboxMessagePage | null>
+}
 export function browserWorkspaceClient(): BrowserWorkspaceClient {
   async function request<T>(path: string, body?: unknown, signal?: AbortSignal): Promise<T> {
     const response = await fetch(`/api/workspace/v1/${path}`, { credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal, ...(body ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) } : {}) })
@@ -28,6 +34,10 @@ export function browserWorkspaceClient(): BrowserWorkspaceClient {
     command: (runtimeId, revision, command, id) => request('commands', { runtimeId, revision, command, id }),
     operation: id => request(`operation?id=${encodeURIComponent(id)}`),
     changes: (cursor, signal) => request(`changes?cursor=${cursor}`, undefined, signal),
+    async messages(command) {
+      const result = await request('messages', command)
+      return command.type === 'list' ? parseInboxMessagePage(result) : null
+    },
   }
 }
 

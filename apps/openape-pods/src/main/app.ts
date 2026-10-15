@@ -3,6 +3,7 @@ import { parseUpdateCommand } from '../contracts/updates'
 import { randomUUID } from 'node:crypto'
 import { sharingLimits } from '@openape/pods-protocol'
 import { parseSharingCommand } from '../contracts/sharing'
+import { parseInboxMessagesCommand } from '../contracts/inbox'
 import { parseDefinitionCommand } from '../contracts/definitions'
 import { McpOwnerSessions } from './codex/session'
 import { parseMcpSessionCommand } from '../contracts/mcp-session'
@@ -364,6 +365,10 @@ async function start(): Promise<void> {
     const selected = await dialog.showOpenDialog(window, { title: t('Choose a private file on this Mac'), properties: ['openFile', 'showHiddenFiles'] })
     if (!selected.canceled && selected.filePaths[0]) await worker.importSecretFile(command.podId, command.alias, selected.filePaths[0])
     return worker.secrets({ type: 'list' })
+  })
+  ipcMain.handle(channels.messages, (event, command: unknown, ...extra: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
+    return remote.messages(parseInboxMessagesCommand(command))
   })
   ipcMain.handle(channels.workspace, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
