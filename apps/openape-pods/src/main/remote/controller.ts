@@ -1,5 +1,6 @@
 import type { InboxPublication } from '../../worker/inbox/outbox'
-import type { InboxApprovals, InboxDecision } from '../../contracts/inbox'
+import { parseInboxMessagePage } from '../../contracts/inbox'
+import type { InboxApprovals, InboxDecision, InboxMessagePage, InboxMessagesCommand } from '../../contracts/inbox'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -172,6 +173,21 @@ export class RemoteController {
       }
     }
     finally { this.delivering = false }
+  }
+
+  /**
+   * The account's messages for the workspace tab (issue 1487). The desktop is a device of the owner's account and
+   * reads what the phone inbox shows. Null while this Mac is not registered for the signed-in owner; a list
+   * returns the parsed page, a mark returns null once the relay applied it.
+   */
+  async messages(command: InboxMessagesCommand): Promise<InboxMessagePage | null> {
+    await this.load()
+    if (!this.saved?.enabled || !this.saved.tokens) return null
+    const identity = await this.worker.remoteOwner()
+    if (!sameOwner(identity.owner, this.saved.tokens.registration.owner)) return null
+    await this.refresh()
+    const result = await this.signed('POST', '/api/runtime/v1/inbox/messages', command)
+    return command.type === 'list' ? parseInboxMessagePage(result) : null
   }
 
   /**
