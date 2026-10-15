@@ -1,5 +1,13 @@
 # Active work
 
+## Object and list newline style — issue 1491
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1491. Branch `feature/issue-1491-object-newline-lint-style`, base `b248ac1594c8f83aff24d705eff5df4c1c818a42`.
+- Owner requested consistent object/list newline rules plus a dedicated autofix commit. `style/newline-per-chained-call` is excluded because it cycles with `antfu/consistent-chaining`; `function-paren-newline` uses `consistent` because `multiline-arguments` cycles with `antfu/consistent-list-newline`.
+- Autofix commit `d5ac18b81cfeb11c71c947e1c0ff9bace5f73700` (227 files) is listed in `.git-blame-ignore-revs`; merge with a merge commit so the SHA survives.
+- Verification: zero remaining violations of the new rules, no new violations of other rules; affected lint and typecheck pass. Pods and Pods relay unit timeouts at 5 s reproduce on the unchanged base under load and are tracked separately.
+- Next: native PR review and merge; then investigate the load-sensitive test timeouts.
+
 ## CI instruction reconciliation — issue 1483
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1483; the native implementation PR is linked there. Branch `bugfix/issue-1483-knowledge-ci-guidance`, checkout `openape-monorepo.worktrees/knowledge-ci-1483`, base `7d0caa8b67a939284d008761efe977dc76fbe288`.
