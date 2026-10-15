@@ -12,7 +12,8 @@ export default defineComponent({
   computed: { visible(): KnowledgeClaim[] { return this.claims.filter(claim => (this.history || claim.current) && (this.kind === 'all' || claim.kind === this.kind) && `${claim.matter} ${claim.text}`.toLowerCase().includes(this.query.toLowerCase())) } },
   async mounted() { await this.load() },
   methods: {
-    t, diagnostic,
+    t,
+    diagnostic,
     async load() {
       this.busy = true; this.error = ''
       try { const view = await this.hostBridge.details({ type: 'list', podId: this.podId, offset: this.claims.length }); this.claims.push(...view.claims); this.total = view.total }

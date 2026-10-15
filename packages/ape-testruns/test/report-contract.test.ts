@@ -191,11 +191,15 @@ describe('versioned report contract', () => {
     writeFileSync(join(directory, 'image.png'), pixel)
     const text = '\uFEFFactual <script> & result\r\nsecond line'
     writeFileSync(join(directory, 'log.txt'), text)
-    const input: TestRun = { ...run, evidence: [
-      { id: 'shot', kind: 'image', title: 'Captured UI', caption: 'Actual rendered fixture', role: 'evidence', path: 'image.png', inspection: { by: 'Reviewer', at: '2026-10-07T10:00:00Z', result: 'matches', notes: 'Expected text is visible', digest: digest(pixel) } },
-      { id: 'mock', kind: 'image', title: 'Design reference', caption: 'Not implementation evidence', role: 'mockup', path: 'image.png' },
-      { id: 'log', kind: 'text', title: 'Output', role: 'evidence', path: 'log.txt' },
-    ], tests: [{ ...run.tests[0]!, evidenceIds: ['shot', 'mock'], steps: [{ title: 'Same screenshot', evidenceIds: ['shot'] }] }] }
+    const input: TestRun = {
+      ...run,
+      evidence: [
+        { id: 'shot', kind: 'image', title: 'Captured UI', caption: 'Actual rendered fixture', role: 'evidence', path: 'image.png', inspection: { by: 'Reviewer', at: '2026-10-07T10:00:00Z', result: 'matches', notes: 'Expected text is visible', digest: digest(pixel) } },
+        { id: 'mock', kind: 'image', title: 'Design reference', caption: 'Not implementation evidence', role: 'mockup', path: 'image.png' },
+        { id: 'log', kind: 'text', title: 'Output', role: 'evidence', path: 'log.txt' },
+      ],
+      tests: [{ ...run.tests[0]!, evidenceIds: ['shot', 'mock'], steps: [{ title: 'Same screenshot', evidenceIds: ['shot'] }] }],
+    }
     const html = renderTestRun(input, directory)
     expect(html).toContain(`data:image/png;base64,${pixel.toString('base64')}`)
     expect(visible(html)).toContain('1 evidence images')

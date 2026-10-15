@@ -9,11 +9,24 @@ export const owner = 'owner@issues.test'
 export const title = 'Report a problem without losing context'
 export const markdown = `<h2>Expected behavior</h2><p>Keep <strong>product context</strong> after login.</p><pre><code>${'a'.repeat(160)}</code></pre>`
 export const record: IssueRecord = {
-  id: 'issue-a', number: 1, title, body: '## Expected behavior', bodyHtml: markdown,
-  state: 'open', version: 1, hidden: 0, triageState: 'classified', authorSubject: owner, authorActor: owner,
-  assignee: null, productName: 'Plans', createdAt: 1, updatedAt: 1,
+  id: 'issue-a',
+  number: 1,
+  title,
+  body: '## Expected behavior',
+  bodyHtml: markdown,
+  state: 'open',
+  version: 1,
+  hidden: 0,
+  triageState: 'classified',
+  authorSubject: owner,
+  authorActor: owner,
+  assignee: null,
+  productName: 'Plans',
+  createdAt: 1,
+  updatedAt: 1,
   labels: [] as { id: string, name: string, color: string }[],
-  stableUrl: '/i/issue-a', repositoryUrl: '/owner/project/issues/1',
+  stableUrl: '/i/issue-a',
+  repositoryUrl: '/owner/project/issues/1',
   capabilities: { repository: { owner: 'owner', name: 'project' }, edit: true, triage: true, admin: true, comment: true },
 }
 export interface RequestOptions { method?: string, body?: Record<string, unknown>, query?: Record<string, unknown>, headers?: Record<string, string> }

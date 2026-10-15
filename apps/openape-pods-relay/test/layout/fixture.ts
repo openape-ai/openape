@@ -5,8 +5,19 @@ import type { InboxItem, Receipt } from '../../app/inbox/client'
 
 export function decision(change: Partial<InboxItem> = {}): InboxItem {
   return {
-    id: crypto.randomUUID(), kind: 'decision', state: 'open', title: 'Rechnung an Buchhaltung zustellen?', body: 'Die Buchhaltung wartet auf die Rechnung.',
-    pod: { id: crypto.randomUUID(), name: 'Belege', tags: ['finanzen'] }, runId: null, links: [], created: 1792051200000, sequence: 1, read: null, archived: null, deleted: null,
+    id: crypto.randomUUID(),
+    kind: 'decision',
+    state: 'open',
+    title: 'Rechnung an Buchhaltung zustellen?',
+    body: 'Die Buchhaltung wartet auf die Rechnung.',
+    pod: { id: crypto.randomUUID(), name: 'Belege', tags: ['finanzen'] },
+    runId: null,
+    links: [],
+    created: 1792051200000,
+    sequence: 1,
+    read: null,
+    archived: null,
+    deleted: null,
     decision: { sourceId: 'question:mail-1', digest: 'a'.repeat(64), type: 'question', authority: 'pods', runtimeId: crypto.randomUUID(), options: [{ key: 'deliver', title: 'Erneut zustellen', input: null }, { key: 'seen', title: 'Bereits zugestellt', input: 'evidence' }] },
     ...change,
   }

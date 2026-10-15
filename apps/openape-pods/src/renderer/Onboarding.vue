@@ -18,7 +18,9 @@ export default defineComponent({
   async mounted() { await this.request({ type: 'list' }); this.email = this.owner?.account ?? ''; this.poll() },
   beforeUnmount() { this.closed = true; if (this.timer) clearTimeout(this.timer) },
   methods: {
-    t, diagnostic, label,
+    t,
+    diagnostic,
+    label,
     poll() { if (this.closed) return; this.timer = setTimeout(async () => { if (!this.busy) await this.request({ type: 'list' }); this.poll() }, 1000) },
     async request(command: OnboardingCommand) {
       if (this.busy) return

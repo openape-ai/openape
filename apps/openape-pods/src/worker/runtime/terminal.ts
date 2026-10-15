@@ -14,9 +14,12 @@ export async function launchTerminal(helper: string, privateDirectory: string, p
   const control = domain.guardian.stdio.at(5)
   if (!control || !('write' in control)) { domain.cancel(); await domain.completed; throw new Error('Terminal control channel is unavailable') }
   control.on('error', (error: NodeJS.ErrnoException) => { if (error.code !== 'EPIPE') console.error('Terminal resize failed', error.message) })
-  return { ...domain, resize(columns: number, rows: number) {
-    if (!Number.isInteger(columns) || columns < 20 || columns > 500 || !Number.isInteger(rows) || rows < 5 || rows > 300) throw new Error('Invalid terminal dimensions')
-    if (control.destroyed || control.writableEnded) throw new Error('Terminal is closed')
-    const bytes = Buffer.alloc(4); bytes.writeUInt16LE(columns, 0); bytes.writeUInt16LE(rows, 2); control.write(bytes)
-  } }
+  return {
+    ...domain,
+    resize(columns: number, rows: number) {
+      if (!Number.isInteger(columns) || columns < 20 || columns > 500 || !Number.isInteger(rows) || rows < 5 || rows > 300) throw new Error('Invalid terminal dimensions')
+      if (control.destroyed || control.writableEnded) throw new Error('Terminal is closed')
+      const bytes = Buffer.alloc(4); bytes.writeUInt16LE(columns, 0); bytes.writeUInt16LE(rows, 2); control.write(bytes)
+    },
+  }
 }

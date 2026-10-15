@@ -28,8 +28,12 @@ export default defineEventHandler(async (event) => {
     const company = await db.select().from(companies).where(eq(companies.id, invite.companyId)).get()
     if (!company) throw createProblemError({ status: 410, title: 'Company no longer exists' })
     return {
-      scope: 'company', resource_name: company.name, role: invite.grantRole,
-      inviter_email: payload.inv, note: invite.note, expires_at: invite.expiresAt,
+      scope: 'company',
+      resource_name: company.name,
+      role: invite.grantRole,
+      inviter_email: payload.inv,
+      note: invite.note,
+      expires_at: invite.expiresAt,
       uses_remaining: invite.maxUses - invite.usedCount,
     }
   }
@@ -42,8 +46,12 @@ export default defineEventHandler(async (event) => {
   const project = await db.select().from(projects).where(eq(projects.id, invite.projectId)).get()
   if (!project) throw createProblemError({ status: 410, title: 'Project no longer exists' })
   return {
-    scope: 'project', resource_name: project.name, role: invite.grantRole,
-    inviter_email: payload.inv, note: invite.note, expires_at: invite.expiresAt,
+    scope: 'project',
+    resource_name: project.name,
+    role: invite.grantRole,
+    inviter_email: payload.inv,
+    note: invite.note,
+    expires_at: invite.expiresAt,
     uses_remaining: invite.maxUses - invite.usedCount,
   }
 })

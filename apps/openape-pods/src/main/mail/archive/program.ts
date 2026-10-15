@@ -34,7 +34,8 @@ export function archiveProvider(applicationId: string, assignment: ProgramAssign
     return reply
   }
   return {
-    applicationId, applicationHash: archiveApplicationHash(assignment),
+    applicationId,
+    applicationHash: archiveApplicationHash(assignment),
     async read(id) {
       const reply = response(await services.read(['read', '--account', mailbox, '--message', id]), 'read')
       return reply.message === null ? null : parseArchiveMail(reply.message)

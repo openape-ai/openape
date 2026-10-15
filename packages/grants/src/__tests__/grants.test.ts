@@ -1220,8 +1220,19 @@ describe('request batches', () => {
   })
 
   it.each([
-    [null], [[]], ['b'], [{ title: 'x' }], [{ id: '' }], [{ id: 'a b' }], [{ id: 'a'.repeat(129) }],
-    [{ id: 'b', title: ' ' }], [{ id: 'b', title: 'x'.repeat(201) }], [{ id: 'b', size: 0 }], [{ id: 'b', size: 1.5 }], [{ id: 'b', size: 101 }], [{ id: 'b', approve: true }],
+    [null],
+    [[]],
+    ['b'],
+    [{ title: 'x' }],
+    [{ id: '' }],
+    [{ id: 'a b' }],
+    [{ id: 'a'.repeat(129) }],
+    [{ id: 'b', title: ' ' }],
+    [{ id: 'b', title: 'x'.repeat(201) }],
+    [{ id: 'b', size: 0 }],
+    [{ id: 'b', size: 1.5 }],
+    [{ id: 'b', size: 101 }],
+    [{ id: 'b', approve: true }],
   ])('rejects %j', (value) => {
     expect(() => parseGrantBatch(value)).toThrow()
   })

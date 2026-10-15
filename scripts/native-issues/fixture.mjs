@@ -28,10 +28,7 @@ else {
   const secret = (name, value) => writeFileSync(`${output}/${name}`, value, { mode: 0o600, flag: 'wx' })
   const password = randomBytes(24).toString('base64url')
   secret('password', password)
-  docker(['run', '-d', '--name', forge, '--label', 'openape.task=issue-1356', '-p', '127.0.0.1:13856:3000',
-    '-e', 'FORGEJO__security__INSTALL_LOCK=true', '-e', 'FORGEJO__database__DB_TYPE=sqlite3',
-    '-e', 'FORGEJO__server__ROOT_URL=http://127.0.0.1:13856/', '-e', 'FORGEJO__service__DISABLE_REGISTRATION=true',
-    '-e', 'FORGEJO__actions__ENABLED=true', '-e', 'FORGEJO__mailer__ENABLED=false', '-e', 'FORGEJO__server__DISABLE_SSH=true', forgeImage])
+  docker(['run', '-d', '--name', forge, '--label', 'openape.task=issue-1356', '-p', '127.0.0.1:13856:3000',    '-e', 'FORGEJO__security__INSTALL_LOCK=true', '-e', 'FORGEJO__database__DB_TYPE=sqlite3',    '-e', 'FORGEJO__server__ROOT_URL=http://127.0.0.1:13856/', '-e', 'FORGEJO__service__DISABLE_REGISTRATION=true',    '-e', 'FORGEJO__actions__ENABLED=true', '-e', 'FORGEJO__mailer__ENABLED=false', '-e', 'FORGEJO__server__DISABLE_SSH=true', forgeImage])
   const endpoint = 'http://127.0.0.1:13856/api/v1'
   const deadline = Date.now() + 30000
   let ready = false

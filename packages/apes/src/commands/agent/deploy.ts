@@ -129,7 +129,8 @@ export const deployAgentCommand = defineCommand({
       let online = false
       for (let i = 0; i < 90 && !online; i++) {
         const st = await api<{ pending: boolean, ok?: boolean, error?: string }>(
-          `${troop}/api/agents/spawn-intent/${deploy.intent_id}`, token,
+          `${troop}/api/agents/spawn-intent/${deploy.intent_id}`,
+          token,
         )
         if (!st.pending) {
           if (!st.ok) throw new CliError(`spawn failed: ${st.error ?? 'unknown error'}`)

@@ -192,8 +192,7 @@ export function cliAuthorizationDetailsCover(
   requiredDetails: OpenApeCliAuthorizationDetail[],
 ): boolean {
   return requiredDetails.every(required =>
-    grantedDetails.some(granted => isCoverableCliDetail(granted) && cliAuthorizationDetailCovers(granted, required)),
-  )
+    grantedDetails.some(granted => isCoverableCliDetail(granted) && cliAuthorizationDetailCovers(granted, required)))
 }
 
 /**

@@ -116,6 +116,5 @@ export async function findStandingCrossSpGrant(
     && g.request.grant_type === 'always'
     && g.request.delegate === input.delegate
     && g.request.audience === input.audienceHost
-    && (g.request.scopes ?? []).includes(input.scope),
-  ) ?? null
+    && (g.request.scopes ?? []).includes(input.scope)) ?? null
 }

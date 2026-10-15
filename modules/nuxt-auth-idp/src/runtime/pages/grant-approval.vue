@@ -47,8 +47,7 @@ const commandDisplay = computed(() => unwrapShellCommand(grant.value?.request?.c
  * nature of the grant.
  */
 const isGenericGrant = computed(() =>
-  cliDetails.value.some(d => d?.operation_id === '_generic.exec'),
-)
+  cliDetails.value.some(d => d?.operation_id === '_generic.exec'))
 
 // "Always allow" opens a rule panel instead of granting an exact always-grant
 // (#1277): an exact grant would never match the next command line. Shaped

@@ -22,7 +22,8 @@ export default defineComponent({
   async mounted() { if (!this.subject) await this.refresh() },
   beforeUnmount() { this.closed = true; if (this.timer) clearTimeout(this.timer) },
   methods: {
-    t, diagnostic,
+    t,
+    diagnostic,
     async refresh() {
       try { if (!this.available) return; this.view = await this.hostBridge.onboarding({ type: 'list' }); this.error = '' }
       catch (error) { this.error = error instanceof Error ? error.message : 'Account status unavailable' }

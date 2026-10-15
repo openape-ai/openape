@@ -121,12 +121,27 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
     })
     const waitingGrants = pendingGrants.filter(row => local && row.pod_id === pod.id && !runApprovals.some(approval => approval.grantId === row.id)).map(grant)
     pods.push({
-      id: pod.id, name: pod.name, revision: pod.revision, script: pod.activeScript, description: descriptions.get(pod.id) || null, lifecycle: pod.lifecycle, draft: pod.activeScript === null,
-      kind, ai, data: { writes: writesData, reads: readsData }, work: { pending: pending[pod.id] ?? 0, held: held[pod.id] ?? 0 }, resources: mapped, secrets,
-      schedule: schedules.get(pod.id) ?? null, lastRun: local ? lastRuns.get(pod.id) ?? null : null, runs: local ? runTotals[pod.id] ?? 0 : 0,
+      id: pod.id,
+      name: pod.name,
+      revision: pod.revision,
+      script: pod.activeScript,
+      description: descriptions.get(pod.id) || null,
+      lifecycle: pod.lifecycle,
+      draft: pod.activeScript === null,
+      kind,
+      ai,
+      data: { writes: writesData, reads: readsData },
+      work: { pending: pending[pod.id] ?? 0, held: held[pod.id] ?? 0 },
+      resources: mapped,
+      secrets,
+      schedule: schedules.get(pod.id) ?? null,
+      lastRun: local ? lastRuns.get(pod.id) ?? null : null,
+      runs: local ? runTotals[pod.id] ?? 0 : 0,
       queue: local ? { blocked: Number(queue?.count ?? 0), error: (queue?.error as string | null) ?? null } : { blocked: 0, error: null },
       unknown: unknownEffects.filter(row => local && row.pod_id === pod.id).map(row => ({ key: String(row.effect_key), runId: String(row.run_id) })),
-      approvals: runApprovals, grants: waitingGrants, failures: local ? failures[pod.id] ?? 0 : 0,
+      approvals: runApprovals,
+      grants: waitingGrants,
+      failures: local ? failures[pod.id] ?? 0 : 0,
       ...tagsOf(pod.id),
     })
   }
@@ -140,10 +155,12 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
   ]
   const unknownDeliveries = unknownEffects.length + Number(db.prepare('SELECT count(*) AS count FROM effect_attempts WHERE state=\'unknown\'').get()!.count)
   return {
-    at, window: { from, to: at },
+    at,
+    window: { from, to: at },
     kpis: { active, paused: pods.length - active, degraded, decisions, unknownDeliveries },
     systems: Array.from(systems.values(), ({ methods, ...item }) => ({ ...item, how: methods ? [...methods].sort().join(', ') : item.how })),
-    pods, edges,
+    pods,
+    edges,
   }
 }
 

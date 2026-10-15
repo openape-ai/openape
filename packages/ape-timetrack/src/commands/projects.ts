@@ -13,7 +13,9 @@ const list = defineCommand({
   async run({ args }) {
     const company = resolveCompanyId(args.company, args.endpoint)
     const rows = await apiCall<Array<{ id: string, name: string, role: string | null }>>(
-      'GET', '/api/projects', { endpoint: args.endpoint, query: { company } },
+      'GET',
+      '/api/projects',
+      { endpoint: args.endpoint, query: { company } },
     )
     if (args.json) { printJson(rows); return }
     if (rows.length === 0) { info('No visible projects in this company.'); return }
@@ -35,7 +37,9 @@ const create = defineCommand({
     const body: Record<string, unknown> = { company_id: company, name: args.name }
     if (args.description) body.description = args.description
     const p = await apiCall<{ id: string, name: string }>(
-      'POST', '/api/projects', { endpoint: args.endpoint, body },
+      'POST',
+      '/api/projects',
+      { endpoint: args.endpoint, body },
     )
     if (args.json) { printJson(p); return }
     printLine(`${p.id}  ${p.name}  (manager)`)
@@ -71,7 +75,9 @@ const invite = defineCommand({
     if (args['expires-in']) body.expires_in = args['expires-in']
     if (args.note) body.note = args.note
     const r = await apiCall<{ url: string, role: string, expires_at: number }>(
-      'POST', `/api/projects/${args.id}/invite`, { endpoint: args.endpoint, body },
+      'POST',
+      `/api/projects/${args.id}/invite`,
+      { endpoint: args.endpoint, body },
     )
     if (args.json) { printJson(r); return }
     printLine(r.url)
@@ -91,7 +97,9 @@ export const projectsCommand = defineCommand({
     if (rawArgs.some(a => ['list', 'new', 'use', 'invite'].includes(a))) return
     const company = resolveCompanyId(args.company, args.endpoint)
     const rows = await apiCall<Array<{ id: string, name: string, role: string | null }>>(
-      'GET', '/api/projects', { endpoint: args.endpoint, query: { company } },
+      'GET',
+      '/api/projects',
+      { endpoint: args.endpoint, query: { company } },
     )
     if (args.json) { printJson(rows); return }
     if (rows.length === 0) { info('No visible projects in this company.'); return }

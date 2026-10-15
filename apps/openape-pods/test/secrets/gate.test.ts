@@ -54,7 +54,9 @@ const podId = '00000000-0000-4000-8000-000000000001'
 function gate(now: () => number = Date.now) {
   let consumer: ConsumerRecord | null = null; const rows: SecretRequestRow[] = []; const stored: { podId: string, alias: string, value: string }[] = []
   const instance = new SecretsGate({
-    origin, fetch: (input, init) => fetch(input, init), now,
+    origin,
+    fetch: (input, init) => fetch(input, init),
+    now,
     ownerToken: async () => 'owner-idp-token',
     consumer: { load: async () => consumer, save: async (record) => { consumer = record }, erase: async () => { consumer = null } },
     rows: { list: async () => rows.map(row => ({ ...row })), record: async (row) => { rows.push({ ...row }) }, update: async (id, patch) => { Object.assign(rows.find(row => row.id === id)!, patch) } },

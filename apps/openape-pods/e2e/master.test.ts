@@ -127,10 +127,13 @@ it('executes the model-facing runtime example and preserves files and progress a
 it('generates a bounded structured description through actual app-server without control tools', async () => {
   const { runtime } = await setup(); const requests: Record<string, unknown>[] = []
   const { summarizeConversation } = await import('../src/worker/master/summarize')
-  const result = await summarizeConversation(store, runtime, { model: bundledModel, provider: async (body) => {
-    requests.push(body as Record<string, unknown>)
-    return recordedResponse({ type: 'message', id: 'summary', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify({ description: 'Checks every 30 minutes.' }), annotations: [] }] })
-  } }, JSON.stringify({ previousDescription: '', conversation: [{ role: 'user', text: 'Check every 30 minutes' }] }), new AbortController().signal)
+  const result = await summarizeConversation(store, runtime, {
+    model: bundledModel,
+    provider: async (body) => {
+      requests.push(body as Record<string, unknown>)
+      return recordedResponse({ type: 'message', id: 'summary', role: 'assistant', status: 'completed', content: [{ type: 'output_text', text: JSON.stringify({ description: 'Checks every 30 minutes.' }), annotations: [] }] })
+    },
+  }, JSON.stringify({ previousDescription: '', conversation: [{ role: 'user', text: 'Check every 30 minutes' }] }), new AbortController().signal)
   expect(result).toBe('Checks every 30 minutes.')
   expect(JSON.stringify(requests[0].tools ?? [])).not.toContain('pods_control')
   expect(store.listPods()).toHaveLength(0)

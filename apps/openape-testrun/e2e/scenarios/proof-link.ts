@@ -21,13 +21,23 @@ export const proofLinkScenario = {
     project: 'openape-free-idp',
     summary: 'Ein Nutzer meldet sich passwortlos an und ein Agent wird in seinem Namen autorisiert.',
     tests: [
-      { id: 'login', title: 'Nutzer meldet sich mit Passkey an', status: 'passed', steps: [
-        { title: 'Startseite', caption: 'Auf der Startseite gibst du deine E-Mail ein.', status: 'passed' },
-        { title: 'Passkey', caption: 'Der Browser fragt deinen Passkey ab — kein Passwort nötig.', status: 'passed' },
-      ] },
-      { id: 'grant', title: 'Agent wird autorisiert', status: 'passed', steps: [
-        { title: 'Consent', caption: 'Du genehmigst dem Agent den Zugriff in deinem Namen.', status: 'passed' },
-      ] },
+      {
+        id: 'login',
+        title: 'Nutzer meldet sich mit Passkey an',
+        status: 'passed',
+        steps: [
+          { title: 'Startseite', caption: 'Auf der Startseite gibst du deine E-Mail ein.', status: 'passed' },
+          { title: 'Passkey', caption: 'Der Browser fragt deinen Passkey ab — kein Passwort nötig.', status: 'passed' },
+        ],
+      },
+      {
+        id: 'grant',
+        title: 'Agent wird autorisiert',
+        status: 'passed',
+        steps: [
+          { title: 'Consent', caption: 'Du genehmigst dem Agent den Zugriff in deinem Namen.', status: 'passed' },
+        ],
+      },
     ],
   },
   steps: [

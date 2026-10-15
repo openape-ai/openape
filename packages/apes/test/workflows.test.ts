@@ -232,11 +232,13 @@ describe('multi-user workflow tests', () => {
   it('Bob logs in via apes login --key', async () => {
     const { loginCommand } = await import('../src/commands/auth/login')
 
-    await loginCommand.run!({ args: {
-      idp: idpBase,
-      key: join(testHome, 'bob_key'),
-      email: bob.email,
-    } } as any)
+    await loginCommand.run!({
+      args: {
+        idp: idpBase,
+        key: join(testHome, 'bob_key'),
+        email: bob.email,
+      },
+    } as any)
 
     // Verify auth was written correctly
     const { readFileSync, existsSync } = await import('node:fs')
@@ -256,13 +258,15 @@ describe('multi-user workflow tests', () => {
       const { requestCommand } = await import('../src/commands/grants/request')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await requestCommand.run!({ args: {
-        command: 'ls -la',
-        audience: 'escapes',
-        reason: 'integration test',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'ls -la',
+          audience: 'escapes',
+          reason: 'integration test',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalled()
       const successMsg = successSpy.mock.calls[0]![0] as string
@@ -330,13 +334,15 @@ describe('multi-user workflow tests', () => {
       const { requestCommand } = await import('../src/commands/grants/request')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await requestCommand.run!({ args: {
-        command: 'rm -rf /tmp/test',
-        audience: 'escapes',
-        reason: 'test denial',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'rm -rf /tmp/test',
+          audience: 'escapes',
+          reason: 'test denial',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       const successMsg = successSpy.mock.calls[0]![0] as string
       const idMatch = successMsg.match(/Grant requested:\s+(\S+)/)
@@ -378,14 +384,16 @@ describe('multi-user workflow tests', () => {
       const { requestCommand } = await import('../src/commands/grants/request')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await requestCommand.run!({ args: {
-        command: 'docker ps',
-        audience: 'escapes',
-        reason: 'timed session test',
-        approval: 'timed',
-        duration: '1h',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'docker ps',
+          audience: 'escapes',
+          reason: 'timed session test',
+          approval: 'timed',
+          duration: '1h',
+          wait: false,
+        },
+      } as any)
 
       const successMsg = successSpy.mock.calls[0]![0] as string
       const idMatch = successMsg.match(/Grant requested:\s+(\S+)/)
@@ -435,13 +443,15 @@ describe('multi-user workflow tests', () => {
 
       for (let i = 0; i < 3; i++) {
         const successSpy = vi.spyOn(consola, 'success')
-        await requestCommand.run!({ args: {
-          command: `test-cmd-${i}`,
-          audience: 'escapes',
-          reason: `batch test ${i}`,
-          approval: 'once',
-          wait: false,
-        } } as any)
+        await requestCommand.run!({
+          args: {
+            command: `test-cmd-${i}`,
+            audience: 'escapes',
+            reason: `batch test ${i}`,
+            approval: 'once',
+            wait: false,
+          },
+        } as any)
 
         const successMsg = successSpy.mock.calls.at(-1)![0] as string
         const idMatch = successMsg.match(/Grant requested:\s+(\S+)/)
@@ -458,11 +468,13 @@ describe('multi-user workflow tests', () => {
       const { revokeCommand } = await import('../src/commands/grants/revoke')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await revokeCommand.run!({ args: {
-        allPending: true,
-        debug: false,
-        _: [],
-      } } as any)
+      await revokeCommand.run!({
+        args: {
+          allPending: true,
+          debug: false,
+          _: [],
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalled()
     })
@@ -490,13 +502,15 @@ describe('multi-user workflow tests', () => {
       const { requestCommand } = await import('../src/commands/grants/request')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await requestCommand.run!({ args: {
-        command: 'cat /etc/shadow',
-        audience: 'escapes',
-        reason: 'inbox test',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'cat /etc/shadow',
+          audience: 'escapes',
+          reason: 'inbox test',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       const successMsg = successSpy.mock.calls[0]![0] as string
       const idMatch = successMsg.match(/Grant requested:\s+(\S+)/)
@@ -514,8 +528,7 @@ describe('multi-user workflow tests', () => {
       const data = JSON.parse(output)
       // The server returns grants with requester nested under request.requester
       const pending = data.data.filter((g: { request?: { requester?: string } }) =>
-        g.request?.requester === bob.email,
-      )
+        g.request?.requester === bob.email)
       expect(pending.length).toBeGreaterThanOrEqual(1)
       const ourGrant = pending.find((g: { id: string }) => g.id === grantId)
       expect(ourGrant).toBeTruthy()
@@ -548,13 +561,15 @@ describe('multi-user workflow tests', () => {
       const { requestCommand } = await import('../src/commands/grants/request')
       let successSpy = vi.spyOn(consola, 'success')
 
-      await requestCommand.run!({ args: {
-        command: 'whoami',
-        audience: 'escapes',
-        reason: 'bob visibility test',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'whoami',
+          audience: 'escapes',
+          reason: 'bob visibility test',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       let successMsg = successSpy.mock.calls[0]![0] as string
       let idMatch = successMsg.match(/Grant requested:\s+(\S+)/)
@@ -566,13 +581,15 @@ describe('multi-user workflow tests', () => {
       writeAuthAs(charlie, idpBase)
       successSpy = vi.spyOn(consola, 'success')
 
-      await requestCommand.run!({ args: {
-        command: 'hostname',
-        audience: 'escapes',
-        reason: 'charlie visibility test',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'hostname',
+          audience: 'escapes',
+          reason: 'charlie visibility test',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       successMsg = successSpy.mock.calls[0]![0] as string
       idMatch = successMsg.match(/Grant requested:\s+(\S+)/)
@@ -606,11 +623,13 @@ describe('multi-user workflow tests', () => {
       const { delegateCommand } = await import('../src/commands/grants/delegate')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await delegateCommand.run!({ args: {
-        to: 'charlie@example.com',
-        at: 'api.example.com',
-        approval: 'once',
-      } } as any)
+      await delegateCommand.run!({
+        args: {
+          to: 'charlie@example.com',
+          at: 'api.example.com',
+          approval: 'once',
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalled()
       const successMsg = successSpy.mock.calls[0]![0] as string
@@ -668,11 +687,13 @@ describe('multi-user workflow tests', () => {
       const { delegateCommand } = await import('../src/commands/grants/delegate')
 
       await expect(
-        delegateCommand.run!({ args: {
-          to: 'alice@example.com',
-          at: 'api.example.com',
-          approval: 'once',
-        } } as any),
+        delegateCommand.run!({
+          args: {
+            to: 'alice@example.com',
+            at: 'api.example.com',
+            approval: 'once',
+          },
+        } as any),
       ).rejects.toThrow()
     })
 
@@ -746,11 +767,13 @@ describe('multi-user workflow tests', () => {
       const { registerUserCommand } = await import('../src/commands/register-user')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await registerUserCommand.run!({ args: {
-        email: newAgent.email,
-        name: newAgent.name,
-        key: pubKeyFile,
-      } } as any)
+      await registerUserCommand.run!({
+        args: {
+          email: newAgent.email,
+          name: newAgent.name,
+          key: pubKeyFile,
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalled()
       const msg = successSpy.mock.calls[0]![0] as string
@@ -771,12 +794,14 @@ describe('multi-user workflow tests', () => {
       const { registerUserCommand } = await import('../src/commands/register-user')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await registerUserCommand.run!({ args: {
-        email: humanSub.email,
-        name: humanSub.name,
-        key: humanSub.publicKeySsh,
-        type: 'human',
-      } } as any)
+      await registerUserCommand.run!({
+        args: {
+          email: humanSub.email,
+          name: humanSub.name,
+          key: humanSub.publicKeySsh,
+          type: 'human',
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalled()
       const msg = successSpy.mock.calls[0]![0] as string
@@ -790,11 +815,13 @@ describe('multi-user workflow tests', () => {
       const { registerUserCommand } = await import('../src/commands/register-user')
 
       await expect(
-        registerUserCommand.run!({ args: {
-          email: subUser.email,
-          name: subUser.name,
-          key: subUser.publicKeySsh,
-        } } as any),
+        registerUserCommand.run!({
+          args: {
+            email: subUser.email,
+            name: subUser.name,
+            key: subUser.publicKeySsh,
+          },
+        } as any),
       ).rejects.toThrow()
     })
 
@@ -805,11 +832,13 @@ describe('multi-user workflow tests', () => {
       const { registerUserCommand } = await import('../src/commands/register-user')
 
       await expect(
-        registerUserCommand.run!({ args: {
-          email: dupKey.email,
-          name: dupKey.name,
-          key: dupKey.publicKeySsh,
-        } } as any),
+        registerUserCommand.run!({
+          args: {
+            email: dupKey.email,
+            name: dupKey.name,
+            key: dupKey.publicKeySsh,
+          },
+        } as any),
       ).rejects.toThrow()
     })
   })

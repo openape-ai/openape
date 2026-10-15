@@ -40,11 +40,20 @@ function workspace() {
 
 async function packageFixture(access = false) {
   const description: PortableDescription = {
-    format: 'openape-package', version: 1, package: { key: 'fixture', revision: 1, title: 'Portable fixture', description: '' }, requiredFeatures: ['portable_aliases_v1'],
-    entry: { kind: 'pod', key: 'fixture' }, compositions: [],
+    format: 'openape-package',
+    version: 1,
+    package: { key: 'fixture', revision: 1, title: 'Portable fixture', description: '' },
+    requiredFeatures: ['portable_aliases_v1'],
+    entry: { kind: 'pod', key: 'fixture' },
+    compositions: [],
     applications: access ? [{ key: 'fixture_cli', application: 'tool-cli', adapter: { identity: 'tool-cli-adapter', version: 1, operations: ['invoke'] }, testedVersions: [], platforms: [{ os: 'darwin', architecture: 'arm64' }], distribution: null, instructions: '' }] : [],
     pods: [{
-      key: 'fixture', title: 'Imported fixture', description: '', script: 'pods/fixture/run.mjs', packages: null, contract: null,
+      key: 'fixture',
+      title: 'Imported fixture',
+      description: '',
+      script: 'pods/fixture/run.mjs',
+      packages: null,
+      contract: null,
       requestedCapabilities: access ? ['credential.token', 'tool.api.request', 'tool.cli.invoke'] : [],
       access: access ? [{ kind: 'http', alias: 'api', origin: 'input_4', methods: ['GET'], authentication: null }, { kind: 'directory', alias: 'inbox', input: 'input_7', access: 'read' }, { kind: 'directory', alias: 'archive', input: 'input_10', access: 'read' }] : [],
       inputs: [
@@ -53,7 +62,9 @@ async function packageFixture(access = false) {
         ...(access ? [{ key: 'input_3', label: 'token', description: '', kind: 'secret' as const, required: true, sharingGroup: null }, { key: 'input_4', label: 'api origin', description: '', kind: 'string' as const, required: true, sharingGroup: null, default: 'https://api.example.test' }, { key: 'input_5', label: 'first', description: '', kind: 'string' as const, required: true, sharingGroup: 'region' }, { key: 'input_6', label: 'second', description: '', kind: 'string' as const, required: true, sharingGroup: 'region' }, { key: 'input_7', label: 'inbox', description: '', kind: 'directory' as const, required: true, sharingGroup: null }, { key: 'input_8', label: 'cli account', description: '', kind: 'account' as const, required: true, sharingGroup: null }, { key: 'input_9', label: 'REGION', description: '', kind: 'string' as const, required: true, sharingGroup: null, default: 'eu' }, { key: 'input_10', label: 'archive', description: '', kind: 'directory' as const, required: true, sharingGroup: null }] : []),
       ],
       bindings: [{ alias: 'greeting', input: 'input_1' }, { alias: 'limit', input: 'input_2' }, ...(access ? [{ alias: 'token', input: 'input_3' }, { alias: 'first', input: 'input_5' }, { alias: 'second', input: 'input_6' }] : [])],
-      applications: access ? [{ alias: 'cli', requirement: 'fixture_cli', account: 'input_8', environment: [{ alias: 'REGION', input: 'input_9' }] }] : [], assets: ['assets/template.txt'], schedule: { kind: 'interval', seconds: 3600 },
+      applications: access ? [{ alias: 'cli', requirement: 'fixture_cli', account: 'input_8', environment: [{ alias: 'REGION', input: 'input_9' }] }] : [],
+      assets: ['assets/template.txt'],
+      schedule: { kind: 'interval', seconds: 3600 },
     }],
   }
   const payloads: PortablePayload[] = [{ path: 'pods/fixture/run.mjs', kind: 'script', mediaType: 'text/javascript', content: bytes('export async function run() { return { status: "completed" } }') }, { path: 'assets/template.txt', kind: 'asset', mediaType: 'text/plain', content: bytes('Reusable template') }]
@@ -287,8 +298,12 @@ it('restores unfinished imports closed', async () => {
 
 it('refuses a package that still composes Pods into a network before anything is staged', async () => {
   const description: PortableDescription = {
-    format: 'openape-package', version: 1, package: { key: 'network', revision: 1, title: 'Retired network', description: '' }, requiredFeatures: ['portable_aliases_v1'],
-    entry: { kind: 'network', key: 'mail' }, applications: [],
+    format: 'openape-package',
+    version: 1,
+    package: { key: 'network', revision: 1, title: 'Retired network', description: '' },
+    requiredFeatures: ['portable_aliases_v1'],
+    entry: { kind: 'network', key: 'mail' },
+    applications: [],
     compositions: [{ key: 'mail', kind: 'network', title: 'Mail', document: 'compositions/mail.json', documentVersion: 1, nodes: [{ pod: 'fixture', after: [], handoff: false }], calls: [], inputs: [], dataSchemas: [] }],
     pods: [{ key: 'fixture', title: 'Member', description: '', script: 'pods/fixture/run.mjs', packages: null, contract: null, requestedCapabilities: [], access: [], inputs: [], bindings: [], applications: [], assets: [], schedule: null }],
   }
