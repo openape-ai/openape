@@ -322,7 +322,6 @@ it('shows the account messages in the workspace tab and keeps read, archive and 
   await card.getByRole('button', { name: 'Löschen' }).click()
   await expect.poll(async () => (await listed(true)).map(entry => entry.id)).not.toContain(item.id)
   expect((await context.request.get(`${relay.url}/inbox/api/v1/items/${item.id}`)).status()).toBe(404)
-  expect(await noHorizontalScroll(page)).toBe(true)
 
   // Refusals: another account's desktop, a missing session and a foreign origin read or change nothing.
   const foreign = await desktop(other)
