@@ -8,6 +8,22 @@
 - Verification: zero remaining violations of the new rules, no new violations of other rules; affected lint and typecheck pass. Pods and Pods relay unit timeouts at 5 s reproduce on the unchanged base under load and are tracked separately.
 - Next: native PR review and merge; then investigate the load-sensitive test timeouts.
 
+## Load-sensitive unit test timeouts — issue 1493
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1493. Branch `bugfix/issue-1493-test-timeouts`, base `01ea0ac93240f92b354c4ad453c3d35711c6ccad`, checkout `openape-monorepo.worktrees/test-timeouts-1493`.
+- Owner first requested a relay fix and a gate worker limit, separate from PR 447 (issue 1491), then kept only the relay fix. The relay quota test filled 10,000 items with a per-write `count(*)` (quadratic, ~3 s unloaded); `InboxStore` now takes the quota and the test uses 20 items with unchanged assertions (1–2 ms; a disabled quota check makes it fail).
+- A gate-wide Vitest worker limit was tried and dropped: in a full uncached `--concurrency=4` comparison it turned `apes` and `openape-e2e` red three times with `403 Invalid management token` while the unlimited run passed; that IdP fixture cross-talk is tracked in https://repos.openape.ai/patrick/monorepo/issues/1494. `VITEST_MAX_WORKERS` must not be used either: Vitest 4.1.10 applies it after `fileParallelism: false`.
+- Next: native PR review and merge.
+
+## Pods workspace messages tab — issue 1487
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1487. Branch `feature/issue-1487-pods-messages`, base `5150cdc2`, checkout `.claude/worktrees/openape-pods-ui-redesign-7b2382`.
+- Owner approved Plan revision 4 on October 15, 2026 ("ja - du kannst mit der umsetzung starten"): https://report.openape.ai/d/01M4ZCQTG2AZM49A5GW2AAWX4T?v=4. The design was iterated in the Vite demo and accepted by the owner.
+- Adds a Mitteilungen tab to the shared workspace, relay endpoints for the owner session and the signed desktop runtime (all of the account's messages, never decisions), a shared message parser, the desktop `messages` channel and the browser client.
+- Rollout: relay first, then a signed desktop build; a new desktop against the old relay would show the tab with an update error. Not deployed.
+- PR: https://repos.openape.ai/patrick/monorepo/pulls/448 (head `7c7cb7cf`, merged with main `01ea0ac9`). Local affected gate (Pods 1802, relay 101), Pods browser suite 64/64 and relay e2e 2/2 passed: https://report.openape.ai/d/01M4ZJ5P0Q9B6CA57CGM35D2HP?v=1. Plan v5: https://report.openape.ai/d/01M4ZCQTG2AZM49A5GW2AAWX4T?v=5.
+- Next: owner review and merge; relay deployment before a signed desktop build; packaged-desktop acceptance with a real notify.
+
 ## CI instruction reconciliation — issue 1483
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1483; the native implementation PR is linked there. Branch `bugfix/issue-1483-knowledge-ci-guidance`, checkout `openape-monorepo.worktrees/knowledge-ci-1483`, base `7d0caa8b67a939284d008761efe977dc76fbe288`.
