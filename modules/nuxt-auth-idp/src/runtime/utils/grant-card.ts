@@ -2,6 +2,8 @@ import type { OpenApeGrant } from '@openape/core'
 import type { LocalizedText, ShapePresentation, ShapePresentationFormat } from '@openape/grants'
 import { getCliAuthorizationDetails } from './cli-grants'
 import { unwrapShellCommand } from './command-display'
+import type { CommandStructure } from './command-structure'
+import { HIDDEN_CHARACTERS, MAX_VALUE_LENGTH, structureCommand, worthStructuring } from './command-structure'
 
 /**
  * One generic grant card (issue 1473). Three labeled sources answer the
@@ -75,10 +77,6 @@ export interface RegistryCardInput {
 }
 
 const PLACEHOLDER = /\{([\w-]+)\}/g
-// Control and format characters (bidi overrides, zero-width marks) could make
-// a value read differently from what the approval covers.
-const HIDDEN_CHARACTERS = /[\p{Cc}\p{Cf}]/u
-const MAX_VALUE_LENGTH = 4096
 const MAX_MAP_LENGTH = 16000
 const MAX_MAP_ENTRIES = 64
 
@@ -170,6 +168,8 @@ export interface BindingLine {
   requested?: true
   /** Shell that wrapped the command (`bash -c …`), shown as a badge. */
   shell?: string
+  /** Readable structure of an exact command; `text` stays the raw command line. */
+  structure?: CommandStructure
 }
 
 /** The primary line of every card and batch row: what the approval binds. */
@@ -177,7 +177,11 @@ export function grantBindingLine(grant: GrantWithCard, language: CardLanguage): 
   const registry = grant.card?.registry
   if (registry) return { kind: 'registry', text: registry.title[language], ...(registry.title.requested ? { requested: true as const } : {}) }
   const command = unwrapShellCommand(grant.request.command)
-  if (command) return { kind: 'command', text: command.text, ...(command.shell ? { shell: command.shell } : {}) }
+  if (command?.shell) return { kind: 'command', text: command.text, shell: command.shell }
+  if (command) {
+    const structure = structureCommand(grant.request.command)
+    return { kind: 'command', text: command.text, ...(structure && worthStructuring(structure, command.text.length) ? { structure } : {}) }
+  }
   const permissions = grant.request.permissions?.length
     ? grant.request.permissions
     : getCliAuthorizationDetails(grant.request.authorization_details).map(detail => detail.permission)
