@@ -73,9 +73,20 @@ from a failing baseline or fewer assertions.
 
 ## Evidence and handoff
 
-Verification, measurements, inspected image digests, exact source SHA and private
-Test Run publication are recorded here after acceptance. No CI reactivation or
-deployment. Additional Opus review is coordinated centrally and is not claimed.
+Private Test Run: https://report.openape.ai/d/01M4ZG3KYXRNDHYXHS20678YAN
+
+The versioned report contains exact source SHAs, command receipts, inspected-image
+SHA-256 attestations and actual outcomes. Its first publication explicitly marks
+final integration and the normal push gate as pending; subsequent editions record
+their actual completion. Owner access, category `Test Runs` and an exact export
+match were verified. No CI reactivation or deployment. Additional Opus review is
+coordinated centrally and is not claimed.
+
+At source `af6513e7eb59d55e0dd6fce0196eac72eb59874d`, all 14 browser cases passed
+in 7.174s wall clock and all 48 existing focused unit tests passed in 2.090s.
+Sixteen exact browser images were personally inspected and hashed. Their evidence
+covers narrow/wide layouts, both themes, decision states, loading/empty/error,
+and German large-text navigation with real open/unread counters.
 
 ### Large-text harness correction
 
@@ -111,9 +122,10 @@ for this setup correction. A subsequent 16.047s failed run reached the actual AP
 and exposed the obsolete `proposal`/`network-choice` fixture types described above.
 
 The corrected legacy scenario (all original UI assertions retained, valid question
-fixtures, current production components/CSS) passed in 34.808s wall clock. This is
+fixtures, components/CSS at measured source `22b1636216c127bbe418af503c913c4565167bd8`) passed in 34.808s wall clock. This is
 a characterization run from a temporary test-file replacement, not the frozen
-original source passing unchanged. Both comparison commands use one Vitest worker,
+original source passing unchanged. Its then-present CSS adjustments were subsequently
+removed after the harness correction above; this is not a controlled speedup benchmark. Both comparison commands use one Vitest worker,
 `TURBO_ENV_MODE=loose`, synthetic app-local HOME/TMPDIR and the Nitro TCP option.
 Dependencies and Nuxt generated caches are warm; each command still builds the
 relay and starts fresh local services, browser contexts and databases. No competing
