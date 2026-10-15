@@ -102,6 +102,14 @@ describe('apes agents spawn', () => {
     })).rejects.toThrow(/Invalid agent name/)
   })
 
+  it('rejects the retired runtime before provisioning an identity or OS user', async () => {
+    const { spawnAgentCommand } = await import('../src/commands/agents/spawn.js')
+    const run = spawnAgentCommand.run as (context: { args: { name: string, type: string } }) => Promise<void>
+    await expect(run({ args: { name: 'legacy', type: 'openclaw' } })).rejects.toThrow('Only "bridge" is supported')
+    expect(bootstrapMock.registerAgentAtIdp).not.toHaveBeenCalled()
+    expect(runPrivilegedBashMock).not.toHaveBeenCalled()
+  })
+
   it('refuses when the OS user already exists', async () => {
     readUserMock.mockReturnValue({ name: 'agent-a', uid: 1001, shell: '/bin/bash', homeDir: '/var/lib/openape/homes/agent-a' })
     const { spawnAgentCommand } = await import('../src/commands/agents/spawn.js')

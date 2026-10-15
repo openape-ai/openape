@@ -237,7 +237,7 @@ const flagScan = dashDash === -1 ? rawArgs : rawArgs.slice(0, dashDash)
 const wantsBuiltin = rawArgs.length === 0
   || flagScan.some(a => a === '-h' || a === '--help' || a === '-v' || a === '--version')
 
-// External subcommands are resolved before citty, so `apes openclaw --help`
+// External subcommands are resolved before citty, so `apes example --help`
 // reaches the child instead of printing apes' own usage.
 const external = dispatchExternalSubcommand(rawArgs, new Set(Object.keys(main.subCommands ?? {})))
 if (external !== null) process.exit(external)

@@ -2,7 +2,7 @@
 name: openape-shapes
 description: "OpenAPE Shapes — grant-aware CLI wrappers with adapter registry for structured, auditable command execution"
 metadata:
-  openclaw:
+  openape:
     emoji: "\U0001F533"
     requires:
       bins:

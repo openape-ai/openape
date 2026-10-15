@@ -23,9 +23,7 @@ const bodySchema = z.object({
   // Optional: if the owner has multiple Macs connected, pick one.
   // Omitted = first connected nest.
   host_id: z.string().optional(),
-  // Runtime that executes the agent: 'bridge' (default) or 'openclaw'
-  // (foreign one-shot runtime). Carried to the nest's `apes agents spawn --type`.
-  runtime_type: z.enum(['bridge', 'openclaw']).optional(),
+  runtime_type: z.literal('bridge').optional(),
   bridge_key: z.string().optional(),
   bridge_base_url: z.string().url().optional(),
   bridge_model: z.string().optional(),

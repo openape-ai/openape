@@ -1,5 +1,15 @@
 # Active work
 
+## OpenClaw retirement — issue 1479
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1479. Branch `feature/issue-1479-remove-openclaw`, base `ba7c4d827f82a556ddfe8009e592e905ce7221ed`.
+- Owner approved removing OpenClaw from OpenApe on October 15, 2026: “passt - dann nest zurückbauen...openclaw entfernen wir nun aus openape”. The implementation removes the Nest adapter, setup and grant-gate packages, container/skill-sync distribution, and active documentation wiring.
+- Nest keeps the default bridge and opt-in in-process bridge. Retired runtime entries remain stored and are reported instead of starting a different runtime. Generic identity/grant APIs and external CLI dispatch are preserved. Bundled skills use `metadata.openape`; old imported metadata requires explicit migration.
+- Existing data, installed host packages, published npm packages and services are not modified. Historical receipts and source attributions remain historical. No deployment is part of this repository cleanup.
+- Validation: full `pnpm lint` (52 tasks), `pnpm typecheck` (75 tasks), 30 consumed-workspace prebuilds, Troop/Monitor/docs builds, and `pnpm check:affected --base origin/main --head HEAD --suite unit` passed locally. The gate includes audit, workspace metadata, tooling, lint, typecheck and unit/component suites. Permanent regressions cover old runtime refusal at CLI/API/registry execution boundaries and skill requirements. Removed tests belonged exclusively to the deleted integration; other suites remain. Exact final-head evidence and report belong on the PR receipt.
+- Follow-up: publish the verification report, create/link the native PR, and reconcile superseded release issue 1341 after merge.
+
+
 ## Pods UI test cycles — issue 1478 follow-up
 
 - Owner authorization, October 15, 2026: “Super. Dann halten wir das Fest wo nötig. Mergen das und verkürzen auch für später die testzyklen”. UI PR https://repos.openape.ai/patrick/monorepo/pulls/427 merged as `9a56b378d9941edb280e790421c29bc26867acff`.

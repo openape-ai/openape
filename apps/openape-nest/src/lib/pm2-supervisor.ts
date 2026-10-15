@@ -31,7 +31,7 @@ import { join } from 'node:path'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import type { AgentEntry } from './registry'
-import { isDaemonRuntime } from './runtime-routing'
+import { assertBridgeRuntime } from './runtime-routing'
 
 const execFileAsync = promisify(execFile)
 // World-readable so agents can read their own ecosystem.config.js
@@ -240,16 +240,15 @@ export class Pm2Supervisor {
   /** Bring per-agent pm2 state in line with the registry. Idempotent. */
   async reconcile(desired: AgentEntry[]): Promise<void> {
     for (const agent of desired) {
-      // Non-daemon runtimes (e.g. openclaw) aren't pm2-supervised — the nest
-      // exec's them per message via the chat router, so there's nothing to
-      // startOrReload here. Only the default 'bridge' runtime is a daemon.
-      if (!isDaemonRuntime(agent)) continue
       // Service agents are always supervised (the worker is the whole point);
       // chat agents only when they carry bridge config.
       if (agent.kind !== 'service' && agent.bridge == null) continue
       if (this.inflight.has(agent.name)) continue
       this.inflight.add(agent.name)
-      try { await this.startOrReload(agent) }
+      try {
+        assertBridgeRuntime(agent)
+        await this.startOrReload(agent)
+      }
       catch (err) {
         this.deps.log(`pm2-supervisor: ${agent.name} reconcile errored: ${err instanceof Error ? err.message.split('\n')[0] : String(err)}`)
       }

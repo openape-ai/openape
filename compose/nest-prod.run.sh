@@ -4,7 +4,7 @@
 # external gateway https://llms.openape.ai, troop target, recipe-dev mount).
 # Blue-green: current → -prev (rollback), then run the new image.
 #
-#   IMAGE=openape-nest:openclaw bash compose/nest-prod.run.sh
+#   IMAGE=openape-nest:latest bash compose/nest-prod.run.sh
 #
 # Secrets live in ~/.config/openape/nest.env (600), NOT in the repo.
 set -euo pipefail

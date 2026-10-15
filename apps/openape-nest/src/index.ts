@@ -26,7 +26,7 @@ import { listAgents, REGISTRY_PATH } from './lib/registry'
 import { Pm2Supervisor } from './lib/pm2-supervisor'
 import { SessionHost } from './lib/session-host'
 import { createAgentRuntimeSession, resolveAgentRuntimeContext } from './lib/agent-runtime-session'
-import { sessionHostAgents } from './lib/runtime-routing'
+import { isBridgeRuntime } from './lib/runtime-routing'
 import { TroopSync } from './lib/troop-sync'
 import { readNestVersion, TroopWs } from './lib/troop-ws'
 
@@ -60,29 +60,28 @@ function log(line: string): void {
 // and the whole path is gated behind OPENAPE_NEST_INPROCESS=1 (default off →
 // pm2 path untouched).
 const INPROCESS = process.env.OPENAPE_NEST_INPROCESS === '1'
-// The SessionHost always exists now: even on the proven pm2 path it hosts the
-// non-daemon runtimes (openclaw) in-process, which have no pm2 child to
-// supervise. With INPROCESS=1 it owns ALL agents (single-process nest); else it
-// owns only the openclaw agents and the Pm2Supervisor keeps the bridge fleet.
-const sessionHost = new SessionHost({
-  log,
-  createSession: entry =>
-    createAgentRuntimeSession(entry, resolveAgentRuntimeContext(entry, process.env, log), log),
-})
+const sessionHost = INPROCESS
+  ? new SessionHost({
+      log,
+      createSession: entry =>
+        createAgentRuntimeSession(entry, resolveAgentRuntimeContext(entry, process.env, log), log),
+    })
+  : undefined
 const pm2Supervisor = INPROCESS ? undefined : new Pm2Supervisor({ apesBin: APES_BIN, log })
-if (INPROCESS) log('nest: OPENAPE_NEST_INPROCESS=1 — in-process SessionHost (all agents)')
-else log('nest: pm2 fleet + in-process SessionHost for openclaw agents')
+log(INPROCESS ? 'nest: in-process bridge sessions' : 'nest: pm2 bridge fleet')
 const troopSync = new TroopSync({ apesBin: APES_BIN, log })
 const troopWs = new TroopWs({ apesBin: APES_BIN, log, version: readNestVersion() })
 
 async function reconcile(): Promise<void> {
   try {
     const agents = listAgents()
-    // pm2 owns the bridge fleet (reconcile skips non-bridge runtimes internally).
-    if (pm2Supervisor) await pm2Supervisor.reconcile(agents)
-    // SessionHost owns all agents in-process when INPROCESS, else only the
-    // non-daemon (openclaw) ones — the bridge agents stay on pm2.
-    await sessionHost.reconcile(sessionHostAgents(agents, INPROCESS))
+    const supported = agents.filter((agent) => {
+      if (isBridgeRuntime(agent)) return true
+      log(`nest: ${agent.name} uses unsupported runtime "${String(agent.runtimeType)}"; retire or explicitly migrate its registry entry`)
+      return false
+    })
+    if (pm2Supervisor) await pm2Supervisor.reconcile(supported)
+    if (sessionHost) await sessionHost.reconcile(supported)
     log('nest: supervisor reconciled with registry')
   }
   catch (err) {
@@ -98,9 +97,11 @@ troopWs.start()
 // every live session once (SessionHost.tickAll). Non-breaking until the real
 // runtime loop lands: placeholder sessions have no `tick`, so tickAll is a
 // no-op. unref'd so it never keeps the process alive on its own.
-const tickTimer: NodeJS.Timeout = setInterval(() => { void sessionHost.tickAll() }, TICK_INTERVAL_MS)
-tickTimer.unref()
-log(`nest: central scheduler tick every ${TICK_INTERVAL_MS}ms`)
+const tickTimer = sessionHost
+  ? setInterval(() => { void sessionHost.tickAll() }, TICK_INTERVAL_MS)
+  : undefined
+tickTimer?.unref()
+if (tickTimer) log(`nest: central scheduler tick every ${TICK_INTERVAL_MS}ms`)
 
 // Watch the registry file for changes. fs.watch fires once per
 // "something happened" — debounce with a small timer because some
@@ -145,7 +146,7 @@ async function shutdown(signal: string): Promise<void> {
   troopWs.stop()
   if (reconcileTimer) clearTimeout(reconcileTimer)
   clearInterval(tickTimer)
-  await sessionHost.stopAll()
+  await sessionHost?.stopAll()
   process.exit(0)
 }
 

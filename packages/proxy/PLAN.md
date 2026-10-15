@@ -230,7 +230,7 @@ Ziel: Nahtlose Einbindung in OpenApe und Agent-Runtimes.
 
 - [ ] `@openape/proxy` npm Package (programmatisch starten/konfigurieren)
 - [ ] Integration mit `escapes` (ein Setup: Proxy + sudo gemeinsam konfiguriert)
-- [ ] OpenClaw Plugin (Proxy automatisch starten wenn Agent startet)
+- Cancelled (October 15, 2026, issue 1479): OpenClaw plugin integration; the owner retired OpenClaw support.
 - [ ] Agent-Runtime SDKs (Python, Go) — für Agents die nicht auf HTTP_PROXY setzen
 - [ ] Auto-Discovery (Agent fragt IdP: "Welche Domains darf ich?" → Config generieren)
 - [ ] Temporary Bypass Token (Admin kann zeitlich begrenzten "Proxy-Skip" geben für Debugging)
