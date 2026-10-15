@@ -10,7 +10,7 @@
     "approach": "Read and mark messages through new bounded relay endpoints, validated in one shared contract.",
     "outcome": "A notify from a Pod appears in the desktop and browser tab, and marking it read is visible on the phone."
   },
-  "status": "active",
+  "status": "done",
   "approval": {
     "by": "Patrick Hofmann",
     "date": "2026-10-15",
@@ -73,7 +73,7 @@
       "id": "desktop",
       "title": "Desktop connection",
       "goal": "The registered desktop shows the account's messages from the relay.",
-      "status": "active",
+      "status": "done",
       "steps": [
         "Add a messages channel to the IPC channel list, the preload bridge (parsing results) and the main process handler.",
         "Add RemoteController.messages(command) using the existing signed POST; return null while the desktop is not registered with an account.",
@@ -84,7 +84,7 @@
         "The packaged desktop shows a real notify message and the read state reaches the phone inbox."
       ],
       "rollback": "Remove the bridge channel; the tab disappears because the host supplies no messages.",
-      "proof": "Channel, controller and shared reader implemented and tested against the real relay store. Open: packaged desktop acceptance with a real notify after the relay deployment."
+      "proof": "Relay prod-2d24afe9 and the signed desktop build from main 2d24afe9 are installed. A real context.notify message appeared in the desktop and browser tab; marking it read in the browser lowered the phone badge count on the server (47 to 46) and reached the desktop after its next refresh. Rollout Test Run: https://report.openape.ai/d/01M4ZW16SJ0EK0VM09VZZQ3PCW?v=1"
     },
     {
       "id": "browser",
@@ -167,7 +167,7 @@
     "pnpm --filter @openape/pods typecheck, test (workspace, adapter-contracts, i18n) and test:browser",
     "Manual end to end: a Pod sends context.notify; the message appears in the desktop and browser tab; marking it read clears the phone badge. Publish the results with screenshots as a Test Run report."
   ],
-  "handoff": "PR 448 (https://repos.openape.ai/patrick/monorepo/pulls/448) is open with green local gate, browser suite and relay e2e. Next: owner review and merge, then deploy the relay first and a signed desktop build second; finish the desktop milestone with a real notify on the packaged app.",
+  "handoff": "Done: relay prod-2d24afe9 deployed, signed desktop 2d24afe9 installed with paired backup, live acceptance published. Follow-ups outside this plan: stale DMG acceptance navigation since #1468, about 2.5 minutes read-state sync on a background desktop window, cached 'no execution slot' MCP run results and a GUI self-relaunch during install backup.",
   "sections": [
     {
       "id": "orientation",
@@ -205,6 +205,10 @@
     {
       "date": "2026-10-15",
       "text": "Implementation on PR 448. Deviations: one POST route per host for list and mark instead of GET plus POST (one shared handler and parser); geometry checks stay in browser layout tests per the inbox UI test migration (issue 1485)."
+    },
+    {
+      "date": "2026-10-15",
+      "text": "Rollout: relay prod-2d24afe9 and signed desktop 2d24afe9 deployed after separate owner approvals; desktop milestone completed by live acceptance; plan done (achieved)."
     }
   ],
   "translations": {
@@ -422,8 +426,8 @@
       },
       {
         "path": "milestones.2.proof",
-        "source": "Channel, controller and shared reader implemented and tested against the real relay store. Open: packaged desktop acceptance with a real notify after the relay deployment.",
-        "text": "Kanal, Controller und gemeinsamer Leser sind umgesetzt und gegen den echten Relay-Store getestet. Offen: Abnahme im paketierten Desktop mit einer echten notify-Mitteilung nach dem Relay-Deployment."
+        "source": "Relay prod-2d24afe9 and the signed desktop build from main 2d24afe9 are installed. A real context.notify message appeared in the desktop and browser tab; marking it read in the browser lowered the phone badge count on the server (47 to 46) and reached the desktop after its next refresh. Rollout Test Run: https://report.openape.ai/d/01M4ZW16SJ0EK0VM09VZZQ3PCW?v=1",
+        "text": "Relay prod-2d24afe9 und der signierte Desktop-Build von main 2d24afe9 sind installiert. Eine echte context.notify-Mitteilung erschien im Desktop- und im Browser-Tab; als gelesen markiert im Browser sank der Badge-Zähler fürs Handy auf dem Server (47 auf 46), und der Desktop übernahm den Status nach seiner nächsten Aktualisierung. Rollout-Test-Run: https://report.openape.ai/d/01M4ZW16SJ0EK0VM09VZZQ3PCW?v=1"
       },
       {
         "path": "milestones.3.title",
@@ -597,8 +601,8 @@
       },
       {
         "path": "handoff",
-        "source": "PR 448 (https://repos.openape.ai/patrick/monorepo/pulls/448) is open with green local gate, browser suite and relay e2e. Next: owner review and merge, then deploy the relay first and a signed desktop build second; finish the desktop milestone with a real notify on the packaged app.",
-        "text": "PR 448 (https://repos.openape.ai/patrick/monorepo/pulls/448) ist offen; lokaler Gate, Browser-Suite und Relay-E2E sind grün. Nächster Schritt: Review und Merge durch den Owner, danach zuerst das Relay und dann einen signierten Desktop-Build ausrollen; den Desktop-Meilenstein mit einer echten notify-Mitteilung in der paketierten App abschließen."
+        "source": "Done: relay prod-2d24afe9 deployed, signed desktop 2d24afe9 installed with paired backup, live acceptance published. Follow-ups outside this plan: stale DMG acceptance navigation since #1468, about 2.5 minutes read-state sync on a background desktop window, cached 'no execution slot' MCP run results and a GUI self-relaunch during install backup.",
+        "text": "Erledigt: Relay prod-2d24afe9 deployt, signierter Desktop 2d24afe9 mit gepaartem Backup installiert, Live-Abnahme veröffentlicht. Follow-ups außerhalb dieses Plans: veraltete Navigation in der DMG-Abnahme seit #1468, rund 2,5 Minuten Lesestatus-Sync bei einem Desktop-Fenster im Hintergrund, gespeicherte MCP-Laufergebnisse „Kein Ausführungsplatz frei“ und ein GUI-Selbstneustart während des Installations-Backups."
       },
       {
         "path": "sections.0.title",
@@ -634,6 +638,16 @@
         "path": "changelog.4.text",
         "source": "Implementation on PR 448. Deviations: one POST route per host for list and mark instead of GET plus POST (one shared handler and parser); geometry checks stay in browser layout tests per the inbox UI test migration (issue 1485).",
         "text": "Umsetzung in PR 448. Abweichungen: eine POST-Route pro Host für Lesen und Markieren statt GET plus POST (ein gemeinsamer Handler und Parser); Geometrieprüfungen bleiben gemäß der Inbox-UI-Testmigration (Issue 1485) in Browser-Layout-Tests."
+      },
+      {
+        "path": "completion.summary",
+        "source": "The Mitteilungen tab shows the account's messages in the desktop and browser workspace in production, and read state reaches the phone inbox badge count. The physical phone icon itself was not observed; it refreshes from the same server count on its next push or sync.",
+        "text": "Der Tab „Mitteilungen“ zeigt die Mitteilungen des Kontos produktiv im Desktop- und Browser-Workspace, und der Lesestatus erreicht den Badge-Zähler der Handy-Inbox. Das Badge-Symbol am Handy selbst wurde nicht beobachtet; es aktualisiert sich beim nächsten Push oder Sync aus demselben Server-Zähler."
+      },
+      {
+        "path": "changelog.5.text",
+        "source": "Rollout: relay prod-2d24afe9 and signed desktop 2d24afe9 deployed after separate owner approvals; desktop milestone completed by live acceptance; plan done (achieved).",
+        "text": "Rollout: Relay prod-2d24afe9 und signierter Desktop 2d24afe9 nach getrennten Owner-Freigaben ausgerollt; Desktop-Meilenstein durch Live-Abnahme abgeschlossen; Plan erledigt (erreicht)."
       }
     ]
   },
@@ -649,6 +663,14 @@
     {
       "title": "Test Run",
       "url": "https://report.openape.ai/d/01M4ZJ5P0Q9B6CA57CGM35D2HP?v=1"
+    },
+    {
+      "title": "Rollout Test Run",
+      "url": "https://report.openape.ai/d/01M4ZW16SJ0EK0VM09VZZQ3PCW?v=1"
     }
-  ]
+  ],
+  "completion": {
+    "result": "achieved",
+    "summary": "The Mitteilungen tab shows the account's messages in the desktop and browser workspace in production, and read state reaches the phone inbox badge count. The physical phone icon itself was not observed; it refreshes from the same server count on its next push or sync."
+  }
 }
