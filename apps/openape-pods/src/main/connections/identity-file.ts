@@ -18,6 +18,8 @@ export async function podIdentityFile(root: string, connection: Pick<AgentConnec
   }
   try { await update() }
   catch (error) { await rm(directory, { recursive: true, force: true }); throw error }
+  // ape-shell rejects credentials in their final 30 seconds. Refresh before that
+  // boundary, leaving time for the asynchronous token read and atomic file swap.
   const timer = setInterval(() => {
     if (refreshing || stopped || failure) return
     refreshing = true
@@ -26,6 +28,6 @@ export async function podIdentityFile(root: string, connection: Pick<AgentConnec
       catch (error) { failure = error instanceof Error ? error : new Error('Pod identity refresh failed'); controller.abort(failure) }
       finally { refreshing = false }
     })()
-  }, 30000)
+  }, 15000)
   return { path, secrets, signal: controller.signal, subject: connection.subject, assertActive: () => { if (failure) throw failure }, close: async () => { stopped = true; clearInterval(timer); await refresh; await rm(directory, { recursive: true, force: true }) } }
 }
