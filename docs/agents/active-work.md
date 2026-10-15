@@ -1,5 +1,12 @@
 # Active work
 
+## Mail choices and decision notifications — issue 1495
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1495. Branch `bugfix/issue-1495-decision-push`, checkout `openape-monorepo.worktrees/mail-processing-1492`, base `cac6db13`.
+- Preserve an existing owner classification for the same immutable message when sender/subject are unchanged after a fuller provider read. Archive approvals remain bound to complete content versions.
+- Collect decision pushes per account for two quiet minutes, at most ten minutes. Keep individual decisions immediately actionable, group before the dispatch page limit, and retain retry/backoff and resolved-item suppression. Messages keep their existing notification behavior.
+- Focused acceptance covers 100 decisions/two devices, continuous arrival, account isolation, cancellation during backoff, fuller mail retrieval and distinct archive authority. Final checks, merge and deployment receipts belong on the implementing PR.
+
 ## Object and list newline style — issue 1491
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1491. Branch `feature/issue-1491-object-newline-lint-style`, base `b248ac1594c8f83aff24d705eff5df4c1c818a42`.

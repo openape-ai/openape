@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
-import { InboxStore, parsePublication } from '../server/utils/inbox-store'
+import { InboxStore, inboxLimits, parsePublication } from '../server/utils/inbox-store'
 import { dispatchPushes } from '../server/utils/inbox-push'
 import type { PushSend } from '../server/utils/inbox-push'
 
@@ -74,4 +74,82 @@ it('drops the push of an item deleted before dispatch', async () => {
   await dispatchPushes(store, config, send)
   expect(send).not.toHaveBeenCalled()
   expect(outbox(store)).toEqual([{ state: 'failed', attempts: 1, result: 'item_gone' }])
+})
+
+const decision = (sourceId: string) => ({ sourceId, type: 'question' as const, digest: 'a'.repeat(64), podId: null, podName: null, title: 'Classify mail', body: 'Mail excerpt', authority: 'pods' as const, options: [{ key: 'keep', title: 'Keep', input: 'none' as const }], link: null })
+const subscribe = (store: InboxStore, deviceId: string, who = owner) => store.subscribe(who, deviceId, { endpoint: subscription(deviceId).endpoint, p256dh: 'p'.repeat(87), auth: 'a'.repeat(22) })
+
+it('coalesces a hundred decisions across syncs into one push per device after quiet time', async () => {
+  const { store, phone, advance } = setup()
+  subscribe(store, phone.id)
+  subscribe(store, store.registerDevice(owner, 'tablet').id)
+  const decisions = Array.from({ length: 100 }, (_, index) => decision(`question:${index}`))
+  store.syncDecisions(owner, runtime, decisions.slice(0, 50))
+  const send = vi.fn<PushSend>(async () => ({ statusCode: 201 }))
+  advance(90_000)
+  store.syncDecisions(owner, runtime, decisions)
+  advance(90_000)
+  await dispatchPushes(store, config, send)
+  expect(send).not.toHaveBeenCalled()
+  // All items are actionable during collection; the normal page size does not limit the push group.
+  expect(store.badgeCount(owner)).toBe(100)
+  advance(30_000)
+  await dispatchPushes(store, config, send)
+  expect(send).toHaveBeenCalledTimes(2)
+  expect(JSON.parse(send.mock.calls[0]![1]).notification).toMatchObject({ title: '100 neue Entscheidungen', navigate: 'https://pods.example/inbox/', tag: 'pods-decisions', app_badge: '100' })
+  expect(outbox(store)).toHaveLength(100)
+  expect(outbox(store).every(entry => entry.state === 'sent')).toBe(true)
+  await dispatchPushes(store, config, send)
+  expect(send).toHaveBeenCalledTimes(2)
+})
+
+it('bounds continuous collection at ten minutes and isolates accounts', async () => {
+  const { store, phone, advance } = setup()
+  subscribe(store, phone.id)
+  const otherPhone = store.registerDevice(other, 'other phone')
+  subscribe(store, otherPhone.id, other)
+  const send = vi.fn<PushSend>(async () => ({ statusCode: 201 }))
+  const decisions = [decision('question:0')]
+  store.syncDecisions(owner, runtime, decisions)
+  for (let index = 1; index < 10; index++) {
+    advance(60_000); decisions.push(decision(`question:${index}`))
+    store.syncDecisions(owner, runtime, decisions)
+    await dispatchPushes(store, config, send)
+  }
+  expect(send).not.toHaveBeenCalled()
+  advance(60_000); decisions.push(decision('question:10'))
+  store.syncDecisions(owner, runtime, decisions)
+  store.syncDecisions(other, runtime, [decision('question:private')])
+  // No quiet time elapsed, but the maximum wait has expired for the first account.
+  await dispatchPushes(store, config, send)
+  expect(send).toHaveBeenCalledOnce()
+  expect(send.mock.calls[0]![0].endpoint).toBe(subscription(phone.id).endpoint)
+  expect(JSON.parse(send.mock.calls[0]![1]).notification.app_badge).toBe('11')
+  advance(120_000)
+  await dispatchPushes(store, config, send)
+  expect(send).toHaveBeenCalledTimes(2)
+  expect(send.mock.calls[1]![0].endpoint).toBe(subscription(otherPhone.id).endpoint)
+  expect(JSON.parse(send.mock.calls[1]![1]).notification.app_badge).toBe('1')
+})
+
+it('retries a decision digest as one group and suppresses decisions resolved during backoff', async () => {
+  const { store, phone, advance } = setup()
+  subscribe(store, phone.id)
+  store.syncDecisions(owner, runtime, [decision('question:a'), decision('question:b')])
+  advance(inboxLimits.decisionQuietMs)
+  const send = vi.fn<PushSend>().mockRejectedValueOnce(Object.assign(new Error('busy'), { statusCode: 503 })).mockResolvedValue({ statusCode: 201 })
+  await dispatchPushes(store, config, send)
+  expect(send).toHaveBeenCalledOnce()
+  store.syncDecisions(owner, runtime, [decision('question:b')])
+  await dispatchPushes(store, config, send)
+  expect(send).toHaveBeenCalledOnce()
+  advance(30_000)
+  await dispatchPushes(store, config, send)
+  expect(send).toHaveBeenCalledTimes(2)
+  expect(JSON.parse(send.mock.calls[1]![1]).notification).toMatchObject({ title: 'Entscheidung wartet', app_badge: '1' })
+  store.syncDecisions(owner, runtime, [decision('question:c')])
+  store.syncDecisions(owner, runtime, [])
+  advance(inboxLimits.decisionQuietMs)
+  await dispatchPushes(store, config, send)
+  expect(send).toHaveBeenCalledTimes(2)
 })

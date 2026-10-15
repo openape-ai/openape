@@ -25,7 +25,7 @@ export function parseSubscription(input: unknown): InboxSubscription {
 
 // `idpPushDelayMs`: an IdP approval is often granted at once by the owner's own session (issue 1455); its push
 // waits this long, and a decision that resolves meanwhile drops the pending push without notifying.
-export const inboxLimits = { bodyBytes: 64 * 1024, retentionMs: 90 * 86400000, tombstoneMs: 30 * 86400000, itemsPerOwner: 10000, page: 50, pushAgeMs: 86400000, idpPushDelayMs: 60000, approvalsFreshMs: 30 * 60000 }
+export const inboxLimits = { bodyBytes: 64 * 1024, retentionMs: 90 * 86400000, tombstoneMs: 30 * 86400000, itemsPerOwner: 10000, page: 50, pushAgeMs: 86400000, idpPushDelayMs: 60000, decisionQuietMs: 120000, decisionMaxMs: 600000, approvalsFreshMs: 30 * 60000 }
 const key = (owner: Owner) => JSON.stringify([owner.issuer, owner.subject])
 const id = /^[0-9a-f-]{36}$/
 const eventKey = /^[\w.:-]{1,200}$/
@@ -293,12 +293,28 @@ export class InboxStore {
     return { item: item(found), badge: this.badge(entry.owner) }
   }
 
-  claimOutbox(limit = 20): OutboxEntry[] {
-    return this.db.prepare('SELECT id,owner,item_id AS itemId,attempts,created FROM outbox WHERE state=\'pending\' AND next<=? ORDER BY next LIMIT ?').all(this.now(), limit) as unknown as OutboxEntry[]
+  claimOutbox(limit = 20, messagesOnly = false): OutboxEntry[] {
+    return this.db.prepare(`SELECT o.id,o.owner,o.item_id AS itemId,o.attempts,o.created FROM outbox o JOIN items i ON i.id=o.item_id WHERE o.state='pending' AND o.next<=? AND (?=0 OR i.kind='message') ORDER BY o.next LIMIT ?`).all(this.now(), Number(messagesOnly), limit) as unknown as OutboxEntry[]
   }
 
-  settleOutbox(entryId: string, outcome: { state: 'sent' | 'pending' | 'failed', next?: number, result: string }): void {
-    this.db.prepare('UPDATE outbox SET state=?,attempts=attempts+1,next=?,result=? WHERE id=?').run(outcome.state, outcome.next ?? this.now(), outcome.result.slice(0, 500), entryId)
+  /** Group before limiting: a hundred decisions must never turn into five twenty-push pages. */
+  decisionPushBatches(limit = 20): OutboxEntry[][] {
+    const owners = this.db.prepare(`SELECT o.owner FROM outbox o JOIN items i ON i.id=o.item_id
+      WHERE o.state='pending' AND i.kind='decision'
+      GROUP BY o.owner HAVING
+        (min(o.created)+?<=? OR max(o.created)+?<=?)
+        AND max(CASE WHEN o.attempts>0 THEN o.next ELSE 0 END)<=?
+      ORDER BY min(o.created) LIMIT ?`).all(inboxLimits.decisionMaxMs, this.now(), inboxLimits.decisionQuietMs, this.now(), this.now(), limit)
+    return owners.map(owner => this.db.prepare(`SELECT o.id,o.owner,o.item_id AS itemId,o.attempts,o.created
+      FROM outbox o JOIN items i ON i.id=o.item_id WHERE o.owner=? AND o.state='pending' AND i.kind='decision'
+      ORDER BY o.created,o.id`).all(String(owner.owner)) as unknown as OutboxEntry[])
+  }
+
+  settleOutbox(entryId: string | string[], outcome: { state: 'sent' | 'pending' | 'failed', next?: number, result: string }): void {
+    this.transaction(() => {
+      const update = this.db.prepare('UPDATE outbox SET state=?,attempts=attempts+1,next=?,result=? WHERE id=?')
+      for (const id of Array.isArray(entryId) ? entryId : [entryId]) update.run(outcome.state, outcome.next ?? this.now(), outcome.result.slice(0, 500), id)
+    })
   }
 
   // Bounded retention: messages expire after 90 days, tombstones are purged 30 days later. Pending decisions stay.
