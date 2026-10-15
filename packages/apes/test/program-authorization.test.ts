@@ -298,25 +298,27 @@ describe('apes run with per-call IdP authorization', () => {
     if (!program) throw new Error('Node executable is missing')
     const script = join(home, 'pinned.cjs'); writeFileSync(script, 'console.log(4)')
     await expect(authorizeProgramCall({ program, argv: [script], files: [{ path: script, sha256: 'a'.repeat(64) }] }, { idp: idp.issuer, subject: SUBJECT, targetHost: 'test-host', grantType: 'once', wait: false })).rejects.toThrow('changed before authorization')
-    for (const argv of [[], ['-'], ['--input-type=module']]) expect(() => nodeProgramFiles({ program, argv })).toThrow('stdin execution')
+    for (const argv of [[], ['-'], ['--input-type=module'], ['--use-env-proxy', '-']]) expect(() => nodeProgramFiles({ program, argv })).toThrow('stdin execution')
+    expect(() => nodeProgramFiles({ program, argv: ['--use-env-proxy', '--env-file=unbound.env', script] })).toThrow('needs an explicit execution binding')
     expect(idp.authorizeBodies).toHaveLength(0)
   })
 
-  it('binds a Node script by content and refuses replacement at the same path', async () => {
+  it.each([{ options: [] }, { options: ['--use-env-proxy'] }])('binds a Node script by content with $options and refuses replacement', async ({ options }) => {
     const { locateProgram } = await import('../src/authorization/program.js')
     const { nodeProgramFiles } = await import('../src/authorization/program-files.js')
     const program = await locateProgram(process.execPath)
     if (!program) throw new Error('Node executable is missing')
     const script = join(home, 'approved.cjs')
     writeFileSync(script, 'require("node:fs").writeFileSync(process.env.APES_TEST_MARKER, "approved")')
-    const grant = await idp.approved([program.name, script], program.sha256)
-    grant.files = nodeProgramFiles({ program, argv: [script] })
+    const argv = [...options, script]
+    const grant = await idp.approved([program.name, ...argv], program.sha256)
+    grant.files = nodeProgramFiles({ program, argv })
 
-    await exactShell([process.execPath, script])
+    await exactShell([process.execPath, ...argv])
     expect(readFileSync(marker, 'utf8')).toBe('approved')
     rmSync(marker)
     writeFileSync(script, 'require("node:fs").writeFileSync(process.env.APES_TEST_MARKER, "replaced")')
-    await expect(exactShell([process.execPath, script])).rejects.toMatchObject({ exitCode: 75 })
+    await expect(exactShell([process.execPath, ...argv])).rejects.toMatchObject({ exitCode: 75 })
     expect(existsSync(marker)).toBe(false)
   })
 
