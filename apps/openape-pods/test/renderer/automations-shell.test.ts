@@ -23,27 +23,28 @@ const button = (text: string) => wrapper!.findAll('button').find(item => item.te
 const pod = (name: string) => view.pods.find(item => item.name === name)!
 
 describe('Automatisierungen', () => {
-  it('shows the five system KPIs with subtitles from the data, in German and English', async () => {
+  it('shows the three system KPIs with subtitles from the data, in German and English', async () => {
     applyLanguage('de')
     await mountShell()
     const kpis = wrapper!.findAll('.kpi').map(item => [item.find('b').text(), item.find('span').text(), item.find('small').text()])
     expect(kpis).toEqual([
-      ['5', 'aktiv', 'Pods mit laufendem Zeitplan'],
-      ['25', 'pausiert', 'davon 1 Entwürfe, 1 archiviert'],
+      // Archived Pods have their own list and do not count.
+      ['5 / 29', 'aktiv', 'Pods mit laufendem Zeitplan'],
       // Only Pods failing now count; a Pod whose last run succeeded keeps its earlier failures in its history.
       ['1', 'aktuelle Fehler', 'IURIO PR monitor · mit Lücken abgeschlossen'],
       // The same sections as Entscheidungen: a run waiting for its grant and a grant requested at the IdP are rights.
       ['24', 'Entscheidungen warten auf dich', '17 Rückfragen, 4 Freigaben, 2 Rechte, 1 abzugleichen'],
-      ['1', 'unklare Zustellungen', '1 Zustellungen abzugleichen'],
     ])
     expect(wrapper!.find('.kpi.alert').text()).toContain('aktuelle Fehler')
+    await wrapper!.find('.kpi-pod').trigger('click')
+    expect(wrapper!.emitted('openPod')).toEqual([[view.pods.find(pod => pod.name === 'IURIO PR monitor')!.id]])
     expect(wrapper!.find('[role="tablist"]').text()).toContain('Automatisierungen')
     expect(wrapper!.find('[role="tablist"]').text()).toContain('Entscheidungen 24')
     expect(wrapper!.find('.automations-stamp').text()).toBe(`Stand ${clock(view.at, 'de')}`)
     expect(wrapper!.find('.kinds').text()).toContain('Service, per HTTPS')
     wrapper!.unmount(); applyLanguage('en')
     await mountShell({ live: true })
-    expect(wrapper!.findAll('.kpi span').map(item => item.text())).toEqual(['active', 'paused', 'current errors', 'decisions waiting for you', 'unknown deliveries'])
+    expect(wrapper!.findAll('.kpi span').map(item => item.text())).toEqual(['active', 'current errors', 'decisions waiting for you'])
     // Live data is the normal case and carries no timestamp.
     expect(wrapper!.find('.automations-stamp').exists()).toBe(false)
   })
