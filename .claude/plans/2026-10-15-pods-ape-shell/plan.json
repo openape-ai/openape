@@ -85,7 +85,11 @@
       "acceptance": [
         "Every discovered process entry and each existing safeguard has an owner, test and migration disposition; no unknown path is silently exempted."
       ],
-      "rollback": "Read-only inventory; preserve original records and avoid executing scheduled work."
+      "rollback": "Read-only inventory; preserve original records and avoid executing scheduled work.",
+      "proof": "Caller census and safeguard ownership are recorded in docs/operations/pods-ape-shell-migration.md. Installed state and 16 active scripts were inspected read-only; two legacy callers have migration drafts.",
+      "evidenceIds": [
+        "implementation-verification"
+      ]
     },
     {
       "id": "M1",
@@ -101,7 +105,11 @@
         "Record the final -c syntax and transport decision with native execution evidence. If the approach cannot preserve the safety matrix, revise this plan before proceeding.",
         "An approved node -e invocation executes its exact inline code. Changed inline code is refused under that approval. An approved node script.js invocation binds the script content; changed content at the same path, including replacement after approval, is refused before execution. These cases pass through the same ape-shell path as other programs."
       ],
-      "rollback": "Keep the prototype isolated and leave installed Pods unchanged."
+      "rollback": "Keep the prototype isolated and leave installed Pods unchanged.",
+      "proof": "Literal argv and private request-FD forwarding pass native exact-code/file, mismatch, once, refusal, PTY and packaged-runtime cases.",
+      "evidenceIds": [
+        "implementation-verification"
+      ]
     },
     {
       "id": "M2",
@@ -115,7 +123,11 @@
       "acceptance": [
         "Each M0 entry point passes both success and refusal tests through ape-shell. A structural check rejects new direct user-program launch or authorization paths in Pods."
       ],
-      "rollback": "Before production cutover, retain a tested old build for whole-version recovery; never add an automatic per-call fallback to the old path."
+      "rollback": "Before production cutover, retain a tested old build for whole-version recovery; never add an automatic per-call fallback to the old path.",
+      "proof": "All ordinary program callers use ape-shell. The complete native suite passes 141 cases across 30 files; fixed authentication/model bootstrap exceptions and structural checks are documented.",
+      "evidenceIds": [
+        "implementation-verification"
+      ]
     },
     {
       "id": "M3",
@@ -131,7 +143,11 @@
         "Synthetic changed mail is skipped; wrong identity/version/destination refuses; uncertain mutation cannot replay, including from another Pod. Provider receipts remain inspectable.",
         "A mail behavior or approval-label change ships through a tool/recipe/IdP update without changing the Pods binary."
       ],
-      "rollback": "Version tools, adapters and recipes together; pause affected work if compatibility fails. Preserve authoritative effect state."
+      "rollback": "Version tools, adapters and recipes together; pause affected work if compatibility fails. Preserve authoritative effect state.",
+      "proof": "Mail CLI PR 19 provides protected archive and external recipe/parser/knowledge packages; registry PR 5 owns presentation and exact single-use policy. Go, race, 22 automation tests and all 32 adapters pass, including the actual candidate CLI option check.",
+      "evidenceIds": [
+        "implementation-verification"
+      ]
     },
     {
       "id": "M4",
@@ -146,7 +162,11 @@
         "Migration rehearsal preserves counts, operation identity and every unresolved/consumed state. Unknown outcomes stay held, consumed work stays non-executable, and pending decisions remain visible without duplicate requests.",
         "No executable Pods path uses custom mail or program approval semantics after cutover."
       ],
-      "rollback": "Use backup plus an execution-record reconciliation procedure. An old build must refuse a newer incompatible state; rollback may stop work but must never replay consumed effects."
+      "rollback": "Use backup plus an execution-record reconciliation procedure. An old build must refuse a newer incompatible state; rollback may stop work but must never replay consumed effects.",
+      "proof": "Schema-53 cutover preserves inert history and pauses active Pods. Temporary imports preserve 302 archive records, 699 sources and 707 claims. Active caller drafts are prepared; production validation and activation remain separately gated.",
+      "evidenceIds": [
+        "implementation-verification"
+      ]
     },
     {
       "id": "M5",
@@ -160,7 +180,11 @@
       "acceptance": [
         "Every safety-matrix row has recorded evidence; the packaged app has no direct alternative program path; compatible old records remain inspectable; native issue, plan and release evidence identify the actual SHAs and artifacts."
       ],
-      "rollback": "Pause affected scheduling and restore compatible software with reconciled current state. Keep unresolved effects held; do not downgrade data blindly."
+      "rollback": "Pause affected scheduling and restore compatible software with reconciled current state. Keep unresolved effects held; do not downgrade data blindly.",
+      "proof": "Local build, native, browser and required affected gates pass and actual evidence is published in Test Runs. Coordinated production release and activation have not been performed or authorized by this implementation handoff.",
+      "evidenceIds": [
+        "implementation-verification"
+      ]
     }
   ],
   "risks": [
@@ -189,10 +213,10 @@
     "Render IdP approval states with real browser CSS; inspect screenshots before publishing actual evidence under Test Runs. This plan records source findings only, not passed implementation tests."
   ],
   "completion": {
-    "result": "not-assessed",
-    "summary": "Implementation is in progress; no milestone acceptance is claimed yet."
+    "result": "partial",
+    "summary": "Implementation, native verification and migration rehearsals are complete and available in three reviewable PRs. Production release, installation, final data cutover and activation remain separately gated in M5."
   },
-  "handoff": "Implementation and migration rehearsal are complete; the full native suite now passes 141 tests in 30 files, and Pods passes 1714 unit tests plus typecheck. The external mail package passes 22 tests, all Go packages and race checks, and builds standalone recipe/parser artifacts. Registry checks pass for 32 adapters, including real CLI option checks against candidate digest 879064c86353465fe577bca6d6bf4e8162cbaced04e61cd9359a40d35a2923d6. Historical imports preserve 302 archive records, 699 sources and 707 claims. Mail PR 19 and registry PR 5 are open. The mandatory affected repository gate, monorepo PR and final evidence publication are in progress. M5 production installation and activation remain separately gated; no live state was changed.",
+  "handoff": "Review monorepo PR 458, mail CLI PR 19 and registry PR 5. The required affected gate passes after integrating current main; the 26 mail recipe tests retain the newly merged reply, invoice and cursor safeguards. Native execution passes 141 cases, external automation 22; Go/race, Windows build and 32 registry adapters pass. Test Runs records exact sources, artifacts, inspected UI captures and limits. Rehearsals preserve 302 archive records, 699 sources and 707 claims. For rollout, first verify deployed IdP/registry compatibility, then quiesce and export fresh state, back up, install matched artifacts, validate migrated drafts and activate individually. No production state was changed.",
   "changelog": [
     {
       "date": "2026-10-15",
@@ -229,6 +253,10 @@
     {
       "date": "2026-10-15",
       "text": "Completed caller migration and all native regression cases, preserved external application state and managed identity, and verified the new IdP/historical UI with real browser CSS. Added the release ordering and rollback gate, private active-caller migration drafts and the tested external CLI digest."
+    },
+    {
+      "date": "2026-10-15",
+      "text": "Published implementation evidence and opened all three PRs. Integrated newer main recipes, retaining reply/invoice protection and cursor recovery; all 26 recipe tests pass. Implementation is complete, with coordinated production rollout still separately gated."
     }
   ],
   "evidence": [
@@ -273,6 +301,14 @@
       "role": "reference",
       "title": "Unit, packaged execution and external recipe checkpoint",
       "text": "The full Pods unit suite passes 1714 tests; typecheck passes. A freshly built fixture package passes 27 native machine tests, including the independently delivered PDF parser and nonblocking pending/refused replies without dispatch. Autonomous mail recipes pass 18 tests using only generic program calls. The external automation package passes 21 tests and builds a standalone 41 KiB recipe plus the separately assigned parser. All Go packages pass after adding append-only reconciliation bound to exact historical/current receipt digests. Historical UI records are read-only; 56 related migration, UI, inbox and translation tests pass. Additional native caller regression work exposed masked script diagnostics and outdated fixtures; these are being corrected without adding execution fallbacks. Full affected checks, remaining native callers, compatibility/rollout artifacts and PRs remain open. No production app, journal, grant or recipe was changed; all implementation is still uncommitted. Evidence: /tmp/pods-1497-unit-final-candidate.log; /tmp/pods-1497-typecheck-final-candidate.log; /tmp/pods-1497-latest-machine-native.log; /tmp/pods-1497-external-all-current.log; /tmp/pods-1497-go-all.log; /tmp/pods-1497-history-ui-tests.log."
+    },
+    {
+      "id": "implementation-verification",
+      "kind": "link",
+      "role": "evidence",
+      "title": "Implementation and migration verification",
+      "url": "https://report.openape.ai/d/01M5092ZWW862KTC5MEMASKBJJ?v=2",
+      "version": 2
     }
   ],
   "translations": {
@@ -680,8 +716,8 @@
       },
       {
         "path": "completion.summary",
-        "source": "Implementation is in progress; no milestone acceptance is claimed yet.",
-        "text": "Die Umsetzung läuft; noch wird kein Meilenstein als abgenommen ausgewiesen."
+        "source": "Implementation, native verification and migration rehearsals are complete and available in three reviewable PRs. Production release, installation, final data cutover and activation remain separately gated in M5.",
+        "text": "Implementierung, native Prüfung und Migrationsproben sind abgeschlossen und in drei prüfbaren PRs verfügbar. Produktiver Release, Installation, endgültige Datenmigration und Aktivierung bleiben in M5 separat freizugeben."
       },
       {
         "path": "changelog.0.text",
@@ -720,8 +756,8 @@
       },
       {
         "path": "handoff",
-        "source": "Implementation and migration rehearsal are complete; the full native suite now passes 141 tests in 30 files, and Pods passes 1714 unit tests plus typecheck. The external mail package passes 22 tests, all Go packages and race checks, and builds standalone recipe/parser artifacts. Registry checks pass for 32 adapters, including real CLI option checks against candidate digest 879064c86353465fe577bca6d6bf4e8162cbaced04e61cd9359a40d35a2923d6. Historical imports preserve 302 archive records, 699 sources and 707 claims. Mail PR 19 and registry PR 5 are open. The mandatory affected repository gate, monorepo PR and final evidence publication are in progress. M5 production installation and activation remain separately gated; no live state was changed.",
-        "text": "Implementierung und Migrationsprobe sind abgeschlossen: Die vollständige native Suite besteht mit 141 Tests in 30 Dateien; Pods besteht 1714 Unit-Tests und die Typprüfung. Das externe Mail-Paket besteht 22 Tests, alle Go-Pakete und Race-Prüfungen und baut eigenständige Rezept-/Parser-Artefakte. Die Registry-Prüfungen bestehen für 32 Adapter einschließlich realer CLI-Optionsprüfung gegen den Kandidaten-Digest 879064c86353465fe577bca6d6bf4e8162cbaced04e61cd9359a40d35a2923d6. Historische Importe erhalten 302 Archivdatensätze, 699 Quellen und 707 Claims. Mail-PR 19 und Registry-PR 5 sind offen. Die verbindliche Prüfung betroffener Repository-Pakete, der Monorepo-PR und der abschließende Nachweis sind in Arbeit. Produktive Installation und Aktivierung in M5 bleiben gesondert freizugeben; kein Live-Zustand wurde verändert."
+        "source": "Review monorepo PR 458, mail CLI PR 19 and registry PR 5. The required affected gate passes after integrating current main; the 26 mail recipe tests retain the newly merged reply, invoice and cursor safeguards. Native execution passes 141 cases, external automation 22; Go/race, Windows build and 32 registry adapters pass. Test Runs records exact sources, artifacts, inspected UI captures and limits. Rehearsals preserve 302 archive records, 699 sources and 707 claims. For rollout, first verify deployed IdP/registry compatibility, then quiesce and export fresh state, back up, install matched artifacts, validate migrated drafts and activate individually. No production state was changed.",
+        "text": "Monorepo-PR 458, Mail-CLI-PR 19 und Registry-PR 5 prüfen. Die verbindliche Prüfung betroffener Pakete besteht nach Übernahme des aktuellen main; 26 Mail-Rezepttests erhalten die neu zusammengeführten Schutzmaßnahmen für Antworten, Rechnungen und Cursor. Die native Ausführung besteht 141 Fälle, die externe Automation 22; Go/Race, Windows-Build und 32 Registry-Adapter bestehen. Test Runs dokumentiert genaue Quellen, Artefakte, persönlich geprüfte UI-Aufnahmen und Grenzen. Die Proben erhalten 302 Archivdatensätze, 699 Quellen und 707 Claims. Für den Rollout zuerst die bereitgestellte IdP-/Registry-Kompatibilität prüfen, dann Arbeit anhalten, frischen Export und Backup erstellen, passende Artefakte installieren, migrierte Entwürfe validieren und einzeln aktivieren. Kein Produktionszustand wurde verändert."
       },
       {
         "path": "changelog.6.text",
@@ -737,6 +773,41 @@
         "path": "changelog.8.text",
         "source": "Completed caller migration and all native regression cases, preserved external application state and managed identity, and verified the new IdP/historical UI with real browser CSS. Added the release ordering and rollback gate, private active-caller migration drafts and the tested external CLI digest.",
         "text": "Caller-Migration und alle nativen Regressionstests abgeschlossen, externen Anwendungszustand und verwaltete Identität erhalten sowie neue IdP-/Historienansichten mit echten Browser-Styles geprüft. Release-Reihenfolge und Rollback-Grenze, private Migrationsentwürfe für aktive Caller und den geprüften externen CLI-Digest ergänzt."
+      },
+      {
+        "path": "milestones.0.proof",
+        "source": "Caller census and safeguard ownership are recorded in docs/operations/pods-ape-shell-migration.md. Installed state and 16 active scripts were inspected read-only; two legacy callers have migration drafts.",
+        "text": "Caller-Inventar und Verantwortlichkeiten der Schutzmaßnahmen stehen in docs/operations/pods-ape-shell-migration.md. Installierter Zustand und 16 aktive Skripte wurden nur gelesen; für zwei Alt-Caller liegen Migrationsentwürfe vor."
+      },
+      {
+        "path": "milestones.1.proof",
+        "source": "Literal argv and private request-FD forwarding pass native exact-code/file, mismatch, once, refusal, PTY and packaged-runtime cases.",
+        "text": "Wörtliche Argumentübergabe und privater Request-FD bestehen native Prüfungen für exakte Code-/Dateibindung, Abweichungen, Einmaligkeit, Ablehnung, PTY und paketierte Laufzeit."
+      },
+      {
+        "path": "milestones.2.proof",
+        "source": "All ordinary program callers use ape-shell. The complete native suite passes 141 cases across 30 files; fixed authentication/model bootstrap exceptions and structural checks are documented.",
+        "text": "Alle regulären Programm-Caller nutzen ape-shell. Die vollständige native Suite besteht 141 Fälle in 30 Dateien; feste Authentifizierungs-/Modell-Bootstraps und Strukturprüfungen sind dokumentiert."
+      },
+      {
+        "path": "milestones.3.proof",
+        "source": "Mail CLI PR 19 provides protected archive and external recipe/parser/knowledge packages; registry PR 5 owns presentation and exact single-use policy. Go, race, 22 automation tests and all 32 adapters pass, including the actual candidate CLI option check.",
+        "text": "Mail-CLI-PR 19 liefert geschützte Archivierung und externe Rezept-/Parser-/Wissenspakete; Registry-PR 5 verantwortet Darstellung und exakte Einmalfreigaben. Go, Race, 22 Automationstests und alle 32 Adapter bestehen einschließlich der Optionsprüfung des tatsächlich gebauten CLI-Kandidaten."
+      },
+      {
+        "path": "milestones.4.proof",
+        "source": "Schema-53 cutover preserves inert history and pauses active Pods. Temporary imports preserve 302 archive records, 699 sources and 707 claims. Active caller drafts are prepared; production validation and activation remain separately gated.",
+        "text": "Der Schema-53-Umstieg erhält inaktive Historie und pausiert aktive Pods. Temporäre Importe erhalten 302 Archivdatensätze, 699 Quellen und 707 Claims. Entwürfe für aktive Caller sind vorbereitet; produktive Validierung und Aktivierung bleiben separat freizugeben."
+      },
+      {
+        "path": "milestones.5.proof",
+        "source": "Local build, native, browser and required affected gates pass and actual evidence is published in Test Runs. Coordinated production release and activation have not been performed or authorized by this implementation handoff.",
+        "text": "Lokaler Build, native Prüfungen, Browserprüfungen und verbindliche Prüfungen betroffener Pakete bestehen; tatsächliche Nachweise sind in Test Runs veröffentlicht. Koordinierter Produktionsrelease und Aktivierung wurden mit dieser Implementierungsübergabe weder ausgeführt noch freigegeben."
+      },
+      {
+        "path": "changelog.9.text",
+        "source": "Published implementation evidence and opened all three PRs. Integrated newer main recipes, retaining reply/invoice protection and cursor recovery; all 26 recipe tests pass. Implementation is complete, with coordinated production rollout still separately gated.",
+        "text": "Implementierungsnachweise veröffentlicht und alle drei PRs eröffnet. Neuere main-Rezepte übernommen und Antwort-/Rechnungsschutz sowie Cursor-Wiederaufnahme erhalten; alle 26 Rezepttests bestehen. Implementierung abgeschlossen; koordinierter Produktionsrollout bleibt separat freizugeben."
       }
     ]
   },
@@ -753,6 +824,22 @@
     {
       "title": "Development issue 1497",
       "url": "https://repos.openape.ai/patrick/monorepo/issues/1497"
+    },
+    {
+      "title": "Monorepo PR 458",
+      "url": "https://repos.openape.ai/patrick/monorepo/pulls/458"
+    },
+    {
+      "title": "External mail CLI PR 19",
+      "url": "https://git.openape.ai/delta-mind/o365-cli/pulls/19"
+    },
+    {
+      "title": "Registry PR 5",
+      "url": "https://repos.openape.ai/patrick/shapes-registry/pulls/5"
+    },
+    {
+      "title": "Test Runs — implementation evidence",
+      "url": "https://report.openape.ai/d/01M5092ZWW862KTC5MEMASKBJJ?v=2"
     }
   ]
 }
