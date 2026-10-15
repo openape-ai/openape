@@ -70,7 +70,8 @@ const storedTags = (tags: string[] | undefined) => tags?.length ? JSON.stringify
 
 export class InboxStore {
   readonly db: DatabaseSync
-  constructor(path: string, readonly now = Date.now) {
+  // Tests pass a small quota to reach a full inbox without thousands of writes.
+  constructor(path: string, readonly now = Date.now, private readonly itemsPerOwner = inboxLimits.itemsPerOwner) {
     if (path !== ':memory:') mkdirSync(dirname(path), { recursive: true, mode: 0o700 })
     this.db = new DatabaseSync(path)
     const version = Number(this.db.prepare('PRAGMA user_version').get()?.user_version)
@@ -153,7 +154,7 @@ export class InboxStore {
         return { id: existing.id, created: false }
       }
       const count = Number(this.db.prepare('SELECT count(*) AS n FROM items WHERE owner=? AND deleted IS NULL').get(key(owner))?.n)
-      if (count >= inboxLimits.itemsPerOwner) throw new ProtocolError('inbox_quota', 507)
+      if (count >= this.itemsPerOwner) throw new ProtocolError('inbox_quota', 507)
       const itemId = randomUUID()
       this.db.prepare('INSERT INTO items(id,owner,runtime_id,event_id,digest,kind,state,title,body,pod_id,pod_name,pod_tags,run_id,links,created,sequence) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
         .run(itemId, key(owner), runtimeId, publication.eventId, digest, publication.kind, 'open', publication.title, publication.body, publication.podId, publication.podName, storedTags(publication.podTags), publication.runId, JSON.stringify(publication.links), this.now(), this.nextSequence())
@@ -182,7 +183,7 @@ export class InboxStore {
           continue
         }
         const count = Number(this.db.prepare('SELECT count(*) AS n FROM items WHERE owner=? AND deleted IS NULL').get(key(owner))?.n)
-        if (count >= inboxLimits.itemsPerOwner) { counts.skipped++; continue }
+        if (count >= this.itemsPerOwner) { counts.skipped++; continue }
         const itemId = randomUUID()
         this.db.prepare('INSERT INTO items(id,owner,runtime_id,event_id,digest,kind,state,title,body,pod_id,pod_name,pod_tags,run_id,links,created,sequence,decision) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
           .run(itemId, key(owner), runtimeId, decision.sourceId, decision.digest, 'decision', 'open', decision.title, decision.body, decision.podId, decision.podName, storedTags(decision.podTags), null, links, this.now(), this.nextSequence(), JSON.stringify(data))

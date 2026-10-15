@@ -1,5 +1,12 @@
 # Active work
 
+## Load-sensitive unit test timeouts — issue 1493
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1493. Branch `bugfix/issue-1493-test-timeouts`, base `01ea0ac93240f92b354c4ad453c3d35711c6ccad`, checkout `openape-monorepo.worktrees/test-timeouts-1493`.
+- Owner first requested a relay fix and a gate worker limit, separate from PR 447 (issue 1491), then kept only the relay fix. The relay quota test filled 10,000 items with a per-write `count(*)` (quadratic, ~3 s unloaded); `InboxStore` now takes the quota and the test uses 20 items with unchanged assertions (1–2 ms; a disabled quota check makes it fail).
+- A gate-wide Vitest worker limit was tried and dropped: in a full uncached `--concurrency=4` comparison it turned `apes` and `openape-e2e` red three times with `403 Invalid management token` while the unlimited run passed; that IdP fixture cross-talk is tracked in https://repos.openape.ai/patrick/monorepo/issues/1494. `VITEST_MAX_WORKERS` must not be used either: Vitest 4.1.10 applies it after `fileParallelism: false`.
+- Next: native PR review and merge.
+
 ## CI instruction reconciliation — issue 1483
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1483; the native implementation PR is linked there. Branch `bugfix/issue-1483-knowledge-ci-guidance`, checkout `openape-monorepo.worktrees/knowledge-ci-1483`, base `7d0caa8b67a939284d008761efe977dc76fbe288`.
