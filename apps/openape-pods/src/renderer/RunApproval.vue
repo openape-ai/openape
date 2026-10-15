@@ -1,4 +1,5 @@
 <script lang="ts">
+import { useHostBridge } from './host-bridge'
 import { usePodAccess } from './pod-access'
 import { defineComponent } from 'vue'
 import type { PropType } from 'vue'
@@ -7,13 +8,13 @@ import { t, diagnostic } from './i18n'
 
 export default defineComponent({
   props: { podId: { type: String, required: true }, approvals: { type: Array as PropType<(RunApproval & { runId: string })[]>, default: () => [] } },
-  setup() { return { access: usePodAccess() } },
+  setup() { return { hostBridge: useHostBridge(), access: usePodAccess() } },
   data() { return { busy: false, error: '' } },
   methods: {
     t, diagnostic,
     async open(approval: RunApproval & { runId: string }) {
       this.busy = true; this.error = ''
-      try { await window.pods.runs({ type: 'openApproval', podId: this.podId, runId: approval.runId, grantId: approval.grantId }) }
+      try { await this.hostBridge.runs({ type: 'openApproval', podId: this.podId, runId: approval.runId, grantId: approval.grantId }) }
       catch (error) { this.error = error instanceof Error ? error.message : 'Could not open approval' }
       finally { this.busy = false }
     },

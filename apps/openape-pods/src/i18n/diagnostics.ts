@@ -1,6 +1,8 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Demo: {p0} is unavailable here. Nothing outside the demo was changed.',
+  'Unsupported workspace channel: {p0}',
   'Application {p0} is not in this Pod\'s sandbox; assign it before granting its commands',
   'A grant for every {p0} command is decided at the IdP; declare one command with argv, or widen an approved command there',
   'Grant does not cover required permission: {p0}',

@@ -1,10 +1,12 @@
 <script lang="ts">
+import { useHostBridge } from './host-bridge'
 import { defineComponent } from 'vue'
 import type { ConnectionView, OnboardingCommand } from '../contracts/onboarding'
 import { t, diagnostic } from './i18n'
 
 export default defineComponent({
   props: { compact: Boolean },
+  setup() { return { hostBridge: useHostBridge() } },
   data() { return { expanded: false, disconnecting: false, key: '', busy: false, error: '', connection: undefined as ConnectionView | undefined, loaded: false } },
   async mounted() { await this.execute({ type: 'list' }); this.loaded = true },
   methods: {
@@ -12,7 +14,7 @@ export default defineComponent({
     async execute(command: OnboardingCommand) {
       if (this.busy) return
       this.busy = true; this.error = ''
-      try { this.connection = (await window.pods.onboarding(command)).connections.find(item => item.provider === 'typesafe') }
+      try { this.connection = (await this.hostBridge.onboarding(command)).connections.find(item => item.provider === 'typesafe') }
       catch (error) { this.error = error instanceof Error ? error.message : 'TypeSafe connection failed' }
       finally { this.busy = false }
     },

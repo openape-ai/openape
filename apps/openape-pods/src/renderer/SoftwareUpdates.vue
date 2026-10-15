@@ -1,9 +1,11 @@
 <script lang="ts">
+import { useHostBridge } from './host-bridge'
 import { defineComponent } from 'vue'
 import type { UpdateView } from '../contracts/updates'
 import { t, diagnostic } from './i18n'
 
 export default defineComponent({
+  setup() { return { hostBridge: useHostBridge() } },
   data() { return { view: null as UpdateView | null, error: '', busy: false, timer: undefined as ReturnType<typeof setInterval> | undefined } },
   computed: {
     working(): boolean { return this.busy || (!!this.view && ['checking', 'downloading', 'preparing', 'installing', 'restart-required'].includes(this.view.state)) },
@@ -13,14 +15,14 @@ export default defineComponent({
   methods: {
     t, diagnostic,
     async refresh() {
-      if (!window.pods.updates) return
-      try { this.view = await window.pods.updates({ type: 'status' }) }
+      if (!this.hostBridge.updates) return
+      try { this.view = await this.hostBridge.updates({ type: 'status' }) }
       catch (error) { this.error = error instanceof Error ? error.message : 'Update failed' }
     },
     async perform(type: 'check' | 'install') {
-      if (!window.pods.updates || this.working) return
+      if (!this.hostBridge.updates || this.working) return
       this.busy = true; this.error = ''
-      try { this.view = await window.pods.updates({ type }) }
+      try { this.view = await this.hostBridge.updates({ type }) }
       catch (error) { this.error = error instanceof Error ? error.message : 'Update failed' }
       finally { this.busy = false }
     },

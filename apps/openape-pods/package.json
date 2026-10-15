@@ -26,7 +26,8 @@
     "package:signed-candidate": "node scripts/package.mjs --distribution --signed-candidate",
     "test:distribution": "node scripts/verify-distribution.mjs",
     "handbook": "node scripts/handbook.mjs",
-    "handbook:capture": "PODS_HANDBOOK_CAPTURE=1 vitest run --config vitest.electron.config.ts"
+    "handbook:capture": "PODS_HANDBOOK_CAPTURE=1 vitest run --config vitest.electron.config.ts",
+    "dev:ui": "vite --mode ui"
   },
   "dependencies": {
     "croner": "10.0.1",

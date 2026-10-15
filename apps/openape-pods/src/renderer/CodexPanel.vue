@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import { useHostBridge } from './host-bridge'
 import { onMounted, ref } from 'vue'
 import type { CodexConnection } from '../contracts/codex'
 import { t, diagnostic } from './i18n'
 
 const emit = defineEmits<{ changed: [connection: CodexConnection] }>()
+
+const hostBridge = useHostBridge()
+
 const connection = ref<CodexConnection | null>(null); const busy = ref(false); const error = ref('')
 const states = {
   connected: 'Connected. Restart Codex once so it loads OpenApe Pods.',
@@ -13,7 +17,7 @@ const states = {
 } as const
 async function request(type: 'status' | 'connect' | 'disconnect'): Promise<void> {
   busy.value = true; error.value = ''
-  try { connection.value = await window.pods.codex({ type }); emit('changed', connection.value) }
+  try { connection.value = await hostBridge.codex({ type }); emit('changed', connection.value) }
   catch (failure) { error.value = failure instanceof Error ? failure.message : 'Codex request failed' }
   finally { busy.value = false }
 }

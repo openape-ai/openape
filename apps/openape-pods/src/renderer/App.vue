@@ -1,4 +1,5 @@
 <script lang="ts">
+import { useHostBridge } from './host-bridge'
 import { usePodAccess } from './pod-access'
 import { t, diagnostic, label, dateTime } from './i18n'
 import { defineComponent } from 'vue'
@@ -15,6 +16,7 @@ import PodSettings from './PodSettings.vue'
 import PodValues from './PodValues.vue'
 import PodResources from './PodResources.vue'
 import PodRuns from './PodRuns.vue'
+import RunApproval from './RunApproval.vue'
 import type { RunApproval as Approval } from '../contracts/activity'
 import PodKnowledge from './PodKnowledge.vue'
 import TagEditor from './central/TagEditor.vue'
@@ -27,16 +29,16 @@ import type { ScheduleView } from '../contracts/scheduling'
 import type { PodStatus } from '../contracts/ipc'
 
 export default defineComponent({
-  components: { WorkspaceFrame, AppSettings, LocalShell, SharingImport, SharingExport, AccountStatus, PodDescription, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge, TagEditor },
+  components: { WorkspaceFrame, AppSettings, LocalShell, SharingImport, SharingExport, AccountStatus, RunApproval, PodDescription, PodScript, PodSettings, PodValues, PodResources, PodRuns, PodKnowledge, TagEditor },
   props: { embedded: Boolean, initialPodId: { type: String, default: '' }, refreshToken: { type: Number, default: 0 } },
   emits: ['settings'],
-  setup() { return { access: usePodAccess() } },
+  setup() { const hostBridge = useHostBridge(); return { hostBridge, sharing: typeof hostBridge?.sharing === 'function', access: usePodAccess() } },
   data() {
-    return { sharing: typeof window.pods?.sharing === 'function', shareSelection: null as PortableSourceSelection | null, requestedRun: '', requestedSecret: '', approvals: [] as (Approval & { runId: string })[], selected: this.initialPodId ? 'Overview' : 'Pods', sections: ['runs', 'values', 'access', 'settings', 'code'], tags: [] as ItemTags[], codeOpen: false, pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
+    return { shareSelection: null as PortableSourceSelection | null, requestedRun: '', requestedSecret: '', approvals: [] as (Approval & { runId: string })[], selected: this.initialPodId ? 'Overview' : 'Pods', sections: ['runs', 'values', 'access', 'settings', 'code'], tags: [] as ItemTags[], codeOpen: false, pods: [] as StoredPod[], podId: this.initialPodId, creating: false, details: null as PodDetails | null, runs: [] as RunRecord[], schedule: null as ScheduleView | null, resourceCount: 0, status: null as PodStatus | null, connectionError: '', dataError: '', busy: false, setupChecked: false, closed: false, timer: null as ReturnType<typeof setTimeout> | null, unsubscribe: null as (() => void) | null }
   },
   computed: {
     globalPage(): boolean { return ['App settings', 'Pods', 'Import', 'Share'].includes(this.selected) },
-    sharingApi(): (command: SharingCommand) => Promise<import('../contracts/sharing').SharingState> { return command => window.pods.sharing!(command) },
+    sharingApi(): (command: SharingCommand) => Promise<import('../contracts/sharing').SharingState> { return command => this.hostBridge.sharing!(command) },
     pod(): StoredPod | undefined { return this.pods.find(pod => pod.id === this.podId) },
     podTags(): MapTags { const item = this.tags.find(entry => entry.id === this.podId); return item ? { own: item.tags, revision: item.revision } : { own: [], revision: 0 } },
     tagSuggestions(): string[] { return [...new Set(this.tags.flatMap(item => item.tags))].sort() },
@@ -48,7 +50,7 @@ export default defineComponent({
   },
   watch: { refreshToken() { void this.refresh() } },
   async mounted() {
-    try { if (this.access.remote) { await this.refresh(); return }; this.unsubscribe = window.pods.onStatus((status) => { this.status = status }); this.status = await window.pods.getStatus(); await this.refresh() }
+    try { if (this.access.remote) { await this.refresh(); return }; this.unsubscribe = this.hostBridge.onStatus((status) => { this.status = status }); this.status = await this.hostBridge.getStatus(); await this.refresh() }
     catch (error) { this.connectionError = error instanceof Error ? error.message : 'Could not reach the desktop worker' }
     this.poll()
   },
@@ -56,7 +58,7 @@ export default defineComponent({
   methods: {
     navigate(page: string) { if (this.embedded && page === 'App settings') { this.$emit('settings'); return }; this.selected = page },
     share(selection: PortableSourceSelection) { this.shareSelection = selection; this.selected = 'Share' },
-    podResources(podId: string) { return window.pods.resources({ type: 'list', podId }) },
+    podResources(podId: string) { return this.hostBridge.resources({ type: 'list', podId }) },
     t, diagnostic, label, dateTime,
     sectionTitle(section: string): string { return ({ runs: t('Runs'), values: t('Variables and secrets'), access: t('Access'), settings: t('Settings'), code: t('Code') } as Record<string, string>)[section] ?? section },
     async openRun(podId: string, runId: string) { await this.selectPod(podId); this.requestedRun = runId; this.goTo('runs') },
@@ -69,7 +71,7 @@ export default defineComponent({
     },
     async openFolder() {
       if (this.pod && !this.access.remote) {
-        try { await window.pods.programs({ type: 'openFolder', podId: this.pod.id }) }
+        try { await this.hostBridge.programs({ type: 'openFolder', podId: this.pod.id }) }
         catch (error) { this.dataError = error instanceof Error ? error.message : 'Could not open folder' }
       }
     },
@@ -138,7 +140,7 @@ export default defineComponent({
         </nav>
         <RunApproval v-if="!globalPage && selected !== 'History' && podId" :pod-id="podId" :approvals="approvals" />
         <AppSettings v-if="selected === 'App settings'" :sharing="sharing" @import="selected = 'Import'" />
-        <LocalShell v-else-if="selected === 'Pods'" :sharing="sharing" @open-pod="selectPod" @share="share" @settings="navigate('App settings')" />
+        <LocalShell v-else-if="selected === 'Pods'" :sharing="sharing" @open-pod="selectPod" @settings="navigate('App settings')" />
         <template v-else-if="selected === 'Import'">
           <SharingImport :api="sharingApi" desktop :resources="podResources" @changed="refresh" @open-pod="selectPod" />
         </template>
