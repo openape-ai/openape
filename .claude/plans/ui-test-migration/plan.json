@@ -57,7 +57,7 @@
       "id": "m0",
       "title": "M0 — Approval and parallel launch preparation",
       "goal": "Publish one approved base and remove shared-file conflicts before dispatch.",
-      "status": "active",
+      "status": "done",
       "steps": [
         "Bind Patrick’s actual approval to proposal revision 1; creating or merging the planning PR does not approve implementation.",
         "Refresh canonical main and inspect the ongoing legacy extraction. Inventory existing declared browser/CSS dependencies, app commands and graph generation for A/B/C; avoid new dependencies when existing ones suffice.",
@@ -74,7 +74,7 @@
       "id": "a",
       "title": "A — Git/Issues",
       "goal": "Deliver the scoped fast UI path for Git/Issues after M0; run independently of the other areas.",
-      "status": "planned",
+      "status": "active",
       "steps": [
         "Inventory and map existing assertions, establish relevant baseline timings, then implement the area section above.",
         "Prove replacement behavior and CSS sensitivity before removing UI-only duplicates from integrated scenarios. Keep distinct security and system-boundary assertions.",
@@ -92,7 +92,7 @@
       "id": "b",
       "title": "B — Inbox/PWA",
       "goal": "Deliver the scoped fast UI path for Inbox/PWA after M0; run independently of the other areas.",
-      "status": "planned",
+      "status": "active",
       "steps": [
         "Inventory and map existing assertions, establish relevant baseline timings, then implement the area section above.",
         "Prove replacement behavior and CSS sensitivity before removing UI-only duplicates from integrated scenarios. Keep distinct security and system-boundary assertions.",
@@ -110,7 +110,7 @@
       "id": "c",
       "title": "C — Reports",
       "goal": "Deliver the scoped fast UI path for Reports after M0; run independently of the other areas.",
-      "status": "planned",
+      "status": "active",
       "steps": [
         "Inventory and map existing assertions, establish relevant baseline timings, then implement the area section above.",
         "Prove replacement behavior and CSS sensitivity before removing UI-only duplicates from integrated scenarios. Keep distinct security and system-boundary assertions.",
@@ -163,7 +163,7 @@
       "mitigation": "Exclude Troop. Refresh and inspect the extraction’s merged changes at preparation and integration. Request only the specific shared dependency clarification if needed; never edit or reset its worktree."
     }
   ],
-  "handoff": "M0 is active. Add the existing catalog browser dependencies to Git and Inbox centrally, then merge preparation and freeze its SHA for all three sessions. Reports already declares these dependencies. Existing test commands remain until replacements are proven. The coordinator owns shared files, heavy-check scheduling and merges.",
+  "handoff": "M0 completed: preparation PR 435 merged as 95d1083abfb9de07ad8edf5bb16c71e06207c5fd. Git/Issues issue 1484, Inbox/PWA issue 1485 and Reports issue 1486 are running in separate user-owned chats and independently installed worktrees from that exact baseline. The coordinator monitors their handoffs, grants the heavy-check slot and performs sequential reviews and merges. Troop remains excluded. Area acceptance and final integration are still open.",
   "changelog": [
     {
       "date": "2026-10-15",
@@ -594,8 +594,8 @@
       },
       {
         "path": "handoff",
-        "source": "M0 is active. Add the existing catalog browser dependencies to Git and Inbox centrally, then merge preparation and freeze its SHA for all three sessions. Reports already declares these dependencies. Existing test commands remain until replacements are proven. The coordinator owns shared files, heavy-check scheduling and merges.",
-        "text": "M0 läuft. Die vorhandenen Browser-Abhängigkeiten aus dem Katalog werden zentral für Git und Inbox ergänzt. Danach wird die Vorbereitung gemergt und ihr SHA als gemeinsame Basis festgehalten. Reports deklariert diese Abhängigkeiten bereits. Bestehende Prüfkommandos bleiben bis zum Nachweis ihrer Ablösung erhalten. Die Koordination verwaltet gemeinsame Dateien, aufwendige Prüfungen und Merges."
+        "source": "M0 completed: preparation PR 435 merged as 95d1083abfb9de07ad8edf5bb16c71e06207c5fd. Git/Issues issue 1484, Inbox/PWA issue 1485 and Reports issue 1486 are running in separate user-owned chats and independently installed worktrees from that exact baseline. The coordinator monitors their handoffs, grants the heavy-check slot and performs sequential reviews and merges. Troop remains excluded. Area acceptance and final integration are still open.",
+        "text": "M0 ist abgeschlossen: Vorbereitungs-PR 435 wurde als 95d1083abfb9de07ad8edf5bb16c71e06207c5fd gemergt. Git/Issues (Issue 1484), Inbox/PWA (Issue 1485) und Reports (Issue 1486) laufen in getrennten Benutzer-Chats und unabhängig installierten Worktrees auf genau dieser Basis. Die Koordination überwacht Übergaben, vergibt den Slot für aufwendige Prüfungen und übernimmt Reviews und Merges nacheinander. Troop bleibt ausgeschlossen. Bereichsabnahmen und abschließende Integration sind noch offen."
       },
       {
         "path": "changelog.0.text",

@@ -255,6 +255,8 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   cleanupOncePerProcess()
   const host = opts.host ?? '127.0.0.1'
   const port = opts.port ?? await getFreePort()
+  let hmrPort = await getFreePort()
+  while (hmrPort === port) hmrPort = await getFreePort()
   const url = `http://${host}:${port}`
   const command = opts.command?.({ port, host })
     ?? ['pnpm', 'exec', 'nuxt', 'dev', '--port', String(port), '--host', host]
@@ -266,10 +268,9 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
     cwd: opts.cwd,
     detached: true, // own process group → the whole tree dies on stop()
     stdio: ['ignore', 'pipe', 'pipe'],
-    // Concurrent `nuxt dev` servers would fight over vite's fixed HMR port
-    // 24678 and the loser never becomes ready (runs 3253/3255). Derive a
-    // unique HMR port from the app port, which is already unique per server.
-    env: { ...process.env, E2E_HMR_PORT: String(port + 10_000), ...extraEnv },
+    // Each fixture needs a separate available HMR port. A fixed offset from
+    // an ephemeral app port can exceed 65535 or collide with another listener.
+    env: { ...process.env, E2E_HMR_PORT: String(hmrPort), ...extraEnv },
   })
 
   let logBuffer = ''
