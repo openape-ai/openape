@@ -1,16 +1,18 @@
 // The generic grant card (issue 1473): registry meaning only from adapters in
 // the IdP's shapes table, matched by adapter digest and re-derived from the
-// grant's own argv; the binding line never yields to a requester title, and
-// values the approval does not bind are marked as requested.
+// grant's own argv; the binding line always stays visible (a requester title
+// leads only above an exact command), and values the approval does not bind
+// are marked as requested.
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { OpenApeGrant } from '@openape/core'
+import { computeArgvHash } from '@openape/grants'
 import { describe, expect, it, vi } from 'vitest'
-import { registryCard, withGrantCards } from '../src/runtime/server/utils/grant-card'
-import { grantBindingLine } from '../src/runtime/utils/grant-card'
+import { bindsExactCommand, registryCard, withGrantCards } from '../src/runtime/server/utils/grant-card'
+import { grantBindingLine, requesterHeadline } from '../src/runtime/utils/grant-card'
 import type { GrantWithCard } from '../src/runtime/utils/grant-card'
-import { buildCardFixtures, findUser, getShape, gitAdapter, idpResolvedRequest, POD_ID, podArgv, podRuntimeAdapter, pushArgv, shapedRequest, UNTESTED_GIT_SHA256 } from './helpers/grant-card-fixtures'
+import { buildCardFixtures, findUser, getShape, gitAdapter, graphGateArgv, idpResolvedRequest, POD_ID, podArgv, podRuntimeAdapter, pushArgv, shapedRequest, UNTESTED_GIT_SHA256 } from './helpers/grant-card-fixtures'
 
 vi.mock('nitropack/runtime', () => ({ useRuntimeConfig: () => ({}), useEvent: () => undefined, useStorage: () => ({}) }))
 
@@ -72,7 +74,7 @@ describe('registry card', () => {
 
   it('falls back for oversized values, control or format characters and malformed maps', async () => {
     expect(await registryCard(await podRequest(withOption('script', `/${'x'.repeat(5000)}`)), getShape)).toBeNull()
-    expect(await registryCard(await podRequest(withOption('name', 'Mail ‮digest')), getShape)).toBeNull()
+    expect(await registryCard(await podRequest(withOption('name', 'Mail \u202Edigest')), getShape)).toBeNull()
     expect(await registryCard(await podRequest(withOption('environment', '{"HOME":"/a\nb"}')), getShape)).toBeNull()
     expect(await registryCard(await podRequest(withOption('environment', '{"HOME":1}')), getShape)).toBeNull()
     expect(await registryCard(await podRequest(withOption('environment', 'HOME=/a')), getShape)).toBeNull()
@@ -106,6 +108,67 @@ describe('grant cards', () => {
     const withoutRegistry: GrantWithCard = { ...gitPush, card: { registry: null, requester: null } }
     expect(grantBindingLine(withoutRegistry, 'de')).toEqual({ kind: 'command', text: pushArgv.join(' ') })
     expect(grantBindingLine(unknown, 'en')).toEqual({ kind: 'command', text: 'acme-cli deploy --env production' })
+  })
+
+  it('verify that an approval binds nothing but the exact command, and fail closed otherwise', async () => {
+    const { gitPush, gitUntested, podRun, graphGate } = await buildCardFixtures()
+    const gate = graphGate.request
+    const [detail] = gate.authorization_details!
+
+    // A command no adapter describes: its exact-only detail and permission name the hash of exactly this argv.
+    expect(gate.permissions).toEqual([`pods-graph-gate.cli[name=pods-graph-gate].argv[hash=${await computeArgvHash(graphGateArgv)}]#exec`])
+    expect(await bindsExactCommand(gate)).toBe(true)
+    expect(await bindsExactCommand({ ...gate, permissions: [] })).toBe(true)
+    // A plain command without permissions is bound by its command hash; its exact permission alone is too.
+    const plain = { requester: 'agent@example.com', target_host: 'macmini', audience: 'escapes', command: ['ls', '-la'] }
+    expect(await bindsExactCommand(plain)).toBe(true)
+    expect(await bindsExactCommand({ ...plain, permissions: [`ls.cli[name=ls].argv[hash=${await computeArgvHash(['ls', '-la'])}]#exec`] })).toBe(true)
+
+    // An additional broad permission.
+    expect(await bindsExactCommand({ ...gate, permissions: [...gate.permissions!, 'pods.approval:b-gate'] })).toBe(false)
+    expect(await bindsExactCommand({ ...plain, permissions: ['files.read'] })).toBe(false)
+    // The Pods gate batch permission is not bound to the command (issue 1477 follow-up).
+    expect(await bindsExactCommand({ ...gate, authorization_details: undefined, permissions: ['pods.approval:ed50790c-7d3b-4f0e-9c51-2a8b4f7c9a0e'] })).toBe(false)
+    // A detail of another type, or one that is not exact-only.
+    expect(await bindsExactCommand({ ...gate, authorization_details: [detail!, { type: 'openape_grant', action: 'exec' }] })).toBe(false)
+    expect(await bindsExactCommand({ ...gate, authorization_details: [{ ...detail!, constraints: {} } as typeof detail] })).toBe(false)
+    // A command, argv or argv hash that differs from what the permission names.
+    expect(await bindsExactCommand({ ...gate, command: [...graphGateArgv.slice(0, 2), '{}'] })).toBe(false)
+    expect(await bindsExactCommand({ ...gate, execution_context: { argv: ['pods-graph-gate', 'approve'], argv_hash: 'SHA-256:00', adapter_id: 'x', adapter_version: 'x', adapter_digest: 'x', resolved_executable: 'x', context_bindings: {} } })).toBe(false)
+    expect(await bindsExactCommand({ ...gate, permissions: ['pods-graph-gate.cli[name=pods-graph-gate].argv[hash=SHA-256:00]#exec'] })).toBe(false)
+    // Structured grants, resolved by the requester or by the IdP, and requests without a command.
+    expect(await bindsExactCommand(gitPush.request)).toBe(false)
+    expect(await bindsExactCommand(gitUntested.request)).toBe(false)
+    expect(await bindsExactCommand({ ...podRun.request, command: podArgv })).toBe(false)
+    expect(await bindsExactCommand({ ...plain, command: [] })).toBe(false)
+  })
+
+  it('lead with the requester title only when the IdP verified the exact command binding', async () => {
+    const { gitPush, unknown, graphGate } = await buildCardFixtures()
+    const headline = (grant: GrantWithCard) => requesterHeadline(grant, grantBindingLine(grant, 'en'))
+
+    expect(graphGate.card?.binds_exact_command).toBe(true)
+    expect(headline(unknown)).toBe('Deploy the hotfix')
+    expect(headline(graphGate)).toBe('62 Personen haben sich Ihr Profil angesehen')
+    // A registry title keeps the lead; without the registry card, a shaped permission is broader than the line.
+    expect(gitPush.card?.binds_exact_command).toBe(false)
+    expect(headline(gitPush)).toBeNull()
+    expect(headline({ ...gitPush, card: { ...gitPush.card!, registry: null } })).toBeNull()
+    // Without the IdP's verification there is no headline.
+    expect(headline({ ...graphGate, card: undefined })).toBeNull()
+    expect(headline({ ...graphGate, card: { ...graphGate.card!, binds_exact_command: false } })).toBeNull()
+  })
+
+  it('keep the command line in the lead without a title or with an unsafe title', async () => {
+    const { unknown } = await buildCardFixtures()
+    const titled = (title: string | undefined): GrantWithCard => ({ ...unknown, request: { ...unknown.request, summary: title === undefined ? undefined : { title } } })
+    const headline = (grant: GrantWithCard) => requesterHeadline(grant, grantBindingLine(grant, 'en'))
+
+    expect(headline(titled(undefined))).toBeNull()
+    expect(headline(titled('   '))).toBeNull()
+    expect(headline(titled('  Deploy the hotfix  '))).toBe('Deploy the hotfix')
+    for (const unsafe of ['Deploy\u202Eexif.exe', 'two\nlines', 'zero\u200Bwidth', 'line\u2028separator', 'x'.repeat(121)])
+      expect(headline(titled(unsafe))).toBeNull()
   })
 
   it('render a grant the IdP resolved without a client adapter digest and flag an untested version', async () => {

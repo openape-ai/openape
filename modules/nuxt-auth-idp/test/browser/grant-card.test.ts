@@ -116,6 +116,9 @@ for (const dark of [false, true]) {
 
     it(`shows a readable exact command on the card (${lang}${theme})`, async () => {
       const card = await mountPage({ grant_id: 'grant-graph-gate' }, cardFixtures.graphGate, language)
+      expect(card.get('h2 [data-requester-headline]').text()).toBe('62 Personen haben sich Ihr Profil angesehen')
+      expect(card.get('h2 [data-requested-marker]').text()).toBe(lang === 'de' ? 'laut Anfrage' : 'as requested')
+      expect(card.find('[data-requester-claims]').exists()).toBe(false)
       expect(card.get('[data-command-head]').text()).toBe('pods-graph-gate approve')
       expect(card.get('[data-binding-line="command"]').text()).toContain('mail.archive')
       // Open the technical details with the raw command line.
@@ -127,6 +130,9 @@ for (const dark of [false, true]) {
 
     it(`lists graph gate batch members by their compact command line (${lang}${theme})`, async () => {
       const batch = await mountPage({ requester: cardFixtures.graphGate.request.requester, batch: 'b-gate' }, gateBatch(), language)
+      const marker = lang === 'de' ? 'laut Anfrage' : 'as requested'
+      expect(batch.findAll('[data-requester-headline]').map(headline => headline.text())).toEqual(['62 Personen haben sich Ihr Profil angesehen', 'Ihre Rechnung für Oktober', 'Wochenrückblick'].map(title => `${title}${marker}`))
+      expect(batch.find('[data-row-claim]').exists()).toBe(false)
       expect(batch.findAll('[data-command-head]').map(head => head.text())).toEqual(['pods-graph-gate approve', 'pods-graph-gate approve', 'pods-graph-gate approve'])
       await capture(`graph-gate-batch-${lang}${theme}`, dark)
       // On a phone (the last capture): the head and two lines of facts; members that would
@@ -152,6 +158,8 @@ for (const dark of [false, true]) {
       await capture(`graph-gate-history-closed-${lang}${theme}`, dark)
       ;(batch.get('[data-batch-history]').element as HTMLDetailsElement).open = true
       await frame()
+      expect(batch.findAll('[data-batch-history] [data-requester-headline]').map(headline => headline.text().replace(/(laut Anfrage|as requested)$/, ''))).toEqual(['Gewinnspiel', 'Lieferung unterwegs', 'Termin morgen'])
+      expect(batch.findAll('[data-batch-history] [data-binding-line="command"]')).toHaveLength(3)
       await capture(`graph-gate-history-open-${lang}${theme}`, dark)
     })
   }
