@@ -25,14 +25,26 @@ const examples = [
   ['Wochenbericht', 'Erstellt freitags einen Überblick über abgeschlossene Arbeiten.', 'Contoso', 'reports'],
 ] as const
 
-function podView(pod: StoredPod, description: string, topic: string, at: number): CentralPod {
+// Everyday-only edge cases: [name, description, company, topic, lifecycle, failed run indices (0 = latest), failure summary, error]
+const edgeCases = [
+  ['Lieferantenabgleich', 'Gleicht Lieferantenstammdaten mit der Buchhaltung ab.', 'Northwind', 'suppliers', 'active', [0, 1], 'Lieferantenliste konnte nicht geladen werden.', 'HTTP 503 from demo-api after 3 attempts'],
+  ['Kontoabgleich', 'Ordnet Kontobewegungen offenen Rechnungen zu.', 'Contoso', 'banking', 'active', [2], 'Kontoauszug war unvollständig.', 'Statement ends before requested date'],
+  ['Mahnwesen', 'Erinnert Kunden an überfällige Rechnungen.', 'Contoso', 'dunning', 'paused', [0], 'Vorlage für die Mahnung fehlt.', 'Template dunning-2 not found'],
+  ['Altes Ticketsystem', 'Hat Supportanfragen aus dem abgelösten Ticketsystem übernommen.', 'Northwind', 'tickets', 'archived', [], '', ''],
+  ['Steuerexport 2025', 'Hat die Belege für die Steuererklärung 2025 exportiert.', 'Contoso', 'tax', 'archived', [0], 'Export wurde vom Zielsystem abgelehnt.', 'Export rejected: period closed'],
+] as const
+
+function podView(pod: StoredPod, description: string, topic: string, at: number, failure?: { runs: readonly number[], summary: string, error: string }): CentralPod {
   const versions = [{ hash: demoHash, assignmentRevision: 1, validated: true, active: true }]
-  const runs = Array.from({ length: 3 }, (_, index) => ({
-    id: demoId(100 + examples.findIndex(example => example[0] === pod.name) * 10 + index), podId: pod.id, scriptHash: demoHash,
-    state: 'completed' as const, startedAt: at - (index + 1) * 3600000, finishedAt: at - (index + 1) * 3600000 + 24000,
-    summary: index ? 'Keine neuen Einträge. Alles auf dem aktuellen Stand.' : '12 Einträge geprüft, 2 zur Entscheidung vorgelegt.',
-    error: null, checkpointRevision: 1, recovery: null,
-  }))
+  const runs = Array.from({ length: 3 }, (_, index) => {
+    const failed = failure?.runs.includes(index) ? failure : null
+    return {
+      id: demoId(100 + (Number(pod.id.slice(-2)) - 1) * 10 + index), podId: pod.id, scriptHash: demoHash,
+      state: failed ? 'failed' as const : 'completed' as const, startedAt: at - (index + 1) * 3600000, finishedAt: at - (index + 1) * 3600000 + 24000,
+      summary: failed ? failed.summary : index ? 'Keine neuen Einträge. Alles auf dem aktuellen Stand.' : '12 Einträge geprüft, 2 zur Entscheidung vorgelegt.',
+      error: failed?.error ?? null, checkpointRevision: 1, recovery: failed && index === 0 ? { state: 'ready' as const, error: null } : null,
+    }
+  })
   const events = [{ sequence: 1, type: 'log', data: { line: 'Demo: 12 synthetische Einträge eingelesen.' }, at: runs[0]!.startedAt }]
   return {
     id: pod.id, ready: true,
@@ -52,6 +64,16 @@ export function demoState(scenario: DemoScenario, at: number): DemoState {
     state.pods.push(pod); state.tags[pod.id] = normalizeTags([company, index < 2 ? 'Mail' : 'Betrieb'])
     state.views[pod.id] = podView(pod, description, topic, at)
   })
+  if (scenario === 'everyday') {
+    edgeCases.forEach(([name, description, company, topic, lifecycle, runs, summary, error], index) => {
+      const pod: StoredPod = { id: demoId(examples.length + index + 1), name, revision: 1, lifecycle, activeScript: demoHash }
+      const archived = lifecycle === 'archived'
+      state.pods.push(pod); state.tags[pod.id] = normalizeTags([company, 'Betrieb'])
+      const view = podView(pod, description, topic, archived ? at - 30 * 86400000 : at, { runs, summary, error })
+      if (archived) view.scheduling = { ...view.scheduling, enabled: false, nextAt: null }
+      state.views[pod.id] = view
+    })
+  }
   state.domain.questions = Array.from({ length: 4 }, (_, index) => ({
     id: `demo-question-${index + 1}`, podId: demoId(index < 2 ? 1 : 2), namespace: 'demo/mail', key: `message-${index + 1}`,
     title: index < 2 ? 'Unbekannter Lieferant' : 'Newsletter einordnen',
@@ -76,11 +98,11 @@ export function demoMap(state: DemoState, at: number): MapView {
       data: { writes: [`demo/${pod.id.slice(-1)}/results`], reads: pod.id === demoId(5) ? ['demo/1/results'] : [] }, work: { pending: 0, held: 0 },
       resources: [{ kind: 'service' as const, name: 'Demo API', how: 'Read', system: 'demo-api' }], secrets: [], schedule: view.scheduling,
       lastRun: last ? { at: last.startedAt, state: last.state, summary: last.summary, error: last.error } : null, runs: view.runs.runs.length,
-      queue: { blocked: 0, error: null }, approvals: [], unknown: [], failures: view.runs.runs.filter(run => run.state === 'failed').length,
+      queue: { blocked: 0, error: null }, approvals: [], unknown: [], failures: view.runs.runs.filter(run => run.state === 'failed' && run.startedAt >= at - 86400000).length,
       tags: { own: state.tags[pod.id] ?? [], revision: pod.revision },
     }
   })
   return { at, window: { from: at - 86400000, to: at }, pods, systems: [{ id: 'demo-api', kind: 'service', name: 'Demo API', how: 'Read' }],
     edges: [...pods.map(pod => ({ from: 'demo-api', to: pod.id, type: 'read' as const, channel: null, flow: 12 })), ...(pods.length ? [{ from: demoId(1), to: demoId(5), type: 'data' as const, channel: 'demo/1/results', flow: 12 }] : [])],
-    kpis: { active: pods.filter(pod => pod.lifecycle === 'active').length, paused: pods.filter(pod => pod.lifecycle === 'paused').length, degraded: pods.filter(pod => pod.lastRun?.state === 'failed').map(pod => ({ podId: pod.id, reason: pod.lastRun!.summary })), decisions: [...state.domain.questions.map(question => ({ podId: question.podId, kind: 'question' as const, title: question.title, count: 1 })), ...state.domain.approvals.map(approval => ({ podId: approval.podId, kind: 'approval' as const, title: approval.title, count: 1 }))], unknownDeliveries: 0 } }
+    kpis: { active: pods.filter(pod => pod.lifecycle === 'active').length, paused: pods.filter(pod => pod.lifecycle === 'paused').length, degraded: pods.filter(pod => pod.lifecycle !== 'archived' && pod.lastRun?.state === 'failed').map(pod => ({ podId: pod.id, reason: pod.lastRun!.summary })), decisions: [...state.domain.questions.map(question => ({ podId: question.podId, kind: 'question' as const, title: question.title, count: 1 })), ...state.domain.approvals.map(approval => ({ podId: approval.podId, kind: 'approval' as const, title: approval.title, count: 1 }))], unknownDeliveries: 0 } }
 }
