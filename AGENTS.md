@@ -65,8 +65,12 @@ supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
   acceptance requires an available, unlocked Mac.
 - `--dry-run` explains scope; `.openape/check-results/` holds complete logs and
   summaries. See [checks](docs/operations/checks.md). Do not bypass a failed gate.
-- Before committing or deploying, full `pnpm lint` and `pnpm typecheck` must
-  pass. For app changes also build that app and exercise its relevant tests.
+- Commits run only branch and lockfile guards. The pre-push hook is the single
+  complete local affected unit gate, including lint and typecheck; do not add
+  separate repository-wide lint/typecheck or repeat that contract before commit.
+  During iteration run focused checks. For a handoff without a push, run the
+  affected unit gate explicitly once. For app changes also build that app and
+  exercise relevant tests. Deployments still require full `pnpm check:ci`.
 - Build consumed workspaces serially before checks; the shared script does this.
   Avoid concurrent fresh declaration builds during typechecks.
 - Visible Vue state and interactions need component tests. Geometry needs a real
