@@ -62,6 +62,8 @@ export interface GrantCardContext {
    * null for client-resolved grants. `version_tested` is null for a command no adapter describes.
    */
   program?: { sha256: string, version_tested: boolean | null } | null
+  /** The IdP verified that approving binds nothing but the request's command line (`bindsExactCommand`). */
+  binds_exact_command?: boolean
 }
 
 export type GrantWithCard = OpenApeGrant & { card?: GrantCardContext }
@@ -194,22 +196,16 @@ const MAX_HEADLINE_LENGTH = 120
 // Characters that can make displayed text differ from what was sent (grants.md §3.4).
 const UNSAFE_TITLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
 
-/** True when approving binds nothing but the request's exact command line. */
-function bindsExactCommand(request: OpenApeGrant['request']): boolean {
-  const details = getCliAuthorizationDetails(request.authorization_details)
-  if (details.length) return details.every(detail => detail.constraints?.exact_command)
-  return !request.permissions?.length && !request.authorization_details?.length
-}
-
 /**
  * The requester's summary title as the headline above an exact command line
- * (owner decision, issue 1477). Such an approval binds only the command shown
- * directly beneath, so the title cannot widen it. Registry and permission
- * lines keep the lead; so does the command line when the title is missing or
- * contains control or format characters.
+ * (owner decision, issue 1477). Only when the IdP verified that the approval
+ * binds nothing but the command shown directly beneath
+ * (`card.binds_exact_command`) can the title not widen it. Registry and
+ * permission lines keep the lead; so does the command line when the title is
+ * missing or contains control or format characters.
  */
-export function requesterHeadline(grant: OpenApeGrant, line: BindingLine): string | null {
-  if (line.kind !== 'command' || !bindsExactCommand(grant.request)) return null
+export function requesterHeadline(grant: GrantWithCard, line: BindingLine): string | null {
+  if (line.kind !== 'command' || grant.card?.binds_exact_command !== true) return null
   const title = grant.request.summary?.title?.trim()
   if (!title || [...title].length > MAX_HEADLINE_LENGTH || UNSAFE_TITLE.test(title)) return null
   return title

@@ -32,6 +32,8 @@ function member(id: string, index: number, overrides: Record<string, unknown> = 
       waits_until: future,
       batch: { id: 'b-1', title: 'Newsletters, October 7', size: 3 },
     },
+    // What the IdP attaches: this plain command binds nothing but itself (`bindsExactCommand`).
+    card: { registry: null, requester: null, binds_exact_command: true },
     ...overrides,
   }
 }
@@ -140,11 +142,14 @@ describe('grant batch approval', () => {
       member('g-1', 1) as unknown as GrantWithCard,
       member('g-2', 2, { request: { ...member('g-2', 2).request, summary: { title: 'two\nlines' } } }) as unknown as GrantWithCard,
       { ...cardFixtures.gitPush, id: 'g-3', created_at: 1_710_000_003 } as unknown as GrantWithCard,
+      // A command whose permission the IdP could not verify as bound to it, such as a Pods gate batch permission.
+      member('g-4', 4, { request: { ...member('g-4', 4).request, permissions: ['pods.approval:b-1'] }, card: { registry: null, requester: null, binds_exact_command: false } }) as unknown as GrantWithCard,
     ], 'en')
     expect(rows.map(row => [row.id, row.headline, row.claim])).toEqual([
       ['g-1', '"Newsletter XY" <news@xy.example> – Issue 1', null],
       ['g-2', null, 'two\nlines'],
       ['g-3', null, 'Read-only status check'],
+      ['g-4', null, '"Newsletter XY" <news@xy.example> – Issue 4'],
     ])
   })
 
