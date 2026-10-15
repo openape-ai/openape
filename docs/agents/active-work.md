@@ -8,6 +8,13 @@
 - Preserve the complete safety matrix and remove domain code only after equivalent external protections exist. Installed Pods, active scripts, schedules and decisions remain untouched. Production rollout is a separate boundary in the approved plan.
 - Source: `.claude/plans/2026-10-15-pods-ape-shell/plan.json`. Keep this source and its complete German translation synchronized with implementation evidence.
 
+## Retire legacy runtime — issue 1498
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1498. Branch `feature/issue-1498-retire-legacy-runtime`.
+- Owner-authorized shutdown of Troop, CRM and Chat, retaining application data and legacy source/history.
+- Disable old Troop producers and operator support jobs; remove the three Compose services, live containers, routes and associated monitors.
+- Verify database preservation/integrity and unrelated runtime identities. Exact runtime, provider webhook and merge receipts belong on the issue/PR and Test Run.
+
 ## Mail choices and decision notifications — issue 1495
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1495. Branch `bugfix/issue-1495-decision-push`, checkout `openape-monorepo.worktrees/mail-processing-1492`, base `cac6db13`.
@@ -2138,3 +2145,17 @@ are implied by merging this preparation increment.
 - Activate classification rule version 5 for both declared operations after activating the new script. The bounded `refresh-message-ids` variable refreshes up to five selected Inbox messages per Intake run; its checkpoint makes retries resumable. Remove the variable after recovery. No mailbox mutations bypass the existing approval service.
 - Verification: the focused autonomous mail suite passes 16 tests, including multi-run long content, resumable targeted refresh, exact approval before a move, HTML normalization, incomplete-content visibility and an invoice found in the last section. The Pods application build also passes. Retain these regressions because silent completion and premature archival have consequential effects. The mandatory pre-push affected gate and live acceptance follow; receipts belong on the PR and issue.
 - Limit: assigned-program output is still capped by the native transport at 200,000 bytes. A provider response beyond that boundary fails visibly; this recipe fix does not claim unlimited transport. Original messages remain in the mailbox.
+
+## Issue 1496 — mail question context
+
+- Source: `bugfix/issue-1496-mail-question-context`, worktree `openape-monorepo.worktrees/mail-processing-1492`.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1496
+- Extend Sent Items coverage to match Inbox, reconcile sent replies and identical invoice notices, separate attachment review from owner category questions. Preserve explicit content-bound archive approvals.
+- Verification: focused autonomous mail regression suite; required affected and full deployment gates before activating the canonical recipes. Live acceptance reconciles the 35 audited questions and checks mailbox/category/approval state.
+
+### Issue 1496 — delta continuation recovery
+
+- Follow-up source: `bugfix/issue-1496-mail-cursor-recovery`.
+- Live historical synchronization returned `outcome=unknown, reason=Gone` for a persisted Sent Items continuation. Restart that folder once per run, retain stored evidence, checkpoint each complete page and avoid full reads for unchanged provider versions.
+- Focused verification: 26 autonomous mail cases, including expired cursor recovery and retaining the last complete page after a later provider failure.
+- Reuse source-bound version-five machine assessments during the version-six transition; update context and uncertainty without another model choice or fabricated owner answer.

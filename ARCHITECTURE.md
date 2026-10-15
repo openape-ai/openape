@@ -52,20 +52,14 @@ management, admin) or an SP by adding `modules/nuxt-auth-sp` (login via DNS
 discovery, callback, session, well-known endpoints). The web apps below are
 thin shells around exactly these modules (see their `nuxt.config.ts`).
 
-**`apps/` — deployables.** Ten self-hosted Nuxt web apps.
-`apps/openape-free-idp` is the free IdP (id.openape.ai) and uses
-`nuxt-auth-idp`; the other nine are SPs on `nuxt-auth-sp`:
-`apps/openape-troop` (agent control plane, includes the company/org view),
-`apps/openape-chat` (human↔agent chat), and the proof-link services
-`openape-tasks`, `openape-plans`, `openape-testrun`, `openape-timetrack`,
-`openape-pr` and `openape-monitor` (uptime checks + mail alerts).
-The Question Service Q&A surface is preserved in the separate legacy repository;
-its production container, route, monitoring and obsolete question database were
-retired with owner authorization on October 15, 2026.
-Beside them: `apps/openape-nest` (local daemon supervising agents on a
-machine), `apps/openape-ape-agent` (one runtime process per agent),
-`apps/openape-llm` (LLM proxy container), `apps/docs` (documentation site,
-statically prerendered, deployed on its own path).
+**`apps/` — deployables.** Active applications include the free IdP, the
+proof-link services, Monitor, Dashboard, Secrets and Pods services; see the
+[workspace map](docs/architecture/workspace-map.md) for the maintained inventory.
+Troop, Chat, CRM, Nest, ape-agent and Question Service source/history are preserved
+in the separate legacy repository. Their retired runtime boundaries are documented
+in [legacy operations](docs/operations/legacy-apps.md). Troop, Chat and CRM data
+remain on the production host after their owner-authorized shutdown.
+`apps/docs` is statically prerendered and deployed on its own path.
 
 **`examples/`** — minimal IdP/SP apps, the `examples/e2e` integration tests,
 and `examples/agent-recipes`. `examples/idp` and `examples/sp` are also the
@@ -83,14 +77,12 @@ publishes the `@openape/*` packages to npm in dependency order.
 
 The web apps run as Docker containers from `registry.openape.ai`, orchestrated
 by `compose/chatty.yml` (compose project `openape-prod`), each publishing on
-`127.0.0.1:<port>` behind nginx. The deploy target names are the ones
+`127.0.0.1:<port>` behind Traefik. The deploy target names are the ones
 `pnpm run deploy:image` takes:
 
 | Target | Compose service | App | Port | Domain |
 |---|---|---|---|---|
 | `free-idp` | `idp` | openape-free-idp | 3003 | id.openape.ai |
-| `troop` | `troop` | openape-troop | 3010 | troop.openape.ai |
-| `chat` | `chat` | openape-chat | 3007 | chat.openape.ai |
 | `plans` | `plans` | openape-plans | 3004 | plans.openape.ai |
 | `tasks` | `tasks` | openape-tasks | 3005 | tasks.openape.ai |
 | `testrun` | `testrun` | openape-testrun | 3006 | testrun.openape.ai |
@@ -98,7 +90,6 @@ by `compose/chatty.yml` (compose project `openape-prod`), each publishing on
 | `pr` | `pr` | openape-pr | 3014 | pr.openape.ai |
 | `monitor` | `monitor` | openape-monitor | 3018 | monitor.openape.ai |
 | `dashboard` | `dashboard` | openape-dashboard | 3022 | dashboard.openape.ai |
-| `crm` | `crm` | openape-crm | 3024 | crm.openape.ai |
 
 Each container mounts the pre-existing `/home/openape/projects/<app>/shared`
 at the identical path and reuses its `.env` — SQLite `file:` URLs and secrets
