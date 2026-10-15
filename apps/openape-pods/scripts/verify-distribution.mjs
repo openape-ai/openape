@@ -51,8 +51,7 @@ try {
   // The Automations tab lists the Pod; its detail page opens the Pod editor.
   await page.getByRole('button', { name: 'List', exact: true }).click()
   await page.getByRole('row', { name: /DMG acceptance/ }).click()
-  await page.getByRole('button', { name: 'Open page', exact: true }).click()
-  await page.getByRole('tab', { name: 'History', exact: true }).click(); await page.evaluate(async () => { const pod = (await window.pods.workspace({ type: 'list' })).pods[0]; await window.pods.runs({ type: 'installExample', podId: pod.id, variant: 'deterministic' }) }); await page.getByRole('button', { name: 'Run now', exact: true }).click()
+  await page.getByRole('button', { name: 'Runs', exact: true }).click(); await page.evaluate(async () => { const pod = (await window.pods.workspace({ type: 'list' })).pods[0]; await window.pods.runs({ type: 'installExample', podId: pod.id, variant: 'deterministic' }) }); await page.getByRole('button', { name: 'Run now', exact: true }).click()
   await page.getByText('Local example completed (1)', { exact: true }).waitFor()
   await page.getByTestId('back-to-automations').click(); await page.getByRole('button', { name: 'OpenApe account', exact: true }).click(); await page.locator('summary').filter({ hasText: 'Data & backups' }).click(); await page.getByRole('heading', { name: 'Data & backups', exact: true }).waitFor()
   await mkdir('.artifacts', { recursive: true }); await page.screenshot({ path: '.artifacts/data-dmg.png' })
