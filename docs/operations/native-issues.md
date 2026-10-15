@@ -129,16 +129,25 @@ cache. The frontend preserves drafts after network/conflict errors, reuses retry
 keys for unchanged submissions and requires an explicit reload after conflicts.
 Forms accept input only after hydration, avoiding loss of very early input.
 
-The approved `test:e2e` and `test:layout` suites are registered in the shared
-check contract. Both boot the real Nuxt application and the shared disposable
-DDISA IdP. The CLI exchanges a real IdP token; the browser receives only cookies
-produced by a complete OIDC callback. There is no test authentication bypass.
-Playwright uses the repository's existing pinned dependency and installed Chrome;
-the shared fixture dependency avoids a second identity protocol implementation.
-Layout tests load actual application CSS at 390 and 1440 pixels and emit synthetic
-screenshots, `testrun.json` and a self-contained `report.html` under
-`apps/openape-git/.artifacts/issues/`. Unit/component tests additionally protect
-retry keys, draft retention, permission changes and participant-only controls.
+The existing manual commands now select separate boundaries. `test:layout` uses
+Vitest browser mode with actual issue/PR components, shared production theme and
+application CSS at narrow/wide widths, without starting Nuxt or an IdP. It covers
+presentation, interaction, drafts and deterministic transport failures. The
+[UI verification handoff](../../apps/openape-git/docs/ui-test-migration.md)
+records the old-to-new assertions, counter-proofs and artifact paths.
+
+`test:e2e` retains the real Nuxt application and disposable DDISA IdP. Its API/CLI
+and browser journeys verify the actual login/callback, authorization, persistence,
+route/history behavior, reciprocal PR relations and protected migration downloads.
+The CLI exchanges a real IdP token; browser cookies come from the complete OIDC
+callback. There is no authentication bypass. The fixture files run serially to
+avoid sharing generated Nuxt outputs concurrently. Existing unit/component tests
+remain for retry keys, draft retention, permissions and participant-only controls.
+
+Use the pinned installed Chrome for browser geometry, inspect captured screenshots,
+and publish the actual versioned Test Run with exact source and command outcomes.
+UI-only changes do not require repeating every responsive matrix through the
+integrated app. CI and the manual suite-registration policy remain unchanged.
 
 ## M4: product reporting and intake triage
 

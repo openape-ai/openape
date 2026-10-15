@@ -1,5 +1,9 @@
-import { nextTick } from 'vue'
-import { mount } from '@vue/test-utils'
+import { h, nextTick, Suspense } from 'vue'
+import { commands, page } from 'vitest/browser'
+import { routeBoundary, screenshotPath } from './harness'
+import { installNuxtGlobals } from './report-fixture'
+import ReportPage from '../../app/pages/r/[slug].vue'
+import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it } from 'vitest'
 import BriefingReport from '../../app/components/BriefingReport.vue'
 import { sampleBriefing } from '../briefing-fixture'
@@ -38,4 +42,33 @@ it('shows a mail summary and next action once while preserving unrelated report 
   expect(wrapper.text()).toContain('Deine Nachrichten')
   expect(wrapper.text()).toContain('27. September 2026')
   expect(wrapper.attributes('lang')).toBe('de')
+})
+
+it.each([
+  { width: 390, height: 844, theme: 'light' as const },
+  { width: 390, height: 844, theme: 'dark' as const },
+  { width: 1440, height: 1000, theme: 'light' as const },
+  { width: 1440, height: 1000, theme: 'dark' as const },
+])('renders the real briefing page at $width px in $theme without horizontal overflow', async ({ width, height, theme }) => {
+  await page.viewport(width, height)
+  await commands.setColorScheme(theme)
+  const report = sampleBriefing()
+  installNuxtGlobals({ type: 'briefing', briefing: report, version: 1, latest_version: 2,
+    editions: [{ version: 1, date: report.editionDate }, { version: 2, date: '2026-09-28' }],
+    created_by: 'owner@example.test', created_by_act: 'agent', created_at: 1, visibility: 'private' })
+  wrapper = mount({ render: () => h(Suspense, null, { default: () => h(ReportPage) }) }, { global: routeBoundary, attachTo: document.body })
+  await flushPromises()
+  await wrapper.get('select[aria-label="Darstellung"]').setValue(theme)
+  const briefing = wrapper.get('.briefing')
+  expect(briefing.attributes('data-theme')).toBe(theme)
+  expect(getComputedStyle(briefing.element).backgroundColor).toBe(theme === 'dark' ? 'rgb(20, 35, 31)' : 'rgb(247, 246, 241)')
+  expect(briefing.text()).toContain('Personal events may be missing')
+  expect(wrapper.get('.docbar h1').text()).toBe(report.title)
+  expect(wrapper.get('.docbar a.pill').attributes('href')).toBe('/r/demo')
+  expect(wrapper.get('select#briefing-edition').element).toHaveProperty('value', '1')
+  expect(wrapper.findAll('select#briefing-edition option').map(option => option.attributes('value'))).toEqual(['1', '2'])
+  expect(getComputedStyle(wrapper.get('label[for="briefing-theme"]').element).position).toBe('absolute')
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+  expect(wrapper.get('.native').element.scrollWidth).toBeLessThanOrEqual(width)
+  await page.screenshot({ path: screenshotPath(`briefing-${width}-${theme}`) })
 })
