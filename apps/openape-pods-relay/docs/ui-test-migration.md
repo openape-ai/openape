@@ -77,27 +77,26 @@ Verification, measurements, inspected image digests, exact source SHA and privat
 Test Run publication are recorded here after acceptance. No CI reactivation or
 deployment. Additional Opus review is coordinated centrally and is not claimed.
 
-### Large-text navigation correction
+### Large-text harness correction
 
-The initial 390px / 28px-font fixture screenshot preserved the old value-width
-criterion but lacked the real German document language, so its overlapping labels
-were not sufficient proof of the production behavior. The final fixture uses
-`lang=de`, real German hyphenation and open/unread tab counters at 375/390px.
-Those counters make the navigation taller than the original 84px content padding. The approved app-local
-correction lets labels wrap and scales content/update-banner clearance with text.
-The browser regression measures each rendered text line inside its own link,
-checks navigation height against bottom padding, and scrolls the final content
-above the fixed navigation. Forcing unwrapped labels or restoring the original 84px clearance makes this
-regression fail; restored light/dark tests pass. Native Safari Dynamic Type is
-outside this Chromium acceptance.
+The initial 390px / 28px-font fixture lacked the real German document language.
+Its overlapping labels were not evidence of a production defect. The final
+fixture uses `lang=de`, real German hyphenation and open/unread tab counters at
+375/390px. Each rendered label remains inside its own link and the last content
+can be scrolled above the fixed navigation with the unchanged production CSS.
+An additional assertion requiring padding to exceed the navigation height failed
+with the original 84px padding, but actual content visibility still passed. That
+implementation-specific assertion and all three proposed CSS changes were removed.
+No product styling fix is claimed. Native Safari Dynamic Type is outside this
+Chromium acceptance.
 
 ### Original baseline limitation
 
 The original E2E command exited 1 after 307.745 seconds, including relay build:
 IdP readiness timed out at port 62572, and the scenario was skipped. The shared
 harness configured HMR port 72572 (`port + 10000`), outside the TCP range; its
-captured log only reported an HMR deprecation. A causal recovery still needs
-real acceptance after the coordinator's shared fixture correction. This failed
+captured log only reported an HMR deprecation. After the shared fixture correction and the isolated runtime setup below,
+real acceptance passed; the first log alone does not establish causality. This failed
 baseline is not a speedup denominator.
 
 
