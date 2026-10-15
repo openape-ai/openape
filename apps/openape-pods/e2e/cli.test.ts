@@ -1,4 +1,5 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
+import { once } from 'node:events'
 import { promisify } from 'node:util'
 import { mkdtemp, realpath, rm, mkdir, writeFile, readFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
@@ -149,4 +150,22 @@ it('refuses a run without a Pod identity before any script process starts', asyn
     expect(reopened.db.prepare('SELECT count(*) AS n FROM run_events WHERE type=\'process\'').get()!.n).toBe(0)
   }
   finally { reopened.close() }
+})
+
+it('retains the profile lease through a terminal interrupt until the worker closes its pipe', async () => {
+  root = await realpath(await mkdtemp(join(tmpdir(), 'pods-cli-signal-')))
+  const helper = spawn(resolve('dist/native/pods-profile-lock'), [join(root, '.runtime.lock')], { stdio: ['pipe', 'pipe', 'pipe'] })
+  try {
+    const [data] = await once(helper.stdout, 'data')
+    expect(data.toString()).toBe('locked\n')
+    helper.kill('SIGINT')
+    await new Promise(resolve => setTimeout(resolve, 50))
+    expect(helper.exitCode).toBeNull()
+    expect(helper.signalCode).toBeNull()
+    await expect(exec(resolve('dist/native/pods-profile-lock'), [join(root, '.runtime.lock')], { timeout: 1000 })).rejects.toMatchObject({ code: 3 })
+    const ended = once(helper, 'exit')
+    helper.stdin.end()
+    expect(await ended).toEqual([0, null])
+  }
+  finally { helper.kill('SIGKILL') }
 })
