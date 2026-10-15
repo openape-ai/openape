@@ -1,23 +1,12 @@
-import { bundleNpm } from './npm-runtime.mjs'
-import { bundleApes } from './apes-runtime.mjs'
-import { bundleCodex } from './codex-runtime.mjs'
+import { buildRuntimeAssets } from './runtime-build.mjs'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { readFileSync, writeFileSync } from 'node:fs'
 import { createHash } from 'node:crypto'
 import { build as buildScripts } from 'tsup'
 import { build as buildRenderer } from 'vite'
 
 await buildScripts({ entry: { 'main/app': 'src/main/app.ts', 'preload/index': 'src/preload/index.ts', 'worker/entry': 'src/worker/entry.ts' }, format: ['cjs'], platform: 'node', target: 'node24', outDir: 'dist', clean: true, splitting: false, removeNodeProtocol: false, external: ['electron'], noExternal: ['croner', '@openape/pods-protocol', 'electron-updater', 'builder-util-runtime', 'fs-extra', 'lazy-val', 'lodash.escaperegexp', 'lodash.isequal', 'semver', 'tiny-typed-emitter', 'js-yaml', 'argparse', 'sax', 'debug', 'ms', 'graceful-fs', 'universalify', 'jsonfile'], outExtension: () => ({ js: '.cjs' }) })
-if (process.platform === 'darwin') {
-  mkdirSync('dist/native', { recursive: true })
-  execFileSync('/usr/bin/xcrun', ['clang', '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', 'native/pods-helper.c', '-o', 'dist/native/pods-helper'], { stdio: 'inherit' })
-}
-const podsVersion = `${JSON.parse(readFileSync('package.json', 'utf8')).version}+${execFileSync('git', ['rev-parse', '--short=8', 'HEAD'], { encoding: 'utf8' }).trim()}`
-await buildScripts({ entry: { 'runtime/shell-client': 'src/runtime/shell-client.ts', 'runtime/program-client': 'src/runtime/program-client.ts', 'runtime/codex-mcp': 'src/runtime/codex-mcp.ts', 'runtime/script-entry': 'src/worker/runs/script-entry.ts', 'runtime/sdk-host': 'src/worker/agent/sdk-host.ts', 'runtime/master-host': 'src/worker/master/host.ts', 'runtime/auth-host': 'src/main/connections/auth-host.ts' }, format: ['esm'], platform: 'node', target: 'node24', outDir: 'dist', clean: false, splitting: false, removeNodeProtocol: false, noExternal: ['@openai/codex-sdk', 'croner'], define: { __OPENAPE_PODS_VERSION__: JSON.stringify(podsVersion) }, outExtension: () => ({ js: '.mjs' }) })
-bundleCodex()
-bundleNpm()
-
-await bundleApes()
+await buildRuntimeAssets()
 await buildRenderer()
 
 writeFileSync('dist/build-inputs.json', JSON.stringify({ sourceRevision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), clean: execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim() === '', dependencyLockHash: createHash('sha256').update(readFileSync('../../pnpm-lock.yaml')).digest('hex') }, null, 2))

@@ -1,3 +1,4 @@
+import { mkdir, writeFile } from 'node:fs/promises'
 import { computeArgvHash } from '@openape/grants'
 import { computeCmdHash } from '@openape/core'
 import { createHash, generateKeyPairSync, randomBytes, randomUUID, sign } from 'node:crypto'
@@ -168,6 +169,9 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
       const grant = grants.get(id)
       if (!networkGates || !grant || grant.command?.[0] !== 'pods-graph-gate' || grant.status !== 'pending') throw new Error('Synthetic owner can decide only a pending network gate')
       grant.status = decision
+    },
+    persistCredentials: async (encrypt: (value: string) => Buffer) => {
+      for (const record of records) { await mkdir(join(root, 'credentials'), { recursive: true, mode: 0o700 }); await writeFile(record.path, encrypt(record.value), { mode: 0o600 }) }
     },
     encrypt: async (app: ElectronApplication, synthetic = false) => app.evaluate(({ safeStorage }, { records, synthetic, key }) => {
       if (synthetic) {
