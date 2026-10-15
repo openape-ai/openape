@@ -310,8 +310,11 @@ export class InboxStore {
       ORDER BY o.created,o.id`).all(String(owner.owner)) as unknown as OutboxEntry[])
   }
 
-  settleOutbox(entryId: string, outcome: { state: 'sent' | 'pending' | 'failed', next?: number, result: string }): void {
-    this.db.prepare('UPDATE outbox SET state=?,attempts=attempts+1,next=?,result=? WHERE id=?').run(outcome.state, outcome.next ?? this.now(), outcome.result.slice(0, 500), entryId)
+  settleOutbox(entryId: string | string[], outcome: { state: 'sent' | 'pending' | 'failed', next?: number, result: string }): void {
+    this.transaction(() => {
+      const update = this.db.prepare('UPDATE outbox SET state=?,attempts=attempts+1,next=?,result=? WHERE id=?')
+      for (const id of Array.isArray(entryId) ? entryId : [entryId]) update.run(outcome.state, outcome.next ?? this.now(), outcome.result.slice(0, 500), id)
+    })
   }
 
   // Bounded retention: messages expire after 90 days, tombstones are purged 30 days later. Pending decisions stay.

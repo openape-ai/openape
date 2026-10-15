@@ -103,7 +103,7 @@ it('coalesces a hundred decisions across syncs into one push per device after qu
   expect(send).toHaveBeenCalledTimes(2)
 })
 
-it('bounds continuous collection, isolates accounts and drops resolved decisions before notification', async () => {
+it('bounds continuous collection at ten minutes and isolates accounts', async () => {
   const { store, phone, advance } = setup()
   subscribe(store, phone.id)
   const otherPhone = store.registerDevice(other, 'other phone')
@@ -117,15 +117,19 @@ it('bounds continuous collection, isolates accounts and drops resolved decisions
     await dispatchPushes(store, config, send)
   }
   expect(send).not.toHaveBeenCalled()
+  advance(60_000); decisions.push(decision('question:10'))
+  store.syncDecisions(owner, runtime, decisions)
   store.syncDecisions(other, runtime, [decision('question:private')])
-  store.syncDecisions(owner, runtime, decisions.slice(1))
-  // The oldest surviving entry began a minute later; its maximum deadline still bounds the wait.
+  // No quiet time elapsed, but the maximum wait has expired for the first account.
+  await dispatchPushes(store, config, send)
+  expect(send).toHaveBeenCalledOnce()
+  expect(send.mock.calls[0]![0].endpoint).toBe(subscription(phone.id).endpoint)
+  expect(JSON.parse(send.mock.calls[0]![1]).notification.app_badge).toBe('11')
   advance(120_000)
   await dispatchPushes(store, config, send)
   expect(send).toHaveBeenCalledTimes(2)
-  expect(send.mock.calls.map(([target, payload]) => [target.endpoint, JSON.parse(payload).notification.app_badge])).toEqual(expect.arrayContaining([
-    [subscription(phone.id).endpoint, '9'], [subscription(otherPhone.id).endpoint, '1'],
-  ]))
+  expect(send.mock.calls[1]![0].endpoint).toBe(subscription(otherPhone.id).endpoint)
+  expect(JSON.parse(send.mock.calls[1]![1]).notification.app_badge).toBe('1')
 })
 
 it('retries a decision digest as one group and suppresses decisions resolved during backoff', async () => {

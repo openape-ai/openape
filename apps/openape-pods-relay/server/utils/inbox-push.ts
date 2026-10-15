@@ -44,16 +44,22 @@ export async function dispatchPushes(store: InboxStore, config: PushConfig, send
     if (!first) continue
     const subscriptions = store.subscriptions(first.owner)
     const settle = (outcome: Parameters<InboxStore['settleOutbox']>[1]) => {
-      for (const entry of entries) store.settleOutbox(entry.id, outcome)
+      store.settleOutbox(entries.map(entry => entry.id), outcome)
     }
     if (!subscriptions.length) { settle({ state: 'failed', result: 'no_subscription' }); continue }
     if (store.pushContent(first)?.item.kind === 'decision') {
       const badge = store.pushContent(first)!.badge
-      payload = JSON.stringify({ web_push: 8030, mutable: true, notification: {
-        title: entries.length === 1 ? 'Entscheidung wartet' : `${entries.length} neue Entscheidungen`,
-        body: 'In Pods ansehen und gesammelt bearbeiten.', navigate: `${config.origin}/inbox/`,
-        tag: 'pods-decisions', app_badge: String(badge),
-      } })
+      payload = JSON.stringify({
+        web_push: 8030,
+        mutable: true,
+        notification: {
+          title: entries.length === 1 ? 'Entscheidung wartet' : `${entries.length} neue Entscheidungen`,
+          body: 'In Pods ansehen und gesammelt bearbeiten.',
+          navigate: `${config.origin}/inbox/`,
+          tag: 'pods-decisions',
+          app_badge: String(badge),
+        },
+      })
     }
     const statuses = await Promise.all(subscriptions.map(async (subscription) => {
       try { return (await send(subscription, payload)).statusCode }
