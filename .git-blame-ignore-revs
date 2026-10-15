@@ -1,0 +1,5 @@
+# Bulk formatting commits that git blame should skip.
+# Local use: git config blame.ignoreRevsFile .git-blame-ignore-revs
+
+# style: apply consistent object and list newlines
+d5ac18b81cfeb11c71c947e1c0ff9bace5f73700
