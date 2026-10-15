@@ -1,0 +1,607 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "project": "OpenApe monorepo",
+  "owner": "Patrick Hofmann",
+  "date": "2026-10-15",
+  "revision": 1,
+  "status": "draft",
+  "title": "Parallel UI verification migration",
+  "goal": "Verify UI behavior and appearance quickly with real components and styles while retaining meaningful integration coverage.",
+  "summary": "Prepare three independent worktree sessions for Git/Issues, Inbox/PWA and Reports. Coordinate shared files and heavy checks centrally; keep authentication, persistence, offline and security boundaries in their appropriate suites. Troop is excluded.",
+  "problem": {
+    "statement": "Some UI assertions still start full applications and identity services; other browser suites use only partial production styles.",
+    "impact": "Small presentation changes require costly setup, and partial CSS can leave layout regressions undetected.",
+    "approach": "Transfer the Pods pattern into three disjoint areas using real Vue components, production CSS and deterministic transport boundaries.",
+    "outcome": "Each area has a documented fast UI command, replacement evidence and a smaller, explicitly retained integration set."
+  },
+  "context": "Source assessment: canonical main bc6fa362e84614c5a12352849d6875dc2c215e4c, October 15. PR 429 separated Pods browser layout from native acceptance; PR 432 consolidated local gates. This is a proposal, not implementation approval. Patrick explicitly excludes Troop because a separate worktree is moving it into a legacy repository. Refresh main and the dependency graph before launch.",
+  "scope": [
+    "First wave: Git/Issues, Pods Inbox/PWA and Reports; three area sessions plus coordination in this chat.",
+    "Move existing UI assertions only after replacement proof; add lasting cases only for important missing behavior.",
+    "Align commands, per-area testing guidance and evidence with the existing repository gates."
+  ],
+  "nonGoals": [
+    "No Troop changes, migration support or access to the other session’s worktree.",
+    "No production deployment, CI reactivation, authentication bypass, coverage quota or generic new testing framework.",
+    "No wholesale Tasks/CRM expansion or IdP/login rewrite in this wave."
+  ],
+  "sections": [
+    {
+      "id": "ownership",
+      "title": "Parallel work and exclusive ownership",
+      "body": "After M0, A, B and C can edit, run focused tests and prepare PRs concurrently. Each gets a separate native issue, branch `feature/issue-<number>-ui-tests-<area>` and fresh managed worktree from the coordinator’s exact approved base SHA. Prefer the app worktree tool; if this collection context cannot create one, use `git worktree add` in the actual monorepo. Never reuse an occupied checkout.\n\n| Session | Exclusive editable area | Suggested worktree | Optional dev/HMR ports |\n| --- | --- | --- | --- |\n| A: Git/Issues | `apps/openape-git/**` | `ui-tests-git` | 5481 / 5491 |\n| B: Inbox/PWA | `apps/openape-pods-relay/**` | `ui-tests-inbox` | 5482 / 5492 |\n| C: Reports | `apps/openape-testrun/**` | `ui-tests-reports` | 5483 / 5493 |\n\nThe coordinator alone owns root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `turbo.json`, `.openape/checks.json`, hooks, shared scripts, root AGENTS/CONTRIBUTING, generated architecture docs, `docs/agents/active-work.md` and this plan. Shared packages/modules and `apps/openape-pods/**` are reference-only for area sessions. No shared file is silently claimed. Request a coordinator patch or revise scope if one is needed.\n\nEach session may update its existing area test config and docs. Dependency additions and manifest script changes must be agreed during M0 so the coordinator can reconcile the lockfile/generated map. Plan sources are read-only for area sessions; they provide a handoff, not concurrent edits to the same Plan. The user follows the separate chats; the coordinator reads their status from here.",
+      "placement": "before-details"
+    },
+    {
+      "id": "runtime",
+      "title": "Isolation and shared Mac capacity",
+      "body": "Every worktree has its own install, build outputs, Vite/Turbo artifacts, synthetic database, test HOME and browser profile. Do not symlink another checkout’s `node_modules`, `.nuxt`, `dist`, `.output` or writable fixtures. Existing package-download caches may be shared. Use the pinned toolchain in every shell:\n\n```sh\nexport OPENAPE_PNPM_BIN=/Users/patrickhofmann/Companies/private/repos/openape/.toolchains/pnpm/10.29.3/bin\nexport PATH=\"$OPENAPE_PNPM_BIN:$PATH\"\n. ./scripts/activate-node.sh\npnpm install --frozen-lockfile\npnpm run doctor\n```\n\nIf doctor reports missing prerequisite builds, run the selected checkout’s documented prebuild and recheck; do not use another checkout’s outputs. Confirm reserved ports are free; fail on collisions, never kill another session’s process. Existing integration fixtures should allocate their own ephemeral ports and temporary data.\n\nFocused tests can run concurrently with bounded workers. Full affected gates, cold full builds and real integration acceptance share one heavy-check slot on this Mac. The coordinator grants that slot to one session at a time, recording chat/worktree/command and release status in its launch ledger. A busy session continues independent work. No shell polling loop, timeout inflation, global process kill or hook bypass. Repository-wide Vitest uses the established `TURBO_ENV_MODE=loose VITEST_MAX_WORKERS=1` invocation where needed; focused package commands choose a small explicit cap. Record settings with measurements. Worktrees permit parallel development, not unlimited machine capacity.",
+      "placement": "after-details"
+    },
+    {
+      "id": "areas",
+      "title": "Area tasks and boundaries that stay real",
+      "body": "### A — Git/Issues\nStart at `e2e/issues.layout.test.ts`, `e2e/fixture.ts`, `tests/issue-ui.test.ts`, `app/components/Issue*.vue` and `app/assets/main.css`. The layout suite currently starts the app and IdP. Build a browser-component route through the existing Vitest infrastructure using real Nuxt UI controls and generated production CSS. Reuse existing scenarios for creation, Markdown preview, comments, filtering, triage, draft/error/conflict states and narrow layouts. Introduce a small boundary adapter only where needed; avoid a broad app refactor. Keep real login/callback, server permissions, durable create/comment behavior, migration/download protection and representative route wiring. Do not label mocked Markdown as proof of server sanitization.\n\n### B — Inbox/PWA\nStart at `e2e/inbox-app.test.ts`, existing `test/inbox-{decision,list,item,client,worker}.test.ts` and `app/components/Inbox*.vue`. Separate card presentation, sender/classification, tags, evidence-required forms, pending/accepted/applied states, undo, empty/error and narrow/dark presentation from the large integrated scenario. Use real components, styles and a deterministic transport boundary. Preserve real service-worker registration/cache behavior, offline/reconnect, restart/reinstall, cross-account separation, real authentication and decision receipt/application semantics. Do not modify the shared Pods renderer; coordinate a dependency request if necessary.\n\n### C — Reports\nStart at `vitest.browser.config.ts`, `tests/layout/setup.ts`, `tests/layout/*.test.ts`, `app/components/DocumentReport.vue` and `app/assets/main.css`. Upgrade existing browser tests to load the actual stylesheet pipeline; replace the partial hand-written preflight without hiding component regressions. Cover the meaningful report shell, series/version navigation, document/briefing views, screenshot frames and responsive errors using existing scenarios. Keep real publication/CLI round trips, private access and expiry, content-origin isolation, CSP and actual iframe behavior in their appropriate integration/security tests. A sandbox attribute assertion alone does not replace browser isolation evidence.\n\nIdP and `nuxt-auth-sp` are read-only pattern references. Tasks/CRM remain optional subsequent work, requiring a concrete UI need and a scope decision. Troop has no session, acceptance item or dependency in this plan.",
+      "placement": "after-details"
+    },
+    {
+      "id": "handover",
+      "title": "Launch packet and integration protocol",
+      "body": "The coordinator creates each user-owned chat only after the launch request. Fill in the actual approved Plan URL/revision, frozen base SHA, native issue, branch, absolute worktree, area, ports and allowed paths. Attach the relevant area section and these shared instructions:\n\n> Implement only your assigned area of approved Plan revision 1. Read this checkout’s AGENTS and mapped memory rules. Verify branch/base/status; preserve other worktrees. Use the existing test infrastructure and real production components/CSS. Inventory old assertions and retained boundaries before editing. Do not edit coordinator-owned files, other areas or the Plan. Raise shared dependency needs in your handoff. Run focused checks, demonstrate replacement failures, inspect screenshots and publish actual evidence. Obtain the coordinator’s heavy-check slot before full gates/builds/integration acceptance. Commit/push normally, open a native PR and link the area issue. Leave the PR open for coordinated review/merge. Return issue/PR, source/base SHA, touched paths, exact results, assertion mapping, evidence URL, remaining risks, processes/ports and resource-slot state. Do not message other chats without Patrick’s explicit authorization.\n\nDuring launch, ask for/record explicit authorization for the coordinator to send operational messages to the three chats. Reads and progress monitoring stay in this parent chat. Do not spawn hidden implementation agents as a substitute for the requested sessions.\n\nArea handoffs live in their own existing testing document or `docs/ui-test-migration.md` beneath the owned app. The coordinator maintains one launch ledger under `.claude/plans/ui-test-migration/` and the single published Plan; preserve the current Reports version on updates. Native issues track implementation, the Plan tracks proposal/approval, PRs track code review. Link them without copying all status into each system.\n\nMerge one PR at a time against reviewed source and target SHAs. Prefer Git/Issues first as the pattern reference, but an independent ready area need not wait. Inspect newly merged main changes, including the separate legacy extraction. Merge main into the owned feature branch if integration needs changes; do not rewrite already mirrored history. Rerun checks affected by the new source/dependencies and retain exact evidence. Cross-cutting repairs go through the coordinator. After each merge, record the receipt and close only its completed technical issue. Roll back a faulty area through a revert PR preserving unrelated areas; restore original assertions before retiring a replacement.",
+      "placement": "after-details"
+    }
+  ],
+  "milestones": [
+    {
+      "id": "m0",
+      "title": "M0 — Approval and parallel launch preparation",
+      "goal": "Publish one approved base and remove shared-file conflicts before dispatch.",
+      "status": "planned",
+      "steps": [
+        "Bind Patrick’s actual approval to proposal revision 1; creating or merging the planning PR does not approve implementation.",
+        "Refresh canonical main and inspect the ongoing legacy extraction. Inventory existing declared browser/CSS dependencies, app commands and graph generation for A/B/C; avoid new dependencies when existing ones suffice.",
+        "If shared setup is needed, integrate one minimal coordinator PR first, including all required dependency declarations/lockfile changes. Freeze its merge SHA; otherwise use current main directly.",
+        "Create three area issues and three isolated worktrees/chats on request. Record ownership, ports, handoffs and message authorization; all area sessions must reference the same frozen baseline."
+      ],
+      "acceptance": [
+        "Approved revision and exact common base are recorded; Troop remains excluded and its worktree untouched.",
+        "All three setups install frozen dependencies in separate directories; mandatory prerequisites are satisfied or a concrete blocker is recorded before dispatch."
+      ],
+      "rollback": "Revert only this milestone’s changes through a reviewed PR; preserve existing assertions until equivalent replacements are proven."
+    },
+    {
+      "id": "a",
+      "title": "A — Git/Issues",
+      "goal": "Deliver the scoped fast UI path for Git/Issues after M0; run independently of the other areas.",
+      "status": "planned",
+      "steps": [
+        "Inventory and map existing assertions, establish relevant baseline timings, then implement the area section above.",
+        "Prove replacement behavior and CSS sensitivity before removing UI-only duplicates from integrated scenarios. Keep distinct security and system-boundary assertions.",
+        "Document the fast command, retained integration command, synthetic data reset and evidence; deliver an open native PR and area handoff."
+      ],
+      "acceptance": [
+        "The focused UI command runs without a live app backend, IdP or Electron and uses real components and production styles.",
+        "Every removed assertion has a named passing replacement and counter-proof; retained real boundaries still pass their relevant acceptance.",
+        "Normal affected gate passes on the exact pushed head; before/after timing and inspected screenshot evidence are published without an invented speedup claim.",
+        "Diff stays within ownership; all processes, ports and heavy-check slots are released or explicitly handed off."
+      ],
+      "rollback": "Revert only this milestone’s changes through a reviewed PR; preserve existing assertions until equivalent replacements are proven."
+    },
+    {
+      "id": "b",
+      "title": "B — Inbox/PWA",
+      "goal": "Deliver the scoped fast UI path for Inbox/PWA after M0; run independently of the other areas.",
+      "status": "planned",
+      "steps": [
+        "Inventory and map existing assertions, establish relevant baseline timings, then implement the area section above.",
+        "Prove replacement behavior and CSS sensitivity before removing UI-only duplicates from integrated scenarios. Keep distinct security and system-boundary assertions.",
+        "Document the fast command, retained integration command, synthetic data reset and evidence; deliver an open native PR and area handoff."
+      ],
+      "acceptance": [
+        "The focused UI command runs without a live app backend, IdP or Electron and uses real components and production styles.",
+        "Every removed assertion has a named passing replacement and counter-proof; retained real boundaries still pass their relevant acceptance.",
+        "Normal affected gate passes on the exact pushed head; before/after timing and inspected screenshot evidence are published without an invented speedup claim.",
+        "Diff stays within ownership; all processes, ports and heavy-check slots are released or explicitly handed off."
+      ],
+      "rollback": "Revert only this milestone’s changes through a reviewed PR; preserve existing assertions until equivalent replacements are proven."
+    },
+    {
+      "id": "c",
+      "title": "C — Reports",
+      "goal": "Deliver the scoped fast UI path for Reports after M0; run independently of the other areas.",
+      "status": "planned",
+      "steps": [
+        "Inventory and map existing assertions, establish relevant baseline timings, then implement the area section above.",
+        "Prove replacement behavior and CSS sensitivity before removing UI-only duplicates from integrated scenarios. Keep distinct security and system-boundary assertions.",
+        "Document the fast command, retained integration command, synthetic data reset and evidence; deliver an open native PR and area handoff."
+      ],
+      "acceptance": [
+        "The focused UI command runs without a live app backend, IdP or Electron and uses real components and production styles.",
+        "Every removed assertion has a named passing replacement and counter-proof; retained real boundaries still pass their relevant acceptance.",
+        "Normal affected gate passes on the exact pushed head; before/after timing and inspected screenshot evidence are published without an invented speedup claim.",
+        "Diff stays within ownership; all processes, ports and heavy-check slots are released or explicitly handed off."
+      ],
+      "rollback": "Revert only this milestone’s changes through a reviewed PR; preserve existing assertions until equivalent replacements are proven."
+    },
+    {
+      "id": "m4",
+      "title": "M4 — Sequential integration and closeout",
+      "goal": "Integrate three independently reviewed areas without losing their evidence or boundary coverage.",
+      "status": "planned",
+      "steps": [
+        "Review all assertion maps and exact source/target diffs; reconcile shared scripts, dependency metadata and repository documentation centrally.",
+        "Merge ready PRs one at a time; recheck newly affected behavior after integration. Record actual merge receipts, evidence and residual limitations.",
+        "Update the single Plan and umbrella issue; archive only completed worktrees created for this effort after preserving needed evidence."
+      ],
+      "acceptance": [
+        "All three area fast commands and retained acceptance paths are documented and reachable on canonical main.",
+        "No automatic E2E/CI reactivation, lost product contract or Troop change was introduced.",
+        "The final report distinguishes checks, domain assessment, approval and plan completion; unresolved work remains explicit."
+      ],
+      "rollback": "Revert only this milestone’s changes through a reviewed PR; preserve existing assertions until equivalent replacements are proven."
+    }
+  ],
+  "verification": [
+    "For every moved assertion record old test, observable contract, replacement test, retained boundary and a targeted counter-proof. Temporarily break the relevant behavior/style, observe failure, restore it and rerun. Keep only useful regressions.",
+    "Use real production components and stylesheet entry points, including Tailwind/Nuxt UI generation and fonts/tokens where relevant. Do not copy CSS fixes into setup or replace the measured UI controls with stubs.",
+    "Capture representative wide/narrow, light/dark, loading/empty/error states where applicable. Inspect the actual images and publish a private Test Run with exact SHA, commands, timings, mapping and limitations.",
+    "Measure the old and new relevant commands on the same machine with declared cold/warm cache and worker settings, outside competing heavy checks. Include startup cost. Do not invent a percentage target or treat fewer assertions as a speedup.",
+    "Run focused checks during editing; normal pre-push affected unit gates once per pushed head, plus relevant explicit browser/integration acceptance. Keep CI paused. Record pre-existing failures and never turn skips into passes."
+  ],
+  "risks": [
+    {
+      "title": "False confidence from simulated backends",
+      "mitigation": "UI tests prove presentation and requests, not actual authorization or durable effects. Retain API/adapter contracts and representative real journeys."
+    },
+    {
+      "title": "Worktree isolation does not isolate ports, resources or shared files",
+      "mitigation": "Enforce path ownership, isolated installs/artifacts/profiles, reserved ports and one heavy-check slot. Centralize lockfile changes and merges."
+    },
+    {
+      "title": "Concurrent legacy extraction changes dependencies",
+      "mitigation": "Exclude Troop. Refresh and inspect the extraction’s merged changes at preparation and integration. Request only the specific shared dependency clarification if needed; never edit or reset its worktree."
+    }
+  ],
+  "handoff": "Review proposal revision 1. After Patrick approves this revision and requests launch, complete M0 in the coordinator, publish the frozen base and start A, B and C as separate chats with their own worktrees. No area sessions or implementation have started.",
+  "changelog": [
+    {
+      "date": "2026-10-15",
+      "text": "Created the proposal from repository inspection and Patrick’s parallel-worktree request; excluded Troop following his explicit correction before publication."
+    }
+  ],
+  "links": [
+    {
+      "title": "Technical delivery issue 1481",
+      "url": "https://repos.openape.ai/patrick/monorepo/issues/1481"
+    },
+    {
+      "title": "Pods test-cycle separation: PR 429",
+      "url": "https://repos.openape.ai/patrick/monorepo/pulls/429"
+    },
+    {
+      "title": "Affected selection and one local gate: PR 432",
+      "url": "https://repos.openape.ai/patrick/monorepo/pulls/432"
+    }
+  ],
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "Parallel UI verification migration",
+        "text": "UI-Prüfungen parallel umstellen"
+      },
+      {
+        "path": "goal",
+        "source": "Verify UI behavior and appearance quickly with real components and styles while retaining meaningful integration coverage.",
+        "text": "UI-Verhalten und Darstellung mit echten Komponenten und Styles schnell prüfen und dabei sinnvolle Integrationsabdeckung erhalten."
+      },
+      {
+        "path": "summary",
+        "source": "Prepare three independent worktree sessions for Git/Issues, Inbox/PWA and Reports. Coordinate shared files and heavy checks centrally; keep authentication, persistence, offline and security boundaries in their appropriate suites. Troop is excluded.",
+        "text": "Drei unabhängige Worktree-Sessions für Git/Issues, Inbox/PWA und Reports vorbereiten. Gemeinsame Dateien und aufwendige Prüfungen zentral koordinieren; Authentifizierung, Speicherung, Offlinebetrieb und Sicherheitsgrenzen in passenden Suites erhalten. Troop ist ausgeschlossen."
+      },
+      {
+        "path": "problem.statement",
+        "source": "Some UI assertions still start full applications and identity services; other browser suites use only partial production styles.",
+        "text": "Einige UI-Prüfungen starten noch vollständige Anwendungen und Identitätsdienste; andere Browser-Suites laden nur Teile der Produktions-Styles."
+      },
+      {
+        "path": "problem.impact",
+        "source": "Small presentation changes require costly setup, and partial CSS can leave layout regressions undetected.",
+        "text": "Kleine Darstellungsänderungen erfordern aufwendige Vorbereitung; unvollständiges CSS kann Layoutfehler unentdeckt lassen."
+      },
+      {
+        "path": "problem.approach",
+        "source": "Transfer the Pods pattern into three disjoint areas using real Vue components, production CSS and deterministic transport boundaries.",
+        "text": "Das Pods-Muster in drei getrennte Bereiche übertragen: echte Vue-Komponenten, Produktions-CSS und kontrollierbare Schnittstellen zum Backend."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "Each area has a documented fast UI command, replacement evidence and a smaller, explicitly retained integration set.",
+        "text": "Jeder Bereich besitzt einen dokumentierten schnellen UI-Befehl, Nachweise für ersetzte Assertions und eine kleinere, ausdrücklich erhaltene Integrationsauswahl."
+      },
+      {
+        "path": "context",
+        "source": "Source assessment: canonical main bc6fa362e84614c5a12352849d6875dc2c215e4c, October 15. PR 429 separated Pods browser layout from native acceptance; PR 432 consolidated local gates. This is a proposal, not implementation approval. Patrick explicitly excludes Troop because a separate worktree is moving it into a legacy repository. Refresh main and the dependency graph before launch.",
+        "text": "Bewerteter Quellstand: kanonischer main bc6fa362e84614c5a12352849d6875dc2c215e4c, 15. Oktober. PR 429 trennte Pods-Browserlayout von nativer Abnahme; PR 432 bündelte lokale Gates. Dies ist ein Vorschlag, keine Umsetzungsfreigabe. Patrick schließt Troop ausdrücklich aus, weil ein anderer Worktree es in ein Legacy-Repository ausgliedert. Vor dem Start main und den Abhängigkeitsgraphen aktualisieren."
+      },
+      {
+        "path": "scope.0",
+        "source": "First wave: Git/Issues, Pods Inbox/PWA and Reports; three area sessions plus coordination in this chat.",
+        "text": "Erste Welle: Git/Issues, Pods-Inbox/PWA und Reports; drei Bereichssessions und Koordination in diesem Chat."
+      },
+      {
+        "path": "scope.1",
+        "source": "Move existing UI assertions only after replacement proof; add lasting cases only for important missing behavior.",
+        "text": "Bestehende UI-Assertions erst nach Ersatznachweis verschieben; dauerhafte Fälle nur für wichtiges fehlendes Verhalten ergänzen."
+      },
+      {
+        "path": "scope.2",
+        "source": "Align commands, per-area testing guidance and evidence with the existing repository gates.",
+        "text": "Befehle, Testanleitungen der Bereiche und Nachweise an den bestehenden Repository-Gates ausrichten."
+      },
+      {
+        "path": "nonGoals.0",
+        "source": "No Troop changes, migration support or access to the other session’s worktree.",
+        "text": "Keine Änderungen an Troop, keine Unterstützung seiner Migration und kein Eingriff in den Worktree der anderen Session."
+      },
+      {
+        "path": "nonGoals.1",
+        "source": "No production deployment, CI reactivation, authentication bypass, coverage quota or generic new testing framework.",
+        "text": "Kein Produktionsdeployment, keine CI-Reaktivierung, kein Authentifizierungs-Bypass, keine Coverage-Quote und kein neues allgemeines Testframework."
+      },
+      {
+        "path": "nonGoals.2",
+        "source": "No wholesale Tasks/CRM expansion or IdP/login rewrite in this wave.",
+        "text": "Keine flächendeckende Erweiterung von Tasks/CRM und kein Umbau von IdP/Login in dieser Welle."
+      },
+      {
+        "path": "sections.0.title",
+        "source": "Parallel work and exclusive ownership",
+        "text": "Parallelarbeit und feste Zuständigkeiten"
+      },
+      {
+        "path": "sections.0.body",
+        "source": "After M0, A, B and C can edit, run focused tests and prepare PRs concurrently. Each gets a separate native issue, branch `feature/issue-<number>-ui-tests-<area>` and fresh managed worktree from the coordinator’s exact approved base SHA. Prefer the app worktree tool; if this collection context cannot create one, use `git worktree add` in the actual monorepo. Never reuse an occupied checkout.\n\n| Session | Exclusive editable area | Suggested worktree | Optional dev/HMR ports |\n| --- | --- | --- | --- |\n| A: Git/Issues | `apps/openape-git/**` | `ui-tests-git` | 5481 / 5491 |\n| B: Inbox/PWA | `apps/openape-pods-relay/**` | `ui-tests-inbox` | 5482 / 5492 |\n| C: Reports | `apps/openape-testrun/**` | `ui-tests-reports` | 5483 / 5493 |\n\nThe coordinator alone owns root `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `turbo.json`, `.openape/checks.json`, hooks, shared scripts, root AGENTS/CONTRIBUTING, generated architecture docs, `docs/agents/active-work.md` and this plan. Shared packages/modules and `apps/openape-pods/**` are reference-only for area sessions. No shared file is silently claimed. Request a coordinator patch or revise scope if one is needed.\n\nEach session may update its existing area test config and docs. Dependency additions and manifest script changes must be agreed during M0 so the coordinator can reconcile the lockfile/generated map. Plan sources are read-only for area sessions; they provide a handoff, not concurrent edits to the same Plan. The user follows the separate chats; the coordinator reads their status from here.",
+        "text": "Nach M0 können A, B und C gleichzeitig bearbeiten, gezielte Tests ausführen und PRs vorbereiten. Jede Session erhält ein eigenes natives Issue, den Branch `feature/issue-<number>-ui-tests-<area>` und einen frischen verwalteten Worktree von der exakten freigegebenen Basis-SHA der Koordination. Das Worktree-Werkzeug der App bevorzugen; kann es im Sammelordner keinen Worktree erstellen, `git worktree add` im tatsächlichen Monorepo nutzen. Niemals einen belegten Checkout wiederverwenden.\n\n| Session | Exklusiv bearbeitbarer Bereich | Vorgeschlagener Worktree | Optionale Dev-/HMR-Ports |\n| --- | --- | --- | --- |\n| A: Git/Issues | `apps/openape-git/**` | `ui-tests-git` | 5481 / 5491 |\n| B: Inbox/PWA | `apps/openape-pods-relay/**` | `ui-tests-inbox` | 5482 / 5492 |\n| C: Reports | `apps/openape-testrun/**` | `ui-tests-reports` | 5483 / 5493 |\n\nNur die Koordination bearbeitet Root-`package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `turbo.json`, `.openape/checks.json`, Hooks, gemeinsame Skripte, Root-AGENTS/CONTRIBUTING, generierte Architekturdokumente, `docs/agents/active-work.md` und diesen Plan. Gemeinsame Packages/Module und `apps/openape-pods/**` sind für Bereichssessions nur Referenzen. Keine gemeinsame Datei wird stillschweigend übernommen. Bei Bedarf einen Koordinationspatch anfordern oder den Umfang anpassen.\n\nJede Session darf bestehende Testkonfiguration und Dokumentation ihres Bereichs ändern. Neue Abhängigkeiten und Manifest-Skriptänderungen werden in M0 abgestimmt, damit die Koordination Lockfile und generierte Übersicht konsistent halten kann. Planquellen sind für Bereichssessions schreibgeschützt; sie liefern eine Übergabe statt paralleler Änderungen am selben Plan. Der Nutzer verfolgt die getrennten Chats; die Koordination liest ihren Status von hier."
+      },
+      {
+        "path": "sections.1.title",
+        "source": "Isolation and shared Mac capacity",
+        "text": "Isolation und Kapazität des gemeinsamen Macs"
+      },
+      {
+        "path": "sections.1.body",
+        "source": "Every worktree has its own install, build outputs, Vite/Turbo artifacts, synthetic database, test HOME and browser profile. Do not symlink another checkout’s `node_modules`, `.nuxt`, `dist`, `.output` or writable fixtures. Existing package-download caches may be shared. Use the pinned toolchain in every shell:\n\n```sh\nexport OPENAPE_PNPM_BIN=/Users/patrickhofmann/Companies/private/repos/openape/.toolchains/pnpm/10.29.3/bin\nexport PATH=\"$OPENAPE_PNPM_BIN:$PATH\"\n. ./scripts/activate-node.sh\npnpm install --frozen-lockfile\npnpm run doctor\n```\n\nIf doctor reports missing prerequisite builds, run the selected checkout’s documented prebuild and recheck; do not use another checkout’s outputs. Confirm reserved ports are free; fail on collisions, never kill another session’s process. Existing integration fixtures should allocate their own ephemeral ports and temporary data.\n\nFocused tests can run concurrently with bounded workers. Full affected gates, cold full builds and real integration acceptance share one heavy-check slot on this Mac. The coordinator grants that slot to one session at a time, recording chat/worktree/command and release status in its launch ledger. A busy session continues independent work. No shell polling loop, timeout inflation, global process kill or hook bypass. Repository-wide Vitest uses the established `TURBO_ENV_MODE=loose VITEST_MAX_WORKERS=1` invocation where needed; focused package commands choose a small explicit cap. Record settings with measurements. Worktrees permit parallel development, not unlimited machine capacity.",
+        "text": "Jeder Worktree besitzt eine eigene Installation, Build-Ausgaben, Vite-/Turbo-Artefakte, synthetische Datenbank, Test-HOME und Browserprofil. Keine Symlinks auf `node_modules`, `.nuxt`, `dist`, `.output` oder beschreibbare Fixtures eines anderen Checkouts. Bestehende Paket-Downloadcaches dürfen gemeinsam genutzt werden. In jeder Shell die festgelegte Toolchain verwenden:\n\n```sh\nexport OPENAPE_PNPM_BIN=/Users/patrickhofmann/Companies/private/repos/openape/.toolchains/pnpm/10.29.3/bin\nexport PATH=\"$OPENAPE_PNPM_BIN:$PATH\"\n. ./scripts/activate-node.sh\npnpm install --frozen-lockfile\npnpm run doctor\n```\n\nMeldet Doctor fehlende Vorab-Builds, den dokumentierten Prebuild des gewählten Checkouts ausführen und erneut prüfen; keine Ausgaben anderer Checkouts verwenden. Reservierte Ports auf Verfügbarkeit prüfen; bei Kollision abbrechen, niemals fremde Prozesse beenden. Bestehende Integrations-Fixtures sollen eigene dynamische Ports und temporäre Daten verwenden.\n\nGezielte Tests dürfen mit begrenzten Workern gleichzeitig laufen. Vollständige betroffene Gates, kalte Vollbuilds und echte Integrationsabnahmen teilen sich einen Slot für aufwendige Prüfungen auf diesem Mac. Die Koordination vergibt ihn jeweils an eine Session und hält Chat, Worktree, Befehl und Freigabestatus in ihrer Startübersicht fest. Eine wartende Session erledigt unabhängige Arbeit. Keine Shell-Pollingschleife, erhöhten Timeouts, globalen Prozessabbrüche oder Hook-Umgehungen. Repositoryweite Vitest-Prüfungen nutzen bei Bedarf den etablierten Aufruf mit `TURBO_ENV_MODE=loose VITEST_MAX_WORKERS=1`; gezielte Paketbefehle wählen eine kleine ausdrückliche Begrenzung. Einstellungen bei Messungen dokumentieren. Worktrees ermöglichen parallele Entwicklung, nicht unbegrenzte Rechnerkapazität."
+      },
+      {
+        "path": "sections.2.title",
+        "source": "Area tasks and boundaries that stay real",
+        "text": "Bereichsaufgaben und weiterhin echte Systemgrenzen"
+      },
+      {
+        "path": "sections.2.body",
+        "source": "### A — Git/Issues\nStart at `e2e/issues.layout.test.ts`, `e2e/fixture.ts`, `tests/issue-ui.test.ts`, `app/components/Issue*.vue` and `app/assets/main.css`. The layout suite currently starts the app and IdP. Build a browser-component route through the existing Vitest infrastructure using real Nuxt UI controls and generated production CSS. Reuse existing scenarios for creation, Markdown preview, comments, filtering, triage, draft/error/conflict states and narrow layouts. Introduce a small boundary adapter only where needed; avoid a broad app refactor. Keep real login/callback, server permissions, durable create/comment behavior, migration/download protection and representative route wiring. Do not label mocked Markdown as proof of server sanitization.\n\n### B — Inbox/PWA\nStart at `e2e/inbox-app.test.ts`, existing `test/inbox-{decision,list,item,client,worker}.test.ts` and `app/components/Inbox*.vue`. Separate card presentation, sender/classification, tags, evidence-required forms, pending/accepted/applied states, undo, empty/error and narrow/dark presentation from the large integrated scenario. Use real components, styles and a deterministic transport boundary. Preserve real service-worker registration/cache behavior, offline/reconnect, restart/reinstall, cross-account separation, real authentication and decision receipt/application semantics. Do not modify the shared Pods renderer; coordinate a dependency request if necessary.\n\n### C — Reports\nStart at `vitest.browser.config.ts`, `tests/layout/setup.ts`, `tests/layout/*.test.ts`, `app/components/DocumentReport.vue` and `app/assets/main.css`. Upgrade existing browser tests to load the actual stylesheet pipeline; replace the partial hand-written preflight without hiding component regressions. Cover the meaningful report shell, series/version navigation, document/briefing views, screenshot frames and responsive errors using existing scenarios. Keep real publication/CLI round trips, private access and expiry, content-origin isolation, CSP and actual iframe behavior in their appropriate integration/security tests. A sandbox attribute assertion alone does not replace browser isolation evidence.\n\nIdP and `nuxt-auth-sp` are read-only pattern references. Tasks/CRM remain optional subsequent work, requiring a concrete UI need and a scope decision. Troop has no session, acceptance item or dependency in this plan.",
+        "text": "### A — Git/Issues\nEinstieg über `e2e/issues.layout.test.ts`, `e2e/fixture.ts`, `tests/issue-ui.test.ts`, `app/components/Issue*.vue` und `app/assets/main.css`. Die Layout-Suite startet derzeit Anwendung und IdP. In der vorhandenen Vitest-Infrastruktur Browser-Komponententests mit echten Nuxt-UI-Steuerelementen und erzeugtem Produktions-CSS aufbauen. Bestehende Szenarien für Erstellung, Markdown-Vorschau, Kommentare, Filter, Triage, Entwurfs-/Fehler-/Konfliktzustände und schmale Layouts wiederverwenden. Nur bei Bedarf einen kleinen Schnittstellenadapter einführen; keinen breiten App-Umbau. Echten Login/Callback, serverseitige Rechte, dauerhafte Erstellung/Kommentare, Migrations-/Downloadschutz und repräsentative Routenanbindung erhalten. Simuliertes Markdown beweist keine serverseitige Bereinigung.\n\n### B — Inbox/PWA\nEinstieg über `e2e/inbox-app.test.ts`, vorhandene `test/inbox-{decision,list,item,client,worker}.test.ts` und `app/components/Inbox*.vue`. Kartendarstellung, Absender/Klassifikation, Tags, Nachweis-Pflichtfelder, wartende/angenommene/angewendete Zustände, Rückgängig, Leer-/Fehlerzustände und schmale/dunkle Darstellung aus dem großen Integrationsszenario lösen. Echte Komponenten, Styles und eine deterministische Transportschnittstelle verwenden. Echte Service-Worker-Registrierung und Caches, Offlinebetrieb/Wiederverbindung, Neustart/Neuinstallation, Kontentrennung, Authentifizierung und Entscheidungsannahme/-anwendung erhalten. Den gemeinsamen Pods-Renderer nicht ändern; nötige Abhängigkeiten mit der Koordination klären.\n\n### C — Reports\nEinstieg über `vitest.browser.config.ts`, `tests/layout/setup.ts`, `tests/layout/*.test.ts`, `app/components/DocumentReport.vue` und `app/assets/main.css`. Vorhandene Browsertests auf die tatsächliche Stylesheet-Verarbeitung umstellen; den teilweise nachgebauten Preflight ersetzen, ohne Komponentenregressionen zu verdecken. Relevanten Berichtsrahmen, Serien-/Versionsnavigation, Dokument-/Briefingansichten, Screenshot-Rahmen und responsive Fehler mit bestehenden Szenarien abdecken. Echte Veröffentlichungs-/CLI-Abläufe, privaten Zugriff und Ablauf, Isolation der Inhalts-Origin, CSP und tatsächliches iframe-Verhalten in passenden Integrations-/Sicherheitstests erhalten. Eine Prüfung des Sandbox-Attributs allein ersetzt keinen Nachweis der Browserisolation.\n\nIdP und `nuxt-auth-sp` dienen nur als gelesene Musterreferenzen. Tasks/CRM bleiben optionale spätere Arbeit mit konkretem UI-Bedarf und eigener Umfangsentscheidung. Troop erhält in diesem Plan weder Session noch Abnahmepunkt oder Abhängigkeit."
+      },
+      {
+        "path": "sections.3.title",
+        "source": "Launch packet and integration protocol",
+        "text": "Startpaket und Integrationsablauf"
+      },
+      {
+        "path": "sections.3.body",
+        "source": "The coordinator creates each user-owned chat only after the launch request. Fill in the actual approved Plan URL/revision, frozen base SHA, native issue, branch, absolute worktree, area, ports and allowed paths. Attach the relevant area section and these shared instructions:\n\n> Implement only your assigned area of approved Plan revision 1. Read this checkout’s AGENTS and mapped memory rules. Verify branch/base/status; preserve other worktrees. Use the existing test infrastructure and real production components/CSS. Inventory old assertions and retained boundaries before editing. Do not edit coordinator-owned files, other areas or the Plan. Raise shared dependency needs in your handoff. Run focused checks, demonstrate replacement failures, inspect screenshots and publish actual evidence. Obtain the coordinator’s heavy-check slot before full gates/builds/integration acceptance. Commit/push normally, open a native PR and link the area issue. Leave the PR open for coordinated review/merge. Return issue/PR, source/base SHA, touched paths, exact results, assertion mapping, evidence URL, remaining risks, processes/ports and resource-slot state. Do not message other chats without Patrick’s explicit authorization.\n\nDuring launch, ask for/record explicit authorization for the coordinator to send operational messages to the three chats. Reads and progress monitoring stay in this parent chat. Do not spawn hidden implementation agents as a substitute for the requested sessions.\n\nArea handoffs live in their own existing testing document or `docs/ui-test-migration.md` beneath the owned app. The coordinator maintains one launch ledger under `.claude/plans/ui-test-migration/` and the single published Plan; preserve the current Reports version on updates. Native issues track implementation, the Plan tracks proposal/approval, PRs track code review. Link them without copying all status into each system.\n\nMerge one PR at a time against reviewed source and target SHAs. Prefer Git/Issues first as the pattern reference, but an independent ready area need not wait. Inspect newly merged main changes, including the separate legacy extraction. Merge main into the owned feature branch if integration needs changes; do not rewrite already mirrored history. Rerun checks affected by the new source/dependencies and retain exact evidence. Cross-cutting repairs go through the coordinator. After each merge, record the receipt and close only its completed technical issue. Roll back a faulty area through a revert PR preserving unrelated areas; restore original assertions before retiring a replacement.",
+        "text": "Die Koordination erstellt jeden nutzereigenen Chat erst nach dem Startauftrag. Tatsächliche freigegebene Plan-URL/Revision, feste Basis-SHA, natives Issue, Branch, absoluten Worktree, Bereich, Ports und erlaubte Pfade einsetzen. Den passenden Bereichsabschnitt und diese gemeinsamen Anweisungen übergeben:\n\n> Setze nur deinen zugewiesenen Bereich der freigegebenen Planrevision 1 um. Lies AGENTS dieses Checkouts und die zugeordneten Wissensregeln. Prüfe Branch, Basis und Status; erhalte fremde Worktrees. Nutze die bestehende Testinfrastruktur und echte Produktionskomponenten samt CSS. Erfasse vor Änderungen alte Assertions und zu erhaltende Systemgrenzen. Bearbeite keine Dateien der Koordination, fremden Bereiche oder des Plans. Melde gemeinsame Abhängigkeiten in deiner Übergabe. Prüfe gezielt, belege das Fehlschlagen der Ersatztests, sieh Screenshots an und veröffentliche tatsächliche Nachweise. Hole vor Vollgates/Builds/Integrationsabnahmen den Slot der Koordination für aufwendige Prüfungen. Committe und pushe regulär, eröffne einen nativen PR und verknüpfe das Bereichsissue. Lass den PR für koordinierte Prüfung und Zusammenführung offen. Liefere Issue/PR, Quell-/Basis-SHA, geänderte Pfade, genaue Ergebnisse, Assertion-Zuordnung, Nachweis-URL, offene Risiken, Prozesse/Ports und Slotstatus. Sende ohne Patricks ausdrückliche Autorisierung keine Nachrichten an andere Chats.\n\nBeim Start ausdrückliche Autorisierung für operative Nachrichten der Koordination an die drei Chats einholen beziehungsweise festhalten. Lesen und Fortschrittskontrolle bleiben in diesem übergeordneten Chat. Keine versteckten Umsetzungsagenten als Ersatz für die gewünschten Sessions starten.\n\nBereichsübergaben liegen in der eigenen vorhandenen Testdokumentation oder in `docs/ui-test-migration.md` unter der zuständigen App. Die Koordination pflegt eine Startübersicht unter `.claude/plans/ui-test-migration/` und den einzigen veröffentlichten Plan; bei Aktualisierungen die aktuelle Reports-Version berücksichtigen. Native Issues führen Umsetzung, der Plan führt Vorschlag/Freigabe, PRs führen Codereview. Verknüpfen, ohne sämtliche Statusdaten in jedes System zu kopieren.\n\nJeweils einen PR gegen geprüfte Quell- und Ziel-SHAs zusammenführen. Git/Issues als Muster möglichst zuerst, aber ein unabhängiger fertiger Bereich muss nicht warten. Neue main-Änderungen einschließlich der separaten Legacy-Ausgliederung prüfen. Wenn die Integration Änderungen erfordert, main in den eigenen Featurebranch mergen; bereits gespiegelte Historie nicht umschreiben. Von neuer Quelle oder Abhängigkeiten betroffene Prüfungen erneut ausführen und genaue Nachweise erhalten. Bereichsübergreifende Reparaturen übernimmt die Koordination. Nach jedem Merge den Beleg festhalten und nur das abgeschlossene technische Issue schließen. Einen fehlerhaften Bereich per Revert-PR zurücknehmen, ohne andere Bereiche anzutasten; ursprüngliche Assertions wiederherstellen, bevor ein Ersatz entfernt wird."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "M0 — Approval and parallel launch preparation",
+        "text": "M0 — Freigabe und Vorbereitung des Parallelstarts"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Publish one approved base and remove shared-file conflicts before dispatch.",
+        "text": "Eine freigegebene Basis festhalten und Konflikte um gemeinsame Dateien vor dem Start beseitigen."
+      },
+      {
+        "path": "milestones.0.steps.0",
+        "source": "Bind Patrick’s actual approval to proposal revision 1; creating or merging the planning PR does not approve implementation.",
+        "text": "Patricks tatsächliche Freigabe an Vorschlagsrevision 1 binden; Erstellen oder Mergen des Planungs-PRs genehmigt keine Umsetzung."
+      },
+      {
+        "path": "milestones.0.steps.1",
+        "source": "Refresh canonical main and inspect the ongoing legacy extraction. Inventory existing declared browser/CSS dependencies, app commands and graph generation for A/B/C; avoid new dependencies when existing ones suffice.",
+        "text": "Kanonischen main aktualisieren und die laufende Legacy-Ausgliederung prüfen. Für A/B/C deklarierte Browser-/CSS-Abhängigkeiten, App-Befehle und Grapherzeugung erfassen; vorhandene Abhängigkeiten bevorzugen."
+      },
+      {
+        "path": "milestones.0.steps.2",
+        "source": "If shared setup is needed, integrate one minimal coordinator PR first, including all required dependency declarations/lockfile changes. Freeze its merge SHA; otherwise use current main directly.",
+        "text": "Falls gemeinsame Vorbereitung nötig ist, zuerst einen minimalen Koordinations-PR samt nötigen Abhängigkeitsdeklarationen/Lockfile-Änderungen integrieren. Dessen Merge-SHA festhalten; andernfalls aktuellen main direkt verwenden."
+      },
+      {
+        "path": "milestones.0.steps.3",
+        "source": "Create three area issues and three isolated worktrees/chats on request. Record ownership, ports, handoffs and message authorization; all area sessions must reference the same frozen baseline.",
+        "text": "Auf Startauftrag drei Bereichsissues und drei isolierte Worktrees/Chats erstellen. Zuständigkeiten, Ports, Übergaben und Nachrichtenautorisierung festhalten; alle Bereichssessions müssen dieselbe feste Basis referenzieren."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "Approved revision and exact common base are recorded; Troop remains excluded and its worktree untouched.",
+        "text": "Freigegebene Revision und exakte gemeinsame Basis sind dokumentiert; Troop bleibt ausgeschlossen und sein Worktree unberührt."
+      },
+      {
+        "path": "milestones.0.acceptance.1",
+        "source": "All three setups install frozen dependencies in separate directories; mandatory prerequisites are satisfied or a concrete blocker is recorded before dispatch.",
+        "text": "Alle drei Umgebungen installieren festgelegte Abhängigkeiten in getrennten Verzeichnissen; nötige Voraussetzungen sind vor dem Start erfüllt oder konkret als Blocker dokumentiert."
+      },
+      {
+        "path": "milestones.0.rollback",
+        "source": "Revert only this milestone’s changes through a reviewed PR; preserve existing assertions until equivalent replacements are proven.",
+        "text": "Nur Änderungen dieses Meilensteins per geprüftem PR zurücknehmen; bestehende Assertions bis zum Nachweis gleichwertiger Ersatztests erhalten."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "A — Git/Issues",
+        "text": "A — Git/Issues"
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "Deliver the scoped fast UI path for Git/Issues after M0; run independently of the other areas.",
+        "text": "Nach M0 den abgegrenzten schnellen UI-Prüfweg für Git/Issues unabhängig von den anderen Bereichen umsetzen."
+      },
+      {
+        "path": "milestones.1.steps.0",
+        "source": "Inventory and map existing assertions, establish relevant baseline timings, then implement the area section above.",
+        "text": "Bestehende Assertions erfassen und zuordnen, relevante Ausgangslaufzeiten messen und den obigen Bereichsabschnitt umsetzen."
+      },
+      {
+        "path": "milestones.1.steps.1",
+        "source": "Prove replacement behavior and CSS sensitivity before removing UI-only duplicates from integrated scenarios. Keep distinct security and system-boundary assertions.",
+        "text": "Ersatzverhalten und Empfindlichkeit gegenüber CSS-Fehlern beweisen, bevor reine UI-Duplikate aus integrierten Szenarien entfernt werden. Eigenständige Sicherheits- und Systemgrenzenprüfungen erhalten."
+      },
+      {
+        "path": "milestones.1.steps.2",
+        "source": "Document the fast command, retained integration command, synthetic data reset and evidence; deliver an open native PR and area handoff.",
+        "text": "Schnellen Befehl, erhaltenen Integrationsbefehl, Rücksetzen synthetischer Daten und Nachweise dokumentieren; offenen nativen PR und Bereichsübergabe liefern."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "The focused UI command runs without a live app backend, IdP or Electron and uses real components and production styles.",
+        "text": "Der gezielte UI-Befehl läuft ohne aktives App-Backend, IdP oder Electron und nutzt echte Komponenten und Produktions-Styles."
+      },
+      {
+        "path": "milestones.1.acceptance.1",
+        "source": "Every removed assertion has a named passing replacement and counter-proof; retained real boundaries still pass their relevant acceptance.",
+        "text": "Jede entfernte Assertion besitzt einen benannten bestandenen Ersatz samt Gegenbeweis; erhaltene echte Systemgrenzen bestehen ihre relevante Abnahme weiterhin."
+      },
+      {
+        "path": "milestones.1.acceptance.2",
+        "source": "Normal affected gate passes on the exact pushed head; before/after timing and inspected screenshot evidence are published without an invented speedup claim.",
+        "text": "Der normale betroffene Gate besteht auf dem exakten gepushten Stand; Vorher-/Nachherzeiten und angesehene Screenshot-Nachweise sind ohne erfundene Beschleunigungsbehauptung veröffentlicht."
+      },
+      {
+        "path": "milestones.1.acceptance.3",
+        "source": "Diff stays within ownership; all processes, ports and heavy-check slots are released or explicitly handed off.",
+        "text": "Der Diff bleibt innerhalb der Zuständigkeit; alle Prozesse, Ports und Slots für aufwendige Prüfungen sind freigegeben oder ausdrücklich übergeben."
+      },
+      {
+        "path": "milestones.1.rollback",
+        "source": "Revert only this milestone’s changes through a reviewed PR; preserve existing assertions until equivalent replacements are proven.",
+        "text": "Nur Änderungen dieses Meilensteins per geprüftem PR zurücknehmen; bestehende Assertions bis zum Nachweis gleichwertiger Ersatztests erhalten."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "B — Inbox/PWA",
+        "text": "B — Inbox/PWA"
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "Deliver the scoped fast UI path for Inbox/PWA after M0; run independently of the other areas.",
+        "text": "Nach M0 den abgegrenzten schnellen UI-Prüfweg für Inbox/PWA unabhängig von den anderen Bereichen umsetzen."
+      },
+      {
+        "path": "milestones.2.steps.0",
+        "source": "Inventory and map existing assertions, establish relevant baseline timings, then implement the area section above.",
+        "text": "Bestehende Assertions erfassen und zuordnen, relevante Ausgangslaufzeiten messen und den obigen Bereichsabschnitt umsetzen."
+      },
+      {
+        "path": "milestones.2.steps.1",
+        "source": "Prove replacement behavior and CSS sensitivity before removing UI-only duplicates from integrated scenarios. Keep distinct security and system-boundary assertions.",
+        "text": "Ersatzverhalten und Empfindlichkeit gegenüber CSS-Fehlern beweisen, bevor reine UI-Duplikate aus integrierten Szenarien entfernt werden. Eigenständige Sicherheits- und Systemgrenzenprüfungen erhalten."
+      },
+      {
+        "path": "milestones.2.steps.2",
+        "source": "Document the fast command, retained integration command, synthetic data reset and evidence; deliver an open native PR and area handoff.",
+        "text": "Schnellen Befehl, erhaltenen Integrationsbefehl, Rücksetzen synthetischer Daten und Nachweise dokumentieren; offenen nativen PR und Bereichsübergabe liefern."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "The focused UI command runs without a live app backend, IdP or Electron and uses real components and production styles.",
+        "text": "Der gezielte UI-Befehl läuft ohne aktives App-Backend, IdP oder Electron und nutzt echte Komponenten und Produktions-Styles."
+      },
+      {
+        "path": "milestones.2.acceptance.1",
+        "source": "Every removed assertion has a named passing replacement and counter-proof; retained real boundaries still pass their relevant acceptance.",
+        "text": "Jede entfernte Assertion besitzt einen benannten bestandenen Ersatz samt Gegenbeweis; erhaltene echte Systemgrenzen bestehen ihre relevante Abnahme weiterhin."
+      },
+      {
+        "path": "milestones.2.acceptance.2",
+        "source": "Normal affected gate passes on the exact pushed head; before/after timing and inspected screenshot evidence are published without an invented speedup claim.",
+        "text": "Der normale betroffene Gate besteht auf dem exakten gepushten Stand; Vorher-/Nachherzeiten und angesehene Screenshot-Nachweise sind ohne erfundene Beschleunigungsbehauptung veröffentlicht."
+      },
+      {
+        "path": "milestones.2.acceptance.3",
+        "source": "Diff stays within ownership; all processes, ports and heavy-check slots are released or explicitly handed off.",
+        "text": "Der Diff bleibt innerhalb der Zuständigkeit; alle Prozesse, Ports und Slots für aufwendige Prüfungen sind freigegeben oder ausdrücklich übergeben."
+      },
+      {
+        "path": "milestones.2.rollback",
+        "source": "Revert only this milestone’s changes through a reviewed PR; preserve existing assertions until equivalent replacements are proven.",
+        "text": "Nur Änderungen dieses Meilensteins per geprüftem PR zurücknehmen; bestehende Assertions bis zum Nachweis gleichwertiger Ersatztests erhalten."
+      },
+      {
+        "path": "milestones.3.title",
+        "source": "C — Reports",
+        "text": "C — Reports"
+      },
+      {
+        "path": "milestones.3.goal",
+        "source": "Deliver the scoped fast UI path for Reports after M0; run independently of the other areas.",
+        "text": "Nach M0 den abgegrenzten schnellen UI-Prüfweg für Reports unabhängig von den anderen Bereichen umsetzen."
+      },
+      {
+        "path": "milestones.3.steps.0",
+        "source": "Inventory and map existing assertions, establish relevant baseline timings, then implement the area section above.",
+        "text": "Bestehende Assertions erfassen und zuordnen, relevante Ausgangslaufzeiten messen und den obigen Bereichsabschnitt umsetzen."
+      },
+      {
+        "path": "milestones.3.steps.1",
+        "source": "Prove replacement behavior and CSS sensitivity before removing UI-only duplicates from integrated scenarios. Keep distinct security and system-boundary assertions.",
+        "text": "Ersatzverhalten und Empfindlichkeit gegenüber CSS-Fehlern beweisen, bevor reine UI-Duplikate aus integrierten Szenarien entfernt werden. Eigenständige Sicherheits- und Systemgrenzenprüfungen erhalten."
+      },
+      {
+        "path": "milestones.3.steps.2",
+        "source": "Document the fast command, retained integration command, synthetic data reset and evidence; deliver an open native PR and area handoff.",
+        "text": "Schnellen Befehl, erhaltenen Integrationsbefehl, Rücksetzen synthetischer Daten und Nachweise dokumentieren; offenen nativen PR und Bereichsübergabe liefern."
+      },
+      {
+        "path": "milestones.3.acceptance.0",
+        "source": "The focused UI command runs without a live app backend, IdP or Electron and uses real components and production styles.",
+        "text": "Der gezielte UI-Befehl läuft ohne aktives App-Backend, IdP oder Electron und nutzt echte Komponenten und Produktions-Styles."
+      },
+      {
+        "path": "milestones.3.acceptance.1",
+        "source": "Every removed assertion has a named passing replacement and counter-proof; retained real boundaries still pass their relevant acceptance.",
+        "text": "Jede entfernte Assertion besitzt einen benannten bestandenen Ersatz samt Gegenbeweis; erhaltene echte Systemgrenzen bestehen ihre relevante Abnahme weiterhin."
+      },
+      {
+        "path": "milestones.3.acceptance.2",
+        "source": "Normal affected gate passes on the exact pushed head; before/after timing and inspected screenshot evidence are published without an invented speedup claim.",
+        "text": "Der normale betroffene Gate besteht auf dem exakten gepushten Stand; Vorher-/Nachherzeiten und angesehene Screenshot-Nachweise sind ohne erfundene Beschleunigungsbehauptung veröffentlicht."
+      },
+      {
+        "path": "milestones.3.acceptance.3",
+        "source": "Diff stays within ownership; all processes, ports and heavy-check slots are released or explicitly handed off.",
+        "text": "Der Diff bleibt innerhalb der Zuständigkeit; alle Prozesse, Ports und Slots für aufwendige Prüfungen sind freigegeben oder ausdrücklich übergeben."
+      },
+      {
+        "path": "milestones.3.rollback",
+        "source": "Revert only this milestone’s changes through a reviewed PR; preserve existing assertions until equivalent replacements are proven.",
+        "text": "Nur Änderungen dieses Meilensteins per geprüftem PR zurücknehmen; bestehende Assertions bis zum Nachweis gleichwertiger Ersatztests erhalten."
+      },
+      {
+        "path": "milestones.4.title",
+        "source": "M4 — Sequential integration and closeout",
+        "text": "M4 — Geordnete Integration und Abschluss"
+      },
+      {
+        "path": "milestones.4.goal",
+        "source": "Integrate three independently reviewed areas without losing their evidence or boundary coverage.",
+        "text": "Drei unabhängig geprüfte Bereiche integrieren, ohne Nachweise oder Abdeckung echter Systemgrenzen zu verlieren."
+      },
+      {
+        "path": "milestones.4.steps.0",
+        "source": "Review all assertion maps and exact source/target diffs; reconcile shared scripts, dependency metadata and repository documentation centrally.",
+        "text": "Alle Assertion-Zuordnungen und exakten Quell-/Ziel-Diffs prüfen; gemeinsame Skripte, Abhängigkeitsmetadaten und Repository-Dokumentation zentral abgleichen."
+      },
+      {
+        "path": "milestones.4.steps.1",
+        "source": "Merge ready PRs one at a time; recheck newly affected behavior after integration. Record actual merge receipts, evidence and residual limitations.",
+        "text": "Fertige PRs einzeln zusammenführen; nach Integration neu betroffenes Verhalten erneut prüfen. Tatsächliche Mergebelege, Nachweise und verbleibende Grenzen festhalten."
+      },
+      {
+        "path": "milestones.4.steps.2",
+        "source": "Update the single Plan and umbrella issue; archive only completed worktrees created for this effort after preserving needed evidence.",
+        "text": "Den gemeinsamen Plan und das übergeordnete Issue aktualisieren; nur abgeschlossene Worktrees dieser Arbeit archivieren, nachdem benötigte Nachweise gesichert wurden."
+      },
+      {
+        "path": "milestones.4.acceptance.0",
+        "source": "All three area fast commands and retained acceptance paths are documented and reachable on canonical main.",
+        "text": "Alle drei schnellen Bereichsbefehle und erhaltenen Abnahmewege sind auf dem kanonischen main dokumentiert und erreichbar."
+      },
+      {
+        "path": "milestones.4.acceptance.1",
+        "source": "No automatic E2E/CI reactivation, lost product contract or Troop change was introduced.",
+        "text": "Es wurde weder automatisches E2E/CI reaktiviert noch ein Produktvertrag verloren oder Troop geändert."
+      },
+      {
+        "path": "milestones.4.acceptance.2",
+        "source": "The final report distinguishes checks, domain assessment, approval and plan completion; unresolved work remains explicit.",
+        "text": "Der Abschlussbericht trennt Prüfergebnisse, fachliche Bewertung, Freigabe und Planabschluss; offene Arbeit bleibt ausdrücklich sichtbar."
+      },
+      {
+        "path": "milestones.4.rollback",
+        "source": "Revert only this milestone’s changes through a reviewed PR; preserve existing assertions until equivalent replacements are proven.",
+        "text": "Nur Änderungen dieses Meilensteins per geprüftem PR zurücknehmen; bestehende Assertions bis zum Nachweis gleichwertiger Ersatztests erhalten."
+      },
+      {
+        "path": "verification.0",
+        "source": "For every moved assertion record old test, observable contract, replacement test, retained boundary and a targeted counter-proof. Temporarily break the relevant behavior/style, observe failure, restore it and rerun. Keep only useful regressions.",
+        "text": "Für jede verschobene Assertion alten Test, beobachtbaren Vertrag, Ersatztest, erhaltene Systemgrenze und gezielten Gegenbeweis festhalten. Das betreffende Verhalten beziehungsweise den Style vorübergehend brechen, den Fehler beobachten, wiederherstellen und erneut prüfen. Nur nützliche Regressionstests behalten."
+      },
+      {
+        "path": "verification.1",
+        "source": "Use real production components and stylesheet entry points, including Tailwind/Nuxt UI generation and fonts/tokens where relevant. Do not copy CSS fixes into setup or replace the measured UI controls with stubs.",
+        "text": "Echte Produktionskomponenten und Stylesheet-Einstiegspunkte nutzen, einschließlich Tailwind-/Nuxt-UI-Erzeugung sowie relevanter Schriften und Tokens. Keine CSS-Korrekturen ins Setup kopieren und gemessene UI-Steuerelemente nicht durch Attrappen ersetzen."
+      },
+      {
+        "path": "verification.2",
+        "source": "Capture representative wide/narrow, light/dark, loading/empty/error states where applicable. Inspect the actual images and publish a private Test Run with exact SHA, commands, timings, mapping and limitations.",
+        "text": "Repräsentative breite/schmale, helle/dunkle sowie Lade-/Leer-/Fehlerzustände aufnehmen, soweit relevant. Die tatsächlichen Bilder ansehen und einen privaten Test Run mit exakter SHA, Befehlen, Zeiten, Zuordnung und Grenzen veröffentlichen."
+      },
+      {
+        "path": "verification.3",
+        "source": "Measure the old and new relevant commands on the same machine with declared cold/warm cache and worker settings, outside competing heavy checks. Include startup cost. Do not invent a percentage target or treat fewer assertions as a speedup.",
+        "text": "Alten und neuen relevanten Befehl auf demselben Rechner mit angegebenem kaltem/warmem Cache und Worker-Einstellungen messen, ohne konkurrierende aufwendige Prüfungen. Startkosten einschließen. Kein Prozentziel erfinden und weniger Assertions nicht als Beschleunigung werten."
+      },
+      {
+        "path": "verification.4",
+        "source": "Run focused checks during editing; normal pre-push affected unit gates once per pushed head, plus relevant explicit browser/integration acceptance. Keep CI paused. Record pre-existing failures and never turn skips into passes.",
+        "text": "Während der Bearbeitung gezielt prüfen; den normalen betroffenen Unit-Gate einmal pro gepushtem Stand ausführen, dazu relevante ausdrückliche Browser-/Integrationsabnahmen. CI pausiert lassen. Vorbestehende Fehler dokumentieren und übersprungene Fälle nicht als bestanden ausgeben."
+      },
+      {
+        "path": "risks.0.title",
+        "source": "False confidence from simulated backends",
+        "text": "Scheinsicherheit durch simulierte Backends"
+      },
+      {
+        "path": "risks.0.mitigation",
+        "source": "UI tests prove presentation and requests, not actual authorization or durable effects. Retain API/adapter contracts and representative real journeys.",
+        "text": "UI-Tests beweisen Darstellung und Anfragen, nicht tatsächliche Autorisierung oder dauerhafte Effekte. API-/Adapterverträge und repräsentative echte Abläufe erhalten."
+      },
+      {
+        "path": "risks.1.title",
+        "source": "Worktree isolation does not isolate ports, resources or shared files",
+        "text": "Worktrees isolieren weder Ports noch Rechnerressourcen oder gemeinsame Dateien"
+      },
+      {
+        "path": "risks.1.mitigation",
+        "source": "Enforce path ownership, isolated installs/artifacts/profiles, reserved ports and one heavy-check slot. Centralize lockfile changes and merges.",
+        "text": "Pfadzuständigkeiten, getrennte Installationen/Artefakte/Profile, reservierte Ports und einen Slot für aufwendige Prüfungen durchsetzen. Lockfile-Änderungen und Merges zentralisieren."
+      },
+      {
+        "path": "risks.2.title",
+        "source": "Concurrent legacy extraction changes dependencies",
+        "text": "Parallele Legacy-Ausgliederung verändert Abhängigkeiten"
+      },
+      {
+        "path": "risks.2.mitigation",
+        "source": "Exclude Troop. Refresh and inspect the extraction’s merged changes at preparation and integration. Request only the specific shared dependency clarification if needed; never edit or reset its worktree.",
+        "text": "Troop ausschließen. Bei Vorbereitung und Integration zusammengeführte Änderungen der Ausgliederung aktualisieren und prüfen. Falls nötig nur die konkrete gemeinsame Abhängigkeit klären; niemals deren Worktree bearbeiten oder zurücksetzen."
+      },
+      {
+        "path": "handoff",
+        "source": "Review proposal revision 1. After Patrick approves this revision and requests launch, complete M0 in the coordinator, publish the frozen base and start A, B and C as separate chats with their own worktrees. No area sessions or implementation have started.",
+        "text": "Vorschlagsrevision 1 prüfen. Nach Patricks Freigabe dieser Revision und Startauftrag führt die Koordination M0 aus, veröffentlicht die feste Basis und startet A, B und C als getrennte Chats mit eigenen Worktrees. Noch keine Bereichssessions oder Umsetzung gestartet."
+      },
+      {
+        "path": "changelog.0.text",
+        "source": "Created the proposal from repository inspection and Patrick’s parallel-worktree request; excluded Troop following his explicit correction before publication.",
+        "text": "Vorschlag aus Repository-Inspektion und Patricks Wunsch nach parallelen Worktrees erstellt; Troop nach seiner ausdrücklichen Korrektur vor der Veröffentlichung ausgeschlossen."
+      }
+    ]
+  }
+}
