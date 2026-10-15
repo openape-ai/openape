@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import type { WorkspaceAccess, WorkspaceSnapshot } from '../workspace-access'
+import type { MessagesAccessCommand, MessagesView, WorkspaceAccess, WorkspaceSnapshot } from '../workspace-access'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { diagnostic } from '../i18n'
 import type { CentralCommand } from '../../contracts/central'
 import type { DomainCommand, DomainOverview } from '../../contracts/domain-admin'
 import type { MapView } from '../../contracts/map-view'
 import type { SecretsCommand, SecretsView } from '../../contracts/secrets'
-import type { InboxMessage, InboxMessagesCommand } from '../../contracts/inbox'
 import AutomationsShell from './AutomationsShell.vue'
 
 const props = defineProps<{ access: WorkspaceAccess, sharing?: boolean, paused?: boolean, revision?: number }>()
@@ -16,7 +15,7 @@ const domain = ref<DomainOverview | null>(null)
 const codex = ref<WorkspaceSnapshot['codex']>()
 const live = ref(false)
 const secrets = ref<SecretsView | null>(null)
-const messages = ref<InboxMessage[] | null>(null)
+const messages = ref<MessagesView | null>(null)
 const tab = ref<'automations' | 'decisions' | 'messages'>('automations')
 const now = ref(Date.now())
 const error = ref('')
@@ -52,7 +51,7 @@ function domainCommand(command: DomainCommand, settle?: (error: string | null) =
     await props.access.domain(command)
   }, settle)
 }
-function messagesCommand(command: InboxMessagesCommand) {
+function messagesCommand(command: MessagesAccessCommand) {
   return void run(async () => {
     if (!props.access.messages) throw new Error('Messages are unavailable on this host')
     await props.access.messages(command)

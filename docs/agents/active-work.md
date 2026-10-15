@@ -1,5 +1,12 @@
 # Active work
 
+## Pods workspace messages tab — issue 1487
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1487. Branch `feature/issue-1487-pods-messages`, base `5150cdc2`, checkout `.claude/worktrees/openape-pods-ui-redesign-7b2382`.
+- Owner approved Plan revision 4 on October 15, 2026 ("ja - du kannst mit der umsetzung starten"): https://report.openape.ai/d/01M4ZCQTG2AZM49A5GW2AAWX4T?v=4. The design was iterated in the Vite demo and accepted by the owner.
+- Adds a Mitteilungen tab to the shared workspace, relay endpoints for the owner session and the signed desktop runtime (all of the account's messages, never decisions), a shared message parser, the desktop `messages` channel and the browser client.
+- Rollout: relay first, then a signed desktop build; a new desktop against the old relay would show the tab with an update error. Not deployed.
+
 ## CI instruction reconciliation — issue 1483
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1483; the native implementation PR is linked there. Branch `bugfix/issue-1483-knowledge-ci-guidance`, checkout `openape-monorepo.worktrees/knowledge-ci-1483`, base `7d0caa8b67a939284d008761efe977dc76fbe288`.

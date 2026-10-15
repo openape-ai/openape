@@ -5,10 +5,12 @@ import MessagesInbox from '../../src/renderer/central/MessagesInbox.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
 
 const now = Date.UTC(2026, 9, 15, 9)
-const message = (id: number, fields: Partial<InboxMessage> = {}): InboxMessage => ({
-  id: `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`, title: `Message ${id}`, body: 'Body', pod: { id: '00000000-0000-4000-8000-000000000001', name: 'Briefing', tags: ['ops'] },
-  runId: null, links: [], created: now - id * 60000, read: null, archived: null, ...fields,
-})
+function message(id: number, fields: Partial<InboxMessage> = {}): InboxMessage {
+  return {
+    id: `00000000-0000-4000-8000-${String(id).padStart(12, '0')}`, title: `Message ${id}`, body: 'Body', pod: { id: '00000000-0000-4000-8000-000000000001', name: 'Briefing', tags: ['ops'] },
+    runId: null, links: [], created: now - id * 60000, read: null, archived: null, ...fields,
+  }
+}
 afterEach(() => applyLanguage('en'))
 
 function setup(messages: InboxMessage[]) {

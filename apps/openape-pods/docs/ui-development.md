@@ -25,12 +25,17 @@ other Vite or Electron processes by name.
 The toolbar selects a scenario and resets it. URLs preserve the scenario:
 
 - `/?scenario=everyday`: six related Pods, two company tags, four questions,
-  public variables, scripts, schedules and run history.
+  six Pod messages (one archived), public variables, scripts, schedules and run history.
 - `/?scenario=attention`: a failed run, a waiting IdP action and a choice that
   first fails, then succeeds on retry.
 - `/?scenario=empty`: an empty workspace and decision inbox.
 - `/?scenario=loading-error`: delayed reads and a connection failure. Use the
   demo reconnect button to restore reads.
+
+The Mitteilungen tab lists messages from `context.notify` with inbox and archive,
+mark all as read and archive all (each after a confirmation that names the count)
+and delete from the archive (with confirmation). The demo pages messages like the
+relay, so "load older messages" uses the same reader as the real hosts.
 
 Add `&language=en` for English product labels. Synthetic content remains German.
 The toolbar identifies simulation throughout the session.
@@ -56,6 +61,14 @@ reload of fixture/controller modules can reset state too.
 `AutomationsShell.vue` and `DecisionsInbox.vue`. `workspace-access.ts` supplies
 local and backend capabilities. `LocalShell.vue` is the desktop host wrapper;
 `BrowserWorkspace.vue` supplies the backend adapter and its inbox link.
+
+Messages (issue 1487) come from the account inbox on the relay, never from the
+local outbox. `messagesReader` in `workspace-access.ts` is the one reader for every
+host: the desktop reads through the `messages` bridge channel and its signed runtime
+session (`POST /api/runtime/v1/inbox/messages`), the browser through the owner
+session (`POST /api/workspace/v1/messages`). Both parse responses with
+`parseInboxMessagePage`. The tab appears only when the host supplies messages; an
+unregistered desktop shows none, and a failed update keeps the last list with a note.
 
 `PodAccess` and `remotePodAccess` remain the shared Pod editor boundary.
 `hostBridgeKey` injects host-only services into native subcomponents. Only
