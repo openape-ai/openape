@@ -1,5 +1,16 @@
 # @openape/ape-agent
 
+## 3.0.0
+
+### Major Changes
+
+- 139c15e: Retire OpenClaw integration. Nest and agent provisioning support only the bridge runtime; legacy unsupported registry entries remain stored but cannot start. Remove the OpenClaw setup and grant-gate packages and their distribution tooling. Imported skill requirements now use metadata.openape; metadata.openclaw is rejected with migration guidance. Generic DDISA, grant authorization and CLI extensions remain available.
+
+### Patch Changes
+
+- Updated dependencies [139c15e]
+  - @openape/apes@3.0.0
+
 ## 2.11.17
 
 ### Patch Changes
