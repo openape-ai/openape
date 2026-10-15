@@ -22,19 +22,9 @@ id.openape.test {
 	}
 }
 
-troop.openape.test {
-	tls internal
-	reverse_proxy troop:3010 {
-		header_up X-Forwarded-Proto https
-		header_up X-Forwarded-Host {host}
 	}
 }
 
-chat.openape.test {
-	tls internal
-	reverse_proxy chat:3007 {
-		header_up X-Forwarded-Proto https
-		header_up X-Forwarded-Host {host}
 	}
 }
 
@@ -70,11 +60,6 @@ timetrack.openape.test {
 	}
 }
 
-crm.openape.test {
-	tls internal
-	reverse_proxy crm:3024 {
-		header_up X-Forwarded-Proto https
-		header_up X-Forwarded-Host {host}
 	}
 }
 

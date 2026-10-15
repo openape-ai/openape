@@ -16,7 +16,7 @@
  *   2. capture-previous-release + rollback when the deploy script fails
  *
  * Usage:
- *   pnpm deploy <target...>      # deploy named targets (e.g. troop chat)
+ *   pnpm deploy <target...>      # deploy named targets (e.g. tasks plans)
  *   pnpm deploy --all            # deploy every target
  *   pnpm deploy --changed[=ref]  # deploy targets whose paths changed vs ref
  *                                #   (ref defaults to origin/main)
@@ -41,18 +41,6 @@ const SSH_HOST = process.env.CHATTY_HOST || 'chatty.delta-mind.at'
 // `service: null` would mark a static target (symlink swap only, no restart
 // and nothing to roll back to); no current target uses it.
 const TARGETS = {
-  troop: {
-    script: 'deploy-troop.sh',
-    base: '/home/openape/projects/openape-troop',
-    service: 'openape-troop.service',
-    paths: ['apps/openape-troop/**', 'modules/nuxt-auth-sp/**', 'packages/auth/**', 'packages/core/**', 'scripts/deploy-troop.sh', 'pnpm-lock.yaml'],
-  },
-  chat: {
-    script: 'deploy-chat.sh',
-    base: '/home/openape/projects/openape-chat',
-    service: 'openape-chat.service',
-    paths: ['apps/openape-chat/**', 'modules/nuxt-auth-sp/**', 'packages/auth/**', 'packages/core/**', 'scripts/deploy-chat.sh', 'pnpm-lock.yaml'],
-  },
   'free-idp': {
     script: 'deploy-free-idp.sh',
     base: '/home/openape/projects/openape-free-idp',
