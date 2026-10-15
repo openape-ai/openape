@@ -10,11 +10,11 @@
 
 ## Parallel UI verification — issue 1481
 
-- Patrick approved Plan revision 1 on October 15 and authorized three sessions, coordination messages and merges: https://report.openape.ai/d/01M4ZB1XK5995C4Z79BDPKTD7R?v=1.
-- M0 preparation branch: `feature/issue-1481-ui-test-base`, checkout `openape-monorepo.worktrees/ui-test-plan-1481`, base `7d0caa8b67a939284d008761efe977dc76fbe288`.
-- Add the existing browser-test catalog dependencies to Git and Inbox. Reports already has them. Preserve all existing tests and commands until replacement evidence exists.
-- After preparation merges, freeze its SHA for separate Git/Issues, Inbox/PWA and Reports worktrees. The coordinator owns shared files, the launch ledger, one heavy-check slot and sequential merges. Area sessions own only their assigned app.
-- Troop is excluded. No deployment or CI reactivation. Launch details and actual validation receipts follow in the coordinator ledger and native PR comments.
+- Patrick approved proposal revision 1 on October 15 and authorized three sessions, coordination messages and sequential merges. Current private Plan: https://report.openape.ai/d/01M4ZB1XK5995C4Z79BDPKTD7R?v=3.
+- Shared preparation PR 435 merged as `95d1083abfb9de07ad8edf5bb16c71e06207c5fd`. Its 52-workspace local gate passed; additional Opus review could not run because Claude OAuth expired. All three area installs and doctor checks passed independently.
+- Git/Issues #1484, Inbox/PWA #1485 and Reports #1486 run from that frozen SHA in separate worktrees and user-owned chats. Exact ownership, branches, chat IDs, ports and heavy-check slot history: `.claude/plans/ui-test-migration/launch-ledger.md`.
+- Coordinator branch `feature/issue-1481-ui-test-integration` owns shared metadata, plan updates and merges. Area acceptance and final integration remain open. Existing assertions may be retired only after replacement and counter-proof; real system boundaries stay integrated.
+- Troop is excluded. No deployment or CI reactivation. Actual merge receipts and evidence belong on the native PRs/issues.
 
 
 ## Affected selection and local gates — issue 1480
