@@ -31,7 +31,7 @@ The route boundary renders anchors with the supplied destination; `$fetch`,
 `useRoute`, `useFetch` and the auth composable receive synthetic data. Those seams
 do not prove authentication, server sanitization, navigation or durable effects.
 
-Browser instances use isolated Playwright contexts and a strict port (5483).
+Browser instances use isolated Playwright contexts and a strict loopback endpoint (`127.0.0.1:5483`).
 Focused runs use one worker and serial browser files. They need installed Chrome,
 not an app backend, IdP, Electron or production credentials. Synthetic screenshots
 and logs live under `.artifacts/ui-test-migration/` and are not committed.
@@ -40,6 +40,11 @@ For integrated checks, set `TMPDIR` to a new directory beneath this worktree's
 `.artifacts/` so the shared lifecycle helper cannot clean another checkout's
 tracker or fixtures. Its disposable app/IdP databases, ports and browser contexts
 must stay local to this checkout. Close only processes started by this invocation.
+
+A temporary listener on `127.0.0.1:5483` caused the browser runner to exit 1
+with `Port 5483 is already in use`, before running tests. After closing only that
+listener, the same document case passed. The explicit host avoids Vite treating a
+wildcard-address listener and localhost as distinct available bindings.
 
 ## Replacement proof and retained acceptance
 
@@ -79,11 +84,10 @@ module, CI setting or deployment changed.
 
 ## Commands and handoff
 
-From the repository root, activate the pinned toolchain in every shell:
+From the repository root, put the pinned pnpm 10.29.3 on PATH using the
+repository session-toolchain instructions, then activate Node in every shell:
 
 ```sh
-export OPENAPE_PNPM_BIN=/Users/patrickhofmann/Companies/private/repos/openape/.toolchains/pnpm/10.29.3/bin
-export PATH="$OPENAPE_PNPM_BIN:$PATH"
 . ./scripts/activate-node.sh
 pnpm run doctor
 ```
