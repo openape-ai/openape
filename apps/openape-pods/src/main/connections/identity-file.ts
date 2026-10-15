@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentConnection } from '../broker/authorization'
 
-export async function podIdentityFile(root: string, connection: Pick<AgentConnection, 'issuer' | 'subject' | 'accessToken'>) {
+export async function podIdentityFile(root: string, connection: Pick<AgentConnection, 'issuer' | 'subject' | 'accessToken' | 'decisionIssuer' | 'brokered' | 'owner' | 'keyId'>) {
   const controller = new AbortController()
   const secrets: string[] = []
   const temporary = join(root, 'credentials/temporary'); await mkdir(temporary, { recursive: true, mode: 0o700 })
@@ -13,7 +13,7 @@ export async function podIdentityFile(root: string, connection: Pick<AgentConnec
     if (stopped) return
     secrets.push(token, JSON.stringify(token).slice(1, -1))
     const stage = join(directory, 'auth.next')
-    await writeFile(stage, JSON.stringify({ idp: connection.issuer, email: connection.subject, access_token: token, expires_at: Math.floor(Date.now() / 1000) + 60 }), { mode: 0o600 })
+    await writeFile(stage, JSON.stringify({ idp: connection.issuer, email: connection.subject, owner_email: connection.owner, agent_key_id: connection.keyId, access_token: token, expires_at: Math.floor(Date.now() / 1000) + 60, ...(connection.decisionIssuer ? { decision_issuer: connection.decisionIssuer } : {}), ...(connection.brokered ? { brokered: connection.brokered } : {}) }), { mode: 0o600 })
     await rename(stage, path)
   }
   try { await update() }

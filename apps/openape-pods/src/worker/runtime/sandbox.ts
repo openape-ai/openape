@@ -1,11 +1,10 @@
-import { quoteShell } from '../../runtime/environment'
 import type { SandboxReach } from '../../contracts/sandbox'
 import { existsSync, realpathSync } from 'node:fs'
 import { spawn } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import { createHash, randomUUID } from 'node:crypto'
 import { homedir } from 'node:os'
-import { readFile, realpath, writeFile } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import type { Duplex, Readable, Writable } from 'node:stream'
 
@@ -124,6 +123,7 @@ export function deniedPaths(entries: string[], home: string): string[] {
 }
 
 export interface ProcessDomain {
+  authority?: Duplex
   recordPath: string
   guardian: ChildProcess
   channel: Duplex
@@ -133,19 +133,7 @@ export interface ProcessDomain {
   completed: Promise<number>
   cancel: () => void
 }
-export interface ShellLaunch { cli: string, environment: Record<string, string> }
-export async function launchSandbox(helper: string, privateDirectory: string, policy: RuntimePolicy, args: string[], environment: Record<string, string> = {}, register?: (path: string, ownerPid: number) => void | Promise<void>, shell?: ShellLaunch): Promise<ProcessDomain> {
-  if (process.platform !== 'darwin') throw new Error('Native pod execution requires macOS')
-  const profile = join(privateDirectory, `policy-${randomUUID()}.sb`)
-  const canonical = { ...policy, executable: await realpath(policy.executable), workspace: await realpath(policy.workspace) }
-  await writeFile(profile, sandboxPolicy(canonical), { flag: 'wx', mode: 0o600 })
-  if (shell) {
-    const command = ['exec', '/usr/bin/env', '-i', ...Object.entries(environment).map(([key, value]) => `${key}=${value}`), '/usr/bin/sandbox-exec', '-f', profile, canonical.executable, ...args]
-    return superviseProcess(helper, canonical.executable, [shell.cli, '-c', command.map(quoteShell).join(' ')], canonical.workspace, { ...shell.environment, ELECTRON_RUN_AS_NODE: '1', APES_SHELL_MODE: '1', APES_SHELL_CHANNEL_FD: '3', APE_WAIT: '1' }, privateDirectory, register)
-  }
-  return superviseProcess(helper, '/usr/bin/sandbox-exec', ['-f', profile, canonical.executable, ...args], canonical.workspace, environment, privateDirectory, register)
-}
-export async function superviseProcess(helper: string, executable: string, args: string[], workspace: string, environment: Record<string, string>, privateDirectory: string, register?: (path: string, ownerPid: number) => void | Promise<void>, terminal = false): Promise<ProcessDomain> {
+export async function superviseProcess(helper: string, executable: string, args: string[], workspace: string, environment: Record<string, string>, privateDirectory: string, register?: (path: string, ownerPid: number) => void | Promise<void>, terminal = false, machine = false): Promise<ProcessDomain> {
   literal(executable); literal(workspace)
   const recordPath = join(privateDirectory, `domain-${randomUUID()}.record`)
   try { await register?.(recordPath, process.pid) }
@@ -153,7 +141,8 @@ export async function superviseProcess(helper: string, executable: string, args:
     await sealDomain(helper, recordPath, executable, workspace)
     throw error
   }
-  const guardian = spawn(helper, [terminal ? 'supervise-terminal-record' : 'supervise-record', recordPath, executable, ...args], { cwd: workspace, env: { HOME: workspace, TMPDIR: workspace, PATH: '/usr/bin:/bin', ...environment }, stdio: terminal ? ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'] })
+  const mode = machine ? (terminal ? 'supervise-machine-terminal-record' : 'supervise-machine-record') : (terminal ? 'supervise-terminal-record' : 'supervise-record')
+  const guardian = spawn(helper, [mode, recordPath, executable, ...args], { cwd: workspace, env: { HOME: workspace, TMPDIR: workspace, PATH: '/usr/bin:/bin', ...environment }, stdio: machine ? ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', terminal ? 'pipe' : 'ignore', 'pipe'] : terminal ? ['pipe', 'pipe', 'pipe', 'pipe', 'pipe', 'pipe'] : ['pipe', 'pipe', 'pipe', 'pipe', 'pipe'] })
   const lease = guardian.stdin as Writable
   const channel = guardian.stdio[3] as Duplex
   const control = guardian.stdio[4] as Readable
@@ -184,7 +173,7 @@ export async function superviseProcess(helper: string, executable: string, args:
       resolve(code ?? 128)
     })
   })
-  return { recordPath, guardian, channel, stdout: guardian.stdout as Readable, stderr: guardian.stderr as Readable, processId, completed, cancel: () => { if (!lease.destroyed && !lease.writableEnded) lease.end('X') } }
+  return { recordPath, guardian, channel, ...(machine ? { authority: guardian.stdio.at(6) as Duplex } : {}), stdout: guardian.stdout as Readable, stderr: guardian.stderr as Readable, processId, completed, cancel: () => { if (!lease.destroyed && !lease.writableEnded) lease.end('X') } }
 }
 // A registration callback can fail after the worker stored the domain, for example when the run is
 // aborted meanwhile. Recovery waits for every stored domain to report quiescence, so the guardian

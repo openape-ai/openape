@@ -61,7 +61,11 @@ declare const __VERSION__: string
 // indirectly via the ape-shell-wrapper.sh shim.
 const shellRewrite = rewriteApeShellArgs(process.argv, process.argv0)
 if (shellRewrite) {
-  if (shellRewrite.action === 'rewrite') {
+  if (shellRewrite.action === 'machine') {
+    const { runMachineRequest } = await import('./authorization/machine.js')
+    process.exit(await runMachineRequest())
+  }
+  else if (shellRewrite.action === 'rewrite') {
     process.argv = shellRewrite.argv
   }
   else if (shellRewrite.action === 'version') {
@@ -74,6 +78,8 @@ if (shellRewrite) {
     console.log('Usage:')
     console.log('  ape-shell                 Start interactive grant-mediated REPL')
     console.log('  ape-shell -c <command>    Run a single command through the grant flow')
+    console.log('  ape-shell -c -- <program> [args...]    Authorize exact arguments without shell interpretation')
+    console.log('  ape-shell -c --request-fd 6           Receive a supervised request on the private control channel')
     console.log('  ape-shell -i | -l         Force interactive mode')
     console.log('')
     console.log('Options:')

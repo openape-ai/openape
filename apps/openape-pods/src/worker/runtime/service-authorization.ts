@@ -1,7 +1,6 @@
 import { parseRunApproval } from '../../contracts/activity'
 import { ScriptCredentials } from '../resources/script-credentials'
 import { parseCredentialAlias } from '../../contracts/credentials'
-import type { MailRead, MailScope } from '../../main/mail/contract'
 import { parseServiceScope } from '../../contracts/services'
 import type { ServiceCheck } from '../../contracts/services'
 import type { ResourceState } from '../../contracts/resources'
@@ -26,21 +25,10 @@ export function authorizeRunService(store: PodDatabase, registry: ResourceRegist
   return { resources: registry.list(scope.podId), epoch: registry.epoch(scope.podId) }
 }
 
-export function authorizeMailService(store: PodDatabase, registry: ResourceRegistry, runs: RunStore, check: ServiceCheck): ResourceState {
-  const state = authorizeRunService(store, registry, runs, check)
-  if (!check.scope.capabilities.includes('mail.read')) throw new Error('Service capability is not declared by the pinned script')
-  return state
-}
 export function authorizeCredentialService(store: PodDatabase, registry: ResourceRegistry, runs: RunStore, check: ServiceCheck, value: string): string {
   const alias = parseCredentialAlias(value)
   authorizeRunService(store, registry, runs, check)
   const { scope } = check
   const authority = new ScriptCredentials(store, registry)
   return authority.assigned(scope.podId, alias).configuration.credentialId as string
-}
-
-export function assertMailHistory(store: PodDatabase, podId: string, scope: MailScope, read: MailRead): void {
-  if (!scope.since || read.operation === 'messages') return
-  const parent = store.db.prepare('SELECT 1 FROM mail_items WHERE pod_id=? AND account=? AND folder=? AND id=? AND julianday(json_extract(metadata,\'$.receivedAt\'))>=julianday(?)').get(podId, scope.account, read.folder, read.message!, scope.since)
-  if (!parent) throw new Error('Attachment parent has not been observed within the assigned mail history')
 }

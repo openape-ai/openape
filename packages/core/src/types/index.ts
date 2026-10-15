@@ -1,5 +1,7 @@
 import type { BrokeredGrant } from './broker.js'
 
+export * from './execution.js'
+
 export * from './broker.js'
 
 /** Policy modes controlling SP admission */
@@ -107,6 +109,7 @@ export interface OpenApeCliResourceRef {
 
 /** Execution-time context for a wrapped command */
 export interface OpenApeExecutionContext {
+  files?: { path: string, sha256: string }[]
   /** Full argv, including executable, when bound to a concrete command */
   argv?: string[]
   /** Stable hash of argv for exact-command binding */
@@ -160,6 +163,8 @@ export interface OpenApeCliAuthorizationDetail {
   risk: 'low' | 'medium' | 'high' | 'critical'
   constraints?: {
     exact_command?: boolean
+    /** The IdP requires a human decision for one exact invocation; approval cannot widen it. */
+    single_use?: boolean
   }
 }
 

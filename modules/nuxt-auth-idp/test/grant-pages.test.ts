@@ -116,6 +116,23 @@ describe('grant approval pages', () => {
     vi.unstubAllGlobals()
   })
 
+  it('offers only one exact approval for registry-protected operations on both pages', async () => {
+    const grant = buildCliGrant()
+    Object.assign(grant.request.authorization_details[0]!, { constraints: { exact_command: true, single_use: true } })
+    for (const component of [GrantApprovalPage, GrantsPage]) {
+      __setRouteQuery({ grant_id: grant.id })
+      const { fetchMock, calls } = routedFetchMock(grant)
+      vi.stubGlobal('$fetch', fetchMock)
+      const wrapper = mount(component, { global: { stubs: globalStubs } })
+      await flushPromises()
+      expect(wrapper.findAll('button').some(button => button.text() === 'Always allow')).toBe(false)
+      await wrapper.findAll('button').find(button => button.text() === 'Just this once')!.trigger('click')
+      await flushPromises()
+      expect(calls.find(call => call.url.endsWith('/approve'))?.opts.body).toMatchObject({ grant_type: 'once' })
+      wrapper.unmount()
+    }
+  })
+
   it('renders a pending CLI grant and approves it once from the single-grant page', async () => {
     __setRouteQuery({ grant_id: 'grant-1' })
     const fetchMock = vi.fn()

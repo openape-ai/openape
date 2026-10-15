@@ -240,7 +240,7 @@ it('converts the network runtime into standalone Pods, keeping history, effects,
   const root = directory(); const ids = profile47(root)
   const store = open(root)
   expect(readdirSync(root).filter(file => file.startsWith('before-v47-'))).toHaveLength(1)
-  expect(store.listPods().map(pod => [pod.name, pod.lifecycle])).toEqual([['Mail member', 'active'], ['Standalone', 'active']])
+  expect(store.listPods().map(pod => [pod.name, pod.lifecycle])).toEqual([['Mail member', 'paused'], ['Standalone', 'paused']])
   expect(store.db.prepare('SELECT summary FROM runs WHERE id=?').get(ids.run)).toEqual({ summary: 'archived one message' })
   // Every retired row is archived unchanged and counted; nothing of the network runtime remains executable.
   expect(store.db.prepare('SELECT source,count(*) AS rows FROM legacy_records WHERE source IN (\'networks\',\'network_members\',\'network_invocations\',\'pod_grants\',\'pod_sandbox_deny\',\'item_tags\') GROUP BY source ORDER BY source').all()).toEqual([

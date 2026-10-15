@@ -188,7 +188,7 @@ static int lease_open(void) {
 }
 #include "terminal-io.h"
 
-static int supervise(char **command, const char *record_path, int interactive) {
+static int supervise(char **command, const char *record_path, int interactive, int machine) {
   signal(SIGPIPE, SIG_IGN);
   struct domain_record record; memset(&record, 0, sizeof(record));
   struct proc_bsdinfo guardian_info;
@@ -218,16 +218,19 @@ static int supervise(char **command, const char *record_path, int interactive) {
     if (interactive) {
       close(terminal.master);
       if (ioctl(slave, TIOCSCTTY, 0) < 0 || dup2(slave, STDIN_FILENO) < 0 || dup2(slave, STDOUT_FILENO) < 0 || dup2(slave, STDERR_FILENO) < 0) fail("Attach foreground terminal");
-      close_descriptors(3);
+      if (machine) { close(3); close(4); close(5); close_descriptors(7); }
+      else close_descriptors(3);
     }
     else {
       int input = open("/dev/null", O_RDONLY);
       if (input < 0 || dup2(input, STDIN_FILENO) < 0) fail("Close inherited input");
-      close_descriptors(4);
+      if (machine) { close(4); close(5); close_descriptors(7); }
+      else close_descriptors(4);
     }
     execv(command[0], command); fail("Execute isolated process");
   }
   if (interactive) close(slave);
+  if (machine) close(6);
   close(readiness[1]); close(permission[0]);
   char registered;
   if (read(readiness[0], &registered, 1) != 1 || registered != 'R') {
@@ -279,9 +282,11 @@ static int supervise(char **command, const char *record_path, int interactive) {
 int main(int argc, char **argv) {
   if (argc == 5 && !strcmp(argv[1], "capture-managed")) { close_descriptors(3); capture(argv[2], argv[3], argv[4], 1); return 0; }
   if (argc == 5 && !strcmp(argv[1], "capture")) { close_descriptors(3); capture(argv[2], argv[3], argv[4], 0); return 0; }
-  if (argc >= 3 && !strcmp(argv[1], "supervise") && argv[2][0] == '/') return supervise(argv + 2, NULL, 0);
-  if (argc >= 4 && !strcmp(argv[1], "supervise-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2], 0);
-  if (argc >= 4 && !strcmp(argv[1], "supervise-terminal-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2], 1);
+  if (argc >= 3 && !strcmp(argv[1], "supervise") && argv[2][0] == '/') return supervise(argv + 2, NULL, 0, 0);
+  if (argc >= 4 && !strcmp(argv[1], "supervise-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2], 0, 0);
+  if (argc >= 4 && !strcmp(argv[1], "supervise-terminal-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2], 1, 0);
+  if (argc >= 4 && !strcmp(argv[1], "supervise-machine-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2], 0, 1);
+  if (argc >= 4 && !strcmp(argv[1], "supervise-machine-terminal-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2], 1, 1);
   if (argc == 3 && !strcmp(argv[1], "inspect-domain") && argv[2][0] == '/') { close_descriptors(3); return inspect_domain(argv[2]); }
   fprintf(stderr, "Expected capture SOURCE STAGING LIMIT or supervise ABSOLUTE_EXECUTABLE ARGS\n"); return 2;
 }

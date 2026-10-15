@@ -1,3 +1,4 @@
+import { machineRuntime } from './fixtures/machine'
 import { randomUUID } from 'node:crypto'
 import { link, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -25,7 +26,7 @@ async function fixture() {
   const store = new PodDatabase(root); cleanup.push(() => store.close())
   let runs: RunDispatcher
   const resources = new ResourceRegistry(store, id => runs.cancelPod(id))
-  const runtime = { helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: resolve('dist/vendor/codex'), catalog: resolve('dist/vendor/models.json'), manifest: resolve('dist/vendor/manifest.json'), sdkHost: resolve('dist/runtime/sdk-host.mjs') }
+  const runtime = { ...await machineRuntime(), helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: resolve('dist/vendor/codex'), catalog: resolve('dist/vendor/models.json'), manifest: resolve('dist/vendor/manifest.json'), sdkHost: resolve('dist/runtime/sdk-host.mjs') }
   runs = new RunDispatcher(store, resources, runtime); cleanup.push(() => runs.stop())
   const scheduler = new Scheduler(store, runs)
   const master = new MasterControl(store, resources, runs, scheduler, runtime)

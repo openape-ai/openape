@@ -1,4 +1,5 @@
 import consola from 'consola'
+import { setTimeout as delay } from 'node:timers/promises'
 import { getAuthToken, getIdpUrl, loadAuth, loadConfig, saveAuth } from './config'
 
 const debug = process.argv.includes('--debug')
@@ -246,6 +247,7 @@ export async function apiFetch<T = unknown>(
     body?: unknown
     idp?: string
     token?: string
+    signal?: AbortSignal
   } = {},
 ): Promise<T> {
   const token = options.token ?? await ensureFreshToken()
@@ -281,14 +283,14 @@ export async function apiFetch<T = unknown>(
   // `agents spawn` (enroll + challenge + authenticate) immediately followed by
   // `agents destroy` (de-register). Honour Retry-After, bounded, so the call
   // rides it out instead of failing. This is well-behaved backoff, not bypass.
-  const fetchInit = { method, headers, body: options.body ? JSON.stringify(options.body) : undefined }
+  const fetchInit = { method, headers, body: options.body ? JSON.stringify(options.body) : undefined, signal: options.signal }
   let response = await fetch(url, fetchInit)
   for (let rlAttempt = 0; response.status === 429 && rlAttempt < MAX_RATE_LIMIT_RETRIES; rlAttempt++) {
     const retryAfter = Number(response.headers.get('retry-after'))
     const waitMs = Math.min((Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : 2 ** rlAttempt) * 1000, RATE_LIMIT_WAIT_CAP_MS)
     await response.text().catch(() => {}) // drain so the socket frees before the retry
     consola.info(`Rate limited by IdP — retrying in ${Math.round(waitMs / 1000)}s (${rlAttempt + 1}/${MAX_RATE_LIMIT_RETRIES})`)
-    await new Promise(resolve => setTimeout(resolve, waitMs))
+    await delay(waitMs, undefined, { signal: options.signal })
     response = await fetch(url, fetchInit)
   }
 

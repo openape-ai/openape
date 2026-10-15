@@ -25,6 +25,7 @@ const knownSchemas: Record<number, { objects: number, digest: string }> = {
   49: { objects: 100, digest: '601fc34efb6fd577153621c2c2555cb858225ba6e647b9252e63f5dd9c83b82a' },
   50: { objects: 100, digest: '8ec6f0e1541245e95949f05a13c020855a2c8eb1fa8f9d12f369245563cff679' },
   51: { objects: 100, digest: '7c7012332cba58f01ba7ef168d48763c44ebb745dbcf9b1931d729d6ef8c7a5f' },
+  52: { objects: 100, digest: '7c7012332cba58f01ba7ef168d48763c44ebb745dbcf9b1931d729d6ef8c7a5f' },
 }
 
 /** Schema 50 differs from the current baseline only in the summary columns of action_approvals (issue 1473). */

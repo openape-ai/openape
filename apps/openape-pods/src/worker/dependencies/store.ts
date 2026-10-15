@@ -121,8 +121,11 @@ export class DependencyStore {
     const stage = await podDirectory(stages, randomUUID())
     const parent = await podDirectory(await podDirectory(root, 'dependencies'), podId)
     let published: string | undefined
+    let preparation: Awaited<ReturnType<NonNullable<ScriptRuntime['prepareExecution']>>> | undefined
     try {
-      const project = await installPackages(runtime, stage, packages, signal, (path, pid) => this.store.db.prepare('INSERT INTO dependency_domains VALUES(?,?)').run(path, pid), requestedLock)
+      preparation = await runtime.prepareExecution?.(podId, 'dependencies', signal)
+      current()
+      const project = await installPackages({ ...runtime, ...(preparation ? { machine: preparation.machine } : {}) }, stage, packages, signal, (path, pid) => this.store.db.prepare('INSERT INTO dependency_domains VALUES(?,?)').run(path, pid), requestedLock)
       const lock = await readFile(join(project, 'package-lock.json'), 'utf8')
       const files = await packageFiles(project, true); const hash = packageDigest(files)
       signal.throwIfAborted(); current()
@@ -140,6 +143,7 @@ export class DependencyStore {
     }
     catch (error) { if (published) await removePackageTree(published); throw error }
     finally {
+      await preparation?.close()
       await inspectDomainRecords(this.store.db.prepare('SELECT * FROM dependency_domains WHERE path LIKE ?').all(`${stage}/%`), stages, runtime.helper)
       this.store.db.prepare('DELETE FROM dependency_domains WHERE path LIKE ?').run(`${stage}/%`)
       await removePackageTree(stage)

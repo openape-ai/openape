@@ -114,7 +114,7 @@ The worker receives an explicitly constructed environment with a fixture HOME/TM
 
 Electron supplies desktop APIs and Node. electron-builder supplies the macOS development bundle; both versions passed the repository's seven-day publication quarantine at introduction. Vue/Vite/TypeScript are confirmed product dependencies; tsup bundles sandbox-compatible CommonJS main/preload/worker entrypoints. Vitest/Vue Test Utils verify state/contracts; Playwright drives actual Electron and captures light/dark/compact/error evidence. The established catalog supplies shared dependencies. No Bootstrap-Vue Vue 2 dependency is introduced into the confirmed Vue 3 application.
 
-Storage, resource boundaries, scheduling, recovery, networks and mail knowledge are implemented. Connection setup, explicit local deletion, backup/restore and manual update checks are implemented and verified with synthetic cases. Actual provider, tenant and signed distribution acceptance remain release gates.
+Storage, resource boundaries, scheduling, recovery and networks are implemented; mail knowledge is provided by the external automation package. Connection setup, explicit local deletion, backup/restore and manual update checks are implemented and verified with synthetic cases. Actual provider, tenant and signed distribution acceptance remain release gates.
 
 - Issue: https://git.openape.ai/openape-ai/openape/issues/1349
 - Plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A2ZV0AAPDW75YMD4TVG8Q5
@@ -230,23 +230,21 @@ engine or new third-party authentication dependency is introduced.
 
 ## Program calls (issue 1473, revision 4)
 
-A program is assigned by its path, file hash, optional runtime descriptor and
-network hosts; its command name is the file name it was chosen by. Only the IdP
-knows Shapes: per call the desktop sends `{target_host, audience: "shapes",
-program: {name, sha256}, argv, grant_type: "always", summary}` and the IdP
-resolves the exact command with the shapes registry. `200` carries a command
-token (at most five minutes, bound to the Pod, its target, the argv hash of
-`[name, ...argv]` and the program hash); the desktop verifies every binding and
-reuses the token for the identical command while it is valid. `202` is a pending
-request, shown and awaited like every Pod approval, after which the call is
-authorized again. `403` (denied or revoked) fails the call without a new request.
-Whether a call writes, and therefore becomes a recorded effect, follows from the
-IdP's resolution of exactly this call in the verified token (`authorization_details`):
-only read, list or get actions are reads; mail moves stay with the archive port.
-Running the Pod script, HTTP destinations and SSH inventories remain plain
-permission grants with fixed details the desktop builds itself. Schema 52
-removed the adapter fields from existing program assignments; approved grants keep
-matching because the IdP matches by permission, not by adapter version.
+A program is assigned by its path, content hash, optional runtime descriptor and
+network hosts. Every ordinary program call is forwarded to ape-shell, which asks
+the IdP to resolve and authorize the exact target, argv and script/file hashes.
+The IdP owns Shapes and domain presentation; Pods does not interpret mail actions.
+A pending decision is awaited without consuming the active execution budget.
+Denied/revoked decisions never start the target. Reusable tokens retain all exact
+bindings; single-use decisions are consumed once and never cached.
+
+Write classification comes from the verified IdP resolution. The generic launcher
+records durable intent before acknowledging execution; uncertain writes remain
+non-replayable. Script runners and dependency installation use this same boundary.
+HTTP destinations and SSH inventories retain their separate service grants.
+Schema 53 preserves historical records, pauses active Pods and invalidates old
+validation before the new execution boundary can be used. See the
+[migration contract](../../docs/operations/pods-ape-shell-migration.md).
 
 ## M4: manual runs and pinned Codex execution
 
@@ -365,104 +363,33 @@ screenshots cover all five views at 1060×850, 760×700 and 560×700 in light/da
 including keyboard tabs, horizontal overflow and a reachable fixed footer.
 
 
-## M8 — Confined read-only mail integration
+## External mail tools and recipes
 
-The historical o365 `pods` protocol is retained only as a synthetic test fixture
-under `.artifacts/o365-fixture`. Production packages do not contain o365-cli,
-its legacy runtime manifest or its CA bundle. Configure an installed executable
-in Permissions and use that executable's supported commands. Old `context.mail`
-scripts report an explicit migration error; their history and source are retained.
-The currently installed Mac CLI uses `auth login` and `mail` commands, not the
-historical `pods` protocol.
+Mail ingestion, classification, extraction and protected archival live in the
+independently delivered o365-cli repository and its `automation/` package. Pods
+contains no mail port or bundled mail parser. Assign exact program/runtime files
+and use `tools.invoke`, generic model calls, data and progress. All controlled
+programs, including scripts, parsers, dependencies, terminals and applications,
+execute through `ape-shell -c` with the actual target and content bindings.
 
-The following boundary description applies to the retained legacy protocol tests;
-new pod assignments use the generic application broker.
-Scripts and SDK calls share the declared tool capability and frozen run scope.
-The main broker verifies the pod's signed ape-shell grant, holds a serialized
-connection cache, registers the native domain with the worker before spawning,
-and delivers credentials only to the separate tool sandbox. The script cannot
-supply a cache path, executable, proxy, CA file or unassigned account/folder.
-The broker's authenticated CONNECT endpoint permits only the fixed Microsoft
-login and Graph hosts. The CLI additionally restricts methods, redirects,
-projections and pagination paths. OAuth results must retain the requested account
-and Mail.Read boundary after refresh.
+The external package provides a standalone recipe bundle and a separate parser
+runtime. The parser uses a 192 MiB heap, a 15-second deadline, no network/identity,
+explicit hashed inputs and bounded output. `fflate` remains in Pods for portable
+workspace archives; mail parsing dependencies are no longer desktop dependencies.
 
-The worker imports exact source blobs before returning bounded excerpts and
-explicit continuation/completeness. This import does not advance the script's
-checkpoint or claim that a business matter is processed. Claims and progress
-still commit through the script contract. Full folder inventories and matter
-processing use this protocol in M9. Onboarding assigns real identities, grants
-and connections in M11; none were provisioned during implementation.
+Legacy schema-52 mail knowledge and approval records remain historical evidence.
+Schema 53 pauses active Pods and invalidates earlier validation. The external
+migration exports and imports sources, claims, checkpoints and archive holds;
+it never grants authority or replays an earlier effect. Historical decisions have
+no execution controls. New archival calls require an IdP-resolved exact once
+decision and the external mailbox-wide journal. See the
+[migration and release gates](../../docs/operations/pods-ape-shell-migration.md).
 
-Synthetic tests exercise actual TLS, cache refresh across process restart,
-non-mutating paginated reads, wrong accounts, invalid refreshes, cancellation,
-foreign endpoints, traversal/symlink output, cache conflict/redaction, split UTF-8,
-and native domain registration. A composed test combines the signed grant,
-encrypted cache and actual packaged o365 binary against a local TLS fixture.
-The fixture changes only its public CA snapshot and network dial target; product
-code and the CLI binary are used directly. No live Microsoft request is made.
-Provider streams now respect downstream backpressure and a 16 MiB response bound.
-
-The upstream README declares MIT, but the source revision lacks its referenced
-LICENSE file. The package records that missing notice explicitly; complete
-license notices, Apple signing/notarization, physical sleep/wake, supported OS
-coverage and live tenant/provider acceptance remain distribution gates.
-
-## M9: sourced mail recipe
-
-`mail-knowledge-v1` is a bundled, versioned read-only script. It inventories every
-selected folder before analysis, checkpoints each durable page and continues a
-bounded batch on the next run. Every subsequent run starts a fresh full inventory;
-this intentionally favors correctness for moved old messages over an unproven
-short lookback/delta optimization. A failed page retains its cursor. Stable item
-IDs and immutable source snapshots are separate, so folder moves retain both
-versions without a hash conflict. Permission or recipe changes
-invalidate processing receipts. No owner schedule is enabled by installation.
-
-The recipe uses `mail.next`, the existing SDK `agent.run`, and `mail.commit`.
-Trusted host operations still use the assigned ape-shell authorization boundary.
-Model calls retain the single effectful ape-shell gateway; they receive no new
-filesystem, shell or credential access. Prepared contexts record source IDs,
-parser fingerprints, current claims and omissions.
-Provider conversation IDs group matters; missing IDs produce an association gap.
-No subject-only merge is inferred. Selected sent folders participate in the same
-inventory and can provide evidence that resolves an earlier question.
-
-The proposed bounded defaults are ten messages and twenty current claim excerpts
-per context, 48 KB of serialized evidence text, three attachments from the first
-attachment page per message, twenty recipe units per run, 20 MiB per file and
-100 MiB of attachment bytes per run. Omitted pages/documents, unsupported types,
-truncation and uncertain association create explicit verification gaps. These
-limits do not imply that omitted attachments have been examined. The model's
-structured claims must quote supplied source text and may supersede only supplied
-current claims from that matter. Quotes establish provenance, not semantic truth:
-real model quality evaluation remains a separate acceptance gate.
-
-Text/HTML/PDF/DOCX extraction executes in its own no-fork/no-network native sandbox,
-with a 192 MiB V8 heap cap, 15-second process deadline, bounded input/output and
-only the selected source plus pinned parser files readable. PDFs allow at most
-100 pages; no rendering, XFA, WebAssembly, remote assets or OCR is enabled. DOCX
-streams only `word/document.xml` in 1 KiB compressed chunks, with a 2 MiB expanded
-text cap and no entity declarations. Unsupported, scanned, encrypted or malformed
-sources remain unexamined gaps. The complete extracted source links back to the
-original retained bytes in Knowledge; large raw previews are labelled truncated.
-
-New pinned build dependencies are `pdfjs-dist@6.3.289` (Apache-2.0),
-`html-to-text@10.0.1` and `fflate@0.8.3` (MIT). They replace unsafe ad-hoc document
-parsing and have passed the repository quarantine. The PDF worker uses the
-upstream legacy build's compatibility polyfills because pinned Node 24.15.0 lacks
-`Uint8Array.toHex`, while Electron already supplies it. Both parser files are
-checksummed and bundled; no system document converter is invoked. Existing
-workspace dependency resolutions are preserved.
-
-Verification: `test/mail/knowledge.test.ts` covers rule folders, sent resolutions,
-attachment citations, hostile fabricated evidence, unsupported-only gaps,
-contradictory dates, receipt rollback, permission changes and interrupted inventory.
-`e2e/mail-knowledge.test.ts` exercises actual local/packaged parser processes and
-the complete versioned script → SDK → parser → SQLite path with recorded model
-outputs. UI tests follow extracted citations to original bytes. This is synthetic
-fixture evidence, not a live mailbox or real-model quality claim.
-
+The native generic broker tests retain synthetic provider TLS/cache/identity and
+sandbox coverage. The external package owns ingestion, extraction and historical
+mail tests. These fixtures make no live Microsoft request. Installation, final
+profile cutover, live provider acceptance and recipe activation remain separate
+rollout steps.
 
 ## M10: draft validation and activation
 
@@ -476,7 +403,7 @@ as a grant by the Pod identity and decided by the owner at the identity provider
 or in the owner's MCP session; a model never approves it.
 
 
-## M11: account onboarding and exact mail scope
+## M11: account onboarding
 
 The sidebar account button opens central account management. It shows exactly
 two accounts: Codex / GPT and the owner's DDISA account. The DDISA identity
@@ -515,42 +442,19 @@ The live identity service must allow this registered client/redirect; compatibil
 has not been inferred from local source tests. Owner and model credentials remain
 separate from each pod's generated Ed25519 agent identity.
 
-Microsoft device sign-in and owner-requested folder inventory run the pinned
-read-only Go CLI in a native sandbox with only their isolated writable cache and
-public CA bundle. Folder traversal is bounded to 200 pages and 1,000 folders;
-at most 100 can be assigned. The default history selection is 90 days, rounded to
-a UTC calendar day; all history and attachments require explicit choices.
-The reviewed upstream history change is ac04293166dda43ca35cc67bd77108d2fe6911c9,
-merged through https://git.openape.ai/delta-mind/o365-cli/pulls/6.
-The bundled source now pins `f3c2f71d6ce70f1c1bce028e2668ad66597e5d60`,
-which also includes the account-scoped workflow transport from upstream PR 8.
-The network preview example uses only its `workflow read` operation; the IdP's
-registry adapter for it declares no mutation command. Message pagination
-preserves the exact receivedDateTime boundary. An attachment parent must already
-be recorded within that boundary. Existing durable knowledge is retained when
-read permissions narrow.
+Mail account sign-in, folder inventory, history scope and attachments now belong
+to the separately delivered mail CLI and automation package. Pods assigns their
+exact programs, runtimes, paths and network boundaries through generic resources;
+there is no mail-specific onboarding or bundled provider CLI. Existing historical
+mail scope and knowledge remain readable and exportable for explicit migration.
 
-The owner reviews account, folders, history, attachments and provider data use,
-then confirms a native permission dialog. Only the per-pod agent requests grants;
-only the human owner approves them. Already-approved reusable grants are handled
-without an invalid second approval. A replacement revokes old resources, advances
-the permission epoch, pauses the pod and cancels affected work. Shared connections
-remain separate; disconnect invalidates every assignment that uses them. Existing
-pod keys survive interrupted provisioning. Interrupted sign-ins become failed
-on restart; a retry creates a separate isolated connection. Startup inspects old
-authentication and tool domains before clearing abandoned plaintext cache files.
-
-Verification covers 82 unit/component and 78 native/Electron cases, including the
-actual auth-only Codex process, local and packaged setup, exact history/attachment
-boundaries, owner-token signature checks, cancelled/retried sign-in, wrong account,
-offline/expired login, locked store and wrong architecture. The UI was inspected
-at desktop and 560px dark sizes. Native startup checks exposed an async readiness
-race in two older tests; explicit status polling now covers the longer startup.
-No actual browser sign-in, tenant, grant provisioning or model inference was used.
-Physical sleep/wake, real authentication/refresh/provider compatibility, signed
-release and clean-machine acceptance remain external gates. Pod deletion and
-reachability cleanup are completed with M12 backup/retention, so this milestone
-record does not claim those operations yet.
+Resource replacement advances the permission epoch, pauses the Pod and cancels
+affected work. Shared connections remain separate; disconnect invalidates every
+assignment that uses them. Existing Pod keys survive interrupted provisioning.
+Interrupted sign-ins become failed on restart; retry creates a separate isolated
+connection. Startup inspects old authentication and tool domains before clearing
+abandoned plaintext cache files. Current verification and the separate live
+provider/release gates are recorded in the migration contract.
 
 Pinned auth/provider source contract:
 https://github.com/openai/codex/tree/rust-v0.153.4/codex-rs/login and
@@ -814,4 +718,4 @@ The reviewed `examples/microsoft-mail.mjs` companion requires `PODS_MAIL_POLICY`
 
 Local Codex can initialize a missing native Jev connection using resources command `{type:"importJev",podId,epoch}` with outer `revision` and `path` to an existing private owner key file. Key values never enter the MCP request, journal or response; no Pod permission is assigned implicitly. Existing connections must be replaced through the protected App settings form. Once connected, use the existing `assignJev` permission flow.
 
-Replacing the assigned companion expires its prior pending archive batches locally. Their old links cannot authorize the replacement program. Fresh proposals remain manual expiring one-time approvals; do not approve a grant merely to verify setup.
+Changing assigned program or script content invalidates earlier exact-call authority. Historical archive batches remain inert. New archive proposals use the external protected command and IdP single-use policy; do not approve a grant merely to verify setup.

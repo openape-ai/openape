@@ -1,3 +1,4 @@
+import { machineRuntime } from './fixtures/machine'
 import { createHash, randomUUID } from 'node:crypto'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
@@ -59,12 +60,12 @@ export async function run(context) {
 }`)
     const input: RunInput = { version: 1, runId: randomUUID(), podId, scriptHash: createHash('sha256').update(await readFile(artifact)).digest('hex'), assignmentRevision: 1, reason: 'manual', eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: 0, workspace: context.workspace, references: [], limits: { timeMs: 15000, frameBytes: 256 * 1024 } }
     const operations: string[] = []
-    const result = await executeScript({ helper: resolve('dist/native/pods-helper'), executable, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [dirname(dirname(executable))], environment: { ...context.environment, ELECTRON_RUN_AS_NODE: '1' }, home: context.home, shell: { cli: runtime.cli, environment } }, directory, artifact, input, new AbortController().signal, { event: () => {}, request: async (operation) => { operations.push(operation); return { revision: 1 } } })
+    const result = await executeScript({ ...await machineRuntime(), helper: resolve('dist/native/pods-helper'), executable, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [dirname(dirname(executable))], environment: { ...context.environment, ELECTRON_RUN_AS_NODE: '1' }, home: context.home }, directory, artifact, input, new AbortController().signal, { execution: { authorized: async () => {} }, event: () => {}, request: async (operation) => { operations.push(operation); return { revision: 1 } } })
     expect(result.status).toBe('completed')
     expect(JSON.parse(result.summary)).toEqual({ message: 'hello from terminal', home: context.home, cwd: context.workspace, shell: context.environment.SHELL })
     expect(await readFile(join(context.workspace, 'reply.txt'), 'utf8')).toBe('hello from script')
     expect(operations).toEqual(['progress.commit'])
-    expect(requests.filter(url => url.startsWith('/api/grants?')).length).toBeGreaterThanOrEqual(2)
+    expect(requests.filter(url => url.startsWith('/api/grants?')).length).toBeGreaterThanOrEqual(1)
   }
   finally { await new Promise<void>(resolve => server.close(() => resolve())); await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }
 })

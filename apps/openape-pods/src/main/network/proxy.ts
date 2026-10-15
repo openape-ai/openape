@@ -10,7 +10,7 @@ async function dialPublicHost(host: string): Promise<Socket> {
   return connect({ host: addresses[0].address, port: 443 })
 }
 
-export async function startMailProxy(signal: AbortSignal, dial: (host: string) => Socket | Promise<Socket> = dialPublicHost, hosts: string[] = ['graph.microsoft.com', 'login.microsoftonline.com']) {
+export async function startNetworkProxy(signal: AbortSignal, hosts: string[], dial: (host: string) => Socket | Promise<Socket> = dialPublicHost) {
   signal.throwIfAborted()
   const allowed = parseNetworkHosts(hosts)
   const secret = randomBytes(32).toString('hex')
@@ -40,6 +40,6 @@ export async function startMailProxy(signal: AbortSignal, dial: (host: string) =
   await new Promise<void>((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve) })
   signal.addEventListener('abort', stop, { once: true })
   const address = server.address()
-  if (!address || typeof address === 'string') throw new Error('Mail network broker did not bind')
+  if (!address || typeof address === 'string') throw new Error('Network broker did not bind')
   return { port: address.port, environment: { HTTPS_PROXY: `http://pods:${secret}@127.0.0.1:${address.port}`, HTTP_PROXY: '', NO_PROXY: '' }, close: async () => { signal.removeEventListener('abort', stop); stop(); server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())) } }
 }

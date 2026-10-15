@@ -1,7 +1,7 @@
 <script setup>
+import { requiresSingleUse, formatWidenedPreview, getCliAuthorizationDetails  } from '../utils/cli-grants'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { navigateTo, useIdpAuth, useRoute } from '#imports'
-import { formatWidenedPreview, getCliAuthorizationDetails } from '../utils/cli-grants'
 import { buildRuleProposals, ruleTemplatePreview, suggestAllowPattern } from '../utils/rule-suggestions'
 import { callerState, formatCountdown, formatWaited } from '../utils/caller-liveness'
 import GrantBatchDecision from '../components/GrantBatchDecision.vue'
@@ -20,12 +20,12 @@ const grantId = computed(() => route.query.grant_id)
 const batchQuery = computed(() => typeof route.query.batch === 'string' && typeof route.query.requester === 'string' && !route.query.grant_id ? { requester: route.query.requester, batchId: route.query.batch } : null)
 const callbackUrl = computed(() => route.query.callback)
 const isDelegate = computed(() => grant.value?.request?.permissions?.includes('delegate'))
-const hasSimilarGrants = computed(() => grant.value?.similar_grants?.similar_grants?.length > 0)
+const hasSimilarGrants = computed(() => !requiresSingleUse(grant.value) && grant.value?.similar_grants?.similar_grants?.length > 0)
 const similarGrants = computed(() => grant.value?.similar_grants?.similar_grants ?? [])
 const widenedPreview = computed(() => formatWidenedPreview(grant.value?.similar_grants?.widened_details ?? []))
 const mergedPreview = computed(() => formatWidenedPreview(grant.value?.similar_grants?.merged_details ?? []))
 const wideningSuggestions = computed(() => grant.value?.widening_suggestions ?? [])
-const hasWideningSuggestions = computed(() => wideningSuggestions.value.length > 0)
+const hasWideningSuggestions = computed(() => !requiresSingleUse(grant.value) && wideningSuggestions.value.length > 0)
 // One selected scope index per detail; defaults to 0 (exact) for conservative behavior.
 const selectedWideningByIndex = ref({})
 const EXTEND_MODE_OPTIONS = [
@@ -164,6 +164,7 @@ const asRequestedOption = computed(() => {
   return { label: 'As requested', value: 'as_requested', description: desc }
 })
 const grantTypeOptions = computed(() => {
+  if (requiresSingleUse(grant.value)) return [{ label: 'Once', value: 'once', description: 'This operation requires one exact approval' }]
   const base = [
     { label: 'Once', value: 'once', description: 'Single use only' },
     { label: 'Timed', value: 'timed', description: 'Time-limited' },
@@ -447,12 +448,12 @@ async function handleDeny() {
             >
               {{ german ? 'Nur dieses Mal' : 'Just this once' }}
             </UButton>
-            <UButton color="success" variant="outline" class="flex-1" @click="toggleAlwaysPanel">
+            <UButton v-if="!requiresSingleUse(grant)" color="success" variant="outline" class="flex-1" @click="toggleAlwaysPanel">
               {{ german ? 'Immer erlauben' : 'Always allow' }}
             </UButton>
           </div>
 
-          <div v-if="alwaysOpen" class="rounded border border-success/30 bg-success/5 px-3 py-2 space-y-2">
+          <div v-if="alwaysOpen && !requiresSingleUse(grant)" class="rounded border border-success/30 bg-success/5 px-3 py-2 space-y-2">
             <p class="text-xs text-muted">
               Make a rule so future requests like this auto-approve. This request itself runs once.
             </p>

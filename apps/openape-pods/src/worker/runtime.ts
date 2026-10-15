@@ -1,3 +1,6 @@
+import { ExecutionIdentityBridge } from './runtime/execution-identity'
+import { recordProgramExecution } from './runs/program-execution'
+import type { ProgramExecutionCheck } from '../contracts/program-execution'
 import { occupiedRunSlots } from './runs/slots'
 import { assertDataIdle } from './data/backup'
 import { automaticBackupDue, runAutomaticBackup } from './data/automatic-backup'
@@ -15,19 +18,15 @@ import { CentralProjection } from './central/projection'
 import { boundedStep } from './scheduling/tick-step'
 import { parseOwner } from '@openape/pods-protocol'
 import { commandPodIds, parseCentralCommand } from '../contracts/central'
-import { parseApprovalManifest } from '../contracts/approvals'
 import type { AdministrationJournal } from '../contracts/codex-admin'
 import { DesktopRegistration } from './remote/registration'
 import type { RemoteInternal } from './remote/registration'
 import type { RunContextRequest, ServiceCheck  } from '../contracts/services'
-import { parseProgramEffect } from '../contracts/services'
 import { recoverPortableImports } from './sharing/import'
 import { SharingService } from './sharing/service'
 import { parseSharingCommand } from '../contracts/sharing'
 import { DependencyStore } from './dependencies/store'
 import { programRequest } from '../main/programs/invoke'
-import { parseApprovedInvocation } from '../contracts/programs'
-import { archiveRefusal } from '../contracts/mail-archive-port'
 import { podDirectories } from '../runtime/environment'
 import { ProgramControl } from './resources/programs'
 import type { ProgramInternal } from './resources/programs'
@@ -52,12 +51,8 @@ import { CodexControl } from './codex/control'
 import { parseCodexRequest } from '../contracts/codex'
 import type { AgentRuntime } from './agent/executor'
 import { endpointModel } from './agent/model'
-import { authorizeRunService, authorizeCredentialService, assertMailHistory } from './mail/authorization'
-import { MailBridge } from './mail/bridge'
-import { assignedMail } from '../main/mail/assigned'
-import { parseMailRequest } from '../main/mail/contract'
-import { ingestMailPage } from './mail/ingestion'
-import type { MailArtifact } from '../main/mail/service'
+import { authorizeRunService, authorizeCredentialService } from './runtime/service-authorization'
+import { ServiceBridge } from './runtime/service-bridge'
 import { parseDetailsCommand } from '../contracts/details'
 import { WorkspaceDetails } from './workspace/details'
 import { Recovery } from './recovery/reconcile'
@@ -78,7 +73,8 @@ import { openedStore } from './storage/readiness'
 const port = process.parentPort
 if (!port) throw new Error('Pods worker requires its owning Electron process')
 const store = openedStore()
-const mailBridge = new MailBridge(value => port.postMessage(value))
+const executionIdentities = new ExecutionIdentityBridge(value => port.postMessage(value))
+const serviceBridge = new ServiceBridge(value => port.postMessage(value))
 let dispatcher: RunDispatcher
 store.onActivated = podId => port.postMessage({ programCancel: podId })
 const registry = new ResourceRegistry(store, (podId) => { dispatcher.cancelPod(podId, 'Resource permissions changed', 'authority'); port.postMessage({ programCancel: podId }) })
@@ -86,6 +82,7 @@ const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
 const executable = process.env.PODS_RUNTIME_EXECUTABLE
 if (!executable) throw new Error('Trusted runtime executable is missing')
 const runtime: AgentRuntime = {
+  prepareExecution: (podId, purpose, signal) => executionIdentities.acquire(podId, purpose, signal),
   helper: join(dist, 'native/pods-helper'),
   executable,
   entry: join(dist, 'runtime/script-entry.mjs'),
@@ -97,58 +94,38 @@ const runtime: AgentRuntime = {
   sdkHost: join(dist, 'runtime/sdk-host.mjs'),
 }
 const runServices: RunServices = {
-  approval: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'approval'),
-  mailArchive: async (body, signal, scope) => mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'mailArchive'),
   shell: async (scope, signal) => {
     const { podId, runId, epoch, assignmentRevision, capabilities } = scope
-    return await mailBridge.execute({ podId, runId, epoch, assignmentRevision, capabilities }, {}, signal, 'shell') as Awaited<ReturnType<NonNullable<RunServices['shell']>>>
+    return await serviceBridge.execute({ podId, runId, epoch, assignmentRevision, capabilities }, {}, signal, 'shell') as Awaited<ReturnType<NonNullable<RunServices['shell']>>>
   },
   closeShell: async (scope) => {
     const { podId, runId, epoch, assignmentRevision, capabilities } = scope
-    await mailBridge.execute({ podId, runId, epoch, assignmentRevision, capabilities }, {}, AbortSignal.timeout(10000), 'shellClose')
+    await serviceBridge.execute({ podId, runId, epoch, assignmentRevision, capabilities }, {}, AbortSignal.timeout(10000), 'shellClose')
   },
-  jev: async (body, signal, scope) => await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'jev') as JevEvaluation,
-  http: async (body, signal, scope, summary) => parseHttpReply(await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'http', summary)),
+  jev: async (body, signal, scope) => await serviceBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'jev') as JevEvaluation,
+  http: async (body, signal, scope, summary) => parseHttpReply(await serviceBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'http', summary)),
   credential: async (alias, signal, scope) => {
-    const value = await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, { alias }, signal, 'credential')
+    const value = await serviceBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, { alias }, signal, 'credential')
     if (typeof value !== 'string') throw new Error('Invalid credential broker response')
     return value
-  },
-  mailMove: async (body, signal, scope) => {
-    try { programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, body); signal.throwIfAborted() }
-    catch (error) { throw archiveRefusal(error) }
-    return mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'mailMove')
-  },
-  approvedProgram: async (body, signal, scope) => {
-    programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, { application: body.application, argv: body.argv })
-    return mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'approvedProgram')
-  },
-  programEffect: async (body, signal, scope, summary) => {
-    programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, body)
-    return parseProgramEffect(await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, 'programAuthorize', summary))
   },
   tool: async (body, signal, scope, summary) => {
     if (body && typeof body === 'object' && 'sshInventory' in body) {
       assignedSsh(registry.list(scope.podId), scope.podId, scope.capabilities, body)
-      return mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, undefined, summary)
+      return serviceBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, undefined, summary)
     }
     if (body && typeof body === 'object' && ('applicationId' in body || 'application' in body)) {
       programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, body)
-      return mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, undefined, summary)
+      return serviceBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, undefined, summary)
     }
-    const assignment = assignedMail(registry.list(scope.podId))
-    const { read } = parseMailRequest(body, assignment.mail)
-    assertMailHistory(store, scope.podId, assignment.mail, read)
-    const value = await mailBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, undefined, summary)
-    if (!value || typeof value !== 'object' || typeof (value as MailArtifact).path !== 'string' || typeof (value as MailArtifact).hash !== 'string') throw new Error('Invalid mail broker artifact')
-    return ingestMailPage(store, scope.podId, scope.root, value as MailArtifact, assignment.mail, read, scope.assertCurrent)
+    throw new Error('Unsupported tool request; use an assigned application through ape-shell')
   },
 }
 dispatcher = new RunDispatcher(store, registry, runtime, runServices)
 const data = new DataControl(store, runtime.helper)
 const setup = new SetupControl(store, registry)
 const details = new WorkspaceDetails(store, registry)
-const scheduler = new Scheduler(store, dispatcher, Date.now, false, podId => !dispatcher.approvals.due(podId) && !dispatcher.work.pending(podId))
+const scheduler = new Scheduler(store, dispatcher, Date.now, false, podId => !dispatcher.work.pending(podId))
 const fixturePort = process.env.PODS_FIXTURE_MODEL_PORT
 const fixtureServices = fixturePort ? { provider: async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${fixturePort}/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }), model: endpointModel(`http://127.0.0.1:${fixturePort}/model`) } : undefined
 runServices.provider = fixtureServices?.provider; runServices.model = fixtureServices?.model
@@ -166,7 +143,6 @@ function registeredOwner() {
   if (!row) throw new Error('This needs an initialized owner identity')
   return parseOwner((JSON.parse(row.body as string) as { owner: unknown }).owner)
 }
-if (process.env.PODS_FIXTURE_GATE_COLLECT === '0') dispatcher.approvals.collect = { quietMs: 0, maxMs: 0 }
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 let centralUntil = process.env.PODS_CENTRAL_ENABLED === '1' ? 0 : Infinity
 let scanAt = 0
@@ -245,8 +221,9 @@ const timer = setInterval(() => {
   })().finally(() => { ticking = null; lastTickAt = Date.now(); tickPhase = '' })
 }, 1000)
 port.on('message', async (event) => {
-  if (event.data && typeof event.data === 'object' && 'serviceReply' in event.data) { mailBridge.accept(event.data.serviceReply); return }
-  if (event.data && typeof event.data === 'object' && 'serviceParked' in event.data) { const { id, parked } = event.data.serviceParked as { id: string, parked: boolean }; mailBridge.park(id, parked === true); return }
+  if (event.data && typeof event.data === 'object' && 'executionIdentityReply' in event.data) { executionIdentities.accept(event.data.executionIdentityReply); return }
+  if (event.data && typeof event.data === 'object' && 'serviceReply' in event.data) { serviceBridge.accept(event.data.serviceReply); return }
+  if (event.data && typeof event.data === 'object' && 'serviceParked' in event.data) { const { id, parked } = event.data.serviceParked as { id: string, parked: boolean }; serviceBridge.park(id, parked === true); return }
   if (event.data === 'suspend') { suspended = true; return }
   if (event.data === 'resume') { suspended = false; scanAt = 0; return }
   if (event.data === 'stop') { scriptController.abort(); suspended = true; clearInterval(timer); await ticking; await Promise.allSettled(preparing ? [preparing] : []); await master.stop(); await dispatcher.stop(); store.close(); process.exit(0) }
@@ -409,17 +386,10 @@ port.on('message', async (event) => {
       dispatcher.approvals.released(release.keys as string[])
       port.postMessage({ id: request.id, state: true }); return
     }
-    if (request.command && typeof request.command === 'object' && 'approvalCheck' in request.command) {
-      const check = request.command.approvalCheck as ServiceCheck & { manifest: unknown, operation: string, grants?: { key: string, id: string }[] }
+    if (request.command && typeof request.command === 'object' && 'programExecution' in request.command) {
+      const check = request.command.programExecution as ProgramExecutionCheck
       authorizeRunService(store, registry, dispatcher.runs, check)
-      dispatcher.approvals.authorize(check.scope.podId, parseApprovalManifest(check.manifest), check.operation, check.grants)
-      port.postMessage({ id: request.id, state: true }); return
-    }
-    if (request.command && typeof request.command === 'object' && 'approvalExecution' in request.command) {
-      const check = request.command.approvalExecution as ServiceCheck & { invocation: unknown }
-      authorizeRunService(store, registry, dispatcher.runs, check)
-      const invocation = parseApprovedInvocation(check.invocation)
-      dispatcher.approvals.assertExecution(check.scope, invocation.approval, { application: invocation.application, argv: invocation.argv })
+      recordProgramExecution(store, dispatcher.runs, check)
       port.postMessage({ id: request.id, state: true }); return
     }
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {

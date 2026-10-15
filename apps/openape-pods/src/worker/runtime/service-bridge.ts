@@ -6,16 +6,16 @@ import type { ScriptSummary } from '../../contracts/grant-summary'
 // A service call that does not answer within this time is cancelled; a wait for an IdP decision is exempt.
 const serviceTimeoutMs = 16 * 60 * 1000
 
-export class MailBridge {
+export class ServiceBridge {
   private pending = new Map<string, { resolve: (value: unknown) => void, reject: (error: Error) => void }>()
   private timers = new Map<string, ReturnType<typeof setTimeout>>()
   private parked = new Set<string>()
   constructor(private readonly send: (value: unknown) => void) {}
   accept(value: unknown): void {
-    if (!value || typeof value !== 'object') throw new Error('Invalid mail broker reply')
+    if (!value || typeof value !== 'object') throw new Error('Invalid service broker reply')
     const reply = value as { id?: string, error?: string, value?: unknown, infrastructure?: unknown, authority?: boolean, nonRetryable?: boolean }
     const pending = reply.id ? this.pending.get(reply.id) : undefined
-    if (!pending || !reply.id) throw new Error('Unexpected mail broker reply')
+    if (!pending || !reply.id) throw new Error('Unexpected service broker reply')
     this.pending.delete(reply.id)
     if (reply.error) pending.reject(reply.authority === true ? new AuthorityError(reply.error) : reply.infrastructure ? new InfrastructureError(infrastructureFailure(reply.infrastructure)) : reply.nonRetryable === true ? new NonRetryableError(reply.error) : new Error(reply.error))
     else pending.resolve(reply.value)
@@ -44,7 +44,7 @@ export class MailBridge {
 
   async execute(scope: ServiceScope, body: unknown, signal: AbortSignal, kind?: ServiceKind, summary?: ScriptSummary): Promise<unknown> {
     signal.throwIfAborted()
-    if (this.queued() >= 16) throw new Error('Mail broker queue is full')
+    if (this.queued() >= 16) throw new Error('Service broker queue is full')
     const id = randomUUID()
     const cancel = () => this.send({ serviceCancel: id })
     signal.addEventListener('abort', cancel, { once: true })
