@@ -1,5 +1,12 @@
 # Active work
 
+## CI instruction reconciliation — issue 1483
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1483; the native implementation PR is linked there. Branch `bugfix/issue-1483-knowledge-ci-guidance`, checkout `openape-monorepo.worktrees/knowledge-ci-1483`, base `7d0caa8b67a939284d008761efe977dc76fbe288`.
+- Reconcile AGENTS.md with the October 7 owner decision: keep the local affected gate, require a new owner decision to reactivate CI/protection, and distinguish recorded configuration from actual merge requirements. No product, workflow or protection changes.
+- Verification: instruction diff reviewed against issue 1448 / PR 296; `git diff --check` passes; affected unit dry-run selects zero workspaces and steps for these documentation changes. The isolated checkout has no dependencies or CLI-auth build; the shared checkout doctor passed. The pre-push gate will record the final source result on the PR.
+- Next: native PR review and merge after the local gate; record the merge receipt on the PR and close the issue manually. A separate hosted report is disproportionate for this documentation-only correction.
+
 
 ## Parallel UI verification proposal — issue 1481
 
