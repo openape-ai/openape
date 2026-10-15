@@ -182,7 +182,7 @@ onUnmounted(() => {
 :root { color-scheme: light dark; --bg: #f6f4ee; --card: #fff; --text: #1d2420; --muted: #5d6762; --accent: #1c4534; --line: #dcd8cc; --warn: #8a3b12; --warn-bg: #fbeee4; }
 @media (prefers-color-scheme: dark) { :root { --bg: #111613; --card: #1b221e; --text: #edf0ec; --muted: #a2aca6; --accent: #8fd1ae; --line: #2e3833; --warn: #f0a37a; --warn-bg: #2b1d15; } }
 html, body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.4 system-ui, sans-serif; font: -apple-system-body; -webkit-text-size-adjust: 100%; }
-.inbox { min-height: 100dvh; box-sizing: border-box; padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) calc(84px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); max-width: 640px; margin: 0 auto; overflow-wrap: anywhere; }
+.inbox { min-height: 100dvh; box-sizing: border-box; padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) calc(6em + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); max-width: 640px; margin: 0 auto; overflow-wrap: anywhere; }
 .inbox h1 { font-size: 1.5em; margin: 8px 0 4px; }
 .inbox h2 { font-size: 1.05em; margin: 20px 0 6px; color: var(--muted); }
 .inbox button, .inbox input, .inbox textarea, .inbox select { font: inherit; min-height: 44px; border-radius: 10px; box-sizing: border-box; }
@@ -202,7 +202,7 @@ html, body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.
 .inbox-note { background: var(--warn-bg); border-radius: 10px; padding: 10px 12px; }
 .inbox-done { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
 .inbox-banner { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; margin: 4px 0 8px; }
-.inbox-banner.floating { position: fixed; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); bottom: calc(72px + env(safe-area-inset-bottom)); max-width: 616px; margin: 0 auto; z-index: 3; box-shadow: 0 2px 12px rgb(0 0 0 / 20%); }
+.inbox-banner.floating { position: fixed; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); bottom: calc(6em + env(safe-area-inset-bottom)); max-width: 616px; margin: 0 auto; z-index: 3; box-shadow: 0 2px 12px rgb(0 0 0 / 20%); }
 .inbox-banner.warn { background: var(--warn-bg); border-color: var(--warn); }
 .inbox-banner small { flex-basis: 100%; color: var(--muted); }
 .inbox-status { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); min-height: 44px; }
@@ -211,6 +211,7 @@ html, body { margin: 0; background: var(--bg); color: var(--text); font: 17px/1.
 .inbox-card small { color: var(--muted); }
 .inbox-tabs { position: fixed; left: 0; right: 0; bottom: 0; display: flex; background: var(--card); border-top: 1px solid var(--line); padding: 4px max(8px, env(safe-area-inset-right)) max(4px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); z-index: 2; }
 .inbox-tabs a { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px 6px; min-height: 52px; padding: 4px; color: var(--muted); text-decoration: none; text-align: center; border-radius: 10px; font-size: .8em; overflow-wrap: normal; hyphens: auto; }
+.inbox-tabs a > span:first-child { max-width: 100%; overflow-wrap: anywhere; }
 .inbox-tabs a[aria-current] { color: var(--accent); font-weight: 600; background: var(--bg); }
 .inbox-tabs .count { min-width: 1.4em; padding: 0 .35em; border-radius: 1em; background: var(--accent); color: var(--bg); font-size: .8em; font-weight: 700; line-height: 1.4em; }
 /* Scrolled content must not show through the transparent iOS status bar of the installed app. */
