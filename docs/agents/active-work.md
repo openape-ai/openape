@@ -1,5 +1,12 @@
 # Active work
 
+## Retire legacy runtime — issue 1498
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1498. Branch `feature/issue-1498-retire-legacy-runtime`.
+- Owner-authorized shutdown of Troop, CRM and Chat, retaining application data and legacy source/history.
+- Disable old Troop producers and operator support jobs; remove the three Compose services, live containers, routes and associated monitors.
+- Verify database preservation/integrity and unrelated runtime identities. Exact runtime, provider webhook and merge receipts belong on the issue/PR and Test Run.
+
 ## Mail choices and decision notifications — issue 1495
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1495. Branch `bugfix/issue-1495-decision-push`, checkout `openape-monorepo.worktrees/mail-processing-1492`, base `cac6db13`.
