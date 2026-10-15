@@ -87,16 +87,18 @@ pnpm --filter @openape/pods lint
 pnpm --filter @openape/pods typecheck
 pnpm --filter @openape/pods build
 pnpm --filter @openape/pods test
-pnpm --filter @openape/pods package:mac
+pnpm --filter @openape/pods test:layout
 pnpm --filter @openape/pods test:e2e
 pnpm --filter @openape/pods report
 ```
 
 `dev` builds once and opens Electron with bundled renderer assets; restart it after changing source. No HTTP development server or remote content is exposed. `package:mac` creates the unsigned arm64 development bundle at `release/mac-arm64/OpenApe Pods Fixture.app`. It runs with its own Node runtime and does not require system Node. M12 also supplies explicit signed-candidate/release pipelines and an unsigned DMG; release acceptance remains pending.
 
-`test:e2e` requires macOS and an already built app/bundle. `test:packaged` selects packaged acceptance; `test:boundaries` selects the Electron renderer/IPC boundary checks. The native cases exercise the owner-accepted custom SBPL boundary; this is not an Apple-supported isolation guarantee. `test:layout` builds/packages, runs the complete Electron suite and then the browser-mode geometry suite (`test:browser`, `test/layout/`). It is registered in the shared `layout` contract, which runs on the macOS CI runner and locally as part of `check:ci`. No skipped Electron suite is presented as a passing release gate. `test:fast` runs the unit, component and browser-mode suites without building or launching Electron. Which level proves what is described in [testing](docs/testing.md).
+`test:layout` runs only the real-browser UI suite (`test:browser`, `test/layout/`) with production CSS. It needs installed Chrome, with no Electron build or packaging. `test:fast` runs the unit/component and browser suites without Electron. Select focused browser cases during UI iteration; the [test selection table](docs/testing.md#choose-the-check-for-the-change) defines additional checks by changed behavior.
 
-`report` creates a self-contained HTML evidence file with embedded screenshots at `.artifacts/foundation-report.html` after `test:layout` (Electron and browser-mode suites) and `handbook:capture`. Raw results stay in `.artifacts/electron-tests.json`.
+`test:e2e` explicitly builds, packages and runs native acceptance on an unlocked Mac. It is registered in the manual shared `e2e` contract; `test:layout` is registered in the separate manual `layout` contract. Automatic/pre-push unit policy is unchanged. `test:packaged` and `test:boundaries` select subsets from already built/package artifacts. Native cases exercise the owner-accepted custom SBPL boundary; this is not an Apple-supported isolation guarantee.
+
+`report` creates a self-contained HTML evidence file with embedded screenshots at `.artifacts/foundation-report.html` after explicit `test:e2e`, `test:layout` and `handbook:capture`. Raw native results stay in `.artifacts/electron-tests.json`. For new evidence use the installed `ape-report-render test-run` and `ape-reports` workflow.
 
 ## Fixture state and lifecycle
 

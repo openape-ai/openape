@@ -4,8 +4,8 @@ import { defineConfig } from 'vitest/config'
 
 // Geometry tests: happy-dom computes no boxes and evaluates no media queries.
 // Pods ships its own CSS (no Tailwind), so a mounted component here carries the
-// same stylesheet the packaged app loads. Runs inside `test:layout`, which the
-// layout suite already executes on the mac runner with Google Chrome installed.
+// same stylesheet the packaged app loads. Installed Chrome is required;
+// Electron and a packaged application are not.
 export default defineConfig({
   plugins: [vue()],
   test: {

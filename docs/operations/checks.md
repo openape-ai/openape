@@ -17,6 +17,12 @@
   require an unlocked Mac; they must never start implicitly on push or merge.
 - `--dry-run` prints resolved SHAs, dirty state, workspace selection and commands.
 
+For Pods, the manual `layout` suite calls browser-only `test:layout`; it does
+not build, package or launch Electron. The manual `e2e` suite calls Pods'
+self-contained `test:e2e`, which builds and packages before native acceptance.
+For everyday UI edits use the [Pods test selection table](../../apps/openape-pods/docs/testing.md#choose-the-check-for-the-change)
+and select the relevant browser cases. Unit/pre-push policy remains unchanged.
+
 The runner preserves its own Git hook context when selecting revisions, but removes
 Git-local repository and command-config environment variables from child steps.
 This includes the direct tooling step before Turbo: synthetic Git repositories
