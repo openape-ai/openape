@@ -1,27 +1,27 @@
+import ui from '@nuxt/ui/vite'
 import vue from '@vitejs/plugin-vue'
 import { playwright } from '@vitest/browser-playwright'
 import { defineConfig } from 'vitest/config'
+import appConfig from './app/app.config.ts'
 
-// Layout tests: a real browser at a real viewport, because that is the only
-// place CSS actually exists. happy-dom computes no boxes, so the node suite
-// cannot see a screenshot frame push the report page off the screen.
-//
-// The public report page is the one place in this app whose geometry is its
-// own CSS rather than Tailwind utilities: the screenshot frame and the markdown
-// blocks. A browser mount brings exactly those styles along, which is why they
-// are worth measuring here and the Tailwind-only chrome around them is not.
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [vue(), ui({ ui: appConfig.ui, autoImport: false, components: false, colorMode: false, dts: false })],
   test: {
     include: ['tests/layout/**/*.test.ts'],
     setupFiles: ['tests/layout/setup.ts'],
     browser: {
       enabled: true,
-      // Drive the installed Google Chrome instead of a downloaded build: no
-      // browser binary to ship, and it is the engine the app runs in anyway.
+      api: { port: 5483, strictPort: true },
+      fileParallelism: false,
       provider: playwright({
         launchOptions: { executablePath: process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
+        contextOptions: { viewport: { width: 1440, height: 1000 } },
       }),
+      commands: {
+        async setColorScheme({ page }, colorScheme: 'light' | 'dark') {
+          await page.emulateMedia({ colorScheme })
+        },
+      },
       headless: true,
       instances: [{ browser: 'chromium', viewport: { width: 390, height: 844 } }],
     },

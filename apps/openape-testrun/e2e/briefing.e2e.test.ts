@@ -110,7 +110,7 @@ describe('private briefing publication and viewing', () => {
     expect((await call('POST', '/api/reports', sampleBriefing(series.id, '2026-09-29'), agentToken, { 'idempotency-key': 'revoked' })).status).toBe(401)
     expect((await call('GET', `/api/report-series/${series.id}/editions/2026-09-27/publication`, undefined, agentToken)).status).toBe(401)
   })
-  it('renders real authenticated desktop, mobile and dark editions on both login origins', async () => {
+  it('retains authenticated edition routing and CSRF denial on both login origins', async () => {
     browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true })
     const artifacts = resolve(appRoot, '.artifacts/reports'); mkdirSync(artifacts, { recursive: true })
     for (const origin of [base, alias]) {
@@ -133,26 +133,18 @@ describe('private briefing publication and viewing', () => {
       const mutation = await fetch(`${origin}/api/report-series`, { method: 'POST', body: JSON.stringify({ name: 'Cross origin' }), headers: { cookie, 'content-type': 'application/json', origin: 'https://evil.example' } })
       expect(mutation.status, await mutation.text()).toBe(403)
       if (origin === base) {
-        for (const width of [1440, 390]) {
-          await page.setViewportSize({ width, height: width === 390 ? 844 : 1000 })
-          for (const theme of ['light', 'dark']) {
-            await page.getByLabel('Darstellung', { exact: true }).selectOption(theme)
-            await expect.poll(() => page.locator('.briefing').getAttribute('data-theme')).toBe(theme)
-            expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-            await page.screenshot({ path: `${artifacts}/${width}-${theme}.png`, fullPage: true })
-          }
-        }
         await expect.poll(() => page.getByLabel('Frühere Ausgaben').inputValue()).toBe('1')
         await page.getByLabel('Frühere Ausgaben').selectOption('2')
         await page.waitForURL('**?v=2')
         await page.getByText('Ausgabe 2', { exact: true }).waitFor()
       }
+      await page.screenshot({ path: `${artifacts}/${origin === base ? 'canonical' : 'alias'}-authenticated.png`, fullPage: true })
       expect(errors).toEqual([])
       await context.close()
     }
-    const screenshots = [1440, 390].flatMap(width => ['light', 'dark'].map(theme => ({ title: `${width}px · ${theme}`, shot: `${width}-${theme}.png` })))
-    writeFileSync(`${artifacts}/testrun.json`, JSON.stringify({ title: 'OpenApe Reports — private briefing acceptance', project: 'OpenApe Reports', tests: [{ id: 'briefing', title: 'Real DDISA login, owner privacy, editions and responsive reading', status: 'passed', steps: screenshots }] }, null, 2))
-    writeFileSync(`${artifacts}/report.html`, `<!doctype html><html lang="en"><meta charset="utf-8"><title>OpenApe Reports verification</title><style>body{font:16px/1.6 system-ui;max-width:1100px;margin:auto;padding:30px;background:#f7f6f1;color:#213c36}img{max-width:100%;border:1px solid #ddd}section{margin:40px 0}strong{color:#326354}</style><h1>OpenApe Reports</h1><p><strong>Passed:</strong> actual DDISA callback on canonical and alias origins; owner-only viewing; immutable editions; mobile, desktop and light/dark rendering. Synthetic data only.</p>${screenshots.map(shot => `<section><h2>${shot.title}</h2><img alt="${shot.title}" src="data:image/png;base64,${readFileSync(`${artifacts}/${shot.shot}`).toString('base64')}"></section>`).join('')}</html>`)
+    const screenshots = ['canonical', 'alias'].map(origin => ({ title: `${origin} authenticated route`, shot: `${origin}-authenticated.png` }))
+    writeFileSync(`${artifacts}/testrun.json`, JSON.stringify({ title: 'OpenApe Reports — private briefing acceptance', project: 'OpenApe Reports', tests: [{ id: 'briefing', title: 'Real DDISA login, owner privacy and edition routing', status: 'passed', steps: screenshots }] }, null, 2))
+    writeFileSync(`${artifacts}/report.html`, `<!doctype html><html lang="en"><meta charset="utf-8"><title>OpenApe Reports verification</title><style>body{font:16px/1.6 system-ui;max-width:1100px;margin:auto;padding:30px;background:#f7f6f1;color:#213c36}img{max-width:100%;border:1px solid #ddd}section{margin:40px 0}strong{color:#326354}</style><h1>OpenApe Reports</h1><p><strong>Passed:</strong> actual DDISA callback on canonical and alias origins; owner-only viewing; immutable editions and route navigation. Synthetic data only.</p>${screenshots.map(shot => `<section><h2>${shot.title}</h2><img alt="${shot.title}" src="data:image/png;base64,${readFileSync(`${artifacts}/${shot.shot}`).toString('base64')}"></section>`).join('')}</html>`)
   }, 180000)
 })
 
