@@ -26,6 +26,9 @@ describe('shared check contract', () => {
       const manual = preview('--suite', suite)
       assert.deepEqual(manual.suites, [suite])
       assert.ok(manual.steps.some(step => step.name.startsWith(`${suite}-`)))
+      const pods = manual.steps.find(step => step.name === `${suite}--openape-pods`)
+      assert.ok(pods, `Pods acceptance must remain reachable in the explicit ${suite} suite`)
+      assert.deepEqual(pods.args, ['--filter', '@openape/pods', `test:${suite}`])
     }
   })
   it('checks transitive consumers of a changed shared package', () => {

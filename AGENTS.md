@@ -42,6 +42,12 @@ supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
   `pnpm check:affected --base origin/main --head HEAD --suite unit`; automatic
   CI also runs only the unit suite. Run a workspace's E2E or layout suite
   locally only while working on it (Pods: `test:fast` without Electron).
+- For Pods UI iteration, follow [the test selection table](apps/openape-pods/docs/testing.md#choose-the-check-for-the-change):
+  run focused browser tests with real CSS for presentation and interactions;
+  add affected controller/adapter/backend tests when behavior or contracts change.
+  `test:layout` is browser-only. Reserve explicit `test:e2e` for real native or
+  packaged boundaries; do not repeat every UI scenario in Electron or per host.
+  Retire an existing assertion only after its replacement proves the same behavior.
 - CI is paused (owner decision October 7, 2026, issue 1448): Forgejo CI runs only on
   manual dispatch and main's branch protection is disabled. Do not wait for or
   require CI until the owner approves a stable solution; the local pre-push

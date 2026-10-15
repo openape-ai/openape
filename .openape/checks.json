@@ -21,7 +21,8 @@
     "@openape-testrun/app",
     "@openape-pr/app",
     "@openape-git/app",
-    "@openape-pods-relay/app"
+    "@openape-pods-relay/app",
+    "@openape/pods"
   ],
   "layout": [
     "@openape/troop",
