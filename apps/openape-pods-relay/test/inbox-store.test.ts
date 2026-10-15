@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it } from 'vitest'
-import { parseInboxDecisions } from '../../openape-pods/src/contracts/inbox'
+import { parseInboxDecisions, parseInboxMessagePage, parseInboxMessagesCommand } from '../../openape-pods/src/contracts/inbox'
+import type { InboxMessagePage } from '../../openape-pods/src/contracts/inbox'
 import { InboxStore, inboxLimits, parsePublication } from '../server/utils/inbox-store'
 
 const cleanup: (() => void)[] = []
@@ -195,4 +196,37 @@ it('counts the newest fresh IdP approvals report per owner in the badge and forg
   advance(inboxLimits.approvalsFreshMs + 1)
   expect(store.approvals(owner)?.pending).toBeNull()
   expect(store.badgeCount(owner)).toBe(0)
+})
+
+it('lists and marks only messages for the workspace, account-wide and owner-isolated (issue 1487)', () => {
+  const { store } = setup()
+  const first = store.publish(owner, runtime, parsePublication({ eventId: 'run-a', kind: 'message', title: 'Belege', body: 'Abgelegt.', podId: randomUUID(), podName: 'Belegablage', podTags: ['contoso'], links: [{ title: 'Ordner', url: 'https://example.com/belege' }] }))
+  const second = store.publish(owner, randomUUID(), message('run-b'))
+  store.syncDecisions(owner, runtime, [decision('effect:a')])
+  const decisionId = store.list(owner, { kind: 'decision' }).items[0]!.id
+  const list = (archived?: boolean) => parseInboxMessagePage(store.messages(owner, parseInboxMessagesCommand({ type: 'list', archived }))) as InboxMessagePage
+  // Messages of every runtime of the account, newest first, parsed by the same contract the hosts use.
+  expect(list().messages.map(item => item.id)).toEqual([second.id, first.id])
+  expect(list().messages[1]).toMatchObject({ pod: { name: 'Belegablage', tags: ['contoso'] }, links: [{ url: 'https://example.com/belege' }], read: null })
+
+  store.messages(owner, { type: 'mark', id: first.id, archived: true, read: true })
+  expect(list().messages.map(item => item.id)).toEqual([second.id])
+  expect(list(true).messages).toMatchObject([{ id: first.id }])
+  expect(store.list(owner, { kind: 'message', archived: true }).items[0]!.read).not.toBeNull()
+
+  // Deleting leaves only a tombstone, which the phone's change feed carries.
+  expect(store.messages(owner, { type: 'mark', id: first.id, deleted: true })).toEqual({ message: null })
+  expect(list(true).messages).toEqual([])
+  expect(store.changes(owner, 0).items.find(item => item.id === first.id)).toMatchObject({ deleted: expect.any(Number), title: '', body: '' })
+
+  // Refusals: decisions, another owner's message and malformed commands change nothing.
+  expect(() => store.messages(owner, { type: 'mark', id: decisionId, read: true })).toThrow('not_found')
+  expect(() => store.messages(owner, { type: 'mark', id: decisionId, deleted: true })).toThrow('not_found')
+  expect(store.list(owner, { kind: 'decision' }).items[0]).toMatchObject({ id: decisionId, read: null, deleted: null })
+  expect(() => store.messages(other, { type: 'mark', id: second.id, read: true })).toThrow('not_found')
+  expect(parseInboxMessagePage(store.messages(other, { type: 'list' })).messages).toEqual([])
+  expect(list().messages[0]!.read).toBeNull()
+  for (const command of [{ type: 'mark', id: second.id }, { type: 'mark', id: second.id, deleted: false }, { type: 'list', id: second.id }, { type: 'delete', id: second.id }, { type: 'mark', id: 'not-an-id', read: true }]) {
+    expect(() => parseInboxMessagesCommand(command)).toThrow('Invalid inbox messages command')
+  }
 })
