@@ -486,6 +486,20 @@ describe('grant approval pages', () => {
     expect(wrapper.html()).not.toContain('javascript:alert(1)')
   })
 
+  it('leads an exact command in the list with the marked requester title, the command right below', async () => {
+    const grant = { ...cardFixtures.unknown, request: { ...cardFixtures.unknown.request, summary: { title: 'Deploy the hotfix' } } } as unknown as ReturnType<typeof buildCliGrant>
+    vi.stubGlobal('$fetch', routedFetchMock(grant).fetchMock)
+
+    const wrapper = mount(GrantsPage, { global: { stubs: globalStubs } })
+    await flushPromises()
+
+    expect(wrapper.find('[data-requester-headline]').text()).toBe('Deploy the hotfix')
+    expect(wrapper.find('[data-requested-marker]').text()).toBe('as requested')
+    expect(wrapper.find('[data-binding-line="command"]').text()).toBe('acme-cli deploy --env production')
+    // Nothing else in the statement, so the claims box is not repeated.
+    expect(wrapper.find('[data-requester-claims]').exists()).toBe(false)
+  })
+
   it('"Always allow" opens the rule panel; exact-always stays one click away', async () => {
     const { fetchMock, calls } = routedFetchMock(buildCliGrant())
     vi.stubGlobal('$fetch', fetchMock)
@@ -788,13 +802,25 @@ describe('grant approval pages', () => {
       expect(wrapper.find('[data-exact-command]').text()).toContain('git -C /Users/owner/repos/iurio push --force-with-lease origin feature/rebase')
     })
 
-    it('shows the exact command and the claims for a command without a registry adapter', async () => {
+    it('leads a command without a registry adapter with the marked requester title above the exact command', async () => {
       const { wrapper } = await mountCard(cardFixtures.unknown)
 
+      expect(wrapper.find('h2 [data-requester-headline]').text()).toBe('Deploy the hotfix')
+      expect(wrapper.find('h2 [data-requested-marker]').text()).toBe('as requested')
       expect(wrapper.find('[data-binding-line="command"]').text()).toBe('acme-cli deploy --env production')
-      expect(wrapper.find('[data-requester-claims]').text()).toContain('Deploy the hotfix')
+      expect(wrapper.find('[data-requested-note]').text()).toContain('this approval does not bind them')
+      // The title is not repeated; the rest of the requester's statement stays.
+      expect(wrapper.find('[data-requester-claims]').text()).not.toContain('Deploy the hotfix')
+      expect(wrapper.find('[data-requester-claims]').text()).toContain('Ticket 7: roll out the login fix.')
       expect(wrapper.find('[data-idp-facts]').text()).toContain('Not registered at this IdP')
+    })
+
+    it('lets the exact command lead without a requester title', async () => {
+      const { wrapper } = await mountCard({ ...cardFixtures.unknown, request: { ...cardFixtures.unknown.request, summary: undefined } })
+
       expect(wrapper.find('h2').exists()).toBe(false)
+      expect(wrapper.find('[data-requested-note]').exists()).toBe(false)
+      expect(wrapper.find('[data-binding-line="command"]').text()).toBe('acme-cli deploy --env production')
     })
   })
 })

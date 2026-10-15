@@ -6,7 +6,7 @@ import { callerState, formatCountdown, formatWaited } from '../utils/caller-live
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
 import GrantBindingLine from '../components/GrantBindingLine.vue'
 import GrantClaims from '../components/GrantClaims.vue'
-import { grantBindingLine } from '../utils/grant-card'
+import { grantBindingLine, requesterHeadline } from '../utils/grant-card'
 import { grantBatchPath, groupPendingGrantBatches } from '../utils/grant-batch'
 import { buildRuleProposals, ruleTemplatePreview, standingRulePreview, suggestAllowPattern } from '../utils/rule-suggestions'
 
@@ -220,6 +220,9 @@ onMounted(() => { german.value = navigator.language.startsWith('de') })
 function bindingLine(grant) {
   return grantBindingLine(grant, german.value ? 'de' : 'en')
 }
+function headline(grant) {
+  return requesterHeadline(grant, bindingLine(grant))
+}
 function commandDisplay(grant) {
   return unwrapShellCommand(grant.request?.command)
 }
@@ -382,11 +385,11 @@ function isExactCommand(detail) {
                   <UBadge v-if="grant.request.run_as" color="warning" variant="soft" :label="`run as ${grant.request.run_as}`" />
                   <span class="text-xs text-dimmed">on {{ grant.request.target_host }}</span>
                 </div>
-                <GrantBindingLine :line="bindingLine(grant)" :german="german" />
+                <GrantBindingLine :line="bindingLine(grant)" :headline="headline(grant)" :german="german" />
                 <p v-if="cliSummary(grant)" class="text-muted">
                   {{ cliSummary(grant) }}
                 </p>
-                <GrantClaims :request="grant.request" :german="german" />
+                <GrantClaims :request="grant.request" :german="german" :without-title="headline(grant) !== null" />
                 <div v-if="commandDisplay(grant) && bindingLine(grant).kind !== 'command'" class="mt-1">
                   <div class="flex items-center gap-2">
                     <span class="text-muted">Command:</span>
@@ -604,7 +607,7 @@ function isExactCommand(detail) {
                   <UBadge color="success" variant="soft" :label="grant.status" />
                   <UBadge color="secondary" :label="grant.request.grant_type" />
                 </div>
-                <GrantBindingLine :line="bindingLine(grant)" :german="german" />
+                <GrantBindingLine :line="bindingLine(grant)" :headline="headline(grant)" :german="german" />
                 <p><span class="text-muted">Requester:</span> {{ formatRequesterName(grant.request.requester) }}</p>
                 <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
                 <div v-if="standingRule(grant)" class="mt-1">
@@ -617,7 +620,7 @@ function isExactCommand(detail) {
                 <p v-if="grant.request.run_as">
                   <span class="text-muted">Run as:</span> {{ grant.request.run_as }}
                 </p>
-                <GrantClaims :request="grant.request" :german="german" />
+                <GrantClaims :request="grant.request" :german="german" :without-title="headline(grant) !== null" />
                 <div v-if="commandDisplay(grant) && bindingLine(grant).kind !== 'command'" class="mt-1">
                   <div class="flex items-center gap-2">
                     <span class="text-muted">Command:</span>
@@ -692,7 +695,7 @@ function isExactCommand(detail) {
                   :label="grant.status"
                 />
               </div>
-              <GrantBindingLine :line="bindingLine(grant)" :german="german" />
+              <GrantBindingLine :line="bindingLine(grant)" :headline="headline(grant)" :german="german" />
               <p><span class="text-muted">Requester:</span> {{ formatRequesterName(grant.request.requester) }}</p>
               <p><span class="text-muted">Host:</span> {{ grant.request.target_host }} <span class="text-muted">Audience:</span> {{ grant.request.audience }}</p>
               <p v-if="cliSummary(grant)">
@@ -723,7 +726,7 @@ function isExactCommand(detail) {
                   </div>
                 </div>
               </div>
-              <GrantClaims :request="grant.request" :german="german" />
+              <GrantClaims :request="grant.request" :german="german" :without-title="headline(grant) !== null" />
               <p v-if="grant.decided_by" class="text-xs text-dimmed flex items-center gap-2">
                 <span>Decided by: {{ grant.decided_by }}</span>
                 <UBadge

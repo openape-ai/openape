@@ -1,14 +1,15 @@
 // The generic grant card (issue 1473): registry meaning only from adapters in
 // the IdP's shapes table, matched by adapter digest and re-derived from the
-// grant's own argv; the binding line never yields to a requester title, and
-// values the approval does not bind are marked as requested.
+// grant's own argv; the binding line always stays visible (a requester title
+// leads only above an exact command), and values the approval does not bind
+// are marked as requested.
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { OpenApeGrant } from '@openape/core'
 import { describe, expect, it, vi } from 'vitest'
 import { registryCard, withGrantCards } from '../src/runtime/server/utils/grant-card'
-import { grantBindingLine } from '../src/runtime/utils/grant-card'
+import { grantBindingLine, requesterHeadline } from '../src/runtime/utils/grant-card'
 import type { GrantWithCard } from '../src/runtime/utils/grant-card'
 import { buildCardFixtures, findUser, getShape, gitAdapter, idpResolvedRequest, POD_ID, podArgv, podRuntimeAdapter, pushArgv, shapedRequest, UNTESTED_GIT_SHA256 } from './helpers/grant-card-fixtures'
 
@@ -72,7 +73,7 @@ describe('registry card', () => {
 
   it('falls back for oversized values, control or format characters and malformed maps', async () => {
     expect(await registryCard(await podRequest(withOption('script', `/${'x'.repeat(5000)}`)), getShape)).toBeNull()
-    expect(await registryCard(await podRequest(withOption('name', 'Mail ‮digest')), getShape)).toBeNull()
+    expect(await registryCard(await podRequest(withOption('name', 'Mail \u202Edigest')), getShape)).toBeNull()
     expect(await registryCard(await podRequest(withOption('environment', '{"HOME":"/a\nb"}')), getShape)).toBeNull()
     expect(await registryCard(await podRequest(withOption('environment', '{"HOME":1}')), getShape)).toBeNull()
     expect(await registryCard(await podRequest(withOption('environment', 'HOME=/a')), getShape)).toBeNull()
@@ -106,6 +107,37 @@ describe('grant cards', () => {
     const withoutRegistry: GrantWithCard = { ...gitPush, card: { registry: null, requester: null } }
     expect(grantBindingLine(withoutRegistry, 'de')).toEqual({ kind: 'command', text: pushArgv.join(' ') })
     expect(grantBindingLine(unknown, 'en')).toEqual({ kind: 'command', text: 'acme-cli deploy --env production' })
+  })
+
+  it('lead with the requester title only above an exact command the approval binds', async () => {
+    const { gitPush, podRun, unknown, graphGate } = await buildCardFixtures()
+    const headline = (grant: GrantWithCard) => requesterHeadline(grant, grantBindingLine(grant, 'en'))
+    const withoutRegistry = (grant: GrantWithCard): GrantWithCard => ({ ...grant, card: { registry: null, requester: null } })
+
+    expect(headline(unknown)).toBe('Deploy the hotfix')
+    expect(headline(graphGate)).toBe('62 Personen haben sich Ihr Profil angesehen')
+    // A registry title keeps the lead.
+    expect(headline(gitPush)).toBeNull()
+    expect(headline(podRun)).toBeNull()
+    // Without the registry adapter, only an exact-only permission binds nothing but the shown command.
+    expect(headline(withoutRegistry(gitPush))).toBe('Read-only status check')
+    expect(headline({ ...withoutRegistry(podRun), request: { ...podRun.request, command: podArgv } })).toBeNull()
+    // A plain command request is bound by its command hash alone.
+    const plain: GrantWithCard = { id: 'g', status: 'pending', created_at: 0, request: { requester: 'agent@example.com', target_host: 'macmini', audience: 'escapes', command: ['ls', '-la'], cmd_hash: 'SHA-256:1', summary: { title: 'List the folder' } } }
+    expect(headline(plain)).toBe('List the folder')
+    expect(headline({ ...plain, request: { ...plain.request, command: undefined, permissions: ['files.read'] } })).toBeNull()
+  })
+
+  it('keep the command line in the lead without a title or with an unsafe title', async () => {
+    const { unknown } = await buildCardFixtures()
+    const titled = (title: string | undefined): GrantWithCard => ({ ...unknown, request: { ...unknown.request, summary: title === undefined ? undefined : { title } } })
+    const headline = (grant: GrantWithCard) => requesterHeadline(grant, grantBindingLine(grant, 'en'))
+
+    expect(headline(titled(undefined))).toBeNull()
+    expect(headline(titled('   '))).toBeNull()
+    expect(headline(titled('  Deploy the hotfix  '))).toBe('Deploy the hotfix')
+    for (const unsafe of ['Deploy\u202Eexif.exe', 'two\nlines', 'zero\u200Bwidth', 'line\u2028separator', 'x'.repeat(121)])
+      expect(headline(titled(unsafe))).toBeNull()
   })
 
   it('render a grant the IdP resolved without a client adapter digest and flag an untested version', async () => {
