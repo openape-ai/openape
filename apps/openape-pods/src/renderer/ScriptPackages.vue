@@ -1,4 +1,5 @@
 <script lang="ts">
+import { useHostBridge } from './host-bridge'
 import { usePodAccess } from './pod-access'
 import { defineComponent } from 'vue'
 import { parsePackages } from '../contracts/dependencies'
@@ -8,7 +9,7 @@ import { t, diagnostic } from './i18n'
 export default defineComponent({
   props: { modelValue: { type: String, required: true }, disabled: Boolean },
   emits: ['update:modelValue'],
-  setup() { return { access: usePodAccess() } },
+  setup() { return { hostBridge: useHostBridge(), access: usePodAccess() } },
   data() { return { selected: '', adding: false, query: '', searching: false, searched: false, results: [] as PackageOption[], candidate: null as PackageOption | null, error: '', requestId: 0 } },
   computed: {
     packages(): Record<string, string> { return parsePackages(JSON.parse(this.modelValue)).dependencies },
@@ -22,7 +23,7 @@ export default defineComponent({
       if (this.disabled || this.searching || !this.query.trim()) return
       const request = ++this.requestId
       this.searching = true; this.error = ''; this.candidate = null; this.results = []; this.searched = false
-      try { const results = await window.pods.packages({ query: this.query }); if (request === this.requestId) { this.results = results; this.searched = true } }
+      try { const results = await this.hostBridge.packages({ query: this.query }); if (request === this.requestId) { this.results = results; this.searched = true } }
       catch (error) { if (request === this.requestId) this.error = error instanceof Error ? error.message : 'npm search failed. Check the package name and connection, then try again.' }
       finally { if (request === this.requestId) this.searching = false }
     },

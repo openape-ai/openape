@@ -1,4 +1,5 @@
 <script lang="ts">
+import { useHostBridge } from './host-bridge'
 import { defineComponent } from 'vue'
 import type { OnboardingCommand, OnboardingView } from '../contracts/onboarding'
 import { t, diagnostic, label } from './i18n'
@@ -6,6 +7,7 @@ import { t, diagnostic, label } from './i18n'
 export default defineComponent({
   props: { podId: { type: String, required: true } },
   emits: ['accounts'],
+  setup() { return { hostBridge: useHostBridge() } },
   data() { return { view: null as OnboardingView | null, busy: false, error: '', loadError: '', brokerReview: false, brokerRevoking: false, provider: { issuer: 'https://pods.openape.ai', domain: 'pods.openape.ai' }, closed: false, timer: null as ReturnType<typeof setTimeout> | null } },
   computed: {
     identity() { return this.view?.podIdentity },
@@ -22,8 +24,8 @@ export default defineComponent({
       this.busy = true
       if (command) this.error = ''
       try {
-        if (command) await window.pods.onboarding(command)
-        this.view = await window.pods.onboarding({ type: 'list', podId: this.podId })
+        if (command) await this.hostBridge.onboarding(command)
+        this.view = await this.hostBridge.onboarding({ type: 'list', podId: this.podId })
         this.loadError = ''
         if (command) { this.brokerReview = false; this.brokerRevoking = false }
       }

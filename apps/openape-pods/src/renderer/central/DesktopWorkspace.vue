@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useHostBridge } from '../host-bridge'
 import { t, diagnostic } from '../i18n'
 import { onBeforeUnmount, onMounted, ref } from 'vue'
 import type { CentralStatus } from '../../contracts/central'
@@ -12,18 +13,20 @@ import AccountStatus from '../AccountStatus.vue'
 import SharingImport from '../SharingImport.vue'
 import type { SharingCommand } from '../../contracts/sharing'
 
+const hostBridge = useHostBridge()
+
 /**
  * The registered desktop: the shell is the landing page; the Pod editor, portable packages and the
  * settings page open from it and return with one button. The shell stays mounted behind those pages,
  * so returning shows the last map at once instead of loading the workspace again.
  */
-const invoke = window.pods.central!
+const invoke = hostBridge.central!
 const client = desktopWorkspaceClient(invoke)
 const page = ref<'Automations' | 'Pods' | 'App settings' | 'Sharing'>('Automations')
 const workspace = ref<InstanceType<typeof CentralWorkspace> | null>(null)
 const sharing = ref<{ mode: 'import' } | null>(null)
-const sharingApi = (command: SharingCommand) => window.pods.sharing!(command)
-const podResources = (podId: string) => window.pods.resources({ type: 'list', podId })
+const sharingApi = (command: SharingCommand) => hostBridge.sharing!(command)
+const podResources = (podId: string) => hostBridge.resources({ type: 'list', podId })
 const error = ref('')
 const registering = ref(false)
 const status = ref<CentralStatus | null>(null)

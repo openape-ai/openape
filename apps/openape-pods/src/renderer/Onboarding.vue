@@ -1,4 +1,5 @@
 <script lang="ts">
+import { useHostBridge } from './host-bridge'
 import { t, diagnostic, label } from './i18n'
 import { defineComponent } from 'vue'
 import type { ConnectionView, OnboardingCommand, OnboardingView } from '../contracts/onboarding'
@@ -6,6 +7,7 @@ import type { ConnectionView, OnboardingCommand, OnboardingView } from '../contr
 export default defineComponent({
   props: { compact: Boolean },
   emits: ['finished'],
+  setup() { return { hostBridge: useHostBridge() } },
   data() { return { expanded: '', view: null as OnboardingView | null, email: '', busy: false, error: '', switching: false, disconnecting: '', closed: false, timer: null as ReturnType<typeof setTimeout> | null } },
   computed: {
     codex(): ConnectionView | undefined { return this.view?.connections.find(item => item.provider === 'chatgpt') },
@@ -21,7 +23,7 @@ export default defineComponent({
     async request(command: OnboardingCommand) {
       if (this.busy) return
       this.busy = true
-      try { this.view = await window.pods.onboarding(command); if (command.type !== 'list') this.error = '' }
+      try { this.view = await this.hostBridge.onboarding(command); if (command.type !== 'list') this.error = '' }
       catch (error) { this.error = error instanceof Error ? error.message : 'Setup failed' }
       finally { this.busy = false }
     },

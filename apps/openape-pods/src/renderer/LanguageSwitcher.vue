@@ -1,9 +1,13 @@
 <script setup lang="ts">
+import { useHostBridge } from './host-bridge'
 import { ref } from 'vue'
 import { parseLanguage } from '../contracts/language'
 import { language, applyLanguage, t, diagnostic } from './i18n'
 
 const props = defineProps<{ browser?: boolean }>()
+
+const hostBridge = useHostBridge()
+
 const busy = ref(false)
 const error = ref('')
 async function change(event: Event): Promise<void> {
@@ -13,7 +17,7 @@ async function change(event: Event): Promise<void> {
     const chosen = parseLanguage(select.value)
     if (props.browser) { localStorage.setItem('pods-language', chosen); applyLanguage(chosen) }
     else {
-      applyLanguage(await window.pods.language({ type: 'set', language: chosen }))
+      applyLanguage(await hostBridge.language({ type: 'set', language: chosen }))
     }
   }
   catch (failure) { error.value = failure instanceof Error ? failure.message : 'Could not save language' }
