@@ -6,35 +6,35 @@ Includes packages, modules, apps and examples. Arrows point to dependencies.
 ```mermaid
 graph LR
   subgraph packages
-    w11["@openape/agent-runtime"]
-    w12["@openape/ape-calls"]
-    w13["@openape/ape-kpi"]
-    w14["@openape/ape-plans"]
-    w15["@openape/ape-pr"]
-    w16["@openape/ape-secrets"]
-    w17["@openape/ape-tasks"]
-    w18["@openape/ape-testruns"]
-    w19["@openape/ape-timetrack"]
-    w20["@openape/apes"]
-    w21["@openape/attention-events"]
-    w22["@openape/auth"]
-    w23["@openape/cli-auth"]
-    w24["@openape/codex-proxy"]
-    w25["@openape/core"]
-    w26["@openape/grants"]
-    w30["@openape/pods-protocol"]
-    w31["@openape/prompt-injection-detector"]
-    w32["@openape/proof-cli"]
-    w33["@openape/protocol-conformance"]
-    w34["@openape/proxy"]
-    w35["@openape/report-contracts"]
-    w36["@openape/shapes"]
-    w37["@openape/sp-tasks"]
-    w38["@openape/unstorage-s3-driver"]
+    w10["@openape/agent-runtime"]
+    w11["@openape/ape-calls"]
+    w12["@openape/ape-kpi"]
+    w13["@openape/ape-plans"]
+    w14["@openape/ape-pr"]
+    w15["@openape/ape-secrets"]
+    w16["@openape/ape-tasks"]
+    w17["@openape/ape-testruns"]
+    w18["@openape/ape-timetrack"]
+    w19["@openape/apes"]
+    w20["@openape/attention-events"]
+    w21["@openape/auth"]
+    w22["@openape/cli-auth"]
+    w23["@openape/codex-proxy"]
+    w24["@openape/core"]
+    w25["@openape/grants"]
+    w29["@openape/pods-protocol"]
+    w30["@openape/prompt-injection-detector"]
+    w31["@openape/proof-cli"]
+    w32["@openape/protocol-conformance"]
+    w33["@openape/proxy"]
+    w34["@openape/report-contracts"]
+    w35["@openape/shapes"]
+    w36["@openape/sp-tasks"]
+    w37["@openape/unstorage-s3-driver"]
   end
   subgraph modules
-    w27["@openape/nuxt-auth-idp"]
-    w28["@openape/nuxt-auth-sp"]
+    w26["@openape/nuxt-auth-idp"]
+    w27["@openape/nuxt-auth-sp"]
   end
   subgraph apps
     w0["@openape-dashboard/app"]
@@ -43,106 +43,102 @@ graph LR
     w3["@openape-plans/app"]
     w4["@openape-pods-relay/app"]
     w5["@openape-pr/app"]
-    w6["@openape-question-service/app"]
-    w7["@openape-secrets/app"]
-    w8["@openape-tasks/app"]
-    w9["@openape-testrun/app"]
-    w10["@openape-timetrack/app"]
-    w29["@openape/pods"]
-    w39["docs"]
-    w41["openape-free-idp"]
+    w6["@openape-secrets/app"]
+    w7["@openape-tasks/app"]
+    w8["@openape-testrun/app"]
+    w9["@openape-timetrack/app"]
+    w28["@openape/pods"]
+    w38["docs"]
+    w40["openape-free-idp"]
   end
   subgraph examples
-    w40["openape-e2e"]
-    w42["openape-idp-example"]
-    w43["openape-sp-example"]
+    w39["openape-e2e"]
+    w41["openape-idp-example"]
+    w42["openape-sp-example"]
   end
-  w0 --> w28
+  w0 --> w27
+  w1 --> w24
   w1 --> w25
-  w1 --> w26
-  w1 --> w28
-  w1 --> w40
-  w2 --> w25
-  w2 --> w28
-  w3 --> w14
-  w3 --> w28
-  w3 --> w35
-  w3 --> w40
-  w4 --> w22
-  w4 --> w25
+  w1 --> w27
+  w1 --> w39
+  w2 --> w24
+  w2 --> w27
+  w3 --> w13
+  w3 --> w27
+  w3 --> w34
+  w3 --> w39
+  w4 --> w21
+  w4 --> w24
+  w4 --> w27
   w4 --> w28
   w4 --> w29
-  w4 --> w30
-  w4 --> w40
-  w5 --> w28
-  w5 --> w40
-  w6 --> w28
-  w6 --> w37
-  w6 --> w40
-  w7 --> w25
-  w7 --> w28
-  w8 --> w28
-  w9 --> w28
-  w9 --> w35
-  w9 --> w40
-  w10 --> w28
-  w11 --> w23
-  w11 --> w25
-  w12 --> w23
-  w12 --> w32
-  w13 --> w23
-  w13 --> w32
-  w14 --> w23
-  w14 --> w32
-  w15 --> w23
-  w15 --> w32
-  w16 --> w23
-  w16 --> w32
-  w17 --> w23
-  w17 --> w32
-  w18 --> w23
-  w18 --> w32
-  w18 --> w35
-  w19 --> w23
-  w19 --> w32
-  w20 --> w11
-  w20 --> w23
-  w20 --> w25
-  w20 --> w26
-  w20 --> w34
-  w20 --> w36
-  w20 --> w40
-  w22 --> w25
+  w4 --> w39
+  w5 --> w27
+  w5 --> w39
+  w6 --> w24
+  w6 --> w27
+  w7 --> w27
+  w8 --> w27
+  w8 --> w34
+  w8 --> w39
+  w9 --> w27
+  w10 --> w22
+  w10 --> w24
+  w11 --> w22
+  w11 --> w31
+  w12 --> w22
+  w12 --> w31
+  w13 --> w22
+  w13 --> w31
+  w14 --> w22
+  w14 --> w31
+  w15 --> w22
+  w15 --> w31
+  w16 --> w22
+  w16 --> w31
+  w17 --> w22
+  w17 --> w31
+  w17 --> w34
+  w18 --> w22
+  w18 --> w31
+  w19 --> w10
+  w19 --> w22
+  w19 --> w24
+  w19 --> w25
+  w19 --> w33
+  w19 --> w35
+  w19 --> w39
+  w21 --> w24
+  w25 --> w24
+  w26 --> w21
+  w26 --> w24
   w26 --> w25
-  w27 --> w22
-  w27 --> w25
-  w27 --> w26
-  w27 --> w36
+  w26 --> w35
+  w27 --> w21
+  w27 --> w24
+  w28 --> w19
   w28 --> w22
+  w28 --> w24
   w28 --> w25
-  w29 --> w20
-  w29 --> w23
-  w29 --> w25
-  w29 --> w26
-  w29 --> w30
-  w32 --> w23
-  w33 --> w25
-  w33 --> w26
-  w34 --> w25
-  w36 --> w25
-  w36 --> w26
-  w40 --> w27
-  w40 --> w28
-  w41 --> w22
-  w41 --> w25
+  w28 --> w29
+  w31 --> w22
+  w32 --> w24
+  w32 --> w25
+  w33 --> w24
+  w35 --> w24
+  w35 --> w25
+  w39 --> w26
+  w39 --> w27
+  w40 --> w21
+  w40 --> w24
+  w40 --> w25
+  w40 --> w26
+  w40 --> w39
   w41 --> w26
-  w41 --> w27
-  w41 --> w40
+  w41 --> w37
+  w41 --> w39
+  w42 --> w21
+  w42 --> w24
+  w42 --> w25
   w42 --> w27
-  w42 --> w38
-  w42 --> w40
-  w43 --> w22
-  w43 --> w25
-  w43 --> w26
-  w43 --> w28
 ```

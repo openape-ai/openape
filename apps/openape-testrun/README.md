@@ -2,6 +2,9 @@
 
 OpenApe Reports stores client-authored private documents, shared test reports and compatible private structured briefings. Package, image, database and CLI identity remain `openape-testrun` / `testrun.openape.ai`. `report.openape.ai` is the general reading entry point; `ape-testruns` and old `/r/:slug?v=N` links are unchanged.
 
+UI verification commands, assertion replacements and retained security boundaries:
+[UI test migration](docs/ui-test-migration.md).
+
 ## Reading surface
 
 `/reports` is one library of HTML documents and earlier uploads (search with `/`,

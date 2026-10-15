@@ -113,7 +113,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
         {{ t('Loading workspace…') }}
       </p>
       <template v-else>
-        <KpiRow :view="view" :requests="secrets?.requests ?? []" />
+        <KpiRow :view="view" :requests="secrets?.requests ?? []" @open="emit('openPod', $event)" />
         <div class="automations-toolbar">
           <div class="tb-left">
             <div class="seg" role="group" :aria-label="t('View')">
@@ -154,7 +154,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
         </div>
         <CodexHandoff v-if="handoff" :view="view" :pinned="pinned" :tags="pinnedTags" :connected="codex === undefined ? null : codex === 'connected'" @close="handoff = false" @settings="emit('settings')" />
         <div class="automations-kindrow">
-          <span class="automations-stamp" :class="{ live }">{{ live ? t('Live · {time}', { time: clock(now, language) }) : t('As of {time}', { time: clock(view.at, language) }) }}</span>
+          <span v-if="!live" class="automations-stamp">{{ t('As of {time}', { time: clock(view.at, language) }) }}</span>
           <details class="kinds-legend">
             <summary>{{ t('Legend') }}</summary>
             <div class="kinds">
@@ -219,8 +219,10 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
 .automations-empty{padding:48px 16px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:8px}
 .automations-toolbar .idp{border-color:var(--idp);background:var(--idp-soft);color:var(--idp);font-weight:600}
 .automations-toolbar .secondary{padding:6px 12px;font-size:14px}
+.automations-toolbar .archived-toggle[aria-pressed="true"]{background:var(--tint);border-color:var(--accent);color:var(--accent);font-weight:600}
 .automations-kindrow{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 16px;align-items:center;margin:0 0 8px}
-.automations-stamp{font-size:12px;color:var(--muted)}.automations-stamp.live{color:var(--ok)}
+.automations-stamp{font-size:12px;color:var(--muted)}
+.automations-kindrow .kinds-legend{margin-left:auto}
 .automations-kindrow .kinds{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:12px;color:var(--muted)}
 .automations-kindrow .kinds i{display:inline-block;width:14px;height:10px;border:1.4px solid;vertical-align:-1px;margin-right:5px}
 .automations-kindrow .k-svc{border-color:var(--service);border-radius:6px}.automations-kindrow .k-app{border-color:var(--application);border-radius:2px}.automations-kindrow .k-dir{border-color:var(--warn);border-radius:1px 3px 3px 3px}.automations-kindrow .k-key{border:0;width:10px;height:10px;border-radius:50%;background:var(--warn)}

@@ -2,7 +2,6 @@
   "version": 1,
   "consumedApps": [],
   "unitExceptions": {
-    "@openape-question-service/app:test": "No unit suite yet; app lint and typecheck remain mandatory.",
     "@openape/ape-secrets:test": "No unit suite yet; CLI build and typecheck remain mandatory.",
     "openape-idp-example:test": "Covered by the dedicated openape-e2e suite.",
     "openape-sp-example:test": "Covered by the dedicated openape-e2e suite.",
@@ -23,6 +22,7 @@
     "@openape/nuxt-auth-sp",
     "@openape-testrun/app",
     "@openape/pods",
-    "@openape-git/app"
+    "@openape-git/app",
+    "@openape-pods-relay/app"
   ]
 }

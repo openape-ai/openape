@@ -31,7 +31,8 @@ async function shot(name: string) {
 it('uses the actual Pod components for edits, pause, simulated runs and reset without native access', async () => {
   const requests = vi.spyOn(globalThis, 'fetch')
   await open()
-  await expect.poll(() => wrapper!.findAll('[data-pod]').length).toBe(6)
+  // Six everyday Pods plus three edge cases (failing, recovered, paused after failure); archived ones stay hidden.
+  await expect.poll(() => wrapper!.findAll('[data-pod]').length).toBe(9)
   await shot('automations-wide')
   await wrapper!.get('[data-pod="00000000-0000-4000-8000-000000000001"]').trigger('click'); await flushPromises()
   expect(wrapper!.findAll('[role="alert"]').map(item => item.text())).toEqual([])
@@ -53,7 +54,7 @@ it('uses the actual Pod components for edits, pause, simulated runs and reset wi
   expect(wrapper!.get('#pod-values').text()).toContain('reviewed-invoices')
   expect((wrapper!.get('.schedule-panel form input[type="number"]').element as HTMLInputElement).value).toBe('60')
   await click('Zurücksetzen')
-  await expect.poll(() => wrapper!.findAll('[data-pod]').length).toBe(6)
+  await expect.poll(() => wrapper!.findAll('[data-pod]').length).toBe(9)
   expect(wrapper!.text()).not.toContain('Geprüfte Rechnungen für Northwind vorbereiten.')
   expect(window.pods).toBeUndefined()
   expect(requests).not.toHaveBeenCalled()
@@ -82,7 +83,8 @@ it('keeps a failed decision actionable, confirms grouped choices and resets all 
 it('renders all three areas narrowly with real CSS and restores empty/error scenarios', async () => {
   await open('everyday', 390)
   document.documentElement.style.colorScheme = 'dark'
-  await expect.poll(() => wrapper!.findAll('[data-pod]').length).toBe(6)
+  // Six everyday Pods plus three edge cases (failing, recovered, paused after failure); archived ones stay hidden.
+  await expect.poll(() => wrapper!.findAll('[data-pod]').length).toBe(9)
   await shot('automations-narrow')
   await wrapper!.get('[role="tablist"] button:nth-child(2)').trigger('click'); await flushPromises()
   await shot('decisions-narrow')
