@@ -2144,3 +2144,10 @@ are implied by merging this preparation increment.
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1496
 - Extend Sent Items coverage to match Inbox, reconcile sent replies and identical invoice notices, separate attachment review from owner category questions. Preserve explicit content-bound archive approvals.
 - Verification: focused autonomous mail regression suite; required affected and full deployment gates before activating the canonical recipes. Live acceptance reconciles the 35 audited questions and checks mailbox/category/approval state.
+
+### Issue 1496 — delta continuation recovery
+
+- Follow-up source: `bugfix/issue-1496-mail-cursor-recovery`.
+- Live historical synchronization returned `outcome=unknown, reason=Gone` for a persisted Sent Items continuation. Restart that folder once per run, retain stored evidence, checkpoint each complete page and avoid full reads for unchanged provider versions.
+- Focused verification: 26 autonomous mail cases, including expired cursor recovery and retaining the last complete page after a later provider failure.
+- Reuse source-bound version-five machine assessments during the version-six transition; update context and uncertainty without another model choice or fabricated owner answer.
