@@ -24,10 +24,8 @@ echo "→ Clearing old captures…"
 rm -rf docs/local-stack/screenshots
 rm -f docs/local-stack/manifest-demo.json
 
-# `--build`, nicht nur `up -d`: existiert ein Image bereits, wuerde compose es
-# wiederverwenden und der Capture fotografiert den alten Code. Eine Anleitung,
-# die aus dem Testlauf entsteht, darf nicht am Testlauf vorbei veralten — genau
-# das passierte beim Fix zu #1269. Warme Layer machen das billig.
+# Rebuild existing images so captures reflect the current source. Cached layers
+# keep repeated runs inexpensive; issue 1269 exposed stale image reuse.
 echo "→ Ensuring the stack is up (rebuilding changed apps)…"
 "${COMPOSE[@]}" up -d --build >/dev/null
 
@@ -56,7 +54,7 @@ echo " ok"
 echo "→ Minting a registration token for ${EMAIL}…"
 # Self-service signup. The email send errors locally (no Resend key), but the
 # token is persisted to registration_urls *before* the send, so it's usable.
-"${COMPOSE[@]}" exec -T troop curl -k -s -o /dev/null -X POST https://id.openape.test/api/register \
+"${COMPOSE[@]}" exec -T tasks curl -k -s -o /dev/null -X POST https://id.openape.test/api/register \
   -H 'content-type: application/json' -d "{\"email\":\"${EMAIL}\"}" || true
 
 TOKEN=$("${COMPOSE[@]}" exec -T idp node -e '
