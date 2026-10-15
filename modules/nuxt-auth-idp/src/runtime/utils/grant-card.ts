@@ -10,9 +10,10 @@ import { HIDDEN_CHARACTERS, MAX_VALUE_LENGTH, structureCommand, worthStructuring
  * approver's questions: the registry adapter the IdP holds (what happens and
  * what it means), the IdP's own records (who asks, grant type, validity) and
  * the requester's summary (its claim). The binding identity — the registry
- * title or, without one, the exact command — always stays the primary line;
- * a requester title can only add to it, and registry values the approval does
- * not bind carry an "as requested" marker.
+ * title or, without one, the exact command — always stays visible as the
+ * primary line; a requester title can only add to it, and values the approval
+ * does not bind carry an "as requested" marker. Only above an exact command
+ * may that marked title lead (`requesterHeadline`).
  */
 
 export type CardLanguage = 'de' | 'en'
@@ -61,6 +62,8 @@ export interface GrantCardContext {
    * null for client-resolved grants. `version_tested` is null for a command no adapter describes.
    */
   program?: { sha256: string, version_tested: boolean | null } | null
+  /** The IdP verified that approving binds nothing but the request's command line (`bindsExactCommand`). */
+  binds_exact_command?: boolean
 }
 
 export type GrantWithCard = OpenApeGrant & { card?: GrantCardContext }
@@ -187,6 +190,25 @@ export function grantBindingLine(grant: GrantWithCard, language: CardLanguage): 
     : getCliAuthorizationDetails(grant.request.authorization_details).map(detail => detail.permission)
   if (permissions.length) return { kind: 'permission', text: permissions.join(', ') }
   return { kind: 'permission', text: `${grant.request.audience} · ${grant.request.target_host}` }
+}
+
+const MAX_HEADLINE_LENGTH = 120
+// Characters that can make displayed text differ from what was sent (grants.md §3.4).
+const UNSAFE_TITLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
+
+/**
+ * The requester's summary title as the headline above an exact command line
+ * (owner decision, issue 1477). Only when the IdP verified that the approval
+ * binds nothing but the command shown directly beneath
+ * (`card.binds_exact_command`) can the title not widen it. Registry and
+ * permission lines keep the lead; so does the command line when the title is
+ * missing or contains control or format characters.
+ */
+export function requesterHeadline(grant: GrantWithCard, line: BindingLine): string | null {
+  if (line.kind !== 'command' || grant.card?.binds_exact_command !== true) return null
+  const title = grant.request.summary?.title?.trim()
+  if (!title || [...title].length > MAX_HEADLINE_LENGTH || UNSAFE_TITLE.test(title)) return null
+  return title
 }
 
 /** The approver-facing marker for values the approval does not bind. */

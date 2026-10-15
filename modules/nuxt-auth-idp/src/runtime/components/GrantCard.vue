@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 import type { LocalizedText } from '@openape/grants'
 import type { GrantWithCard } from '../utils/grant-card'
-import { grantBindingLine, grantValidity } from '../utils/grant-card'
+import { grantBindingLine, grantValidity, requesterHeadline } from '../utils/grant-card'
 import { formatCliResourceChain, getCliAuthorizationDetails } from '../utils/cli-grants'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
 import { commandBlocks } from '../utils/command-structure'
@@ -20,6 +20,7 @@ const requester = computed(() => props.grant.card?.requester ?? null)
 const program = computed(() => props.grant.card?.program ?? null)
 const requesterName = computed(() => requester.value?.name || formatRequesterName(request.value.requester))
 const line = computed(() => grantBindingLine(props.grant, language.value))
+const headline = computed(() => requesterHeadline(props.grant, line.value))
 const command = computed(() => unwrapShellCommand(request.value.command))
 const structure = computed(() => line.value.structure ?? null)
 const blocks = computed(() => structure.value ? commandBlocks(structure.value) : [])
@@ -30,7 +31,7 @@ const validity = computed(() => grantValidity(props.grant, language.value))
 const batchPath = computed(() => request.value.batch ? grantBatchPath(request.value.requester, request.value.batch.id) : null)
 const showsRequested = computed(() => {
   const card = registry.value
-  if (!card) return false
+  if (!card) return headline.value !== null
   return [card.title, card.statement, card.allows, card.does_not_allow, card.details_note].some(item => item?.requested)
     || [...card.facts, ...card.details].some(field => field.provenance === 'requested')
 })
@@ -61,6 +62,9 @@ function formatTime(seconds: number): string {
           <span data-binding-line="registry">{{ line.text }}</span><GrantRequestedMarker v-if="line.requested" :german="german" />
         </h2>
         <template v-else>
+          <h2 v-if="headline" class="mb-2 text-xl font-semibold break-words">
+            <span data-requester-headline>{{ headline }}</span><GrantRequestedMarker :german="german" />
+          </h2>
           <p class="text-xs text-muted mb-1 flex items-center gap-2">
             {{ line.kind === 'command' ? text.exactCommand : text.permission }}
             <span v-if="line.shell" class="rounded border border-default px-1">via {{ line.shell }}</span>
@@ -168,10 +172,10 @@ function formatTime(seconds: number): string {
           {{ localized(registry.details_note) }}
         </p>
       </details>
-      <p v-if="showsRequested" class="text-xs text-muted" data-requested-note>
-        {{ text.requested }}
-      </p>
     </template>
+    <p v-if="showsRequested" class="text-xs text-muted" data-requested-note>
+      {{ text.requested }}
+    </p>
 
     <dl class="space-y-2 text-sm border-t border-default pt-3" data-idp-facts>
       <div>
@@ -237,7 +241,7 @@ function formatTime(seconds: number): string {
       </div>
     </dl>
 
-    <GrantClaims :request="request" :german="german" />
+    <GrantClaims :request="request" :german="german" :without-title="headline !== null" />
 
     <details>
       <summary class="cursor-pointer text-sm">

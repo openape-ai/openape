@@ -135,7 +135,8 @@
         "name": "Mail digest Pod",
         "owner": "owner@example.com"
       },
-      "program": null
+      "program": null,
+      "binds_exact_command": false
     }
   },
   "gitPush": {
@@ -255,7 +256,8 @@
         "name": "IURIO rebase",
         "owner": "owner@example.com"
       },
-      "program": null
+      "program": null,
+      "binds_exact_command": false
     }
   },
   "unknown": {
@@ -274,7 +276,7 @@
         "production"
       ],
       "permissions": [
-        "acme-cli.cli[name=acme-cli].argv[hash=SHA-256:9f]#exec"
+        "acme-cli.cli[name=acme-cli].argv[hash=SHA-256:34c2c336e095c87e22a01ebe33dd94d1953be7f825982e44ab18acb8b842a13e]#exec"
       ],
       "authorization_details": [
         {
@@ -291,12 +293,12 @@
             {
               "resource": "argv",
               "selector": {
-                "hash": "SHA-256:9f"
+                "hash": "SHA-256:34c2c336e095c87e22a01ebe33dd94d1953be7f825982e44ab18acb8b842a13e"
               }
             }
           ],
           "action": "exec",
-          "permission": "acme-cli.cli[name=acme-cli].argv[hash=SHA-256:9f]#exec",
+          "permission": "acme-cli.cli[name=acme-cli].argv[hash=SHA-256:34c2c336e095c87e22a01ebe33dd94d1953be7f825982e44ab18acb8b842a13e]#exec",
           "display": "Execute (unshaped): `acme-cli deploy --env production`",
           "risk": "high",
           "constraints": {
@@ -312,7 +314,8 @@
     "card": {
       "registry": null,
       "requester": null,
-      "program": null
+      "program": null,
+      "binds_exact_command": true
     }
   },
   "gitUntested": {
@@ -435,7 +438,8 @@
       "program": {
         "sha256": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
         "version_tested": false
-      }
+      },
+      "binds_exact_command": false
     }
   },
   "graphGate": {
@@ -453,7 +457,7 @@
         "{\"action\":\"mail.archive\",\"batchId\":\"ed50790c-7d3b-4f0e-9c51-2a8b4f7c9a0e\",\"expiresAt\":1792478942037,\"hash\":\"fac5678a9e0d4c7b8f2e1a3d5c6b9e0f4a7d2c1b8e3f6a9d0c5b2e7f4a7f8091\",\"object\":\"phofmann@delta-mind.at:AAkALgAAAAAAHYQDEapmEc2byACqAC-EWg0Aihx0qtzv3k_XDmEEfSdYlgAJOdNU0wAA\",\"owner\":{\"issuer\":\"https://id.openape.ai\",\"subject\":\"patrick@hofmann.eco\"},\"podId\":\"129579b8-e03d-44b5-a44b-4de9f8cd7f89\",\"version\":5}"
       ],
       "permissions": [
-        "pods-graph-gate.cli[name=pods-graph-gate].argv[hash=SHA-256:3c]#exec"
+        "pods-graph-gate.cli[name=pods-graph-gate].argv[hash=SHA-256:1a76493774ded5b3bd9d3375a3742681142502dcce4fd84064d1667078024ab0]#exec"
       ],
       "authorization_details": [
         {
@@ -470,12 +474,12 @@
             {
               "resource": "argv",
               "selector": {
-                "hash": "SHA-256:3c"
+                "hash": "SHA-256:1a76493774ded5b3bd9d3375a3742681142502dcce4fd84064d1667078024ab0"
               }
             }
           ],
           "action": "exec",
-          "permission": "pods-graph-gate.cli[name=pods-graph-gate].argv[hash=SHA-256:3c]#exec",
+          "permission": "pods-graph-gate.cli[name=pods-graph-gate].argv[hash=SHA-256:1a76493774ded5b3bd9d3375a3742681142502dcce4fd84064d1667078024ab0]#exec",
           "display": "Execute (unshaped): `pods-graph-gate approve {\"action\":\"mail.archive\",\"batchId\":\"ed50790c-7d3b-4f0e-9c51-2a8b4f7c9a0e\",\"expiresAt\":1792478942037,\"hash\":\"fac5678a9e0d4c7b8f2e1a3d5c6b9e0f4a7d2c1b8e3f6a9d0c5b2e7f4a7f8091\",\"object\":\"phofmann@delta-mind.at:AAkALgAAAAAAHYQDEapmEc2byACqAC-EWg0Aihx0qtzv3k_XDmEEfSdYlgAJOdNU0wAA\",\"owner\":{\"issuer\":\"https://id.openape.ai\",\"subject\":\"patrick@hofmann.eco\"},\"podId\":\"129579b8-e03d-44b5-a44b-4de9f8cd7f89\",\"version\":5}`",
           "risk": "high",
           "constraints": {
@@ -490,7 +494,8 @@
     "card": {
       "registry": null,
       "requester": null,
-      "program": null
+      "program": null,
+      "binds_exact_command": true
     }
   }
 }

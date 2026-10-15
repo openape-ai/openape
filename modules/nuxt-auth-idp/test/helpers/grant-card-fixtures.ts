@@ -2,7 +2,7 @@ import { join } from 'node:path'
 import type { User } from '@openape/auth'
 import type { OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
 import type { ServerShape } from '@openape/grants'
-import { createInMemoryShapeStore, resolveProgramCall } from '@openape/grants'
+import { computeArgvHash, createInMemoryShapeStore, resolveProgramCall } from '@openape/grants'
 import type { LoadedAdapter } from '@openape/shapes'
 import { loadAdapter, resolveCommand } from '@openape/shapes'
 import { withGrantCards } from '../../src/runtime/server/utils/grant-card'
@@ -69,8 +69,9 @@ function pending(id: string, request: OpenApeGrantRequest): OpenApeGrant {
 }
 
 /** A command no adapter describes, as apes requests it: bound by its exact argv hash. */
-function unshapedRequest(argv: string[], hash: string, extra: Partial<OpenApeGrantRequest>): OpenApeGrantRequest {
+export async function unshapedRequest(argv: string[], extra: Partial<OpenApeGrantRequest> = {}): Promise<OpenApeGrantRequest> {
   const cli = argv[0]!
+  const hash = await computeArgvHash(argv)
   const permission = `${cli}.cli[name=${cli}].argv[hash=${hash}]#exec`
   return {
     requester: 'agent@example.com',
@@ -99,14 +100,14 @@ export async function buildCardFixtures(): Promise<CardFixtures> {
     command: pushArgv,
     summary: { title: 'Read-only status check', description: 'Rebased feature/rebase onto main; 12 commits replayed.', origin: 'IURIO rebase Pod', link: 'https://repos.example.com/iurio/pulls/42' },
   }))
-  const unknown = pending('grant-unknown', unshapedRequest(['acme-cli', 'deploy', '--env', 'production'], 'SHA-256:9f', {
+  const unknown = pending('grant-unknown', await unshapedRequest(['acme-cli', 'deploy', '--env', 'production'], {
     summary: { title: 'Deploy the hotfix', description: 'Ticket 7: roll out the login fix.' },
   }))
   const gitUntested = pending('grant-git-untested', await idpResolvedRequest({ name: 'git', sha256: UNTESTED_GIT_SHA256 }, pushArgv.slice(1), {
     requester: 'rebase-agent+owner+example_com@id.example.com',
     summary: { title: 'Push the rebased branch', origin: 'IURIO rebase Pod' },
   }))
-  const graphGate = pending('grant-graph-gate', unshapedRequest(graphGateArgv, 'SHA-256:3c', {
+  const graphGate = pending('grant-graph-gate', await unshapedRequest(graphGateArgv, {
     requester: 'mail-triage+owner+example_com@id.example.com',
     target_host: 'pods:129579b8-e03d-44b5-a44b-4de9f8cd7f89',
     audience: 'pods-graph-gate',

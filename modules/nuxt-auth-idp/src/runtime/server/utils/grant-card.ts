@@ -1,7 +1,7 @@
 import type { User } from '@openape/auth'
 import type { OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
 import type { ServerShape } from '@openape/grants'
-import { buildCliAuthDetail, computeArgvHash, GENERIC_OPERATION_ID, matchArgvToOperation } from '@openape/grants'
+import { buildCliAuthDetail, canonicalizeCliPermission, computeArgvHash, GENERIC_OPERATION_ID, matchArgvToOperation } from '@openape/grants'
 import type { GrantCardContext, RegistryCard } from '../../utils/grant-card'
 import { renderRegistryCard } from '../../utils/grant-card'
 import { getCliAuthorizationDetails } from '../../utils/cli-grants'
@@ -94,6 +94,40 @@ export function programFacts(request: OpenApeGrantRequest): GrantCardContext['pr
   return { sha256: context.program_sha256!, version_tested: structured ? context.version_tested === true : null }
 }
 
+/** The permission of an exact-command grant: the CLI name and the hash of its whole argv (`buildGenericResolvedServer`). */
+function exactCommandPermission(cliId: string, argvHash: string): string {
+  return canonicalizeCliPermission({ cli_id: cliId, resource_chain: [{ resource: 'cli', selector: { name: cliId } }, { resource: 'argv', selector: { hash: argvHash } }], action: 'exec' })
+}
+
+/**
+ * Whether approving binds nothing but the request's command line, so a
+ * requester title cannot widen it (owner decision, issue 1477). Fails closed:
+ * every authorization detail must be an exact-only CLI detail whose permission
+ * names the hash of exactly this command, and every permission must be that
+ * permission. A command without details or permissions is bound by its
+ * command hash. Anything else, such as a permission of another form or a
+ * detail of another type, counts as broader.
+ */
+export async function bindsExactCommand(request: OpenApeGrantRequest): Promise<boolean> {
+  const command = request.command
+  if (!Array.isArray(command) || !command.length || command.some(token => typeof token !== 'string')) return false
+  const context = request.execution_context
+  if (context?.argv && !sameArgv(context.argv, command)) return false
+  const argvHash = await computeArgvHash(command)
+  if (context?.argv_hash && context.argv_hash !== argvHash) return false
+  const details = request.authorization_details ?? []
+  const permissions = request.permissions ?? []
+  const allowed = new Set<string>()
+  for (const detail of details) {
+    if (detail.type !== 'openape_cli' || detail.constraints?.exact_command !== true) return false
+    const expected = exactCommandPermission(detail.cli_id, argvHash)
+    if (detail.permission !== expected || canonicalizeCliPermission(detail) !== expected) return false
+    allowed.add(expected)
+  }
+  if (!details.length) allowed.add(exactCommandPermission(command[0]!.split('/').pop()!, argvHash))
+  return permissions.every(permission => allowed.has(permission))
+}
+
 function defaultSources(): GrantCardSources {
   const shapeStore = useShapeStore()
   const { userStore } = useIdpStores()
@@ -105,7 +139,7 @@ export async function withGrantCards<T extends OpenApeGrant>(grants: T[], source
   const getShape = memoize(sources.getShape)
   const findUser = memoize(sources.findUser)
   return await Promise.all(grants.map(async (grant) => {
-    const [registry, user] = await Promise.all([registryCard(grant.request, getShape), findUser(grant.request.requester)])
-    return { ...grant, card: { registry, requester: user ? { name: user.name, owner: user.owner ?? null } : null, program: programFacts(grant.request) } }
+    const [registry, user, exactCommand] = await Promise.all([registryCard(grant.request, getShape), findUser(grant.request.requester), bindsExactCommand(grant.request)])
+    return { ...grant, card: { registry, requester: user ? { name: user.name, owner: user.owner ?? null } : null, program: programFacts(grant.request), binds_exact_command: exactCommand } }
   }))
 }
