@@ -1,5 +1,5 @@
 import type { Browser, Page } from 'playwright'
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { mkdirSync } from 'node:fs'
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { chromium } from 'playwright'
@@ -16,7 +16,7 @@ beforeAll(async () => {
   user = await fixture.identity(owner)
   expect((await user.call('POST', '/api/repos', { owner: 'owner', name: 'project' })).ok).toBe(true)
   browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true })
-  const context = await browser.newContext()
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
   await context.addCookies(user.cookie.split('; ').map((cookie) => {
     const index = cookie.indexOf('=')
     return { name: cookie.slice(0, index), value: cookie.slice(index + 1), url: fixture.base, httpOnly: true, sameSite: 'Lax' as const }
@@ -39,13 +39,8 @@ async function signIn(reader: Page, email: string, idpToken: string) {
   expect(callback).toContain(`${fixture.base}/api/callback?`)
   await reader.goto(callback!)
 }
-async function screenshot(name: string) {
-  await page.screenshot({ path: `${artifactDir}/${name}.png`, fullPage: true })
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-}
 
-it('creates, previews, discusses, filters and triages at desktop and phone widths', async () => {
-  await page.setViewportSize({ width: 1440, height: 1000 })
+it('persists creation, preview, comments and triage through real routes and URL history', async () => {
   await page.goto(`${fixture.base}/owner/project/issues/new`)
   await page.getByLabel('Title', { exact: true }).fill('Report a problem without losing context')
   await page.getByLabel('Description', { exact: true }).fill(`## Expected behavior\nKeep **product context** after login.\n\n\`\`\`text\n${'a'.repeat(160)}\n\`\`\``)
@@ -54,9 +49,6 @@ it('creates, previews, discusses, filters and triages at desktop and phone width
   const preview = await previewResponse
   expect(await preview.json()).toMatchObject({ bodyHtml: expect.stringContaining('Expected behavior') })
   await page.getByRole('heading', { name: 'Expected behavior' }).waitFor()
-  await screenshot('new-desktop')
-  await page.setViewportSize({ width: 390, height: 844 })
-  await screenshot('new-mobile')
   await page.getByRole('button', { name: 'Create issue', exact: true }).focus()
   await page.keyboard.press('Enter')
   await page.waitForURL('**/owner/project/issues/1')
@@ -75,21 +67,12 @@ it('creates, previews, discusses, filters and triages at desktop and phone width
   await page.getByRole('button', { name: 'Save metadata' }).click()
   await page.getByRole('button', { name: 'Save metadata' }).waitFor()
   await expect.poll(async () => (await (await user.call('GET', '/api/repos/owner/project/issues/1')).json()).labels.length).toBe(1)
-  const discussion = await page.getByRole('region', { name: 'Discussion' }).boundingBox()
-  const metadata = await page.getByRole('complementary', { name: 'Issue details' }).boundingBox()
-  expect(metadata!.y).toBeGreaterThan(discussion!.y + discussion!.height)
-  await screenshot('detail-mobile')
-  await page.setViewportSize({ width: 1440, height: 1000 })
-  await screenshot('detail-desktop')
   await page.getByRole('button', { name: 'Close issue', exact: true }).click()
   await page.getByRole('button', { name: 'Reopen issue', exact: true }).waitFor()
   await page.getByRole('button', { name: 'Reopen issue', exact: true }).click()
   await page.getByRole('button', { name: 'Close issue', exact: true }).waitFor()
   await page.goto(`${fixture.base}/owner/project/issues`)
   await visible('Report a problem without losing context')
-  await screenshot('repository-desktop')
-  await page.setViewportSize({ width: 390, height: 844 })
-  await screenshot('repository-mobile')
   await page.goto(`${fixture.base}/issues`)
   await visible('Report a problem without losing context')
   await page.getByLabel('Search issues').fill('missing')
@@ -100,13 +83,6 @@ it('creates, previews, discusses, filters and triages at desktop and phone width
   expect(await page.getByLabel('Search issues').inputValue()).toBe('missing')
   await page.goBack()
   await visible('Report a problem without losing context')
-  await screenshot('overview-mobile')
-  await page.setViewportSize({ width: 1440, height: 1000 })
-  await screenshot('overview-desktop')
-  const views = ['new', 'detail', 'repository', 'overview']
-  const shots = views.flatMap(view => ['desktop', 'mobile'].map(size => ({ title: `${view} — ${size}`, shot: `${view}-${size}.png`, status: 'passed' })))
-  writeFileSync(`${artifactDir}/testrun.json`, JSON.stringify({ title: 'Native issues: repository and ecosystem UI', project: 'OpenApe', summary: 'Actual Nuxt UI and private SQLite fixture after real DDISA login. Keyboard creation/commenting, Markdown preview, labels, assignment, close/reopen, URL filters and 390/1440px layouts pass. Synthetic data only; production issues are unchanged.', tests: [{ id: 'native-issues-ui', title: 'Find, discuss and triage development issues', status: 'passed', steps: shots }] }, null, 2))
-  writeFileSync(`${artifactDir}/report.html`, `<!doctype html><html lang="en"><meta charset="utf-8"><title>Native issues UI verification</title><style>body{background:#09090b;color:#e4e4e7;font:16px system-ui;max-width:1200px;margin:auto;padding:24px}img{max-width:100%}section{border:1px solid #3f3f46;padding:16px;margin:24px 0}b{color:#34d399}</style><h1>Native issues UI verification</h1><p><b>Passed</b> · Real DDISA login → create → preview → comment → triage → filter. Synthetic data.</p>${shots.map(shot => `<section><h2>${shot.title}</h2><img alt="${shot.title}" src="data:image/png;base64,${readFileSync(`${artifactDir}/${shot.shot}`).toString('base64')}"></section>`).join('')}</html>`)
 })
 
 it('keeps product selection across login and gives reporters only their own discussion', async () => {
@@ -123,13 +99,7 @@ it('keeps product selection across login and gives reporters only their own disc
     await reporterPage.getByLabel('What happened?').fill('Plans lost my selected product after login')
     await reporterPage.getByLabel('Expected and actual behavior', { exact: true }).fill('Expected: retain Plans. Actual: context is missing. Reproduced with a new session.')
     expect(await reporterPage.getByLabel('Product', { exact: true }).inputValue()).toBe('plans')
-    const shots = []
-    for (const [name, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]] as const) {
-      await reporterPage.setViewportSize({ width, height })
-      await reporterPage.screenshot({ path: `${artifactDir}/report-${name}.png`, fullPage: true })
-      expect(await reporterPage.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
-      shots.push({ title: `Product reporting — ${name}`, shot: `report-${name}.png`, status: 'passed' })
-    }
+
     await reporterPage.getByRole('button', { name: 'Submit report', exact: true }).focus()
     await reporterPage.keyboard.press('Enter')
     await reporterPage.waitForURL('**/i/*')
@@ -146,11 +116,6 @@ it('keeps product selection across login and gives reporters only their own disc
     await reporterPage.reload()
     await reporterPage.getByRole('alert').waitFor()
     expect(await reporterPage.locator('body').textContent()).not.toContain('I can follow my own report.')
-    const manifest = JSON.parse(readFileSync(`${artifactDir}/testrun.json`, 'utf8'))
-    manifest.tests.push({ id: 'product-reporting-ui', title: 'Preselected product, private participant discussion and revocation', status: 'passed', steps: shots })
-    writeFileSync(`${artifactDir}/testrun.json`, JSON.stringify(manifest, null, 2))
-    const report = readFileSync(`${artifactDir}/report.html`, 'utf8')
-    writeFileSync(`${artifactDir}/report.html`, report.replace('</html>', `${shots.map(shot => `<section><h2>${shot.title}</h2><img alt="${shot.title}" src="data:image/png;base64,${readFileSync(`${artifactDir}/${shot.shot}`).toString('base64')}"></section>`).join('')}</html>`))
   }
   finally { await context.close() }
 })
@@ -158,7 +123,6 @@ it('keeps product selection across login and gives reporters only their own disc
 it('shows reciprocal related links and a merged PR without implicitly closing its issue', async () => {
   const heads = await fixture.seedBranches('owner', 'project')
   const pull = await (await user.call('POST', '/api/repos/owner/project/pulls', { title: 'Preserve product context', source: 'fix-issue', target: 'main' })).json()
-  await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto(`${fixture.base}/owner/project/issues/1`)
   await page.getByRole('region', { name: 'Linked pull requests' }).getByText('No visible links.', { exact: true }).waitFor()
   await page.locator('summary').filter({ hasText: 'Link pull request' }).click()
@@ -166,18 +130,13 @@ it('shows reciprocal related links and a merged PR without implicitly closing it
   await page.getByLabel('Pull request number', { exact: true }).fill(String(pull.number))
   await page.getByRole('button', { name: 'Add related pull request', exact: true }).click()
   await page.getByRole('link', { name: 'Preserve product context', exact: true }).waitFor()
-  const shots = []
-  for (const [view, path, text] of [
-    ['issue-linked', '/owner/project/issues/1', 'Preserve product context'],
-    ['pull-linked', `/owner/project/pulls/${pull.number}`, 'Report a problem without losing context'],
+
+  for (const [path, text] of [
+    ['/owner/project/issues/1', 'Preserve product context'],
+    [`/owner/project/pulls/${pull.number}`, 'Report a problem without losing context'],
   ]) {
     await page.goto(`${fixture.base}${path}`)
     await page.getByRole('link', { name: text, exact: true }).waitFor()
-    for (const [size, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]] as const) {
-      await page.setViewportSize({ width, height })
-      await screenshot(`${view}-${size}`)
-      shots.push({ title: `${view} — ${size}`, shot: `${view}-${size}.png`, status: 'passed' })
-    }
   }
   const merged = await user.call('POST', `/api/repos/owner/project/pulls/${pull.number}/merge`, { expectedSourceSha: heads.sourceSha, expectedTargetSha: heads.targetSha })
   expect(merged.status).toBe(200)
@@ -186,14 +145,9 @@ it('shows reciprocal related links and a merged PR without implicitly closing it
   await page.getByRole('button', { name: 'Close issue', exact: true }).waitFor()
   await page.getByRole('button', { name: 'Unlink Preserve product context', exact: true }).click()
   await page.getByRole('region', { name: 'Linked pull requests' }).getByText('No visible links.', { exact: true }).waitFor()
-  const manifest = JSON.parse(readFileSync(`${artifactDir}/testrun.json`, 'utf8'))
-  manifest.tests.push({ id: 'issue-pr-links', title: 'Explicit relation, reciprocal view and manual issue resolution', status: 'passed', steps: shots })
-  writeFileSync(`${artifactDir}/testrun.json`, JSON.stringify(manifest, null, 2))
-  writeFileSync(`${artifactDir}/report.html`, readFileSync(`${artifactDir}/report.html`, 'utf8').replace('</html>', `${shots.map(shot => `<section><h2>${shot.title}</h2><img alt="${shot.title}" src="data:image/png;base64,${readFileSync(`${artifactDir}/${shot.shot}`).toString('base64')}"></section>`).join('')}</html>`))
 })
 
 it('creates an external-code issue home and hides native code, pull and mirror controls', async () => {
-  await page.setViewportSize({ width: 1440, height: 1000 })
   await page.goto(fixture.base)
   await page.getByLabel('Repository owner', { exact: true }).fill('owner')
   await page.getByLabel('Repository name', { exact: true }).fill('external')
@@ -204,28 +158,19 @@ it('creates an external-code issue home and hides native code, pull and mirror c
   await page.getByRole('link', { name: 'View external code', exact: true }).waitFor()
   expect(await page.getByRole('link', { name: 'Code', exact: true }).count()).toBe(0)
   expect(await page.getByRole('link', { name: 'Pulls', exact: true }).count()).toBe(0)
-  const shots = []
-  for (const [size, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]] as const) {
-    await page.setViewportSize({ width, height })
-    await screenshot(`external-home-${size}`)
-    shots.push({ title: `External code issue home — ${size}`, shot: `external-home-${size}.png`, status: 'passed' })
-  }
+
   await page.getByRole('link', { name: 'Access', exact: true }).click()
   await page.getByRole('heading', { name: 'Product issue reporting' }).waitFor()
   expect(await page.getByText('Push mirrors', { exact: true }).count()).toBe(0)
   expect(await page.getByText('Webhooks', { exact: true }).count()).toBe(0)
   await page.goto(`${fixture.base}/owner/external`)
   await page.waitForURL('**/owner/external/issues')
-  const manifest = JSON.parse(readFileSync(`${artifactDir}/testrun.json`, 'utf8'))
-  manifest.tests.push({ id: 'external-issue-home', title: 'External Git authority retained', status: 'passed', steps: shots })
-  writeFileSync(`${artifactDir}/testrun.json`, JSON.stringify(manifest, null, 2))
-  writeFileSync(`${artifactDir}/report.html`, readFileSync(`${artifactDir}/report.html`, 'utf8').replace('</html>', `${shots.map(shot => `<section><h2>${shot.title}</h2><img alt="${shot.title}" src="data:image/png;base64,${readFileSync(`${artifactDir}/${shot.shot}`).toString('base64')}"></section>`).join('')}</html>`))
 })
 
 it('opens a migrated comment after login and displays original attribution and protected downloads', async () => {
   const repository = await (await user.call('POST', '/api/repos', { owner: 'owner', name: 'archive' })).json()
   const imported = await fixture.seedImport({ id: repository.id, owner: 'owner', name: 'archive' })
-  const context = await browser.newContext()
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
   const reader = await context.newPage()
   try {
     await reader.goto(`${fixture.base}/legacy?url=${encodeURIComponent(imported.sourceUrl)}#issuecomment-99`)
@@ -235,20 +180,10 @@ it('opens a migrated comment after login and displays original attribution and p
     await reader.getByText('Original comment retained across migration.', { exact: true }).waitFor()
     await reader.getByText('Imported from Forgejo: Ghost', { exact: true }).waitFor()
     expect(await reader.getByLabel('Leave a comment', { exact: true }).count()).toBe(0)
-    const shots = []
-    for (const [size, width, height] of [['desktop', 1440, 1000], ['mobile', 390, 844]] as const) {
-      await reader.setViewportSize({ width, height })
-      await reader.screenshot({ path: `${artifactDir}/imported-${size}.png`, fullPage: true })
-      expect(await reader.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true)
-      shots.push({ title: `Imported discussion — ${size}`, shot: `imported-${size}.png`, status: 'passed' })
-    }
+
     const download = reader.waitForEvent('download')
     await reader.getByRole('link', { name: 'diagnostic.html', exact: true }).click()
     expect((await download).suggestedFilename()).toBe('diagnostic.html')
-    const manifest = JSON.parse(readFileSync(`${artifactDir}/testrun.json`, 'utf8'))
-    manifest.tests.push({ id: 'imported-discussion', title: 'Legacy comment continuation, provenance and protected downloads', status: 'passed', steps: shots })
-    writeFileSync(`${artifactDir}/testrun.json`, JSON.stringify(manifest, null, 2))
-    writeFileSync(`${artifactDir}/report.html`, readFileSync(`${artifactDir}/report.html`, 'utf8').replace('</html>', `${shots.map(shot => `<section><h2>${shot.title}</h2><img alt="${shot.title}" src="data:image/png;base64,${readFileSync(`${artifactDir}/${shot.shot}`).toString('base64')}"></section>`).join('')}</html>`))
   }
   finally { await context.close() }
 })

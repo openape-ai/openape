@@ -1,7 +1,8 @@
 # Git/Issues UI verification migration
 
 Approved Plan revision 1; frozen base `95d1083abfb9de07ad8edf5bb16c71e06207c5fd`.
-Only this application is editable. Integration assertions remain until a named
+Integrated shared main `b248ac1594c8f83aff24d705eff5df4c1c818a42` (PR 437)
+without rebasing. Only this application is editable. Integration assertions remain until a named
 browser replacement passes, a targeted mutation fails, and restoration passes.
 
 ## Initial assertion inventory
@@ -92,3 +93,47 @@ PR relation and merge, external authority fences, migration/private downloads an
 pilot-size private pagination. `tests/issue-api.test.ts` retains actual Markdown
 sanitization, permission and migration-fence coverage. UI transport fixtures never
 substitute for these boundaries.
+
+
+## Commands and measured scope
+
+Activate the repository's pinned Node/pnpm toolchain and run `pnpm run doctor`
+in every shell, as required by the root instructions.
+
+- Fast manual UI acceptance: `pnpm --filter @openape-git/app test:layout`.
+- Retained real acceptance: `pnpm --filter @openape-git/app test:e2e`.
+- Focused existing interaction contracts: `pnpm --filter @openape-git/app exec vitest run tests/issue-ui.test.ts --maxWorkers=1`.
+
+`vitest.layout.config.ts` now selects the browser component suite. The former
+`e2e/issues.layout.test.ts` becomes `e2e/issues.journey.e2e.test.ts`; its five
+functional journeys remain, with the responsive assertion and screenshot loops
+moved to the named browser equivalents above. `test:e2e` uses one worker because
+the real fixtures share this worktree's generated Nuxt directories. No manifest,
+lockfile or shared check-registry change is required for this existing command.
+
+Repaired original baseline at `56112f91976d96652718aadefc1d0a9daa99868e`:
+`/usr/bin/time -p pnpm --filter @openape-git/app test:layout --maxWorkers=1`
+passed all five original cases in 24.57 s Vitest / 25.00 s wall time, including
+fresh IdP/app/browser startup. The original test blob was still exactly
+`78baab06ec691d167e10fb5b0ac5a302072e7073`, matching the frozen start basis.
+Dependencies and filesystem caches were warm after local installation/prebuild;
+there was no competing heavy check. One unrelated idle Nuxt dev server was left
+untouched. These measurements describe UI feedback commands with different
+boundary responsibilities, not an overall acceptance speedup or removed test quota.
+
+### Removed assertion map
+
+| Original layout assertion group | Browser replacement in `tests/layout/issues.test.ts` | Counter-proof |
+| --- | --- | --- |
+| `new-desktop/mobile` overflow | `creates by keyboard…`, `layouts('new')` | mobile shell minimum width; hidden preview; changed retry key |
+| `detail-desktop/mobile` overflow and metadata vertical position | `comments, assigns labels…`, `layouts('detail')` | mobile shell minimum width; two-column mobile grid |
+| `repository-*`, `overview-*` overflow | parameterized `filters the %s…` | mobile shell minimum width |
+| `report-desktop/mobile` overflow | `keeps the selected product…` | mobile form minimum width |
+| `issue-linked-*`, `pull-linked-*` overflow | `renders reciprocal merged pull links…`; real issue detail and full open/merged PR page | issue shell minimum width; separate PR shell minimum width |
+| `external-home-*` overflow | `shows an external issue home…`; full browser/list/header | mobile shell minimum width |
+| `imported-desktop/mobile` overflow | `renders imported attribution…` | mobile detail minimum width |
+
+All original non-geometric assertions stay in the five real browser journeys.
+The former generated ad-hoc HTML/manifest is replaced by the private versioned
+Test Run linked from the native PR. Final commit, commands, exact outcomes,
+measurements, inspected image hashes and remaining limitations belong there.
