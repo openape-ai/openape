@@ -52,10 +52,12 @@ describe('foundation', () => {
       dialog.showMessageBox = async () => ({ response: 1, checkboxChecked: false })
     }, source)
     await openPod(page, 'Reference pod')
-    await page.getByRole('tab', { name: 'Permissions', exact: true }).click()
+    await page.getByRole('navigation', { name: 'Pod sections' }).getByRole('button', { name: 'Access', exact: true }).click()
     await page.evaluate(podId => window.pods.resources({ type: 'pickReference', podId }), pod.id)
-    await page.getByRole('tab', { name: 'Overview', exact: true }).click()
-    await page.getByRole('tab', { name: 'Permissions', exact: true }).click()
+    await page.getByTestId('back-to-automations').click()
+    await openPod(page, 'Reference pod')
+    await page.locator('#section-overview').scrollIntoViewIfNeeded()
+    await page.getByRole('navigation', { name: 'Pod sections' }).getByRole('button', { name: 'Access', exact: true }).click()
     await page.getByText('synthetic-reference.txt', { exact: true }).waitFor()
     const snapshot = await page.evaluate(podId => window.pods.resources({ type: 'snapshot', podId }), pod.id)
     expect(snapshot.snapshot?.files).toHaveLength(1)
@@ -79,9 +81,9 @@ describe('foundation', () => {
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Local example' }))).pods[0]!
     const identity = await fixtureShellIdentity(root); identities.push(identity); await identity.encrypt(app, true)
     await openPod(page, 'Local example')
-    await page.getByRole('tab', { name: 'History', exact: true }).click()
+    await page.getByRole('navigation', { name: 'Pod sections' }).getByRole('button', { name: 'Runs', exact: true }).click()
     await page.evaluate(podId => window.pods.runs({ type: 'installExample', podId, variant: 'deterministic' }), pod.id)
-    await page.getByRole('button', { name: 'Run now', exact: true }).click()
+    await page.locator('#section-runs').getByRole('button', { name: 'Run now', exact: true }).click()
     await page.getByText('Local example completed (1)', { exact: true }).waitFor()
     await page.getByText('Technical details', { exact: true }).click()
     await mkdir(artifacts, { recursive: true })
@@ -91,7 +93,7 @@ describe('foundation', () => {
   })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {
     const { app, page } = await launch()
-    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['central', 'codex', 'data', 'definitions', 'details', 'domain', 'getStatus', 'language', 'master', 'mcpSession', 'onStatus', 'onboarding', 'packages', 'programs', 'resources', 'runs', 'scheduling', 'scripts', 'secrets', 'sharing', 'storage', 'updates', 'workspace'] })
+    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['central', 'codex', 'data', 'definitions', 'details', 'domain', 'getStatus', 'language', 'master', 'mcpSession', 'messages', 'onStatus', 'onboarding', 'packages', 'programs', 'resources', 'runs', 'scheduling', 'scripts', 'secrets', 'sharing', 'storage', 'updates', 'workspace'] })
     expect(await page.evaluate(async () => {
       try { await fetch('https://unassigned.invalid/'); return 'allowed' }
       catch { return 'denied' }
@@ -154,6 +156,7 @@ describe('foundation', () => {
     expect(await page.evaluate(() => typeof (globalThis as Record<string, unknown>).require)).toBe('undefined')
     // The renderer lands on the Automatisierungen shell and draws the worker's (empty) workspace map.
     expect(await page.getByRole('tab', { name: 'Automations', exact: true }).getAttribute('aria-selected')).toBe('true')
+    await page.getByRole('button', { name: 'Map', exact: true }).click()
     await page.getByRole('img', { name: 'Animated map of all Pods with their data sources, stores and decision points' }).waitFor()
   })
 })

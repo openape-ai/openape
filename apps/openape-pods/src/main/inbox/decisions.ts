@@ -94,8 +94,7 @@ export class InboxDecisions {
   }
 
   /**
-   * A requested approval is decided at the IdP and only counted in the inbox (issue 1458); an uncertain one is settled
-   * here. The card shows the approval's own fields (issue 1473): its title, description and link, the Pod as origin.
+   * Historical approvals remain visible; their authority and reconciliation moved to the external tool.
    */
   private approvals(sources: DecisionSources): DecisionEntry[] {
     return sources.domain.approvals.filter(approval => approval.state === 'unknown').map(approval => this.entry('approval', [approval.id], {
@@ -103,9 +102,9 @@ export class InboxDecisions {
       title: approval.title,
       body: [this.t('Uncertain approval'), ...(approval.description ? [approval.description] : []), approval.object, ...(approval.reason ? [approval.reason] : [])].join('\n'),
       authority: 'pods',
-      options: [{ key: 'renew', title: this.t('Ask again'), input: 'evidence' }, { key: 'withdraw', title: this.t('Withdraw'), input: 'evidence' }],
+      options: [],
       link: inboxLink(approval.link),
-    }, async (option, evidence) => this.worker.domain({ type: 'resolveApproval', id: approval.id, decision: option === 'renew' ? 'renew' : 'withdraw', evidence })))
+    }, async () => { throw new Error('Historical decisions are read-only; reconcile the external tool journal') }))
   }
 
   /** Work a Pod could not finish safely; it runs again only after the owner states what was observed. */
@@ -131,9 +130,9 @@ export class InboxDecisions {
       title: `${this.t('Uncertain action')} · ${effect.operation}`,
       body: Object.entries(effect.intent && typeof effect.intent === 'object' ? effect.intent : {}).map(([key, value]) => `${key}: ${show(value)}`).join('\n'),
       authority: 'pods',
-      options: [{ key: 'applied', title: this.t('It happened'), input: 'evidence' }, { key: 'notApplied', title: this.t('It did not happen'), input: 'evidence' }],
+      options: [],
       link: null,
-    }, async (option, evidence) => this.worker.domain({ type: 'resolveEffect', actionKey: effect.actionKey, attempt: effect.attempt, applied: option === 'applied', evidence })))
+    }, async () => { throw new Error('Historical effects are read-only; reconcile the external tool journal') }))
   }
 
   // Replaces the desktop confirmation dialog: the owner states what was observed outside, never an automatic resend.

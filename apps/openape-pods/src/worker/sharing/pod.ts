@@ -120,10 +120,6 @@ export async function mapPortablePod(root: string, source: PortablePodSource, ch
       pod.access.push({ kind: 'jev', alias, connection: inputs.add(`jev:${resource.id}:connection`, `${alias} connection`, 'connection'), model: inputs.add(`jev:${resource.id}:model`, `${alias} model`, 'string', configuration.model), maxAttempts: Number(configuration.maxAttempts) })
       capabilities.set('jev.evaluate', 'jev.evaluate')
     }
-    else if (configuration.capability === 'mail.read') {
-      pod.access.push({ kind: 'mail', alias, connection: inputs.add(`mail:${resource.id}:connection`, `${alias} connection`, 'connection'), folders: inputs.add(`mail:${resource.id}:folders`, `${alias} folders`, 'string'), since: inputs.add(`mail:${resource.id}:since`, `${alias} since`, 'string', configuration.since ?? ''), attachments: Boolean(configuration.attachments) })
-      capabilities.set('mail.read', 'mail.read')
-    }
     else {
       throw new Error('This resource configuration does not support portable export')
     }

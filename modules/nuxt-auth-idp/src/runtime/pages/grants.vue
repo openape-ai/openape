@@ -1,7 +1,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { navigateTo, useHead, useIdpAuth } from '#imports'
-import { formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
+import { requiresSingleUse, formatCliResourceChain, formatWidenedPreview, getCliAuthorizationDetails, summarizeCliGrant } from '../utils/cli-grants'
 import { callerState, formatCountdown, formatWaited } from '../utils/caller-liveness'
 import { formatRequesterName, unwrapShellCommand } from '../utils/command-display'
 import GrantBindingLine from '../components/GrantBindingLine.vue'
@@ -57,7 +57,7 @@ async function loadSimilarGrants(grantId) {
   }
 }
 function hasSimilar(grantId) {
-  return !!similarGrantsData.value[grantId]?.similar_grants?.length
+  return !requiresSingleUse(activeAndPending.value.find(grant => grant.id === grantId)) && !!similarGrantsData.value[grantId]?.similar_grants?.length
 }
 function getEffectiveDuration(grantId) {
   if (grantTypeSelections.value[grantId] !== 'timed') return void 0
@@ -450,12 +450,12 @@ function isExactCommand(detail) {
                 >
                   Just this once
                 </UButton>
-                <UButton color="success" variant="outline" size="sm" class="flex-1" @click="toggleAlwaysPanel(grant)">
+                <UButton v-if="!requiresSingleUse(grant)" color="success" variant="outline" size="sm" class="flex-1" @click="toggleAlwaysPanel(grant)">
                   Always allow
                 </UButton>
               </div>
 
-              <div v-if="alwaysOpen[grant.id]" class="rounded border border-success/30 bg-success/5 px-3 py-2 space-y-2">
+              <div v-if="alwaysOpen[grant.id] && !requiresSingleUse(grant)" class="rounded border border-success/30 bg-success/5 px-3 py-2 space-y-2">
                 <p class="text-xs text-muted">
                   Make a rule so future requests like this auto-approve. This request itself runs once.
                 </p>
@@ -559,7 +559,7 @@ function isExactCommand(detail) {
                     <label class="text-xs font-medium text-muted block mb-1">Approval Type</label>
                     <URadioGroup
                       v-model="grantTypeSelections[grant.id]"
-                      :items="GRANT_TYPE_OPTIONS"
+                      :items="requiresSingleUse(grant) ? GRANT_TYPE_OPTIONS.slice(0, 1) : GRANT_TYPE_OPTIONS"
                     />
                   </div>
                   <div v-if="grantTypeSelections[grant.id] === 'timed'" class="space-y-1">

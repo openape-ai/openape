@@ -16,14 +16,13 @@ import { ProgramState } from '../../src/main/programs/state'
 import { ProgramSession } from '../../src/main/programs/session'
 import type { ProgramAssignment } from '../../src/contracts/programs'
 import type { SandboxLevel } from '../../src/contracts/sandbox'
-import { launchSandbox } from '../../src/worker/runtime/sandbox'
 import type { RuntimePolicy } from '../../src/worker/runtime/sandbox'
-import { launchTerminal } from '../../src/worker/runtime/terminal'
+import { launchApeShell } from '../../src/worker/runtime/ape-shell'
 
 // Owner decision October 13, 2026 (issue 1468): at the owner level programs and the application terminal run with the
 // owner's HOME, so host logins (az, gh) apply; the isolated level keeps the Pod's private application state as HOME.
-vi.mock('../../src/worker/runtime/sandbox', async original => ({ ...await original<typeof import('../../src/worker/runtime/sandbox')>(), launchSandbox: vi.fn() }))
-vi.mock('../../src/worker/runtime/terminal', () => ({ launchTerminal: vi.fn() }))
+vi.mock('../../src/worker/runtime/ape-shell', () => ({ launchApeShell: vi.fn() }))
+vi.mock('../../src/main/programs/execution', () => ({ observeExecution: async (_domain: { completed: Promise<number> }, _id: string, observer: { authorized: (value: unknown) => Promise<void> }) => { await observer.authorized({ grantId: 'fixture', write: true }); await _domain.completed; return { kind: 'completed', exitCode: 0 } } }))
 vi.mock('../../src/worker/recovery/domains', () => ({ inspectDomainRecords: vi.fn(async () => {}) }))
 vi.mock('../../src/main/broker/authorization', () => ({ AgentAuthority: class { async authorizeProgram() { return { grantId: 'fixture', actions: ['list'], programs: ['az'] } } async assertActive() {} } }))
 
@@ -40,8 +39,8 @@ beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-owner-home-'))); launches = []
   credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: bytes => bytes.toString() })
   const record = (policy: RuntimePolicy, environment: Record<string, string>) => { launches.push({ policy, environment, temporaryExisted: existsSync(environment.TMPDIR!) }); return domain() }
-  vi.mocked(launchSandbox).mockImplementation(async (_helper, _directory, policy, _args, environment = {}) => record(policy, environment) as never)
-  vi.mocked(launchTerminal).mockImplementation(async (_helper, _directory, policy, _args, environment) => record(policy, environment) as never)
+  vi.mocked(launchApeShell).mockImplementation(async (_helper, _directory, policy, _args, environment = {}) => record(policy, environment) as never)
+  vi.mocked(launchApeShell).mockImplementation(async (_helper, _directory, policy, _args, environment) => record(policy, environment) as never)
 })
 afterEach(async () => { vi.clearAllMocks(); await rm(root, { recursive: true, force: true }) })
 
@@ -52,11 +51,11 @@ async function executable(): Promise<{ path: string, hash: string }> {
 /** The private application state folder: opened from the encrypted record below the credential store for one session. */
 const applicationState = expect.stringMatching(/\/credentials\/temporary\/.+\/application$/)
 
-async function brokerCall(level: SandboxLevel, identityConnection?: AgentConnection) {
+async function brokerCall(level: SandboxLevel, identityConnection: AgentConnection = connection(async () => 'synthetic-token')) {
   const program = await executable(); const stateId = await new ProgramState(credentials).create({ podId, applicationId })
   const argv = ['repos', 'pr', 'list']
   const assignment: ToolAssignment = { id: applicationId, identityConnection, program: { path: program.path, name: 'az', sha256: program.hash }, argv, reach: reach(level), programState: { id: stateId, podId, applicationId }, capability: 'tool.az.invoke', executable: program.path, executableHash: program.hash, entryFiles: [], prefix: [], runtimeDirectories: [], environment: {}, runtimeEnvironment: { HOME: '/descriptor/home' }, networkPorts: [] }
-  const broker = new PodToolBroker('/fixture/helper', join(root, 'broker'), async () => {}, credentials)
+  const broker = new PodToolBroker('/fixture/helper', join(root, 'broker'), { runtime: { executable: process.execPath, cli: '/fixture/ape-shell.mjs' }, targetHost: identityConnection.targetHost, operationId: randomUUID(), observer: { authorized: async () => {} } }, credentials)
   const reply = await broker.execute(assignment, { toolId: applicationId, argv }, { capabilities: ['tool.az.invoke'], assertCurrent: () => {}, signal: AbortSignal.timeout(5000) })
   return { reply, launch: launches.at(-1)! }
 }
@@ -88,7 +87,7 @@ async function terminal(level: SandboxLevel) {
   const assignment = { type: 'program', name: 'az', cliId: 'az', executable: program.path, executableHash: program.hash, stateId, capability: 'tool.az.invoke', networkHosts: [], entryFiles: [], environment: {} } as unknown as ProgramAssignment
   const workspace = join(root, 'workspace'); await mkdir(workspace)
   const sessionId = randomUUID()
-  const session = new ProgramSession(sessionId, podId, applicationId, assignment, ['login'], '/fixture/helper', join(root, 'authentication'), credentials, async () => {}, async () => {}, workspace, { readDirectories: [], writeDirectories: [] }, { connection: async () => ({}) as never, ledger: {} as never, origin: async () => 'Pod', reach: async () => reach(level) })
+  const session = new ProgramSession(sessionId, podId, applicationId, assignment, ['login'], '/fixture/helper', join(root, 'authentication'), credentials, async () => {}, async () => {}, workspace, { readDirectories: [], writeDirectories: [] }, { connection: async () => connection(), runtime: { executable: '/fixture/node', cli: '/fixture/ape-shell.mjs', environment: {} }, ledger: {} as never, origin: async () => 'Pod', reach: async () => reach(level) })
   await session.completed
   expect(session.view().error).toBeNull()
   return { launch: launches.at(-1)!, sessionDirectory: join(root, 'authentication', sessionId) }
@@ -110,11 +109,11 @@ it('keeps the isolated application terminal in the private application state', a
   expect(launch.policy.writeDirectories).toEqual([launch.environment.HOME])
 })
 
-const connection = (accessToken = async () => 'SYNTHETIC_POD_TOKEN'): AgentConnection => ({ issuer: 'https://id.example.test', subject: 'pod@example.test', owner: 'owner@example.test', keyId: 'key', targetHost: 'pods:fixture', accessToken })
+function connection(accessToken = async () => 'SYNTHETIC_POD_TOKEN'): AgentConnection { return { issuer: 'https://id.example.test', subject: 'pod@example.test', owner: 'owner@example.test', keyId: 'key', targetHost: 'pods:fixture', accessToken } }
 
 it.each(['owner', 'isolated'] as const)('passes only the Pod identity file to a %s program, redacts its token, and removes the file', async (level) => {
   let path = ''
-  vi.mocked(launchSandbox).mockImplementation(async (_helper, _directory, policy, _args, environment = {}) => {
+  vi.mocked(launchApeShell).mockImplementation(async (_helper, _directory, policy, _args, environment = {}) => {
     path = environment.APES_AUTH_FILE!
     expect(JSON.parse(await readFile(path, 'utf8'))).toMatchObject({ email: 'pod@example.test', access_token: 'SYNTHETIC_POD_TOKEN' })
     expect((await stat(path)).mode & 0o777).toBe(0o600)
@@ -131,7 +130,7 @@ it.each(['owner', 'isolated'] as const)('passes only the Pod identity file to a 
 
 it('removes the Pod identity when the native program cannot start', async () => {
   let path = ''
-  vi.mocked(launchSandbox).mockImplementation(async (_helper, _directory, _policy, _args, environment = {}) => {
+  vi.mocked(launchApeShell).mockImplementation(async (_helper, _directory, _policy, _args, environment = {}) => {
     path = environment.APES_AUTH_FILE!
     throw new Error('Synthetic launch failure')
   })

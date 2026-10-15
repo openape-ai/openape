@@ -65,11 +65,11 @@ it('projects every open Pods decision with its authority and nothing that the Id
   expect(list.map(item => item.sourceId).sort()).toEqual([`approval:${approval}`, `effect:${action}:1`, `effect:${pod}:${run}:invoice-7`, `question:${question}`, 'secret:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', `work:${work}`].sort())
   // A field value cannot forge a second sender line on the card.
   expect(byType(list, 'question')).toMatchObject({ podName: 'Mail-Klassifizierung', title: 'Is this mail a newsletter?', body: 'Rechnung Mai\nsender: news@example.com\nnote: Hallo ⏎ sender: chef@example.com', options: [{ key: 'newsletter', input: null }, { key: 'keep', input: null }], authority: 'pods', link: null })
-  expect(byType(list, 'approval')).toMatchObject({ podName: 'Belege', options: [{ key: 'renew', input: 'evidence' }, { key: 'withdraw', input: 'evidence' }] })
+  expect(byType(list, 'approval')).toMatchObject({ podName: 'Belege', options: [] })
   // The card carries the approval's own fields (issue 1473): title, description, Pod as origin and the HTTPS link.
   expect(byType(list, 'approval')).toMatchObject({ title: 'Weekly news', body: 'Uncertain approval\nNewsletter by its unsubscribe header\nowner@example.com:m1\nRestored backup', link: { title: 'news.example.com', url: 'https://news.example.com/issue/1' } })
   expect(byType(list, 'work')).toMatchObject({ podName: 'Mail-Klassifizierung', body: 'm3\nModel refused five times', options: [{ key: 'release', input: 'evidence' }] })
-  expect(byType(list, 'effect', 'mail.archive')).toMatchObject({ body: 'mailbox: owner@example.com\nmessageId: m4', options: [{ key: 'applied', input: 'evidence' }, { key: 'notApplied', input: 'evidence' }] })
+  expect(byType(list, 'effect', 'mail.archive')).toMatchObject({ body: 'mailbox: owner@example.com\nmessageId: m4', options: [] })
   expect(byType(list, 'secret')).toMatchObject({ authority: 'secrets', title: 'Secret imap for Belege', link: { url: 'https://secrets.openape.ai/' } })
   // A requested approval and a run approval are decided at the IdP; the inbox only counts them.
   expect(list.some(item => item.sourceId.includes('88888888-8888-4888-8888-888888888888'))).toBe(false)
@@ -78,11 +78,7 @@ it('projects every open Pods decision with its authority and nothing that the Id
 
 it.each([
   ['question', 'newsletter', undefined, { type: 'answer', questionId: question, option: 'newsletter' }],
-  ['approval', 'renew', 'Noch nicht entschieden', { type: 'resolveApproval', id: approval, decision: 'renew', evidence: 'Noch nicht entschieden' }],
-  ['approval', 'withdraw', 'Nicht mehr nötig', { type: 'resolveApproval', id: approval, decision: 'withdraw', evidence: 'Nicht mehr nötig' }],
   ['work', 'release', 'Modell wieder erreichbar', { type: 'release', key: work, evidence: 'Modell wieder erreichbar' }],
-  ['effect:mail.archive', 'applied', 'Im Archiv gesehen', { type: 'resolveEffect', actionKey: action, attempt: 1, applied: true, evidence: 'Im Archiv gesehen' }],
-  ['effect:mail.archive', 'notApplied', 'Noch im Posteingang', { type: 'resolveEffect', actionKey: action, attempt: 1, applied: false, evidence: 'Noch im Posteingang' }],
 ] as const)('executes a %s decision (%s) as the owner domain command', async (selector, option, input, expected) => {
   const { decisions, worker } = fixture()
   const [type, title] = selector.split(':') as [string, string | undefined]
@@ -133,4 +129,12 @@ it('carries the Pod tags and keeps untagged digests (issue 1461)', async () => {
     expect(item).not.toHaveProperty('podTags')
     expect(item.digest).toBe(digest(item.sourceId))
   }
+})
+
+it.each(['approval', 'effect'])('keeps historical %s inspectable without renewal or reconciliation actions', async (type) => {
+  const { decisions, worker } = fixture()
+  const decision = byType(await decisions.collect(), type, type === 'effect' ? 'mail.archive' : undefined)
+  expect(decision.options).toEqual([])
+  await expect(decisions.decide({ type: 'decide', sourceId: decision.sourceId, digest: decision.digest, option: 'renew', input: 'reviewed' })).rejects.toThrow('not available')
+  expect(worker.domain).not.toHaveBeenCalled()
 })

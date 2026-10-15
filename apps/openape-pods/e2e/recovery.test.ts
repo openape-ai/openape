@@ -1,3 +1,4 @@
+import { machineRuntime } from './fixtures/machine'
 import { mkdtemp, realpath, rm, readFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -19,7 +20,7 @@ describe('owned runtime recovery', () => {
     const resources = new ResourceRegistry(store, id => dispatcher?.cancelPod(id))
     let markRequested: () => void = () => {}
     const requested = new Promise<void>((resolveRequest) => { markRequested = resolveRequest })
-    dispatcher = new RunDispatcher(store, resources, { helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: resolve('dist/vendor/codex'), catalog: resolve('dist/vendor/models.json'), manifest: resolve('dist/vendor/manifest.json'), sdkHost: resolve('dist/runtime/sdk-host.mjs') }, {
+    dispatcher = new RunDispatcher(store, resources, { ...await machineRuntime(), helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: resolve('dist/vendor/codex'), catalog: resolve('dist/vendor/models.json'), manifest: resolve('dist/vendor/manifest.json'), sdkHost: resolve('dist/runtime/sdk-host.mjs') }, {
       model: bundledModel,
       provider: async (_body, signal) => { markRequested(); return new Promise<Response>((_resolve, reject) => { signal.addEventListener('abort', () => reject(signal.reason), { once: true }) }) },
       tool: async () => { throw new Error('No tools assigned') },

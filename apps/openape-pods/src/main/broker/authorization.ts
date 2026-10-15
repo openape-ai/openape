@@ -1,11 +1,11 @@
 import { AuthorityError, isTransientStatus, NonRetryableError, transientNetwork, transientResponse } from '../../contracts/infrastructure'
 import type { BrokeredGrant, OpenApeAuthZClaims, OpenApeCliAuthorizationDetail } from '@openape/core'
-import { cliAuthorizationDetailsCover, computeArgvHash, coverableCliDetails, sameBrokeredGrant, verifyAuthzJWT } from '@openape/grants'
+import { cliAuthorizationDetailsCover, coverableCliDetails, sameBrokeredGrant, verifyAuthzJWT } from '@openape/grants'
 import type { VerifyAuthzOptions } from '@openape/grants'
 import type { RunApproval } from '../../contracts/activity'
 import { grantSummary } from '../../contracts/grant-summary'
 import type { ScriptSummary } from '../../contracts/grant-summary'
-import { assertProgramName, commandLine, reservedProgramNames } from '../../contracts/programs'
+import { commandLine } from '../../contracts/programs'
 import type { PodPermission } from '../grants/pod-permissions'
 import { setTimeout as delay } from 'node:timers/promises'
 
@@ -63,16 +63,9 @@ export interface PermissionAuthorization {
  * arguments exactly as executed, without the executable.
  */
 export interface ProgramCall { program: { name: string, sha256: string }, argv: string[] }
-/**
- * A verified command token: the grant it was issued for and the IdP's resolution of exactly this call, its actions and
- * the programs (shape ids) they belong to.
- */
-export interface CommandAuthorization { grantId: string, actions: string[], programs: string[] }
 interface MintedGrant { grantId: string, token: string, jwks: VerifyAuthzOptions['jwks'], reusableUntil: number }
-interface CommandToken extends CommandAuthorization { reusableUntil: number }
 export const grantTokenReuseMs = 60 * 1000
 // The IdP issues a command token for at most five minutes (issue 1473, revision 4).
-export const commandTokenLifetimeMs = 300 * 1000
 const expiryMarginMs = 10 * 1000
 // A single-use request is useless once its caller stopped waiting (DDISA grants §3.4).
 const onceWaitMs = 15 * 60 * 1000
@@ -89,7 +82,6 @@ export function decisionPollMs(waitedMs: number): number { return waitedMs < 5 *
  */
 export class RunGrantTokens {
   private readonly minted = new Map<string, MintedGrant>()
-  private readonly commands = new Map<string, CommandToken>()
   private readonly keySets = new Map<string, VerifyAuthzOptions['jwks']>()
   private readonly inflight = new Map<string, Promise<unknown>>()
   /** One in-flight grant request or decision wait per key and run; concurrent calls share its result. */
@@ -112,17 +104,6 @@ export class RunGrantTokens {
     this.minted.set(key, { grantId: grant.grantId, token: grant.token, jwks: grant.jwks, reusableUntil: Math.min(now + grantTokenReuseMs, grant.expiresAt - expiryMarginMs) })
   }
 
-  command(key: string, now = Date.now()): CommandAuthorization | undefined {
-    const entry = this.commands.get(key)
-    if (entry && now < entry.reusableUntil) return { grantId: entry.grantId, actions: entry.actions, programs: entry.programs }
-    this.commands.delete(key)
-    return undefined
-  }
-
-  rememberCommand(key: string, authorization: CommandAuthorization, expiresAt: number, now = Date.now()): void {
-    this.commands.set(key, { ...authorization, reusableUntil: Math.min(now + commandTokenLifetimeMs, expiresAt) - expiryMarginMs })
-  }
-
   /** The signing keys of an issuer, fetched once per run. */
   async keys(uri: string, load: () => Promise<VerifyAuthzOptions['jwks']>): Promise<VerifyAuthzOptions['jwks']> {
     const cached = this.keySets.get(uri)
@@ -132,7 +113,7 @@ export class RunGrantTokens {
     return loaded
   }
 
-  expired(now = Date.now()): boolean { return this.inflight.size === 0 && [...this.minted.keys()].every(key => !this.reusable(key, now)) && [...this.commands.keys()].every(key => !this.command(key, now)) }
+  expired(now = Date.now()): boolean { return this.inflight.size === 0 && [...this.minted.keys()].every(key => !this.reusable(key, now)) }
 }
 
 /** Awaits a shared operation but leaves as soon as this caller is cancelled. */
@@ -187,7 +168,6 @@ type AuthorizeReply = { state: 'approved', grantId: string, token: string } | { 
 interface IdentityReply { status: number, text: string }
 
 const grantIdPattern = /^[\w-]{1,128}$/
-const commandRefused = 'The IdP command token does not match this Pod, host, command or program; nothing was run'
 
 export class AgentAuthority {
   private readonly usedOnce = new Set<string>()
@@ -253,38 +233,6 @@ export class AgentAuthority {
   private get decisionIssuer(): string { return (this.connection.decisionIssuer ?? this.connection.issuer).replace(/\/$/, '') }
 
   /**
-   * Authorizes one program call at the IdP (issue 1473, revision 4). The desktop sends the exact command and the
-   * program hash; the IdP alone resolves it and finds a grant that covers it. A pending request is shown and awaited
-   * like every Pod approval, then the call is authorized again. The returned token is verified before anything runs and
-   * reused for an identical command until it expires.
-   */
-  async authorizeProgram(call: ProgramCall, signal: AbortSignal): Promise<CommandAuthorization> {
-    assertProgramName(call.program.name)
-    const argvHash = await computeArgvHash([call.program.name, ...call.argv])
-    // Like a permission token, a command token is reused only for the identity, key and broker connection it was issued to.
-    const key = [this.decisionIssuer, this.connection.subject, this.connection.keyId, this.connection.brokered?.connection_id ?? '', this.connection.targetHost, argvHash, call.program.sha256].join('\n')
-    const cached = this.tokens?.command(key)
-    if (cached) return cached
-    const caller = Symbol('caller')
-    const shared = await this.share(`command:${key}`, async () => {
-      let reply = await this.authorizeCall(call, signal)
-      if (reply.state === 'pending') {
-        await this.awaitProgramDecision(reply.grantId, call, signal)
-        reply = await this.authorizeCall(call, signal)
-        if (reply.state === 'pending') throw new AuthorityError('The approved grant does not cover this command; review it at the IdP')
-      }
-      const { authorization, expiresAt, once } = await this.verifyCommand(reply, call, argvHash, signal)
-      // A single-use grant keeps issuing tokens until it is consumed, so its token runs exactly this call and is never reused.
-      if (once) await this.consume(reply.token, reply.grantId, signal)
-      else this.tokens?.rememberCommand(key, authorization, expiresAt)
-      return { authorization, once, caller }
-    }, signal)
-    // A single-use token authorizes only the call that obtained it; a concurrent identical call asks the IdP again.
-    if (shared.once && shared.caller !== caller) return this.authorizeProgram(call, signal)
-    return shared.authorization
-  }
-
-  /**
    * Asks the IdP once about a program call without waiting or running it, as the owner's grant command does: a pending
    * request is recorded in the ledger so the owner can decide it.
    */
@@ -310,39 +258,6 @@ export class AgentAuthority {
   }
 
   /** Shows the pending request of a program call and waits for the owner's decision; Pods never decides it. */
-  private async awaitProgramDecision(grantId: string, call: ProgramCall, signal: AbortSignal): Promise<void> {
-    let grant = await this.grant(grantId, signal)
-    await this.ledger?.record(grant, this.connection)
-    const coverage = grantCoverage(grant)
-    const publish = async (state: GrantProgress['state']) => this.observe?.({ grantId, issuer: this.decisionIssuer, title: grant.request.summary?.title ?? coverage[0]?.display ?? commandLine([call.program.name, ...call.argv]), ...(coverage[0] ? { permission: coverage[0].permission } : {}), subject: this.connection.subject, state })
-    if (grant.status === 'pending') {
-      grant = await this.decision(grant, publish, signal)
-      await this.ledger?.record(grant, this.connection)
-    }
-    if (grant.status !== 'approved') throw new AuthorityError(grant.status === 'pending' ? 'Permission was not decided while this command waited; start it again and approve at the IdP' : grant.status === 'expired' ? 'Permission request expired at the IdP; start a new run to request it again' : `Permission ${grant.status}; review this Pod's permissions before retrying`)
-    await publish('approved')
-  }
-
-  /**
-   * Verifies a command token before anything runs: the decision IdP's signature and issuer, this Pod identity and
-   * execution target, the grant it answers, the hash of exactly the argv about to run and the program's file hash. A
-   * broker binding in the token must be this connection's.
-   */
-  private async verifyCommand(reply: Extract<AuthorizeReply, { state: 'approved' }>, call: ProgramCall, argvHash: string, signal: AbortSignal): Promise<{ authorization: CommandAuthorization, expiresAt: number, once: boolean }> {
-    const issuer = this.decisionIssuer
-    const result = await verifyAuthzJWT(reply.token, { expectedIss: issuer, expectedAud: 'shapes', jwks: await this.keySet(signal) })
-    if (!result.valid || !result.claims) throw new AuthorityError(commandRefused)
-    const claims = result.claims as OpenApeAuthZClaims & { argv_hash?: unknown, program_sha256?: unknown }
-    if (claims.sub !== this.connection.subject || claims.target_host !== this.connection.targetHost || claims.grant_id !== reply.grantId || claims.argv_hash !== argvHash || claims.program_sha256 !== call.program.sha256) throw new AuthorityError(commandRefused)
-    // The broker binding must match both ways, a brokered grant must be decided by its owner, and no token runs as another user.
-    const brokered = this.connection.brokered
-    if (!sameBrokeredGrant(brokered, claims.brokered) || (brokered && claims.decided_by !== brokered.owner) || claims.run_as !== undefined) throw new AuthorityError(commandRefused)
-    const resolved = (claims.authorization_details ?? []).flatMap(detail => detail.type === 'openape_cli' ? [detail] : [])
-    // The desktop's own permissions are never authorized as a program command.
-    if (resolved.some(detail => reservedProgramNames.includes(detail.cli_id))) throw new AuthorityError(commandRefused)
-    return { authorization: { grantId: reply.grantId, actions: resolved.map(detail => detail.action), programs: [...new Set(resolved.map(detail => detail.cli_id))] }, expiresAt: claims.exp * 1000, once: grantTypeOf(claims) === 'once' }
-  }
-
   /** Finds or requests the grant of a desktop-own permission and waits for its decision; returns its id. */
   async acquire(assignment: PermissionAuthorization, signal: AbortSignal): Promise<string> {
     const detail = assignment.permission.detail

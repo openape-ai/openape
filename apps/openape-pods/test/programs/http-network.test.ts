@@ -1,5 +1,5 @@
 import { request as httpRequest } from 'node:http'
-import { startMailProxy } from '../../src/main/mail/proxy'
+import { startNetworkProxy } from '../../src/main/network/proxy'
 // @vitest-environment node
 import { expect, it, vi } from 'vitest'
 import { requestHttp } from '../../src/main/programs/http'
@@ -22,7 +22,7 @@ it('rejects redirects, oversized bodies and oversized headers from a transport',
 
 it('rejects a private DNS result behind an allowed application proxy hostname', async () => {
   lookup.mockResolvedValue([{ address: '127.0.0.1', family: 4 }])
-  const proxy = await startMailProxy(new AbortController().signal, undefined, ['api.example.com'])
+  const proxy = await startNetworkProxy(new AbortController().signal, ['api.example.com'])
   try {
     const address = new URL(proxy.environment.HTTPS_PROXY)
     const authorization = `Basic ${Buffer.from(`${address.username}:${address.password}`).toString('base64')}`

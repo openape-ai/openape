@@ -2,12 +2,12 @@ import { parseDomainCommand } from '../../contracts/domain-admin'
 import type { DomainOverview } from '../../contracts/domain-admin'
 import { ownerWriter } from '../../contracts/domain-data'
 import type { PodDatabase } from '../storage/database'
-import type { Approvals } from './approvals'
+import type { ApprovalHistory } from './approval-history'
 import type { DomainData } from './domain'
 import type { OwnerQuestions } from './questions'
 import type { WorkLedger } from './work'
 
-export interface DomainServices { data: DomainData, work: WorkLedger, questions: OwnerQuestions, approvals: Approvals }
+export interface DomainServices { data: DomainData, work: WorkLedger, questions: OwnerQuestions, approvals: ApprovalHistory }
 
 /** Owner administration of shared domain data (contracts/domain-admin.ts); every command acts as the owner. */
 export class DomainAdministration {
@@ -15,7 +15,7 @@ export class DomainAdministration {
 
   execute(input: unknown): unknown {
     const command = parseDomainCommand(input)
-    const { data, work, questions, approvals } = this.services
+    const { data, work, questions } = this.services
     switch (command.type) {
       case 'list': return this.overview()
       case 'define': return data.define(command)
@@ -29,8 +29,8 @@ export class DomainAdministration {
       case 'selectRule': work.selectRule(command.operation, command.ruleVersion); return this.overview()
       case 'release': work.release(command.key, command.evidence); return this.overview()
       case 'answer': return questions.answer(command.questionId, command.option)
-      case 'resolveApproval': approvals.resolve(command.id, command.decision, command.evidence); return this.overview()
-      case 'resolveEffect': this.resolveEffect(command.actionKey, command.attempt, command.applied, command.evidence); return this.overview()
+      case 'resolveApproval': throw new Error('Historical decisions cannot be renewed in Pods; reconcile the external tool journal')
+      case 'resolveEffect': throw new Error('Historical effects are read-only in Pods; reconcile the external tool journal')
       case 'openApproval': throw new Error('Opening an approval page needs the desktop window')
     }
   }
@@ -39,7 +39,7 @@ export class DomainAdministration {
     const { data, work, questions, approvals } = this.services
     const operations = this.store.db.prepare('SELECT operation,input,output,rule_version,generation FROM work_operations ORDER BY operation').all()
     const effects = this.store.db.prepare(`SELECT a.action_key,a.attempt,a.pod_id,a.run_id,a.operation,a.created_at,r.body FROM effect_attempts a
-      LEFT JOIN effect_receipts r ON r.action_key=a.action_key AND r.attempt=a.attempt AND r.outcome='intent' WHERE a.state='unknown' ORDER BY a.created_at`).all()
+      LEFT JOIN effect_receipts r ON r.action_key=a.action_key AND r.attempt=a.attempt AND r.outcome='intent' WHERE a.state IN ('intent','unknown') ORDER BY a.created_at`).all()
     return {
       namespaces: data.namespaces(),
       operations: operations.map(row => ({ operation: String(row.operation), input: String(row.input), output: String(row.output), ruleVersion: Number(row.rule_version), generation: Number(row.generation), counts: work.counts(String(row.operation))[String(row.operation)] ?? null })),
@@ -50,13 +50,4 @@ export class DomainAdministration {
     }
   }
 
-  /** Records what the owner observed about an uncertain effect; it never executes the effect again. */
-  private resolveEffect(actionKey: string, attempt: number, applied: boolean, evidence: string): void {
-    this.store.transaction(() => {
-      const state = applied ? 'confirmed_applied' : 'confirmed_not_applied'
-      if (this.store.db.prepare('UPDATE effect_attempts SET state=? WHERE action_key=? AND attempt=? AND state=\'unknown\'').run(state, actionKey, attempt).changes !== 1) throw new Error('Only an uncertain effect can be reconciled')
-      const sequence = Number(this.store.db.prepare('SELECT coalesce(max(sequence),0) AS sequence FROM effect_receipts WHERE action_key=? AND attempt=?').get(actionKey, attempt)!.sequence) + 1
-      this.store.db.prepare('INSERT INTO effect_receipts VALUES(?,?,?,?,?,?)').run(actionKey, attempt, sequence, state, JSON.stringify({ reconciledBy: ownerWriter, evidence: evidence.slice(0, 2000) }), Date.now())
-    })
-  }
 }

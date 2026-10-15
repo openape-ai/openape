@@ -1,7 +1,30 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { rewriteApeShellArgs } from '../src/ape-shell'
+import { parseMachineRequest } from '../src/authorization/machine-request'
 
 describe('ape-shell argv rewriting', () => {
+  it('keeps structured requests separate from shell text, including malformed invocations', () => {
+    expect(rewriteApeShellArgs(['node', 'ape-shell', '-c', '--request-fd', '6'])).toEqual({ action: 'machine' })
+    for (const arguments_ of [[], [''], ['3'], ['6', 'extra']]) expect(rewriteApeShellArgs(['node', 'ape-shell', '-c', '--request-fd', ...arguments_])).toEqual({ action: 'error' })
+  })
+
+  it('refuses caller-supplied approvals, arbitrary wrappers and implicit authority in machine context', () => {
+    const request = { version: 1, operationId: 'operation', executable: { path: '/bin/tool', sha256: 'a'.repeat(64) }, argv: [], cwd: '/workspace', environment: {}, targetHost: 'host', grantType: 'once', sandbox: { path: '/private/profile.sb', sha256: 'b'.repeat(64) }, forwardChannel: false, waitMs: 0 }
+    expect(parseMachineRequest(request)).toMatchObject({ operationId: 'operation', grantType: 'once' })
+    for (const invalid of [{ ...request, approved: true }, { ...request, wrapper: '/bin/sh' }, { ...request, grantType: undefined }, { ...request, environment: { APES_SHELL_MODE: '1' } }, { ...request, executable: { ...request.executable, sha256: '' } }]) expect(() => parseMachineRequest(invalid)).toThrow()
+  })
+  it('forwards exact program arguments without enabling shell mode', () => {
+    const command = ['node', '-e', 'console.log(2 + 2)', '', 'Grüße', '$HOME', 'a\nb', '$(touch marker)', '>', 'a && b', '--as', 'root']
+    expect(rewriteApeShellArgs(['node', 'ape-shell', '-c', '--', ...command])).toEqual({
+      action: 'rewrite',
+      argv: ['node', 'ape-shell', 'run', '--', ...command],
+    })
+  })
+
+  it.each([{ command: [] }, { command: [''] }, { command: ['node', 'a\0b'] }])('refuses invalid exact calls without a shell fallback: $command', ({ command }) => {
+    expect(rewriteApeShellArgs(['node', 'ape-shell', '-c', '--', ...command])).toEqual({ action: 'error' })
+  })
+
   it('returns null when not invoked as ape-shell', () => {
     expect(rewriteApeShellArgs(['/usr/bin/node', '/usr/local/bin/apes', 'login'])).toBeNull()
     expect(rewriteApeShellArgs(['/usr/bin/node', '/usr/local/bin/apes', 'run', '--', 'git', 'status'])).toBeNull()

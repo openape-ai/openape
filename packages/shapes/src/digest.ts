@@ -36,6 +36,7 @@ export function semanticAdapterDigest(adapter: ShapesAdapter): string {
       risk: operation.risk,
       resource_chain: operation.resource_chain,
       exact_command: operation.exact_command === true,
+      ...(operation.decision ? { decision: operation.decision } : {}),
     })),
   }
   return sha256(JSON.stringify(canonical))

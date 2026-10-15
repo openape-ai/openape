@@ -103,7 +103,7 @@ export async function retainsCompleteUnit(target: Termination) {
   const stopped = (await reopened.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs[0]!
   expect(stopped.state).toBe(target === 'quit' ? 'cancelled' : target === 'script' ? 'failed' : 'interrupted')
   await openPod(reopened, 'Checkpoint recovery')
-  await reopened.getByRole('tab', { name: 'History', exact: true }).click()
+  await reopened.getByRole('navigation', { name: 'Pod sections' }).getByRole('button', { name: 'Runs', exact: true }).click()
   // Automatic recovery retries once the stopped processes are proven; no owner step is needed.
   await reopened.getByText('Recovered committed unit', { exact: true }).waitFor({ timeout: 60000 })
   const store = new PodDatabase(root)

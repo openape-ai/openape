@@ -83,6 +83,8 @@ export interface ProgramCallScope {
   detail: OpenApeCliAuthorizationDetail
   argvHash: string
   programSha256: string
+  requiresOnce?: true
+  files?: { path: string, sha256: string }[]
 }
 
 function commandGrantFor(grant: OpenApeGrant, call: ProgramCallScope, brokered: BrokeredGrant | undefined): boolean {
@@ -98,7 +100,10 @@ function commandGrantFor(grant: OpenApeGrant, call: ProgramCallScope, brokered: 
  * The adapter digest is never compared: approvals carry over adapter updates.
  */
 function bindsCall(grant: OpenApeGrant, call: ProgramCallScope): boolean {
+  if (call.requiresOnce && ((grant.request.grant_type ?? 'once') !== 'once' || grant.auto_approval_kind || grant.decided_by_standing_grant)) return false
   const context = grant.request.execution_context
+  if (JSON.stringify(context?.files ?? []) !== JSON.stringify(call.files ?? [])) return false
+  if (call.requiresOnce && context?.argv_hash !== call.argvHash) return false
   if (isCliAuthorizationDetailExact(call.detail) || hasExactStructuredDetail(grant.request)) {
     if (context?.argv_hash !== call.argvHash) return false
   }

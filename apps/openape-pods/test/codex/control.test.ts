@@ -45,14 +45,14 @@ it('administers shared data as the owner: namespaces, owner records, questions a
   await expect(codex.execute({ ...write, action: { action: 'domain', command: { type: 'set', key: 'synthetic/records/sender-a', value: {}, revision: 1 } } }, new AbortController().signal)).rejects.toThrow('different command')
   await expect(domain({ type: 'set', key: 'synthetic/results/x', value: {}, revision: 0 })).rejects.toThrow()
   expect(await domain({ type: 'entries', path: 'synthetic/records' })).toMatchObject({ entries: [{ key: 'synthetic/records/sender-a', value: { rule: 'newsletter' } }] })
-  // An uncertain effect is settled by the owner's observation; nothing is executed again.
+  // Historical effects remain inspectable; reconciliation belongs to the external journal.
   store.db.prepare('INSERT INTO effect_attempts VALUES(?,1,?,NULL,\'mail.archive\',?,\'unknown\',\'{}\',1)').run('a'.repeat(64), pod.id, 'b'.repeat(64))
   store.db.prepare('INSERT INTO effect_receipts VALUES(?,1,1,\'intent\',\'{"messageId":"m1"}\',1)').run('a'.repeat(64))
   expect(await domain({ type: 'list' })).toMatchObject({ namespaces: [expect.objectContaining({ path: 'synthetic/records', readers: [reader.id], entries: 1 }), expect.objectContaining({ path: 'synthetic/results', writer: pod.id })], unknownEffects: [{ actionKey: 'a'.repeat(64), intent: { messageId: 'm1' } }] })
   await expect(domain({ type: 'resolveEffect', actionKey: 'a'.repeat(64), attempt: 1, applied: true, evidence: '' })).rejects.toThrow('observation')
-  await domain({ type: 'resolveEffect', actionKey: 'a'.repeat(64), attempt: 1, applied: true, evidence: 'The message is in the Archive folder' })
-  expect(store.db.prepare('SELECT state FROM effect_attempts').get()).toEqual({ state: 'confirmed_applied' })
-  await expect(domain({ type: 'resolveEffect', actionKey: 'a'.repeat(64), attempt: 1, applied: false, evidence: 'again' })).rejects.toThrow('Only an uncertain effect')
+  await expect(domain({ type: 'resolveEffect', actionKey: 'a'.repeat(64), attempt: 1, applied: true, evidence: 'The message is in the Archive folder' })).rejects.toThrow('read-only')
+  expect(store.db.prepare('SELECT state FROM effect_attempts').get()).toEqual({ state: 'unknown' })
+  await expect(domain({ type: 'resolveEffect', actionKey: 'a'.repeat(64), attempt: 1, applied: false, evidence: 'again' })).rejects.toThrow('read-only')
   await expect(domain({ type: 'openApproval', id: randomUUID() })).rejects.toThrow('desktop window')
 })
 
@@ -227,7 +227,7 @@ it('describes shared data as the only way Pods compose and offers no network, wo
   const { send } = fixture()
   const reference = await send({ action: 'runtime' }) as { contractVersion: number, sharedData: Record<string, string>, domain: unknown, actions: Record<string, unknown> }
   expect(reference.contractVersion).toBe(4)
-  expect(Object.keys(reference.sharedData)).toEqual(['purpose', 'data', 'work', 'decisions', 'approvals', 'presentation', 'engineering', 'example'])
+  expect(Object.keys(reference.sharedData)).toEqual(['purpose', 'data', 'work', 'decisions', 'presentation', 'engineering', 'example'])
   expect(reference).not.toHaveProperty('networks')
   expect(reference).toHaveProperty('domain')
   await expect(send({ action: 'networks', command: { type: 'list' } })).rejects.toThrow()

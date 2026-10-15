@@ -49,6 +49,8 @@ export interface ShapesOperation {
   risk: ScopeRiskLevel
   resource_chain: string[]
   exact_command?: boolean
+  /** Registry policy: one exact human decision, or an operation that must never execute. */
+  decision?: 'once' | 'deny'
   /** Approval card content from `[operation.presentation]`. */
   presentation?: ShapePresentation
 }

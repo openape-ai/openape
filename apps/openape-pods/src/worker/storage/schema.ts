@@ -7,7 +7,7 @@
  * schema-51 profiles and backups, archiving every row of the retired network runtime and of the retired groups in
  * legacy_records. Older profiles and backups are refused.
  */
-export const schemaVersion = 52
+export const schemaVersion = 53
 
 export const baselineSchema = `
 -- Pods, scripts and knowledge

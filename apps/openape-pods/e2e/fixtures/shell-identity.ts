@@ -1,3 +1,4 @@
+import { computeArgvHash } from '@openape/grants'
 import { computeCmdHash } from '@openape/core'
 import { createHash, generateKeyPairSync, randomBytes, randomUUID, sign } from 'node:crypto'
 import { createServer } from 'node:http'
@@ -39,6 +40,17 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
         if (failEnrollment) { failEnrollment = false; response.writeHead(503).end('{}'); return }
         response.end(JSON.stringify({ owner: 'fixture-owner@example.test', email: subject, keyId, permissions: 'none', decisionIssuer: origin, brokerConnectionId: brokerId }))
       }
+      else if (provisioning && request.url === '/api/auth/challenge') {
+        let raw = ''; for await (const bytes of request) raw += bytes
+        if (!subjects.has(JSON.parse(raw).id)) { response.writeHead(403).end('{}'); return }
+        response.end(JSON.stringify({ challenge: 'SYNTHETIC_NATIVE_CHALLENGE' }))
+      }
+      else if (provisioning && request.url === '/api/auth/authenticate') {
+        let raw = ''; for await (const bytes of request) raw += bytes
+        const body = JSON.parse(raw)
+        if (!subjects.has(body.id) || body.challenge !== 'SYNTHETIC_NATIVE_CHALLENGE' || !body.signature) { response.writeHead(403).end('{}'); return }
+        response.end(JSON.stringify({ act: 'agent', email: body.id, token: 'LOCAL_SYNTHETIC_TOKEN', expires_in: 3600 }))
+      }
       else if (request.url?.startsWith('/api/grants?')) {
         const query = new URL(request.url, origin).searchParams
         const requester = query.get('requester')
@@ -53,6 +65,19 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
       else if (request.url === '/.well-known/jwks.json') {
         response.end(JSON.stringify({ keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'key', alg: 'EdDSA', use: 'sig' }] }))
       }
+      else if (request.url === '/api/grants/authorize' && request.method === 'POST') {
+        let raw = ''; for await (const bytes of request) raw += bytes
+        const call = JSON.parse(raw)
+        const subject = [...subjects].find(([, pod]) => call.target_host === `pods:${pod}`)?.[0]
+        if (!subject || request.headers.authorization !== 'Bearer LOCAL_SYNTHETIC_TOKEN') { response.writeHead(403).end('{}'); return }
+        const id = randomUUID(); const now = Math.floor(Date.now() / 1000)
+        const brokered = enrollmentKeys.has(subject) ? { connection_id: brokerId, broker_issuer: origin, agent_issuer: origin, owner: 'fixture-owner@example.test', key_id: enrollmentKeys.get(subject) } : undefined
+        const grant = { requester: subject, target_host: call.target_host, audience: 'shapes', grant_type: 'always', authorization_details: [{ type: 'openape_cli', cli_id: call.program.name, action: 'read' }], execution_context: { files: call.files } }
+        grants.set(id, grant)
+        const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')
+        const body = Buffer.from(JSON.stringify({ iss: origin, sub: subject, aud: 'shapes', target_host: call.target_host, grant_id: id, grant_type: 'always', iat: now, exp: now + 300, ...(brokered ? { brokered, decided_by: brokered.owner } : {}), jti: randomUUID(), argv_hash: await computeArgvHash([call.program.name, ...call.argv]), program_sha256: call.program.sha256, authorization_details: grant.authorization_details, execution_context: grant.execution_context })).toString('base64url')
+        response.end(JSON.stringify({ state: 'approved', grant_id: id, authz_jwt: `${head}.${body}.${sign(null, Buffer.from(`${head}.${body}`), keys.privateKey).toString('base64url')}`, expires_at: now + 60 }))
+      }
       else if (request.url === '/api/grants' && request.method === 'POST') {
         const chunks: Buffer[] = []
         for await (const chunk of request) chunks.push(Buffer.from(chunk))
@@ -66,7 +91,7 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
       else if (request.url?.startsWith('/api/pods/agents/')) {
         const url = new URL(request.url, origin); const id = url.searchParams.get('grant') ?? ''
         const subject = decodeURIComponent(url.pathname.split('/').at(-1)!)
-        response.end(JSON.stringify({ email: subject, owner: 'fixture-owner@example.test', active: subjects.has(subject), keyIds: [enrollmentKeys.get(subject) ?? 'fixture-key'], grantId: id, grantActive: grants.get(id)?.requester === subject && grants.get(id)?.status !== 'denied' }))
+        response.end(JSON.stringify({ email: subject, owner: 'fixture-owner@example.test', active: subjects.has(subject), keyIds: [enrollmentKeys.get(subject) ?? 'fixture-key'], ...(enrollmentKeys.has(subject) ? { decisionIssuer: origin, brokerConnectionId: brokerId } : {}), grantId: id, grantActive: grants.get(id)?.requester === subject && grants.get(id)?.status !== 'denied' }))
       }
       else if (request.url?.startsWith('/api/grants/')) {
         const [, , , id, action] = request.url.split('/')

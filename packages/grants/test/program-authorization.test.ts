@@ -33,6 +33,21 @@ const store = createInMemoryShapeStore([gitShape, scriptShape, toolShape])
 const valid = { target_host: 'macmini', audience: 'shapes', program: { name: 'git', sha256: tested }, argv: ['status'] }
 
 describe('parseProgramAuthorizeRequest', () => {
+  it('validates and canonicalizes script content bindings', () => {
+    const files = [{ path: '/b.cjs', sha256: tested }, { path: '/a.cjs', sha256: untested }]
+    expect(parseProgramAuthorizeRequest({ ...valid, files }).files).toEqual([...files].reverse())
+    for (const invalid of [[], [{ path: 'relative.js', sha256: tested }], [files[0], files[0]], [{ path: '/a.js', sha256: 'bad' }]]) {
+      expect(() => parseProgramAuthorizeRequest({ ...valid, files: invalid })).toThrow(InvalidProgramAuthorizeRequestError)
+    }
+  })
+
+  it('retains script bindings in an exact command context', async () => {
+    const files = [{ path: '/script.cjs', sha256: tested }]
+    const resolved = await resolveProgramCall(store, parseProgramAuthorizeRequest({ ...valid, files }))
+    expect(resolved.executionContext.files).toEqual(files)
+    expect(resolved.detail.constraints?.exact_command).toBe(true)
+  })
+
   it('accepts the contract body and defaults to a continuing grant', () => {
     expect(parseProgramAuthorizeRequest(valid)).toEqual({ ...valid, grant_type: 'always' })
     const full = parseProgramAuthorizeRequest({ ...valid, grant_type: 'once', summary: { title: 'Check the repository' }, batch: { id: 'b-1' } })
@@ -184,5 +199,24 @@ describe('issueCommandJWT', () => {
     expect(ending.expiresAt).toBe(now() + 30)
     await expect(issueCommandJWT(grant({ expires_at: now() - 1 }), input, 'https://id.example.com', keys.privateKey)).rejects.toThrow('expired')
     await expect(issueCommandJWT(grant({ status: 'pending' }), input, 'https://id.example.com', keys.privateKey)).rejects.toThrow('not approved')
+  })
+})
+
+describe('registry protected operations', () => {
+  const guarded: ServerShape = {
+    ...gitShape,
+    operations: [
+      { ...gitShape.operations[0]!, decision: 'once', exact_command: true },
+      { ...gitShape.operations[1]!, decision: 'deny' },
+    ],
+  }
+  const registry = createInMemoryShapeStore([guarded])
+  it('requires an exact single-use decision and refuses denied or unrecognized bypasses', async () => {
+    expect((await resolveProgramCall(registry, valid)).requiresOnce).toBe(true)
+    for (const argv of [['push', 'origin', 'main'], ['unknown']]) {
+      await expect(resolveProgramCall(registry, { ...valid, argv })).rejects.toThrow('protected operation')
+    }
+    await expect(resolveProgramCall(registry, { ...valid, files: [{ path: '/code.js', sha256: tested }] })).rejects.toThrow('protected operation')
+    await expect(resolveProgramCall(registry, { ...valid, program: { name: 'renamed', sha256: tested }, argv: ['unknown'] })).rejects.toThrow('protected operation')
   })
 })

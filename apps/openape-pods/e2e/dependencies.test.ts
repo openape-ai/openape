@@ -1,3 +1,4 @@
+import { machineRuntime } from './fixtures/machine'
 import { chmod, mkdtemp, realpath, mkdir, writeFile, rename } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -32,7 +33,7 @@ it('managed dependencies: a bare import resolves from the prepared read-only lib
     await mkdir(parent, { recursive: true }); await chmod(stage, 0o700); await rename(stage, join(parent, hash)); await chmod(join(parent, hash), 0o500)
     store.db.prepare('INSERT INTO dependency_sets VALUES(?,?,?,?,?)').run(pod.id, hash, JSON.stringify(packages), JSON.stringify(lock), JSON.stringify(files))
     const resources = new ResourceRegistry(store, () => {})
-    const runtime = { helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: '', catalog: '', sdkHost: '', manifest: resolve('dist/vendor/manifest.json') }
+    const runtime = { ...await machineRuntime(), helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: '', catalog: '', sdkHost: '', manifest: resolve('dist/vendor/manifest.json') }
     const draft = async (id: string, code: string) => {
       store.db.prepare('INSERT INTO script_drafts VALUES(?,?,?,?,?,?,NULL,NULL)').run(id, pod.id, 1, store.getPod(pod.id).bindingRevision, code, '[]')
       store.db.prepare('INSERT INTO draft_packages VALUES(?,?)').run(id, JSON.stringify(packages))
@@ -53,7 +54,7 @@ it('managed dependencies: changing a library requires a new validated script and
     const resources = new ResourceRegistry(store, () => {}); resources.assignCredential(pod.id, 'api', randomUUID(), 0)
     const credentials = new ScriptCredentials(store, resources); const dependencies = new DependencyStore(store)
     const draftId = randomUUID(); let first = ''
-    const runtime = { helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: '', catalog: '', sdkHost: '', manifest: resolve('dist/vendor/manifest.json') }
+    const runtime = { ...await machineRuntime(), helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: '', catalog: '', sdkHost: '', manifest: resolve('dist/vendor/manifest.json') }
     for (const revision of [1, 2]) {
       const version = `1.0.${revision}`; const packages = { dependencies: { sample: version } }
       const lock = { lockfileVersion: 3, packages: { '': packages, 'node_modules/sample': { version, resolved: `https://registry.npmjs.org/sample/-/sample-${version}.tgz`, integrity: 'sha512-YQ==' } } }
@@ -82,7 +83,7 @@ it('managed dependencies: imports an exact registry lock and rejects altered int
     const dependencies = new DependencyStore(store)
     const packages = { dependencies: { 'is-odd': '3.0.1' } }
     const source = store.createPod({ name: 'Registry lock source' }); const recipient = store.createPod({ name: 'Registry lock recipient' }); const tampered = store.createPod({ name: 'Altered integrity refusal' })
-    const runtime = { helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: '', catalog: '', sdkHost: '', manifest: resolve('dist/vendor/manifest.json') }
+    const runtime = { ...await machineRuntime(), helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: '', catalog: '', sdkHost: '', manifest: resolve('dist/vendor/manifest.json') }
     const signal = new AbortController().signal
     const original = await dependencies.prepare(runtime, source.id, packages, signal, () => {})
     const row = store.db.prepare('SELECT lockfile FROM dependency_sets WHERE pod_id=? AND hash=?').get(source.id, original!)!

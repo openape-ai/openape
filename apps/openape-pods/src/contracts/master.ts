@@ -55,7 +55,7 @@ export type MasterAction =
   | { action: 'list' }
   | { action: 'runtime' }
   | { action: 'create', name: string }
-  | { action: 'inspect' | 'run' | 'pause' | 'resume' | 'installMailRecipe', podId: string, revision: number }
+  | { action: 'inspect' | 'run' | 'pause' | 'resume', podId: string, revision: number }
   | { action: 'setVariable', podId: string, revision: number, name: string, value: string, variableRevision: number }
   | { action: 'setSchedule', podId: string, revision: number, spec: ScheduleSpec, scheduleRevision: number, enabled: boolean }
   | { action: 'prepareSchedule', podId: string, revision: number, spec: ScheduleSpec, scheduleRevision: number }
@@ -66,7 +66,7 @@ export type MasterAction =
 export function parseMasterAction(value: unknown): MasterAction {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid master action')
   const item = { ...value } as Record<string, unknown>
-  const extra: Record<string, string[]> = { list: [], runtime: [], setVariable: ['name', 'value', 'variableRevision'], prepareSchedule: ['spec', 'scheduleRevision'], setSchedule: ['spec', 'scheduleRevision', 'enabled'], create: ['name'], inspect: [], run: [], pause: [], resume: [], installMailRecipe: [], revise: ['name'], draft: ['draftId', 'draftRevision', 'code', 'capabilities'], validate: ['draftId', 'draftRevision'], activate: ['draftId', 'draftRevision'], rollback: ['hash', 'expectedActive'] }
+  const extra: Record<string, string[]> = { list: [], runtime: [], setVariable: ['name', 'value', 'variableRevision'], prepareSchedule: ['spec', 'scheduleRevision'], setSchedule: ['spec', 'scheduleRevision', 'enabled'], create: ['name'], inspect: [], run: [], pause: [], resume: [], revise: ['name'], draft: ['draftId', 'draftRevision', 'code', 'capabilities'], validate: ['draftId', 'draftRevision'], activate: ['draftId', 'draftRevision'], rollback: ['hash', 'expectedActive'] }
   if (typeof item.action !== 'string' || !Object.hasOwn(extra, item.action)) throw new Error('Master action is not allowed')
   const scoped = !['list', 'runtime', 'create'].includes(item.action)
   const allowed = ['action', ...(scoped ? ['podId', 'revision'] : []), ...extra[item.action]!]
@@ -95,7 +95,7 @@ export const masterTool = {
     required: ['action'],
     additionalProperties: false,
     properties: {
-      action: { type: 'string', enum: ['runtime', 'list', 'create', 'inspect', 'revise', 'setVariable', 'prepareSchedule', 'draft', 'validate', 'activate', 'run', 'pause', 'resume', 'rollback', 'installMailRecipe'] },
+      action: { type: 'string', enum: ['runtime', 'list', 'create', 'inspect', 'revise', 'setVariable', 'prepareSchedule', 'draft', 'validate', 'activate', 'run', 'pause', 'resume', 'rollback'] },
       podId: { type: 'string', description: 'Exact pod UUID from list/create.' },
       revision: { type: 'integer', minimum: 1, description: 'Current pod settings revision.' },
       name: { type: 'string', description: 'Pod or variable name.' },

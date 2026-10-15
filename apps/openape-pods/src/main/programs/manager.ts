@@ -110,9 +110,9 @@ export class ProgramManager {
     await this.assignment(command.podId, command.applicationId, command.epoch)
     if ([...this.launches.values()].filter(item => item.view().state !== 'closed').length >= 4) throw new Error('Close another application first')
     const state = await this.resources(command.podId); const id = randomUUID()
-    const { level } = await this.access(command.podId).reach()
+    const reach = await this.access(command.podId).reach()
     const name = await this.dispatch({ type: 'reserveShell', podId: command.podId, epoch: command.epoch, sessionId: id }) as string
-    const shell = new ExternalShell(command.podId, dirname(this.root), runtime, state, this.credentials, this.connections,      async () => { await this.dispatch({ type: 'check', podId: command.podId, sessionId: id }) },      async () => { await this.dispatch({ type: 'release', podId: command.podId, sessionId: id }) }, level, name, command.applicationId)
+    const shell = new ExternalShell(command.podId, dirname(this.root), runtime, state, this.credentials, this.connections,      async () => { await this.dispatch({ type: 'check', podId: command.podId, sessionId: id }) },      async () => { await this.dispatch({ type: 'release', podId: command.podId, sessionId: id }) }, reach.level, name, command.applicationId, reach)
     const launch = new ApplicationLaunch(id, command.podId, shell)
     this.launches.set(command.podId, launch)
     try { await shell.ready }
@@ -125,9 +125,9 @@ export class ProgramManager {
     if (previous) throw new Error(previous.error ?? 'This pod already has an external terminal; close it first')
     const state = await this.resources(podId)
     const sessionId = randomUUID()
-    const { level } = await this.access(podId).reach()
+    const reach = await this.access(podId).reach()
     const name = await this.dispatch({ type: 'reserveShell', podId, epoch: state.epoch, sessionId }) as string
-    const shell = new ExternalShell(podId, dirname(this.root), runtime, state, this.credentials, this.connections,      async () => { await this.dispatch({ type: 'check', podId, sessionId }) },      async () => { await this.dispatch({ type: 'release', podId, sessionId }) }, level, name)
+    const shell = new ExternalShell(podId, dirname(this.root), runtime, state, this.credentials, this.connections,      async () => { await this.dispatch({ type: 'check', podId, sessionId }) },      async () => { await this.dispatch({ type: 'release', podId, sessionId }) }, reach.level, name, undefined, reach)
     this.shells.set(podId, shell)
     const observe = async () => { await shell.completed; if (!shell.error || shell.closed) this.shells.delete(podId) }
     void observe()

@@ -35,8 +35,8 @@ async function legacyProfile() {
   insert.run(rows.owner, 'openape', 'patrick@example.invalid', 'ready', null, JSON.stringify({ issuer, subject: 'patrick@example.invalid', pods: { [pods[1].id]: bindings.owner } }))
   insert.run(rows.ownerDuplicate, 'openape', 'patrick@example.invalid', 'revoked', null, JSON.stringify({ issuer, subject: 'patrick@example.invalid', pods: { [pods[2].id]: bindings.duplicate } }))
   insert.run(rows.codex, 'chatgpt', 'model@example.invalid', 'ready', null, JSON.stringify({ accountId: 'synthetic' }))
-  resources.replaceMail(pods[0].id, [{ kind: 'connection', name: 'OpenApe pod agent', configuration: { provider: 'openape', identity: bindings.delta.identity, ownerConnection: rows.deltaReady } }])
-  resources.replaceMail(pods[2].id, [{ kind: 'connection', name: 'OpenApe pod agent', configuration: { provider: 'openape', identity: bindings.duplicate.identity, ownerConnection: rows.ownerDuplicate } }])
+  store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), pods[0].id, 'connection', 'ready', 'Historical OpenApe pod agent', JSON.stringify({ provider: 'openape', identity: bindings.delta.identity, ownerConnection: rows.deltaReady }))
+  store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), pods[2].id, 'connection', 'ready', 'Historical OpenApe pod agent', JSON.stringify({ provider: 'openape', identity: bindings.duplicate.identity, ownerConnection: rows.ownerDuplicate }))
   for (const [index, item] of [bindings.delta, bindings.owner, bindings.duplicate].entries()) await credentials.create(item.connectionId, JSON.stringify({ podId: pods[index].id, privateKey: 'synthetic-key' }))
   for (const id of Object.values(rows)) await credentials.create(id, JSON.stringify({ issuer, account: 'synthetic' }))
   const runtime = { helper: 'unused-fixture-helper', executable: process.execPath, entry: 'unused-entry', runtimeDirectories: [], environment: {}, binary: join(vendor, 'codex'), manifest: join(vendor, 'manifest.json'), catalog: 'unused-catalog', sdkHost: 'unused-host' }

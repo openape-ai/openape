@@ -1,3 +1,4 @@
+import { machineRuntime } from './fixtures/machine'
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -18,7 +19,7 @@ let root = ''; let store: PodDatabase; let dispatcher: RunDispatcher; let master
 async function setup(provider?: AgentGatewayServices['provider'], packaged = false) {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-master-'))); store = new PodDatabase(root)
   const bundle = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents'); const dist = packaged ? join(bundle, 'Resources/app.asar.unpacked/dist') : resolve('dist')
-  const runtime: AgentRuntime = { helper: join(dist, 'native/pods-helper'), executable: packaged ? join(bundle, 'MacOS/OpenApe Pods Fixture') : process.execPath, entry: join(dist, 'runtime/script-entry.mjs'), runtimeDirectories: packaged ? [bundle] : [], environment: packaged ? { ELECTRON_RUN_AS_NODE: '1' } : {}, binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs') }
+  const runtime: AgentRuntime = { ...await machineRuntime(), helper: join(dist, 'native/pods-helper'), executable: packaged ? join(bundle, 'MacOS/OpenApe Pods Fixture') : process.execPath, entry: join(dist, 'runtime/script-entry.mjs'), runtimeDirectories: packaged ? [bundle] : [], environment: packaged ? { ELECTRON_RUN_AS_NODE: '1' } : {}, binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs') }
   const registry = new ResourceRegistry(store, podId => dispatcher.cancelPod(podId, 'Permissions changed'))
   dispatcher = new RunDispatcher(store, registry, runtime); const scheduler = new Scheduler(store, dispatcher)
   const control = new MasterControl(store, registry, dispatcher, scheduler, runtime)
@@ -86,7 +87,7 @@ it('persists ordinary setup, keeps automation disabled and enforces revisions be
   expect(inspected.tags).toEqual([])
   expect(inspected.resources.find(resource => resource.id === reference.id)?.configuration).toEqual({})
   expect(JSON.stringify(inspected)).not.toContain(credentialId); expect(JSON.stringify(inspected)).not.toContain('/private/owner-only.txt'); expect(JSON.stringify(inspected)).not.toContain('PRIVATE_'); expect(JSON.stringify(inspected)).not.toContain('/private/host/tool')
-  expect(inspected.resources.find(resource => (resource.configuration as { cliId?: string }).cliId === 'fixture')?.configuration).toEqual({ type: 'program', cliId: 'fixture', runtimeConfigured: false, capability: 'tool.fixture.read', commands: expect.arrayContaining([expect.objectContaining({ command: ['read'], action: 'read' })]) })
+  expect(inspected.resources.find(resource => (resource.configuration as { cliId?: string }).cliId === 'fixture')?.configuration).toEqual({ type: 'program', cliId: 'fixture', runtimeConfigured: false, capability: 'tool.fixture.read' })
   const epoch = registry.epoch(pod.id)
   await expect(action({ action: 'requestAccess', request: { provider: 'credential', alias: 'bot_token', description: 'Provide the notification token in Settings' } })).rejects.toThrow('not allowed')
   await expect(action({ action: 'requestAccess', request: { provider: 'credential', alias: 'bot_token', value: 'DO_NOT_ACCEPT', description: 'Secret' } })).rejects.toThrow('not allowed')
