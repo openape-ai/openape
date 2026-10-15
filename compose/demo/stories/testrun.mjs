@@ -20,8 +20,14 @@ function forgeCliToken() {
   const now = Math.floor(Date.now() / 1000)
   const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
   const payload = b64url(JSON.stringify({
-    typ: 'cli', sub: 'demo@openape.test', email: 'demo@openape.test', act: 'human',
-    iss: CLIENT_ID, aud: CLIENT_ID, iat: now, exp: now + 3600,
+    typ: 'cli',
+    sub: 'demo@openape.test',
+    email: 'demo@openape.test',
+    act: 'human',
+    iss: CLIENT_ID,
+    aud: CLIENT_ID,
+    iat: now,
+    exp: now + 3600,
   }))
   const sig = Buffer.from(createHmac('sha256', SECRET).update(`${header}.${payload}`).digest()).toString('base64url')
   return `${header}.${payload}.${sig}`
@@ -32,13 +38,23 @@ const manifest = {
   project: 'openape-free-idp',
   summary: 'Ein Nutzer meldet sich passwortlos an und ein Agent wird in seinem Namen autorisiert.',
   tests: [
-    { id: 'login', title: 'Nutzer meldet sich mit Passkey an', status: 'passed', steps: [
-      { title: 'Startseite', caption: 'Auf der Startseite gibst du deine E-Mail ein.', status: 'passed' },
-      { title: 'Passkey', caption: 'Der Browser fragt deinen Passkey ab — kein Passwort nötig.', status: 'passed' },
-    ] },
-    { id: 'grant', title: 'Agent wird autorisiert', status: 'passed', steps: [
-      { title: 'Consent', caption: 'Du genehmigst dem Agent den Zugriff in deinem Namen.', status: 'passed' },
-    ] },
+    {
+      id: 'login',
+      title: 'Nutzer meldet sich mit Passkey an',
+      status: 'passed',
+      steps: [
+        { title: 'Startseite', caption: 'Auf der Startseite gibst du deine E-Mail ein.', status: 'passed' },
+        { title: 'Passkey', caption: 'Der Browser fragt deinen Passkey ab — kein Passwort nötig.', status: 'passed' },
+      ],
+    },
+    {
+      id: 'grant',
+      title: 'Agent wird autorisiert',
+      status: 'passed',
+      steps: [
+        { title: 'Consent', caption: 'Du genehmigst dem Agent den Zugriff in deinem Namen.', status: 'passed' },
+      ],
+    },
   ],
 }
 

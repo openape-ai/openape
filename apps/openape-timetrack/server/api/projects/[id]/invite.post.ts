@@ -42,13 +42,25 @@ export default defineEventHandler(async (event) => {
   const id = ulid()
 
   const token = await signInviteToken({
-    inviteId: id, scope: 'project', resourceId: projectId, role: grantRole,
-    inviterEmail: caller.email, expiresAt,
+    inviteId: id,
+    scope: 'project',
+    resourceId: projectId,
+    role: grantRole,
+    inviterEmail: caller.email,
+    expiresAt,
   })
 
   await db.insert(projectInvites).values({
-    id, projectId, createdBy: caller.email, note, grantRole: grantRole as 'manager' | 'member',
-    maxUses, usedCount: 0, expiresAt, revokedAt: null, createdAt: now,
+    id,
+    projectId,
+    createdBy: caller.email,
+    note,
+    grantRole: grantRole as 'manager' | 'member',
+    maxUses,
+    usedCount: 0,
+    expiresAt,
+    revokedAt: null,
+    createdAt: now,
   })
 
   const origin = new URL('/', getRequestURL(event)).origin

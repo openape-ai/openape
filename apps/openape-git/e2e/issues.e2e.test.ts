@@ -89,10 +89,13 @@ describe('real DDISA login, native API and CLI', () => {
     const issue = await user.cli('create', '--repo', 'owner/external', '--title', 'External code issue', '--body-file', bodyFile, '--idempotency-key', 'external-issue-001')
     expect(issue.repositoryUrl).toBe('/owner/external/issues/1')
     for (const [method, path, body] of [
-      ['GET', '/browse', undefined], ['GET', '/pulls', undefined],
+      ['GET', '/browse', undefined],
+      ['GET', '/pulls', undefined],
       ['POST', '/pulls', { title: 'No native code', source: 'feature', target: 'main' }],
       ['POST', '/mirrors', { url: 'https://code.example/mirror', username: 'fixture', token: 'fixture' }],
-      ['POST', '/mirrors/reconcile', {}], ['POST', '/protections', {}], ['POST', '/webhooks', {}],
+      ['POST', '/mirrors/reconcile', {}],
+      ['POST', '/protections', {}],
+      ['POST', '/webhooks', {}],
     ] as const) expect((await user.call(method, `${endpoint}${path}`, body)).status).toBe(409)
     const git = (name: string) => fetch(`${fixture.base}/owner/${name}.git/info/refs?service=git-upload-pack`, { headers: { authorization: `Basic ${Buffer.from(`x-access-token:${user.idpToken}`).toString('base64')}` } })
     expect((await git('project')).status).toBe(200)

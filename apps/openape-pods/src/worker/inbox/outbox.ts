@@ -20,7 +20,9 @@ export function parseNotify(payload: unknown): Notify {
   const links = value.links === undefined ? [] : value.links
   if (!Array.isArray(links) || links.length > 5) throw new Error('notify accepts at most five links')
   return {
-    key: value.key, title: value.title, body: value.body,
+    key: value.key,
+    title: value.title,
+    body: value.body,
     links: links.map((link) => {
       const entry = link as { title?: unknown, url?: unknown } | null
       const url = typeof entry?.url === 'string' && entry.url.length <= 2048 ? URL.parse(entry.url) : null

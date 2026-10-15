@@ -21,12 +21,17 @@ export function localPodAccess(bridge: PodsBridge, namespace = '', revision?: Re
   return {
     revision,
     api: {
-      workspace: command => bridge.workspace(command), details: command => bridge.details(command),
-      scripts: command => bridge.scripts(command), resources: command => bridge.resources(command),
-      scheduling: command => bridge.scheduling(command), runs: command => bridge.runs(command),
+      workspace: command => bridge.workspace(command),
+      details: command => bridge.details(command),
+      scripts: command => bridge.scripts(command),
+      resources: command => bridge.resources(command),
+      scheduling: command => bridge.scheduling(command),
+      runs: command => bridge.runs(command),
       data: command => bridge.data(command),
     },
-    remote: false, key: id => `${namespace}${id}`, edits: reactive(new Map()),
+    remote: false,
+    key: id => `${namespace}${id}`,
+    edits: reactive(new Map()),
   }
 }
 export function trackPodEdits(access: PodAccess, name: string, dirty: () => boolean): void {

@@ -89,8 +89,7 @@ export class InboxDecisions {
   private questions(sources: DecisionSources): DecisionEntry[] {
     return sources.domain.questions.map((question) => {
       const facts = Object.entries(question.data).map(([key, value]) => `${key}: ${show(value)}`)
-      return this.entry('question', [question.id], { ...this.pod(sources, question.podId), title: question.title, body: [question.body, ...facts].filter(Boolean).join('\n'), authority: 'pods', options: question.options.map(option => ({ ...option, input: null })), link: null },
-        async option => this.worker.domain({ type: 'answer', questionId: question.id, option }))
+      return this.entry('question', [question.id], { ...this.pod(sources, question.podId), title: question.title, body: [question.body, ...facts].filter(Boolean).join('\n'), authority: 'pods', options: question.options.map(option => ({ ...option, input: null })), link: null },        async option => this.worker.domain({ type: 'answer', questionId: question.id, option }))
     })
   }
 
@@ -100,8 +99,12 @@ export class InboxDecisions {
    */
   private approvals(sources: DecisionSources): DecisionEntry[] {
     return sources.domain.approvals.filter(approval => approval.state === 'unknown').map(approval => this.entry('approval', [approval.id], {
-      ...this.pod(sources, approval.podId), title: approval.title, body: [this.t('Uncertain approval'), ...(approval.description ? [approval.description] : []), approval.object, ...(approval.reason ? [approval.reason] : [])].join('\n'), authority: 'pods',
-      options: [{ key: 'renew', title: this.t('Ask again'), input: 'evidence' }, { key: 'withdraw', title: this.t('Withdraw'), input: 'evidence' }], link: inboxLink(approval.link),
+      ...this.pod(sources, approval.podId),
+      title: approval.title,
+      body: [this.t('Uncertain approval'), ...(approval.description ? [approval.description] : []), approval.object, ...(approval.reason ? [approval.reason] : [])].join('\n'),
+      authority: 'pods',
+      options: [{ key: 'renew', title: this.t('Ask again'), input: 'evidence' }, { key: 'withdraw', title: this.t('Withdraw'), input: 'evidence' }],
+      link: inboxLink(approval.link),
     }, async (option, evidence) => this.worker.domain({ type: 'resolveApproval', id: approval.id, decision: option === 'renew' ? 'renew' : 'withdraw', evidence })))
   }
 
@@ -111,8 +114,12 @@ export class InboxDecisions {
     return sources.domain.held.map((item) => {
       const podId = writer(item.operation)
       return this.entry('work', [item.key], {
-        ...(podId && podId !== 'owner' ? this.pod(sources, podId) : { podId: null, podName: null }), title: `${this.t('Held work')} · ${item.operation}`, body: [item.object, ...(item.reason ? [item.reason] : [])].join('\n'), authority: 'pods',
-        options: [{ key: 'release', title: this.t('Release after review'), input: 'evidence' }], link: null,
+        ...(podId && podId !== 'owner' ? this.pod(sources, podId) : { podId: null, podName: null }),
+        title: `${this.t('Held work')} · ${item.operation}`,
+        body: [item.object, ...(item.reason ? [item.reason] : [])].join('\n'),
+        authority: 'pods',
+        options: [{ key: 'release', title: this.t('Release after review'), input: 'evidence' }],
+        link: null,
       }, async (_option, evidence) => this.worker.domain({ type: 'release', key: item.key, evidence }))
     })
   }
@@ -120,8 +127,12 @@ export class InboxDecisions {
   /** External effects whose outcome is unknown; the owner records what happened and nothing is executed again. */
   private uncertain(sources: DecisionSources): DecisionEntry[] {
     return sources.domain.unknownEffects.map(effect => this.entry('effect', [effect.actionKey, String(effect.attempt)], {
-      ...this.pod(sources, effect.podId), title: `${this.t('Uncertain action')} · ${effect.operation}`, body: Object.entries(effect.intent && typeof effect.intent === 'object' ? effect.intent : {}).map(([key, value]) => `${key}: ${show(value)}`).join('\n'), authority: 'pods',
-      options: [{ key: 'applied', title: this.t('It happened'), input: 'evidence' }, { key: 'notApplied', title: this.t('It did not happen'), input: 'evidence' }], link: null,
+      ...this.pod(sources, effect.podId),
+      title: `${this.t('Uncertain action')} · ${effect.operation}`,
+      body: Object.entries(effect.intent && typeof effect.intent === 'object' ? effect.intent : {}).map(([key, value]) => `${key}: ${show(value)}`).join('\n'),
+      authority: 'pods',
+      options: [{ key: 'applied', title: this.t('It happened'), input: 'evidence' }, { key: 'notApplied', title: this.t('It did not happen'), input: 'evidence' }],
+      link: null,
     }, async (option, evidence) => this.worker.domain({ type: 'resolveEffect', actionKey: effect.actionKey, attempt: effect.attempt, applied: option === 'applied', evidence })))
   }
 
@@ -130,7 +141,12 @@ export class InboxDecisions {
     return (sources.map?.pods ?? []).flatMap(pod => pod.unknown.map((item) => {
       const options: InboxDecisionOption[] = [{ key: 'delivered', title: this.t('Delivered'), input: 'evidence' }, { key: 'resend', title: this.t('Not delivered, send again'), input: 'evidence' }]
       return this.entry('effect', [pod.id, item.runId, item.key], {
-        ...this.pod(sources, pod.id), title: `${this.t('unknown deliveries')} · ${item.key}`, body: item.runId, authority: 'pods', options, link: null,
+        ...this.pod(sources, pod.id),
+        title: `${this.t('unknown deliveries')} · ${item.key}`,
+        body: item.runId,
+        authority: 'pods',
+        options,
+        link: null,
       }, async (option, evidence) => this.worker.runs({ type: 'resolveHttp', podId: pod.id, runId: item.runId, key: item.key, applied: option === 'delivered', evidence }))
     }))
   }
@@ -139,9 +155,12 @@ export class InboxDecisions {
     const view = sources.secrets
     if (!view) return []
     return view.requests.filter(row => row.status !== 'collected' && row.status !== 'expired').map(row => this.entry('secret', [row.id], {
-      ...this.pod(sources, row.podId), title: this.t('Secret {alias} for {pod}', { alias: row.alias, pod: this.podName(sources, row.podId) ?? row.podId }),
-      body: [row.purpose || this.t('no purpose given'), ...(row.error ? [row.error] : [])].join('\n'), authority: 'secrets',
-      options: [{ key: 'cancel', title: this.t('Cancel'), input: null }], link: row.status === 'requested' ? { title: this.t('Fill in at secrets.openape.ai'), url: view.origin } : null,
+      ...this.pod(sources, row.podId),
+      title: this.t('Secret {alias} for {pod}', { alias: row.alias, pod: this.podName(sources, row.podId) ?? row.podId }),
+      body: [row.purpose || this.t('no purpose given'), ...(row.error ? [row.error] : [])].join('\n'),
+      authority: 'secrets',
+      options: [{ key: 'cancel', title: this.t('Cancel'), input: null }],
+      link: row.status === 'requested' ? { title: this.t('Fill in at secrets.openape.ai'), url: view.origin } : null,
     }, async () => this.worker.secrets({ type: 'cancel', id: row.id })))
   }
 }

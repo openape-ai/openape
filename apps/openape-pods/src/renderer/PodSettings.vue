@@ -26,7 +26,9 @@ export default defineComponent({
   },
   beforeUnmount() { this.remember() },
   methods: {
-    t, diagnostic, label,
+    t,
+    diagnostic,
+    label,
     async reloadSaved() {
       const id = this.selectedId
       this.error = ''; await this.reload(); if (this.error) return

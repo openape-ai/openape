@@ -80,10 +80,13 @@ describe('pod tabs with the production stylesheet', () => {
   })
 
   it('reaches an earlier run, a variable and the schedule within two clicks of the list (issue 1468)', async () => {
-    const view = { runs: [
-      { id: '00000000-0000-4000-8000-000000000044', podId, scriptHash: hash, state: 'completed', startedAt: 1_790_000_100_000, finishedAt: 1_790_000_110_000, summary: 'Stored 3 messages', error: null, checkpointRevision: 0, recovery: null },
-      { id: '00000000-0000-4000-8000-000000000045', podId, scriptHash: hash, state: 'failed', startedAt: 1_790_000_000_000, finishedAt: 1_790_000_065_000, summary: 'Run failed', error: 'Invalid program arguments', checkpointRevision: 0, recovery: null },
-    ], events: [] } as unknown as RunView
+    const view = {
+      runs: [
+        { id: '00000000-0000-4000-8000-000000000044', podId, scriptHash: hash, state: 'completed', startedAt: 1_790_000_100_000, finishedAt: 1_790_000_110_000, summary: 'Stored 3 messages', error: null, checkpointRevision: 0, recovery: null },
+        { id: '00000000-0000-4000-8000-000000000045', podId, scriptHash: hash, state: 'failed', startedAt: 1_790_000_000_000, finishedAt: 1_790_000_065_000, summary: 'Run failed', error: 'Invalid program arguments', checkpointRevision: 0, recovery: null },
+      ],
+      events: [],
+    } as unknown as RunView
     applyLanguage('de')
     // Click 1 (row in the list) is the host's openPod; the page mounts with that Pod selected.
     installWorkspace({ runs: async () => structuredClone(view) })
@@ -125,7 +128,8 @@ describe('pod tabs with the production stylesheet', () => {
 
   it('places terminal feedback beside its button and keeps permissions readable in English and narrow dark German', async () => {
     const resources: ResourceState = {
-      epoch: 3, directories: { home: '/Users/fixture/Library/Application Support/OpenApe Pods/pods/pod/home', workspace: '/Users/fixture/Library/Application Support/OpenApe Pods/pods/pod/workspace' },
+      epoch: 3,
+      directories: { home: '/Users/fixture/Library/Application Support/OpenApe Pods/pods/pod/home', workspace: '/Users/fixture/Library/Application Support/OpenApe Pods/pods/pod/workspace' },
       resources: [
         { id: '00000000-0000-4000-8000-000000000051', podId, revision: 1, kind: 'directory', state: 'ready', name: 'Invoices', configuration: { path: '/Users/fixture/Documents/Customers/Northwind Trading Company/Invoices/2026', access: 'read' } },
         { id: '00000000-0000-4000-8000-000000000052', podId, revision: 1, kind: 'tool', state: 'ready', name: 'Synthetic application', configuration: { type: 'program', cliId: 'synthetic-reporting-cli', executable: '/opt/homebrew/bin/synthetic-reporting-cli', executableHash: 'a'.repeat(64), networkHosts: [] } },

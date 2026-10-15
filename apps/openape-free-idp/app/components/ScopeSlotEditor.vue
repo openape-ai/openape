@@ -58,8 +58,7 @@ function setMode(next: Mode) {
 const inputPlaceholder = computed(() =>
   mode.value === 'pattern'
     ? 'e.g. /Users/me/*  oder  open*'
-    : `${props.selectorKey} …`,
-)
+    : `${props.selectorKey} …`)
 </script>
 
 <template>

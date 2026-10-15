@@ -13,7 +13,8 @@ function worker(count: unknown = 3, status = 200, supported = true) {
     addEventListener: (name: string, handler: (event: unknown) => void) => handlers.set(name, handler),
     navigator: supported ? { setAppBadge, clearAppBadge } : {},
     registration: { showNotification },
-    fetch, console: { error },
+    fetch,
+    console: { error },
   })
   async function push() {
     let pending: Promise<unknown> | undefined

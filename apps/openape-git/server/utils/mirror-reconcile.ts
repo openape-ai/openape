@@ -52,7 +52,12 @@ async function reconcile(repo: { id: string, owner: string, name: string }) {
         catch (err) { error = (err as Error).message.slice(0, 2000); observed = undefined }
         const now = Math.floor(Date.now() / 1000)
         const state = {
-          mirrorId: mirror.id, ref, sourceSha, targetSha, checkedAt: now, error,
+          mirrorId: mirror.id,
+          ref,
+          sourceSha,
+          targetSha,
+          checkedAt: now,
+          error,
           syncedAt: error ? old.get(ref)?.syncedAt ?? null : now,
           lastSuccessfulSha: error ? old.get(ref)?.lastSuccessfulSha ?? null : sourceSha,
         }

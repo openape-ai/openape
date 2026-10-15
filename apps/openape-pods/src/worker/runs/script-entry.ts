@@ -43,12 +43,14 @@ async function main(): Promise<void> {
   if (config.dependencyRoot) {
     const entry = pathToFileURL(config.entry).href
     const parentURL = pathToFileURL(join(config.dependencyRoot, 'entry.mjs')).href
-    registerHooks({ resolve(specifier, context, nextResolve) {
-      const bare = !isBuiltin(specifier) && !specifier.startsWith('.') && !specifier.startsWith('/') && !specifier.includes(':') && !specifier.startsWith('#')
-      if (context.parentURL !== entry || !bare) return nextResolve(specifier, context)
-      if (context.conditions.includes('require')) return nextResolve(createRequire(parentURL).resolve(specifier), context)
-      return nextResolve(specifier, { ...context, parentURL })
-    } })
+    registerHooks({
+      resolve(specifier, context, nextResolve) {
+        const bare = !isBuiltin(specifier) && !specifier.startsWith('.') && !specifier.startsWith('/') && !specifier.includes(':') && !specifier.startsWith('#')
+        if (context.parentURL !== entry || !bare) return nextResolve(specifier, context)
+        if (context.conditions.includes('require')) return nextResolve(createRequire(parentURL).resolve(specifier), context)
+        return nextResolve(specifier, { ...context, parentURL })
+      },
+    })
   }
   const input = freeze(config.input)
   try {

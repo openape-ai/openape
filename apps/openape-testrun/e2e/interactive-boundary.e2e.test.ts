@@ -12,9 +12,17 @@ import { afterAll, beforeAll, expect, it } from 'vitest'
 // This deliberately asserts the proposed boundary, not today's static renderer.
 const artifacts = resolve('.artifacts/interactive-boundary')
 const policy = [
-  'default-src \'none\'', 'script-src \'unsafe-inline\'', 'style-src \'unsafe-inline\'',
-  'img-src data:', 'font-src data:', 'connect-src \'none\'', 'frame-src \'none\'',
-  'object-src \'none\'', 'base-uri \'none\'', 'form-action \'none\'', 'sandbox allow-scripts',
+  'default-src \'none\'',
+  'script-src \'unsafe-inline\'',
+  'style-src \'unsafe-inline\'',
+  'img-src data:',
+  'font-src data:',
+  'connect-src \'none\'',
+  'frame-src \'none\'',
+  'object-src \'none\'',
+  'base-uri \'none\'',
+  'form-action \'none\'',
+  'sandbox allow-scripts',
 ].join('; ')
 const marker = 'synthetic-report-data-1429'
 const observations: Record<string, unknown> = {}

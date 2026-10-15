@@ -29,7 +29,9 @@ export default defineComponent({
   watch: { remoteRevision() { if (!this.buffer.busy && !this.buffer.error && !this.dirty) void this.refresh(false) }, 'buffer.source': { handler() { this.syncChoice() } } },
   async mounted() { trackPodEdits(this.access, 'script', () => this.dirty); if (!this.buffer.busy) { if (!this.buffer.view) await this.load(); else await this.refresh(false) } this.syncChoice(); await this.loadAvailable(); if (!this.buffer.source && !this.buffer.editing && this.buffer.view) await this.open('new') },
   methods: {
-    t, diagnostic, number,
+    t,
+    diagnostic,
+    number,
     async loadAvailable() {
       try { const resources = await this.access.api.resources({ type: 'list', podId: this.pod.id }); this.available = [...(resources.variables ?? []).map(item => ({ name: item.name, expression: `context.variables[${JSON.stringify(item.name)}]` })), ...resources.resources.filter(item => item.kind === 'credential' && item.state === 'ready').map(item => ({ name: item.name, expression: `await context.credentials.get(${JSON.stringify(item.name)})` }))] }
       catch (error) { this.buffer.error = error instanceof Error ? error.message : 'Could not load variables' }

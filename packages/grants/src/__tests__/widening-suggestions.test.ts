@@ -35,8 +35,7 @@ describe('suggestWideningsForDetail', () => {
     const detail = mockDetail('filesystem', { path: '/tmp/foo.txt' })
     const suggestions = suggestWideningsForDetail(detail)
     const paths = suggestions.map(s =>
-      s.detail.resource_chain[0]!.selector?.path ?? '<none>',
-    )
+      s.detail.resource_chain[0]!.selector?.path ?? '<none>')
     expect(paths).toEqual(['/tmp/foo.txt', '/tmp/*.txt', '/tmp/*', '/tmp/**', '<none>'])
     expect(suggestions.map(s => s.scope)).toEqual([
       'exact',

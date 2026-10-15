@@ -18,20 +18,26 @@ import { createPortablePackage } from '../../src/worker/sharing/package'
 const captured = vi.hoisted(() => ({ services: undefined as RunServices | undefined, startControlled: undefined as ((podId: string, operationId: string) => string) | undefined }))
 vi.mock('../../src/worker/runs/dispatcher', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../src/worker/runs/dispatcher')>()
-  return { ...original, RunDispatcher: class extends original.RunDispatcher {
-    constructor(...args: ConstructorParameters<typeof original.RunDispatcher>) {
-      super(...args); captured.services = args[3]
-    }
-  } }
+  return {
+    ...original,
+    RunDispatcher: class extends original.RunDispatcher {
+      constructor(...args: ConstructorParameters<typeof original.RunDispatcher>) {
+        super(...args); captured.services = args[3]
+      }
+    },
+  }
 })
 
 vi.mock('../../src/worker/master/control', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../src/worker/master/control')>()
-  return { ...original, MasterControl: class extends original.MasterControl {
-    constructor(...args: ConstructorParameters<typeof original.MasterControl>) {
-      super(...args); captured.startControlled = args[5]
-    }
-  } }
+  return {
+    ...original,
+    MasterControl: class extends original.MasterControl {
+      constructor(...args: ConstructorParameters<typeof original.MasterControl>) {
+        super(...args); captured.startControlled = args[5]
+      }
+    },
+  }
 })
 
 const backupGate = vi.hoisted(() => ({ started: false, hold: Promise.resolve() }))
@@ -218,8 +224,13 @@ it('refuses browser changes to a local-only Pod in the real worker and allows it
 })
 it('routes validated portable import commands through the real worker only after identity setup', async () => {
   const exported = await createPortablePackage({
-    format: 'openape-package', version: 1, package: { key: 'fixture', revision: 1, title: 'Portable fixture', description: '' }, requiredFeatures: ['portable_aliases_v1'],
-    entry: { kind: 'pod', key: 'fixture' }, applications: [], compositions: [],
+    format: 'openape-package',
+    version: 1,
+    package: { key: 'fixture', revision: 1, title: 'Portable fixture', description: '' },
+    requiredFeatures: ['portable_aliases_v1'],
+    entry: { kind: 'pod', key: 'fixture' },
+    applications: [],
+    compositions: [],
     pods: [{ key: 'fixture', title: 'Imported through entry', description: '', script: 'pods/fixture/run.mjs', packages: null, contract: null, requestedCapabilities: [], access: [], inputs: [], bindings: [], applications: [], assets: [] }],
   }, [{ path: 'pods/fixture/run.mjs', kind: 'script', mediaType: 'text/javascript', content: new TextEncoder().encode('export async function run() { return { status: "completed" } }') }], '')
   const id = randomUUID()

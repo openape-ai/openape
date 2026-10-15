@@ -43,8 +43,7 @@ const SHARED_FILES = ['pnpm-lock.yaml', 'pnpm-workspace.yaml', 'package.json', '
 
 function affectedApps(changedFiles) {
   const touchesShared = changedFiles.some(f =>
-    SHARED_PREFIXES.some(p => f.startsWith(p)) || SHARED_FILES.includes(f),
-  )
+    SHARED_PREFIXES.some(p => f.startsWith(p)) || SHARED_FILES.includes(f))
   if (touchesShared)
     return APPS
   return APPS.filter(app => changedFiles.some(f => f.startsWith(app.dir)))

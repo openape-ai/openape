@@ -237,12 +237,22 @@ export class WorkspaceStore {
       if (!this.hasData(row)) return { id: row.id, revision: row.revision, online, lastSeenAt, workspace: { pods: [] } }
       const read = this.reader(row.id)
       const workspace = read('workspace') as WorkspaceState
-      return { id: row.id, revision: row.revision, online, lastSeenAt, workspace: { ...workspace, ...(workspace.map ? { map: currentMap(workspace.map)! } : {}), pods: workspace.pods.map((pod) => {
-        const view = read(`pod/${pod.id}`) as PodView
-        if (!online || !view.ready) return { id: pod.id, name: pod.name, online: false, revision: 1, lifecycle: pod.lifecycle === 'archived' ? 'archived' as const : 'paused' as const, activeScript: null }
-        const { blocked, blockedSince = null, error } = view.scheduling
-        return { ...pod, online: true, queue: { blocked, since: blockedSince, error: blocked ? error : null } }
-      }) } }
+      return {
+        id: row.id,
+        revision: row.revision,
+        online,
+        lastSeenAt,
+        workspace: {
+          ...workspace,
+          ...(workspace.map ? { map: currentMap(workspace.map)! } : {}),
+          pods: workspace.pods.map((pod) => {
+            const view = read(`pod/${pod.id}`) as PodView
+            if (!online || !view.ready) return { id: pod.id, name: pod.name, online: false, revision: 1, lifecycle: pod.lifecycle === 'archived' ? 'archived' as const : 'paused' as const, activeScript: null }
+            const { blocked, blockedSince = null, error } = view.scheduling
+            return { ...pod, online: true, queue: { blocked, since: blockedSince, error: blocked ? error : null } }
+          }),
+        },
+      }
     })
   }
 

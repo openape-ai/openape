@@ -16,8 +16,15 @@ const rows = computed(() => {
   const visible = visibleNodes(buildModel(props.view), props.layers)
   const shown = props.archived ? props.view.pods.filter(pod => pod.lifecycle === 'archived') : props.view.pods.filter(pod => visible.has(pod.id))
   return shown.map(pod => ({
-    id: pod.id, name: pod.name, purpose: pod.description ?? '', tags: tagsOf(props.view, pod.id),
-    state: podState(pod, props.view), result: lastResult(pod, props.now), failures: failureCount(pod), next: nextRun(pod, props.now), waits: waitsFor(pod, props.view),
+    id: pod.id,
+    name: pod.name,
+    purpose: pod.description ?? '',
+    tags: tagsOf(props.view, pod.id),
+    state: podState(pod, props.view),
+    result: lastResult(pod, props.now),
+    failures: failureCount(pod),
+    next: nextRun(pod, props.now),
+    waits: waitsFor(pod, props.view),
   }))
 })
 </script>

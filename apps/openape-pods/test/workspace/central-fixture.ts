@@ -5,12 +5,15 @@ export const runtimeId = '00000000-0000-4000-8000-000000000138'
 export function centralFixture() {
   const pod = { id: podId, name: 'Release monitor', revision: 1, lifecycle: 'active' as const, activeScript: null, online: true }
   const view: CentralPod = {
-    id: podId, ready: true,
+    id: podId,
+    ready: true,
     details: { description: { text: 'Reviews recent releases and records the results.', revision: 1, state: 'ready', error: null, updatedAt: 1 }, claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 4, versions: [], source: null },
     scripts: { pod, resourceEpoch: 0, credentialAliases: [], versions: [], drafts: [], source: null },
     resources: { resources: [], variables: [], epoch: 0 },
     scheduling: { spec: { kind: 'interval', seconds: 900 }, enabled: true, revision: 2, nextAt: 1790270100000, error: null, pending: 0, blocked: 0, concurrency: 2 },
-    runs: { runs: [{ id: '00000000-0000-4000-8000-000000000139', podId, scriptHash: 'a'.repeat(64), state: 'completed', startedAt: 1790269200000, finishedAt: 1790269260000, summary: 'All checks completed. No action required.', error: null, checkpointRevision: 4, recovery: null }], events: [] }, versions: {}, history: {},
+    runs: { runs: [{ id: '00000000-0000-4000-8000-000000000139', podId, scriptHash: 'a'.repeat(64), state: 'completed', startedAt: 1790269200000, finishedAt: 1790269260000, summary: 'All checks completed. No action required.', error: null, checkpointRevision: 4, recovery: null }], events: [] },
+    versions: {},
+    history: {},
   }
   const host: CentralRuntime = { id: runtimeId, revision: 1, online: true, workspace: { pods: [pod, { ...pod, id: '00000000-0000-4000-8000-000000000140', name: 'Monthly report', online: false }] } }
   let wake: (() => void) | null = null

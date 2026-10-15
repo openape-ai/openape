@@ -20,7 +20,9 @@ export const membersCommand = defineCommand({
     if (args.company) query.company = args.company
     if (args.project) query.project = args.project
     const r = await apiCall<{ scope: string, members: Array<{ user_email: string, role: string }> }>(
-      'GET', '/api/members', { endpoint: args.endpoint, query },
+      'GET',
+      '/api/members',
+      { endpoint: args.endpoint, query },
     )
     if (args.json) { printJson(r); return }
     printLine(`${r.scope} members:`)

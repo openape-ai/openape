@@ -66,8 +66,7 @@ export function searchAdapters(index: RegistryIndex, query: string): RegistryEnt
     || a.name.toLowerCase().includes(q)
     || a.description.toLowerCase().includes(q)
     || a.tags.some(t => t.includes(q))
-    || a.category.includes(q),
-  )
+    || a.category.includes(q))
 }
 
 /**

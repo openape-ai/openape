@@ -83,8 +83,7 @@ function emptyForm(): FormState {
 // A Vollautomatik without a single block rule or risk threshold is a server-
 // side no-op (fail-closed) — the switch would silently do nothing.
 const ineffectiveFullAuto = computed(() =>
-  isIneffectiveFullAuto(form.value.fullAuto, form.value.blockPatterns.length, form.value.denyRiskThreshold || null),
-)
+  isIneffectiveFullAuto(form.value.fullAuto, form.value.blockPatterns.length, form.value.denyRiskThreshold || null))
 
 const riskOptions = [
   { label: 'Keine', value: '' },
@@ -185,8 +184,7 @@ async function save() {
       apiFetch(
         `/api/users/${encodeURIComponent(props.agentEmail)}/yolo-policy?audience=${encodeURIComponent(aud)}`,
         { method: 'PUT', body },
-      ),
-    ))
+      )))
     await load()
   }
   catch (err: unknown) {
@@ -207,8 +205,7 @@ async function reset() {
       apiFetch(
         `/api/users/${encodeURIComponent(props.agentEmail)}/yolo-policy?audience=${encodeURIComponent(aud)}`,
         { method: 'DELETE' },
-      ),
-    ))
+      )))
     policiesByAudience.value = {}
     form.value = emptyForm()
   }

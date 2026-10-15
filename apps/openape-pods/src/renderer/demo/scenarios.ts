@@ -41,20 +41,29 @@ function podView(pod: StoredPod, description: string, topic: string, at: number,
   const runs = Array.from({ length: 3 }, (_, index) => {
     const failed = failure?.runs.includes(index) ? failure : null
     return {
-      id: demoId(100 + (Number(pod.id.slice(-2)) - 1) * 10 + index), podId: pod.id, scriptHash: demoHash,
-      state: failed ? 'failed' as const : 'completed' as const, startedAt: at - (index + 1) * 3600000, finishedAt: at - (index + 1) * 3600000 + 24000,
+      id: demoId(100 + (Number(pod.id.slice(-2)) - 1) * 10 + index),
+      podId: pod.id,
+      scriptHash: demoHash,
+      state: failed ? 'failed' as const : 'completed' as const,
+      startedAt: at - (index + 1) * 3600000,
+      finishedAt: at - (index + 1) * 3600000 + 24000,
       summary: failed ? failed.summary : index ? 'Keine neuen Einträge. Alles auf dem aktuellen Stand.' : '12 Einträge geprüft, 2 zur Entscheidung vorgelegt.',
-      error: failed?.error ?? null, checkpointRevision: 1, recovery: failed && index === 0 ? { state: 'ready' as const, error: null } : null,
+      error: failed?.error ?? null,
+      checkpointRevision: 1,
+      recovery: failed && index === 0 ? { state: 'ready' as const, error: null } : null,
     }
   })
   const events = [{ sequence: 1, type: 'log', data: { line: 'Demo: 12 synthetische Einträge eingelesen.' }, at: runs[0]!.startedAt }]
   return {
-    id: pod.id, ready: true,
+    id: pod.id,
+    ready: true,
     details: { description: { text: description, revision: 1, state: 'ready', error: null, updatedAt: at }, claims: [], counts: { finding: 0, question: 0, gap: 0 }, total: 0, checkpointRevision: 1, versions, source: null },
     scripts: { pod, resourceEpoch: 1, credentialAliases: [], versions, drafts: [], environment: { PODS_POD_ID: pod.id, HOME: '/demo/home' }, source: { kind: 'version', id: demoHash, hash: demoHash, assignmentRevision: 1, revision: 1, validated: true, evidence: null, credentialAccessApproved: true, capabilities: [], code: `export async function run(context) {\n  // Synthetic example; never executed by the UI demo.\n  const topic = context.variables.topic\n  return { status: 'completed', summary: topic, completedInputIds: [], gapIds: [] }\n}\n` } },
     resources: { epoch: 1, directories: { home: '/demo/home', workspace: `/demo/${topic}` }, resources: [{ id: demoId(500 + Number(pod.id.slice(-2))), podId: pod.id, revision: 1, kind: 'directory', state: 'ready', name: 'Demo-Unterlagen', configuration: { path: `/demo/${topic}`, access: 'read' } }], variables: [{ name: 'topic', value: topic, revision: 1 }] },
     scheduling: { spec: { kind: 'interval', seconds: 1800 }, enabled: true, revision: 1, nextAt: at + 1800000, error: null, pending: 0, blocked: 0, concurrency: 2 },
-    runs: { runs, events }, versions: {}, history: Object.fromEntries(runs.map(run => [run.id, { runs: [run], events }])),
+    runs: { runs, events },
+    versions: {},
+    history: Object.fromEntries(runs.map(run => [run.id, { runs: [run], events }])),
   }
 }
 
@@ -75,15 +84,26 @@ export function demoState(scenario: DemoScenario, at: number): DemoState {
       if (archived) view.scheduling = { ...view.scheduling, enabled: false, nextAt: null }
       state.views[pod.id] = view
     })
-    state.domain.unknownEffects = [{ actionKey: 'b'.repeat(64), attempt: 1, podId: demoId(6), runId: state.views[demoId(6)]!.runs.runs[0]!.id, operation: 'mail.send', createdAt: at - 3600000 + 20000,
-      intent: { to: 'team@contoso.invalid', subject: 'Wochenbericht KW 41' } }]
+    state.domain.unknownEffects = [{
+      actionKey: 'b'.repeat(64),
+      attempt: 1,
+      podId: demoId(6),
+      runId: state.views[demoId(6)]!.runs.runs[0]!.id,
+      operation: 'mail.send',
+      createdAt: at - 3600000 + 20000,
+      intent: { to: 'team@contoso.invalid', subject: 'Wochenbericht KW 41' },
+    }]
   }
   state.domain.questions = Array.from({ length: 4 }, (_, index) => ({
-    id: `demo-question-${index + 1}`, podId: demoId(index < 2 ? 1 : 2), namespace: 'demo/mail', key: `message-${index + 1}`,
+    id: `demo-question-${index + 1}`,
+    podId: demoId(index < 2 ? 1 : 2),
+    namespace: 'demo/mail',
+    key: `message-${index + 1}`,
     title: index < 2 ? 'Unbekannter Lieferant' : 'Newsletter einordnen',
     body: ['Soll die Rechnung von Bergblick Büroservice zur Belegablage?', 'Soll die Rechnung von Stadtrad Logistik zur Belegablage?', 'Wie soll der Newsletter von Design Weekly behandelt werden?', 'Wie soll der Newsletter von Product Notes behandelt werden?'][index]!,
     options: [{ key: 'keep', title: 'Behalten' }, { key: 'archive', title: 'Archivieren' }],
-    data: { sender: ['billing@bergblick.invalid', 'invoice@stadtrad.invalid', 'news@design.invalid', 'team@product.invalid'][index]!, organization: 'Northwind', amount: index < 2 ? `${(index + 1) * 149},00 EUR` : '–' }, createdAt: at - (index + 1) * 60000,
+    data: { sender: ['billing@bergblick.invalid', 'invoice@stadtrad.invalid', 'news@design.invalid', 'team@product.invalid'][index]!, organization: 'Northwind', amount: index < 2 ? `${(index + 1) * 149},00 EUR` : '–' },
+    createdAt: at - (index + 1) * 60000,
   }))
   // Index of the sending Pod, minutes ago, read, archived, title, body, links.
   const notes: [number, number, boolean, boolean, string, string, string[]][] = [
@@ -95,9 +115,15 @@ export function demoState(scenario: DemoScenario, at: number): DemoState {
     [2, 7300, true, true, 'Neue Version 4.1 verfügbar', 'Kleinere Fehlerbehebungen ohne Auswirkungen.', []],
   ]
   state.messages = notes.map(([pod, minutes, read, archived, title, body, links], index) => ({
-    id: demoId(700 + index), title, body, pod: { id: demoId(pod + 1), name: examples[pod]![0], tags: state.tags[demoId(pod + 1)] }, runId: null,
-    links: links.map(link => ({ title: link, url: 'https://example.invalid/demo' })), created: at - minutes * 60000,
-    read: read ? at - minutes * 60000 + 60000 : null, archived: archived ? at - minutes * 60000 + 120000 : null,
+    id: demoId(700 + index),
+    title,
+    body,
+    pod: { id: demoId(pod + 1), name: examples[pod]![0], tags: state.tags[demoId(pod + 1)] },
+    runId: null,
+    links: links.map(link => ({ title: link, url: 'https://example.invalid/demo' })),
+    created: at - minutes * 60000,
+    read: read ? at - minutes * 60000 + 60000 : null,
+    archived: archived ? at - minutes * 60000 + 120000 : null,
   }))
   if (scenario === 'attention') {
     const run = state.views[demoId(3)]!.runs.runs[0]!
@@ -112,18 +138,37 @@ export function demoMap(state: DemoState, at: number): MapView {
   const pods = state.pods.map((pod) => {
     const view = state.views[pod.id]!
     const last = view.runs.runs[0]
-    return { ...pod, script: pod.activeScript, description: view.details.description?.text ?? null, draft: false, kind: 'code' as const, ai: pod.id === demoId(4),
-      data: { writes: [`demo/${pod.id.slice(-1)}/results`], reads: pod.id === demoId(5) ? ['demo/1/results'] : [] }, work: { pending: 0, held: 0 },
-      resources: [{ kind: 'service' as const, name: 'Demo API', how: 'Read', system: 'demo-api' }], secrets: [], schedule: view.scheduling,
-      lastRun: last ? { at: last.startedAt, state: last.state, summary: last.summary, error: last.error } : null, runs: view.runs.runs.length,
-      queue: { blocked: 0, error: null }, approvals: [], unknown: [], failures: view.runs.runs.filter(run => run.state === 'failed' && run.startedAt >= at - 86400000).length,
+    return {
+      ...pod,
+      script: pod.activeScript,
+      description: view.details.description?.text ?? null,
+      draft: false,
+      kind: 'code' as const,
+      ai: pod.id === demoId(4),
+      data: { writes: [`demo/${pod.id.slice(-1)}/results`], reads: pod.id === demoId(5) ? ['demo/1/results'] : [] },
+      work: { pending: 0, held: 0 },
+      resources: [{ kind: 'service' as const, name: 'Demo API', how: 'Read', system: 'demo-api' }],
+      secrets: [],
+      schedule: view.scheduling,
+      lastRun: last ? { at: last.startedAt, state: last.state, summary: last.summary, error: last.error } : null,
+      runs: view.runs.runs.length,
+      queue: { blocked: 0, error: null },
+      approvals: [],
+      unknown: [],
+      failures: view.runs.runs.filter(run => run.state === 'failed' && run.startedAt >= at - 86400000).length,
       tags: { own: state.tags[pod.id] ?? [], revision: pod.revision },
+
     }
   })
   // Same rules as the worker's map view: settled run states, and paused counts every Pod without a running schedule.
   const settled = ({ id }: { id: string }) => state.views[id]!.runs.runs.find(run => run.finishedAt !== null)?.state ?? ''
   const active = pods.filter(pod => pod.lifecycle === 'active' && pod.schedule.enabled).length
-  return { at, window: { from: at - 86400000, to: at }, pods, systems: [{ id: 'demo-api', kind: 'service', name: 'Demo API', how: 'Read' }],
+  return {
+    at,
+    window: { from: at - 86400000, to: at },
+    pods,
+    systems: [{ id: 'demo-api', kind: 'service', name: 'Demo API', how: 'Read' }],
     edges: [...pods.map(pod => ({ from: 'demo-api', to: pod.id, type: 'read' as const, channel: null, flow: 12 })), ...(pods.length ? [{ from: demoId(1), to: demoId(5), type: 'data' as const, channel: 'demo/1/results', flow: 12 }] : [])],
-    kpis: { active, paused: pods.length - active, degraded: pods.filter(pod => pod.lifecycle !== 'archived' && ['failed', 'completedWithGaps'].includes(settled(pod))).map(pod => ({ podId: pod.id, reason: settled(pod) })), decisions: [...state.domain.questions.map(question => ({ podId: question.podId, kind: 'question' as const, title: question.title, count: 1 })), ...state.domain.approvals.map(approval => ({ podId: approval.podId, kind: 'approval' as const, title: approval.title, count: 1 }))], unknownDeliveries: state.domain.unknownEffects.length } }
+    kpis: { active, paused: pods.length - active, degraded: pods.filter(pod => pod.lifecycle !== 'archived' && ['failed', 'completedWithGaps'].includes(settled(pod))).map(pod => ({ podId: pod.id, reason: settled(pod) })), decisions: [...state.domain.questions.map(question => ({ podId: question.podId, kind: 'question' as const, title: question.title, count: 1 })), ...state.domain.approvals.map(approval => ({ podId: approval.podId, kind: 'approval' as const, title: approval.title, count: 1 }))], unknownDeliveries: state.domain.unknownEffects.length },
+  }
 }

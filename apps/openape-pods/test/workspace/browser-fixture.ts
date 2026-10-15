@@ -17,7 +17,11 @@ export async function browserFixture() {
     },
   })
   const [details, scripts, resources, scheduling, runs] = await Promise.all([
-    bridge.details({ type: 'list', podId }), bridge.scripts({ type: 'list', podId }), bridge.resources({ type: 'list', podId }), bridge.scheduling({ type: 'list', podId }), bridge.runs({ type: 'list', podId }),
+    bridge.details({ type: 'list', podId }),
+    bridge.scripts({ type: 'list', podId }),
+    bridge.resources({ type: 'list', podId }),
+    bridge.scheduling({ type: 'list', podId }),
+    bridge.runs({ type: 'list', podId }),
   ])
   Object.assign(fixture.view, { id: podId, details, scripts, resources, scheduling, runs })
   fixture.host.workspace.pods = pods.map(pod => ({ ...pod, online: true }))

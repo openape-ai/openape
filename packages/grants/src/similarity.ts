@@ -14,8 +14,7 @@ export interface SimilarGrantsResult {
 
 function cliDetails(details?: unknown[]): OpenApeCliAuthorizationDetail[] {
   return (details ?? []).filter((d): d is OpenApeCliAuthorizationDetail =>
-    typeof d === 'object' && d !== null && (d as Record<string, unknown>).type === 'openape_cli',
-  )
+    typeof d === 'object' && d !== null && (d as Record<string, unknown>).type === 'openape_cli')
 }
 
 /**

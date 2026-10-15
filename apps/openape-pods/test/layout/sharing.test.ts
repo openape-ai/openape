@@ -11,7 +11,14 @@ import { applyLanguage } from '../../src/renderer/i18n'
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en'); document.documentElement.style.colorScheme = '' })
 const manifest = {
-  format: 'openape-package', version: 1, package: { key: 'briefing', revision: 3, title: 'Morning briefing', description: 'Reads the inbox, summarizes new mail and posts the summary.' }, requiredFeatures: ['portable_aliases_v1'], entry: { kind: 'pod', key: 'reader' }, applications: [], files: [{ path: 'pods/reader/run.mjs', kind: 'script', bytes: 2048, sha256: 'c'.repeat(64), mediaType: 'text/javascript' }, { path: 'assets/reader/template.md', kind: 'asset', bytes: 410, sha256: 'd'.repeat(64), mediaType: 'text/markdown' }], contentSha256: 'a'.repeat(64),
+  format: 'openape-package',
+  version: 1,
+  package: { key: 'briefing', revision: 3, title: 'Morning briefing', description: 'Reads the inbox, summarizes new mail and posts the summary.' },
+  requiredFeatures: ['portable_aliases_v1'],
+  entry: { kind: 'pod', key: 'reader' },
+  applications: [],
+  files: [{ path: 'pods/reader/run.mjs', kind: 'script', bytes: 2048, sha256: 'c'.repeat(64), mediaType: 'text/javascript' }, { path: 'assets/reader/template.md', kind: 'asset', bytes: 410, sha256: 'd'.repeat(64), mediaType: 'text/markdown' }],
+  contentSha256: 'a'.repeat(64),
   pods: [{ key: 'reader', title: 'Inbox reader', description: '', script: 'pods/reader/run.mjs', packages: null, contract: null, requestedCapabilities: ['tool.api.request'], access: [{ kind: 'http', alias: 'api', origin: 'input_2', methods: ['GET'], authentication: null }, { kind: 'directory', alias: 'archive', input: 'input_3', access: 'read' }], inputs: [{ key: 'input_1', label: 'greeting', description: 'Shown at the top of the summary', kind: 'string', required: true, sharingGroup: null }, { key: 'input_2', label: 'api origin', description: '', kind: 'string', required: true, sharingGroup: null, default: 'https://api.example.test' }, { key: 'input_3', label: 'archive folder', description: '', kind: 'directory', required: true, sharingGroup: null }, { key: 'input_4', label: 'limit', description: 'Mails per run', kind: 'number', required: true, sharingGroup: null, minimum: 1, maximum: 50, default: 10 }], bindings: [{ alias: 'greeting', input: 'input_1' }, { alias: 'limit', input: 'input_4' }], applications: [], assets: ['assets/reader/template.md'] }],
   compositions: [],
 } as unknown as PortableImportView['manifest']

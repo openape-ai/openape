@@ -8,10 +8,12 @@ const mocks = vi.hoisted(() => ({ authorize: vi.fn(), refresh: vi.fn(), assertAc
 vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent', isPackaged: false }, shell: { openExternal: vi.fn(async () => {}) } }))
 vi.mock('../../src/main/broker/authorization', async importOriginal => ({ ...await importOriginal<object>(), AgentAuthority: class { authorize = mocks.authorize; refresh = mocks.refresh; assertActive = mocks.assertActive } }))
 // The watch waits with timers/promises, which fake timers do not replace on their own.
-vi.mock('node:timers/promises', () => ({ setTimeout: async (ms: number, value: unknown, options?: { signal?: AbortSignal }) => new Promise((resolve, reject) => {
-  const timer = setTimeout(resolve, ms, value)
-  options?.signal?.addEventListener('abort', () => { clearTimeout(timer); reject(options.signal!.reason) }, { once: true })
-}) }))
+vi.mock('node:timers/promises', () => ({
+  setTimeout: async (ms: number, value: unknown, options?: { signal?: AbortSignal }) => new Promise((resolve, reject) => {
+    const timer = setTimeout(resolve, ms, value)
+    options?.signal?.addEventListener('abort', () => { clearTimeout(timer); reject(options.signal!.reason) }, { once: true })
+  }),
+}))
 vi.mock('@openape/apes', () => ({ loadAdapter: () => ({ digest: 'digest' }), resolveCommand: async () => ({ permission: 'pod-runtime' }) }))
 vi.mock('../../src/main/grants/registry-copies', () => ({ loadPodAdapter: () => ({ digest: 'digest' }) }))
 vi.mock('../../src/runtime/environment', () => ({ podEnvironment: async () => ({ workspace: '/fixture/workspace', home: '/fixture/home', environment: {} }), podEnvironmentValues: () => ({}), visibleEnvironment: () => ({}) }))

@@ -112,8 +112,13 @@ export function snapshot(version: Row): HtmlPublication {
   return { title: String(version.title), html: String(version.html), ...(version.language ? { language: String(version.language) } : {}), ...(version.category ? { category: String(version.category) } : {}), tags: JSON.parse(String(version.tags)), metadata: JSON.parse(String(version.metadata)), externalImages: JSON.parse(String(version.external_images)), externalLinks: JSON.parse(String(version.external_links)) }
 }
 export async function publishHtml(client: Client, input: {
-  publication?: HtmlPublication, changes?: Partial<HtmlMetadata>, documentId?: string, expectedVersion?: number,
-  seriesId?: string, audience?: unknown, lifetime?: unknown,
+  publication?: HtmlPublication,
+  changes?: Partial<HtmlMetadata>,
+  documentId?: string,
+  expectedVersion?: number,
+  seriesId?: string,
+  audience?: unknown,
+  lifetime?: unknown,
 }, raw: string, identity: ReportIdentity, key: string, base: string, now = Date.now()) {
   if (!/^[\w:.-]{1,200}$/u.test(key)) invalid('A 1–200 character idempotency key is required')
   const digest = hash(raw)

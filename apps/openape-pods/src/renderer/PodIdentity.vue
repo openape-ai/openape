@@ -17,7 +17,9 @@ export default defineComponent({
   async mounted() { await this.request(); this.poll() },
   beforeUnmount() { this.closed = true; if (this.timer) clearTimeout(this.timer) },
   methods: {
-    t, diagnostic, label,
+    t,
+    diagnostic,
+    label,
     poll() { if (this.closed) return; this.timer = setTimeout(async () => { if (!this.busy) await this.request(); this.poll() }, 1000) },
     async request(command?: OnboardingCommand) {
       if (this.busy) return

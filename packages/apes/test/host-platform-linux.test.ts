@@ -177,7 +177,13 @@ describe('linux-exec runAsAgentUserOnLinux', () => {
   it('invokes sudo -n -H -u <name> with argv', async () => {
     const { spawnSync } = await import('node:child_process')
     vi.mocked(spawnSync).mockReturnValue({
-      pid: 1, status: 0, stdout: 'ok', stderr: '', signal: null, output: [], error: undefined,
+      pid: 1,
+      status: 0,
+      stdout: 'ok',
+      stderr: '',
+      signal: null,
+      output: [],
+      error: undefined,
     } as ReturnType<typeof spawnSync>)
 
     const { runAsAgentUserOnLinux } = await import('../src/lib/host-platform/linux-exec.js')
@@ -193,7 +199,13 @@ describe('linux-exec runAsAgentUserOnLinux', () => {
   it('returns exit code 1 when status is null (e.g. spawn-level failure)', async () => {
     const { spawnSync } = await import('node:child_process')
     vi.mocked(spawnSync).mockReturnValue({
-      pid: 1, status: null, stdout: '', stderr: 'EACCES', signal: 'SIGKILL', output: [], error: new Error('boom'),
+      pid: 1,
+      status: null,
+      stdout: '',
+      stderr: 'EACCES',
+      signal: 'SIGKILL',
+      output: [],
+      error: new Error('boom'),
     } as ReturnType<typeof spawnSync>)
 
     const { runAsAgentUserOnLinux } = await import('../src/lib/host-platform/linux-exec.js')

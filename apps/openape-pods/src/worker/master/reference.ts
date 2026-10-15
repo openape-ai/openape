@@ -73,7 +73,9 @@ export const runtimeReference = {
     'run starts one run and returns its identity. A new Pod\'s first run waits for its runtime grant unless that grant was already approved in the owner session. Inspect the actual run result. State precisely what ran and which live-provider checks remain. Never claim that synthetic validation proves every branch or real delivery.',
   ],
   actions: {
-    runtime: {}, list: {}, create: { name: 'string' },
+    runtime: {},
+    list: {},
+    create: { name: 'string' },
     inspect: { podId: 'UUID', revision: 'current pod settings revision' },
     revise: { podId: 'UUID', revision: 'current pod settings revision', name: 'string' },
     setVariable: { podId: 'UUID', revision: 'current pod settings revision', name: 'lowercase alias', value: 'ordinary string, not a secret', variableRevision: '0 for new, otherwise current variable revision' },

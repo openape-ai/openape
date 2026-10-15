@@ -21,7 +21,12 @@ export async function exportSource({ source, repository, output, token }) {
   const prefix = `/repos/${repository}`
   async function snapshot() {
     const [version, repo, issues, labels, pulls, allComments] = await Promise.all([
-      read('/version'), read(prefix), collectPages(read, `${prefix}/issues?state=all&type=issues&sort=oldest`), collectPages(read, `${prefix}/labels`), collectPages(read, `${prefix}/issues?state=all&type=pulls&sort=oldest`), collectPages(read, `${prefix}/issues/comments`),
+      read('/version'),
+      read(prefix),
+      collectPages(read, `${prefix}/issues?state=all&type=issues&sort=oldest`),
+      collectPages(read, `${prefix}/labels`),
+      collectPages(read, `${prefix}/issues?state=all&type=pulls&sort=oldest`),
+      collectPages(read, `${prefix}/issues/comments`),
     ])
     const records = []
     for (let offset = 0; offset < issues.items.length; offset += 4) {

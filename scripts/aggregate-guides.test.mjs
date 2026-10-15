@@ -18,9 +18,12 @@ test('guide regeneration preserves Pods, shared handbook content, images and web
     const handbookFile = join(root, 'apps/openape-pods/docs/handbook.json')
     const handbook = JSON.parse(readFileSync(handbookFile, 'utf8'))
     handbook.sections[0] = {
-      ...handbook.sections[0], title: 'Synthetic chapter',
-      paragraphs: ['Fixture paragraph.'], steps: ['Open the workspace.', 'Review the activity.'],
-      code: 'console.log("fixture")', image: 'handbook-fixture.png',
+      ...handbook.sections[0],
+      title: 'Synthetic chapter',
+      paragraphs: ['Fixture paragraph.'],
+      steps: ['Open the workspace.', 'Review the activity.'],
+      code: 'console.log("fixture")',
+      image: 'handbook-fixture.png',
     }
     writeFileSync(handbookFile, JSON.stringify(handbook))
     writeFileSync(join(root, 'apps/openape-pods/docs/images/handbook-fixture.png'), 'synthetic image')
@@ -33,7 +36,8 @@ test('guide regeneration preserves Pods, shared handbook content, images and web
       if (section.image) assert.ok(existsSync(join(root, 'apps/docs/public/guides/pods', section.image)))
     }
     assert.ok(first.includes([
-      '## Synthetic chapter', 'Fixture paragraph.',
+      '## Synthetic chapter',
+      'Fixture paragraph.',
       '1. Open the workspace.\n2. Review the activity.',
       '```javascript\nconsole.log("fixture")\n```',
       '![Synthetic chapter](/guides/pods/handbook-fixture.png)',
