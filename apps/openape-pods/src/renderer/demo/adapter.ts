@@ -8,6 +8,7 @@ import { parseResourceCommand } from '../../contracts/resources'
 import { parseScheduleCommand } from '../../contracts/scheduling'
 import { parseRunCommand } from '../../contracts/runs'
 import { parseDomainCommand } from '../../contracts/domain-admin'
+import { inboxMessageLimits, parseInboxMessagePage } from '../../contracts/inbox'
 import { demoId, demoHash, demoState, demoMap } from './scenarios'
 import type { DemoScenario } from './scenarios'
 
@@ -164,6 +165,22 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
     async scripts(command) {
       if (command.type !== 'list') return unavailable('Editing or executing scripts')
       return structuredClone(view(command.podId).scripts)
+    },
+    async messages(command) {
+      if (failRead) throw new Error('Demo connection interrupted. Restore it from the demo toolbar.')
+      if (command.type === 'mark') {
+        const message = state.messages.find(item => item.id === command.id)
+        if (!message) throw new Error('Demo message not found')
+        if (command.deleted) state.messages.splice(state.messages.indexOf(message), 1)
+        if (command.read !== undefined) message.read = command.read ? Date.now() : null
+        if (command.archived !== undefined) message.archived = command.archived ? Date.now() : null
+        changed()
+        return null
+      }
+      // Pages like the relay, newest first; the demo's creation times are unique and serve as the cursor.
+      const view = state.messages.filter(item => !!item.archived === !!command.archived && item.created < (command.before ?? Infinity)).sort((a, b) => b.created - a.created)
+      const page = view.slice(0, inboxMessageLimits.page)
+      return parseInboxMessagePage(structuredClone({ messages: page, next: view.length > page.length ? page.at(-1)!.created : null }))
     },
     async domain(input) {
       const command = parseDomainCommand(input)

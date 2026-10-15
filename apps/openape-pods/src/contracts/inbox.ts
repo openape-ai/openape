@@ -43,9 +43,9 @@ export function parseInboxTags(value: unknown): string[] {
   return value as string[]
 }
 
-function record(value: unknown, fields: string[]): Record<string, unknown> {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid inbox decision')
-  if (Object.keys(value).some(key => !fields.includes(key))) throw new Error('Invalid inbox decision fields')
+function record(value: unknown, fields: string[], invalid = 'Invalid inbox decision'): Record<string, unknown> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error(invalid)
+  if (Object.keys(value).some(key => !fields.includes(key))) throw new Error(invalid === 'Invalid inbox decision' ? 'Invalid inbox decision fields' : invalid)
   return value as Record<string, unknown>
 }
 function text(value: unknown, maximum: number, empty = false): string {
@@ -118,4 +118,89 @@ export function parseInboxDecide(value: unknown): InboxDecide {
   if (item.type !== 'decide' || typeof item.sourceId !== 'string' || !inboxSourceId.test(item.sourceId) || typeof item.digest !== 'string' || !digestPattern.test(item.digest) || typeof item.option !== 'string' || !optionKey.test(item.option)) throw new Error('Invalid inbox decide command')
   if (item.input === undefined) return { type: 'decide', sourceId: item.sourceId, digest: item.digest, option: item.option }
   return { type: 'decide', sourceId: item.sourceId, digest: item.digest, option: item.option, input: text(item.input, inboxDecisionLimits.input) }
+}
+
+/**
+ * An owner message from a Pod script (`context.notify`) as the account inbox keeps it: the relay's `InboxItem`
+ * of kind `message`. The workspace lists messages and marks, archives or deletes them; it never sends one.
+ * Every host parses them at its boundary: the content comes from Pod scripts.
+ */
+export interface InboxMessage {
+  id: string
+  title: string
+  body: string
+  pod: { id: string, name: string | null, tags?: string[] } | null
+  runId: string | null
+  links: { title: string, url: string }[]
+  created: number
+  read: number | null
+  archived: number | null
+}
+/** One page, newest first; `next` continues with older messages of the same view. */
+export interface InboxMessagePage { messages: InboxMessage[], next: number | null }
+/** `deleted` is final: the relay keeps only a tombstone so the message never reappears on another device. */
+export type InboxMessagesCommand = { type: 'list', archived?: boolean, before?: number } | { type: 'mark', id: string, read?: boolean, archived?: boolean, deleted?: true }
+
+/** The notify limits (worker/inbox/outbox.ts) as the relay enforces them. */
+export const inboxMessageLimits = { page: 50, title: 300, bodyBytes: 64 * 1024, podName: 200, links: 5, linkTitle: 200, url: 2048 } as const
+const invalidMessage = 'Invalid inbox message'
+const invalidCommand = 'Invalid inbox messages command'
+const bytes = (value: string) => new TextEncoder().encode(value).length
+function stamp(value: unknown, nullable: boolean): number | null {
+  if (nullable && value === null) return null
+  if (!Number.isSafeInteger(value) || (value as number) < 0) throw new Error(invalidMessage)
+  return value as number
+}
+function messageText(value: unknown, maximum: number): string {
+  if (typeof value !== 'string' || !value.trim() || bytes(value) > maximum) throw new Error(invalidMessage)
+  return value
+}
+function messageId(value: unknown, invalid = invalidMessage): string {
+  if (typeof value !== 'string' || !uuid.test(value)) throw new Error(invalid)
+  return value
+}
+
+export function parseInboxMessage(value: unknown): InboxMessage {
+  const item = record(value, ['id', 'title', 'body', 'pod', 'runId', 'links', 'created', 'read', 'archived'], invalidMessage)
+  let pod: InboxMessage['pod'] = null
+  if (item.pod !== null) {
+    const entry = record(item.pod, ['id', 'name', 'tags'], invalidMessage)
+    pod = { id: messageId(entry.id), name: entry.name === null ? null : messageText(entry.name, inboxMessageLimits.podName), ...(entry.tags === undefined ? {} : { tags: parseInboxTags(entry.tags) }) }
+  }
+  if (!Array.isArray(item.links) || item.links.length > inboxMessageLimits.links) throw new Error(invalidMessage)
+  const links = item.links.map((link) => {
+    const entry = record(link, ['title', 'url'], invalidMessage)
+    const url = typeof entry.url === 'string' && entry.url.length <= inboxMessageLimits.url ? URL.parse(entry.url) : null
+    if (!url || url.protocol !== 'https:' || url.username || url.password) throw new Error(invalidMessage)
+    return { title: messageText(entry.title, inboxMessageLimits.linkTitle), url: url.href }
+  })
+  return {
+    id: messageId(item.id), title: messageText(item.title, inboxMessageLimits.title), body: messageText(item.body, inboxMessageLimits.bodyBytes),
+    pod, runId: item.runId === null ? null : messageId(item.runId), links, created: stamp(item.created, false)!, read: stamp(item.read, true), archived: stamp(item.archived, true),
+  }
+}
+
+export function parseInboxMessagePage(value: unknown): InboxMessagePage {
+  const page = record(value, ['messages', 'next'], invalidMessage)
+  if (!Array.isArray(page.messages) || page.messages.length > inboxMessageLimits.page) throw new Error(invalidMessage)
+  const messages = page.messages.map(parseInboxMessage)
+  if (new Set(messages.map(message => message.id)).size !== messages.length) throw new Error(invalidMessage)
+  return { messages, next: stamp(page.next, true) }
+}
+
+export function parseInboxMessagesCommand(value: unknown): InboxMessagesCommand {
+  const item = record(value, ['type', 'id', 'archived', 'before', 'read', 'deleted'], invalidCommand)
+  const flag = (field: unknown) => {
+    if (field !== undefined && typeof field !== 'boolean') throw new Error(invalidCommand)
+    return field as boolean | undefined
+  }
+  if (item.type === 'list') {
+    if (item.id !== undefined || item.read !== undefined || item.deleted !== undefined) throw new Error(invalidCommand)
+    const before = item.before === undefined ? undefined : stamp(item.before, false)!
+    return { type: 'list', ...(flag(item.archived) === undefined ? {} : { archived: item.archived as boolean }), ...(before === undefined ? {} : { before }) }
+  }
+  if (item.type !== 'mark' || item.before !== undefined || (item.deleted !== undefined && item.deleted !== true)) throw new Error(invalidCommand)
+  const read = flag(item.read); const archived = flag(item.archived)
+  if (read === undefined && archived === undefined && !item.deleted) throw new Error(invalidCommand)
+  return { type: 'mark', id: messageId(item.id, invalidCommand), ...(read === undefined ? {} : { read }), ...(archived === undefined ? {} : { archived }), ...(item.deleted ? { deleted: true } : {}) }
 }
