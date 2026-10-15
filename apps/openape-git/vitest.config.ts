@@ -5,6 +5,7 @@ export default defineConfig({
   plugins: [vue()],
   test: {
     include: ['server/**/*.test.ts', 'tests/**/*.test.ts'],
+    exclude: ['tests/layout/**'],
     // CI runs the whole monorepo under load; the 5s default trips on CPU-
     // bound tests. Match the hardened packages.
     retry: 2,

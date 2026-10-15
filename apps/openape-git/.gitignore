@@ -4,3 +4,5 @@ data/
 .output/
 .data/
 .artifacts/
+
+.vitest-attachments/
