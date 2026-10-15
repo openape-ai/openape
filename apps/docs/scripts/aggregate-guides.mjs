@@ -23,17 +23,15 @@ const monorepoRoot = join(docsRoot, '..', '..')
 // service yet, so they have no page in this section — add
 // compose/demo/stories/<app>.mjs and a local-stack service first, then list
 // them here.
+// Keep existing guide paths stable when legacy applications leave the list.
 const APPS = [
-  { dir: 'openape-free-idp', slug: 'idp', title: 'OpenApe ID' },
-  { dir: 'openape-troop', slug: 'troop', title: 'Troop' },
-  { dir: 'openape-chat', slug: 'chat', title: 'Chat' },
-  { dir: 'openape-tasks', slug: 'tasks', title: 'Tasks' },
-  { dir: 'openape-plans', slug: 'plans', title: 'Plans' },
-  { dir: 'openape-testrun', slug: 'testrun', title: 'Testrun' },
-  { dir: 'openape-timetrack', slug: 'timetrack', title: 'Timetrack' },
-  { dir: 'openape-pr', slug: 'pr', title: 'PR' },
-  { dir: 'openape-crm', slug: 'crm', title: 'CRM' },
-  { dir: 'openape-pods', slug: 'pods', title: 'Pods', source: 'handbook' },
+  { dir: 'openape-free-idp', slug: 'idp', order: 2, title: 'OpenApe ID' },
+  { dir: 'openape-tasks', slug: 'tasks', order: 5, title: 'Tasks' },
+  { dir: 'openape-plans', slug: 'plans', order: 6, title: 'Plans' },
+  { dir: 'openape-testrun', slug: 'testrun', order: 7, title: 'Testrun' },
+  { dir: 'openape-timetrack', slug: 'timetrack', order: 8, title: 'Timetrack' },
+  { dir: 'openape-pr', slug: 'pr', order: 9, title: 'PR' },
+  { dir: 'openape-pods', slug: 'pods', order: 11, title: 'Pods', source: 'handbook' },
 ]
 
 /**
@@ -60,7 +58,7 @@ writeFileSync(join(sectionDir, '.navigation.yml'), 'title: Apps\nicon: i-lucide-
 
 const overview = []
 let written = 0
-APPS.forEach((app, i) => {
+APPS.forEach((app) => {
   if (app.source === 'handbook') {
     const imageDir = join(shotsRoot, app.slug)
     mkdirSync(imageDir, { recursive: true })
@@ -78,7 +76,7 @@ APPS.forEach((app, i) => {
       '- [Permissions and grants](/ecosystem/grants)',
       '- [All app guides](/apps)', '',
     ]
-    writeFileSync(join(sectionDir, `${String(i + 2).padStart(2, '0')}.${app.slug}.md`), `${lines.join('\n')}\n`)
+    writeFileSync(join(sectionDir, `${String(app.order).padStart(2, '0')}.${app.slug}.md`), `${lines.join('\n')}\n`)
     overview.push({ ...app, blurb: handbook.subtitle })
     written++
     return
@@ -124,7 +122,7 @@ APPS.forEach((app, i) => {
       if (step.shot) lines.push(`![${step.title}](/guides/${app.slug}/${step.shot})`, '')
     }
   }
-  const prefix = String(i + 2).padStart(2, '0')
+  const prefix = String(app.order).padStart(2, '0')
   writeFileSync(join(sectionDir, `${prefix}.${app.slug}.md`), `${lines.join('\n')}\n`)
   written++
 })
