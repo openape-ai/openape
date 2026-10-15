@@ -51,7 +51,7 @@ it('presents sender, classification and tags with production styles at narrow an
   expect(card.text()).not.toContain('Review uncertain mail')
   expect(card.get('.tags').text()).toBe('Tags: finanzen')
   expect(card.findAll('strong').map(node => node.text())).toEqual(['Absender: news@example.com', 'Ready to explore this?'])
-  for (const width of [390, 1280]) {
+  for (const width of [375, 390, 1280]) {
     await page.viewport(width, 844); await settle()
     const box = card.element.getBoundingClientRect()
     expect(box.width).toBeGreaterThan(300)
@@ -162,8 +162,9 @@ it('renders loading, empty and service errors with a working retry', async () =>
   expect(wrapper!.text()).toContain('Keine offenen Entscheidungen.')
 })
 
-it('keeps settings values and navigation readable with large text on a narrow screen', async () => {
-  inbox = transport([]).inbox; await inbox.start()
+it.each([375, 390])('keeps settings values and navigation readable with large text at %i px', async (width) => {
+  await page.viewport(width, 844)
+  inbox = transport([decision(), decision({ kind: 'message', decision: null })]).inbox; await inbox.start()
   route.path = '/inbox/settings'
   await open(SettingsPage)
   document.documentElement.style.fontSize = '28px'; document.body.style.fontSize = '28px'
@@ -180,8 +181,8 @@ it('keeps settings values and navigation readable with large text on a narrow sc
     }
   }
   expect(Number.parseFloat(getComputedStyle(wrapper!.get('.inbox').element).paddingBottom)).toBeGreaterThanOrEqual(nav.height)
-  await shot('settings-large-text')
+  await shot(`settings-large-text-${width}`)
   window.scrollTo(0, document.documentElement.scrollHeight); await settle()
   expect(wrapper!.get('main > .inbox-muted').element.getBoundingClientRect().bottom).toBeLessThanOrEqual(wrapper!.get('.inbox-tabs').element.getBoundingClientRect().top)
-  await shot('settings-large-text-bottom')
+  await shot(`settings-large-text-bottom-${width}`)
 })
