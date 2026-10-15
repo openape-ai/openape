@@ -16,6 +16,13 @@ describe('ape-troop (black-box)', () => {
     }
   })
 
+  it('rejects the retired runtime before authentication or dispatch', () => {
+    const res = cli.run('agents', 'spawn', 'legacy', '--type', 'openclaw')
+    expect(res.status).toBe(1)
+    expect(res.stderr).toContain('Only "bridge" is supported')
+    expect(res.stdout).toBe('')
+  })
+
   it('whoami without auth fails with a clear error', () => {
     const res = cli.run('whoami')
     expect(res.status).toBe(1)

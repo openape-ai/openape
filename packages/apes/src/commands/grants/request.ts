@@ -41,7 +41,7 @@ export const requestCommand = defineCommand({
     },
     'run-as': {
       type: 'string',
-      description: 'Execute as this user (e.g. openclaw, root)',
+      description: 'Execute as this user (e.g. agent, root)',
     },
     wait: {
       type: 'boolean',

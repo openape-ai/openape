@@ -2,7 +2,7 @@
 name: openape-idp
 description: Set up and configure an OpenApe Identity Provider using the @openape/nuxt-auth-idp Nuxt module. Use when building an IdP that manages WebAuthn passkeys, OAuth/OIDC flows, grants, and agent enrollment.
 metadata:
-  openclaw:
+  openape:
     emoji: "\U0001F511"
     requires:
       env:

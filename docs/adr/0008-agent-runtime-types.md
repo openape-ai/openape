@@ -1,5 +1,10 @@
 # 0008 — Per-Agent Runtime Types (`bridge` | `openclaw` | native `ThreadSession`)
 
+> Update (October 15, 2026, issue 1479): OpenClaw support has been retired.
+> The Nest supports only the bridge runtime, through pm2 or the existing opt-in
+> in-process path. The OpenClaw implementation and default-runtime question below
+> are historical; they do not authorize restoring that integration.
+
 - Status: Accepted (in active use; end-state default runtime owner-pending)
 - Date: 2026-06-22
 - Related: [0001 — Single-Process Nest](0001-single-process-nest.md),

@@ -8,13 +8,13 @@ import { spawnSync } from 'node:child_process'
 const SUBCOMMAND_NAME = /^[a-z0-9][a-z0-9-]*$/i
 
 /**
- * git-style dispatch for unknown subcommands: `apes openclaw add x` runs
- * `apes-openclaw add x` from PATH. That makes PATH the plugin registry —
- * installing a subcommand is `npm i -g @openape/apes-openclaw`, removing it is
+ * git-style dispatch for unknown subcommands: `apes example add x` runs
+ * `apes-example add x` from PATH. That makes PATH the plugin registry —
+ * installing a subcommand is `npm i -g apes-example`, removing it is
  * `npm rm -g`. The child reads the same `~/.config/apes/auth.json` through
  * `@openape/cli-auth`, so it needs nothing from this process.
  *
- * Runs before citty sees the args, because otherwise `apes openclaw --help`
+ * Runs before citty sees the args, because otherwise `apes example --help`
  * would be answered with apes' own usage instead of the child's.
  *
  * Returns the child's exit code, or `null` when this is not an external

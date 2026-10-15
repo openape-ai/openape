@@ -1,5 +1,20 @@
 # @openape/nest
 
+## Supported runtime
+
+The Nest supports the OpenApe bridge runtime only. Existing registry entries with
+an omitted runtime or `runtimeType: "bridge"` keep their behavior. Unsupported
+runtime entries are reported and are not started; they are never converted to a
+bridge automatically. Retire or explicitly migrate them before resuming work.
+The registry, agent homes, identities and history are preserved.
+
+OpenClaw support, its setup CLI, grant plugin and sandbox publishing scripts were
+retired in issue 1479. Previously published packages and installed host files are
+not removed by a repository update. Imported skills must move their requirements
+from `metadata.openclaw` to `metadata.openape`; retired metadata fails explicitly
+so required tools are never silently dropped.
+
+
 Local control-plane daemon. Manages OpenApe agents on a single machine — provisions macOS users, hands the bridge lifecycle off to launchd, exposes a localhost HTTP API gated by DDISA grant tokens.
 
 ## What it does

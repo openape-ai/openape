@@ -7,10 +7,9 @@ import { isRuntimeType } from '../src/lib/nest-registry'
 describe('isRuntimeType', () => {
   it('accepts the known runtimes', () => {
     expect(isRuntimeType('bridge')).toBe(true)
-    expect(isRuntimeType('openclaw')).toBe(true)
   })
   it('rejects anything else', () => {
-    for (const v of ['openClaw', 'BRIDGE', 'pi', '', undefined, null, 5, {}])
+    for (const v of ['openclaw', 'openClaw', 'BRIDGE', 'pi', '', undefined, null, 5, {}])
       expect(isRuntimeType(v)).toBe(false)
   })
 })

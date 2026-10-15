@@ -48,15 +48,6 @@ export interface Skill {
    * `metadata.openape.requires_tools`.
    */
   requiresTools?: string[]
-  /**
-   * Optional eligibility filter on host-PATH binaries. Mirrors
-   * OpenClaw's `metadata.openclaw.requires.bins` — a skill that
-   * expects `o365-cli` to be installed lists it here, and we drop
-   * the skill from the prompt on hosts where the binary is missing.
-   * Resolved via `which` once per scan; result is cached for the
-   * lifetime of the process. Sourced from either openclaw or
-   * openape metadata namespaces — same semantics.
-   */
   requiresBins?: string[]
 }
 
@@ -86,45 +77,6 @@ export function readSoul(home: string = homedir()): string | null {
   catch { return null }
 }
 
-/**
- * Parse YAML frontmatter from the head of a SKILL.md. We accept three
- * frontmatter shapes so a SKILL.md published on clawhub.ai (the
- * OpenClaw skill registry) drops into our runtime without
- * modification:
- *
- *   # Legacy / openape-flat (current default-skills):
- *   ---
- *   name: <slug>
- *   description: <one-liner>
- *   requires_tools: [time.now, http.get]
- *   ---
- *
- *   # OpenClaw-aligned (what clawhub.ai skills use):
- *   ---
- *   name: <slug>
- *   description: <one-liner>
- *   metadata:
- *     openclaw:
- *       emoji: 📊
- *       os: ["darwin"]
- *       requires:
- *         bins: ["o365-cli"]
- *   ---
- *
- *   # openape-namespaced (additive — coexists with openclaw block):
- *   ---
- *   name: <slug>
- *   description: <one-liner>
- *   metadata:
- *     openape:
- *       requires_tools: [mail.list]
- *   ---
- *
- * Returns `null` if no frontmatter is found or the required `name`
- * and `description` fields are missing — those are the only two
- * fields the rest of the system depends on. Falls back to legacy
- * flat keys when the metadata block is absent.
- */
 export function parseFrontmatter(content: string): {
   name: string
   description: string
@@ -155,24 +107,18 @@ export function parseFrontmatter(content: string): {
     return out.length > 0 ? out : undefined
   }
 
-  // Tool eligibility: openape namespace first, then top-level
-  // requires_tools (legacy/back-compat). OpenClaw doesn't have a
-  // direct equivalent — they use `requires.bins` instead.
   const meta = (fields.metadata && typeof fields.metadata === 'object' && !Array.isArray(fields.metadata))
     ? fields.metadata as Record<string, unknown>
     : {}
   const openapeMeta = (meta.openape && typeof meta.openape === 'object' && !Array.isArray(meta.openape))
     ? meta.openape as Record<string, unknown>
     : {}
-  const openclawMeta = (meta.openclaw && typeof meta.openclaw === 'object' && !Array.isArray(meta.openclaw))
-    ? meta.openclaw as Record<string, unknown>
-    : {}
+  if ('openclaw' in meta) {
+    throw new Error(`Skill "${name}" uses retired OpenClaw metadata; move its requirements to metadata.openape.`)
+  }
 
   const requiresTools = asStringArray(openapeMeta.requires_tools) ?? asStringArray(fields.requires_tools)
 
-  // Binary eligibility: openclaw namespace canonical form, also
-  // accept openape.requires.bins as a mirror. Top-level
-  // `requires_bins` is supported as a legacy/flat alias.
   function readRequiresBins(scope: Record<string, unknown>): string[] | undefined {
     const requires = scope.requires
     if (requires && typeof requires === 'object' && !Array.isArray(requires)) {
@@ -181,8 +127,7 @@ export function parseFrontmatter(content: string): {
     return undefined
   }
   const requiresBins
-    = readRequiresBins(openclawMeta)
-      ?? readRequiresBins(openapeMeta)
+    = readRequiresBins(openapeMeta)
       ?? asStringArray(fields.requires_bins)
 
   return { name, description, requiresTools, requiresBins }

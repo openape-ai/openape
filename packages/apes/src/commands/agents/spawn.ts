@@ -77,7 +77,7 @@ export const spawnAgentCommand = defineCommand({
     },
     'type': {
       type: 'string',
-      description: 'Runtime type: "bridge" (default, our @openape/ape-agent loop, pm2-supervised) or "openclaw" (foreign one-shot runtime the nest exec\'s per message). Orthogonal to --kind.',
+      description: 'Runtime type: bridge (the only supported runtime). Orthogonal to --kind.',
     },
   },
   async run({ args }) {
@@ -98,7 +98,7 @@ export const spawnAgentCommand = defineCommand({
     const pollMs = typeof args['poll-interval'] === 'string' ? Number.parseInt(args['poll-interval'], 10) : undefined
     const runtimeType = typeof args.type === 'string' ? args.type : undefined
     if (runtimeType != null && !isRuntimeType(runtimeType))
-      throw new CliError(`Invalid --type "${runtimeType}". Must be "bridge" or "openclaw".`)
+      throw new CliError(`Invalid --type "${runtimeType}". Only "bridge" is supported.`)
 
     const auth = loadAuth()
     if (!auth) {
