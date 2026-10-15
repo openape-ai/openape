@@ -14,6 +14,7 @@ export interface RuntimePolicy {
   executable: string
   workspace: string
   readFiles: string[]
+  metadataPaths?: string[]
   runtimeDirectories: string[]
   readDirectories?: string[]
   writeDirectories?: string[]
@@ -83,11 +84,13 @@ function ownerPolicy(policy: RuntimePolicy, executable: string): string {
   const writes = subpaths([policy.workspace, ...(policy.writeDirectories ?? [])])
   const reads = subpaths([...(policy.readDirectories ?? []), ...policy.runtimeDirectories])
   const files = [executable, ...policy.readFiles.map(literal)].map(path => `(literal ${path})`).join(' ')
+  const metadata = (policy.metadataPaths ?? []).map(path => `(literal ${literal(path)})`).join(' ')
   return `(version 1)
 (allow default)
 (deny file-read* file-write* ${subpaths(protectedPaths)})
 (allow file-read* file-write* ${writes})
 (allow file-read* file-map-executable ${files} ${reads})
+${metadata ? `(allow file-read-metadata ${metadata})` : ''}
 ${ancestorRule(closed)}
 (deny network-outbound ${closed.map(path => `(remote unix-socket (subpath ${literal(path)}))`).join(' ')})
 ${deny.length ? `(deny file-read* file-write* ${subpaths(deny)})` : ''}

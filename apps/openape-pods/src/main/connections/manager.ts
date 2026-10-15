@@ -47,12 +47,14 @@ export class ConnectionManager {
     this.owner = new OwnerConnection(credentials)
   }
 
-  async initialize(inspectCredentials: () => Promise<void>): Promise<void> {
+  async initialize(inspectCredentials: () => Promise<void>, maintenance = true): Promise<void> {
     try {
       await recoverAuthDomains(join(this.root, 'authentication'), this.runtime.helper)
       await inspectCredentials()
-      await this.cleanup(await this.dispatch({ type: 'reconcile' }) as AccountCleanup)
-      await rm(join(this.root, 'credentials/temporary'), { recursive: true, force: true })
+      if (maintenance) {
+        await this.cleanup(await this.dispatch({ type: 'reconcile' }) as AccountCleanup)
+        await rm(join(this.root, 'credentials/temporary'), { recursive: true, force: true })
+      }
       const manifest = JSON.parse(await readFile(this.runtime.manifest, 'utf8')) as { binaryHash: string, cli: string }
       if (manifest.cli !== `0.153.4-${process.platform}-${process.arch}`) throw new Error('Bundled Codex architecture does not match this Mac')
       await verifyExecutable(this.runtime.binary, manifest.binaryHash)

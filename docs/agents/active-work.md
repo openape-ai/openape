@@ -1,5 +1,13 @@
 # Active work
 
+## Standalone Pods CLI — issue 1499
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1499. Branch `feature/issue-1499-ape-pods-cli`, worktree `openape-monorepo.worktrees/ape-pods-cli-1499`, canonical base `b46051395a10b010b933efde9f71665d0c11a9d8`.
+- Owner approved proposal revision 4, then directed that CLI and desktop remain separate for now. Current source: `.claude/plans/2026-10-15-ape-pods-cli/plan.json`; revision 5 records the explicit standalone condition under the existing authorization.
+- The four commands use the real selected database, existing Pod identity, configured owner/isolated context and shared-data permissions. Extra assigned-script secrets and storage migration remain excluded. Desktop must remain closed; no desktop protocol or signed update is required.
+- Runtime-only build, 33 focused cases and four native CLI cases pass, including both home contexts, shared-data permissions, identity refusal, profile exclusion, cancellation and paged event output. Generated documentation is current. The complete affected unit gate is next; no owner Pod was used as a fixture.
+- Next: finish verification, publish actual Test Runs evidence and open a native PR with an explicit issue relation. No merge, release or desktop installation has occurred.
+
 ## Unified Pods execution — issue 1497
 
 - Approved proposal revision 2: https://report.openape.ai/d/01M4ZXED8YT88G56VGCG9C9JR7?v=2. Current progress: https://report.openape.ai/d/01M4ZXED8YT88G56VGCG9C9JR7.
