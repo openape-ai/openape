@@ -1,24 +1,10 @@
-import type { Slots } from 'vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { h, Suspense } from 'vue'
+import { page } from 'vitest/browser'
+import { routeBoundary as global, screenshotPath } from './harness'
 import { afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { installNuxtGlobals, SMALL_SHOT_WIDTH, WIDE_SHOT_WIDTH } from './report-fixture'
 import ReportPage from '../../app/pages/r/[slug].vue'
-
-// A phone viewport (390px) is set in vitest.browser.config.ts. Nuxt UI is
-// stubbed; the styles under test ship with the page itself.
-//
-// Stubs must be render functions, not `template` strings: the browser build of
-// Vue ships without the compiler, so a string template renders NOTHING — and a
-// report made of empty boxes passes every width assertion. `renders the report
-// it is handed` guards exactly that.
-const global = {
-  stubs: {
-    UIcon: { render: () => h('span', { class: 'stub-icon' }, '·') },
-    UBadge: { setup: (_: unknown, { slots }: { slots: Slots }) => () => h('span', { class: 'stub-badge' }, slots.default?.()) },
-    NuxtLink: { setup: (_: unknown, { slots }: { slots: Slots }) => () => h('a', { class: 'stub-link' }, slots.default?.()) },
-  },
-}
 
 const box = (el: Element) => el.getBoundingClientRect()
 const PAGE_WIDTH = 390
@@ -61,6 +47,7 @@ describe('report page on a phone', () => {
     expect(document.querySelector('.docbar h1')?.textContent).toContain('Proof link round-trip')
     expect(document.querySelector('.prose-report pre')).not.toBeNull()
     expect(document.querySelector('.prose-report ul li')).not.toBeNull()
+    await page.screenshot({ path: screenshotPath('test-report-screenshots-narrow') })
   })
 
   it('reins a desktop screenshot in to the width of the phone', async () => {
