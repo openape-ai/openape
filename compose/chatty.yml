@@ -102,6 +102,7 @@ services:
       retries: 6
       start_period: 10s
 
+  # Legacy source: https://repos.openape.ai/patrick/legacy (existing image/data retained).
   troop:
     image: registry.openape.ai/openape-troop:${TROOP_TAG:-unset}
     restart: unless-stopped
@@ -122,6 +123,7 @@ services:
       retries: 6
       start_period: 10s
 
+  # Legacy source: https://repos.openape.ai/patrick/legacy (existing image/data retained).
   chat:
     image: registry.openape.ai/openape-chat:${CHAT_TAG:-unset}
     restart: unless-stopped
@@ -353,6 +355,7 @@ services:
       start_period: 10s
 
 
+  # Legacy source: https://repos.openape.ai/patrick/legacy (existing image/data retained).
   crm:
     image: registry.openape.ai/openape-crm:${CRM_TAG:-unset}
     restart: unless-stopped

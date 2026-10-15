@@ -1,12 +1,7 @@
 {
   "version": 1,
-  "consumedApps": [
-    "@openape/ape-agent",
-    "@openape/ape-chat",
-    "@openape/nest"
-  ],
+  "consumedApps": [],
   "unitExceptions": {
-    "@openape/ape-chat:test": "No unit suite yet; CLI build and typecheck remain mandatory.",
     "@openape-question-service/app:test": "No unit suite yet; app lint and typecheck remain mandatory.",
     "@openape/ape-secrets:test": "No unit suite yet; CLI build and typecheck remain mandatory.",
     "openape-idp-example:test": "Covered by the dedicated openape-e2e suite.",
@@ -25,7 +20,6 @@
     "@openape/pods"
   ],
   "layout": [
-    "@openape/troop",
     "@openape/nuxt-auth-sp",
     "@openape-testrun/app",
     "@openape/pods",
