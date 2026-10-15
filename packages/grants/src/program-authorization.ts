@@ -17,7 +17,7 @@ export class InvalidProgramAuthorizeRequestError extends Error {}
  */
 export const PROGRAM_AUTHORIZE_LIMITS = { bodyBytes: 64 * 1024, argvItems: 256, tokenChars: 120 * 1024 } as const
 
-const FIELDS = ['target_host', 'audience', 'program', 'argv', 'grant_type', 'summary', 'batch']
+const FIELDS = ['target_host', 'audience', 'program', 'argv', 'files', 'grant_type', 'summary', 'batch']
 const PROGRAM_FIELDS = ['name', 'sha256']
 const SHA256_HEX = /^[0-9a-f]{64}$/
 
@@ -58,6 +58,21 @@ function grantType(value: unknown): 'always' | 'once' {
   return value
 }
 
+function programFiles(value: unknown): OpenApeProgramAuthorizeRequest['files'] {
+  if (value === undefined) return undefined
+  if (!Array.isArray(value) || !value.length || value.length > 64) fail('files must contain 1 to 64 content bindings')
+  const files = value.map((file) => {
+    if (!isRecord(file)) fail('Each file must name a path and sha256')
+    unknownFields(file, ['path', 'sha256'], 'file')
+    const path = requiredText(file.path, 'files.path', 4096)
+    if (!path.startsWith('/') || /[\r\n]/.test(path)) fail('files.path must be an absolute path without line breaks')
+    if (typeof file.sha256 !== 'string' || !SHA256_HEX.test(file.sha256)) fail('files.sha256 must be 64 lowercase hex characters')
+    return { path, sha256: file.sha256 }
+  }).sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
+  if (new Set(files.map(file => file.path)).size !== files.length) fail('files contains duplicate paths')
+  return files
+}
+
 /**
  * Validates the body of `POST /api/grants/authorize` and of the `authorize`
  * broker operation. Unknown fields are refused, so a requester can never
@@ -76,6 +91,8 @@ export function parseProgramAuthorizeRequest(input: unknown): OpenApeProgramAuth
     argv: argvList(input.argv),
     grant_type: grantType(input.grant_type),
   }
+  const files = programFiles(input.files)
+  if (files) request.files = files
   try {
     const summary = parseGrantSummary(input.summary)
     if (summary) request.summary = summary
@@ -127,6 +144,8 @@ function hasWildcardSelector(detail: OpenApeCliAuthorizationDetail): boolean {
 export interface ResolvedProgramCall {
   /** `[program.name, ...argv]`, the argv the requester executes. */
   executionArgv: string[]
+  /** Registry requires a fresh exact single-use human approval; broad policies cannot cover this call. */
+  requiresOnce?: true
   argvHash: string
   detail: OpenApeCliAuthorizationDetail
   /** Written by the IdP; the adapter fields are informational and never compared for coverage. */
@@ -138,20 +157,27 @@ export interface ResolvedProgramCall {
  * operation of the shape matches, the call becomes an exact-command detail
  * bound to its argv hash.
  */
-export async function resolveProgramCall(store: ShapeStore, request: Pick<OpenApeProgramAuthorizeRequest, 'program' | 'argv'>): Promise<ResolvedProgramCall> {
+export async function resolveProgramCall(store: ShapeStore, request: Pick<OpenApeProgramAuthorizeRequest, 'program' | 'argv' | 'files'>): Promise<ResolvedProgramCall> {
   const executionArgv = [request.program.name, ...request.argv]
   const shapes = await store.listShapes()
   if (shapes.some(shape => isVirtualShape(shape) && (shape.executable === request.program.name || shape.cli_id === request.program.name)))
     throw new InvalidProgramAuthorizeRequestError(`program.name ${request.program.name} names an operation of the Pods desktop, not a program`)
   const selection = await selectProgramShape(store, request.program)
   const structured = selection ? await resolveServerShape(store, selection.shape.cli_id, executionArgv) : null
+  const guarded = selection?.shape.operations.some(operation => operation.decision !== undefined)
+  const operation = selection?.shape.operations.find(operation => operation.id === structured?.operation_id)
+  if (operation?.decision === 'deny' || (guarded && (!structured || structured.synthetic || request.files?.length || hasWildcardSelector(structured.detail))))
+    throw new InvalidProgramAuthorizeRequestError('This program requires a registered protected operation; an exact-command fallback cannot bypass its policy')
+  if (operation?.decision === 'once' && operation.exact_command !== true)
+    throw new InvalidProgramAuthorizeRequestError('Registry single-use policy is missing exact-command binding')
   // A `*` in a selector is a glob for coverage (selectorValueMatches): an argv value must never widen what it asks for.
-  const resolved = structured && !hasWildcardSelector(structured.detail)
+  const resolved = structured && !request.files?.length && !hasWildcardSelector(structured.detail)
     ? structured
     : await buildGenericResolvedServer(selection?.shape.cli_id ?? request.program.name, executionArgv)
   const argvHash = await computeArgvHash(executionArgv)
   return {
     executionArgv,
+    ...(operation?.decision === 'once' ? { requiresOnce: true as const } : {}),
     argvHash,
     detail: resolved.detail,
     executionContext: {
@@ -160,6 +186,7 @@ export async function resolveProgramCall(store: ShapeStore, request: Pick<OpenAp
       argv_hash: argvHash,
       program_sha256: request.program.sha256,
       version_tested: selection?.versionTested ?? false,
+      ...(request.files ? { files: request.files } : {}),
     },
   }
 }

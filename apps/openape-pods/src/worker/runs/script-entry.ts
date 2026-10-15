@@ -1,4 +1,3 @@
-import { readFile } from 'node:fs/promises'
 import { createRequire, isBuiltin, registerHooks } from 'node:module'
 import { join } from 'node:path'
 import { Socket } from 'node:net'
@@ -7,10 +6,39 @@ import type { RunInput } from '../../contracts/runs'
 import { freeze, scriptContext } from './script-context.ts'
 import type { ScriptModule } from './script-context.ts'
 
+async function channelInput(channel: Socket): Promise<RunInput> {
+  return new Promise((resolve, reject) => {
+    let buffer = ''
+    let timer: ReturnType<typeof setTimeout>
+    function finish(error?: Error, input?: RunInput): void {
+      clearTimeout(timer); channel.removeListener('data', data); channel.removeListener('error', failed); channel.removeListener('end', ended)
+      if (error) reject(error); else resolve(input!)
+    }
+    function failed(error: Error): void { finish(error) }
+    function ended(): void { finish(new Error('Script input channel closed before its input')) }
+    function data(bytes: Buffer | string): void {
+      buffer += String(bytes)
+      if (Buffer.byteLength(buffer) > 256 * 1024) { finish(new Error('Script input exceeds its size bound')); return }
+      const newline = buffer.indexOf('\n')
+      if (newline < 0) return
+      try {
+        if (newline !== buffer.length - 1) throw new Error('Unexpected data after initial script input')
+        const input = JSON.parse(buffer.slice(0, newline)) as RunInput
+        if (input.version !== 1 || typeof input.runId !== 'string' || input.scriptHash !== process.argv[5]) throw new Error('Script input does not match the authorized script')
+        finish(undefined, input)
+      }
+      catch (error) { finish(error instanceof Error ? error : new Error('Invalid script input')) }
+    }
+    timer = setTimeout(() => finish(new Error('Script input channel timed out')), 30000)
+    channel.on('data', data); channel.once('error', failed); channel.once('end', ended)
+  })
+}
+
 async function main(): Promise<void> {
-  const config = JSON.parse(await readFile(process.argv[2], 'utf8')) as { input: RunInput, entry: string, dependencyRoot?: string }
   const channel = new Socket({ fd: 3, readable: true, writable: true })
   channel.setEncoding('utf8')
+  if (process.argv[2] !== '--input-channel') throw new Error('Script execution requires its private input channel')
+  const config = { input: await channelInput(channel), entry: process.argv[3], dependencyRoot: process.argv[4] || undefined }
   const pending = new Map<string, { resolve: (value: unknown) => void, reject: (error: Error) => void }>()
   const controller = new AbortController()
   let sequence = 0; let buffer = ''

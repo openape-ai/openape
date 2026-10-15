@@ -1,3 +1,4 @@
+import { computeArgvHash } from '@openape/grants'
 import { createHash, generateKeyPairSync, randomUUID, sign } from 'node:crypto'
 import { createServer } from 'node:http'
 import { execFile } from 'node:child_process'
@@ -5,7 +6,6 @@ import { promisify } from 'node:util'
 import { mkdtemp, mkdir, readFile, realpath, rm, writeFile, access } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { loadAdapter, resolveCommand } from '@openape/apes'
 import { expect, it } from 'vitest'
 import { applicationDefinition } from '../src/main/programs/application'
 import { ApplicationLaunch } from '../src/main/programs/launch'
@@ -51,39 +51,43 @@ int main(int argc, char **argv) {
   const definition = await applicationDefinition(bundle)
   const cliId = `pod-open-${applicationId.replaceAll('-', '')}-${definition.executableHash.slice(0, 16)}`
   const descriptor = join(root, `${cliId}.toml`); await writeFile(descriptor, launcherShape(cliId, definition.name))
-  const command = await resolveCommand(loadAdapter(cliId, descriptor), [cliId])
   const keys = generateKeyPairSync('ed25519')
   const server = createServer((request, response) => {
     response.setHeader('Content-Type', 'application/json')
-    if (request.url === '/.well-known/openid-configuration') {
-      response.end(JSON.stringify({ grants_endpoint: `${origin}/api/grants`, jwks_uri: `${origin}/.well-known/jwks.json` }))
-    }
-    else if (request.url === '/.well-known/jwks.json') {
-      response.end(JSON.stringify({ keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'key', alg: 'EdDSA', use: 'sig' }] }))
-    }
-    else if (request.url?.startsWith('/api/grants?')) {
-      response.end('{"data":[]}')
-    }
-    else if (request.url === '/api/grants' && request.method === 'POST') { requested = true; response.end(JSON.stringify({ id: 'synthetic', status: approved ? 'approved' : 'denied' })) }
-    else if (request.url === '/api/grants/synthetic') {
-      response.end(JSON.stringify({ status: approved ? 'approved' : 'denied' }))
-    }
-    else if (request.url === '/api/grants/synthetic/token') {
-      const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url'); const now = Math.floor(Date.now() / 1000)
-      const body = Buffer.from(JSON.stringify({ iss: origin, sub: 'pod@example.test', aud: 'shapes', target_host: `pods:${podId}`, grant_id: 'synthetic', grant_type: 'once', iat: now, exp: now + 60, jti: randomUUID(), authorization_details: [command.detail], execution_context: command.executionContext })).toString('base64url')
-      response.end(JSON.stringify({ authz_jwt: `${head}.${body}.${sign(null, Buffer.from(`${head}.${body}`), keys.privateKey).toString('base64url')}` }))
-    }
-    else if (request.url === '/api/grants/synthetic/consume') {
-      response.end('{"status":"valid"}')
-    }
-    else { response.statusCode = 404; response.end('{}') }
+    void (async () => {
+      if (request.url === '/api/grants/authorize') {
+        requested = true; let raw = ''; for await (const bytes of request) raw += bytes
+        const call = JSON.parse(raw)
+        if (!approved) { response.end(JSON.stringify({ state: 'denied', grant_id: 'synthetic' })); return }
+        const now = Math.floor(Date.now() / 1000)
+        const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')
+        const payload = Buffer.from(JSON.stringify({ iss: origin, sub: 'pod@example.test', aud: 'shapes', target_host: call.target_host, grant_id: 'synthetic', grant_type: 'always', exp: now + 120, iat: now, jti: randomUUID(), argv_hash: await computeArgvHash([call.program.name, ...call.argv]), program_sha256: call.program.sha256, execution_context: { files: call.files }, authorization_details: [{ type: 'openape_cli', cli_id: call.program.name, action: 'read' }] })).toString('base64url')
+        response.end(JSON.stringify({ state: 'approved', grant_id: 'synthetic', authz_jwt: `${head}.${payload}.${sign(null, Buffer.from(`${head}.${payload}`), keys.privateKey).toString('base64url')}`, expires_at: now + 120 }))
+      }
+      else if (request.url?.startsWith('/api/pods/agents/')) { response.end(JSON.stringify({ email: 'pod@example.test', owner: 'owner@example.test', active: true, grantActive: true, keyIds: ['fixture-key'], grantId: 'synthetic' })) }
+      else if (request.url === '/api/grants/synthetic') { response.end(JSON.stringify({ status: approved ? 'approved' : 'denied' })) }
+      else if (request.url === '/.well-known/openid-configuration') {
+        response.end(JSON.stringify({ grants_endpoint: `${origin}/api/grants`, jwks_uri: `${origin}/.well-known/jwks.json` }))
+      }
+      else if (request.url === '/.well-known/jwks.json') {
+        response.end(JSON.stringify({ keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'key', alg: 'EdDSA', use: 'sig' }] }))
+      }
+      else if (request.url?.startsWith('/api/grants?')) {
+        response.end('{"data":[]}')
+      }
+      else if (request.url === '/api/grants' && request.method === 'POST') { requested = true; response.end(JSON.stringify({ id: 'synthetic', status: approved ? 'approved' : 'denied' })) }
+      else if (request.url === '/api/grants/synthetic') {
+        response.end(JSON.stringify({ status: approved ? 'approved' : 'denied' }))
+      }
+      else { response.statusCode = 404; response.end('{}') }
+    })().catch(error => response.destroy(error))
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`
   const credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: bytes => bytes.toString() })
   const stateId = await new ProgramState(credentials).create({ podId, applicationId })
   const resources: ResourceState = { epoch: 1, resources: [{ id: applicationId, podId, name: definition.name, revision: 1, kind: 'tool', state: 'ready', configuration: { ...definition, type: 'program', stateId, grants: [] } }] }
-  const connections = { podConnection: async () => ({ issuer: origin, subject: 'pod@example.test', accessToken: async () => 'synthetic-token' }) } as unknown as ConnectionManager
+  const connections = { podConnection: async () => ({ issuer: origin, subject: 'pod@example.test', owner: 'owner@example.test', keyId: 'fixture-key', targetHost: `pods:${podId}`, accessToken: async () => 'synthetic-token' }) } as unknown as ConnectionManager
   let released = 0
   const runtime = { executable: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), cli: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/Resources/apes/ape-shell.mjs'), client: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/Resources/app.asar.unpacked/dist/runtime/shell-client.mjs') }
   const shell = new ExternalShell(podId, root, runtime, resources, credentials, connections, async () => {}, async () => { released++ }, 'isolated', 'Synthetic GUI', applicationId)

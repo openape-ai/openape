@@ -3,7 +3,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import { afterEach, expect, it, vi } from 'vitest'
 import { InfrastructureError, NonRetryableError, retryInfrastructure, transientNetwork, transientResponse } from '../src/contracts/infrastructure'
 import { recoveryDecision } from '../src/worker/recovery/policy'
-import { MailBridge } from '../src/worker/mail/bridge'
+import { ServiceBridge } from '../src/worker/runtime/service-bridge'
 
 vi.mock('node:timers/promises', () => ({ setTimeout: vi.fn() }))
 afterEach(() => { vi.restoreAllMocks(); vi.mocked(delay).mockReset() })
@@ -54,7 +54,7 @@ it('classifies temporary transport faults without treating refusal or invalid da
 })
 it('preserves trusted retry metadata through broker IPC without interpreting error text', async () => {
   const send = vi.fn()
-  const bridge = new MailBridge(send)
+  const bridge = new ServiceBridge(send)
   const scope = { podId: 'pod', runId: 'run', epoch: 0, assignmentRevision: 1, capabilities: [] }
   const work = bridge.execute(scope, {}, new AbortController().signal, 'http')
   const rejected = expect(work).rejects.toBeInstanceOf(InfrastructureError)
@@ -68,7 +68,7 @@ it('preserves trusted retry metadata through broker IPC without interpreting err
 
 it('carries a non-retryable tool failure through broker IPC and never schedules a retry for it', async () => {
   const send = vi.fn()
-  const bridge = new MailBridge(send)
+  const bridge = new ServiceBridge(send)
   const scope = { podId: 'pod', runId: 'run', epoch: 0, assignmentRevision: 1, capabilities: [] }
   const work = bridge.execute(scope, {}, new AbortController().signal)
   const rejected = expect(work).rejects.toBeInstanceOf(NonRetryableError)
@@ -82,7 +82,7 @@ it('parks broker calls that wait for an IdP decision outside the queue limit and
   vi.useFakeTimers()
   try {
     const send = vi.fn()
-    const bridge = new MailBridge(send)
+    const bridge = new ServiceBridge(send)
     const scope = { podId: 'pod', runId: 'run', epoch: 0, assignmentRevision: 1, capabilities: [] }
     const serviceIds = () => send.mock.calls.filter(([message]) => 'service' in message).map(([message]) => message.service.id as string)
     const cancelled = () => send.mock.calls.filter(([message]) => 'serviceCancel' in message).map(([message]) => message.serviceCancel as string)

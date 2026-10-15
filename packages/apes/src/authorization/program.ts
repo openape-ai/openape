@@ -1,11 +1,14 @@
 import { createHash } from 'node:crypto'
 import { accessSync, constants, createReadStream, realpathSync, statSync } from 'node:fs'
 import { basename, delimiter, join, resolve } from 'node:path'
-import type { OpenApeAuthZClaims, OpenApeGrantSummary } from '@openape/core'
-import { computeArgvHash, verifyAuthzJWT } from '@openape/grants'
+import type { BrokeredGrant, OpenApeAuthZClaims, OpenApeGrantBatch, OpenApeGrantSummary } from '@openape/core'
+import { computeArgvHash, sameBrokeredGrant, verifyAuthzJWT } from '@openape/grants'
 import { ApiError, apiFetch, discoverEndpoints, getGrantsEndpoint } from '../http.js'
 import { GRANT_WAIT_MS } from '../shapes/grants.js'
 import { createWaitProgressReporter } from '../wait-progress.js'
+import { interpreterProgramFiles } from './program-files.js'
+import type { ProgramFile } from './program-files.js'
+import { loadAuth } from '../config.js'
 
 /**
  * Per-call program authorization at the IdP (issue 1473, revision 4). apes sends the exact command and the hash of
@@ -28,6 +31,7 @@ export interface ProgramCall {
   program: LocatedProgram
   /** Arguments without the executable, exactly as executed. */
   argv: string[]
+  files?: ProgramFile[]
 }
 
 export type GrantType = 'once' | 'always'
@@ -37,6 +41,7 @@ export interface AuthorizationRequest {
   targetHost: string
   grantType: GrantType
   summary?: OpenApeGrantSummary
+  batch?: OpenApeGrantBatch
 }
 
 export type AuthorizeAnswer =
@@ -143,8 +148,10 @@ export async function requestAuthorization(call: ProgramCall, request: Authoriza
         audience: 'shapes',
         program: { name: call.program.name, sha256: call.program.sha256 },
         argv: call.argv,
+        ...(call.files?.length ? { files: call.files } : {}),
         grant_type: request.grantType,
         ...(request.summary ? { summary: request.summary } : {}),
+        ...(request.batch ? { batch: request.batch } : {}),
       },
     })
     return parseAnswer(body)
@@ -163,7 +170,7 @@ export async function requestAuthorization(call: ProgramCall, request: Authoriza
  */
 export async function verifyProgramToken(
   token: string,
-  binding: { idp: string, subject: string, targetHost: string, call: ProgramCall },
+  binding: { idp: string, subject: string, targetHost: string, call: ProgramCall, brokered?: BrokeredGrant },
 ): Promise<ProgramTokenClaims> {
   const issuer = issuerOf(binding.idp)
   const result = await verifyAuthzJWT(token, {
@@ -177,6 +184,9 @@ export async function verifyProgramToken(
   if (claims.target_host !== binding.targetHost) throw new Error('Command token is for another host')
   if (claims.argv_hash !== await computeArgvHash(executionArgv(binding.call))) throw new Error('Command token does not match this command')
   if (claims.program_sha256 !== binding.call.program.sha256) throw new Error('Command token does not match this program file')
+  if (JSON.stringify(claims.execution_context?.files ?? []) !== JSON.stringify(binding.call.files ?? [])) throw new Error('Command token does not match the script content')
+  if (claims.run_as !== undefined) throw new Error('Program authorization cannot change the execution user')
+  if (!sameBrokeredGrant(claims.brokered, binding.brokered) || (binding.brokered && claims.decided_by !== binding.brokered.owner)) throw new Error('Command token does not match the brokered owner identity')
   return claims
 }
 
@@ -217,7 +227,7 @@ const REUSE_MARGIN_SECONDS = 5
 const tokenCache = new Map<string, { grantId: string, token: string, claims: ProgramTokenClaims }>()
 
 async function cacheKey(call: ProgramCall, request: AuthorizationRequest, subject: string): Promise<string> {
-  return JSON.stringify([issuerOf(request.idp), subject, request.targetHost, call.program.sha256, await computeArgvHash(executionArgv(call))])
+  return JSON.stringify([issuerOf(request.idp), subject, request.targetHost, call.program.sha256, await computeArgvHash(executionArgv(call)), call.files ?? []])
 }
 
 /** Forgets reusable command tokens; tests and long-lived processes that switch identity use it. */
@@ -226,6 +236,8 @@ export function clearProgramTokenCache(): void {
 }
 
 export interface AuthorizeProgramOptions extends AuthorizationRequest {
+  /** The actual child context, when a supervised caller supplies a separate environment. */
+  context?: { cwd: string, env: NodeJS.ProcessEnv }
   /** The own identity; the command token must name it as subject. */
   subject: string
   /** Wait for a pending decision instead of returning it. A wait that runs out throws and nothing runs. */
@@ -234,7 +246,7 @@ export interface AuthorizeProgramOptions extends AuthorizationRequest {
   waitMs?: number
   /** Poll interval while waiting; default 3 seconds. */
   pollIntervalMs?: number
-  onPending?: (answer: { grantId: string, approvalUrl: string }) => void
+  onPending?: (answer: { grantId: string, approvalUrl: string }) => void | Promise<void>
 }
 
 /**
@@ -244,7 +256,18 @@ export interface AuthorizeProgramOptions extends AuthorizationRequest {
  * they expire; single-use tokens never are.
  */
 export async function authorizeProgramCall(call: ProgramCall, options: AuthorizeProgramOptions): Promise<ProgramAuthorization> {
-  const key = await cacheKey(call, options, options.subject)
+  const detected = interpreterProgramFiles(call, options.context)
+  for (const file of detected) {
+    const pinned = call.files?.find(candidate => candidate.path === file.path)
+    if (pinned && pinned.sha256 !== file.sha256) throw new Error(`${file.path} changed before authorization; nothing was executed`)
+  }
+  call.files = [...new Map([...(call.files ?? []), ...detected].map(file => [file.path, file])).values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
+  const auth = loadAuth()
+  const ownAuth = auth?.email === options.subject && issuerOf(auth.idp) === issuerOf(options.idp) ? auth : undefined
+  const decisionIssuer = ownAuth?.decision_issuer ?? options.idp
+  const brokered = ownAuth?.brokered
+  if (brokered && !ownAuth?.decision_issuer) throw new Error('Brokered authorization requires its decision issuer')
+  const key = JSON.stringify([await cacheKey(call, options, options.subject), decisionIssuer, brokered ?? null])
   const cached = tokenCache.get(key)
   if (cached && cached.claims.exp - REUSE_MARGIN_SECONDS > Date.now() / 1000)
     return { kind: 'authorized', ...cached }
@@ -252,7 +275,7 @@ export async function authorizeProgramCall(call: ProgramCall, options: Authorize
 
   let answer = await requestAuthorization(call, options)
   if (answer.state === 'pending') {
-    options.onPending?.(answer)
+    await options.onPending?.(answer)
     if (!options.wait) return { kind: 'pending', grantId: answer.grantId, approvalUrl: answer.approvalUrl }
     const status = await waitForDecision(options.idp, answer.grantId, options.waitMs ?? GRANT_WAIT_MS, options.pollIntervalMs ?? 3000)
     if (status !== 'approved') throw new AuthorizationRefusedError(status, answer.grantId)
@@ -262,9 +285,10 @@ export async function authorizeProgramCall(call: ProgramCall, options: Authorize
   }
   if (answer.state !== 'approved') throw new AuthorizationRefusedError(answer.state, answer.grantId)
 
-  const claims = await verifyProgramToken(answer.token, { idp: options.idp, subject: options.subject, targetHost: options.targetHost, call })
+  const claims = await verifyProgramToken(answer.token, { idp: decisionIssuer, subject: options.subject, targetHost: options.targetHost, call, brokered })
+  if (claims.grant_id !== answer.grantId) throw new Error('Command token belongs to another grant')
   const authorized = { grantId: answer.grantId, token: answer.token, claims }
-  if (claims.grant_type === 'once') await consumeSingleUseGrant(options.idp, answer.grantId, answer.token)
+  if (claims.grant_type === 'once') await consumeSingleUseGrant(decisionIssuer, answer.grantId, answer.token)
   else tokenCache.set(key, authorized)
   return { kind: 'authorized', ...authorized }
 }

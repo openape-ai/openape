@@ -6,7 +6,6 @@ import type { PortableFile, PortableManifest, PortablePod } from '@openape/pods-
 import { parsePackages } from '../../contracts/dependencies'
 import { parseHttpPermission } from '../../contracts/http'
 import { parseJevModel } from '../../contracts/jev'
-import { parseSince } from '../../contracts/onboarding'
 import { parseSchedule } from '../../contracts/scheduling'
 import { parseImportedLock } from '../dependencies/imported-lock'
 
@@ -33,7 +32,7 @@ function validatePortableAccessDefaults(pod: PortablePod): void {
     if (request.kind === 'http' && value(request.origin) !== undefined) parseHttpPermission({ origin: value(request.origin), methods: request.methods })
     if (request.kind === 'http' && request.authentication && value(request.authentication.issuer) !== undefined) parseHttpPermission({ origin: value(request.authentication.issuer), methods: ['POST'] })
     if (request.kind === 'jev' && value(request.model) !== undefined) parseJevModel(value(request.model))
-    if (request.kind === 'mail' && value(request.since) !== undefined) parseSince(value(request.since) === '' ? null : value(request.since))
+    if (request.kind === 'mail') throw new Error('This package uses retired mail access; migrate it to an external application recipe')
   }
 }
 

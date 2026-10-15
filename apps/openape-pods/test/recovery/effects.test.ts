@@ -1,3 +1,6 @@
+import { randomUUID } from 'node:crypto'
+import { executeRecordedProgram } from '../../src/main/programs/effect-execution'
+import { recordProgramExecution } from '../../src/worker/runs/program-execution'
 // @vitest-environment node
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -125,4 +128,39 @@ it('keeps an unreceipted broker action fenced across fresh runs and manual recov
   await expect(recovery.inspect(f.pod.id, f.run.id)).rejects.toThrow('without replay evidence')
   f.runs.append(f.run.id, 'recovery-boundary-result', { id: 'archive-action', state: 'confirmed' })
   await expect(recovery.inspect(f.pod.id, f.run.id)).resolves.toBeUndefined()
+})
+
+it('persists ape-shell write intent before acknowledgement and never replays uncertain results', async () => {
+  const f = fixture()
+  const operationId = randomUUID()
+  const scope = { podId: f.pod.id, runId: f.run.id, epoch: 0, assignmentRevision: 1, capabilities: [] }
+  const record = async (record: Parameters<typeof recordProgramExecution>[2]['record']) => { recordProgramExecution(f.store, f.runs, { scope, operationId, record }) }
+  let starts = 0
+  await expect(executeRecordedProgram({ command: 'synthetic-secret' }, async (observer) => {
+    await observer.authorized({ grantId: 'verified', write: true })
+    expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()?.state).toBe('intent')
+    starts++
+    throw new Error('Lost execution receipt')
+  }, record)).rejects.toThrow('Lost execution receipt')
+  expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()?.state).toBe('unknown')
+  expect(JSON.stringify(f.store.db.prepare('SELECT * FROM effect_ledger').all())).not.toContain('synthetic-secret')
+  await expect(executeRecordedProgram({ command: 'synthetic-secret' }, async (observer) => {
+    await observer.authorized({ grantId: 'verified', write: true }); starts++; return { exitCode: 0 }
+  }, record)).rejects.toThrow('unknown')
+  expect(starts).toBe(1)
+})
+
+it('drops only a private-channel not-started intent and keeps failed or completed writes non-replayable', async () => {
+  for (const scenario of ['not-started', 'failed', 'completed']) {
+    const f = fixture(); const operationId = randomUUID()
+    const scope = { podId: f.pod.id, runId: f.run.id, epoch: 0, assignmentRevision: 1, capabilities: [] }
+    const record = async (record: Parameters<typeof recordProgramExecution>[2]['record']) => { recordProgramExecution(f.store, f.runs, { scope, operationId, record }) }
+    const result = executeRecordedProgram({}, async (observer) => {
+      await observer.authorized({ grantId: 'verified', write: true })
+      if (scenario === 'not-started') { await observer.notStarted!(); throw new Error('File changed before dispatch') }
+      return { exitCode: scenario === 'failed' ? 1 : 0 }
+    }, record)
+    if (scenario === 'not-started') { await expect(result).rejects.toThrow('before dispatch'); expect(f.store.db.prepare('SELECT * FROM effect_ledger').all()).toEqual([]) }
+    else { await result; expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()?.state).toBe(scenario === 'completed' ? 'completed' : 'unknown') }
+  }
 })

@@ -12,7 +12,7 @@ import { RunDispatcher } from '../../src/worker/runs/dispatcher'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
 import type { RunServices } from '../../src/worker/runs/dispatcher'
 import type { ProgramAuthority } from '../../src/main/programs/grants'
-import { MailBridge } from '../../src/worker/mail/bridge'
+import { ServiceBridge } from '../../src/worker/runtime/service-bridge'
 import { createPortablePackage } from '../../src/worker/sharing/package'
 
 const captured = vi.hoisted(() => ({ services: undefined as RunServices | undefined, startControlled: undefined as ((podId: string, operationId: string) => string) | undefined }))
@@ -126,7 +126,7 @@ it('pauses scheduled intake while suspended and catches missed slots up once on 
 
 it('routes assigned SSH observations through the real worker entry without requiring mail access', async () => {
   const store = new PodDatabase(root)
-  const bridge = vi.spyOn(MailBridge.prototype, 'execute').mockResolvedValue({ version: 1, profile: 'linde-server-v1', facts: { observedAt: '2026-09-30T14:00:00Z' } })
+  const bridge = vi.spyOn(ServiceBridge.prototype, 'execute').mockResolvedValue({ version: 1, profile: 'linde-server-v1', facts: { observedAt: '2026-09-30T14:00:00Z' } })
   try {
     const pod = store.createPod({ name: 'SSH inventory' }); const registry = new ResourceRegistry(store, () => {})
     registry.assignSsh(pod.id, { target: { alias: 'fixture.example', jumps: [], profile: 'linde-server-v1' }, profileHash: 'a'.repeat(64), hosts: [], knownHosts: [] }, { identity: { podId: pod.id }, grantId: 'approved' } as ProgramAuthority, 0)

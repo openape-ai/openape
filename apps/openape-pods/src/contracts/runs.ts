@@ -94,7 +94,7 @@ export function parseResult(value: unknown, input: RunInput): ScriptResult {
   return result as unknown as ScriptResult
 }
 /** Every request a script may send; the frame check and the frame type share this one list. */
-export const scriptOperations = ['data.get', 'data.delete', 'jev.evaluate', 'http.request', 'credentials.get', 'agent.run', 'tools.invoke', 'progress.commit', 'mail.archive', 'mail.next', 'mail.commit', 'graph.contract', 'notify', 'data.set', 'data.list', 'work.contract', 'work.polls', 'work.find', 'work.claim', 'work.complete', 'work.defer', 'work.fail', 'decisions.ask', 'decisions.withdraw', 'approvals.request', 'approvals.get', 'mail.archiveApproved'] as const
+export const scriptOperations = ['data.get', 'data.delete', 'jev.evaluate', 'http.request', 'credentials.get', 'agent.run', 'tools.invoke', 'progress.commit', 'graph.contract', 'notify', 'data.set', 'data.list', 'work.contract', 'work.polls', 'work.find', 'work.claim', 'work.complete', 'work.defer', 'work.fail', 'decisions.ask', 'decisions.withdraw'] as const
 export type ScriptOperation = typeof scriptOperations[number]
 export interface ScriptFrame { version: 1, runId: string, sequence: number, type: 'request' | 'result' | 'error' | 'log', id?: string, operation?: ScriptOperation, payload: unknown }
 export function parseFrame(value: unknown, runId: string, sequence: number): ScriptFrame {

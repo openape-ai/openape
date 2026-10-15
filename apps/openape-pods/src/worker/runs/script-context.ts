@@ -11,7 +11,7 @@ const options = (value: unknown) => value && typeof value === 'object' && !Array
 
 /**
  * The frozen `context` a Pod script receives; every service is a request to the dispatcher: shared data, work, owner
- * questions, approvals and the approved mail archive among them (issue 1465). Tests build the same context in-process.
+ * questions and generic program execution. Tests build the same context in-process.
  */
 export async function scriptContext(script: ScriptModule, input: RunInput, request: Request, log: (message: string) => void, signal: AbortSignal): Promise<Record<string, unknown>> {
   // A retired network contract is refused by the dispatcher, so such a script fails before it acts.
@@ -24,7 +24,6 @@ export async function scriptContext(script: ScriptModule, input: RunInput, reque
     data,
     work,
     decisions: Object.freeze({ ask: (question: unknown) => request('decisions.ask', question), withdraw: (question: unknown) => request('decisions.withdraw', question) }),
-    approvals: Object.freeze({ request: (approval: unknown) => request('approvals.request', approval), get: (id: unknown) => request('approvals.get', { id }) }),
     jev: Object.freeze({ evaluate: (payload: unknown) => request('jev.evaluate', payload) }),
     variables: Object.freeze(input.variables ?? {}),
     aliases: freeze(input.aliases ?? { applications: {}, http: {}, directories: {}, references: {} }),
@@ -36,7 +35,6 @@ export async function scriptContext(script: ScriptModule, input: RunInput, reque
     signal,
     http: Object.freeze({ request: (payload: unknown) => request('http.request', payload) }),
     credentials: Object.freeze({ get: (alias: string) => request('credentials.get', { alias }) }),
-    mail: Object.freeze({ archiveApproved: (target: unknown) => request('mail.archiveApproved', target), archive: Object.freeze({ prepare: (proposal: unknown) => request('mail.archive', { operation: 'prepare', proposal }), process: (target?: unknown) => request('mail.archive', target === undefined ? { operation: 'process' } : { operation: 'process', target }) }), next: () => request('mail.next', {}), commit: (payload: unknown) => request('mail.commit', payload) }),
     tools: Object.freeze({ invoke: (payload: unknown) => request('tools.invoke', payload) }),
     agent: Object.freeze({ run: (payload: unknown) => request('agent.run', payload) }),
     progress: Object.freeze({ commit: (payload: unknown) => request('progress.commit', payload) }),

@@ -16,7 +16,7 @@ vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
 const stores: PodDatabase[] = []
 afterEach(() => { vi.restoreAllMocks(); for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) } })
 
-it('does not hold a standalone Pod after an interrupted legacy mail archive; the archive store fences its batch', async () => {
+it('refuses the retired archive port before dispatch or effect intent', async () => {
   const store = new PodDatabase(mkdtempSync(join(tmpdir(), 'pods-legacy-archive-'))); stores.push(store)
   const resources = new ResourceRegistry(store, () => {})
   const pod = store.createPod({ name: 'Legacy archive' })
@@ -27,10 +27,11 @@ it('does not hold a standalone Pod after an interrupted legacy mail archive; the
     await hooks.request('mail.archive', { operation: 'process' }, signal)
     throw new Error('must not reach')
   })
-  const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime, { mailArchive })
+  const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime, {})
   const runId = dispatcher.start(pod.id)
   await expect.poll(() => dispatcher.view(pod.id).runs[0]?.state).toBe('failed')
-  expect(dispatcher.view(pod.id, runId).events.find(event => event.type === 'recovery-boundary')?.data).toEqual({ kind: 'effect', operation: 'mail.archive' })
+  expect(dispatcher.view(pod.id, runId).events.find(event => event.type === 'recovery-boundary')).toBeUndefined()
+  expect(mailArchive).not.toHaveBeenCalled()
   expect(recoveryHold(store, pod.id, runId)).toBeNull()
   expect(unresolvedOperation(store, pod.id)).toBe(false)
 })

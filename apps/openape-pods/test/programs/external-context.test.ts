@@ -5,7 +5,8 @@ import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it } from 'vitest'
 import { ExternalShell } from '../../src/main/shell/session'
-import { podEnvironment, quoteShell } from '../../src/runtime/environment'
+import { podEnvironment } from '../../src/runtime/environment'
+import type { ProgramClientConfiguration } from '../../src/runtime/program-client'
 import { CredentialCache } from '../../src/main/connections/cache'
 import type { ConnectionManager } from '../../src/main/connections/manager'
 import type { ResourceState } from '../../src/contracts/resources'
@@ -35,7 +36,7 @@ it('refuses a redirected .openape folder in the pod HOME and cleans up a refused
 
 // Owner decision October 13, 2026 (issue 1468): at the owner level a login made in the Pod terminal must be the one the
 // Pod's programs use, so the terminal's application wrappers get the owner's HOME there as well.
-async function wrapper(level: SandboxLevel): Promise<{ text: string, podHome: string }> {
+async function wrapper(level: SandboxLevel): Promise<{ text: string, podHome: string, configuration: ProgramClientConfiguration }> {
   const root = await mkdtemp(join(tmpdir(), 'pods-shell-home-')); const podId = randomUUID(); const applicationId = randomUUID()
   try {
     const runtime = { executable: process.execPath, cli: '/fixture/cli', client: '/fixture/client' }
@@ -48,9 +49,9 @@ async function wrapper(level: SandboxLevel): Promise<{ text: string, podHome: st
     const resources = { epoch: 1, resources: [{ id: applicationId, podId, revision: 1, kind: 'tool', state: 'ready', name: 'az', configuration }] } as unknown as ResourceState
     const session = new ExternalShell(podId, root, runtime, resources, credentials, connections, async () => {}, async () => {}, level)
     try {
-      await session.ready
+      const launcher = await session.ready
       const context = await podEnvironment(root, podId, runtime)
-      return { text: await readFile(join(context.bin, 'az'), 'utf8'), podHome: context.home }
+      return { text: await readFile(join(context.bin, 'az'), 'utf8'), podHome: context.home, configuration: JSON.parse(await readFile(join(launcher, '..', `application-${applicationId}.json`), 'utf8')) }
     }
     finally { session.close(); await session.completed }
   }
@@ -59,9 +60,16 @@ async function wrapper(level: SandboxLevel): Promise<{ text: string, podHome: st
 
 it('gives Pod terminal applications the owner HOME at the owner level and their private state when isolated', async () => {
   const owner = await wrapper('owner')
-  expect(owner.text).toContain(quoteShell(`HOME=${homedir()}`))
-  expect(owner.text).toContain(quoteShell(`TMPDIR=${join(owner.podHome, 'tmp')}`))
+  expect(owner.configuration.environment.HOME).toBe(homedir())
+  expect(owner.configuration.environment.TMPDIR).toBe(join(owner.podHome, 'tmp'))
   const isolated = await wrapper('isolated')
-  expect(isolated.text).not.toContain(quoteShell(`HOME=${homedir()}`))
-  expect(isolated.text).toMatch(/'HOME=[^']*\/credentials\/temporary\/[^']*\/application'/)
+  expect(isolated.configuration.environment.HOME).not.toBe(homedir())
+  expect(isolated.configuration.environment.HOME).toMatch(/\/credentials\/temporary\/[^/]*\/application$/)
+  for (const result of [owner, isolated]) {
+    expect(result.text).toContain('program-client.mjs')
+    expect(result.configuration.policy.executable).toMatch(/\/az$/)
+    expect(result.configuration.launch.executableHash).toMatch(/^[a-f0-9]{64}$/)
+    expect(result.configuration.launch.runtime.environment.APES_AUTH_FILE).toBeTruthy()
+    expect(result.configuration.policy.readFiles).toContain(result.configuration.environment.APES_AUTH_FILE)
+  }
 })

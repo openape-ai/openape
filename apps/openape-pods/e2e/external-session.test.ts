@@ -1,4 +1,5 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { computeArgvHash } from '@openape/grants'
+import { createHash, generateKeyPairSync, randomUUID, sign } from 'node:crypto'
 import { createServer } from 'node:http'
 import { createRequire } from 'node:module'
 import { mkdtemp, readFile, realpath, readdir, rm, writeFile } from 'node:fs/promises'
@@ -14,15 +15,31 @@ import type { ResourceState } from '../src/contracts/resources'
 it('external shell: opens the real client and persists harmless application setup for a later invocation', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-external-session-')))
   const podId = randomUUID(); const applicationId = randomUUID(); let origin = ''
+  const keys = generateKeyPairSync('ed25519')
+  const approved = true
   const server = createServer((request, response) => {
     response.setHeader('Content-Type', 'application/json')
-    if (request.url === '/.well-known/openid-configuration') {
-      response.end(JSON.stringify({ grants_endpoint: `${origin}/api/grants` }))
-    }
-    else if (request.url?.startsWith('/api/grants?')) {
-      response.end(JSON.stringify({ data: [{ id: 'synthetic', status: 'approved', request: { audience: 'ape-shell', target_host: `pods:${podId}`, grant_type: 'timed' } }] }))
-    }
-    else { response.statusCode = 404; response.end('{}') }
+    void (async () => {
+      if (request.url === '/api/grants/authorize') {
+        let raw = ''; for await (const bytes of request) raw += bytes
+        const call = JSON.parse(raw)
+        if (!approved) { response.end(JSON.stringify({ state: 'denied', grant_id: 'synthetic' })); return }
+        const now = Math.floor(Date.now() / 1000)
+        const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')
+        const payload = Buffer.from(JSON.stringify({ iss: origin, sub: 'pod@example.test', aud: 'shapes', target_host: call.target_host, grant_id: 'synthetic', grant_type: 'always', exp: now + 120, iat: now, jti: randomUUID(), argv_hash: await computeArgvHash([call.program.name, ...call.argv]), program_sha256: call.program.sha256, execution_context: { files: call.files }, authorization_details: [{ type: 'openape_cli', cli_id: call.program.name, action: 'read' }] })).toString('base64url')
+        response.end(JSON.stringify({ state: 'approved', grant_id: 'synthetic', authz_jwt: `${head}.${payload}.${sign(null, Buffer.from(`${head}.${payload}`), keys.privateKey).toString('base64url')}`, expires_at: now + 120 }))
+      }
+      else if (request.url?.startsWith('/api/pods/agents/')) { response.end(JSON.stringify({ email: 'pod@example.test', owner: 'owner@example.test', active: true, grantActive: true, keyIds: ['fixture-key'], grantId: 'synthetic' })) }
+      else if (request.url === '/api/grants/synthetic') { response.end(JSON.stringify({ status: approved ? 'approved' : 'denied' })) }
+      else if (request.url === '/.well-known/openid-configuration') {
+        response.end(JSON.stringify({ grants_endpoint: `${origin}/api/grants` }))
+      }
+      else if (request.url === '/.well-known/jwks.json') { response.end(JSON.stringify({ keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'key', alg: 'EdDSA', use: 'sig' }] })) }
+      else if (request.url?.startsWith('/api/grants?')) {
+        response.end(JSON.stringify({ data: [{ id: 'synthetic', status: 'approved', request: { audience: 'ape-shell', target_host: `pods:${podId}`, grant_type: 'timed' } }] }))
+      }
+      else { response.statusCode = 404; response.end('{}') }
+    })().catch(error => response.destroy(error))
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`
@@ -32,8 +49,8 @@ it('external shell: opens the real client and persists harmless application setu
   await writeFile(executable, '#!/bin/sh\nif [ "$1" = setup ]; then printf synthetic-configuration > "$HOME/state.txt"; else cat "$HOME/state.txt"; fi\n', { mode: 0o700 })
   await writeFile(adapterPath, 'schema="openape-shapes/v1"\n[cli]\nid="fixture"\nexecutable="fixture"\naudience="shapes"\n[[operation]]\nid="setup"\ncommand=["setup"]\ndisplay="Synthetic setup"\naction="write"\nrisk="low"\nresource_chain=["state:*"]\n')
   const hash = async (file: string) => createHash('sha256').update(await readFile(file)).digest('hex')
-  const state: ResourceState = { epoch: 1, resources: [{ id: applicationId, podId, name: 'Fixture', revision: 1, kind: 'tool', state: 'ready', configuration: { type: 'program', cliId: 'fixture', executable, executableHash: await hash(executable), adapterPath, adapterHash: await hash(adapterPath), entryFiles: [], environment: {}, stateId, grants: [] } }] }
-  const connections = { podConnection: async () => ({ issuer: origin, subject: 'pod@example.test', accessToken: async () => 'synthetic-token' }) } as unknown as ConnectionManager
+  const state: ResourceState = { epoch: 1, resources: [{ id: applicationId, podId, name: 'Fixture', revision: 1, kind: 'tool', state: 'ready', configuration: { type: 'program', cliId: 'fixture', executable, executableHash: await hash(executable), adapterPath, adapterHash: await hash(adapterPath), entryFiles: [{ path: executable, hash: await hash(executable) }], runtime: { executable: '/bin/bash', executableHash: await hash('/bin/bash'), arguments: [executable], readDirectories: [], environment: {}, descriptor: { path: adapterPath, hash: await hash(adapterPath) } }, networkHosts: [], environment: {}, stateId, grants: [] } }] }
+  const connections = { podConnection: async () => ({ issuer: origin, subject: 'pod@example.test', owner: 'owner@example.test', keyId: 'fixture-key', targetHost: `pods:${podId}`, accessToken: async () => 'synthetic-token' }) } as unknown as ConnectionManager
   let released = 0
   const runtime = { executable: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), cli: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/Resources/apes/ape-shell.mjs'), client: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/Resources/app.asar.unpacked/dist/runtime/shell-client.mjs') }
   const session = new ExternalShell(podId, root, runtime, state, credentials, connections, async () => {}, async () => { released++ }, 'isolated')
@@ -53,8 +70,9 @@ it('external shell: opens the real client and persists harmless application setu
       await expect.poll(() => output).toContain('\r\nSETUP_SAVED')
       terminal.write('exit\r'); expect(await exited).toBe(0)
       await session.completed
-      expect(session.error).toBeNull(); expect(released).toBe(1)
-      const saved = await new ProgramState(credentials).use(stateId, { podId, applicationId }, directory => readFile(join(directory, 'state.txt'), 'utf8'))
+      expect(session.error, output).toBeNull(); expect(released).toBe(1)
+      expect(output).not.toContain('without a verified completion receipt')
+      const saved = await new ProgramState(credentials).use(stateId, { podId, applicationId }, directory => readFile(join(directory, 'state.txt'), 'utf8')).catch((error) => { throw new Error(`${error.message}\n${output}`) })
       expect(saved).toBe('synthetic-configuration')
       expect(await readdir(join(root, 'credentials/temporary'))).toEqual([])
       expect(output).not.toContain('synthetic-token')

@@ -217,6 +217,25 @@ describe('Automatisierungen layout', () => {
     await page.screenshot({ path: screenshotPath('summary-02-freigaben-mobil.png'), element: approvals })
   })
 
+  it.each([{ width: 1440, theme: 'light' }, { width: 390, theme: 'dark' }])('keeps migrated decisions and uncertain effects read-only at $width px ($theme)', async ({ width, theme }) => {
+    await page.viewport(width, 1000)
+    document.documentElement.style.colorScheme = theme
+    applyLanguage('de')
+    const history = structuredClone(domain)
+    for (const approval of history.approvals) { approval.batchUrl = null; approval.reason = 'Historical decision; migrate and reconcile in the external tool before any new execution' }
+    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', domain: history } })
+    await flushPromises(); await frames(2)
+    const approvals = document.querySelector<HTMLElement>('[data-testid="approvals"]')!
+    expect(approvals.querySelectorAll('button')).toHaveLength(0)
+    expect(approvals.textContent).toContain('Historischer Eintrag')
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+    await page.screenshot({ path: screenshotPath(`cutover-history-${width}-${theme}.png`), element: approvals })
+    const effect = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="reconcile"] .item')).find(item => item.textContent?.includes('messageId: m4'))!
+    expect(effect.querySelectorAll('button')).toHaveLength(0)
+    expect(effect.textContent).toContain('Historischer Eintrag')
+    await page.screenshot({ path: screenshotPath(`cutover-effect-${width}-${theme}.png`), element: effect })
+  })
+
   it('renders the dark scheme from tokens', async () => {
     await mountShell(1440, 1000, true)
     // Canvas needs resolved colours; the probe turns a light-dark() token into the scheme's rgb value.

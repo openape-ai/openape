@@ -25,7 +25,7 @@ process.env.APES_TARGET_HOST = 'test-host'
 process.env.APES_USER = 'human'
 process.env.APES_QUIET_WAIT = '1'
 process.env.APES_TEST_MARKER = marker
-for (const name of ['APES_AUTH_FILE', 'APES_IDP', 'APE_WAIT', 'APES_IGNORE_USER_CONFIG', 'APES_SHELL_CHANNEL_FD'])
+for (const name of ['APES_AUTH_FILE', 'APES_IDP', 'APE_WAIT', 'APES_IGNORE_USER_CONFIG', 'APES_SHELL_CHANNEL_FD', 'NODE_OPTIONS'])
   delete process.env[name]
 
 const SUBJECT = 'agent@example.com'
@@ -39,6 +39,7 @@ function writeProgram(body = 'printf \'%s\\n\' "$@" > "$APES_TEST_MARKER"\n'): s
 }
 
 interface FakeGrant {
+  files?: { path: string, sha256: string }[]
   id: string
   status: 'pending' | 'approved' | 'denied' | 'revoked' | 'used'
   grantType: 'once' | 'always'
@@ -50,7 +51,7 @@ interface FakeGrant {
 
 type SigningKey = Parameters<typeof signJWT>[1]
 
-const ALLOWED_FIELDS = new Set(['target_host', 'audience', 'program', 'argv', 'grant_type', 'summary', 'batch'])
+const ALLOWED_FIELDS = new Set(['target_host', 'audience', 'program', 'argv', 'files', 'grant_type', 'summary', 'batch'])
 
 /** Exact-command semantics of the contract (a program without a registry shape). */
 class FakeIdp {
@@ -155,7 +156,7 @@ class FakeIdp {
 
     const executionArgv = [program.name, ...argv as string[]]
     const argvHash = await computeArgvHash(executionArgv)
-    const mine = this.grants.filter(grant => grant.argvHash === argvHash && grant.targetHost === body.target_host)
+    const mine = this.grants.filter(grant => grant.argvHash === argvHash && grant.targetHost === body.target_host && JSON.stringify(grant.files ?? []) === JSON.stringify(body.files ?? []))
     const covering = mine.find(grant => grant.status === 'approved')
     if (covering) {
       const now = Math.floor(Date.now() / 1000)
@@ -172,7 +173,7 @@ class FakeIdp {
         approval: covering.grantType,
         argv_hash: argvHash,
         program_sha256: program.sha256,
-        execution_context: { argv: executionArgv, argv_hash: argvHash, program_sha256: program.sha256, version_tested: false },
+        execution_context: { argv: executionArgv, argv_hash: argvHash, program_sha256: program.sha256, version_tested: false, ...(covering.files ? { files: covering.files } : {}) },
         ...this.claimOverrides,
       }
       const authzJwt = await signJWT(claims, this.signWithForeignKey ? this.foreignKey : this.key, { kid: 'fake-key' })
@@ -182,6 +183,7 @@ class FakeIdp {
     if (latest?.status === 'denied' || latest?.status === 'revoked')
       return this.send(response, 403, { type: `https://openape.org/errors/grant_${latest.status}`, title: `Grant ${latest.status}`, status: 403, state: latest.status, grant_id: latest.id })
     const pending = latest?.status === 'pending' ? latest : await this.add(executionArgv, program.sha256, 'pending', (body.grant_type as 'once' | 'always' | undefined) ?? 'always')
+    pending.files = body.files as FakeGrant['files']
     return this.send(response, 202, { state: 'pending', grant_id: pending.id, approval_url: `${this.issuer}/grant-approval?grant_id=${pending.id}` })
   }
 }
@@ -229,6 +231,7 @@ beforeEach(async () => {
 
 afterEach(() => {
   vi.restoreAllMocks()
+  writeFileSync(join(home, '.config', 'apes', 'auth.json'), JSON.stringify({ idp: idp.issuer, access_token: ACCESS_TOKEN, email: SUBJECT, expires_at: Math.floor(Date.now() / 1000) + 3600 }))
 })
 
 afterAll(async () => {
@@ -247,11 +250,131 @@ async function apesRun(argv: string[], options: { wait?: boolean, approval?: str
   } as never)
 }
 
+async function exactShell(command: string[]): Promise<void> {
+  const { rewriteApeShellArgs } = await import('../src/ape-shell.js')
+  const rewritten = rewriteApeShellArgs([process.execPath, 'ape-shell', '-c', '--', ...command])
+  if (rewritten?.action !== 'rewrite') throw new Error('Exact shell request was not recognized')
+  const { runCommand } = await import('../src/commands/run.js')
+  await runCommand.run!({ rawArgs: rewritten.argv.slice(2), args: { shell: false, wait: false, approval: 'once' } } as never)
+}
+
 function ran(): string[] | null {
   return existsSync(marker) ? readFileSync(marker, 'utf-8').trimEnd().split('\n') : null
 }
 
 describe('apes run with per-call IdP authorization', () => {
+  it('checks the broker owner and key from the managed identity, including cached calls', async () => {
+    const brokered = { connection_id: 'connection-1', broker_issuer: 'https://provider.test', agent_issuer: 'https://provider.test', owner: 'owner@example.com', key_id: 'key-1' }
+    const auth = { idp: idp.issuer, decision_issuer: idp.issuer, brokered, access_token: ACCESS_TOKEN, email: SUBJECT, expires_at: Math.floor(Date.now() / 1000) + 3600 }
+    writeFileSync(join(home, '.config', 'apes', 'auth.json'), JSON.stringify(auth))
+    const sha256 = writeProgram()
+    await idp.approved(['fakegit', 'status'], sha256)
+    idp.claimOverrides = { brokered, decided_by: brokered.owner }
+    await exactShell(['fakegit', 'status'])
+    expect(ran()).toEqual(['status'])
+    rmSync(marker)
+    writeFileSync(join(home, '.config', 'apes', 'auth.json'), JSON.stringify({ ...auth, brokered: { ...brokered, key_id: 'key-2' } }))
+    await expect(exactShell(['fakegit', 'status'])).rejects.toThrow('brokered owner identity')
+    expect(ran()).toBeNull()
+  })
+
+  it('binds preloaded code even when its option follows inline code', async () => {
+    const { locateProgram } = await import('../src/authorization/program.js')
+    const { nodeProgramFiles, assertProgramFiles } = await import('../src/authorization/program-files.js')
+    const program = await locateProgram(process.execPath)
+    if (!program) throw new Error('Node executable is missing')
+    const preload = join(home, 'preload.cjs')
+    writeFileSync(preload, 'module.exports = 4')
+    const files = nodeProgramFiles({ program, argv: ['-e', 'console.log(2 + 2)', '--require', preload] })
+    expect(files).toHaveLength(1)
+    writeFileSync(preload, 'module.exports = 5')
+    expect(() => assertProgramFiles(files)).toThrow('changed after authorization')
+  })
+
+  it('does not replace an assigned script digest or authorize unbound stdin code', async () => {
+    const { locateProgram, authorizeProgramCall } = await import('../src/authorization/program.js')
+    const { nodeProgramFiles } = await import('../src/authorization/program-files.js')
+    const program = await locateProgram(process.execPath)
+    if (!program) throw new Error('Node executable is missing')
+    const script = join(home, 'pinned.cjs'); writeFileSync(script, 'console.log(4)')
+    await expect(authorizeProgramCall({ program, argv: [script], files: [{ path: script, sha256: 'a'.repeat(64) }] }, { idp: idp.issuer, subject: SUBJECT, targetHost: 'test-host', grantType: 'once', wait: false })).rejects.toThrow('changed before authorization')
+    for (const argv of [[], ['-'], ['--input-type=module']]) expect(() => nodeProgramFiles({ program, argv })).toThrow('stdin execution')
+    expect(idp.authorizeBodies).toHaveLength(0)
+  })
+
+  it('binds a Node script by content and refuses replacement at the same path', async () => {
+    const { locateProgram } = await import('../src/authorization/program.js')
+    const { nodeProgramFiles } = await import('../src/authorization/program-files.js')
+    const program = await locateProgram(process.execPath)
+    if (!program) throw new Error('Node executable is missing')
+    const script = join(home, 'approved.cjs')
+    writeFileSync(script, 'require("node:fs").writeFileSync(process.env.APES_TEST_MARKER, "approved")')
+    const grant = await idp.approved([program.name, script], program.sha256)
+    grant.files = nodeProgramFiles({ program, argv: [script] })
+
+    await exactShell([process.execPath, script])
+    expect(readFileSync(marker, 'utf8')).toBe('approved')
+    rmSync(marker)
+    writeFileSync(script, 'require("node:fs").writeFileSync(process.env.APES_TEST_MARKER, "replaced")')
+    await expect(exactShell([process.execPath, script])).rejects.toMatchObject({ exitCode: 75 })
+    expect(existsSync(marker)).toBe(false)
+  })
+
+  it('refuses a script replaced after authorization before starting its interpreter', async () => {
+    const { locateProgram, authorizeProgramCall } = await import('../src/authorization/program.js')
+    const { nodeProgramFiles } = await import('../src/authorization/program-files.js')
+    const { executeProgramCall } = await import('../src/authorization/execute.js')
+    const program = await locateProgram(process.execPath)
+    if (!program) throw new Error('Node executable is missing')
+    const script = join(home, 'late-replacement.cjs')
+    writeFileSync(script, 'console.log(2 + 2)')
+    const call = { program, argv: [script] }
+    const grant = await idp.approved([program.name, script], program.sha256)
+    grant.files = nodeProgramFiles(call)
+    await authorizeProgramCall(call, { idp: idp.issuer, subject: SUBJECT, targetHost: 'test-host', grantType: 'once', wait: false })
+    writeFileSync(script, 'require("node:fs").writeFileSync(process.env.APES_TEST_MARKER, "unexpected")')
+
+    expect(() => executeProgramCall(call)).toThrow('changed after authorization')
+    expect(existsSync(marker)).toBe(false)
+  })
+
+  it('forwards interpreter code and literal arguments through ape-shell with one exact authorization', async () => {
+    const { locateProgram } = await import('../src/authorization/program.js')
+    const program = await locateProgram(process.execPath)
+    if (!program) throw new Error('Node executable is missing')
+    const code = 'require("node:fs").writeFileSync(process.env.APES_TEST_MARKER, JSON.stringify(process.argv.slice(1)))'
+    const literal = ['', 'Grüße', '$HOME', '$(touch unexpected)', 'a\nb', 'a && b', '>', '--as', 'root']
+    const argv = ['-e', code, '--', ...literal]
+    await idp.approved([program.name, ...argv], program.sha256, 'once')
+
+    await exactShell([process.execPath, ...argv])
+
+    expect(JSON.parse(readFileSync(marker, 'utf8'))).toEqual(literal)
+    expect(idp.authorizeBodies).toHaveLength(1)
+    expect(idp.authorizeBodies[0]).toMatchObject({ audience: 'shapes', argv })
+    expect(idp.consumed).toHaveLength(1)
+  })
+
+  it('does not run changed inline code under an earlier exact approval', async () => {
+    const { locateProgram } = await import('../src/authorization/program.js')
+    const program = await locateProgram(process.execPath)
+    if (!program) throw new Error('Node executable is missing')
+    await idp.approved([program.name, '-e', 'console.log(2 + 2)'], program.sha256)
+    const changed = 'require("node:fs").writeFileSync(process.env.APES_TEST_MARKER, "unexpected")'
+
+    await expect(exactShell([process.execPath, '-e', changed])).rejects.toMatchObject({ exitCode: 75 })
+
+    expect(existsSync(marker)).toBe(false)
+    expect(idp.authorizeBodies).toHaveLength(1)
+    expect(idp.authorizeBodies[0]).toMatchObject({ audience: 'shapes', argv: ['-e', changed] })
+  })
+
+  it('refuses an unknown executable without requesting shell-session authority', async () => {
+    await expect(exactShell([join(bin, 'missing'), 'a && b'])).rejects.toThrow('no executable file found')
+    expect(existsSync(marker)).toBe(false)
+    expect(idp.authorizeBodies).toEqual([])
+  })
+
   it('runs an approved command with a token from the IdP and reads nothing below ~/.openape', async () => {
     const sha256 = writeProgram()
     await idp.approved(['fakegit', 'status', '--short'], sha256)
@@ -339,6 +462,10 @@ describe('apes run with per-call IdP authorization', () => {
     ['target host', { target_host: 'other-host' }, 'another host'],
     ['issuer', { iss: 'https://evil.example' }, 'Command token rejected'],
     ['audience', { aud: 'escapes' }, 'Command token rejected'],
+    ['grant identity', { grant_id: 'another-grant' }, 'another grant'],
+    ['execution user', { run_as: 'root' }, 'execution user'],
+    ['unexpected broker', { brokered: { connection_id: 'foreign' } }, 'brokered owner identity'],
+    ['unexpected script content', { execution_context: { files: [{ path: '/foreign.js', sha256: 'a'.repeat(64) }] } }, 'script content'],
   ])('refuses a token with a tampered %s before running anything', async (_field, overrides, message) => {
     const sha256 = writeProgram()
     await idp.approved(['fakegit', 'status'], sha256)
@@ -448,4 +575,24 @@ describe('apes explain', () => {
     expect(JSON.parse(String(write.mock.calls[0]?.[0]))).toMatchObject({ operation: 'git.status', display: 'Show status', shaped: true, exact_command: false })
     expect(openapePaths).toEqual([])
   })
+})
+
+it('binds shell and Python script content while allowing exact inline code and refusing unbound module/stdin execution', async () => {
+  const { interpreterProgramFiles, assertProgramFiles } = await import('../src/authorization/program-files.js')
+  const root = mkdtempSync(join(tmpdir(), 'apes-interpreter-'))
+  try {
+    const script = join(root, 'script.py'); writeFileSync(script, 'print(2 + 2)')
+    for (const name of ['python3', 'bash']) {
+      const program = { name, path: process.execPath, sha256: 'a'.repeat(64) }
+      // The fixture executable has a real Node basename, so select an actual shell file for identity inspection.
+      program.path = '/bin/sh'
+      const context = { cwd: root, env: {} }
+      const files = interpreterProgramFiles({ program, argv: [script] }, context)
+      expect(files).toEqual([{ path: script, sha256: createHash('sha256').update('print(2 + 2)').digest('hex') }])
+      expect(interpreterProgramFiles({ program, argv: ['-c', 'print(2 + 2)'] }, context)).toEqual([])
+      for (const argv of [[], ['-'], ['-m', 'unbound'], ['-lc', 'unbound']]) expect(() => interpreterProgramFiles({ program, argv }, context)).toThrow()
+      writeFileSync(script, 'changed'); expect(() => assertProgramFiles(files)).toThrow('changed after authorization'); writeFileSync(script, 'print(2 + 2)')
+    }
+  }
+  finally { rmSync(root, { recursive: true, force: true }) }
 })

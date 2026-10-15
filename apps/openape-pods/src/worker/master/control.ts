@@ -5,7 +5,6 @@ import { MasterSetup } from './setup'
 import { DependencyStore } from '../dependencies/store'
 import { emptyPackages } from '../../contracts/dependencies'
 import { randomUUID } from 'node:crypto'
-import { readFile } from 'node:fs/promises'
 import { parseMasterAction } from '../../contracts/master'
 import type { MasterAction } from '../../contracts/master'
 import { digest } from '../storage/database'
@@ -16,8 +15,6 @@ import type { Scheduler } from '../scheduling/scheduler'
 import type { AgentRuntime } from '../agent/executor'
 import { ScriptWorkspace } from '../workspace/scripts'
 import { WorkspaceDetails } from '../workspace/details'
-import { assignedMail } from '../../main/mail/assigned'
-import { installMailRecipe } from '../mail/install'
 import { validateDraft } from './validation'
 import { runtimeReference } from './reference'
 import { PodVariables } from '../resources/variables'
@@ -72,8 +69,7 @@ export class MasterControl {
         throw failure
       }
     }
-    let dependencyLockHash = ''
-    if (action.action === 'installMailRecipe') dependencyLockHash = (JSON.parse(await readFile(this.runtime.manifest, 'utf8')) as { dependencyLockHash: string }).dependencyLockHash
+    const dependencyLockHash = ''
     signal.throwIfAborted()
     return this.store.transaction(() => {
       if ('podId' in action) this.assertPod(action.podId, action.revision, action.action === 'inspect')
@@ -124,11 +120,8 @@ export class MasterControl {
     if (action.action === 'revise') { this.store.updatePod(pod.id, action.revision, { name: action.name, lifecycle: pod.lifecycle }); return this.store.getPod(pod.id) }
     if (action.action === 'resume') {
       if (!pod.activeScript || !this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(pod.id, pod.activeScript, pod.bindingRevision, this.resources.epoch(pod.id))) throw new Error('Validate and activate a script for the current script and permissions before resuming')
-      const version = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, pod.activeScript)
-      if (version && (JSON.parse(version.manifest as string) as { capabilities: string[] }).capabilities.includes('mail.read')) assignedMail(this.resources.list(pod.id))
     }
     if (action.action === 'pause' || action.action === 'resume') { this.scheduler.lifecycle(pod.id, action.revision, action.action === 'pause' ? 'paused' : 'active'); return this.store.getPod(pod.id) }
-    if (action.action === 'installMailRecipe') return { hash: installMailRecipe(this.store, this.resources, pod.id, lock) }
     if (action.action === 'draft') {
       if (action.draftId) this.assertDraft(pod.id, action.draftId, action.draftRevision)
       else if (action.draftRevision !== 0) throw new Error('A new draft starts at revision zero')

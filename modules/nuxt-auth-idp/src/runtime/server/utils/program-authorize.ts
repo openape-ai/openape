@@ -93,7 +93,7 @@ function grantRequestFor(requester: string, request: OpenApeProgramAuthorizeRequ
     requester,
     target_host: request.target_host,
     audience: request.audience,
-    grant_type: request.grant_type,
+    grant_type: call.requiresOnce ? 'once' : request.grant_type,
     permissions: [call.detail.permission],
     authorization_details: [call.detail],
     command: call.executionArgv,
@@ -188,12 +188,12 @@ async function decideProgramCall(event: H3Event, input: ProgramAuthorizeInput, t
     throw createProblemError({ status: 400, title: `Invalid batch: ${error.message}` })
   }
 
-  const scope: ProgramCallScope = { target_host: request.target_host, audience: request.audience, detail: call.detail, argvHash: call.argvHash, programSha256: request.program.sha256 }
+  const scope: ProgramCallScope = { target_host: request.target_host, audience: request.audience, detail: call.detail, argvHash: call.argvHash, programSha256: request.program.sha256, files: request.files, requiresOnce: call.requiresOnce }
   const existing = await grantStore.findByRequester(requester)
   const covering = findCoveringGrant(existing, scope, brokered)
   if (covering) return await approvedAnswer(covering, call, onToken)
 
-  if (!brokered) {
+  if (!brokered && !call.requiresOnce) {
     const standing = await evaluateStandingGrants(grantRequest, grantStore)
     if (standing) {
       const decidedBy = (await grantStore.findById(standing.standing_grant_id))?.decided_by
@@ -206,7 +206,7 @@ async function decideProgramCall(event: H3Event, input: ProgramAuthorizeInput, t
   if (latest?.status === 'pending') return pendingAnswer(latest)
   if (latest?.status === 'denied' || latest?.status === 'revoked') return { status: 403, body: { state: latest.status, grant_id: latest.id } }
 
-  if (!brokered) {
+  if (!brokered && !call.requiresOnce) {
     const preApproval = await runPreApprovalHooks(event, grantRequest)
     if (preApproval) {
       const approved = await autoApprove(grantRequest, { decided_by: preApproval.decidedBy, auto_approval_kind: preApproval.kind })

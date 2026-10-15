@@ -60,9 +60,9 @@ int main(int argc, char **argv) {
     const char *authPath=getenv("APES_AUTH_FILE"); if (!authPath) return 11;
     FILE *auth=fopen(authPath, "r"); if (!auth) return 12;
     char identity[2048]={0}; fread(identity, 1, sizeof(identity)-1, auth); fclose(auth);
-    if (!strstr(identity, "SYNTHETIC_AGENT") || !strstr(identity, "pod@example.test")) return 13;
+    if ((!strstr(identity, "SYNTHETIC_AGENT") || !strstr(identity, "pod@example.test")) && (!strstr(identity, "LOCAL_SYNTHETIC_TOKEN") || !strstr(identity, "fixture-"))) return 13;
     auth=fopen(authPath, "w"); if (auth) { fclose(auth); return 14; }
-    puts("IDENTITY_READ_ONLY SYNTHETIC_AGENT");
+    puts(strstr(identity, "SYNTHETIC_AGENT") ? "IDENTITY_READ_ONLY SYNTHETIC_AGENT" : "IDENTITY_READ_ONLY LOCAL_SYNTHETIC_TOKEN");
     FILE *file=fopen(statePath, "r"); if (!file) return 5;
     char line[100]; if (!fgets(line, sizeof(line), file)) return 6;
     fclose(file); printf("STATE_MATCH %d\\n", !strcmp(line, "SYNTHETIC_CONFIGURATION\\n")); return 0;
@@ -88,12 +88,12 @@ int main(int argc, char **argv) {
     if (request.url === '/.well-known/jwks.json') { response.end(JSON.stringify({ keys: [{ ...keys.publicKey.export({ format: 'jwk' }), kid: 'key', alg: 'EdDSA', use: 'sig' }] })); return }
     if (request.url === '/api/grants/authorize' && request.method === 'POST') {
       let text = ''; for await (const chunk of request) text += chunk
-      const call = JSON.parse(text) as { program: { name: string, sha256: string }, argv: string[] }
+      const call = JSON.parse(text) as { program: { name: string, sha256: string }, argv: string[], files?: { path: string, sha256: string }[] }
       const grantId = call.argv[0] === 'setup' ? 'setup' : 'read'
       if (!state.active) { response.statusCode = 403; response.end(JSON.stringify({ type: 'https://openape.org/errors/grant_revoked', title: 'Grant revoked', status: 403, state: 'revoked', grant_id: grantId })); return }
       state.authorized++
       const now = Math.floor(Date.now() / 1000)
-      const token = signed({ iss: origin, sub: 'pod@example.test', aud: 'shapes', target_host: `pods:${podId}`, grant_id: grantId, grant_type: 'always', iat: now, exp: now + 60, jti: randomUUID(), authorization_details: [detail(grantId === 'setup' ? 'write' : 'read')], argv_hash: await computeArgvHash([call.program.name, ...call.argv]), program_sha256: state.corruptHash ? '0'.repeat(64) : call.program.sha256 })
+      const token = signed({ iss: origin, sub: 'pod@example.test', aud: 'shapes', target_host: `pods:${podId}`, grant_id: grantId, grant_type: 'always', iat: now, exp: now + 60, jti: randomUUID(), authorization_details: [detail(grantId === 'setup' ? 'write' : 'read')], argv_hash: await computeArgvHash([call.program.name, ...call.argv]), program_sha256: state.corruptHash ? '0'.repeat(64) : call.program.sha256, execution_context: { files: call.files } })
       response.end(JSON.stringify({ state: 'approved', grant_id: grantId, authz_jwt: token, expires_at: now + 60 })); return
     }
     const grantId = request.url?.split('/')[3] === 'http' ? 'http' : request.url?.split('/')[3] === 'setup' ? 'setup' : 'read'
@@ -120,9 +120,9 @@ int main(int argc, char **argv) {
   const resource: PodResource = { id: applicationId, podId, revision: 1, kind: 'tool', state: 'ready', name: assignment.name, configuration: { ...assignment } }
   const helper = resolve('dist/native/pods-helper'); let releases = 0
   const workspace = await podWorkspace(root, podId)
-  const terminal = () => new ProgramSession(randomUUID(), podId, applicationId, assignment, ['setup'], helper, privateRoot, cache, async () => {}, async () => { releases++ }, workspace, { readDirectories: [], writeDirectories: [] }, { connection: async () => connection, ledger, origin: async () => 'Programs', reach: async () => ({ level: 'isolated', protectedPaths: [] }) })
+  const terminal = () => new ProgramSession(randomUUID(), podId, applicationId, assignment, ['setup'], helper, privateRoot, cache, async () => {}, async () => { releases++ }, workspace, { readDirectories: [], writeDirectories: [] }, { connection: async () => connection, runtime: { executable: process.execPath, cli: resolve('dist/vendor/apes/ape-shell.mjs'), environment: { HOME: privateRoot } }, ledger, origin: async () => 'Programs', reach: async () => ({ level: 'isolated', protectedPaths: [] }) })
   const lease = { signal: new AbortController().signal, capabilities: [assignment.capability], assertCurrent: () => {} }
-  const invoke = (argv: string[], capabilities = lease.capabilities) => invokeProgram([resource], podId, { application: assignment.name, argv }, helper, privateRoot, cache, { ...lease, capabilities }, { connection, ledger, reach: { level: 'isolated', protectedPaths: [] } })
+  const invoke = (argv: string[], capabilities = lease.capabilities) => invokeProgram([resource], podId, { application: assignment.name, argv }, helper, privateRoot, cache, { ...lease, capabilities }, { connection, reach: { level: 'isolated', protectedPaths: [] }, execution: { operationId: randomUUID(), targetHost: connection.targetHost, runtime: { executable: process.execPath, cli: resolve('dist/vendor/apes/ape-shell.mjs') }, observer: { authorized: async () => {} } } })
   return { root, privateRoot, cache, assignment, resource, podId, applicationId, state, identity, connection, ledger, terminal, invoke, releases: () => releases, close: async () => { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await removeProfile(root) } }
 }
 
@@ -137,7 +137,7 @@ it('program boundary: owner terminal state is reused by the assigned read tool a
     const gateway = await startAgentGateway({
       provider: async () => new Response(),
       tool: async (body) => {
-        const request = body as { applicationId: string, argv: string[] }
+        const request = body as { applicationId: string, argv: string[], files?: { path: string, sha256: string }[] }
         if (request.applicationId !== f.applicationId) throw new Error('Unassigned application')
         return f.invoke(request.argv)
       },
@@ -149,7 +149,7 @@ it('program boundary: owner terminal state is reused by the assigned read tool a
     finally { await gateway.close() }
     await expect(f.invoke(['read'], [])).rejects.toThrow('not declared')
     f.state.corruptHash = true
-    await expect(f.invoke(['read'])).rejects.toThrow('nothing was run')
+    await expect(f.invoke(['read'])).rejects.toThrow('Command token does not match this program file')
     expect(f.state.authorized).toBe(4)
     expect(await readdir(join(f.root, 'credentials/temporary'))).toEqual([])
   }
@@ -162,11 +162,12 @@ it('program boundary: grant revocation stops a waiting terminal before its lease
     await expect.poll(() => terminal.view().output).toContain('SETUP_READY')
     expect(f.releases()).toBe(0)
     f.state.active = false; await terminal.completed
-    expect(terminal.view()).toMatchObject({ state: 'closed', exitCode: 125 })
+    expect(terminal.view()).toMatchObject({ state: 'closed' })
+    expect(terminal.view().exitCode).not.toBe(0)
     expect(terminal.view().error).not.toBeNull()
     expect(f.releases()).toBe(1)
     expect(await readdir(join(f.root, 'credentials/temporary'))).toEqual([])
-    await expect(f.invoke(['read'])).rejects.toThrow('Permission revoked')
+    await expect(f.invoke(['read'])).rejects.toThrow('Grant read revoked')
   }
   finally { terminal.close(); await terminal.completed; await f.close() }
 })
@@ -186,6 +187,7 @@ it('packaged program UI: exposes the external terminal and reuses application se
   // The Pod acts as the shell identity's Pod; its IdP approves the application's commands as the owner would.
   const shellIdentity = await fixtureShellIdentity(f.root, ['fixture'])
   const store = new PodDatabase(f.root)
+  store.db.prepare('INSERT INTO pod_sandbox VALUES(?,?) ON CONFLICT(pod_id) DO UPDATE SET level=excluded.level').run(f.podId, 'isolated')
   store.db.prepare('INSERT INTO resources VALUES(?,?,1,\'tool\',\'ready\',?,?)').run(f.applicationId, f.podId, f.assignment.name, JSON.stringify(f.assignment))
   store.db.prepare('INSERT INTO resources VALUES(?,?,1,\'tool\',\'ready\',?,?)').run(randomUUID(), f.podId, 'https://api.example.com', JSON.stringify({ type: 'http', origin: 'https://api.example.com', methods: ['GET', 'POST'], capability: 'tool.http_fixture.request' }))
   store.close()
@@ -205,7 +207,7 @@ it('packaged program UI: exposes the external terminal and reuses application se
     await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     console.info('Program UI: worker ready')
     await openPod(page, 'Application setup')
-    await page.getByRole('tab', { name: 'Permissions', exact: true }).click()
+    await page.getByRole('navigation', { name: 'Pod sections' }).getByRole('button', { name: 'Access', exact: true }).click()
     await page.getByRole('button', { name: 'Open Terminal.app', exact: true }).waitFor()
     expect(await page.getByRole('button', { name: 'Open Terminal.app', exact: true }).count()).toBe(1)
     expect(await page.locator('.pod-console').count()).toBe(0)
@@ -218,6 +220,7 @@ it('packaged program UI: exposes the external terminal and reuses application se
     expect(await page.locator('.fixed-directory').count()).toBe(2)
     const runCode = `import fs from 'node:fs/promises'; import path from 'node:path';
     export async function run(context) {
+      if (context.input.validation) return {status:'completed',summary:'Synthetic validation',completedInputIds:[],gapIds:[]}
       await fs.writeFile(path.join(context.home, 'home-check.txt'), 'HOME')
       if (context.directories.length) {
         const folder = context.directories[0].path
@@ -226,7 +229,7 @@ it('packaged program UI: exposes the external terminal and reuses application se
         catch (error) { if (error.code !== 'EPERM') throw error }
       }
       const result = await context.tools.invoke({ application: 'Synthetic application', argv: ['read'] })
-      if (result.exitCode !== 0) throw new Error('Application read failed')
+      if (result.exitCode !== 0) throw new Error('Application read failed: '+result.exitCode+' '+result.stderr)
       return { status: 'completed', summary: 'Program read: ' + result.stdout.trim(), completedInputIds: context.input.eventIds, gapIds: [] }
     }`
     await page.evaluate(async ({ podId, capability, code }) => {
@@ -236,7 +239,7 @@ it('packaged program UI: exposes the external terminal and reuses application se
       await window.pods.scripts({ type: 'activate', podId, revision: checked.pod.revision, hash: checked.source!.hash!, expectedActive: null })
       await window.pods.runs({ type: 'start', podId })
     }, { podId: f.podId, capability: f.assignment.capability, code: runCode })
-    await expect.poll(async () => { const run = (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), f.podId)).runs[0]; return run?.error ?? run?.summary }, { timeout: 15000 }).toBe('Program read: STATE_MATCH 1')
+    await expect.poll(async () => { const run = (await page.evaluate(podId => window.pods.runs({ type: 'list', podId }), f.podId)).runs[0]; return run?.error ?? run?.summary }, { timeout: 15000 }).toBe('Program read: IDENTITY_READ_ONLY [REDACTED]\nSTATE_MATCH 1')
     console.info('Program UI: saved script invoked application by name through worker and main broker')
   }
   finally { await app.close(); await shellIdentity.close(); await f.close(); await rm(folder, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) }

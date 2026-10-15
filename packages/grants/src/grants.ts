@@ -48,6 +48,8 @@ export async function approveGrant(
 
   const effectiveType = overrides?.grant_type ?? grant.request.grant_type ?? 'once'
   const effectiveDuration = overrides?.duration ?? grant.request.duration
+  if (grant.request.authorization_details?.some(detail => detail.type === 'openape_cli' && detail.constraints?.single_use) && effectiveType !== 'once')
+    throw new Error('This operation requires one exact single-use approval')
 
   if (effectiveType === 'timed' && !effectiveDuration) {
     throw new Error('Duration is required for timed grants')
@@ -305,6 +307,8 @@ export async function approveGrantWithExtension(
     throw new Error(`Grant not found: ${grantId}`)
   if (pendingGrant.status !== 'pending')
     throw new Error(`Grant is not pending: ${pendingGrant.status}`)
+  if (pendingGrant.request.authorization_details?.some(detail => detail.type === 'openape_cli' && detail.constraints?.single_use))
+    throw new Error('This operation requires one exact single-use approval and cannot be widened')
 
   const oldGrants: OpenApeGrant[] = []
   for (const oldId of overrides.extend_grant_ids) {
@@ -382,6 +386,8 @@ export async function approveGrantWithWidening(
     throw new Error(`Grant not found: ${grantId}`)
   if (pendingGrant.status !== 'pending')
     throw new Error(`Grant is not pending: ${pendingGrant.status}`)
+  if (pendingGrant.request.authorization_details?.some(detail => detail.type === 'openape_cli' && detail.constraints?.single_use))
+    throw new Error('This operation requires one exact single-use approval and cannot be widened')
 
   const originalDetails = cliDetails(pendingGrant.request.authorization_details)
   if (originalDetails.length === 0)

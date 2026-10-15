@@ -3,19 +3,11 @@ import type { RunApproval } from './activity'
 import { parseScriptCapabilities } from './credentials'
 
 export interface ServiceScope { podId: string, runId: string, epoch: number, assignmentRevision: number, capabilities: string[] }
-/**
- * The services a run asks the desktop for; a request without a kind is a tool call. `programAuthorize` authorizes one
- * application command at the IdP before the worker decides whether it records the call as an effect (issue 1473).
- */
-export const serviceKinds = ['approval', 'mailArchive', 'mailMove', 'approvedProgram', 'programAuthorize', 'credential', 'jev', 'http', 'shell', 'shellClose'] as const
+/** The services a run asks the desktop for; a request without a kind is a tool call. */
+export const serviceKinds = ['credential', 'jev', 'http', 'shell', 'shellClose'] as const
 export type ServiceKind = typeof serviceKinds[number]
 /** `summary` is a script's own account of a tool or HTTP call, shown by the IdP only if the call needs a new grant. */
 export interface ServiceRequest { id: string, scope: ServiceScope, body: unknown, kind?: ServiceKind, summary?: unknown }
-/** Whether an authorized application command writes: then the worker records it as an effect before it runs. */
-export function parseProgramEffect(value: unknown): { write: boolean } {
-  if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length !== 1 || typeof (value as { write?: unknown }).write !== 'boolean') throw new Error('Invalid program authorization response')
-  return { write: (value as { write: boolean }).write }
-}
 export interface ServiceCheck { infrastructure?: RetryNotice | null, authorityLost?: true, scope: ServiceScope, domain?: { path: string, ownerPid: number }, approval?: RunApproval }
 export function parseServiceScope(value: unknown): ServiceScope {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid service scope')

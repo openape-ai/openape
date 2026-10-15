@@ -1,4 +1,5 @@
 import type { DatabaseSync } from 'node:sqlite'
+import { randomUUID } from 'node:crypto'
 import { assertKnownSchema, assertNoOpenNetworkWork, convert47, convertApprovalSummaries, convertApprovals, convertGroups, convertProgramAssignments, schema47Tags } from './convert.ts'
 import { schemaVersion } from './schema.ts'
 
@@ -30,5 +31,11 @@ export function upgradeToCurrent(database: DatabaseSync, version: number): void 
   if (version < 49) convertGroups(database)
   if (version < 50) convertApprovals(database)
   if (version < 51) convertApprovalSummaries(database)
-  convertProgramAssignments(database)
+  if (version < 52) convertProgramAssignments(database)
+  // The execution contract changes for every script. Preserve data and source, but require
+  // fresh validation and explicit activation after the separately approved rollout.
+  const paused = database.prepare('SELECT id,lifecycle,active_script FROM pods WHERE lifecycle=\'active\'').all()
+  database.prepare('UPDATE pods SET lifecycle=\'paused\',metadata_revision=metadata_revision+1 WHERE lifecycle=\'active\'').run()
+  database.prepare('DELETE FROM validations').run()
+  database.prepare('INSERT INTO storage_receipts VALUES(?,\'conversion\',?,?)').run(randomUUID(), JSON.stringify({ from: 52, execution: 'ape-shell', historicalAuthority: false, paused, at: new Date().toISOString() }), Date.now())
 }

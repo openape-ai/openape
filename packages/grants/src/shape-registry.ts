@@ -73,6 +73,8 @@ export interface ServerShapeOperation {
    * approved argv byte-for-byte. Default false.
    */
   exact_command?: boolean
+  /** Registry policy: one exact human decision, or an operation that must never execute. */
+  decision?: 'once' | 'deny'
 
   /** Approval card content from the adapter's `[operation.presentation]`. */
   presentation?: ShapePresentation
@@ -142,7 +144,7 @@ export function createInMemoryShapeStore(seed: ServerShape[] = []): ShapeStore {
   const map = new Map<string, ServerShape>(seed.map(s => [s.cli_id, s]))
   return {
     async listShapes() {
-      // eslint-disable-next-line e18e/prefer-array-to-sorted -- MapIterator has no toSorted()
+
       return [...map.values()].sort((a, b) => a.cli_id.localeCompare(b.cli_id))
     },
     async getShape(cliId) {

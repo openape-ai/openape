@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, open, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import { parseOwner, canonicalPortableJson, portableTagsFeature } from '@openape/pods-protocol'
+import { parseOwner, portableTagsFeature } from '@openape/pods-protocol'
 import type { Owner, PortableInput, PortableManifest, PortablePod } from '@openape/pods-protocol'
 import { parsePackages } from '../../contracts/dependencies'
 import type { PackageManifest } from '../../contracts/dependencies'
@@ -72,10 +72,6 @@ function satisfies(manifest: PortableManifest, pod: PortablePod, alias: string, 
   const access = pod.access.find(item => item.alias === alias)
   if (access?.kind === 'directory') return resource.kind === 'directory' && configuration.access === access.access
   if (access?.kind === 'jev') return configuration.type === 'jev' && configuration.model === value(access.model) && Number(configuration.maxAttempts) <= access.maxAttempts
-  if (access?.kind === 'mail') {
-    const folders = value(access.folders)
-    return configuration.capability === 'mail.read' && configuration.attachments === access.attachments && (configuration.since ?? '') === value(access.since) && typeof folders === 'string' && canonicalPortableJson(configuration.folders) === canonicalPortableJson(JSON.parse(folders))
-  }
   if (access?.kind !== 'http' || configuration.type !== 'http' || configuration.origin !== value(access.origin) || access.methods.some(method => !(configuration.methods as string[]).includes(method))) return false
   const expected = access.authentication ? { type: 'ddisaAgent', credential: access.authentication.credential, subject: value(access.authentication.subject), issuer: value(access.authentication.issuer), exchange: access.authentication.exchange } : undefined
   const actual = configuration.authentication as Record<string, unknown> | undefined
@@ -102,8 +98,8 @@ function unresolved(manifest: PortableManifest, values: PortableImportValues, se
       if (input.kind === 'secret' && input.required && !local?.resources.some(resource => resource.kind === 'credential' && resource.state === 'ready' && resource.configuration.alias === binding.alias)) result.push({ scope: 'pod', key: pod.key, requirement: 'secret', name: binding.alias })
     }
     for (const access of pod.access) {
-      // Jev and mail are single unaliased scopes of a Pod; directories and HTTP tools are bound by alias.
-      const resource = access.kind === 'jev' || access.kind === 'mail' ? local?.resources.find(item => matches(access.alias, item)) : local?.aliases.get(access.alias)
+      // Jev is a single unaliased scope of a Pod; directories and HTTP tools are bound by alias.
+      const resource = access.kind === 'jev' ? local?.resources.find(item => matches(access.alias, item)) : local?.aliases.get(access.alias)
       if (!matches(access.alias, resource)) result.push({ scope: 'pod', key: pod.key, requirement: 'access', name: access.alias })
     }
     for (const application of pod.applications) {

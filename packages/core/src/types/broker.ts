@@ -56,6 +56,7 @@ export interface OpenApeProgramAuthorizeRequest {
   program: { name: string, sha256: string }
   /** Arguments without the executable, exactly as executed. */
   argv: string[]
+  files?: { path: string, sha256: string }[]
   grant_type: 'always' | 'once'
   summary?: OpenApeGrantSummary
   batch?: OpenApeGrantBatch

@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto'
 import { readFileSync, statSync } from 'node:fs'
 import { CliExit } from '../errors.js'
 import type { ProgramCall } from './program.js'
+import { assertProgramFiles } from './program-files.js'
 
 /**
  * Re-checks the program file right before it runs: it must still be a regular file with the authorized hash (the
@@ -13,6 +14,7 @@ export function assertAuthorizedFile(call: ProgramCall): void {
   if (!statSync(call.program.path).isFile()) throw new Error(`${call.program.path} is not a regular file; nothing was executed`)
   const sha256 = createHash('sha256').update(readFileSync(call.program.path)).digest('hex')
   if (sha256 !== call.program.sha256) throw new Error(`${call.program.path} changed after it was authorized; nothing was executed`)
+  assertProgramFiles(call.files)
 }
 
 /**
