@@ -15,11 +15,14 @@ import { SetupControl } from '../../src/worker/onboarding/control'
 
 const cleanups: (() => void)[] = []
 afterEach(() => { for (const cleanup of cleanups.splice(0)) cleanup(); vi.restoreAllMocks(); vi.unstubAllGlobals() })
-const request = parseJevRequest({ state: 'Synthetic invoice question', questions: {
-  department: { type: 'choice', instructions: 'Route', criteria: { billing: 'Invoices', review: 'Unclear' } },
-  urgency: { type: 'score', instructions: 'Urgency', criteria: ['Low', 'High'] },
-  relevant: { type: 'noul', instructions: 'Related to support?' },
-} })
+const request = parseJevRequest({
+  state: 'Synthetic invoice question',
+  questions: {
+    department: { type: 'choice', instructions: 'Route', criteria: { billing: 'Invoices', review: 'Unclear' } },
+    urgency: { type: 'score', instructions: 'Urgency', criteria: ['Low', 'High'] },
+    relevant: { type: 'noul', instructions: 'Related to support?' },
+  },
+})
 const result = () => syntheticJevResult(request, defaultJevModel)
 const signal = () => new AbortController().signal
 

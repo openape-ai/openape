@@ -41,7 +41,11 @@ export default defineEventHandler(async (event) => {
   await db.update(projects).set(patch).where(eq(projects.id, id)).run()
   const u = await db.select().from(projects).where(eq(projects.id, id)).get()
   return {
-    id: u!.id, company_id: u!.companyId, name: u!.name, description: u!.description,
-    created_at: u!.createdAt, archived_at: u!.archivedAt,
+    id: u!.id,
+    company_id: u!.companyId,
+    name: u!.name,
+    description: u!.description,
+    created_at: u!.createdAt,
+    archived_at: u!.archivedAt,
   }
 })

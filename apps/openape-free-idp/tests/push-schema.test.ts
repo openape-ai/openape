@@ -60,12 +60,16 @@ describe('push_subscriptions schema', () => {
     await db.insert(pushSubscriptions).values({
       endpoint: 'https://fcm.googleapis.com/fcm/send/aaa',
       userEmail: 'patrick@hofmann.eco',
-      p256dh: 'BN1', auth: 'a1', createdAt: 1,
+      p256dh: 'BN1',
+      auth: 'a1',
+      createdAt: 1,
     })
     await db.insert(pushSubscriptions).values({
       endpoint: 'https://updates.push.services.mozilla.com/wpush/v1/zzz',
       userEmail: 'patrick@hofmann.eco',
-      p256dh: 'BN2', auth: 'a2', createdAt: 2,
+      p256dh: 'BN2',
+      auth: 'a2',
+      createdAt: 2,
     })
     const rows = await db
       .select()

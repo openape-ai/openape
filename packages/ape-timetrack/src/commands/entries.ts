@@ -57,7 +57,9 @@ export const logCommand = defineCommand({
       body.duration = args.duration
     }
     const en = await apiCall<{ id: string, duration_minutes: number, project_id: string, act: string }>(
-      'POST', '/api/entries', { endpoint: args.endpoint, body },
+      'POST',
+      '/api/entries',
+      { endpoint: args.endpoint, body },
     )
     if (args.json) { printJson(en); return }
     printLine(`${en.id}  ${fmt(en.duration_minutes)}  project ${en.project_id}  (${en.act})`)
@@ -83,8 +85,14 @@ export const listCommand = defineCommand({
     if (args.to) query.to = args.to
     if (args.mine) query.mine = true
     const rows = await apiCall<Array<{
-      id: string, entry_date: string, duration_minutes: number, type: string,
-      billable: boolean, is_break: boolean, user_email: string, description: string
+      id: string,
+      entry_date: string,
+      duration_minutes: number,
+      type: string,
+      billable: boolean,
+      is_break: boolean,
+      user_email: string,
+      description: string
     }>>('GET', '/api/entries', { endpoint: args.endpoint, query })
     if (args.json) { printJson(rows); return }
     if (rows.length === 0) { info('No entries.'); return }

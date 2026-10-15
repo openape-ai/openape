@@ -163,8 +163,7 @@ export function resolveCapabilityRequest(
       resolved_executable: loaded.adapter.cli.executable,
       context_bindings: Object.fromEntries(
         Array.from(selectorMap.entries()).flatMap(([resource, selector]) =>
-          Object.entries(selector).map(([key, value]) => [`${resource}.${key}`, value] as const),
-        ),
+          Object.entries(selector).map(([key, value]) => [`${resource}.${key}`, value] as const)),
       ),
     },
     permissions: details.map(detail => detail.permission),

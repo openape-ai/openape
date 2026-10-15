@@ -32,10 +32,14 @@ export async function backupForUpdate(profile: string, installedApp: string, par
   try {
     const before = await inventory(profile)
     const destination = join(stage, 'profile')
-    await cp(profile, destination, { recursive: true, verbatimSymlinks: true, filter: async (source) => {
-      if (['chromium', 'control.sqlite-shm', 'control.sqlite-wal'].some(name => source === join(profile, name))) return false
-      return !(await lstat(source)).isSocket()
-    } })
+    await cp(profile, destination, {
+      recursive: true,
+      verbatimSymlinks: true,
+      filter: async (source) => {
+        if (['chromium', 'control.sqlite-shm', 'control.sqlite-wal'].some(name => source === join(profile, name))) return false
+        return !(await lstat(source)).isSocket()
+      },
+    })
     const copied = await inventory(destination); const after = await inventory(profile)
     for (const records of [copied, after]) {
       if (Object.keys(records).length !== Object.keys(before).length || Object.entries(before).some(([path, digest]) => records[path] !== digest)) throw new Error('Profile changed during update backup')

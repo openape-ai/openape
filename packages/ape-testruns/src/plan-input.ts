@@ -43,24 +43,34 @@ export function validatePlan(raw: unknown): PlanDocument {
     const acceptance = texts(item.acceptance, `${field}.acceptance`)
     if (!acceptance.length) invalid(`${field}.acceptance must not be empty`)
     return {
-      title: text(item.title, `${field}.title`), goal: text(item.goal, `${field}.goal`),
+      title: text(item.title, `${field}.title`),
+      goal: text(item.goal, `${field}.goal`),
       status: choice(item.status, `${field}.status`, ['planned', 'active', 'done', 'blocked']),
-      steps: texts(item.steps, `${field}.steps`), acceptance,
-      proof: optionalText(item.proof, `${field}.proof`), rollback: optionalText(item.rollback, `${field}.rollback`),
+      steps: texts(item.steps, `${field}.steps`),
+      acceptance,
+      proof: optionalText(item.proof, `${field}.proof`),
+      rollback: optionalText(item.rollback, `${field}.rollback`),
     }
   })
   if (!milestones.length) invalid('milestones must not be empty')
   const approval = plan.approval === undefined ? undefined : object(plan.approval, 'approval', ['by', 'date', 'reference'])
   return {
-    schema: 'openape.plan/1', title: text(plan.title, 'title'), goal: text(plan.goal, 'goal'),
+    schema: 'openape.plan/1',
+    title: text(plan.title, 'title'),
+    goal: text(plan.goal, 'goal'),
     status: choice(plan.status, 'status', ['draft', 'active', 'done', 'archived']),
-    project: optionalText(plan.project, 'project'), owner: optionalText(plan.owner, 'owner'), date: optionalText(plan.date, 'date'), context: optionalText(plan.context, 'context'),
+    project: optionalText(plan.project, 'project'),
+    owner: optionalText(plan.owner, 'owner'),
+    date: optionalText(plan.date, 'date'),
+    context: optionalText(plan.context, 'context'),
     decisions: list(plan.decisions, 'decisions').map((value, index) => {
       const field = `decisions[${index}]`
       const item = object(value, field, ['title', 'description', 'status', 'by', 'date'])
       return { title: text(item.title, `${field}.title`), description: text(item.description, `${field}.description`), status: choice(item.status, `${field}.status`, ['proposed', 'accepted', 'rejected']), by: optionalText(item.by, `${field}.by`), date: optionalText(item.date, `${field}.date`) }
     }),
-    milestones, scope: texts(plan.scope, 'scope'), nonGoals: texts(plan.nonGoals, 'nonGoals'),
+    milestones,
+    scope: texts(plan.scope, 'scope'),
+    nonGoals: texts(plan.nonGoals, 'nonGoals'),
     risks: list(plan.risks, 'risks').map((value, index) => {
       const field = `risks[${index}]`
       const item = object(value, field, ['title', 'mitigation'])

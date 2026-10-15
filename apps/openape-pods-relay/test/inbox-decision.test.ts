@@ -9,7 +9,19 @@ beforeEach(() => chooseLanguage('de'))
 const digest = 'b'.repeat(64)
 function decision(change: Partial<InboxItem['decision']> = {}, item: Partial<InboxItem> = {}): InboxItem {
   return {
-    id: crypto.randomUUID(), kind: 'decision', state: 'open', title: 'Zustellen?', body: 'Eine Mail wartet.', pod: null, runId: null, links: [], created: 1, sequence: 1, read: null, archived: null, deleted: null,
+    id: crypto.randomUUID(),
+    kind: 'decision',
+    state: 'open',
+    title: 'Zustellen?',
+    body: 'Eine Mail wartet.',
+    pod: null,
+    runId: null,
+    links: [],
+    created: 1,
+    sequence: 1,
+    read: null,
+    archived: null,
+    deleted: null,
     decision: { sourceId: 'effect:1', digest, type: 'question', authority: 'pods', runtimeId: crypto.randomUUID(), options: [{ key: 'yes', title: 'Zustellen', input: null }, { key: 'seen', title: 'Bereits erledigt', input: 'evidence' }], ...change },
     ...item,
   }

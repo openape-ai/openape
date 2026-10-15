@@ -124,12 +124,22 @@ async function smokeTest(tag, target) {
   try { execFileSync('docker', ['rm', '-f', name], { stdio: 'ignore' }) }
   catch {}
   shQuiet('docker', [
-    'run', '-d', '--rm', '--name', name, '--platform', 'linux/amd64',
-    '-p', `127.0.0.1:1${port}:${port}`,
+    'run',
+    '-d',
+    '--rm',
+    '--name',
+    name,
+    '--platform',
+    'linux/amd64',
+    '-p',
+    `127.0.0.1:1${port}:${port}`,
     // Dummy env so apps that hard-require config still boot for /api/health.
-    '-e', 'NUXT_OPENAPE_IDP_SESSION_SECRET=smoke-test-session-secret-0000000000',
-    '-e', 'NUXT_OPENAPE_SP_SESSION_SECRET=smoke-test-session-secret-0000000000',
-    '-e', 'NUXT_TURSO_URL=file:/tmp/smoke.db',
+    '-e',
+    'NUXT_OPENAPE_IDP_SESSION_SECRET=smoke-test-session-secret-0000000000',
+    '-e',
+    'NUXT_OPENAPE_SP_SESSION_SECRET=smoke-test-session-secret-0000000000',
+    '-e',
+    'NUXT_TURSO_URL=file:/tmp/smoke.db',
     ...(target.smokeRuntime ?? []),
     tag,
   ])

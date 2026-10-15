@@ -10,8 +10,7 @@ import { createProblemError } from '../../utils/problem'
 
 function hasStructuredCliGrant(details?: unknown[]): boolean {
   return (details ?? []).some((d): d is OpenApeCliAuthorizationDetail =>
-    typeof d === 'object' && d !== null && (d as Record<string, unknown>).type === 'openape_cli',
-  )
+    typeof d === 'object' && d !== null && (d as Record<string, unknown>).type === 'openape_cli')
 }
 
 export default defineEventHandler(async (event) => {

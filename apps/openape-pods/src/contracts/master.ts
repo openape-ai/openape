@@ -87,19 +87,29 @@ export function parseMasterAction(value: unknown): MasterAction {
   return structuredClone(item) as MasterAction
 }
 export const masterTool = {
-  type: 'function', name: 'pods_control',
+  type: 'function',
+  name: 'pods_control',
   description: 'Configure OpenApe Pods using revision-checked actions. First call runtime for the script API and action formats, then list/inspect for current IDs and revisions. Only explicit conversation context may be inspected or changed. Actions apply directly and run starts one run; grant approvals happen only at the identity provider. New pods and prepared schedules remain paused. Ordinary variables are model-visible; secret values must never be supplied in tool arguments or chat. Validate, repair failures and activate only with the current script and permissions. Synthetic validation does not prove live provider behavior. Do not run without a user request.',
   inputSchema: {
-    type: 'object', required: ['action'], additionalProperties: false,
+    type: 'object',
+    required: ['action'],
+    additionalProperties: false,
     properties: {
       action: { type: 'string', enum: ['runtime', 'list', 'create', 'inspect', 'revise', 'setVariable', 'prepareSchedule', 'draft', 'validate', 'activate', 'run', 'pause', 'resume', 'rollback', 'installMailRecipe'] },
-      podId: { type: 'string', description: 'Exact pod UUID from list/create.' }, revision: { type: 'integer', minimum: 1, description: 'Current pod settings revision.' },
+      podId: { type: 'string', description: 'Exact pod UUID from list/create.' },
+      revision: { type: 'integer', minimum: 1, description: 'Current pod settings revision.' },
       name: { type: 'string', description: 'Pod or variable name.' },
-      value: { type: 'string', description: 'Ordinary, non-secret variable value only.' }, variableRevision: { type: 'integer', minimum: 0 },
-      spec: { type: 'object', description: 'Interval {kind:"interval",seconds:60..2592000} or daily {kind:"daily",time:"HH:MM",timezone:"Europe/Vienna"}.' }, scheduleRevision: { type: 'integer', minimum: 0 },
-      draftId: { type: ['string', 'null'] }, draftRevision: { type: 'integer', minimum: 0 }, code: { type: 'string' }, capabilities: { type: 'array', items: { type: 'string' }, maxItems: 16 },
+      value: { type: 'string', description: 'Ordinary, non-secret variable value only.' },
+      variableRevision: { type: 'integer', minimum: 0 },
+      spec: { type: 'object', description: 'Interval {kind:"interval",seconds:60..2592000} or daily {kind:"daily",time:"HH:MM",timezone:"Europe/Vienna"}.' },
+      scheduleRevision: { type: 'integer', minimum: 0 },
+      draftId: { type: ['string', 'null'] },
+      draftRevision: { type: 'integer', minimum: 0 },
+      code: { type: 'string' },
+      capabilities: { type: 'array', items: { type: 'string' }, maxItems: 16 },
       packages: { type: 'object', description: 'Optional package.json containing only dependencies with exact npm versions; owner prepares new sets in Script.' },
-      hash: { type: 'string' }, expectedActive: { type: ['string', 'null'] },
+      hash: { type: 'string' },
+      expectedActive: { type: ['string', 'null'] },
     },
   },
 }

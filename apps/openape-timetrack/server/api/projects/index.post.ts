@@ -32,15 +32,28 @@ export default defineEventHandler(async (event) => {
   const now = Math.floor(Date.now() / 1000)
   const id = ulid()
   await db.insert(projects).values({
-    id, companyId, name, description, createdBy: caller.email, createdAt: now,
+    id,
+    companyId,
+    name,
+    description,
+    createdBy: caller.email,
+    createdAt: now,
   })
   await db.insert(projectMembers).values({
-    projectId: id, userEmail: caller.email, role: 'manager', joinedAt: now,
+    projectId: id,
+    userEmail: caller.email,
+    role: 'manager',
+    joinedAt: now,
   })
 
   setResponseStatus(event, 201)
   return {
-    id, company_id: companyId, name, description,
-    role: 'manager' as const, created_at: now, archived_at: null,
+    id,
+    company_id: companyId,
+    name,
+    description,
+    role: 'manager' as const,
+    created_at: now,
+    archived_at: null,
   }
 })

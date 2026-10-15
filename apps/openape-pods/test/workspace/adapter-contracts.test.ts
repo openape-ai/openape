@@ -31,8 +31,12 @@ it('preserves the authenticated backend transport and its exact command envelope
   const request = { channel: 'details' as const, body: { type: 'describe', podId: 'pod-1', revision: 7, text: 'Changed purpose' } }
   await client.command('runtime-1', 12, request, 'request-1')
   expect(fetch).toHaveBeenCalledExactlyOnceWith('/api/workspace/v1/commands', {
-    credentials: 'same-origin', cache: 'no-store', redirect: 'error', signal: undefined,
-    method: 'POST', headers: { 'content-type': 'application/json' },
+    credentials: 'same-origin',
+    cache: 'no-store',
+    redirect: 'error',
+    signal: undefined,
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ runtimeId: 'runtime-1', revision: 12, command: request, id: 'request-1' }),
   })
   fetch.mockImplementationOnce(async () => new Response(JSON.stringify({ code: 'authentication_required' }), { status: 401 }))

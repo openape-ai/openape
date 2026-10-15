@@ -56,13 +56,15 @@ describe('manual dispatch', () => {
 
 it('routes a script tool call with a frozen lease and rejects scope substitution before broker access', async () => {
   const calls: unknown[] = []
-  const fixture = await setup({ tool: async (body, _signal, scope) => {
-    const checked = authorizeMailService(fixture.store, fixture.resources, fixture.dispatcher.runs, { scope: { podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities } })
-    expect(checked.resources).toHaveLength(1)
-    expect(() => authorizeMailService(fixture.store, fixture.resources, fixture.dispatcher.runs, { scope: { podId: randomUUID(), runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities } })).toThrow()
-    expect(() => authorizeMailService(fixture.store, fixture.resources, fixture.dispatcher.runs, { scope: { podId: scope.podId, runId: scope.runId, epoch: scope.epoch + 1, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities } })).toThrow()
-    calls.push(body); return { items: ['synthetic'] }
-  } })
+  const fixture = await setup({
+    tool: async (body, _signal, scope) => {
+      const checked = authorizeMailService(fixture.store, fixture.resources, fixture.dispatcher.runs, { scope: { podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities } })
+      expect(checked.resources).toHaveLength(1)
+      expect(() => authorizeMailService(fixture.store, fixture.resources, fixture.dispatcher.runs, { scope: { podId: randomUUID(), runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities } })).toThrow()
+      expect(() => authorizeMailService(fixture.store, fixture.resources, fixture.dispatcher.runs, { scope: { podId: scope.podId, runId: scope.runId, epoch: scope.epoch + 1, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities } })).toThrow()
+      calls.push(body); return { items: ['synthetic'] }
+    },
+  })
   const { store, dispatcher, pod, resources } = fixture
   store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), pod.id, 'tool', 'ready', 'Synthetic mail permission', '{"capability":"mail.read"}')
   await dispatcher.install(pod.id, 'deterministic')
@@ -85,7 +87,8 @@ it.each([false, true])('combines credential reads, files, variables and Codex; s
   const requests: unknown[] = []; const secret = 'SYNTHETIC_DIRECT_CREDENTIAL'
   const f = await setup({
     credential: async (alias, _signal, scope) => { authorizeCredentialService(f.store, f.resources, f.dispatcher.runs, { scope: { podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities } }, alias); return secret },
-    model: bundledModel, provider: async (body) => { requests.push(body); return requests.length === 1 ? recordedResponse({ type: 'function_call', id: 'credential-attempt', call_id: 'credential-attempt', namespace: 'mcp__pod', name: 'ape_shell', arguments: JSON.stringify({ toolId: 'credentials', argv: ['get', 'crm'] }) }) : recordedResponse() },
+    model: bundledModel,
+    provider: async (body) => { requests.push(body); return requests.length === 1 ? recordedResponse({ type: 'function_call', id: 'credential-attempt', call_id: 'credential-attempt', namespace: 'mcp__pod', name: 'ape_shell', arguments: JSON.stringify({ toolId: 'credentials', argv: ['get', 'crm'] }) }) : recordedResponse() },
   })
   f.resources.assignCredential(f.pod.id, 'crm', randomUUID(), 0)
   await f.dispatcher.install(f.pod.id, 'deterministic')
@@ -180,15 +183,17 @@ it('finishes a native run across a rename while still rejecting revoked resource
 it.each(['recover', 'pause', 'cancel'])('handles an infrastructure outage without restarting or duplicating a POST (%s)', async (action) => {
   const { InfrastructureError } = await import('../src/contracts/infrastructure')
   let calls = 0; let delivered = 0
-  const f = await setup({ http: async () => {
-    if (++calls === 1) {
-      if (action === 'pause') f.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(f.pod.id)
-      if (action === 'cancel') f.dispatcher.cancelPod(f.pod.id)
-      throw new InfrastructureError({ phase: 'authorization', retryAfterMs: 0 })
-    }
-    delivered++
-    return { status: 200, headers: {}, body: '{}' }
-  } })
+  const f = await setup({
+    http: async () => {
+      if (++calls === 1) {
+        if (action === 'pause') f.store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE id=?').run(f.pod.id)
+        if (action === 'cancel') f.dispatcher.cancelPod(f.pod.id)
+        throw new InfrastructureError({ phase: 'authorization', retryAfterMs: 0 })
+      }
+      delivered++
+      return { status: 200, headers: {}, body: '{}' }
+    },
+  })
   const capability = 'tool.http_fixture.request'
   f.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), f.pod.id, 'tool', 'ready', 'Fixture HTTP', JSON.stringify({ type: 'http', origin: 'https://example.com', methods: ['POST'], capability, authority: { identity: { podId: f.pod.id }, grantId: 'approved' } }))
   await f.dispatcher.install(f.pod.id, 'deterministic')

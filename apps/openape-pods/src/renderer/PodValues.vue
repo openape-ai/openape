@@ -15,7 +15,8 @@ export default defineComponent({
   async mounted() { const draft = variableDrafts.get(this.access.key(this.podId)); if (draft) Object.assign(this, draft); trackPodEdits(this.access, 'variables', () => !!this.name || !!this.value); await this.load() },
   beforeUnmount() { variableDrafts.set(this.access.key(this.podId), { name: this.name, value: this.value, revision: this.revision }) },
   methods: {
-    t, diagnostic,
+    t,
+    diagnostic,
     async load() {
       try {
         const [resources, script] = await Promise.all([this.access.api.resources({ type: 'list', podId: this.podId }), this.access.api.scripts({ type: 'list', podId: this.podId })])

@@ -82,11 +82,13 @@ describe('grants edge cases with custom server', () => {
 
     // Login
     const { loginCommand } = await import('../src/commands/auth/login')
-    await loginCommand.run!({ args: {
-      idp: idpBase,
-      key: join(testHome, 'test_key'),
-      email: AGENT_EMAIL,
-    } } as any)
+    await loginCommand.run!({
+      args: {
+        idp: idpBase,
+        key: join(testHome, 'test_key'),
+        email: AGENT_EMAIL,
+      },
+    } as any)
   })
 
   beforeEach(() => {
@@ -121,13 +123,15 @@ describe('grants edge cases with custom server', () => {
       const { statusCommand } = await import('../src/commands/grants/status')
 
       const successSpy = vi.spyOn(consola, 'success')
-      await requestCommand.run!({ args: {
-        command: 'test-denied-status',
-        audience: 'escapes',
-        reason: 'test denied',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'test-denied-status',
+          audience: 'escapes',
+          reason: 'test denied',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       const msg = String(successSpy.mock.calls[0]![0])
       const grantId = msg.match(/Grant requested:\s+(\S+)/)![1]!
@@ -254,22 +258,26 @@ describe('grants edge cases with custom server', () => {
       const { requestCommand } = await import('../src/commands/grants/request')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await requestCommand.run!({ args: {
-        command: 'pag-test-1',
-        audience: 'escapes',
-        reason: 'pagination test',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'pag-test-1',
+          audience: 'escapes',
+          reason: 'pagination test',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
       successSpy.mockClear()
 
-      await requestCommand.run!({ args: {
-        command: 'pag-test-2',
-        audience: 'escapes',
-        reason: 'pagination test 2',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'pag-test-2',
+          audience: 'escapes',
+          reason: 'pagination test 2',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       logOutput = []
       const infoSpy = vi.spyOn(consola, 'info')
@@ -319,13 +327,15 @@ describe('grants edge cases with custom server', () => {
       const { tokenCommand } = await import('../src/commands/grants/token')
 
       const successSpy = vi.spyOn(consola, 'success')
-      await requestCommand.run!({ args: {
-        command: 'test-token-success',
-        audience: 'escapes',
-        reason: 'test token success',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'test-token-success',
+          audience: 'escapes',
+          reason: 'test token success',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       const msg = String(successSpy.mock.calls[0]![0])
       const grantId = msg.match(/Grant requested:\s+(\S+)/)![1]!

@@ -35,7 +35,9 @@ async function fetchPublicBroker(raw: string, init: BrokerHttpOptions): Promise<
   const address = addresses[0]!
   const response = await new Promise<IncomingMessage>((resolve, reject) => {
     const outgoing = request(url, {
-      method: init.method ?? 'GET', headers: init.headers, agent: false,
+      method: init.method ?? 'GET',
+      headers: init.headers,
+      agent: false,
       signal: AbortSignal.timeout(10000),
       lookup: (_hostname, options, callback) => {
         if (options.all) callback(null, [address])

@@ -82,7 +82,8 @@ it('forwards central MCP reads and stable commands without a second local operat
   const local = vi.fn()
   Object.assign(worker, { central: { query, local, available: false } })
   const commands = [
-    { type: 'inventory' }, { type: 'read', runtimeId: id, podId: id },
+    { type: 'inventory' },
+    { type: 'read', runtimeId: id, podId: id },
     { type: 'submit', runtimeId: id, revision: 4, id, command: { channel: 'workspace', body: { type: 'create', name: 'Test Pod' } } },
     { type: 'operation', id },
   ]
@@ -102,10 +103,13 @@ it('rejects MCP attempts to override leases, submit local closures or bypass cen
   const query = vi.fn()
   Object.assign(worker, { central: { query } })
   for (const value of [
-    { type: 'inventory', owner: 'other' }, { type: 'read', runtimeId: id, podId: id, lease: id },
+    { type: 'inventory', owner: 'other' },
+    { type: 'read', runtimeId: id, podId: id, lease: id },
     { type: 'submit', runtimeId: id, revision: 1, id, command: { channel: 'local', body: { type: 'ownerAction' } } },
     { type: 'submit', runtimeId: id, revision: 1, id, command: { channel: 'resources', body: { type: 'saveCredential', podId: id, alias: 'secret', value: 'forbidden', epoch: 1 } } },
-    { type: 'publish' }, { type: 'read', runtimeId: id }, { type: 'operation', id: 'invalid' },
+    { type: 'publish' },
+    { type: 'read', runtimeId: id },
+    { type: 'operation', id: 'invalid' },
   ]) await expect(worker.codex({ id, action: { action: 'workspace', query: value } })).rejects.toThrow()
   expect(query).not.toHaveBeenCalled()
   worker.central = null
@@ -140,11 +144,14 @@ it('keeps bounded local reads outside central mutation serialization and attests
   const worker = new FixtureWorker(() => {})
   const id = '00000000-0000-4000-8000-000000000001'
   const dispatch = vi.fn(async () => ({}))
-  const central = { executing: false, local: vi.fn(async (action: () => Promise<unknown>) => {
-    central.executing = true
-    try { return await action() }
-    finally { central.executing = false }
-  }) }
+  const central = {
+    executing: false,
+    local: vi.fn(async (action: () => Promise<unknown>) => {
+      central.executing = true
+      try { return await action() }
+      finally { central.executing = false }
+    }),
+  }
   Object.assign(worker, { dispatch, central })
   await worker.codex({ id, action: { action: 'list' } })
   await worker.codex({ id, action: { action: 'domain', command: { type: 'list' } } })

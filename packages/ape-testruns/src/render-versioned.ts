@@ -38,7 +38,8 @@ function sectionSlots(doc: ReportDocument) {
 function common(doc: ReportDocument, evidence: ResolvedEvidence[]) {
   const images = (doc.evidence ?? []).filter(item => item.kind === 'image')
   return {
-    language: e(doc.language ?? 'en'), title: e(doc.title),
+    language: e(doc.language ?? 'en'),
+    title: e(doc.title),
     banner: doc.sample ? '<div class="sample-banner"><strong>Sample data</strong><span>Illustrative outcomes. This document is not verification evidence.</span></div>' : '',
     ...sectionSlots(doc),
     evidence: block('Evidence & references', `${images.length ? `<p class="small">${images.length} images · ${images.filter(item => item.inspection).length} inspection attestations recorded. Roles and inspection state are shown for each image.</p>` : ''}${evidence.map(item => `<section class="evidence-item" id="evidence-${e(item.id)}">${item.html}</section>`).join('')}`),
@@ -66,10 +67,14 @@ function runSlots(run: TestRun) {
   const counts = ['passed', 'failed', 'skipped', 'blocked'].map(status => `<span><b>${run.tests.filter(check => check.status === status).length}</b> ${status}</span>`).join('')
   const elapsed = run.startedAt && run.finishedAt ? elapsedLabel(Date.parse(run.finishedAt) - Date.parse(run.startedAt)) : 'Duration: not recorded'
   return {
-    masthead: masthead('Test Runs'), eyebrow: e(`${run.purpose} report`), lead: markdown(run.summary), meta: meta([run.project, run.series]),
+    masthead: masthead('Test Runs'),
+    eyebrow: e(`${run.purpose} report`),
+    lead: markdown(run.summary),
+    meta: meta([run.project, run.series]),
     state: `<section class="state ${illustrative ? 'neutral' : result === 'passed' ? 'ok' : result === 'incomplete' ? 'warn' : ''}"><div class="state-head"><div><strong>${label}</strong><p>${illustrative ? 'Recorded outcomes are not product acceptance.' : 'This summary describes recorded checks; the assessment below is a separate conclusion.'}</p></div></div><div class="counts">${counts}</div><dl class="facts"><div><dt>Run interval</dt><dd>${e(run.startedAt ?? 'Not recorded')} — ${e(run.finishedAt ?? 'Not recorded')}</dd></div><div><dt>Duration</dt><dd>${elapsed}</dd></div></dl></section>`,
     scope: run.scope ? block('Scope', `<div class="pair"><div class="card"><h3>Covered</h3>${items(run.scope.covered ?? [])}</div><div class="card"><h3>Not covered</h3>${items(run.scope.excluded ?? [])}</div></div>`) : '',
-    commands: commands(run), details: checks(run),
+    commands: commands(run),
+    details: checks(run),
     assessment: run.assessment ? block(illustrative ? 'Illustrative assessment' : 'Assessment', `<p class="status">${e(run.assessment.outcome)}</p>${markdown(run.assessment.summary)}${refs(run.assessment.evidenceIds, 'evidence')}`) : block('Assessment', '<p>Not recorded. Check results alone do not establish readiness or safety.</p>'),
     limitations: `${run.limitations?.length ? block('Limitations', `<div class="limits">${items(run.limitations)}</div>`) : ''}${narrative('Next step', run.nextStep)}`,
   }
@@ -91,7 +96,10 @@ function planSlots(plan: Plan, language: PlanLanguage = 'en', sourceLanguage = p
   const original = (value?: string) => value ? `<div lang="${e(sourceLanguage)}">${markdown(value)}</div>` : ''
   const originalDetail = (title: string, value?: string) => value ? `<section class="detail"><h3>${e(title)}</h3>${original(value)}</section>` : ''
   return {
-    masthead: masthead('Plans'), eyebrow: t('Implementation plan'), lead: markdown(plan.goal), meta: meta([plan.project, plan.owner, plan.date, `${t('Status')}: ${t(plan.status)}`, plan.revision ? `${t('Proposal revision')} ${plan.revision}` : undefined]),
+    masthead: masthead('Plans'),
+    eyebrow: t('Implementation plan'),
+    lead: markdown(plan.goal),
+    meta: meta([plan.project, plan.owner, plan.date, `${t('Status')}: ${t(plan.status)}`, plan.revision ? `${t('Proposal revision')} ${plan.revision}` : undefined]),
     tldr: plan.summary ? `<section class="plan-tldr" aria-label="TL;DR"><h2>TL;DR</h2>${markdown(plan.summary)}</section>` : '',
     problem: plan.problem ? `<section class="problem-overview" aria-labelledby="problem-heading"><h2 id="problem-heading">${t('Problem at a glance')}</h2><ol>${(['statement', 'impact', 'approach', 'outcome'] as const).map((key, index) => `<li><span class="problem-stage">${index + 1} · ${t(['Problem', 'Impact', 'Approach', 'Outcome'][index]!)}</span>${markdown(plan.problem![key])}</li>`).join('')}</ol></section>` : '',
     milestoneHeading: t('Milestones'),
@@ -105,7 +113,8 @@ function planSlots(plan: Plan, language: PlanLanguage = 'en', sourceLanguage = p
     completion: plan.completion ? block(t('Completion outcome'), `<p class="status">${e(t(plan.completion.result))}</p>${markdown(plan.completion.summary)}${refs(plan.completion.evidenceIds, 'evidence')}`) : plan.status === 'done' ? block(t('Completion outcome'), `<p>${t('Not assessed. Completed work does not imply an achieved outcome.')}</p>`) : '',
     risks: block(t('Risks & tradeoffs'), (plan.risks ?? []).map(item => `<div class="risk-row"><strong>${e(item.title)}</strong>${markdown(item.mitigation)}</div>`).join('')),
     rollback: block(t('Rollback summary'), `<dl class="rollback">${plan.milestones.map(item => `<dt>${e(item.id)}</dt><dd>${item.rollback ? markdown(item.rollback) : t('Not recorded')}</dd>`).join('')}</dl>`),
-    verification: list(t('Verification'), plan.verification), handoff: narrative(t('Handoff & next action'), plan.handoff),
+    verification: list(t('Verification'), plan.verification),
+    handoff: narrative(t('Handoff & next action'), plan.handoff),
     history: block(t('Changelog'), (plan.changelog ?? []).map(item => `<p><strong>${e(item.date)}</strong> · ${e(item.text)}</p>`).join('')),
   }
 }

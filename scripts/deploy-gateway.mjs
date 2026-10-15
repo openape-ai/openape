@@ -97,9 +97,7 @@ console.log(`  snapshot: ${REMOTE_DIR}/.iac-backups/${ts}/`)
 
 // 3. Sync the 8 tracked files (tar over ssh — explicit list, no --delete).
 console.log('deploy-gateway: syncing config…')
-execFileSync('bash', ['-c',
-  `tar -cf - -C '${LOCAL_DIR}' ${FILES.map(f => `'${f}'`).join(' ')} | ssh -o BatchMode=yes ${USER}@${HOST} 'tar -xf - -C ${REMOTE_DIR}'`,
-], { stdio: 'inherit' })
+execFileSync('bash', ['-c',  `tar -cf - -C '${LOCAL_DIR}' ${FILES.map(f => `'${f}'`).join(' ')} | ssh -o BatchMode=yes ${USER}@${HOST} 'tar -xf - -C ${REMOTE_DIR}'`], { stdio: 'inherit' })
 
 // 4. Bring the stack up. --force-recreate so a changed *mounted* config file
 // (litellm-config.yaml / ddisa_auth.py) is actually reloaded — plain `up -d`

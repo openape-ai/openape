@@ -44,11 +44,9 @@ const safeCommandError = ref('')
 
 // Partition standing grants: safe-commands vs. "rich" custom grants
 const safeCommandGrants = computed(() =>
-  agent.value ? agent.value.standing_grants.filter(isSafeCommandGrant) : [],
-)
+  agent.value ? agent.value.standing_grants.filter(isSafeCommandGrant) : [])
 const richStandingGrants = computed(() =>
-  agent.value ? agent.value.standing_grants.filter(g => !isSafeCommandGrant(g)) : [],
-)
+  agent.value ? agent.value.standing_grants.filter(g => !isSafeCommandGrant(g)) : [])
 const safeCommandByCliId = computed(() => {
   const map = new Map()
   for (const g of safeCommandGrants.value) {
@@ -58,8 +56,7 @@ const safeCommandByCliId = computed(() => {
   return map
 })
 const customSafeCommands = computed(() =>
-  safeCommandGrants.value.filter(g => g.request?.reason === 'safe-command:custom'),
-)
+  safeCommandGrants.value.filter(g => g.request?.reason === 'safe-command:custom'))
 
 onMounted(async () => {
   await fetchUser()

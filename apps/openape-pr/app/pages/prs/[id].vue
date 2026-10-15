@@ -62,8 +62,7 @@ const diffHtml = computed(() =>
         matching: 'lines',
         colorScheme: 'dark' as never,
       })
-    : '',
-)
+    : '')
 
 // ── Review state ────────────────────────────────────────────────────────────
 const reviewingAgain = ref(false)

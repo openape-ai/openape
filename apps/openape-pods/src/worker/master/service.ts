@@ -39,9 +39,21 @@ export class MasterService {
     const boundPodId = conversation.originPodId && podIds.includes(conversation.originPodId) && !conversation.unavailablePodIds.includes(conversation.originPodId) ? conversation.originPodId : null
     const messages = conversations.messages(scope, before)
     const session = conversations.session(scope)
-    return { conversation, activeConversationId: new ChatRegistry(this.store).view().activeConversationId, nextBefore: messages.length === 100 ? messages[0]!.sequence : null, adoption: boundPodId ? new LegacyChatAdoption(this.store).preview(boundPodId) : null, ...(requested.startsWith('creation:') ? { creationId: requested.slice(9), boundPodId } : {}), description: boundPodId ? this.descriptions.view(boundPodId) : null, initialRequest: boundPodId ? conversations.initial(boundPodId) : null, ...(boundPodId ? { scriptState: this.control.setup().scriptState(boundPodId) } : {}), connected: !!this.services, state: session.state as MasterView['state'], error: session.error as string | null,
+    return {
+      conversation,
+      activeConversationId: new ChatRegistry(this.store).view().activeConversationId,
+      nextBefore: messages.length === 100 ? messages[0]!.sequence : null,
+      adoption: boundPodId ? new LegacyChatAdoption(this.store).preview(boundPodId) : null,
+      ...(requested.startsWith('creation:') ? { creationId: requested.slice(9), boundPodId } : {}),
+      description: boundPodId ? this.descriptions.view(boundPodId) : null,
+      initialRequest: boundPodId ? conversations.initial(boundPodId) : null,
+      ...(boundPodId ? { scriptState: this.control.setup().scriptState(boundPodId) } : {}),
+      connected: !!this.services,
+      state: session.state as MasterView['state'],
+      error: session.error as string | null,
       messages,
       drafts: this.store.db.prepare('SELECT d.*,p.name FROM script_drafts d JOIN pods p ON p.id=d.pod_id WHERE d.pod_id IN (SELECT value FROM json_each(?)) ORDER BY d.rowid DESC LIMIT 20').all(JSON.stringify(podIds)).map(row => ({ validationError: this.store.db.prepare('SELECT error FROM master_actions WHERE json_extract(request,\'$.action\')=\'validate\' AND json_extract(request,\'$.draftId\')=? AND json_extract(request,\'$.draftRevision\')=? ORDER BY rowid DESC LIMIT 1').get(row.id, row.revision)?.error as string | null ?? null, id: row.id as string, podId: row.pod_id as string, name: row.name as string, revision: row.revision as number, code: row.code as string, capabilities: JSON.parse(row.capabilities as string) as string[], validation: row.validation as string | null, hash: row.script_hash as string | null })),
+
     }
   }
 

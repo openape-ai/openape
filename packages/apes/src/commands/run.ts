@@ -422,8 +422,7 @@ async function runShellMode(
     const sessionGrant = grants.data.find(g =>
       g.request.audience === 'ape-shell'
       && g.request.target_host === targetHost
-      && g.request.grant_type !== 'once',
-    )
+      && g.request.grant_type !== 'once')
     if (sessionGrant) {
       execShellCommand(command)
       return
@@ -674,7 +673,12 @@ async function runAudienceMode(
   // designed for reuse. Now: first call creates+approves once,
   // subsequent calls fetch a fresh token off the same grant id.
   const reusableId = await findReusableAudienceGrant({
-    grantsUrl, requester: auth.email, audience, command, targetHost, runAs,
+    grantsUrl,
+    requester: auth.email,
+    audience,
+    command,
+    targetHost,
+    runAs,
   })
   if (reusableId) {
     const { authz_jwt } = await apiFetch<{ authz_jwt: string }>(`${grantsUrl}/${reusableId}/token`, { method: 'POST' })

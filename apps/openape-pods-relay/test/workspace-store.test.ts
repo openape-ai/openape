@@ -13,12 +13,22 @@ afterEach(() => { for (const run of cleanup.splice(0).reverse()) run() })
 function snapshot(): CentralSnapshot {
   const pod = { id: randomUUID(), name: 'Monitor', revision: 1, lifecycle: 'paused' as const, activeScript: null }
   return {
-    version: 1, schema: 46, workspace: { pods: [pod], organization: { revision: 1, groups: [] } },
-    pods: [{ id: pod.id, ready: true, details: { claims: [], counts: { finding: 0, question: 0, gap: 0 }, total: 0, versions: [], checkpointRevision: 0, source: null },
+    version: 1,
+    schema: 46,
+    workspace: { pods: [pod], organization: { revision: 1, groups: [] } },
+    pods: [{
+      id: pod.id,
+      ready: true,
+      details: { claims: [], counts: { finding: 0, question: 0, gap: 0 }, total: 0, versions: [], checkpointRevision: 0, source: null },
       scripts: { pod, resourceEpoch: 0, credentialAliases: [], versions: [], drafts: [], source: null },
-      resources: { resources: [], variables: [], epoch: 0 }, scheduling: { spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 },
-      runs: { runs: [], events: [] }, versions: {}, history: {} }],
-    artifacts: [], blobs: [],
+      resources: { resources: [], variables: [], epoch: 0 },
+      scheduling: { spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 },
+      runs: { runs: [], events: [] },
+      versions: {},
+      history: {},
+    }],
+    artifacts: [],
+    blobs: [],
   }
 }
 type Actor = Parameters<WorkspaceStore['begin']>[0]

@@ -59,8 +59,15 @@ export function validateBriefing(raw: unknown): Briefing {
   const sourceId = (value: unknown) => { const id = text(value, 'source ID', 100); if (!sourceIds.has(id)) invalid('source reference'); return id }
   const references = (value: unknown) => items(value, 20, 'source IDs', sourceId)
   const briefing: Briefing = {
-    schemaVersion: 1, type: 'briefing', timezone: 'Europe/Vienna',
-    seriesId: text(b.seriesId, 'seriesId', 100), editionDate: date(b.editionDate, 'editionDate'), generatedAt: timestamp(b.generatedAt, 'generatedAt'), title: text(b.title, 'title', 300), overview: text(b.overview, 'overview'), sources,
+    schemaVersion: 1,
+    type: 'briefing',
+    timezone: 'Europe/Vienna',
+    seriesId: text(b.seriesId, 'seriesId', 100),
+    editionDate: date(b.editionDate, 'editionDate'),
+    generatedAt: timestamp(b.generatedAt, 'generatedAt'),
+    title: text(b.title, 'title', 300),
+    overview: text(b.overview, 'overview'),
+    sources,
     importantItems: items(b.importantItems, 50, 'important items', (value) => {
       const i = object(value, ['id', 'title', 'summary', 'priority', 'sourceIds'], 'important item')
       return { id: text(i.id, 'ID', 200), title: text(i.title, 'title', 300), summary: text(i.summary, 'summary'), priority: choice(i.priority, ['high', 'normal'], 'priority'), sourceIds: references(i.sourceIds) }

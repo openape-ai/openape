@@ -175,10 +175,12 @@ describe('admin + delegation-revoke commands', () => {
       const { usersCreateCommand } = await import('../src/commands/admin/users')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await usersCreateCommand.run!({ args: {
-        email: 'dave@example.com',
-        name: 'Dave',
-      } } as any)
+      await usersCreateCommand.run!({
+        args: {
+          email: 'dave@example.com',
+          name: 'Dave',
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalledWith(expect.stringContaining('dave@example.com'))
     })
@@ -237,11 +239,13 @@ describe('admin + delegation-revoke commands', () => {
       const { sshKeysAddCommand } = await import('../src/commands/admin/ssh-keys')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await sshKeysAddCommand.run!({ args: {
-        email: testUser.email,
-        key: testUser.publicKeySsh,
-        name: 'eve-key',
-      } } as any)
+      await sshKeysAddCommand.run!({
+        args: {
+          email: testUser.email,
+          key: testUser.publicKeySsh,
+          name: 'eve-key',
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalled()
       const msg = successSpy.mock.calls[0]![0] as string
@@ -261,11 +265,13 @@ describe('admin + delegation-revoke commands', () => {
       const { sshKeysAddCommand } = await import('../src/commands/admin/ssh-keys')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await sshKeysAddCommand.run!({ args: {
-        email: newUser.email,
-        key: keyFile,
-        name: 'from-file',
-      } } as any)
+      await sshKeysAddCommand.run!({
+        args: {
+          email: newUser.email,
+          key: keyFile,
+          name: 'from-file',
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalledWith(expect.stringContaining('SSH key added'))
     })
@@ -296,10 +302,12 @@ describe('admin + delegation-revoke commands', () => {
       const { sshKeysDeleteCommand } = await import('../src/commands/admin/ssh-keys')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await sshKeysDeleteCommand.run!({ args: {
-        email: testUser.email,
-        keyId: addedKeyId,
-      } } as any)
+      await sshKeysDeleteCommand.run!({
+        args: {
+          email: testUser.email,
+          keyId: addedKeyId,
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalledWith(expect.stringContaining(addedKeyId))
     })

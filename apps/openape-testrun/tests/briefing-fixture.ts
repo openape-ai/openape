@@ -3,7 +3,12 @@ import type { Briefing } from '../shared/briefing'
 export function sampleBriefing(seriesId = 'series', editionDate = '2026-09-27'): Briefing {
   const generatedAt = `${editionDate}T05:01:00Z`
   return {
-    schemaVersion: 1, type: 'briefing', seriesId, editionDate, timezone: 'Europe/Vienna', generatedAt,
+    schemaVersion: 1,
+    type: 'briefing',
+    seriesId,
+    editionDate,
+    timezone: 'Europe/Vienna',
+    generatedAt,
     title: 'A little clarity for today.',
     overview: 'One decision needs your attention, two meetings shape the morning, and the release is ready for review. Here is what matters today.',
     importantItems: [{ id: 'release', title: 'The release is ready for your review', summary: 'The team has resolved the remaining blockers. Review the proposed rollout before the planning meeting.', priority: 'high', sourceIds: ['mail', 'issues'] }, { id: 'planning', title: 'Keep the afternoon focused', summary: 'The calendar leaves an open block after lunch for the proposal.', priority: 'normal', sourceIds: ['calendar'] }],

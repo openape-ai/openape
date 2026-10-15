@@ -301,9 +301,19 @@ export class InboxStore {
 
 function item(row: Record<string, unknown>): InboxItem {
   return {
-    id: String(row.id), kind: row.kind as InboxItem['kind'], state: String(row.state), decision: typeof row.decision === 'string' ? JSON.parse(row.decision) as InboxDecisionData : null, title: String(row.title), body: String(row.body),
-    pod: row.pod_id ? { id: String(row.pod_id), name: row.pod_name === null ? null : String(row.pod_name), ...(typeof row.pod_tags === 'string' ? { tags: JSON.parse(row.pod_tags) as string[] } : {}) } : null, runId: row.run_id === null ? null : String(row.run_id),
-    links: JSON.parse(String(row.links)) as InboxItem['links'], created: Number(row.created), sequence: Number(row.sequence),
-    read: row.read === null ? null : Number(row.read), archived: row.archived === null ? null : Number(row.archived), deleted: row.deleted === null ? null : Number(row.deleted),
+    id: String(row.id),
+    kind: row.kind as InboxItem['kind'],
+    state: String(row.state),
+    decision: typeof row.decision === 'string' ? JSON.parse(row.decision) as InboxDecisionData : null,
+    title: String(row.title),
+    body: String(row.body),
+    pod: row.pod_id ? { id: String(row.pod_id), name: row.pod_name === null ? null : String(row.pod_name), ...(typeof row.pod_tags === 'string' ? { tags: JSON.parse(row.pod_tags) as string[] } : {}) } : null,
+    runId: row.run_id === null ? null : String(row.run_id),
+    links: JSON.parse(String(row.links)) as InboxItem['links'],
+    created: Number(row.created),
+    sequence: Number(row.sequence),
+    read: row.read === null ? null : Number(row.read),
+    archived: row.archived === null ? null : Number(row.archived),
+    deleted: row.deleted === null ? null : Number(row.deleted),
   }
 }

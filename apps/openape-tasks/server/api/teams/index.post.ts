@@ -32,10 +32,18 @@ export default defineEventHandler(async (event) => {
   const db = useDb()
 
   await db.insert(teams).values({
-    id, name, description, orgId, createdBy: caller.email, createdAt: now,
+    id,
+    name,
+    description,
+    orgId,
+    createdBy: caller.email,
+    createdAt: now,
   })
   await db.insert(teamMembers).values({
-    teamId: id, userEmail: caller.email, role: 'owner', joinedAt: now,
+    teamId: id,
+    userEmail: caller.email,
+    role: 'owner',
+    joinedAt: now,
   })
 
   setResponseStatus(event, 201)

@@ -92,10 +92,12 @@ describe('startServer', () => {
       });
     `
     const server = await startServer({
-      cwd: process.cwd(), port: appPort,
+      cwd: process.cwd(),
+      port: appPort,
       command: () => ['node', '-e', script],
       env: ({ port }) => ({ PORT: String(port) }),
-      readyPath: '/', timeoutMs: 15_000,
+      readyPath: '/',
+      timeoutMs: 15_000,
     })
     try {
       const hmr = Number(await (await fetch(server.url)).text())

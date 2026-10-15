@@ -8,11 +8,16 @@ import type { OnboardingView } from '../../src/contracts/onboarding'
 
 const owner = '00000000-0000-4000-8000-000000000002'
 const codex = '00000000-0000-4000-8000-000000000005'
-const state: OnboardingView = { connections: [
-  { id: owner, provider: 'openape', account: 'owner@example.invalid', state: 'ready', error: null, login: null },
-  { id: '00000000-0000-4000-8000-000000000003', provider: 'microsoft', account: 'mail@example.invalid', state: 'ready', error: null, login: null },
-  { id: codex, provider: 'chatgpt', account: 'model@example.invalid', state: 'ready', error: null, login: null },
-], owner, runtime: { ready: true, error: null }, complete: false }
+const state: OnboardingView = {
+  connections: [
+    { id: owner, provider: 'openape', account: 'owner@example.invalid', state: 'ready', error: null, login: null },
+    { id: '00000000-0000-4000-8000-000000000003', provider: 'microsoft', account: 'mail@example.invalid', state: 'ready', error: null, login: null },
+    { id: codex, provider: 'chatgpt', account: 'model@example.invalid', state: 'ready', error: null, login: null },
+  ],
+  owner,
+  runtime: { ready: true, error: null },
+  complete: false,
+}
 const buttons = (wrapper: ReturnType<typeof mount>, section: string) => wrapper.get(`section[aria-label="${section}"]`).findAll('button').map(button => button.text())
 async function page(view: OnboardingView) {
   const onboarding = vi.fn(async (_command: unknown) => view)

@@ -15,7 +15,8 @@ export async function externalChecks(repoId: string, sha: string, mirrorId: stri
   const api = forgejoApiBase(mirror.url)
   const response = await fetch(`${api}/commits/${sha}/status?per_page=100`, {
     headers: { authorization: `token ${mirror.token}`, accept: 'application/json' },
-    redirect: 'error', signal: AbortSignal.timeout(15_000),
+    redirect: 'error',
+    signal: AbortSignal.timeout(15_000),
   })
   if (!response.ok) throw new Error(`CI provider returned HTTP ${response.status}`)
   return normalizeForgejoChecks(await response.json(), sha, new URL(mirror.url).origin)

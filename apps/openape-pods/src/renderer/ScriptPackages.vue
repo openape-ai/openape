@@ -16,7 +16,8 @@ export default defineComponent({
   },
   beforeUnmount() { this.requestId++ },
   methods: {
-    t, diagnostic,
+    t,
+    diagnostic,
     open() { this.adding = true; this.query = ''; this.results = []; this.candidate = null; this.error = ''; this.searched = false },
     close() { this.requestId++; this.adding = false; this.searching = false },
     async search() {

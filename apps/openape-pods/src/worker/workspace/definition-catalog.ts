@@ -41,9 +41,13 @@ export class DefinitionCatalog {
     if (!row) throw new Error('Definition version not found')
     const manifest = row.manifest ? parseManifest(JSON.parse(row.manifest as string)) : null
     const view: DefinitionVersionView = {
-      version, state: row.state === 'published' ? 'published' : 'legacy', contentHash: row.content_hash as string, lockHash: row.lock_hash as string,
+      version,
+      state: row.state === 'published' ? 'published' : 'legacy',
+      contentHash: row.content_hash as string,
+      lockHash: row.lock_hash as string,
       work: manifest?.work ?? null,
-      capabilities: manifest?.capabilities ?? [], packages: row.packages ? parsePackages(JSON.parse(row.packages as string)) : emptyPackages(),
+      capabilities: manifest?.capabilities ?? [],
+      packages: row.packages ? parsePackages(JSON.parse(row.packages as string)) : emptyPackages(),
       defaults: definitionDefaults(Object.fromEntries(this.store.db.prepare('SELECT name,value FROM definition_config WHERE definition_id=? AND definition_version=? AND kind=\'public\'').all(id, version).map(item => [item.name as string, JSON.parse(item.value as string)]))),
     }
     if (manifest && (manifest.contentHash !== view.contentHash || manifest.dependencyLockHash !== view.lockHash)) throw new Error('Definition manifest does not match its version')
@@ -52,7 +56,8 @@ export class DefinitionCatalog {
 
   list(): DefinitionView[] {
     return this.store.db.prepare('SELECT id,name FROM pod_definitions WHERE owner_issuer=? AND owner_subject=? ORDER BY created_at,id').all(this.owner.issuer, this.owner.subject).map(row => ({
-      id: row.id as string, name: row.name as string,
+      id: row.id as string,
+      name: row.name as string,
       versions: this.store.db.prepare('SELECT version FROM pod_definition_versions WHERE definition_id=? ORDER BY version').all(row.id!).map(version => this.source(row.id as string, version.version as number).view),
     }))
   }
