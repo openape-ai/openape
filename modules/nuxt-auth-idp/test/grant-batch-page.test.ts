@@ -107,13 +107,45 @@ describe('grant batch approval', () => {
     expect(row.find('[data-requested-marker]').text()).toBe('as requested')
   })
 
-  it('shows what each approval binds as the row line and the requester title only as its labeled claim', async () => {
-    const misleading = member('g-1', 1, { request: { ...member('g-1', 1).request, summary: { title: 'Read-only status check' } } })
-    const { wrapper } = await mountBatch([misleading])
-    const row = wrapper.find('[data-batch-row="g-1"]')
-    expect(row.find('[data-command-head]').text()).toBe('pods-graph-gate approve')
-    expect(row.findAll('[data-command-fact]').map(fact => fact.text())).toEqual(['item:g-1'])
-    expect(row.find('[data-row-claim]').text()).toBe('requester\'s description: "Read-only status check"')
+  it('leads an exact command row with the marked requester title and keeps the bound line below it', async () => {
+    const titled = member('g-1', 1, { request: { ...member('g-1', 1).request, summary: { title: 'Read-only status check' } } })
+    const { wrapper } = await mountBatch([titled, member('g-2', 2, { status: 'denied', decided_at: 1_710_000_100 })])
+    for (const id of ['g-1', 'g-2']) {
+      const row = wrapper.find(`[data-batch-row="${id}"]`)
+      const headline = row.find('[data-requester-headline]')
+      expect(headline.text()).toBe(`${id === 'g-1' ? 'Read-only status check' : '"Newsletter XY" <news@xy.example> – Issue 2'}as requested`)
+      expect(headline.find('[data-requested-marker]').exists()).toBe(true)
+      expect(row.find('[data-command-head]').text()).toBe('pods-graph-gate approve')
+      expect(row.findAll('[data-command-fact]').map(fact => fact.text())).toEqual([`item:${id}`])
+      expect(row.find('[data-row-claim]').exists()).toBe(false)
+    }
+  })
+
+  it('lets the bound line lead without a usable title and keeps a registry title in the lead', async () => {
+    const untitled = member('g-1', 1, { request: { ...member('g-1', 1).request, summary: undefined } })
+    const unsafe = member('g-2', 2, { request: { ...member('g-2', 2).request, summary: { title: 'Archive\u202Eevil' } } })
+    const shaped = { ...cardFixtures.gitPush, id: 'g-3', created_at: 1_710_000_003, request: { ...cardFixtures.gitPush.request, requester: 'pod-agent@example.com', batch: { id: 'b-1', size: 3 } } }
+    const { wrapper } = await mountBatch([untitled, unsafe, shaped])
+
+    expect(wrapper.find('[data-requester-headline]').exists()).toBe(false)
+    expect(wrapper.find('[data-batch-row="g-1"] [data-row-claim]').exists()).toBe(false)
+    expect(wrapper.find('[data-batch-row="g-2"] [data-row-claim]').text()).toBe('requester\'s description: "Archive\u202Eevil"')
+    const registry = wrapper.find('[data-batch-row="g-3"]')
+    expect(registry.find('[data-binding-line="registry"]').text()).toBe('Push feature/rebase to origin')
+    expect(registry.find('[data-row-claim]').text()).toBe('requester\'s description: "Read-only status check"')
+  })
+
+  it('selects the row headline only for exact commands with a safe title', () => {
+    const rows = grantBatchRows([
+      member('g-1', 1) as unknown as GrantWithCard,
+      member('g-2', 2, { request: { ...member('g-2', 2).request, summary: { title: 'two\nlines' } } }) as unknown as GrantWithCard,
+      { ...cardFixtures.gitPush, id: 'g-3', created_at: 1_710_000_003 } as unknown as GrantWithCard,
+    ], 'en')
+    expect(rows.map(row => [row.id, row.headline, row.claim])).toEqual([
+      ['g-1', '"Newsletter XY" <news@xy.example> – Issue 1', null],
+      ['g-2', null, 'two\nlines'],
+      ['g-3', null, 'Read-only status check'],
+    ])
   })
 
   it('decides only the open members and keeps decided ones in a closed history, newest first', async () => {

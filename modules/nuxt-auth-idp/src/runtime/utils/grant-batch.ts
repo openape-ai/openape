@@ -2,15 +2,17 @@ import type { OpenApeGrant } from '@openape/core'
 import type { CompactCommand } from './command-structure'
 import { distinctCompactCommands } from './command-structure'
 import type { BindingLine, CardLanguage, GrantWithCard } from './grant-card'
-import { grantBindingLine } from './grant-card'
+import { grantBindingLine, requesterHeadline } from './grant-card'
 
 export interface GrantBatchRow {
   id: string
   /** What approving this member binds: registry title or exact command. Always the row's primary line. */
   line: BindingLine
+  /** The requester's title leading an exact command's line, marked as requested; see `requesterHeadline`. */
+  headline: string | null
   /** Short form of an exact command's line, distinct from the other rows; null shows `line.text` as it is. */
   compact: CompactCommand | null
-  /** The member's own summary title, shown only as its labeled claim. */
+  /** The member's own summary title as a labeled claim, when it is not already the headline. */
   claim: string | null
   status: OpenApeGrant['status']
   decidable: boolean
@@ -40,7 +42,10 @@ export function grantBatchRows(members: GrantWithCard[], language: CardLanguage)
     const shown = ordered.filter(({ grant }) => (grant.status === 'pending') === open)
     return distinctCompactCommands(shown.map(({ line }) => line.structure)).map((compact, index) => [shown[index]!.grant.id, compact] as const)
   }))
-  return ordered.map(({ grant, line }) => ({ id: grant.id, line, compact: compacts.get(grant.id) ?? null, claim: grant.request.summary?.title?.trim() || null, status: grant.status, decidable: grant.status === 'pending' && uniform(grant), decidedAt: grant.used_at ?? grant.decided_at ?? grant.expires_at ?? null }))
+  return ordered.map(({ grant, line }) => {
+    const headline = requesterHeadline(grant, line)
+    return { id: grant.id, line, headline, compact: compacts.get(grant.id) ?? null, claim: headline ? null : grant.request.summary?.title?.trim() || null, status: grant.status, decidable: grant.status === 'pending' && uniform(grant), decidedAt: grant.used_at ?? grant.decided_at ?? grant.expires_at ?? null }
+  })
 }
 
 export interface GrantBatchSections {

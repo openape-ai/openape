@@ -10,9 +10,10 @@ import { HIDDEN_CHARACTERS, MAX_VALUE_LENGTH, structureCommand, worthStructuring
  * approver's questions: the registry adapter the IdP holds (what happens and
  * what it means), the IdP's own records (who asks, grant type, validity) and
  * the requester's summary (its claim). The binding identity — the registry
- * title or, without one, the exact command — always stays the primary line;
- * a requester title can only add to it, and registry values the approval does
- * not bind carry an "as requested" marker.
+ * title or, without one, the exact command — always stays visible as the
+ * primary line; a requester title can only add to it, and values the approval
+ * does not bind carry an "as requested" marker. Only above an exact command
+ * may that marked title lead (`requesterHeadline`).
  */
 
 export type CardLanguage = 'de' | 'en'
@@ -187,6 +188,31 @@ export function grantBindingLine(grant: GrantWithCard, language: CardLanguage): 
     : getCliAuthorizationDetails(grant.request.authorization_details).map(detail => detail.permission)
   if (permissions.length) return { kind: 'permission', text: permissions.join(', ') }
   return { kind: 'permission', text: `${grant.request.audience} · ${grant.request.target_host}` }
+}
+
+const MAX_HEADLINE_LENGTH = 120
+// Characters that can make displayed text differ from what was sent (grants.md §3.4).
+const UNSAFE_TITLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
+
+/** True when approving binds nothing but the request's exact command line. */
+function bindsExactCommand(request: OpenApeGrant['request']): boolean {
+  const details = getCliAuthorizationDetails(request.authorization_details)
+  if (details.length) return details.every(detail => detail.constraints?.exact_command)
+  return !request.permissions?.length && !request.authorization_details?.length
+}
+
+/**
+ * The requester's summary title as the headline above an exact command line
+ * (owner decision, issue 1477). Such an approval binds only the command shown
+ * directly beneath, so the title cannot widen it. Registry and permission
+ * lines keep the lead; so does the command line when the title is missing or
+ * contains control or format characters.
+ */
+export function requesterHeadline(grant: OpenApeGrant, line: BindingLine): string | null {
+  if (line.kind !== 'command' || !bindsExactCommand(grant.request)) return null
+  const title = grant.request.summary?.title?.trim()
+  if (!title || [...title].length > MAX_HEADLINE_LENGTH || UNSAFE_TITLE.test(title)) return null
+  return title
 }
 
 /** The approver-facing marker for values the approval does not bind. */
