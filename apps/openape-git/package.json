@@ -40,6 +40,8 @@
     "vitest": "catalog:",
     "vue-tsc": "catalog:",
     "openape-e2e": "workspace:*",
-    "playwright": "catalog:"
+    "playwright": "catalog:",
+    "@vitest/browser": "catalog:",
+    "@vitest/browser-playwright": "catalog:"
   }
 }
