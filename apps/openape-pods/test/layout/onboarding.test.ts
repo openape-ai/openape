@@ -18,7 +18,9 @@ const accounts: OnboardingView = {
     { id: owner, provider: 'openape', account: 'original.owner.with.a.long.address@example.invalid', state: 'ready', error: null, login: null },
     { id: '00000000-0000-4000-8000-0000000000e2', provider: 'chatgpt', account: 'model.account@example.invalid', state: 'ready', error: null, login: null },
   ],
-  owner, runtime: { ready: true, error: null }, complete: true,
+  owner,
+  runtime: { ready: true, error: null },
+  complete: true,
   podIdentity: { podId, bound: true, ownerConnection: owner, issuer: 'https://pods.example.invalid', decisionIssuer: 'https://identity.example.invalid', subject: 'invoice-agent-with-a-long-identifier@pods.example.invalid', brokerConnectionId: null },
 } as OnboardingView
 let wrapper: VueWrapper | undefined

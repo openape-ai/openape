@@ -93,12 +93,14 @@ describe('ensureFreshIdpAuth', () => {
       }
       if (u.endsWith('/api/agent/challenge')) {
         return new Response(JSON.stringify({ challenge: 'YWJj' }), {
-          status: 200, headers: { 'Content-Type': 'application/json' },
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
         })
       }
       if (u.endsWith('/api/agent/authenticate')) {
         return new Response(JSON.stringify({ token: 'fresh-agent-token', expires_in: 3600 }), {
-          status: 200, headers: { 'Content-Type': 'application/json' },
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
         })
       }
       throw new Error(`unexpected fetch ${u}`)

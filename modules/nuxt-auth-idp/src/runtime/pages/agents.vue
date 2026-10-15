@@ -84,8 +84,7 @@ function closeBulk() {
 }
 
 const bulkTotalCreated = computed(() =>
-  bulkResults.value ? bulkResults.value.reduce((s, r) => s + r.created, 0) : 0,
-)
+  bulkResults.value ? bulkResults.value.reduce((s, r) => s + r.created, 0) : 0)
 </script>
 
 <template>

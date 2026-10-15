@@ -10,7 +10,8 @@ export default defineComponent({
   data() { return { expanded: false, disconnecting: false, key: '', busy: false, error: '', connection: undefined as ConnectionView | undefined, loaded: false } },
   async mounted() { await this.execute({ type: 'list' }); this.loaded = true },
   methods: {
-    t, diagnostic,
+    t,
+    diagnostic,
     async execute(command: OnboardingCommand) {
       if (this.busy) return
       this.busy = true; this.error = ''

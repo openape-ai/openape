@@ -18,8 +18,7 @@ onMounted(async () => {
 })
 const tabs = computed(() => [
   ...(!issuesEnabled || metadata.value?.issueHomeOnly === 0
-    ? [{ key: 'code', label: 'Code', icon: 'i-lucide-folder-git-2', to: `/${props.owner}/${props.name}` },
-        { key: 'commits', label: 'Commits', icon: 'i-lucide-history', to: `/${props.owner}/${props.name}/commits` }]
+    ? [{ key: 'code', label: 'Code', icon: 'i-lucide-folder-git-2', to: `/${props.owner}/${props.name}` },        { key: 'commits', label: 'Commits', icon: 'i-lucide-history', to: `/${props.owner}/${props.name}/commits` }]
     : []),
   ...(issuesEnabled ? [{ key: 'issues', label: 'Issues', icon: 'i-lucide-circle-dot', to: `/${props.owner}/${props.name}/issues` }] : []),
   ...(!issuesEnabled || metadata.value?.issueHomeOnly === 0 ? [{ key: 'pulls', label: 'Pulls', icon: 'i-lucide-git-pull-request', to: `/${props.owner}/${props.name}/pulls` }] : []),

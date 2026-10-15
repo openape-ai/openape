@@ -37,17 +37,19 @@ beforeEach(async () => {
   await stores.userStore.create({ email: owner, name: 'Owner', type: 'human', isActive: true, createdAt: 1 })
   const { definePodIdentityStore } = await import('../src/runtime/server/utils/pod-identity-store')
   const { createProblemError } = await import('../src/runtime/server/utils/problem')
-  definePodIdentityStore(() => ({ provision: async (input) => {
-    const existing = await stores.userStore.findByEmail(input.email)
-    const keys = await stores.sshKeyStore.findByUser(input.email)
-    if (existing) {
-      if (!existing.isActive || existing.owner !== input.owner || keys.length !== 1 || keys[0]?.keyId !== input.keyId) throw createProblemError({ status: 409, title: 'Identity conflict' })
-      return
-    }
-    if (await stores.sshKeyStore.findById(input.keyId)) throw createProblemError({ status: 409, title: 'Key conflict' })
-    await stores.userStore.create({ email: input.email, name: input.name, owner: input.owner, approver: input.owner, type: 'agent', isActive: true, createdAt: 1 })
-    await stores.sshKeyStore.save({ keyId: input.keyId, userEmail: input.email, publicKey: input.publicKey, name: input.name, createdAt: 1 })
-  } }))
+  definePodIdentityStore(() => ({
+    provision: async (input) => {
+      const existing = await stores.userStore.findByEmail(input.email)
+      const keys = await stores.sshKeyStore.findByUser(input.email)
+      if (existing) {
+        if (!existing.isActive || existing.owner !== input.owner || keys.length !== 1 || keys[0]?.keyId !== input.keyId) throw createProblemError({ status: 409, title: 'Identity conflict' })
+        return
+      }
+      if (await stores.sshKeyStore.findById(input.keyId)) throw createProblemError({ status: 409, title: 'Key conflict' })
+      await stores.userStore.create({ email: input.email, name: input.name, owner: input.owner, approver: input.owner, type: 'agent', isActive: true, createdAt: 1 })
+      await stores.sshKeyStore.save({ keyId: input.keyId, userEmail: input.email, publicKey: input.publicKey, name: input.name, createdAt: 1 })
+    },
+  }))
   const signing = await stores.keyStore.getSigningKey()
   token = await issueAuthToken({ sub: owner, act: 'human' }, 'https://id.openape.test', signing.privateKey, signing.kid)
   const { default: provision } = await import('../src/runtime/server/api/pods/agents.post')

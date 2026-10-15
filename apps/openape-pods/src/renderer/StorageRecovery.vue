@@ -32,7 +32,10 @@ export default defineComponent({
   },
   async mounted() { await this.run({ type: 'view' }) },
   methods: {
-    t, diagnostic, dateTime, number,
+    t,
+    diagnostic,
+    dateTime,
+    number,
     async run(command: StorageRecoveryCommand) {
       if (!this.hostBridge.storage) return
       this.busy = true; this.error = ''

@@ -8,9 +8,14 @@ function parsePortableManifest(value: unknown) { return parseManifest(value, ['p
 function fixture(): PortableManifest {
   const hash = 'a'.repeat(64)
   const pods: PortablePod[] = ['read', 'summarize', 'send'].map((key, index) => ({
-    key, title: key, description: 'Synthetic portable fixture', script: `pods/${key}.mjs`, packages: null,
+    key,
+    title: key,
+    description: 'Synthetic portable fixture',
+    script: `pods/${key}.mjs`,
+    packages: null,
     contract: { takes: index ? [`step.${index === 1 ? 'one' : 'two'}`] : [], gives: index === 2 ? [] : [`step.${index === 0 ? 'one' : 'two'}`], summary: key },
-    access: [], requestedCapabilities: ['tool.mail.invoke'],
+    access: [],
+    requestedCapabilities: ['tool.mail.invoke'],
     inputs: [
       { key: 'account', label: 'Account', description: 'Separate recipient account', kind: 'account', required: true, sharingGroup: null },
       { key: 'count', label: 'Count', description: '', kind: 'number', required: true, minimum: 1, maximum: 10, default: 3, sharingGroup: null },
@@ -21,15 +26,20 @@ function fixture(): PortableManifest {
     assets: index === 1 ? ['assets/template.txt'] : [],
   }))
   return {
-    format: 'openape-package', version: 1, package: { key: 'morning_briefing', revision: 1, title: 'Morning briefing', description: 'Synthetic only' }, requiredFeatures: ['portable_aliases_v1'],
-    entry: { kind: 'network', key: 'briefing' }, pods,
+    format: 'openape-package',
+    version: 1,
+    package: { key: 'morning_briefing', revision: 1, title: 'Morning briefing', description: 'Synthetic only' },
+    requiredFeatures: ['portable_aliases_v1'],
+    entry: { kind: 'network', key: 'briefing' },
+    pods,
     compositions: [{ key: 'briefing', kind: 'network', title: 'Briefing', document: 'compositions/briefing.json', documentVersion: 1, nodes: pods.map(pod => ({ pod: pod.key, after: [], handoff: false })), calls: [], inputs: [], dataSchemas: [] }],
     applications: ['mail_app', 'missing_app'].map(key => ({ key, application: `org.example.${key.replaceAll('_', '-')}`, adapter: { identity: 'org.example.fixture', version: 1, operations: ['invoke'] }, testedVersions: ['1.0.0'], platforms: [{ os: 'darwin', architecture: 'arm64' }], distribution: null, instructions: 'Select the compatible fixture application on the recipient desktop.' })),
     files: [
       ...pods.map(pod => ({ path: pod.script, kind: 'script' as const, bytes: 100, sha256: hash, mediaType: 'text/javascript' })),
       { path: 'assets/template.txt', kind: 'asset', bytes: 40, sha256: hash, mediaType: 'text/plain' },
       { path: 'compositions/briefing.json', kind: 'composition', bytes: 200, sha256: hash, mediaType: 'application/json' },
-    ], contentSha256: hash,
+    ],
+    contentSha256: hash,
   }
 }
 

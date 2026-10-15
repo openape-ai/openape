@@ -13,7 +13,8 @@ export default defineComponent({
   async mounted() { await this.refresh(); this.timer = setInterval(() => { void this.refresh() }, 1000) },
   beforeUnmount() { clearInterval(this.timer) },
   methods: {
-    t, diagnostic,
+    t,
+    diagnostic,
     async refresh() {
       if (!this.hostBridge.updates) return
       try { this.view = await this.hostBridge.updates({ type: 'status' }) }

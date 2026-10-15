@@ -66,15 +66,23 @@ APPS.forEach((app) => {
       if (section.image) cpSync(join(podsDocs, 'images', section.image), join(imageDir, section.image))
     }
     const lines = [
-      '---', `title: ${JSON.stringify(app.title)}`, `description: ${JSON.stringify(handbook.subtitle)}`, '---', '',
+      '---',
+      `title: ${JSON.stringify(app.title)}`,
+      `description: ${JSON.stringify(handbook.subtitle)}`,
+      '---',
+      '',
       '::note',
       'Pods is a native Mac app. These screenshots show its current interface with isolated synthetic data. This guide shares its English content with the offline handbook; a German offline edition is also maintained.',
-      '::', '',
-      handbook.sections.flatMap(section => sectionMarkdown(section, `/guides/${app.slug}`)).join('\n\n'), '',
-      '## Related guides', '',
+      '::',
+      '',
+      handbook.sections.flatMap(section => sectionMarkdown(section, `/guides/${app.slug}`)).join('\n\n'),
+      '',
+      '## Related guides',
+      '',
       '- [OpenApe ID: your account and approvals](/apps/idp)',
       '- [Permissions and grants](/ecosystem/grants)',
-      '- [All app guides](/apps)', '',
+      '- [All app guides](/apps)',
+      '',
     ]
     writeFileSync(join(sectionDir, `${String(app.order).padStart(2, '0')}.${app.slug}.md`), `${lines.join('\n')}\n`)
     overview.push({ ...app, blurb: handbook.subtitle })

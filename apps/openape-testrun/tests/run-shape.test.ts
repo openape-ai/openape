@@ -13,10 +13,15 @@ function validManifest() {
     project: 'openape',
     summary: 'It works',
     tests: [
-      { id: 't1', title: 'logs in', status: 'passed', steps: [
-        { title: 'land', caption: 'Landing page', shot: 'login/01-landing.png', status: 'passed' },
-        { title: 'submit', shot: 'login/02-submit.png' },
-      ] },
+      {
+        id: 't1',
+        title: 'logs in',
+        status: 'passed',
+        steps: [
+          { title: 'land', caption: 'Landing page', shot: 'login/01-landing.png', status: 'passed' },
+          { title: 'submit', shot: 'login/02-submit.png' },
+        ],
+      },
       { id: 't2', title: 'rejects bad creds', status: 'failed', error: 'boom', steps: [] },
       { id: 't3', title: 'skips 2fa', status: 'skipped', steps: [] },
     ],

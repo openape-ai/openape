@@ -19,7 +19,8 @@ const newsletters = view.pods.find(pod => pod.name === 'Newsletter-Prüfung')!
 const options = [{ key: 'keep', title: 'Keep for review' }, { key: 'newsletter', title: 'Newsletter candidate' }, { key: 'invoice', title: 'Invoice review' }, { key: 'reply', title: 'Reply preview' }]
 /** The 17 owner questions in the order they were asked. */
 export const domain: DomainOverview = {
-  namespaces: [], operations: [],
+  namespaces: [],
+  operations: [],
   questions: [...choiceEvents].sort((a, b) => Date.parse(a[6]) - Date.parse(b[6])).map(recorded => ({ id: `${recorded[0]}-0000-4000-8000-000000000000`.slice(0, 36), podId: classification.id, namespace: 'delta-mind/mail/owner-answers', key: recorded[0], title: 'Review uncertain mail', body: String(choicePayload(recorded).subject), options, data: { sender: recorded[2], category: recorded[4], confidence: recorded[5] }, createdAt: Date.parse(recorded[6]) })),
   approvals: [
     { id: '00000000-0000-4000-8000-0000000000a1', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n1', title: 'Spring sale at Shop', description: 'Newsletter: the sender offers an unsubscribe link', link: 'https://shop.example/newsletter/spring', state: 'requested', reason: null, batchId: 'batch-1', batchUrl: 'https://id.openape.ai/grant-batch?id=1', updatedAt: view.at },

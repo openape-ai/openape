@@ -45,7 +45,10 @@ export default defineEventHandler(async (event) => {
       throw createProblemError({ status: 410, title: 'Invite has no uses remaining' })
     }
     await db.insert(companyMembers).values({
-      companyId: invite.companyId, userEmail: caller.email, role: invite.grantRole, joinedAt: now,
+      companyId: invite.companyId,
+      userEmail: caller.email,
+      role: invite.grantRole,
+      joinedAt: now,
     })
     await db.update(companyInvites).set({ usedCount: invite.usedCount + 1 }).where(eq(companyInvites.id, invite.id)).run()
     return { scope: 'company', company_id: invite.companyId, role: invite.grantRole, already_member: false }
@@ -69,7 +72,10 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 410, title: 'Invite has no uses remaining' })
   }
   await db.insert(projectMembers).values({
-    projectId: invite.projectId, userEmail: caller.email, role: invite.grantRole, joinedAt: now,
+    projectId: invite.projectId,
+    userEmail: caller.email,
+    role: invite.grantRole,
+    joinedAt: now,
   })
   await db.update(projectInvites).set({ usedCount: invite.usedCount + 1 }).where(eq(projectInvites.id, invite.id)).run()
   return { scope: 'project', project_id: invite.projectId, role: invite.grantRole, already_member: false }

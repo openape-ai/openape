@@ -36,11 +36,27 @@ async function identity(email: string) {
 beforeAll(async () => {
   mkdirSync(artifacts, { recursive: true })
   idp = await startIdp({ managementToken, ddisaMockRecords: { 'reports.test': { version: 'ddisa1', idp: 'https://idp.reports.test', mode: 'open' } } })
-  app = await startServer({ cwd: root, readyPath: '/api/health', timeoutMs: 180000, env: ({ url }) => ({
-    NUXT_HTML_PUBLISHING_ENABLED: 'true', NUXT_PLANS_CONSOLIDATED: 'true', NUXT_PLANS_INVITE_SECRET: 'synthetic-plans-invite-secret-at-least-32', NUXT_IGNORE_LOCK: '1', NUXT_TURSO_URL: `file:${join(makeTempDir('html-e2e-'), 'reports.db')}`, NUXT_OPENAPE_SP_SESSION_SECRET: 'html-e2e-secret-at-least-32-characters-long', NUXT_OPENAPE_SP_CLIENT_ID: new URL(url).host, NUXT_FALLBACK_IDP_URL: idp.url, NUXT_PUBLIC_URL: url, NUXT_BRIEFING_URL: url,
-    NUXT_HTML_CONTENT_ORIGIN: url.replace('127.0.0.1', 'localhost'), NUXT_PUBLIC_HTML_CONTENT_ORIGIN: url.replace('127.0.0.1', 'localhost'),
-    DDISA_MOCK_RECORDS: JSON.stringify({ 'reports.test': { version: 'ddisa1', idp: idp.url, mode: 'open' } }), OPENAPE_SP_ALLOW_INSECURE_IDP: '1',
-  }) })
+  app = await startServer({
+    cwd: root,
+    readyPath: '/api/health',
+    timeoutMs: 180000,
+    env: ({ url }) => ({
+      NUXT_HTML_PUBLISHING_ENABLED: 'true',
+      NUXT_PLANS_CONSOLIDATED: 'true',
+      NUXT_PLANS_INVITE_SECRET: 'synthetic-plans-invite-secret-at-least-32',
+      NUXT_IGNORE_LOCK: '1',
+      NUXT_TURSO_URL: `file:${join(makeTempDir('html-e2e-'), 'reports.db')}`,
+      NUXT_OPENAPE_SP_SESSION_SECRET: 'html-e2e-secret-at-least-32-characters-long',
+      NUXT_OPENAPE_SP_CLIENT_ID: new URL(url).host,
+      NUXT_FALLBACK_IDP_URL: idp.url,
+      NUXT_PUBLIC_URL: url,
+      NUXT_BRIEFING_URL: url,
+      NUXT_HTML_CONTENT_ORIGIN: url.replace('127.0.0.1', 'localhost'),
+      NUXT_PUBLIC_HTML_CONTENT_ORIGIN: url.replace('127.0.0.1', 'localhost'),
+      DDISA_MOCK_RECORDS: JSON.stringify({ 'reports.test': { version: 'ddisa1', idp: idp.url, mode: 'open' } }),
+      OPENAPE_SP_ALLOW_INSECURE_IDP: '1',
+    }),
+  })
   base = app.url; content = base.replace('127.0.0.1', 'localhost')
   const first = await identity(owner); ownerToken = first.token; ownerRaw = first.raw; readerToken = (await identity(reader)).token
   browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true })

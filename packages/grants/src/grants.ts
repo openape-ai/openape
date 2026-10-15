@@ -287,8 +287,7 @@ export async function createDelegation(
 
 function cliDetails(details?: unknown[]): OpenApeCliAuthorizationDetail[] {
   return (details ?? []).filter((d): d is OpenApeCliAuthorizationDetail =>
-    typeof d === 'object' && d !== null && (d as Record<string, unknown>).type === 'openape_cli',
-  )
+    typeof d === 'object' && d !== null && (d as Record<string, unknown>).type === 'openape_cli')
 }
 
 /**
@@ -414,8 +413,7 @@ export async function approveGrantWithWidening(
     // constraint — it would force argv-hash enforcement at runtime, which
     // cannot pass when the grant no longer binds a specific command.
     const selectorRemoved = original.resource_chain.some((ref, i) =>
-      ref.selector && !widened.resource_chain[i]?.selector,
-    )
+      ref.selector && !widened.resource_chain[i]?.selector)
     const constraints = selectorRemoved ? undefined : original.constraints
     return {
       ...original,

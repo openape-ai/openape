@@ -20,7 +20,9 @@ for (const shell of shells) {
       symlinkSync(process.execPath, join(bin, 'node'))
       writeFileSync(join(cwd, '.nvmrc'), `${process.versions.node}\n`)
       const result = spawnSync(shell, ['-f', '-c', '. "$1" || exit; command -v node; node --version', 'test', script], {
-        cwd, encoding: 'utf8', timeout: 5000,
+        cwd,
+        encoding: 'utf8',
+        timeout: 5000,
         env: { ...process.env, NVM_DIR: join(cwd, 'nvm'), OPENAPE_NODE_BIN: '' },
       })
       assert.equal(result.status, 0, result.stderr)
@@ -35,7 +37,9 @@ for (const shell of shells) {
       execFileSync('git', ['init', '-q', '--initial-branch=main', cwd])
       writeFileSync(join(cwd, '.nvmrc'), '0.0.1\n')
       const result = spawnSync(shell, ['-f', '-c', 'before=$PATH; . "$1"; status_code=$?; test "$PATH" = "$before" || exit 99; exit "$status_code"', 'test', script], {
-        cwd, encoding: 'utf8', timeout: 5000,
+        cwd,
+        encoding: 'utf8',
+        timeout: 5000,
         env: { ...process.env, OPENAPE_NODE_BIN: fileURLToPath(new URL('.', `file://${process.execPath}`)) },
       })
       assert.equal(result.status, 1, result.stderr)

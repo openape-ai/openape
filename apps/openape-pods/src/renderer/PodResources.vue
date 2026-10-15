@@ -26,7 +26,9 @@ export default defineComponent({
     catch (error) { this.error = error instanceof Error ? error.message : 'Could not load resources' }
   },
   methods: {
-    t, diagnostic, label,
+    t,
+    diagnostic,
+    label,
     async act(command: ResourceCommand) {
       this.busy = true; this.error = ''
       try { this.state = await this.access.api.resources(command); if (this.state.sandbox) this.sandbox = this.state.sandbox }

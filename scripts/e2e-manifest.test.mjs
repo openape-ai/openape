@@ -93,7 +93,10 @@ test('the CLI accepts an unaffected suite only with --allow-empty', () => {
   try {
     for (const allowEmpty of [false, true]) {
       const result = spawnSync(process.execPath, [
-        script, '--out', output, ...(allowEmpty ? ['--allow-empty'] : []),
+        script,
+        '--out',
+        output,
+        ...(allowEmpty ? ['--allow-empty'] : []),
         `core=${join(directory, 'missing.json')}`,
       ], { encoding: 'utf8', timeout: 5000 })
       assert.equal(result.status, allowEmpty ? 0 : 1, result.stderr)

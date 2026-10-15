@@ -73,7 +73,11 @@ describe('controlled briefing data', () => {
     expect(validateBriefing(value).title).toBe(value.title)
   })
   it.each([
-    { owner: 'victim@example.com' }, { visibility: 'shared' }, { type: 'test' }, { editionDate: '2026-02-30' }, { generatedAt: '2026-09-28T05:00:00Z' },
+    { owner: 'victim@example.com' },
+    { visibility: 'shared' },
+    { type: 'test' },
+    { editionDate: '2026-02-30' },
+    { generatedAt: '2026-09-28T05:00:00Z' },
     { importantItems: [{ id: 'x', title: 'X', summary: 'Y', priority: 'high', sourceIds: ['unknown'] }] },
     { nextActions: [{ id: 'x', text: 'X', sourceIds: [], url: 'javascript:alert(1)' }] },
     { nextActions: [{ id: 'x', text: 'X', sourceIds: [], url: 'https://user:password@example.com/' }] },

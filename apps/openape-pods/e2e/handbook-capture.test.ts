@@ -74,8 +74,10 @@ it('handbook: captures current native screens from isolated synthetic data witho
       await page.getByRole('row', { name: /Sample folder review/ }).click()
       await page.getByRole('button', { name: title('Open page', 'Seite öffnen'), exact: true }).click()
       for (const [en, de, name] of [
-        ['Overview', 'Übersicht', 'overview'], ['Script', 'Skript', 'script'],
-        ['Permissions', 'Berechtigungen', 'permissions'], ['History', 'Historie', 'history'],
+        ['Overview', 'Übersicht', 'overview'],
+        ['Script', 'Skript', 'script'],
+        ['Permissions', 'Berechtigungen', 'permissions'],
+        ['History', 'Historie', 'history'],
       ]) {
         await page.getByRole('tab', { name: title(en!, de!), exact: true }).click()
         await page.getByRole('tabpanel').waitFor()

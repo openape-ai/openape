@@ -8,7 +8,14 @@ import { applyLanguage } from '../../src/renderer/i18n'
 
 afterEach(() => applyLanguage('en'))
 const manifest = {
-  format: 'openape-package', version: 1, package: { key: 'fixture', revision: 2, title: 'Morning briefing', description: 'Reads mail and summarizes it' }, requiredFeatures: ['portable_aliases_v1'], entry: { kind: 'pod', key: 'reader' }, applications: [], files: [], contentSha256: 'a'.repeat(64),
+  format: 'openape-package',
+  version: 1,
+  package: { key: 'fixture', revision: 2, title: 'Morning briefing', description: 'Reads mail and summarizes it' },
+  requiredFeatures: ['portable_aliases_v1'],
+  entry: { kind: 'pod', key: 'reader' },
+  applications: [],
+  files: [],
+  contentSha256: 'a'.repeat(64),
   pods: [{ key: 'reader', title: 'Reader', description: '', script: 'pods/reader/run.mjs', packages: null, contract: null, requestedCapabilities: ['tool.api.request'], access: [{ kind: 'http', alias: 'api', origin: 'input_2', methods: ['GET'], authentication: null }], inputs: [{ key: 'input_1', label: 'greeting', description: 'Shown first', kind: 'string', required: true, sharingGroup: null }, { key: 'input_2', label: 'api origin', description: '', kind: 'string', required: true, sharingGroup: null, default: 'https://api.example.test' }], bindings: [{ alias: 'greeting', input: 'input_1' }], applications: [], assets: [] }],
   compositions: [],
 } as unknown as PortableImportView['manifest']

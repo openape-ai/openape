@@ -74,9 +74,17 @@ export function parseInboxDecision(value: unknown): InboxDecision {
     link = { title: text(entry.title, inboxDecisionLimits.option), url: url.href }
   }
   return {
-    sourceId: item.sourceId, type: item.type as InboxDecisionType, digest: item.digest, podId: item.podId as string | null,
-    podName: item.podName === null ? null : text(item.podName, 200), ...(item.podTags === undefined ? {} : { podTags: parseInboxTags(item.podTags) }), title: text(item.title, inboxDecisionLimits.title), body: text(item.body, inboxDecisionLimits.body, true),
-    authority: item.authority as InboxAuthority, options, link,
+    sourceId: item.sourceId,
+    type: item.type as InboxDecisionType,
+    digest: item.digest,
+    podId: item.podId as string | null,
+    podName: item.podName === null ? null : text(item.podName, 200),
+    ...(item.podTags === undefined ? {} : { podTags: parseInboxTags(item.podTags) }),
+    title: text(item.title, inboxDecisionLimits.title),
+    body: text(item.body, inboxDecisionLimits.body, true),
+    authority: item.authority as InboxAuthority,
+    options,
+    link,
   }
 }
 

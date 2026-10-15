@@ -99,8 +99,10 @@ export function parseWorkspaceAction(value: Record<string, unknown>): Record<str
   if (Object.keys(value).some(key => !['action', 'query'].includes(key))) throw new Error('Invalid workspace action fields')
   const query = centralObject(value.query)
   const fields: Record<string, string[]> = {
-    inventory: ['type'], read: ['type', 'runtimeId', 'podId', 'view', 'runId', 'offset', 'selection'],
-    submit: ['type', 'runtimeId', 'revision', 'id', 'command'], operation: ['type', 'id'],
+    inventory: ['type'],
+    read: ['type', 'runtimeId', 'podId', 'view', 'runId', 'offset', 'selection'],
+    submit: ['type', 'runtimeId', 'revision', 'id', 'command'],
+    operation: ['type', 'id'],
     reconcile: ['type', 'id', 'applied', 'evidence'],
   }
   if (typeof query.type !== 'string' || !Object.hasOwn(fields, query.type) || Object.keys(query).some(key => !fields[query.type as string]!.includes(key))) throw new Error('Invalid workspace query')

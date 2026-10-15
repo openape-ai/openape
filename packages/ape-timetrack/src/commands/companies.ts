@@ -11,7 +11,9 @@ const list = defineCommand({
   },
   async run({ args }) {
     const rows = await apiCall<Array<{ id: string, name: string, role: string | null }>>(
-      'GET', '/api/companies', { endpoint: args.endpoint },
+      'GET',
+      '/api/companies',
+      { endpoint: args.endpoint },
     )
     if (args.json) { printJson(rows); return }
     if (rows.length === 0) { info('No companies. Create one: ape-timetrack companies new --name "..."'); return }
@@ -28,7 +30,9 @@ const create = defineCommand({
   },
   async run({ args }) {
     const c = await apiCall<{ id: string, name: string }>(
-      'POST', '/api/companies', { endpoint: args.endpoint, body: { name: args.name } },
+      'POST',
+      '/api/companies',
+      { endpoint: args.endpoint, body: { name: args.name } },
     )
     if (args.json) { printJson(c); return }
     printLine(`${c.id}  ${c.name}  (owner)`)
@@ -64,7 +68,9 @@ const invite = defineCommand({
     if (args['expires-in']) body.expires_in = args['expires-in']
     if (args.note) body.note = args.note
     const r = await apiCall<{ url: string, role: string, expires_at: number }>(
-      'POST', `/api/companies/${args.id}/invite`, { endpoint: args.endpoint, body },
+      'POST',
+      `/api/companies/${args.id}/invite`,
+      { endpoint: args.endpoint, body },
     )
     if (args.json) { printJson(r); return }
     printLine(r.url)
@@ -83,7 +89,9 @@ export const companiesCommand = defineCommand({
     // citty runs the parent when no subcommand matched. Default = list.
     if (rawArgs.some(a => ['list', 'new', 'use', 'invite'].includes(a))) return
     const rows = await apiCall<Array<{ id: string, name: string, role: string | null }>>(
-      'GET', '/api/companies', { endpoint: args.endpoint },
+      'GET',
+      '/api/companies',
+      { endpoint: args.endpoint },
     )
     if (args.json) { printJson(rows); return }
     if (rows.length === 0) { info('No companies. Create one: ape-timetrack companies new --name "..."'); return }

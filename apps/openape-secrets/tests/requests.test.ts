@@ -55,9 +55,21 @@ function event(body?: unknown, params?: Record<string, string>) {
 describe('the stored view can never carry the envelope', () => {
   it('drops every box_* column, even when they are populated', () => {
     const view = toRequestView({
-      id: 'r1', ownerEmail: 'o@x', requester: 'a@x', consumerId: 'c1', fieldName: 'TOKEN',
-      purpose: '', status: 'filled', expiresAt: 0, createdAt: 0, filledAt: 1, fetchedAt: null,
-      boxEpk: 'EPK', boxSalt: 'SALT', boxIv: 'IV', boxCt: 'CIPHERTEXT',
+      id: 'r1',
+      ownerEmail: 'o@x',
+      requester: 'a@x',
+      consumerId: 'c1',
+      fieldName: 'TOKEN',
+      purpose: '',
+      status: 'filled',
+      expiresAt: 0,
+      createdAt: 0,
+      filledAt: 1,
+      fetchedAt: null,
+      boxEpk: 'EPK',
+      boxSalt: 'SALT',
+      boxIv: 'IV',
+      boxCt: 'CIPHERTEXT',
     })
     const dumped = JSON.stringify(view)
     for (const secret of ['EPK', 'SALT', 'IV', 'CIPHERTEXT']) expect(dumped).not.toContain(secret)

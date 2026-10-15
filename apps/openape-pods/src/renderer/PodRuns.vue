@@ -34,7 +34,13 @@ export default defineComponent({
   },
   beforeUnmount() { this.closed = true; if (this.timer) clearTimeout(this.timer) },
   methods: {
-    t, diagnostic, label, dateTime, runHeadline, runFailure, runResult,
+    t,
+    diagnostic,
+    label,
+    dateTime,
+    runHeadline,
+    runFailure,
+    runResult,
     scheduleRefresh() {
       if (this.closed) return
       this.timer = setTimeout(async () => {

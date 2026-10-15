@@ -26,8 +26,7 @@ function buildCsp(nonce: string): string {
 function stampNonce(chunks: string[], nonce: string): string[] {
   // Add nonce only to inline scripts still missing one.
   return chunks.map(html =>
-    html.replace(/<script(?![^>]*\snonce=)/g, `<script nonce="${nonce}"`),
-  )
+    html.replace(/<script(?![^>]*\snonce=)/g, `<script nonce="${nonce}"`))
 }
 
 export default defineNitroPlugin((nitroApp) => {

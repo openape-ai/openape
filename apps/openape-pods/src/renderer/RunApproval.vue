@@ -11,7 +11,8 @@ export default defineComponent({
   setup() { return { hostBridge: useHostBridge(), access: usePodAccess() } },
   data() { return { busy: false, error: '' } },
   methods: {
-    t, diagnostic,
+    t,
+    diagnostic,
     async open(approval: RunApproval & { runId: string }) {
       this.busy = true; this.error = ''
       try { await this.hostBridge.runs({ type: 'openApproval', podId: this.podId, runId: approval.runId, grantId: approval.grantId }) }

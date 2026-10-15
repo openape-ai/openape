@@ -31,14 +31,23 @@ async function idp(options: { brokered?: typeof brokered } = {}) {
   const podId = randomUUID()
   const keys = generateKeyPairSync('ed25519'); const foreign = generateKeyPairSync('ed25519')
   const state = {
-    authorizations: [] as Record<string, unknown>[], reads: 0, keySets: 0, consumes: [] as string[], approvals: [] as string[],
+    authorizations: [] as Record<string, unknown>[],
+    reads: 0,
+    keySets: 0,
+    consumes: [] as string[],
+    approvals: [] as string[],
     // What the IdP decides for a command: the newest grant of this requester per argv hash.
     grants: new Map<string, { id: string, status: string }>(),
     initial: 'approved' as Decision,
     // The IdP's resolution of exactly this call, which the command token carries (IdP PR 417): action per argv.
     resolve: (_argv: string[]) => ['read'],
     // The covering grant: a whole-program grant over reads and writes, which never decides the classification.
-    grantActions: ['read', 'edit'], grantType: 'always', lifetime: 300, tamper: {} as Tamper, unavailable: 0, problem: undefined as unknown,
+    grantActions: ['read', 'edit'],
+    grantType: 'always',
+    lifetime: 300,
+    tamper: {} as Tamper,
+    unavailable: 0,
+    problem: undefined as unknown,
   }
   let origin = ''
   const token = async (grantId: string, body: { program: { name: string, sha256: string }, argv: string[] }) => {

@@ -10,8 +10,13 @@ const row = {
   purpose: 'Bot for the OpenApe operator',
   status: 'requested' as const,
   expiresAt: 0,
-  boxEpk: null, boxSalt: null, boxIv: null, boxCt: null,
-  createdAt: 0, filledAt: null, fetchedAt: null,
+  boxEpk: null,
+  boxSalt: null,
+  boxIv: null,
+  boxCt: null,
+  createdAt: 0,
+  filledAt: null,
+  fetchedAt: null,
 }
 
 describe('what the owner reads on their phone', () => {

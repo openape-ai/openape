@@ -15,7 +15,10 @@ export default defineComponent({
   watch: { remoteRevision() { if (!this.busy && !this.error && this.editState() === this.saved) void this.load() }, 'pod.id': { immediate: true, handler() { void this.load() } } },
   beforeUnmount() { if (this.access.remote && this.editState() === this.saved) scheduleDrafts.delete(this.access.key(this.pod.id)); else if (this.access.remote) scheduleDrafts.set(this.access.key(this.pod.id), { kind: this.kind, minutes: this.minutes, time: this.time, timezone: this.timezone, enabled: this.enabled, saved: this.saved }) },
   methods: {
-    t, diagnostic, label, dateTime,
+    t,
+    diagnostic,
+    label,
+    dateTime,
     editState() { return JSON.stringify([this.kind, this.minutes, this.time, this.timezone, this.enabled]) },
     async load() {
       this.busy = true; this.error = ''

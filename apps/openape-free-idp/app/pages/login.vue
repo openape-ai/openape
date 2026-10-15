@@ -36,8 +36,7 @@ const { login, error: webauthnError, loading } = useWebAuthn()
 const { fetchUser } = useIdpAuth()
 
 const noPasskeyForDomain = computed(() =>
-  /no passkeys?/i.test(webauthnError.value ?? ''),
-)
+  /no passkeys?/i.test(webauthnError.value ?? ''))
 
 async function finishSignIn() {
   await fetchUser()

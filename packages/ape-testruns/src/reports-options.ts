@@ -7,8 +7,15 @@ const string = (description: string, multiple = false): Option => ({ type: 'stri
 const flag = (description: string): Option => ({ type: 'boolean', description })
 const globalOptions = { help: { ...flag('Show root or command help'), short: 'h' }, json: flag('Structured stdout; errors on stderr'), quiet: flag('Suppress progress, not results or errors'), endpoint: string('Reports service; default https://report.openape.ai; APE_REPORTS_ENDPOINT') }
 const metadataOptions = {
-  title: string('Override title; final title must be nonempty'), language: string('Set an HTML language tag'), category: string('Set one optional category'), tag: string('Repeatable; replace the complete tag list', true), meta: string('Repeatable namespaced key=value; override one text field', true),
-  'clear-category': flag('Remove the category'), 'clear-tags': flag('Remove all tags'), 'clear-language': flag('Remove language metadata'), 'unset-meta': string('Repeatable; remove a metadata key', true),
+  title: string('Override title; final title must be nonempty'),
+  language: string('Set an HTML language tag'),
+  category: string('Set one optional category'),
+  tag: string('Repeatable; replace the complete tag list', true),
+  meta: string('Repeatable namespaced key=value; override one text field', true),
+  'clear-category': flag('Remove the category'),
+  'clear-tags': flag('Remove all tags'),
+  'clear-language': flag('Remove language metadata'),
+  'unset-meta': string('Repeatable; remove a metadata key', true),
 }
 const audiences = { private: flag('Owner only'), public: flag('Anyone can read all versions without login'), reader: string('Repeatable verified-email reader; replaces the reader list', true), team: string('Existing team ID') }
 const lifetimes = { permanent: flag('No automatic expiry'), 'expires-in': string('Positive integer m/h/d, resolved once by the server'), 'expires-at': string('Future RFC3339 timestamp with timezone') }
@@ -41,10 +48,7 @@ export function reportsHelp(command?: string) {
   const selected = command ? reportsCommands[command] : undefined
   if (command && !selected) throw new ReportError('USAGE', `Unknown command: ${command}`)
   const options = { ...globalOptions, ...(selected?.options ?? { version: flag('Show executable version; root command only') }) }
-  return [selected?.description ?? 'Publish one HTML file. Read, organize and version reports.', '', `USAGE  ape-reports ${command ?? '<command>'} ${selected?.usage ?? '[options]'}`, '',
-    ...(selected ? [] : ['COMMANDS', ...Object.entries(reportsCommands).map(([name, definition]) => `  ${name.padEnd(14)} ${definition.description}`), '']),
-    'OPTIONS', ...Object.entries(options).map(([name, option]) => `  --${name}${option.type === 'string' ? ' <value>' : ''}${option.multiple ? '...' : ''}  ${option.description}`), '', selected?.details ?? 'Run apes login <email> once; ape-reports uses the existing shared session. Start with preview ./plan.html, then publish ./plan.html --category Plans --key plan-v1. No command sends notifications.',
-  ].join('\n')
+  return [selected?.description ?? 'Publish one HTML file. Read, organize and version reports.', '', `USAGE  ape-reports ${command ?? '<command>'} ${selected?.usage ?? '[options]'}`, '',    ...(selected ? [] : ['COMMANDS', ...Object.entries(reportsCommands).map(([name, definition]) => `  ${name.padEnd(14)} ${definition.description}`), '']),    'OPTIONS', ...Object.entries(options).map(([name, option]) => `  --${name}${option.type === 'string' ? ' <value>' : ''}${option.multiple ? '...' : ''}  ${option.description}`), '', selected?.details ?? 'Run apes login <email> once; ape-reports uses the existing shared session. Start with preview ./plan.html, then publish ./plan.html --category Plans --key plan-v1. No command sends notifications.'].join('\n')
 }
 export function parseReportsArgs(argv: string[]) {
   if (!argv.length || argv[0] === '--help' || argv[0] === '-h') return { command: '', positionals: [], values: { help: true } }
