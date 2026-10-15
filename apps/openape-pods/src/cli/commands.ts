@@ -62,7 +62,8 @@ async function runPod(client: CliClient, pod: StoredPod, io: CliIO): Promise<num
       cancelled = true
       try {
         await client.request({ channel: 'runs', command: { type: 'cancel', podId: pod.id, runId } })
-      } catch (error) {
+      }
+      catch (error) {
         const latest = parseRunView(await client.request({ channel: 'runs', command: { type: 'list', podId: pod.id, runId, after } }))
         if (!latest.runs.some(item => item.id === runId && item.state !== 'running')) throw error
       }
