@@ -10,11 +10,12 @@
 
 ## Parallel UI verification — issue 1481
 
-- Patrick approved proposal revision 1 on October 15 and authorized three sessions, coordination messages and sequential merges. Current private Plan: https://report.openape.ai/d/01M4ZB1XK5995C4Z79BDPKTD7R?v=3.
-- Shared preparation PR 435 merged as `95d1083abfb9de07ad8edf5bb16c71e06207c5fd`. Its 52-workspace local gate passed; additional Opus review could not run because Claude OAuth expired. All three area installs and doctor checks passed independently.
-- Git/Issues #1484, Inbox/PWA #1485 and Reports #1486 run from that frozen SHA in separate worktrees and user-owned chats. Exact ownership, branches, chat IDs, ports and heavy-check slot history: `.claude/plans/ui-test-migration/launch-ledger.md`.
-- Coordinator branch `feature/issue-1481-ui-test-integration` owns shared metadata, plan updates and merges. Area acceptance and final integration remain open. Existing assertions may be retired only after replacement and counter-proof; real system boundaries stay integrated.
-- Troop is excluded. No deployment or CI reactivation. Actual merge receipts and evidence belong on the native PRs/issues.
+- Patrick approved proposal revision 1 on October 15 and authorized three sessions, coordination messages and sequential merges. Current private Plan: https://report.openape.ai/d/01M4ZB1XK5995C4Z79BDPKTD7R. The published Plan and native issue receipts hold the latest integration status after this repository snapshot.
+- Shared preparation PR 435 merged as `95d1083a`; all three independent installs and doctor checks passed. Shared fixture PR 437 merged as `b248ac15`, fixing invalid high HMR ports with a real regression and IdP readiness proof. It incorporates the separate legacy extraction without restoring retired workspaces.
+- Git/Issues PR 439 merged as `5cba821b`, issue 1484 closed: 13 browser cases, 12 real integration cases, 197 unit tests, production build and normal affected gate passed. Inbox/PWA #1485 and Reports #1486 are in final acceptance. Exact ownership, branches, chat IDs and heavy-check history: `.claude/plans/ui-test-migration/launch-ledger.md`.
+- Coordinator branch `feature/issue-1481-ui-test-closeout` owns shared documentation and sequential reviews/merges. Central documentation joins an implementing area PR; final merge receipts do not require a receipt-only PR. Every removed assertion needs replacement and counter-proof; real system boundaries remain integrated.
+- Inbox large-text fixtures now preserve production German language and real counters. Actual label/content visibility passes with unchanged production CSS; speculative padding/label changes were removed.
+- Additional Opus review could not start because Claude OAuth expired; no independent review result is claimed. Troop is excluded. No deployment or CI reactivation.
 
 
 ## Affected selection and local gates — issue 1480
