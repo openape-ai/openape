@@ -73,6 +73,8 @@ export function demoState(scenario: DemoScenario, at: number): DemoState {
       if (archived) view.scheduling = { ...view.scheduling, enabled: false, nextAt: null }
       state.views[pod.id] = view
     })
+    state.domain.unknownEffects = [{ actionKey: 'b'.repeat(64), attempt: 1, podId: demoId(6), runId: state.views[demoId(6)]!.runs.runs[0]!.id, operation: 'mail.send', createdAt: at - 3600000 + 20000,
+      intent: { to: 'team@contoso.invalid', subject: 'Wochenbericht KW 41' } }]
   }
   state.domain.questions = Array.from({ length: 4 }, (_, index) => ({
     id: `demo-question-${index + 1}`, podId: demoId(index < 2 ? 1 : 2), namespace: 'demo/mail', key: `message-${index + 1}`,
@@ -102,7 +104,10 @@ export function demoMap(state: DemoState, at: number): MapView {
       tags: { own: state.tags[pod.id] ?? [], revision: pod.revision },
     }
   })
+  // Same rules as the worker's map view: settled run states, and paused counts every Pod without a running schedule.
+  const settled = ({ id }: { id: string }) => state.views[id]!.runs.runs.find(run => run.finishedAt !== null)?.state ?? ''
+  const active = pods.filter(pod => pod.lifecycle === 'active' && pod.schedule.enabled).length
   return { at, window: { from: at - 86400000, to: at }, pods, systems: [{ id: 'demo-api', kind: 'service', name: 'Demo API', how: 'Read' }],
     edges: [...pods.map(pod => ({ from: 'demo-api', to: pod.id, type: 'read' as const, channel: null, flow: 12 })), ...(pods.length ? [{ from: demoId(1), to: demoId(5), type: 'data' as const, channel: 'demo/1/results', flow: 12 }] : [])],
-    kpis: { active: pods.filter(pod => pod.lifecycle === 'active').length, paused: pods.filter(pod => pod.lifecycle === 'paused').length, degraded: pods.filter(pod => pod.lifecycle !== 'archived' && pod.lastRun?.state === 'failed').map(pod => ({ podId: pod.id, reason: pod.lastRun!.summary })), decisions: [...state.domain.questions.map(question => ({ podId: question.podId, kind: 'question' as const, title: question.title, count: 1 })), ...state.domain.approvals.map(approval => ({ podId: approval.podId, kind: 'approval' as const, title: approval.title, count: 1 }))], unknownDeliveries: 0 } }
+    kpis: { active, paused: pods.length - active, degraded: pods.filter(pod => pod.lifecycle !== 'archived' && ['failed', 'completedWithGaps'].includes(settled(pod))).map(pod => ({ podId: pod.id, reason: settled(pod) })), decisions: [...state.domain.questions.map(question => ({ podId: question.podId, kind: 'question' as const, title: question.title, count: 1 })), ...state.domain.approvals.map(approval => ({ podId: approval.podId, kind: 'approval' as const, title: approval.title, count: 1 }))], unknownDeliveries: state.domain.unknownEffects.length } }
 }
