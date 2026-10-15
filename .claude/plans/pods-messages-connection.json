@@ -10,7 +10,16 @@
     "approach": "Read and mark messages through new bounded relay endpoints, validated in one shared contract.",
     "outcome": "A notify from a Pod appears in the desktop and browser tab, and marking it read is visible on the phone."
   },
-  "status": "draft",
+  "status": "active",
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-15",
+    "reference": "Owner in the implementation session after reviewing revision 4: \"ja - du kannst mit der umsetzung starten\"",
+    "target": {
+      "revision": 4
+    },
+    "scope": "Implementation of revision 4 on issue 1487 (https://repos.openape.ai/patrick/monorepo/issues/1487)."
+  },
   "revision": 4,
   "context": "The UI was iterated in the Vite demo mode (apps/openape-pods docs/ui-development.md) on branch worktree/openape-pods-ui-redesign-7b2382. Owner decisions in that session: first build the UI with demo data, show messages as a third tab next to Automatisierungen and Entscheidungen, and connect real data afterwards in a planned step. The existing inbox plan (Reports document 01M4B5Q1Q0W6C97A4ZXTFZ5WJR, issue 1446) makes the relay inbox authoritative for messages: they stay readable while the Mac is offline, carry unread state, and reading a message never decides anything.",
   "scope": [
@@ -31,7 +40,7 @@
       "id": "relay",
       "title": "Relay message endpoints",
       "goal": "Bounded owner and runtime access to messages without touching decisions.",
-      "status": "planned",
+      "status": "done",
       "steps": [
         "Add InboxStore.messages(owner, { archived, before }) and InboxStore.markMessage(owner, id, change) in apps/openape-pods-relay/server/utils/inbox-store.ts; markMessage sets read, archived or deleted (the existing tombstone, as in the phone inbox) and refuses decisions and already deleted items.",
         "Add GET /api/workspace/v1/messages and POST /api/workspace/v1/messages (mark) with workspaceOwner, including the existing origin check for non-GET.",
@@ -42,13 +51,14 @@
         "Marking through the new endpoints changes the same items the phone inbox reads, including the badge count.",
         "A message deleted in the workspace disappears from the phone inbox after its next sync and never reappears."
       ],
-      "rollback": "The endpoints are additive; remove the routes and store methods. No schema migration is involved."
+      "rollback": "The endpoints are additive; remove the routes and store methods. No schema migration is involved.",
+      "proof": "InboxStore.messages() plus POST /api/workspace/v1/messages and POST /api/runtime/v1/inbox/messages on PR 448 (head 7c7cb7cf). Store, controller and e2e refusal tests pass; Test Run: https://report.openape.ai/d/01M4ZJ5P0Q9B6CA57CGM35D2HP?v=1"
     },
     {
       "id": "contract",
       "title": "Shared message contract",
       "goal": "Every host validates messages at its trust boundary with one parser.",
-      "status": "planned",
+      "status": "done",
       "steps": [
         "Add parseInboxMessages (page with next cursor) and parseInboxMessagesCommand to contracts/inbox.ts, extending InboxMessagesCommand with an optional archived filter and before cursor.",
         "Enforce the notify limits: title up to 300 characters, body up to 64 KiB, at most five https links without credentials, normalized tags."
@@ -56,13 +66,14 @@
       "acceptance": [
         "Contract tests reject unknown fields, non-https or credentialed links, oversize text and decision items."
       ],
-      "rollback": "Revert the parser; the demo keeps its local data."
+      "rollback": "Revert the parser; the demo keeps its local data.",
+      "proof": "parseInboxMessage, parseInboxMessagePage and parseInboxMessagesCommand in contracts/inbox.ts, used by relay routes, desktop main, preload, browser client and demo."
     },
     {
       "id": "desktop",
       "title": "Desktop connection",
       "goal": "The registered desktop shows the account's messages from the relay.",
-      "status": "planned",
+      "status": "active",
       "steps": [
         "Add a messages channel to the IPC channel list, the preload bridge (parsing results) and the main process handler.",
         "Add RemoteController.messages(command) using the existing signed POST; return null while the desktop is not registered with an account.",
@@ -72,13 +83,14 @@
         "adapter-contracts tests cover the IPC client with a transport double, including not-registered (no tab) and relay failure (last list kept, error shown).",
         "The packaged desktop shows a real notify message and the read state reaches the phone inbox."
       ],
-      "rollback": "Remove the bridge channel; the tab disappears because the host supplies no messages."
+      "rollback": "Remove the bridge channel; the tab disappears because the host supplies no messages.",
+      "proof": "Channel, controller and shared reader implemented and tested against the real relay store. Open: packaged desktop acceptance with a real notify after the relay deployment."
     },
     {
       "id": "browser",
       "title": "Browser workspace connection",
       "goal": "The relay /workspace page shows all of the owner's messages.",
-      "status": "planned",
+      "status": "done",
       "steps": [
         "Extend browserWorkspaceClient with messages() and markMessage() for /api/workspace/v1/messages, and browserWorkspaceAccess with the messages capability.",
         "Keep messages readable while the desktop is offline, because they come from the relay, not from the runtime."
@@ -86,13 +98,14 @@
       "acceptance": [
         "Relay e2e test: a published message appears under /workspace, and marking it read changes /inbox/api/v1/badge."
       ],
-      "rollback": "Remove the client methods; the browser tab disappears."
+      "rollback": "Remove the client methods; the browser tab disappears.",
+      "proof": "Relay e2e on the built relay with real fixture IdP, signed desktop runtime and Chrome: 2/2 passed. Test Run: https://report.openape.ai/d/01M4ZJ5P0Q9B6CA57CGM35D2HP?v=1"
     },
     {
       "id": "ui",
       "title": "Finish the tab",
       "goal": "The demo-approved design handles real volumes and failures.",
-      "status": "planned",
+      "status": "done",
       "steps": [
         "Add 'Load more' with the before cursor for inbox and archive, and a stale/unavailable note that keeps the last list.",
         "Add a browser layout test for the tab (unread badge, mark read, archive, empty state, phone width) and extend demo.test.ts.",
@@ -101,7 +114,8 @@
       "acceptance": [
         "Focused browser and unit suites pass, and screenshots at desktop and phone width have been inspected."
       ],
-      "rollback": "Revert the UI commit; the endpoints stay harmless."
+      "rollback": "Revert the UI commit; the endpoints stay harmless.",
+      "proof": "Load older messages, update-error note, layout test at 390/1440 px (64/64 browser tests) and docs in docs/ui-development.md."
     }
   ],
   "decisions": [
@@ -153,7 +167,7 @@
     "pnpm --filter @openape/pods typecheck, test (workspace, adapter-contracts, i18n) and test:browser",
     "Manual end to end: a Pod sends context.notify; the message appears in the desktop and browser tab; marking it read clears the phone badge. Publish the results with screenshots as a Test Run report."
   ],
-  "handoff": "Next action: the owner approves this plan; then implement milestone relay first. The demo UI from this session is not committed yet.",
+  "handoff": "PR 448 (https://repos.openape.ai/patrick/monorepo/pulls/448) is open with green local gate, browser suite and relay e2e. Next: owner review and merge, then deploy the relay first and a signed desktop build second; finish the desktop milestone with a real notify on the packaged app.",
   "sections": [
     {
       "id": "orientation",
@@ -187,6 +201,10 @@
     {
       "date": "2026-10-15",
       "text": "Revision 4: bulk actions ask for confirmation (owner request)."
+    },
+    {
+      "date": "2026-10-15",
+      "text": "Implementation on PR 448. Deviations: one POST route per host for list and mark instead of GET plus POST (one shared handler and parser); geometry checks stay in browser layout tests per the inbox UI test migration (issue 1485)."
     }
   ],
   "translations": {
@@ -323,6 +341,11 @@
         "text": "Die Endpunkte sind additiv; Routen und Store-Methoden entfernen. Es gibt keine Schema-Migration."
       },
       {
+        "path": "milestones.0.proof",
+        "source": "InboxStore.messages() plus POST /api/workspace/v1/messages and POST /api/runtime/v1/inbox/messages on PR 448 (head 7c7cb7cf). Store, controller and e2e refusal tests pass; Test Run: https://report.openape.ai/d/01M4ZJ5P0Q9B6CA57CGM35D2HP?v=1",
+        "text": "InboxStore.messages() sowie POST /api/workspace/v1/messages und POST /api/runtime/v1/inbox/messages in PR 448 (Stand 7c7cb7cf). Store-, Controller- und E2E-Ablehnungstests laufen grün; Test Run: https://report.openape.ai/d/01M4ZJ5P0Q9B6CA57CGM35D2HP?v=1"
+      },
+      {
         "path": "milestones.1.title",
         "source": "Shared message contract",
         "text": "Gemeinsamer Mitteilungs-Contract"
@@ -351,6 +374,11 @@
         "path": "milestones.1.rollback",
         "source": "Revert the parser; the demo keeps its local data.",
         "text": "Den Parser zurücknehmen; die Demo behält ihre lokalen Daten."
+      },
+      {
+        "path": "milestones.1.proof",
+        "source": "parseInboxMessage, parseInboxMessagePage and parseInboxMessagesCommand in contracts/inbox.ts, used by relay routes, desktop main, preload, browser client and demo.",
+        "text": "parseInboxMessage, parseInboxMessagePage und parseInboxMessagesCommand in contracts/inbox.ts, genutzt von Relay-Routen, Desktop-Main, Preload, Browser-Client und Demo."
       },
       {
         "path": "milestones.2.title",
@@ -393,6 +421,11 @@
         "text": "Den Bridge-Kanal entfernen; der Tab verschwindet, weil der Host keine Mitteilungen liefert."
       },
       {
+        "path": "milestones.2.proof",
+        "source": "Channel, controller and shared reader implemented and tested against the real relay store. Open: packaged desktop acceptance with a real notify after the relay deployment.",
+        "text": "Kanal, Controller und gemeinsamer Leser sind umgesetzt und gegen den echten Relay-Store getestet. Offen: Abnahme im paketierten Desktop mit einer echten notify-Mitteilung nach dem Relay-Deployment."
+      },
+      {
         "path": "milestones.3.title",
         "source": "Browser workspace connection",
         "text": "Anbindung im Browser-Workspace"
@@ -421,6 +454,11 @@
         "path": "milestones.3.rollback",
         "source": "Remove the client methods; the browser tab disappears.",
         "text": "Die Client-Methoden entfernen; der Browser-Tab verschwindet."
+      },
+      {
+        "path": "milestones.3.proof",
+        "source": "Relay e2e on the built relay with real fixture IdP, signed desktop runtime and Chrome: 2/2 passed. Test Run: https://report.openape.ai/d/01M4ZJ5P0Q9B6CA57CGM35D2HP?v=1",
+        "text": "Relay-E2E auf dem gebauten Relay mit echtem Fixture-IdP, signierter Desktop-Runtime und Chrome: 2/2 grün. Test Run: https://report.openape.ai/d/01M4ZJ5P0Q9B6CA57CGM35D2HP?v=1"
       },
       {
         "path": "milestones.4.title",
@@ -456,6 +494,11 @@
         "path": "milestones.4.rollback",
         "source": "Revert the UI commit; the endpoints stay harmless.",
         "text": "Den UI-Commit zurücknehmen; die Endpunkte bleiben unschädlich."
+      },
+      {
+        "path": "milestones.4.proof",
+        "source": "Load older messages, update-error note, layout test at 390/1440 px (64/64 browser tests) and docs in docs/ui-development.md.",
+        "text": "Ältere Mitteilungen laden, Hinweis bei Aktualisierungsfehlern, Layout-Test bei 390/1440 px (64/64 Browser-Tests) und Doku in docs/ui-development.md."
       },
       {
         "path": "decisions.0.title",
@@ -554,8 +597,8 @@
       },
       {
         "path": "handoff",
-        "source": "Next action: the owner approves this plan; then implement milestone relay first. The demo UI from this session is not committed yet.",
-        "text": "Nächster Schritt: Der Owner gibt diesen Plan frei; danach zuerst den Meilenstein „Relay“ umsetzen. Die Demo-UI aus dieser Session ist noch nicht committet."
+        "source": "PR 448 (https://repos.openape.ai/patrick/monorepo/pulls/448) is open with green local gate, browser suite and relay e2e. Next: owner review and merge, then deploy the relay first and a signed desktop build second; finish the desktop milestone with a real notify on the packaged app.",
+        "text": "PR 448 (https://repos.openape.ai/patrick/monorepo/pulls/448) ist offen; lokaler Gate, Browser-Suite und Relay-E2E sind grün. Nächster Schritt: Review und Merge durch den Owner, danach zuerst das Relay und dann einen signierten Desktop-Build ausrollen; den Desktop-Meilenstein mit einer echten notify-Mitteilung in der paketierten App abschließen."
       },
       {
         "path": "sections.0.title",
@@ -586,7 +629,26 @@
         "path": "changelog.3.text",
         "source": "Revision 4: bulk actions ask for confirmation (owner request).",
         "text": "Revision 4: Sammelaktionen fragen vorher nach (Wunsch des Owners)."
+      },
+      {
+        "path": "changelog.4.text",
+        "source": "Implementation on PR 448. Deviations: one POST route per host for list and mark instead of GET plus POST (one shared handler and parser); geometry checks stay in browser layout tests per the inbox UI test migration (issue 1485).",
+        "text": "Umsetzung in PR 448. Abweichungen: eine POST-Route pro Host für Lesen und Markieren statt GET plus POST (ein gemeinsamer Handler und Parser); Geometrieprüfungen bleiben gemäß der Inbox-UI-Testmigration (Issue 1485) in Browser-Layout-Tests."
       }
     ]
-  }
+  },
+  "links": [
+    {
+      "title": "Issue 1487",
+      "url": "https://repos.openape.ai/patrick/monorepo/issues/1487"
+    },
+    {
+      "title": "PR 448",
+      "url": "https://repos.openape.ai/patrick/monorepo/pulls/448"
+    },
+    {
+      "title": "Test Run",
+      "url": "https://report.openape.ai/d/01M4ZJ5P0Q9B6CA57CGM35D2HP?v=1"
+    }
+  ]
 }
