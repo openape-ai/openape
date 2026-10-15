@@ -147,7 +147,6 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
         </div>
         <CodexHandoff v-if="handoff" :view="view" :pinned="pinned" :tags="pinnedTags" :connected="codex === undefined ? null : codex === 'connected'" @close="handoff = false" @settings="emit('settings')" />
         <div class="automations-kindrow">
-          <!-- Live data is the normal case; only a stale snapshot needs its time. -->
           <span v-if="!live" class="automations-stamp">{{ t('As of {time}', { time: clock(view.at, language) }) }}</span>
           <details class="kinds-legend">
             <summary>{{ t('Legend') }}</summary>

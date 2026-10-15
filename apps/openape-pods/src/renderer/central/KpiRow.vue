@@ -12,7 +12,6 @@ const pausedDetail = computed(() => {
   const parts = [drafts ? t('{count} drafts', { count: drafts }) : '', archived ? t('{count} archived', { count: archived }) : ''].filter(Boolean)
   return parts.length ? t('of which {parts}', { parts: parts.join(', ') }) : t('nothing paused')
 })
-// Errors do not resolve themselves, so the tile names what is failing now; earlier failures stay in each Pod's history.
 const errorDetail = computed(() => {
   const { errors } = facts.value
   const [first] = errors
