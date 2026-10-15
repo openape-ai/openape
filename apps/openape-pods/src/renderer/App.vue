@@ -113,7 +113,8 @@ export default defineComponent({
       <AccountStatus :available="status?.worker.state === 'ready'" @open="navigate('App settings')" />
     </template>
     <template #status>
-      <span class="muted" role="status">{{ workerLabel }}</span>
+      <!-- A ready worker is the normal case; only a state the owner must notice is shown. -->
+      <span v-if="connectionError || status?.worker.state !== 'ready'" class="muted" role="status">{{ workerLabel }}</span>
     </template>
     <div class="main">
       <div class="window-drag" /><div class="content">

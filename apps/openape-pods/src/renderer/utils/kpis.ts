@@ -8,9 +8,8 @@ import type { SecretRequestRow } from '../../contracts/secrets'
 export interface KpiFacts {
   active: number
   paused: { total: number, drafts: number, archived: number }
-  degraded: { count: number, name: string | null, reason: string | null }
-  /** Failed, interrupted and blocked runs of the last 24 hours, with the Pods that had them, most first. */
-  failures: { runs: number, pods: { name: string, count: number }[] }
+  /** Active Pods whose current state is an error; failures they already recovered from belong to their history. */
+  errors: { name: string, reason: string }[]
   decisions: DecisionCounts
   unknownDeliveries: number
 }
@@ -65,8 +64,11 @@ export function decisionCounts(view: MapView, requests: SecretRequestRow[] = [])
 
 export function kpiFacts(view: MapView, requests: SecretRequestRow[] = []): KpiFacts {
   const { kpis } = view
-  const first = kpis.degraded[0]
-  const failing = view.pods.filter(pod => (pod.failures ?? 0) > 0).map(pod => ({ name: pod.name, count: pod.failures! })).sort((a, b) => b.count - a.count)
+  // Same rule as the row state: a paused or archived Pod shows as paused, not failing.
+  const errors = kpis.degraded.flatMap((item) => {
+    const pod = view.pods.find(candidate => candidate.id === item.podId)
+    return pod?.lifecycle === 'active' ? [{ name: pod.name, reason: item.reason }] : []
+  })
   return {
     active: kpis.active,
     paused: {
@@ -74,8 +76,7 @@ export function kpiFacts(view: MapView, requests: SecretRequestRow[] = []): KpiF
       drafts: view.pods.filter(pod => pod.draft && pod.lifecycle !== 'archived').length,
       archived: view.pods.filter(pod => pod.lifecycle === 'archived').length,
     },
-    degraded: { count: kpis.degraded.length, name: first ? view.pods.find(pod => pod.id === first.podId)?.name ?? null : null, reason: first?.reason ?? null },
-    failures: { runs: failing.reduce((sum, pod) => sum + pod.count, 0), pods: failing },
+    errors,
     decisions: decisionCounts(view, requests),
     unknownDeliveries: kpis.unknownDeliveries,
   }
