@@ -165,6 +165,18 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
       if (command.type !== 'list') return unavailable('Editing or executing scripts')
       return structuredClone(view(command.podId).scripts)
     },
+    async messages(command) {
+      if (failRead) throw new Error('Demo connection interrupted. Restore it from the demo toolbar.')
+      if (command.type === 'mark') {
+        const message = state.messages.find(item => item.id === command.id)
+        if (!message) throw new Error('Demo message not found')
+        if (command.deleted) state.messages.splice(state.messages.indexOf(message), 1)
+        if (command.read !== undefined) message.read = command.read ? Date.now() : null
+        if (command.archived !== undefined) message.archived = command.archived ? Date.now() : null
+        changed()
+      }
+      return structuredClone(state.messages)
+    },
     async domain(input) {
       const command = parseDomainCommand(input)
       if (command.type === 'answer') {

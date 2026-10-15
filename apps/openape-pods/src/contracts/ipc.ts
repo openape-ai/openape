@@ -18,6 +18,7 @@ import type { SharingCommand, SharingState } from './sharing'
 import type { ResourceCommand, ResourceState } from './resources'
 import type { WorkspaceCommand, WorkspaceState } from './control'
 import type { SecretsCommand, SecretsView } from './secrets'
+import type { InboxMessage, InboxMessagesCommand } from './inbox'
 
 export const channels = { storage: 'pods:storage', updates: 'pods:updates', mcpSession: 'pods:mcp-session', central: 'pods:central', codex: 'pods:codex', domain: 'pods:domain', definitions: 'pods:definitions', packages: 'pods:packages', programs: 'pods:programs', language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling', sharing: 'pods:sharing', secrets: 'pods:secrets' } as const
 export type WorkerState = 'starting' | 'ready' | 'recovery' | 'error' | 'stopped'
@@ -52,6 +53,8 @@ export interface PodsBridge {
   details: (command: DetailsCommand) => Promise<PodDetails>
   /** Desktop only: the native store, the private file and the request at OpenApe Secrets. */
   secrets?: (command: SecretsCommand) => Promise<SecretsView>
+  /** Owner messages of the account inbox; hosts without it show no Mitteilungen tab. */
+  messages?: (command: InboxMessagesCommand) => Promise<InboxMessage[]>
   scheduling: (command: ScheduleCommand) => Promise<ScheduleView>
   runs: (command: RunCommand) => Promise<RunView>
   resources: (command: ResourceCommand) => Promise<ResourceState>
