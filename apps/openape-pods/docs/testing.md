@@ -7,18 +7,61 @@ Every assertion lives on the lowest level that can answer its question. A packag
 | Unit / functional | `test/**` (Node, happy-dom) | Pure functions, contracts, worker modules against real SQLite and files | `pnpm --filter @openape/pods test` (unit gate) |
 | Component | `test/**/*-ui.test.ts`, `test/workspace.test.ts` (`@vue/test-utils` + happy-dom) | Vue states, branches, visible text, emitted bridge commands | unit gate |
 | Main process and worker entry | `test/main/**` (Node; `vi.mock('electron')` via `test/main/app-harness.ts`, an in-memory `parentPort` for `src/worker/entry.ts`) | The unchanged `src/main/app.ts` and worker entry: IPC sender checks, native dialog gating, menus, power events, scheduler intake while suspended | unit gate |
-| Layout | `test/layout/**` (Vitest browser mode, installed Chrome) | Widths, overflow, breakpoints, dark mode — with `src/renderer/style.css` and every SFC `<style>` loaded | `test:browser`, part of `test:layout` |
-| Native / packaged | `e2e/**` (Playwright Electron, native helper) | Only what needs the packaged app or a real OS boundary | `test:e2e`, part of `test:layout` (6 workers) |
-| Fast local loop | unit, component, main-process and layout levels above | Everything except Electron and the native helper, in about 15 s without a build | `pnpm --filter @openape/pods test:fast` |
+| Layout | `test/layout/**` (Vitest browser mode, installed Chrome) | Widths, overflow, breakpoints, dark mode — with `src/renderer/style.css` and every SFC `<style>` loaded | `test:browser` / browser-only `test:layout` |
+| Native / packaged | `e2e/**` (Playwright Electron, native helper) | Only what needs the packaged app or a real OS boundary | explicit `test:e2e` (build + package + 6-worker native suite) |
+| Fast local loop | unit, component, main-process and layout levels above | Unit/component and browser suites without building or launching Electron | `pnpm --filter @openape/pods test:fast` |
 | Handbook capture | `e2e/handbook-capture.test.ts` | Screenshots for the handbook and the evidence report — a generator, not a check | `pnpm handbook:capture`, outside the gate |
+
+## Choose the check for the change
+
+| Change | During iteration | Additional acceptance |
+| --- | --- | --- |
+| Text, CSS, navigation, filtering, visible loading/error states | Focused cases in `test/layout` with real CSS; capture screenshots when appearance changes | Existing lint/typecheck and affected unit gate |
+| Editing, pause/resume, choices, async refresh or revisions | Focused browser interactions plus affected controller/adapter tests | Real worker/relay tests for changed effects or contracts |
+| IPC, database persistence, actual execution, restart, keychain, sandbox or package | Existing boundary tests at the lowest sufficient level | Relevant explicit native E2E cases; full suite for release acceptance |
+
+Use the actual shared components and deterministic demo data for the fast UI
+loop. Keep one set of UI expectations and a small representative adapter parity
+set. A simulated successful run proves presentation; actual execution and durable
+storage need their own boundary evidence. New backend fields/commands require
+real backend implementation and tests.
+
+```sh
+# One UI scenario file; append -t to select a behavior within it.
+pnpm --filter @openape/pods exec vitest run --config vitest.browser.config.ts test/layout/demo.test.ts
+# Entire browser suite, without Electron, build or packaging.
+pnpm --filter @openape/pods test:layout
+# Controller/adapter contracts when commands or state handling change.
+pnpm --filter @openape/pods test --maxWorkers=4 test/workspace/demo.test.ts test/workspace/adapter-contracts.test.ts
+# Complete local unit/component + browser acceptance, without Electron.
+pnpm --filter @openape/pods test:fast
+# Explicit native acceptance, including its build/package prerequisites.
+pnpm --filter @openape/pods test:e2e
+```
+
+During editing, rerun the focused cases after each relevant change. Run the
+required repository lint/typecheck and affected unit gate before committing or
+pushing; reuse successful results only while their source and dependencies are
+unchanged. Run the broader relevant acceptance once at handoff, rather than
+repeating build/package/native suites after each visual edit. Existing coverage
+must remain: move UI assertions only after their replacement proves the same
+behavior, retain real native effects, and record the mapping in the PR.
+
+The October 15 UI acceptance measured 63 browser cases in 21.16 seconds and
+1,794 Pods unit/component cases in 38.58 seconds, as separate runs on this Mac.
+These are observations, not deadlines or a measured E2E speedup percentage.
+The [Test Run](https://report.openape.ai/d/01M4YD9F33NX8VY85MN8ZSB3KK?v=2)
+contains their actual output. See [UI development](ui-development.md) for the
+isolated Vite server and adapter handoff.
 
 ## Rules
 
 - Automatic CI and merge checks run unit/component tests only (owner decision,
   September 24, 2026, issue 1379). Browser layout and native/packaged E2E remain
-  manual acceptance: `pnpm --filter @openape/pods test:browser` for layout or
-  `pnpm --filter @openape/pods test:layout` for build, package, native E2E and
-  browser layout together. Run the latter only with an unlocked Mac available.
+  manual acceptance: `pnpm --filter @openape/pods test:layout` runs browser
+  tests only; `pnpm --filter @openape/pods test:e2e` builds, packages and runs
+  native acceptance. Only the latter requires an unlocked Mac. Both are reachable
+  through their explicitly selected shared suites; neither runs implicitly on push.
 - No check waits for a person (issue 1450). Fixture launches with
   `NODE_ENV=test` use Chromium's mock keychain, so safeStorage never touches the
   login keychain. Only `OPENAPE_PODS_TEST_REAL_KEYCHAIN=1` opts into the real

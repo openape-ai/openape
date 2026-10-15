@@ -107,3 +107,8 @@ Keep UI expectations shared; avoid duplicating all scenarios for every adapter.
 A CSS-only change needs focused browser checks. A command/contract change also
 needs its affected adapter/backend tests. Screenshots prove appearance;
 transport and backend results are recorded separately.
+
+`test:layout` now runs only the browser suite. Explicit `test:e2e` owns native
+build/package acceptance. Use the [test selection table](testing.md#choose-the-check-for-the-change)
+for the focused iteration loop and final gates; a UI change does not require
+repeating the native suite.
