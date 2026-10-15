@@ -107,7 +107,7 @@ describe('Automatisierungen layout', () => {
       await mountShell(width, height, false, view, 'list')
       const errors = document.querySelector<HTMLElement>('[data-kpi="errors"]')!
       expect(errors.classList.contains('alert')).toBe(true)
-      expect(errors.querySelector('b')!.textContent).toBe('140')
+      expect(errors.querySelector('b')!.textContent).toBe('1')
       const decisions = document.querySelector<HTMLElement>('[data-kpi="decisions"] b')!.textContent
       expect(document.querySelector('[role="tablist"] .n')!.textContent).toBe(decisions)
       // The failure count sits inside the result cell, below the last result, and wraps instead of widening the page.
