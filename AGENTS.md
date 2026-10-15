@@ -40,7 +40,7 @@ supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
 - Use the mildest sufficient verification: unit/affected checks first, focused
   behavioral checks next, full-application E2E last. The pre-push hook runs
   `pnpm check:affected --base origin/main --head HEAD --suite unit`; automatic
-  CI also runs only the unit suite. Run a workspace's E2E or layout suite
+  CI remains paused under the owner decision below. Run a workspace's E2E or layout suite
   locally only while working on it (Pods: `test:fast` without Electron).
 - For Pods UI iteration, follow [the test selection table](apps/openape-pods/docs/testing.md#choose-the-check-for-the-change):
   run focused browser tests with real CSS for presentation and interactions;
@@ -48,17 +48,15 @@ supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
   `test:layout` is browser-only. Reserve explicit `test:e2e` for real native or
   packaged boundaries; do not repeat every UI scenario in Electron or per host.
   Retire an existing assertion only after its replacement proves the same behavior.
-- CI is paused (owner decision October 7, 2026, issue 1448): Forgejo CI runs only on
-  manual dispatch and main's branch protection is disabled. Do not wait for or
-  require CI until the owner approves a stable solution; the local pre-push
-  affected unit check and the gates below remain.
-- Merge gate (when CI is active again): the external checks for the exact pushed head run the affected
-  unit subset of the contract (audit, tooling, lint, typecheck and unit/component
-  tests for changed workspaces and their consumers); it is recorded on the PR
-  and required for merge. Pushes to main run the full unit contract; a red main
-  blocks further merges until fixed forward. Do not duplicate the external run
-  locally for the same head; run `pnpm check:ci` explicitly before deployments.
-  A missing/skipped required CI check is not a green merge gate. E2E and layout
+- Automatic CI is paused by the October 7, 2026 owner decision
+  ([issue 1448](https://repos.openape.ai/patrick/monorepo/issues/1448), PR 296).
+  The recorded configuration uses manual Forgejo dispatch with main protection
+  disabled; inspect actual configuration before making a live-state claim.
+  Merge after the required local checks without waiting for automatic CI.
+  Do not re-enable CI or protection without a new owner decision. The local
+  pre-push affected unit gate remains mandatory; deployments require `pnpm check:ci`.
+- If an external check is actually configured as required, it must pass for the
+  reviewed source SHA; missing/skipped checks do not count as success. E2E and layout
   are manual only by owner decision (issue 1379); never restore automatic jobs
   or mandatory E2E/layout contexts without a new owner decision. Use explicit
   `--suite e2e` or `--suite layout` for relevant manual acceptance. Native Pods
@@ -94,8 +92,9 @@ supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
 
 ## Merge, publish and hand off
 
-Review the native PR diff and retain its source and target SHAs. Required
-external checks must match that source. The merge API verifies both expected
+Review the native PR diff and retain its source and target SHAs. Inspect actual
+branch protection and apply the owner CI decision above; do not infer a required
+external gate from historical instructions. The merge API verifies both expected
 SHAs and blocks protected-branch direct pushes; see
 [branch protection](docs/operations/branch-protection.md).
 
