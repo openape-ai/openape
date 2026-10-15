@@ -25,7 +25,8 @@ const { data, error } = await useFetch<TestRun | PrivateBriefing | PrivateDocume
 useSeoMeta({
   title: () => data.value && data.value.type !== 'briefing' && data.value.type !== 'document' ? `${data.value.title} — OpenApe Reports` : 'OpenApe Reports',
   description: () => data.value && data.value.type !== 'briefing' && data.value.type !== 'document' ? `${data.value.status.toUpperCase()}: ${data.value.passed} passed, ${data.value.failed} failed` : 'Your private report',
-  robots: 'noindex, nofollow', referrer: 'no-referrer',
+  robots: 'noindex, nofollow',
+  referrer: 'no-referrer',
 })
 
 const detailsOpen = ref(false)

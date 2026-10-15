@@ -38,10 +38,19 @@ function readInput(path: string): { raw: unknown, source: Buffer } {
 }
 
 function main() {
-  const { values, positionals } = parseArgs({ allowPositionals: true, strict: true, options: {
-    help: { type: 'boolean', short: 'h' }, overwrite: { type: 'boolean' }, json: { type: 'boolean' },
-    commit: { type: 'string' }, command: { type: 'string' }, environment: { type: 'string' }, 'next-step': { type: 'string' },
-  } })
+  const { values, positionals } = parseArgs({
+    allowPositionals: true,
+    strict: true,
+    options: {
+      help: { type: 'boolean', short: 'h' },
+      overwrite: { type: 'boolean' },
+      json: { type: 'boolean' },
+      commit: { type: 'string' },
+      command: { type: 'string' },
+      environment: { type: 'string' },
+      'next-step': { type: 'string' },
+    },
+  })
   if (values.help || !positionals.length) { process.stdout.write(HELP); return }
   const [kind, inputPath, outputPath] = positionals
   if (positionals.length !== 3 || !inputPath || !outputPath || !['plan', 'test-run'].includes(kind ?? '')) invalid('Use plan|test-run <input.json> <output.html>; see --help')

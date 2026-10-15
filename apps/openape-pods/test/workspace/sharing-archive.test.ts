@@ -35,8 +35,13 @@ function rawZip(entries: RawEntry[], options: { prefix?: Uint8Array, count?: num
 
 async function fixture() {
   const description: PortableDescription = {
-    format: 'openape-package', version: 1, package: { key: 'fixture', revision: 1, title: 'Portable fixture', description: '' }, requiredFeatures: ['portable_aliases_v1'],
-    entry: { kind: 'pod', key: 'fixture' }, applications: [], compositions: [],
+    format: 'openape-package',
+    version: 1,
+    package: { key: 'fixture', revision: 1, title: 'Portable fixture', description: '' },
+    requiredFeatures: ['portable_aliases_v1'],
+    entry: { kind: 'pod', key: 'fixture' },
+    applications: [],
+    compositions: [],
     pods: [{ key: 'fixture', title: 'Fixture', description: '', script: 'pods/fixture.mjs', packages: null, contract: null, requestedCapabilities: [], access: [], inputs: [], bindings: [], applications: [], assets: ['assets/template.txt'] }],
   }
   const payloads: PortablePayload[] = [{ path: 'pods/fixture.mjs', kind: 'script', mediaType: 'text/javascript', content: bytes('export async function run() { return { status: "completed" } }') }, { path: 'assets/template.txt', kind: 'asset', mediaType: 'text/plain', content: bytes('Reusable template '.repeat(20)) }]

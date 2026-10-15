@@ -14,9 +14,13 @@ export default defineEventHandler(async (event) => {
     const { document, version } = await readHtml(useDatabaseClient(), capability.documentId, capability.identity, capability.version)
     if (document.access_revision !== capability.accessRevision || document.retention_revision !== capability.retentionRevision) throw new ReportError('FORBIDDEN', 'Report policy changed; reopen the viewer', 403)
     setHeaders(event, {
-      'content-type': 'text/html; charset=utf-8', 'content-security-policy': contentPolicy(JSON.parse(String(version.external_images)).length > 0, capability.viewerOrigin),
-      'referrer-policy': 'no-referrer', 'cache-control': 'private, no-store', 'x-content-type-options': 'nosniff',
-      'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()', 'x-robots-tag': 'noindex, nofollow',
+      'content-type': 'text/html; charset=utf-8',
+      'content-security-policy': contentPolicy(JSON.parse(String(version.external_images)).length > 0, capability.viewerOrigin),
+      'referrer-policy': 'no-referrer',
+      'cache-control': 'private, no-store',
+      'x-content-type-options': 'nosniff',
+      'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
+      'x-robots-tag': 'noindex, nofollow',
     })
     return String(version.html)
   }

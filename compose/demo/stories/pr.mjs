@@ -20,8 +20,14 @@ function forgeCliToken() {
   const now = Math.floor(Date.now() / 1000)
   const header = b64url(JSON.stringify({ alg: 'HS256', typ: 'JWT' }))
   const payload = b64url(JSON.stringify({
-    typ: 'cli', sub: 'agent+ci@openape.test', email: 'agent+ci@openape.test', act: 'agent',
-    iss: CLIENT_ID, aud: CLIENT_ID, iat: now, exp: now + 3600,
+    typ: 'cli',
+    sub: 'agent+ci@openape.test',
+    email: 'agent+ci@openape.test',
+    act: 'agent',
+    iss: CLIENT_ID,
+    aud: CLIENT_ID,
+    iat: now,
+    exp: now + 3600,
   }))
   const sig = Buffer.from(createHmac('sha256', SECRET).update(`${header}.${payload}`).digest()).toString('base64url')
   return `${header}.${payload}.${sig}`

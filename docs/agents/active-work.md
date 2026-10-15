@@ -1,5 +1,13 @@
 # Active work
 
+## Object and list newline style — issue 1491
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1491. Branch `feature/issue-1491-object-newline-lint-style`, base `b248ac1594c8f83aff24d705eff5df4c1c818a42`.
+- Owner requested consistent object/list newline rules plus a dedicated autofix commit. `style/newline-per-chained-call` is excluded because it cycles with `antfu/consistent-chaining`; `function-paren-newline` uses `consistent` because `multiline-arguments` cycles with `antfu/consistent-list-newline`.
+- Autofix commits `d5ac18b81cfeb11c71c947e1c0ff9bace5f73700` (227 files) , `62087ae2cb836aba2b402b69c3a1c3dfcf6cab31` and `928463c8fb01e68267077a953e8cf6bd449e1846` (files merged from main) are listed in `.git-blame-ignore-revs`; merge with a merge commit so the SHA survives.
+- Verification: zero remaining violations of the new rules, no new violations of other rules; affected lint and typecheck pass. Pods and Pods relay unit timeouts at 5 s reproduce on the unchanged base under load and are tracked separately.
+- Next: native PR review and merge; then investigate the load-sensitive test timeouts.
+
 ## Load-sensitive unit test timeouts — issue 1493
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1493. Branch `bugfix/issue-1493-test-timeouts`, base `01ea0ac93240f92b354c4ad453c3d35711c6ccad`, checkout `openape-monorepo.worktrees/test-timeouts-1493`.

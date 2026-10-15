@@ -204,8 +204,13 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
     },
     async onboarding(command) {
       if (command.type !== 'list') return unavailable('Authentication or permissions')
-      return { connections: [{ id: 'demo-owner', provider: 'openape', account: 'owner@example.invalid', state: 'ready', error: null, login: null }], owner: 'demo-owner', runtime: { ready: true, error: null }, complete: true,
-        ...command.podId ? { podIdentity: { podId: command.podId, bound: true, ownerConnection: 'demo-owner', issuer: 'https://id.example.invalid', decisionIssuer: 'https://id.example.invalid', subject: `demo:${command.podId}`, brokerConnectionId: null } } : {} }
+      return {
+        connections: [{ id: 'demo-owner', provider: 'openape', account: 'owner@example.invalid', state: 'ready', error: null, login: null }],
+        owner: 'demo-owner',
+        runtime: { ready: true, error: null },
+        complete: true,
+        ...command.podId ? { podIdentity: { podId: command.podId, bound: true, ownerConnection: 'demo-owner', issuer: 'https://id.example.invalid', decisionIssuer: 'https://id.example.invalid', subject: `demo:${command.podId}`, brokerConnectionId: null } } : {},
+      }
     },
     async programs(command) {
       if (command.type === 'launchStatus') return null
@@ -222,7 +227,8 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
     },
   }
   return {
-    bridge, revision,
+    bridge,
+    revision,
     restoreConnection() { failRead = false; changed() },
     dispose() {
       disposed = true

@@ -24,8 +24,11 @@ export const publishCommand = defineCommand({
     const endpoint = resolveEndpoint(args.endpoint)
     const bearer = await getAuthorizedBearer({ endpoint, aud: 'testrun.openape.ai' })
     const response = await fetch(`${endpoint}/api/reports${args['preview-output'] ? '/preview' : ''}`, {
-      method: 'POST', redirect: 'error', signal: AbortSignal.timeout(60000),
-      headers: { authorization: bearer, 'content-type': 'application/json', 'idempotency-key': args.key }, body: raw,
+      method: 'POST',
+      redirect: 'error',
+      signal: AbortSignal.timeout(60000),
+      headers: { authorization: bearer, 'content-type': 'application/json', 'idempotency-key': args.key },
+      body: raw,
     })
     if (!response.ok) throw new Error(`Publication failed (HTTP ${response.status}): ${await response.text()}`)
     if (args['preview-output']) {

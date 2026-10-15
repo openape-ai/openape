@@ -21,11 +21,15 @@ const manifest = { dependencies: { fixture: '1.0.0' } }
 const integrity = `sha512-${Buffer.alloc(64, 1).toString('base64')}`
 function packageEntry(name: string, version: string) { return { version, resolved: `https://registry.npmjs.org/${name}/-/${name.split('/').at(-1)}-${version}.tgz`, integrity } }
 function fixture() {
-  return { lockfileVersion: 3, requires: true, packages: {
-    '': manifest,
-    'node_modules/fixture': { ...packageEntry('fixture', '1.0.0'), dependencies: { child: '^2.0.0' } },
-    'node_modules/child': packageEntry('child', '2.1.0'),
-  } }
+  return {
+    lockfileVersion: 3,
+    requires: true,
+    packages: {
+      '': manifest,
+      'node_modules/fixture': { ...packageEntry('fixture', '1.0.0'), dependencies: { child: '^2.0.0' } },
+      'node_modules/child': packageEntry('child', '2.1.0'),
+    },
+  }
 }
 const roots: string[] = []
 async function runtimeFixture(): Promise<ScriptRuntime> {
@@ -101,10 +105,10 @@ it('does not trust an optional package flag to omit a required transitive', asyn
 
 it('accepts scoped and nested pinned packages with supported npm metadata', () => {
   const lock = fixture()
-  const nested = { ...lock, packages: { ...lock.packages,
-    'node_modules/fixture': { ...lock.packages['node_modules/fixture'], dependencies: { child: '^2.0.0', '@scope/library': '1.0.0' }, peerDependenciesMeta: { unused: { optional: true } } },
-    'node_modules/fixture/node_modules/@scope/library': { ...packageEntry('@scope/library', '1.0.0'), peer: true, deprecated: 'Fixture metadata', license: 'MIT', engines: { node: '>=20' }, bin: { fixture: 'bin/run.js' }, funding: { type: 'individual', url: 'https://example.com/funding' } },
-  } }
+  const nested = {
+    ...lock,
+    packages: { ...lock.packages,    'node_modules/fixture': { ...lock.packages['node_modules/fixture'], dependencies: { child: '^2.0.0', '@scope/library': '1.0.0' }, peerDependenciesMeta: { unused: { optional: true } } },    'node_modules/fixture/node_modules/@scope/library': { ...packageEntry('@scope/library', '1.0.0'), peer: true, deprecated: 'Fixture metadata', license: 'MIT', engines: { node: '>=20' }, bin: { fixture: 'bin/run.js' }, funding: { type: 'individual', url: 'https://example.com/funding' } } },
+  }
   expect(JSON.parse(validateImportedLock(nested, manifest, npmRoot))).toEqual(nested)
   expect(validateImportedLock({ lockfileVersion: 3, packages: { '': {} } }, { dependencies: {} }, npmRoot)).toBeTruthy()
 })

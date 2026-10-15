@@ -112,9 +112,7 @@ export class ProgramManager {
     const state = await this.resources(command.podId); const id = randomUUID()
     const { level } = await this.access(command.podId).reach()
     const name = await this.dispatch({ type: 'reserveShell', podId: command.podId, epoch: command.epoch, sessionId: id }) as string
-    const shell = new ExternalShell(command.podId, dirname(this.root), runtime, state, this.credentials, this.connections,
-      async () => { await this.dispatch({ type: 'check', podId: command.podId, sessionId: id }) },
-      async () => { await this.dispatch({ type: 'release', podId: command.podId, sessionId: id }) }, level, name, command.applicationId)
+    const shell = new ExternalShell(command.podId, dirname(this.root), runtime, state, this.credentials, this.connections,      async () => { await this.dispatch({ type: 'check', podId: command.podId, sessionId: id }) },      async () => { await this.dispatch({ type: 'release', podId: command.podId, sessionId: id }) }, level, name, command.applicationId)
     const launch = new ApplicationLaunch(id, command.podId, shell)
     this.launches.set(command.podId, launch)
     try { await shell.ready }
@@ -129,9 +127,7 @@ export class ProgramManager {
     const sessionId = randomUUID()
     const { level } = await this.access(podId).reach()
     const name = await this.dispatch({ type: 'reserveShell', podId, epoch: state.epoch, sessionId }) as string
-    const shell = new ExternalShell(podId, dirname(this.root), runtime, state, this.credentials, this.connections,
-      async () => { await this.dispatch({ type: 'check', podId, sessionId }) },
-      async () => { await this.dispatch({ type: 'release', podId, sessionId }) }, level, name)
+    const shell = new ExternalShell(podId, dirname(this.root), runtime, state, this.credentials, this.connections,      async () => { await this.dispatch({ type: 'check', podId, sessionId }) },      async () => { await this.dispatch({ type: 'release', podId, sessionId }) }, level, name)
     this.shells.set(podId, shell)
     const observe = async () => { await shell.completed; if (!shell.error || shell.closed) this.shells.delete(podId) }
     void observe()

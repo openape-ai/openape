@@ -51,11 +51,15 @@ async function fixture() {
     throw new Error(`Unexpected request: ${String(body.type)}`)
   }
   function controller() {
-    const instance = new CentralController(root, request, { snapshot: async () => projection.snapshot(owner), execute: async (command) => {
-      if (command.channel === 'scripts') return scripts.execute(parseScriptCommand(command.body), AbortSignal.timeout(30000))
-      if (command.channel !== 'runs' || command.body.type !== 'start') throw new Error('Unexpected fixture command')
-      return { runId: runs.start(pod.id) }
-    }, gate: async () => {} }, runtime.helper)
+    const instance = new CentralController(root, request, {
+      snapshot: async () => projection.snapshot(owner),
+      execute: async (command) => {
+        if (command.channel === 'scripts') return scripts.execute(parseScriptCommand(command.body), AbortSignal.timeout(30000))
+        if (command.channel !== 'runs' || command.body.type !== 'start') throw new Error('Unexpected fixture command')
+        return { runId: runs.start(pod.id) }
+      },
+      gate: async () => {},
+    }, runtime.helper)
     cleanup.push(() => instance.stop()); return instance
   }
   return { root, store, resources, runtime, runs, scheduler, projection, owner, actor, pod, server, controller }

@@ -65,11 +65,14 @@ beforeEach(() => {
     response: { id: 'cred', rawId: 'cred', type: 'public-key', response: {} },
   })
   findRegUrlMock.mockReset().mockResolvedValue({
-    token: 'reg-tok', email: 'patrick@hofmann.eco', name: 'Patrick',
+    token: 'reg-tok',
+    email: 'patrick@hofmann.eco',
+    name: 'Patrick',
   })
   consumeRegUrlMock.mockReset()
   consumeChallengeMock.mockReset().mockResolvedValue({
-    challenge: 'abc', rpId: 'id.openape.ai',
+    challenge: 'abc',
+    rpId: 'id.openape.ai',
   })
   findUserByEmailMock.mockReset()
   createUserMock.mockReset()
@@ -173,7 +176,10 @@ describe('webauthn register verify — add-device tokens (#1097)', () => {
     // Minted by the authenticated /api/account/add-device-link endpoint,
     // mailed to the account's own address, opened on the new device.
     findRegUrlMock.mockResolvedValue({
-      token: 'reg-tok', email: 'patrick@hofmann.eco', name: 'Patrick', createdBy: 'add-device:id.openape.ai',
+      token: 'reg-tok',
+      email: 'patrick@hofmann.eco',
+      name: 'Patrick',
+      createdBy: 'add-device:id.openape.ai',
     })
     findUserByEmailMock.mockResolvedValue({ email: 'patrick@hofmann.eco' })
     findCredentialsByUserMock.mockResolvedValue([
@@ -195,7 +201,10 @@ describe('webauthn register verify — add-device tokens (#1097)', () => {
     // tenant B → authenticated add-device link minted there → redeemed on
     // tenant A where the victim's passkeys live.
     findRegUrlMock.mockResolvedValue({
-      token: 'reg-tok', email: 'patrick@hofmann.eco', name: 'Patrick', createdBy: 'add-device:other-tenant.example',
+      token: 'reg-tok',
+      email: 'patrick@hofmann.eco',
+      name: 'Patrick',
+      createdBy: 'add-device:other-tenant.example',
     })
     findUserByEmailMock.mockResolvedValue({ email: 'patrick@hofmann.eco' })
     findCredentialsByUserMock.mockResolvedValue([
@@ -211,7 +220,10 @@ describe('webauthn register verify — add-device tokens (#1097)', () => {
     // The #291 gate must stay closed for every other createdBy value —
     // mailbox compromise alone must not graft a credential.
     findRegUrlMock.mockResolvedValue({
-      token: 'reg-tok', email: 'patrick@hofmann.eco', name: 'Patrick', createdBy: 'self-service',
+      token: 'reg-tok',
+      email: 'patrick@hofmann.eco',
+      name: 'Patrick',
+      createdBy: 'self-service',
     })
     findUserByEmailMock.mockResolvedValue({ email: 'patrick@hofmann.eco' })
     findCredentialsByUserMock.mockResolvedValue([

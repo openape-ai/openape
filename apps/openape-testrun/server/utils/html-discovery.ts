@@ -47,8 +47,11 @@ export async function discoverHtml(client: Client, identity: ReportIdentity, fil
 export async function discoverLabels(client: Client, identity: ReportIdentity, kind: 'tags' | 'categories', search: string, team: string | undefined, category: string | undefined, now = Date.now()) {
   const source = kind === 'tags' ? 'JOIN json_each(v.tags) j' : ''
   const field = kind === 'tags' ? 'j.value' : 'v.category'
-  const result = await client.execute({ sql: `SELECT ${field} AS label,count(DISTINCT d.id) AS count FROM html_documents d JOIN html_versions v ON v.document_id=d.id AND v.version=d.latest_version ${source}
+  const result = await client.execute({
+    sql: `SELECT ${field} AS label,count(DISTINCT d.id) AS count FROM html_documents d JOIN html_versions v ON v.document_id=d.id AND v.version=d.latest_version ${source}
     WHERE d.purged_at IS NULL AND d.removed_at IS NULL AND (d.expires_at IS NULL OR d.expires_at>?) AND (d.owner=? OR (d.audience='readers' AND EXISTS(SELECT 1 FROM json_each(d.readers) WHERE value=?)) OR (d.audience='team' AND EXISTS(SELECT 1 FROM team_members m WHERE m.team_id=d.team_id AND m.user_email=?)))
-    AND ${field} IS NOT NULL AND instr(lower(${field}),lower(?))>0 AND (? IS NULL OR d.team_id=?) AND (? IS NULL OR v.category=?) GROUP BY ${field} ORDER BY ${field}`, args: [now, identity.subject, identity.subject, identity.subject, search, team ?? null, team ?? null, category ?? null, category ?? null] })
+    AND ${field} IS NOT NULL AND instr(lower(${field}),lower(?))>0 AND (? IS NULL OR d.team_id=?) AND (? IS NULL OR v.category=?) GROUP BY ${field} ORDER BY ${field}`,
+    args: [now, identity.subject, identity.subject, identity.subject, search, team ?? null, team ?? null, category ?? null, category ?? null],
+  })
   return result.rows
 }

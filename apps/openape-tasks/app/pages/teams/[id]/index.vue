@@ -114,8 +114,7 @@ const detailsSummary = computed(() => {
   return parts.filter(Boolean).join(' · ')
 })
 const reminderSummary = computed(() =>
-  editRemindLocal.value ? (dueLabel(localInputToUnix(editRemindLocal.value)) ?? '') : '',
-)
+  editRemindLocal.value ? (dueLabel(localInputToUnix(editRemindLocal.value)) ?? '') : '')
 const saving = ref(false)
 const editError = ref('')
 

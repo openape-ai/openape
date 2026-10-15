@@ -28,7 +28,9 @@ export function markdown(value: string | undefined): string {
   renderer.image = token => `[Image reference: ${escapeHtml(token.text)}]`
   return sanitizeHtml(marked.parse(value, { async: false, renderer }) as string, {
     allowedTags: ['p', 'br', 'strong', 'em', 'del', 'blockquote', 'ul', 'ol', 'li', 'code', 'pre', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'hr', 'h1', 'h2', 'h3', 'h4'],
-    allowedAttributes: { a: ['href', 'rel'] }, allowedSchemes: ['https'], allowProtocolRelative: false,
+    allowedAttributes: { a: ['href', 'rel'] },
+    allowedSchemes: ['https'],
+    allowProtocolRelative: false,
     transformTags: { a: (_tag, attributes) => ({ tagName: 'a', attribs: { ...(safeLink(attributes.href) ? { href: attributes.href } : {}), rel: 'noopener noreferrer' } }) },
   }).replaceAll('\uFFFD', '&#xFFFD;')
 }
@@ -62,10 +64,13 @@ export function documentHtml(kind: 'plan' | 'test-run', title: string, content: 
   const initial = germanSlots && defaultLanguage === 'de' ? germanSlots : bodySlots
   const slots: Record<string, string> = {
     language: initial?.language ?? 'en',
-    banner: bodySlots?.banner ?? '', masthead: bodySlots?.masthead ?? '',
+    banner: bodySlots?.banner ?? '',
+    masthead: bodySlots?.masthead ?? '',
     body: bilingualBody ?? (bodySlots ? fill(body, bodySlots) : ''),
     controls: germanSlots ? fill(controls!, { deChecked: defaultLanguage === 'de' ? ' checked' : '', enChecked: defaultLanguage === 'en' ? ' checked' : '' }) : '',
-    title: initial?.title ?? escapeHtml(title), content, styles: readFileSync(join(templateDirectory, 'document.css'), 'utf8'),
+    title: initial?.title ?? escapeHtml(title),
+    content,
+    styles: readFileSync(join(templateDirectory, 'document.css'), 'utf8'),
     metadata: jsonForHtml({ category: kind === 'plan' ? 'Plans' : 'Test Runs', tags: [], metadata }),
     source: `<script id="openape-${kind}-source" type="application/json">${jsonForHtml(source)}</script>`,
   }

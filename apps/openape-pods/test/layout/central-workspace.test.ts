@@ -52,11 +52,14 @@ it.each(['en', 'de'] as const)('shows Jev in the active desktop settings with re
   const { installWorkspace } = await import('./workspace-fixture')
   const { host } = centralFixture()
   host.workspace.pods = Array.from({ length: 30 }, (_, index) => ({ ...host.workspace.pods[0]!, id: `pod-${index}`, name: `Release monitor ${index + 1}` }))
-  installWorkspace({ onboarding: async () => ({ owner: 'owner', complete: true, runtime: { ready: true, error: null }, connections: [{ id: 'owner', provider: 'openape', account: 'owner@example.invalid', state: 'ready', error: null, login: null }] }), central: async (command) => {
-    if (command.type === 'status') return { enabled: false }
-    if (command.type === 'inventory') return [host]
-    return { requestError: { status: 400, message: 'No fixture change feed' } }
-  } })
+  installWorkspace({
+    onboarding: async () => ({ owner: 'owner', complete: true, runtime: { ready: true, error: null }, connections: [{ id: 'owner', provider: 'openape', account: 'owner@example.invalid', state: 'ready', error: null, login: null }] }),
+    central: async (command) => {
+      if (command.type === 'status') return { enabled: false }
+      if (command.type === 'inventory') return [host]
+      return { requestError: { status: 400, message: 'No fixture change feed' } }
+    },
+  })
   applyLanguage(language)
   await page.viewport(language === 'de' ? 560 : 1060, 950)
   document.documentElement.style.colorScheme = language === 'de' ? 'dark' : 'light'

@@ -117,7 +117,11 @@ describe('SSH-key login for humans', () => {
     // Decode JWT claims (signature already checked implicitly by the endpoint roundtrip).
     const [, payloadB64] = authBody.token.split('.')
     const payload = JSON.parse(Buffer.from(payloadB64, 'base64url').toString()) as {
-      sub: string; act: string; iss: string; iat: number; exp: number
+      sub: string;
+      act: string;
+      iss: string;
+      iat: number;
+      exp: number
     }
     expect(payload.sub).toBe(USER_EMAIL)
     expect(payload.act).toBe('human')

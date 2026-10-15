@@ -1,24 +1,38 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const fake = vi.hoisted(() => ({
-  source: new Map<string, string>(), target: new Map<string, string>(),
-  states: [] as any[], attempts: [] as any[], fail: 0, calls: 0,
+  source: new Map<string, string>(),
+  target: new Map<string, string>(),
+  states: [] as any[],
+  attempts: [] as any[],
+  fail: 0,
+  calls: 0,
 }))
 vi.mock('../server/utils/repos', () => ({ repoDiskPath: () => '/repo' }))
 vi.mock('../server/database/drizzle', async () => {
   const tables = await import('../server/database/schema')
-  return { useDb: () => ({
-    select: () => ({ from: (table: unknown) => ({ where: async () => table === tables.mirrors
-      ? [{ id: 'mirror', repoId: 'repo', enabled: 1, url: 'https://example.test/repo', username: 'bot', token: 'secret' }]
-      : [...fake.states],
-    }) }),
-    insert: (table: unknown) => ({ values: (row: any) => {
-      if (table === tables.mirrorPushes) { fake.attempts.push(row); return Promise.resolve() }
-      return { onConflictDoUpdate: async () => {
-        fake.states = [...fake.states.filter(s => s.ref !== row.ref), row]
-      } }
-    } }),
-  }) }
+  return {
+    useDb: () => ({
+      select: () => ({
+        from: (table: unknown) => ({
+          where: async () => table === tables.mirrors
+            ? [{ id: 'mirror', repoId: 'repo', enabled: 1, url: 'https://example.test/repo', username: 'bot', token: 'secret' }]
+            : [...fake.states],
+
+        }),
+      }),
+      insert: (table: unknown) => ({
+        values: (row: any) => {
+          if (table === tables.mirrorPushes) { fake.attempts.push(row); return Promise.resolve() }
+          return {
+            onConflictDoUpdate: async () => {
+              fake.states = [...fake.states.filter(s => s.ref !== row.ref), row]
+            },
+          }
+        },
+      }),
+    }),
+  }
 })
 vi.mock('../server/utils/mirror', async importOriginal => ({
   ...await importOriginal<typeof import('../server/utils/mirror')>(),

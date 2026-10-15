@@ -39,11 +39,24 @@ async function identity(email: string) {
 }
 beforeAll(async () => {
   idp = await startIdp({ managementToken, ddisaMockRecords: { 'reports.test': { version: 'ddisa1', idp: 'https://idp.reports.test', mode: 'open' } } })
-  app = await startServer({ cwd: appRoot, readyPath: '/api/health', timeoutMs: 180000, env: ({ url }) => ({
-    NUXT_DOCUMENT_PUBLISHING_ENABLED: 'true', NUXT_IGNORE_LOCK: '1', NUXT_TURSO_URL: `file:${join(makeTempDir('reports-e2e-'), 'reports.db')}`, NUXT_OPENAPE_SP_SESSION_SECRET: 'reports-e2e-secret-at-least-32-characters-long', NUXT_OPENAPE_SP_CLIENT_ID: new URL(url).host, NUXT_FALLBACK_IDP_URL: idp.url, NUXT_PUBLIC_URL: url, NUXT_BRIEFING_URL: url,
-    NUXT_OPENAPE_SP_ADDITIONAL_REDIRECT_URIS: JSON.stringify([`${url.replace('127.0.0.1', 'localhost')}/api/callback`]),
-    DDISA_MOCK_RECORDS: JSON.stringify({ 'reports.test': { version: 'ddisa1', idp: idp.url, mode: 'open' } }), OPENAPE_SP_ALLOW_INSECURE_IDP: '1',
-  }) })
+  app = await startServer({
+    cwd: appRoot,
+    readyPath: '/api/health',
+    timeoutMs: 180000,
+    env: ({ url }) => ({
+      NUXT_DOCUMENT_PUBLISHING_ENABLED: 'true',
+      NUXT_IGNORE_LOCK: '1',
+      NUXT_TURSO_URL: `file:${join(makeTempDir('reports-e2e-'), 'reports.db')}`,
+      NUXT_OPENAPE_SP_SESSION_SECRET: 'reports-e2e-secret-at-least-32-characters-long',
+      NUXT_OPENAPE_SP_CLIENT_ID: new URL(url).host,
+      NUXT_FALLBACK_IDP_URL: idp.url,
+      NUXT_PUBLIC_URL: url,
+      NUXT_BRIEFING_URL: url,
+      NUXT_OPENAPE_SP_ADDITIONAL_REDIRECT_URIS: JSON.stringify([`${url.replace('127.0.0.1', 'localhost')}/api/callback`]),
+      DDISA_MOCK_RECORDS: JSON.stringify({ 'reports.test': { version: 'ddisa1', idp: idp.url, mode: 'open' } }),
+      OPENAPE_SP_ALLOW_INSECURE_IDP: '1',
+    }),
+  })
   base = app.url; alias = base.replace('127.0.0.1', 'localhost')
   const primary = await identity(owner); ownerToken = primary.token; idpToken = primary.raw
   otherToken = (await identity('other@reports.test')).token

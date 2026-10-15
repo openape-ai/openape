@@ -80,17 +80,20 @@ describe('YOLO policy admin API', () => {
 
     // Seed: owner + agent (agent.owner = owner)
     const r1 = await fetch(`${baseUrl}/api/admin/users`, {
-      method: 'POST', headers: { ...managementHeader, 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { ...managementHeader, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: OWNER_EMAIL, name: 'Owner' }),
     })
     expect([200, 201, 409]).toContain(r1.status)
     const r2 = await fetch(`${baseUrl}/api/admin/users`, {
-      method: 'POST', headers: { ...managementHeader, 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { ...managementHeader, 'Content-Type': 'application/json' },
       body: JSON.stringify({ email: OTHER_EMAIL, name: 'Other' }),
     })
     expect([200, 201, 409]).toContain(r2.status)
     const r3 = await fetch(`${baseUrl}/api/admin/agents`, {
-      method: 'POST', headers: { ...managementHeader, 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { ...managementHeader, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         email: AGENT_EMAIL,
         name: 'YOLO Agent',

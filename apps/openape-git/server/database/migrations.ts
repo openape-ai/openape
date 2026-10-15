@@ -23,8 +23,11 @@ const importFences = Object.entries(importFenceTables).flatMap(([table, reposito
 }))
 
 export const databaseMigrations: DatabaseMigration[] = [
-  { version: 1, name: 'Existing Git registry', statements: [
-    `CREATE TABLE IF NOT EXISTS repos (
+  {
+    version: 1,
+    name: 'Existing Git registry',
+    statements: [
+      `CREATE TABLE IF NOT EXISTS repos (
     id TEXT PRIMARY KEY,
     owner TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -32,17 +35,17 @@ export const databaseMigrations: DatabaseMigration[] = [
     default_branch TEXT NOT NULL DEFAULT 'main',
     created_at INTEGER NOT NULL
   )`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_repos_owner_name ON repos(owner, name)`,
-    `CREATE INDEX IF NOT EXISTS idx_repos_owner_email ON repos(owner_email)`,
-    `CREATE TABLE IF NOT EXISTS webhooks (
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_repos_owner_name ON repos(owner, name)`,
+      `CREATE INDEX IF NOT EXISTS idx_repos_owner_email ON repos(owner_email)`,
+      `CREATE TABLE IF NOT EXISTS webhooks (
     id TEXT PRIMARY KEY,
     repo_id TEXT NOT NULL,
     url TEXT NOT NULL,
     secret TEXT NOT NULL,
     created_at INTEGER NOT NULL
   )`,
-    `CREATE INDEX IF NOT EXISTS idx_webhooks_repo ON webhooks(repo_id)`,
-    `CREATE TABLE IF NOT EXISTS webhook_deliveries (
+      `CREATE INDEX IF NOT EXISTS idx_webhooks_repo ON webhooks(repo_id)`,
+      `CREATE TABLE IF NOT EXISTS webhook_deliveries (
     id TEXT PRIMARY KEY,
     webhook_id TEXT NOT NULL,
     repo_id TEXT NOT NULL,
@@ -53,8 +56,8 @@ export const databaseMigrations: DatabaseMigration[] = [
     duration_ms INTEGER NOT NULL,
     created_at INTEGER NOT NULL
   )`,
-    `CREATE INDEX IF NOT EXISTS idx_deliveries_repo ON webhook_deliveries(repo_id, created_at)`,
-    `CREATE TABLE IF NOT EXISTS commit_statuses (
+      `CREATE INDEX IF NOT EXISTS idx_deliveries_repo ON webhook_deliveries(repo_id, created_at)`,
+      `CREATE TABLE IF NOT EXISTS commit_statuses (
     id TEXT PRIMARY KEY,
     repo_id TEXT NOT NULL,
     sha TEXT NOT NULL,
@@ -65,8 +68,8 @@ export const databaseMigrations: DatabaseMigration[] = [
     log TEXT,
     created_at INTEGER NOT NULL
   )`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_status_repo_sha_context ON commit_statuses(repo_id, sha, context)`,
-    `CREATE TABLE IF NOT EXISTS pulls (
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_status_repo_sha_context ON commit_statuses(repo_id, sha, context)`,
+      `CREATE TABLE IF NOT EXISTS pulls (
     id TEXT PRIMARY KEY,
     repo_id TEXT NOT NULL,
     number INTEGER NOT NULL,
@@ -80,9 +83,9 @@ export const databaseMigrations: DatabaseMigration[] = [
     created_at INTEGER NOT NULL,
     merged_at INTEGER
   )`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_pulls_repo_number ON pulls(repo_id, number)`,
-    `CREATE INDEX IF NOT EXISTS idx_pulls_repo_state ON pulls(repo_id, state)`,
-    `CREATE TABLE IF NOT EXISTS pull_comments (
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_pulls_repo_number ON pulls(repo_id, number)`,
+      `CREATE INDEX IF NOT EXISTS idx_pulls_repo_state ON pulls(repo_id, state)`,
+      `CREATE TABLE IF NOT EXISTS pull_comments (
     id TEXT PRIMARY KEY,
     pull_id TEXT NOT NULL,
     author_email TEXT NOT NULL,
@@ -91,8 +94,8 @@ export const databaseMigrations: DatabaseMigration[] = [
     line INTEGER,
     created_at INTEGER NOT NULL
   )`,
-    `CREATE INDEX IF NOT EXISTS idx_pull_comments_pull ON pull_comments(pull_id, created_at)`,
-    `CREATE TABLE IF NOT EXISTS grants (
+      `CREATE INDEX IF NOT EXISTS idx_pull_comments_pull ON pull_comments(pull_id, created_at)`,
+      `CREATE TABLE IF NOT EXISTS grants (
     id TEXT PRIMARY KEY,
     status TEXT NOT NULL,
     type TEXT,
@@ -107,9 +110,9 @@ export const databaseMigrations: DatabaseMigration[] = [
     expires_at INTEGER,
     used_at INTEGER
   )`,
-    `CREATE INDEX IF NOT EXISTS idx_grants_status ON grants(status)`,
-    `CREATE INDEX IF NOT EXISTS idx_grants_requester ON grants(requester)`,
-    `CREATE TABLE IF NOT EXISTS mirrors (
+      `CREATE INDEX IF NOT EXISTS idx_grants_status ON grants(status)`,
+      `CREATE INDEX IF NOT EXISTS idx_grants_requester ON grants(requester)`,
+      `CREATE TABLE IF NOT EXISTS mirrors (
     id TEXT PRIMARY KEY,
     repo_id TEXT NOT NULL,
     url TEXT NOT NULL,
@@ -118,8 +121,8 @@ export const databaseMigrations: DatabaseMigration[] = [
     enabled INTEGER NOT NULL DEFAULT 1,
     created_at INTEGER NOT NULL
   )`,
-    `CREATE INDEX IF NOT EXISTS idx_mirrors_repo ON mirrors(repo_id)`,
-    `CREATE TABLE IF NOT EXISTS mirror_pushes (
+      `CREATE INDEX IF NOT EXISTS idx_mirrors_repo ON mirrors(repo_id)`,
+      `CREATE TABLE IF NOT EXISTS mirror_pushes (
     id TEXT PRIMARY KEY,
     mirror_id TEXT NOT NULL,
     repo_id TEXT NOT NULL,
@@ -130,33 +133,37 @@ export const databaseMigrations: DatabaseMigration[] = [
     duration_ms INTEGER NOT NULL,
     created_at INTEGER NOT NULL
   )`,
-    `CREATE INDEX IF NOT EXISTS idx_mirror_pushes_repo ON mirror_pushes(repo_id, created_at)`,
-    `CREATE TABLE IF NOT EXISTS mirror_ref_states (
+      `CREATE INDEX IF NOT EXISTS idx_mirror_pushes_repo ON mirror_pushes(repo_id, created_at)`,
+      `CREATE TABLE IF NOT EXISTS mirror_ref_states (
     mirror_id TEXT NOT NULL, ref TEXT NOT NULL, source_sha TEXT, target_sha TEXT,
     last_successful_sha TEXT, checked_at INTEGER NOT NULL, synced_at INTEGER, error TEXT
   )`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_mirror_state_ref ON mirror_ref_states(mirror_id, ref)`,
-    `CREATE TABLE IF NOT EXISTS branch_protections (
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_mirror_state_ref ON mirror_ref_states(mirror_id, ref)`,
+      `CREATE TABLE IF NOT EXISTS branch_protections (
     repo_id TEXT NOT NULL, branch TEXT NOT NULL, mirror_id TEXT NOT NULL,
     contexts TEXT NOT NULL, enabled INTEGER NOT NULL DEFAULT 1,
     updated_at INTEGER NOT NULL, updated_by TEXT NOT NULL
   )`,
-    `CREATE UNIQUE INDEX IF NOT EXISTS idx_protection_branch ON branch_protections(repo_id, branch)`,
-    `CREATE TABLE IF NOT EXISTS protection_events (
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_protection_branch ON branch_protections(repo_id, branch)`,
+      `CREATE TABLE IF NOT EXISTS protection_events (
     id TEXT PRIMARY KEY, repo_id TEXT NOT NULL, branch TEXT NOT NULL,
     actor TEXT NOT NULL, reason TEXT NOT NULL, configuration TEXT NOT NULL, created_at INTEGER NOT NULL
   )`,
-  ] },
-  { version: 2, name: 'Private issue storage', statements: [
-    `ALTER TABLE repos ADD COLUMN reporting_enabled INTEGER NOT NULL DEFAULT 0`,
-    `ALTER TABLE repos ADD COLUMN issue_home_only INTEGER NOT NULL DEFAULT 0`,
-    `ALTER TABLE repos ADD COLUMN code_source_url TEXT`,
-    `CREATE TABLE issue_counters (
+    ],
+  },
+  {
+    version: 2,
+    name: 'Private issue storage',
+    statements: [
+      `ALTER TABLE repos ADD COLUMN reporting_enabled INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE repos ADD COLUMN issue_home_only INTEGER NOT NULL DEFAULT 0`,
+      `ALTER TABLE repos ADD COLUMN code_source_url TEXT`,
+      `CREATE TABLE issue_counters (
     repo_id TEXT NOT NULL,
     next_number INTEGER NOT NULL,
     PRIMARY KEY(repo_id), CHECK(next_number > 0)
   )`,
-    `CREATE TABLE issues (
+      `CREATE TABLE issues (
     id TEXT NOT NULL,
     repo_id TEXT NOT NULL,
     number INTEGER NOT NULL,
@@ -174,7 +181,7 @@ export const databaseMigrations: DatabaseMigration[] = [
     closed_at INTEGER,
     PRIMARY KEY(id), UNIQUE(repo_id, number), CHECK(number > 0), CHECK(version > 0), CHECK(state IN ('open','closed')), CHECK(hidden IN (0,1)), FOREIGN KEY(repo_id) REFERENCES repos(id)
   )`,
-    `CREATE TABLE issue_comments (
+      `CREATE TABLE issue_comments (
     id TEXT NOT NULL,
     issue_id TEXT NOT NULL,
     body TEXT NOT NULL,
@@ -186,7 +193,7 @@ export const databaseMigrations: DatabaseMigration[] = [
     updated_at INTEGER,
     PRIMARY KEY(id), FOREIGN KEY(issue_id) REFERENCES issues(id), CHECK(version > 0), CHECK(hidden IN (0,1))
   )`,
-    `CREATE TABLE issue_labels (
+      `CREATE TABLE issue_labels (
     id TEXT NOT NULL,
     repo_id TEXT NOT NULL,
     name TEXT NOT NULL,
@@ -196,19 +203,19 @@ export const databaseMigrations: DatabaseMigration[] = [
     version INTEGER NOT NULL,
     PRIMARY KEY(id), UNIQUE(repo_id, name), FOREIGN KEY(repo_id) REFERENCES repos(id)
   )`,
-    `CREATE TABLE issue_label_links (
+      `CREATE TABLE issue_label_links (
     issue_id TEXT NOT NULL,
     label_id TEXT NOT NULL,
     PRIMARY KEY(issue_id, label_id), FOREIGN KEY(issue_id) REFERENCES issues(id), FOREIGN KEY(label_id) REFERENCES issue_labels(id)
   )`,
-    `CREATE TABLE issue_participants (
+      `CREATE TABLE issue_participants (
     issue_id TEXT NOT NULL,
     subject TEXT NOT NULL,
     created_by TEXT NOT NULL,
     created_at INTEGER NOT NULL,
     PRIMARY KEY(issue_id, subject), FOREIGN KEY(issue_id) REFERENCES issues(id)
   )`,
-    `CREATE TABLE issue_products (
+      `CREATE TABLE issue_products (
     key TEXT NOT NULL,
     name TEXT NOT NULL,
     repo_id TEXT NOT NULL,
@@ -218,7 +225,7 @@ export const databaseMigrations: DatabaseMigration[] = [
     version INTEGER NOT NULL,
     PRIMARY KEY(key), FOREIGN KEY(repo_id) REFERENCES repos(id), CHECK(enabled IN (0,1))
   )`,
-    `CREATE TABLE issue_pull_links (
+      `CREATE TABLE issue_pull_links (
     issue_id TEXT NOT NULL,
     pull_id TEXT NOT NULL,
     subject TEXT NOT NULL,
@@ -226,7 +233,7 @@ export const databaseMigrations: DatabaseMigration[] = [
     created_at INTEGER NOT NULL,
     PRIMARY KEY(issue_id, pull_id), FOREIGN KEY(issue_id) REFERENCES issues(id), FOREIGN KEY(pull_id) REFERENCES pulls(id)
   )`,
-    `CREATE TABLE issue_events (
+      `CREATE TABLE issue_events (
     id TEXT NOT NULL,
     issue_id TEXT NOT NULL,
     action TEXT NOT NULL,
@@ -237,20 +244,20 @@ export const databaseMigrations: DatabaseMigration[] = [
     import_batch_id TEXT,
     PRIMARY KEY(id), FOREIGN KEY(issue_id) REFERENCES issues(id)
   )`,
-    `CREATE TABLE issue_aliases (
+      `CREATE TABLE issue_aliases (
     repo_id TEXT NOT NULL,
     number INTEGER NOT NULL,
     issue_id TEXT NOT NULL,
     PRIMARY KEY(repo_id, number), FOREIGN KEY(issue_id) REFERENCES issues(id)
   )`,
-    `CREATE TABLE issue_legacy_references (
+      `CREATE TABLE issue_legacy_references (
     source_key TEXT NOT NULL,
     kind TEXT NOT NULL,
     issue_id TEXT NOT NULL,
     comment_id TEXT,
     PRIMARY KEY(source_key), FOREIGN KEY(issue_id) REFERENCES issues(id)
   )`,
-    `CREATE TABLE issue_import_batches (
+      `CREATE TABLE issue_import_batches (
     id TEXT NOT NULL,
     source TEXT NOT NULL,
     manifest_hash TEXT NOT NULL,
@@ -259,7 +266,7 @@ export const databaseMigrations: DatabaseMigration[] = [
     status TEXT NOT NULL,
     PRIMARY KEY(id)
   )`,
-    `CREATE TABLE issue_import_origins (
+      `CREATE TABLE issue_import_origins (
     source_key TEXT NOT NULL,
     batch_id TEXT NOT NULL,
     entity_id TEXT NOT NULL,
@@ -268,7 +275,7 @@ export const databaseMigrations: DatabaseMigration[] = [
     provenance TEXT NOT NULL,
     PRIMARY KEY(source_key), FOREIGN KEY(batch_id) REFERENCES issue_import_batches(id)
   )`,
-    `CREATE TABLE issue_attachments (
+      `CREATE TABLE issue_attachments (
     id TEXT NOT NULL,
     issue_id TEXT NOT NULL,
     comment_id TEXT,
@@ -281,7 +288,7 @@ export const databaseMigrations: DatabaseMigration[] = [
     provenance TEXT NOT NULL,
     PRIMARY KEY(id), FOREIGN KEY(issue_id) REFERENCES issues(id), CHECK(size >= 0)
   )`,
-    `CREATE TABLE issue_write_requests (
+      `CREATE TABLE issue_write_requests (
     subject TEXT NOT NULL,
     actor TEXT NOT NULL,
     operation TEXT NOT NULL,
@@ -291,23 +298,32 @@ export const databaseMigrations: DatabaseMigration[] = [
     created_at INTEGER NOT NULL,
     PRIMARY KEY(subject, actor, operation, request_key)
   )`,
-    `CREATE INDEX idx_issues_repo_updated ON issues(repo_id, updated_at, id)`,
-    `CREATE INDEX idx_issues_state ON issues(state, updated_at, id)`,
-    `CREATE INDEX idx_issues_product ON issues(product_key)`,
-    `CREATE INDEX idx_issues_assignee ON issues(assignee)`,
-    `CREATE INDEX idx_issue_participant_subject ON issue_participants(subject, issue_id)`,
-    `CREATE INDEX idx_issue_comments_order ON issue_comments(issue_id, created_at, id)`,
-    `CREATE INDEX idx_issue_events_order ON issue_events(issue_id, created_at, id)`,
-    `CREATE INDEX idx_issue_links_label ON issue_label_links(label_id, issue_id)`,
-  ] },
-  { version: 3, name: 'Issue reporting policy and triage', statements: [
-    `ALTER TABLE repos ADD COLUMN issue_policy_version INTEGER NOT NULL DEFAULT 1`,
-    `ALTER TABLE issues ADD COLUMN triage_state TEXT NOT NULL DEFAULT 'classified' CHECK(triage_state IN ('classified', 'unclassified'))`,
-  ] },
-  { version: 4, name: 'Isolated issue import fences', statements: [
-    `CREATE TABLE issue_import_targets (repo_id TEXT PRIMARY KEY REFERENCES repos(id), batch_id TEXT NOT NULL REFERENCES issue_import_batches(id), status TEXT NOT NULL CHECK(status IN ('locked','released')))`,
-    ...importFences,
-  ] },
+      `CREATE INDEX idx_issues_repo_updated ON issues(repo_id, updated_at, id)`,
+      `CREATE INDEX idx_issues_state ON issues(state, updated_at, id)`,
+      `CREATE INDEX idx_issues_product ON issues(product_key)`,
+      `CREATE INDEX idx_issues_assignee ON issues(assignee)`,
+      `CREATE INDEX idx_issue_participant_subject ON issue_participants(subject, issue_id)`,
+      `CREATE INDEX idx_issue_comments_order ON issue_comments(issue_id, created_at, id)`,
+      `CREATE INDEX idx_issue_events_order ON issue_events(issue_id, created_at, id)`,
+      `CREATE INDEX idx_issue_links_label ON issue_label_links(label_id, issue_id)`,
+    ],
+  },
+  {
+    version: 3,
+    name: 'Issue reporting policy and triage',
+    statements: [
+      `ALTER TABLE repos ADD COLUMN issue_policy_version INTEGER NOT NULL DEFAULT 1`,
+      `ALTER TABLE issues ADD COLUMN triage_state TEXT NOT NULL DEFAULT 'classified' CHECK(triage_state IN ('classified', 'unclassified'))`,
+    ],
+  },
+  {
+    version: 4,
+    name: 'Isolated issue import fences',
+    statements: [
+      `CREATE TABLE issue_import_targets (repo_id TEXT PRIMARY KEY REFERENCES repos(id), batch_id TEXT NOT NULL REFERENCES issue_import_batches(id), status TEXT NOT NULL CHECK(status IN ('locked','released')))`,
+      ...importFences,
+    ],
+  },
 ]
 
 export async function migrateDatabase(client: Client, migrations = databaseMigrations): Promise<void> {

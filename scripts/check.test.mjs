@@ -152,7 +152,9 @@ it('runs the complete gate only at push and preserves commit and push refusals',
     for (const binary of ['pnpm', 'node']) chmodSync(join(directory, 'bin', binary), 0o755)
     git('remote', 'add', 'origin', directory)
     const hook = (name, overrides = {}) => spawnSync('bash', [join(root, '.githooks', name), 'origin', directory], {
-      cwd: directory, encoding: 'utf8', env: { ...environment, PATH: `${join(directory, 'bin')}:${environment.PATH}`, CI: '', SKIP_HOOKS: '', CHECK_TRACE: trace, CHECK_EXIT: '0', DESTINATION_EXIT: '0', ...overrides },
+      cwd: directory,
+      encoding: 'utf8',
+      env: { ...environment, PATH: `${join(directory, 'bin')}:${environment.PATH}`, CI: '', SKIP_HOOKS: '', CHECK_TRACE: trace, CHECK_EXIT: '0', DESTINATION_EXIT: '0', ...overrides },
     })
     const commands = () => readFileSync(trace, 'utf8').trim().split('\n')
     git('checkout', '-b', 'feature')

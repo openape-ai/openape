@@ -115,11 +115,13 @@ describe('apes CLI in-process tests', () => {
     const { loginCommand } = await import('../src/commands/auth/login')
     expect(existsSync(join(testHome, 'test_key'))).toBe(true)
 
-    await loginCommand.run!({ args: {
-      idp: idpBase,
-      key: join(testHome, 'test_key'),
-      email: AGENT_EMAIL,
-    } } as any)
+    await loginCommand.run!({
+      args: {
+        idp: idpBase,
+        key: join(testHome, 'test_key'),
+        email: AGENT_EMAIL,
+      },
+    } as any)
 
     // Verify auth.json was written with correct data
     const authFile = join(testHome, '.config', 'apes', 'auth.json')
@@ -141,11 +143,13 @@ describe('apes CLI in-process tests', () => {
     // Use `approval` (not `idp`) to avoid poisoning later "no IdP configured" tests.
     writeFileSync(configFile, '[defaults]\napproval = "once"\n', { mode: 0o600 })
 
-    await loginCommand.run!({ args: {
-      idp: idpBase,
-      key: join(testHome, 'test_key'),
-      email: AGENT_EMAIL,
-    } } as any)
+    await loginCommand.run!({
+      args: {
+        idp: idpBase,
+        key: join(testHome, 'test_key'),
+        email: AGENT_EMAIL,
+      },
+    } as any)
 
     expect(existsSync(configFile)).toBe(true)
     const tomlContent = readFileSync(configFile, 'utf-8')
@@ -204,13 +208,15 @@ describe('apes CLI in-process tests', () => {
     // 4a: Request a grant
     const successSpy = vi.spyOn(consola, 'success')
 
-    await requestCommand.run!({ args: {
-      command: 'ls -la',
-      audience: 'escapes',
-      reason: 'integration test',
-      approval: 'once',
-      wait: false,
-    } } as any)
+    await requestCommand.run!({
+      args: {
+        command: 'ls -la',
+        audience: 'escapes',
+        reason: 'integration test',
+        approval: 'once',
+        wait: false,
+      },
+    } as any)
 
     // Extract grant ID from consola.success call
     expect(successSpy).toHaveBeenCalled()
@@ -329,8 +335,7 @@ describe('apes CLI in-process tests', () => {
     const { workflowsCommand } = await import('../src/commands/workflows')
 
     expect(() =>
-      workflowsCommand.run!({ args: { id: 'nonexistent', json: false } } as any),
-    ).toThrow(CliError)
+      workflowsCommand.run!({ args: { id: 'nonexistent', json: false } } as any)).toThrow(CliError)
   })
 
   // NOTE: This test MUST remain the last test in this describe block because

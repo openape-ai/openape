@@ -88,11 +88,13 @@ describe('apes command tests', () => {
 
     // ---- login: authenticate and save auth ----
     const { loginCommand } = await import('../src/commands/auth/login')
-    await loginCommand.run!({ args: {
-      idp: idpBase,
-      key: join(testHome, 'test_key'),
-      email: AGENT_EMAIL,
-    } } as any)
+    await loginCommand.run!({
+      args: {
+        idp: idpBase,
+        key: join(testHome, 'test_key'),
+        email: AGENT_EMAIL,
+      },
+    } as any)
   })
 
   beforeEach(() => {
@@ -137,11 +139,13 @@ describe('apes command tests', () => {
 
       // Re-login for subsequent tests
       const { loginCommand } = await import('../src/commands/auth/login')
-      await loginCommand.run!({ args: {
-        idp: idpBase,
-        key: join(testHome, 'test_key'),
-        email: AGENT_EMAIL,
-      } } as any)
+      await loginCommand.run!({
+        args: {
+          idp: idpBase,
+          key: join(testHome, 'test_key'),
+          email: AGENT_EMAIL,
+        },
+      } as any)
     })
   })
 
@@ -155,13 +159,15 @@ describe('apes command tests', () => {
 
       // Request a grant first
       const successSpy = vi.spyOn(consola, 'success')
-      await requestCommand.run!({ args: {
-        command: 'test-approve-cmd',
-        audience: 'escapes',
-        reason: 'test approve',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'test-approve-cmd',
+          audience: 'escapes',
+          reason: 'test approve',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       const successMsg = successSpy.mock.calls[0]![0] as string
       const idMatch = successMsg.match(/Grant requested:\s+(\S+)/)
@@ -199,13 +205,15 @@ describe('apes command tests', () => {
       const { denyCommand } = await import('../src/commands/grants/deny')
 
       const successSpy = vi.spyOn(consola, 'success')
-      await requestCommand.run!({ args: {
-        command: 'test-deny-cmd',
-        audience: 'escapes',
-        reason: 'test deny',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'test-deny-cmd',
+          audience: 'escapes',
+          reason: 'test deny',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       const successMsg = successSpy.mock.calls[0]![0] as string
       const idMatch = successMsg.match(/Grant requested:\s+(\S+)/)
@@ -228,13 +236,15 @@ describe('apes command tests', () => {
       const { revokeCommand } = await import('../src/commands/grants/revoke')
 
       const successSpy = vi.spyOn(consola, 'success')
-      await requestCommand.run!({ args: {
-        command: 'test-revoke-cmd',
-        audience: 'escapes',
-        reason: 'test revoke',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'test-revoke-cmd',
+          audience: 'escapes',
+          reason: 'test revoke',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       const successMsg = successSpy.mock.calls[0]![0] as string
       const idMatch = successMsg.match(/Grant requested:\s+(\S+)/)
@@ -270,13 +280,15 @@ describe('apes command tests', () => {
 
       // Create a pending grant
       const successSpy = vi.spyOn(consola, 'success')
-      await requestCommand.run!({ args: {
-        command: 'test-revoke-all-1',
-        audience: 'escapes',
-        reason: 'test revoke all',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'test-revoke-all-1',
+          audience: 'escapes',
+          reason: 'test revoke all',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       successSpy.mockClear()
       const infoSpy = vi.spyOn(consola, 'info')
@@ -297,13 +309,15 @@ describe('apes command tests', () => {
       const { revokeCommand } = await import('../src/commands/grants/revoke')
 
       const successSpy = vi.spyOn(consola, 'success')
-      await requestCommand.run!({ args: {
-        command: 'test-revoke-debug',
-        audience: 'escapes',
-        reason: 'test debug',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'test-revoke-debug',
+          audience: 'escapes',
+          reason: 'test debug',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       const successMsg = successSpy.mock.calls[0]![0] as string
       const idMatch = successMsg.match(/Grant requested:\s+(\S+)/)
@@ -330,13 +344,15 @@ describe('apes command tests', () => {
       const { statusCommand } = await import('../src/commands/grants/status')
 
       const successSpy = vi.spyOn(consola, 'success')
-      await requestCommand.run!({ args: {
-        command: 'test-status-cmd',
-        audience: 'escapes',
-        reason: 'test status',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'test-status-cmd',
+          audience: 'escapes',
+          reason: 'test status',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       const successMsg = successSpy.mock.calls[0]![0] as string
       const idMatch = successMsg.match(/Grant requested:\s+(\S+)/)
@@ -357,13 +373,15 @@ describe('apes command tests', () => {
       const { statusCommand } = await import('../src/commands/grants/status')
 
       const successSpy = vi.spyOn(consola, 'success')
-      await requestCommand.run!({ args: {
-        command: 'test-status-json',
-        audience: 'escapes',
-        reason: 'test status json',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'test-status-json',
+          audience: 'escapes',
+          reason: 'test status json',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       const successMsg = successSpy.mock.calls[0]![0] as string
       const idMatch = successMsg.match(/Grant requested:\s+(\S+)/)
@@ -508,13 +526,15 @@ describe('apes command tests', () => {
       const { tokenCommand } = await import('../src/commands/grants/token')
 
       const successSpy = vi.spyOn(consola, 'success')
-      await requestCommand.run!({ args: {
-        command: 'test-token-error',
-        audience: 'escapes',
-        reason: 'test token error',
-        approval: 'once',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'test-token-error',
+          audience: 'escapes',
+          reason: 'test token error',
+          approval: 'once',
+          wait: false,
+        },
+      } as any)
 
       const successMsg = successSpy.mock.calls[0]![0] as string
       const idMatch = successMsg.match(/Grant requested:\s+(\S+)/)
@@ -541,11 +561,13 @@ describe('apes command tests', () => {
       try {
         rmSync(authFile)
         await expect(
-          delegateCommand.run!({ args: {
-            to: 'other@example.com',
-            at: 'example.com',
-            approval: 'once',
-          } } as any),
+          delegateCommand.run!({
+            args: {
+              to: 'other@example.com',
+              at: 'example.com',
+              approval: 'once',
+            },
+          } as any),
         ).rejects.toThrow(CliError)
       }
       finally {
@@ -610,8 +632,7 @@ describe('apes command tests', () => {
       const { configSetCommand } = await import('../src/commands/config/set')
 
       expect(() =>
-        configSetCommand.run!({ args: { key: 'invalid', value: 'x' } } as any),
-      ).toThrow(CliError)
+        configSetCommand.run!({ args: { key: 'invalid', value: 'x' } } as any)).toThrow(CliError)
     })
 
     it('throws CliError for unknown section', async () => {
@@ -619,8 +640,7 @@ describe('apes command tests', () => {
       const { configSetCommand } = await import('../src/commands/config/set')
 
       expect(() =>
-        configSetCommand.run!({ args: { key: 'unknown.field', value: 'x' } } as any),
-      ).toThrow(CliError)
+        configSetCommand.run!({ args: { key: 'unknown.field', value: 'x' } } as any)).toThrow(CliError)
     })
   })
 
@@ -681,8 +701,7 @@ describe('apes command tests', () => {
       const { configGetCommand } = await import('../src/commands/config/get')
 
       expect(() =>
-        configGetCommand.run!({ args: { key: 'invalid' } } as any),
-      ).toThrow(CliError)
+        configGetCommand.run!({ args: { key: 'invalid' } } as any)).toThrow(CliError)
     })
   })
 
@@ -810,14 +829,16 @@ describe('apes command tests', () => {
       const { requestCommand } = await import('../src/commands/grants/request')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await requestCommand.run!({ args: {
-        command: 'ls -la',
-        audience: 'escapes',
-        reason: 'test duration',
-        approval: 'timed',
-        duration: '1h',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'ls -la',
+          audience: 'escapes',
+          reason: 'test duration',
+          approval: 'timed',
+          duration: '1h',
+          wait: false,
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalled()
       const msg = String(successSpy.mock.calls[0]![0])
@@ -828,14 +849,16 @@ describe('apes command tests', () => {
       const { requestCommand } = await import('../src/commands/grants/request')
       const successSpy = vi.spyOn(consola, 'success')
 
-      await requestCommand.run!({ args: {
-        command: 'apt-get update',
-        audience: 'escapes',
-        reason: 'test run-as',
-        approval: 'once',
-        'run-as': 'root',
-        wait: false,
-      } } as any)
+      await requestCommand.run!({
+        args: {
+          command: 'apt-get update',
+          audience: 'escapes',
+          reason: 'test run-as',
+          approval: 'once',
+          'run-as': 'root',
+          wait: false,
+        },
+      } as any)
 
       expect(successSpy).toHaveBeenCalled()
     })
@@ -849,12 +872,14 @@ describe('apes command tests', () => {
       try {
         rmSync(authFile)
         await expect(
-          requestCommand.run!({ args: {
-            command: 'ls',
-            audience: 'escapes',
-            approval: 'once',
-            wait: false,
-          } } as any),
+          requestCommand.run!({
+            args: {
+              command: 'ls',
+              audience: 'escapes',
+              approval: 'once',
+              wait: false,
+            },
+          } as any),
         ).rejects.toThrow(CliError)
       }
       finally {
@@ -873,11 +898,13 @@ describe('apes command tests', () => {
       const getSubCommand = fetchCommand.subCommands!.get as any
 
       logOutput = []
-      await getSubCommand.run!({ args: {
-        url: `${idpBase}/.well-known/openid-configuration`,
-        raw: false,
-        headers: false,
-      } } as any)
+      await getSubCommand.run!({
+        args: {
+          url: `${idpBase}/.well-known/openid-configuration`,
+          raw: false,
+          headers: false,
+        },
+      } as any)
 
       const output = logOutput.join('\n')
       const data = JSON.parse(output)
@@ -889,11 +916,13 @@ describe('apes command tests', () => {
       const getSubCommand = fetchCommand.subCommands!.get as any
 
       logOutput = []
-      await getSubCommand.run!({ args: {
-        url: `${idpBase}/.well-known/openid-configuration`,
-        raw: false,
-        headers: true,
-      } } as any)
+      await getSubCommand.run!({
+        args: {
+          url: `${idpBase}/.well-known/openid-configuration`,
+          raw: false,
+          headers: true,
+        },
+      } as any)
 
       const output = logOutput.join('\n')
       expect(output).toContain('HTTP')
@@ -905,11 +934,13 @@ describe('apes command tests', () => {
       const getSubCommand = fetchCommand.subCommands!.get as any
 
       stdoutOutput = []
-      await getSubCommand.run!({ args: {
-        url: `${idpBase}/.well-known/openid-configuration`,
-        raw: true,
-        headers: false,
-      } } as any)
+      await getSubCommand.run!({
+        args: {
+          url: `${idpBase}/.well-known/openid-configuration`,
+          raw: true,
+          headers: false,
+        },
+      } as any)
 
       const output = stdoutOutput.join('')
       expect(output).toContain('issuer')
@@ -939,20 +970,22 @@ describe('apes command tests', () => {
 
       // POST to grants endpoint (will create a grant)
       logOutput = []
-      await postSubCommand.run!({ args: {
-        url: `${idpBase}/api/grants`,
-        body: JSON.stringify({
-          requester: AGENT_EMAIL,
-          target_host: 'test-host',
-          audience: 'escapes',
-          grant_type: 'once',
-          command: ['echo', 'hello'],
-          reason: 'test fetch post',
-        }),
-        'content-type': 'application/json',
-        raw: false,
-        headers: false,
-      } } as any)
+      await postSubCommand.run!({
+        args: {
+          url: `${idpBase}/api/grants`,
+          body: JSON.stringify({
+            requester: AGENT_EMAIL,
+            target_host: 'test-host',
+            audience: 'escapes',
+            grant_type: 'once',
+            command: ['echo', 'hello'],
+            reason: 'test fetch post',
+          }),
+          'content-type': 'application/json',
+          raw: false,
+          headers: false,
+        },
+      } as any)
 
       const output = logOutput.join('\n')
       const data = JSON.parse(output)
@@ -965,11 +998,13 @@ describe('apes command tests', () => {
       const postSubCommand = fetchCommand.subCommands!.post as any
 
       await expect(
-        postSubCommand.run!({ args: {
-          url: `${idpBase}/nonexistent`,
-          raw: false,
-          headers: false,
-        } } as any),
+        postSubCommand.run!({
+          args: {
+            url: `${idpBase}/nonexistent`,
+            raw: false,
+            headers: false,
+          },
+        } as any),
       ).rejects.toThrow(CliError)
     })
   })

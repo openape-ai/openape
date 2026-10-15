@@ -12,7 +12,8 @@ export default defineComponent({
   data() { return { alias: '', jumps: '', error: '' } },
   computed: { targets() { return this.state.resources.filter(item => item.configuration.type === 'sshInventory') } },
   methods: {
-    t, label,
+    t,
+    label,
     route(configuration: Record<string, unknown>) {
       const binding = configuration as unknown as SshBinding
       return binding.hosts.map(host => `${host.user}@${host.alias} (${host.hostname}:${host.port})`).join(' → ')

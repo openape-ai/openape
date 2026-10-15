@@ -61,7 +61,8 @@ it('derives systems, pods, shared data, measured edges and KPIs from the stored 
 
   // KPIs: Pods with a running schedule, the degraded monitor that is running again, open questions and approvals.
   expect(view.kpis).toEqual({
-    active: 5, paused: 25,
+    active: 5,
+    paused: 25,
     degraded: [{ podId: monitor.id, reason: 'completedWithGaps' }],
     decisions: [{ podId: f.pods['Mail-Klassifizierung'], kind: 'question', title: 'Mail-Klassifizierung', count: 17 }, { podId: f.pods['Newsletter-Prüfung'], kind: 'approval', title: 'Newsletter-Prüfung', count: 4 }],
     unknownDeliveries: 1,

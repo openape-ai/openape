@@ -85,10 +85,12 @@ it('keeps the trust action disabled while the viewer request is pending', async 
 })
 
 it('opens real version details and preserves pinned and latest link destinations', async () => {
-  const fetch = vi.fn().mockResolvedValue({ items: [
-    { version: 1, author: report.author, created_at: 1 },
-    { version: 2, author: report.author, created_at: 2 },
-  ] })
+  const fetch = vi.fn().mockResolvedValue({
+    items: [
+      { version: 1, author: report.author, created_at: 1 },
+      { version: 2, author: report.author, created_at: 2 },
+    ],
+  })
   vi.stubGlobal('$fetch', fetch)
   wrapper = mount(HtmlReport, { props: { report }, global, attachTo: document.body })
   await flushPromises()

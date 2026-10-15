@@ -194,14 +194,26 @@ describe('reviewed source transaction', () => {
     const preview = await mergePreview(repo, target, source)
     git(['update-ref', 'refs/heads/review-source', target])
     await expect(createMergeCommit(repo, {
-      tree: preview.tree!, target, source, targetRef: 'refs/heads/review-target', expectedTarget: target,
-      sourceRef: 'refs/heads/review-source', message: 'must not merge stale source', identity: { name: 'T', email: 't@example.com' },
+      tree: preview.tree!,
+      target,
+      source,
+      targetRef: 'refs/heads/review-target',
+      expectedTarget: target,
+      sourceRef: 'refs/heads/review-source',
+      message: 'must not merge stale source',
+      identity: { name: 'T', email: 't@example.com' },
     })).rejects.toThrow()
     expect(git(['rev-parse', 'review-target']).trim()).toBe(target)
     git(['update-ref', 'refs/heads/review-source', source])
     const merged = await createMergeCommit(repo, {
-      tree: preview.tree!, target, source, targetRef: 'refs/heads/review-target', expectedTarget: target,
-      sourceRef: 'refs/heads/review-source', message: 'reviewed source', identity: { name: 'T', email: 't@example.com' },
+      tree: preview.tree!,
+      target,
+      source,
+      targetRef: 'refs/heads/review-target',
+      expectedTarget: target,
+      sourceRef: 'refs/heads/review-source',
+      message: 'reviewed source',
+      identity: { name: 'T', email: 't@example.com' },
     })
     expect(git(['rev-parse', 'review-target']).trim()).toBe(merged)
   })

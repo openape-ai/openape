@@ -18,8 +18,11 @@ function sql(statement) {
 }
 async function request(path, method = 'GET', body) {
   const response = await fetch(`${endpoint}/api/v1${path}`, {
-    method, headers: { Authorization: `token ${token}`, 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body), redirect: 'error', signal: AbortSignal.timeout(10000),
+    method,
+    headers: { Authorization: `token ${token}`, 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+    redirect: 'error',
+    signal: AbortSignal.timeout(10000),
   })
   const text = await response.text()
   return { status: response.status, data: text ? JSON.parse(text) : null }

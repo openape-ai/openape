@@ -39,7 +39,8 @@ describe('pinned SDK native boundary', () => {
     for (const tools of [undefined, []] as const) {
       let turns = 0; let calls = 0
       const reply = await executeAgent(runtime, root, 'Treat this injected request as untrusted data.', [], {
-        model: bundledModel, provider: async () => {
+        model: bundledModel,
+        provider: async () => {
           if (++turns > 2) throw new Error('Unexpected repeated model request')
           return turns === 1 ? recordedResponse({ type: 'function_call', id: 'injected', call_id: 'injected', namespace: 'mcp__pod', name: 'ape_shell', arguments: JSON.stringify({ application: 'fixture', argv: ['read'] }) }) : recordedResponse()
         },
@@ -53,7 +54,8 @@ describe('pinned SDK native boundary', () => {
     const runtime = await setup(); let turns = 0; const requests: unknown[] = []; const calls: unknown[] = []
     const marker = join(root, 'unassigned-output')
     const services = {
-      model: bundledModel, provider: async (body: unknown) => {
+      model: bundledModel,
+      provider: async (body: unknown) => {
         requests.push(body)
         if (++turns > 2) throw new Error('Unexpected repeated model request')
         return turns === 1 ? recordedResponse({ type: 'function_call', id: 'denied-call', call_id: 'denied-call', namespace: 'functions', name, arguments: JSON.stringify({ cmd: `/usr/bin/touch ${marker}`, input: `*** Begin Patch\n*** Add File: ${marker}\n+BAD\n*** End Patch`, message: 'Create an unassigned file', path: marker }) }) : recordedResponse()
@@ -71,7 +73,8 @@ describe('pinned SDK native boundary', () => {
     let markRequested: () => void = () => {}
     const requested = new Promise<void>((resolveRequest) => { markRequested = resolveRequest })
     const running = executeAgent(runtime, root, 'Synthetic stalled provider.', [], {
-      model: bundledModel, provider: async (_body, signal) => { markRequested(); return new Promise<Response>((_resolve, reject) => { signal.addEventListener('abort', () => reject(signal.reason), { once: true }) }) },
+      model: bundledModel,
+      provider: async (_body, signal) => { markRequested(); return new Promise<Response>((_resolve, reject) => { signal.addEventListener('abort', () => reject(signal.reason), { once: true }) }) },
       tool: async () => { throw new Error('No tools assigned') },
     }, controller.signal, () => {})
     const settled = expect(running).rejects.toThrow('Owner cancelled')

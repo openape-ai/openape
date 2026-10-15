@@ -90,9 +90,13 @@ export const authorizeNestCommand = defineCommand({
     consola.info(`Configuring YOLO-policy on ${nestAuth.email} via \`apes yolo set\`…`)
 
     const cmdArgs = [
-      'yolo', 'set', nestAuth.email,
-      '--mode', 'allow-list',
-      '--allow', allow,
+      'yolo',
+      'set',
+      nestAuth.email,
+      '--mode',
+      'allow-list',
+      '--allow',
+      allow,
     ]
     if (typeof args['expires-in'] === 'string' && args['expires-in']) {
       cmdArgs.push('--expires-in', args['expires-in'])

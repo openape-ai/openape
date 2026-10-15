@@ -1027,7 +1027,13 @@ export class FixtureWorker {
         if (!this.credentials || !this.connections) throw new Error('Connection service unavailable')
         const assignment = assignedJev(state.resources, scope.podId, scope.capabilities)
         const result = await executeJev(assignment, parseJevRequest(request.body), {
-          credentials: this.credentials, signal: controller.signal, observe, ledger, check, tokens, presentation,
+          credentials: this.credentials,
+          signal: controller.signal,
+          observe,
+          ledger,
+          check,
+          tokens,
+          presentation,
           send: (body, signal) => this.connections!.typesafeRequest(assignment.connectionId, body, signal),
           consumeAttempt: () => {
             const count = this.jevAttempts.get(scope.runId) ?? 0

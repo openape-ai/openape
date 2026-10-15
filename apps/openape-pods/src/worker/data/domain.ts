@@ -113,7 +113,11 @@ export class DomainData {
 
   private view(row: Record<string, unknown>): DataEntryView {
     return {
-      key: `${String(row.namespace)}/${String(row.key)}`, revision: Number(row.revision), value: JSON.parse(String(row.value)), author: String(row.author), updatedAt: Number(row.updated_at),
+      key: `${String(row.namespace)}/${String(row.key)}`,
+      revision: Number(row.revision),
+      value: JSON.parse(String(row.value)),
+      author: String(row.author),
+      updatedAt: Number(row.updated_at),
       ...(row.result ? { result: JSON.parse(String(row.result)) as DataResultBinding } : {}),
     }
   }

@@ -32,7 +32,9 @@ const effectivePodKeys = computed(() => uniqueKeys((source.value?.pods ?? []).ma
 const choices = computed<PortableExportChoices>(() => ({
   package: { key: key.value, revision: Number(revision.value), title: title.value, description: description.value },
   pods: (source.value?.pods ?? []).map(pod => ({
-    podId: pod.podId, key: effectivePodKeys.value[pod.podId]!, description: '',
+    podId: pod.podId,
+    key: effectivePodKeys.value[pod.podId]!,
+    description: '',
     defaults: [...pod.variables.filter(name => defaults.value[`${pod.podId}/variable:${name}`]).map(name => `variable:${name}`), ...pod.configuration.filter(name => defaults.value[`${pod.podId}/configuration:${name}`]).map(name => `configuration:${name}`)],
     aliases: pod.aliasable.map(resource => ({ resourceId: resource.id, alias: aliases.value[resource.id] || key36(resource.name) })),
     assets: pod.references.filter(reference => included.value[reference.id]).map((reference, _, chosen) => ({ resourceId: reference.id, path: `assets/${effectivePodKeys.value[pod.podId]}/${uniqueKeys(chosen, {}, assetName)[reference.id]}`, mediaType: 'application/octet-stream' })),

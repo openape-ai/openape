@@ -34,7 +34,10 @@ describe('validateAuthzJWT', () => {
   it('returns error for missing required permission', async () => {
     const { token, publicKey } = await makeToken({ permissions: ['doc:read'] })
     const result = await validateAuthzJWT(token, {
-      expectedIss: 'https://openape.example.com', expectedAud: 'sp.example.com', publicKey, requiredPermission: 'doc:delete',
+      expectedIss: 'https://openape.example.com',
+      expectedAud: 'sp.example.com',
+      publicKey,
+      requiredPermission: 'doc:delete',
     })
     expect(result).toMatchObject({ valid: false, error: 'Missing required permission: doc:delete' })
   })
@@ -42,7 +45,10 @@ describe('validateAuthzJWT', () => {
   it('returns error for command hash mismatch', async () => {
     const { token, publicKey } = await makeToken({ cmd_hash: 'abc' })
     const result = await validateAuthzJWT(token, {
-      expectedIss: 'https://openape.example.com', expectedAud: 'sp.example.com', publicKey, expectedCmdHash: 'xyz',
+      expectedIss: 'https://openape.example.com',
+      expectedAud: 'sp.example.com',
+      publicKey,
+      expectedCmdHash: 'xyz',
     })
     expect(result).toMatchObject({ valid: false, error: 'Command hash mismatch' })
   })
@@ -50,7 +56,9 @@ describe('validateAuthzJWT', () => {
   it('catches verification errors (wrong issuer, malformed token)', async () => {
     const { publicKey } = await generateKeyPair()
     const result = await validateAuthzJWT('not.a.jwt', {
-      expectedIss: 'iss', expectedAud: 'aud', publicKey,
+      expectedIss: 'iss',
+      expectedAud: 'aud',
+      publicKey,
     })
     expect(result.valid).toBe(false)
     expect(result.error).toBeDefined()
