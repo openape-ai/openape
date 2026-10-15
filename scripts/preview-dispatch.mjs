@@ -25,8 +25,6 @@ const API = process.env.COOLIFY_API || 'https://coolify.openape.ai/api/v1'
 
 const APPS = [
   { name: 'idp', dir: 'apps/openape-free-idp/', filter: 'openape-free-idp', image: 'openape-free-idp', port: 3003, uuid: 't13z5yj6xw87cy7bwz00y93x' },
-  { name: 'troop', dir: 'apps/openape-troop/', filter: '@openape/troop', image: 'openape-troop', port: 3010, uuid: 'hke1tnc7xxy2pc8uf8ch6bud' },
-  { name: 'chat', dir: 'apps/openape-chat/', filter: '@openape/chat', image: 'openape-chat', port: 3007, uuid: 'zmgz7sm50unh49bzclgjbfmh' },
   // org retired (merged into troop, B0) — no preview target.
 ]
 
