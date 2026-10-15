@@ -57,7 +57,6 @@ apps/             # Deployable applications (private, not published)
   openape-plans/      # plans.openape.ai — living plans → self-hosted (chatty)
   openape-timetrack/  # timetrack.openape.ai — time tracking → self-hosted (chatty)
   openape-monitor/    # monitor.openape.ai — uptime monitor (checks + mail alerts) → self-hosted (chatty)
-  openape-question-service/  # question-service.openape.ai — sp-tasks Q&A surface → self-hosted (chatty)
   openape-crm/        # crm.openape.ai — Deal-Pipeline, Kontakte, Notizen → self-hosted (chatty)
   openape-git/        # repos.openape.ai — ape-git, DDISA-natives Git-Forge → self-hosted (Forge-VM)
   openape-ape-agent/  # @openape/ape-agent — per-agent runtime process
@@ -140,7 +139,7 @@ The release script never commits or pushes. Do not publish an unmerged version.
 **Prod = tested images** (seit 2026-06-10): die Web-Apps laufen als Container aus `registry.openape.ai`, orchestriert von `scripts/deploy-image.mjs` + `compose/chatty.yml` (auf chatty unter `/home/openape/prod/`, compose-Projekt `openape-prod`).
 
 ```bash
-pnpm run deploy:image <target...>   # free-idp | troop | chat | testrun | tasks | pr | plans | timetrack | monitor | question-service | dashboard | crm
+pnpm run deploy:image <target...>   # free-idp | troop | chat | testrun | tasks | pr | plans | timetrack | monitor | dashboard | crm
 pnpm run deploy:image --all
 ```
 
@@ -156,7 +155,6 @@ Ablauf pro Target: turbo build (.output, Mac, warme Caches) → COPY-only amd64-
 | `testrun`    | 3006 | openape-testrun        |
 | `timetrack`  | 3011 | openape-timetrack      |
 | `monitor`    | 3018 | openape-monitor        |
-| `question-service` | 3017 | openape-question-service |
 | `pr`         | 3014 | openape-pr             |
 | `dashboard`  | 3022 | openape-dashboard      |
 | `crm`        | 3024 | openape-crm            |

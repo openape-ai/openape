@@ -2,17 +2,21 @@ import type { MapApproval, MapGrant, MapPod, MapView } from '../../contracts/map
 import type { SecretRequestRow } from '../../contracts/secrets'
 
 /**
- * The five system KPIs with the data their subtitles are made of. The words come from the
+ * The three system KPIs with the data their subtitles are made of. The words come from the
  * renderer's translations; nothing here is a judgement, only counts and names from the read model.
  */
 export interface KpiFacts {
-  active: number
-  paused: { total: number, drafts: number, archived: number }
-  /** Active Pods whose current state is an error; failures they already recovered from belong to their history. */
-  errors: { name: string, reason: string }[]
+  /** Running Pods out of all Pods that are not archived; archived Pods have their own list. */
+  active: { running: number, total: number }
+  /**
+   * Active Pods whose current state is an error; failures they already recovered from belong to their history.
+   * `reason` is the settled run state or `blocked`; raw queue errors stay in the Pod.
+   */
+  errors: { podId: string, name: string, reason: string | null }[]
   decisions: DecisionCounts
-  unknownDeliveries: number
 }
+
+const readableReasons = new Set(['failed', 'completedWithGaps', 'blocked'])
 
 /**
  * What waits for the owner, per section of Entscheidungen. The KPI, the tab badge and the section counters all read
@@ -67,17 +71,11 @@ export function kpiFacts(view: MapView, requests: SecretRequestRow[] = []): KpiF
   // Same rule as the row state: a paused or archived Pod shows as paused, not failing.
   const errors = kpis.degraded.flatMap((item) => {
     const pod = view.pods.find(candidate => candidate.id === item.podId)
-    return pod?.lifecycle === 'active' ? [{ name: pod.name, reason: item.reason }] : []
+    return pod?.lifecycle === 'active' ? [{ podId: pod.id, name: pod.name, reason: readableReasons.has(item.reason) ? item.reason : null }] : []
   })
   return {
-    active: kpis.active,
-    paused: {
-      total: kpis.paused,
-      drafts: view.pods.filter(pod => pod.draft && pod.lifecycle !== 'archived').length,
-      archived: view.pods.filter(pod => pod.lifecycle === 'archived').length,
-    },
+    active: { running: kpis.active, total: view.pods.filter(pod => pod.lifecycle !== 'archived').length },
     errors,
     decisions: decisionCounts(view, requests),
-    unknownDeliveries: kpis.unknownDeliveries,
   }
 }
