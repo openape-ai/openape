@@ -102,48 +102,6 @@ services:
       retries: 6
       start_period: 10s
 
-  # Legacy source: https://repos.openape.ai/patrick/legacy (existing image/data retained).
-  troop:
-    image: registry.openape.ai/openape-troop:${TROOP_TAG:-unset}
-    restart: unless-stopped
-    user: "999:988"
-    env_file: /home/openape/projects/openape-troop/shared/.env
-    environment:
-      HOST: 0.0.0.0
-      NITRO_HOST: 0.0.0.0
-    volumes:
-      - /home/openape/projects/openape-troop/shared:/home/openape/projects/openape-troop/shared
-    ports:
-      - "127.0.0.1:3010:3010"
-      - "10.0.1.1:3010:3010"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3010/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 10s
-
-  # Legacy source: https://repos.openape.ai/patrick/legacy (existing image/data retained).
-  chat:
-    image: registry.openape.ai/openape-chat:${CHAT_TAG:-unset}
-    restart: unless-stopped
-    user: "999:988"
-    env_file: /home/openape/projects/openape-chat/shared/.env
-    environment:
-      HOST: 0.0.0.0
-      NITRO_HOST: 0.0.0.0
-    volumes:
-      - /home/openape/projects/openape-chat/shared:/home/openape/projects/openape-chat/shared
-    ports:
-      - "127.0.0.1:3007:3007"
-      - "10.0.1.1:3007:3007"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3007/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 10s
-
   testrun:
     image: registry.openape.ai/openape-testrun:${TESTRUN_TAG:-unset}
     restart: unless-stopped
@@ -329,49 +287,6 @@ services:
       traefik.http.services.dashboard.loadbalancer.server.port: "3022"
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3022/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
-      interval: 10s
-      timeout: 5s
-      retries: 6
-      start_period: 10s
-
-
-  # Legacy source: https://repos.openape.ai/patrick/legacy (existing image/data retained).
-  crm:
-    image: registry.openape.ai/openape-crm:${CRM_TAG:-unset}
-    restart: unless-stopped
-    user: "999:988"
-    env_file: /home/openape/projects/openape-crm/shared/.env
-    environment:
-      HOST: 0.0.0.0
-      NITRO_HOST: 0.0.0.0
-      # shared/.env trägt keinen Port — der Dev-Default der App (3024) steht
-      # hier, damit Container und Traefik-Upstream übereinstimmen.
-      PORT: "3024"
-      NITRO_PORT: "3024"
-    volumes:
-      - /home/openape/projects/openape-crm/shared:/home/openape/projects/openape-crm/shared
-    ports:
-      - "127.0.0.1:3024:3024"
-      - "10.0.1.1:3024:3024"
-    # Traefik wie beim dashboard — TLS kommt vom letsencrypt-Certresolver,
-    # kein nginx-vhost und kein certbot auf dem Host.
-    networks:
-      - default
-      - coolify
-    labels:
-      traefik.enable: "true"
-      traefik.docker.network: coolify
-      traefik.http.routers.crm-http.entryPoints: http
-      traefik.http.routers.crm-http.rule: Host(`crm.openape.ai`)
-      traefik.http.routers.crm-http.middlewares: redirect-to-https
-      traefik.http.routers.crm-https.entryPoints: https
-      traefik.http.routers.crm-https.rule: Host(`crm.openape.ai`)
-      traefik.http.routers.crm-https.tls: "true"
-      traefik.http.routers.crm-https.tls.certresolver: letsencrypt
-      traefik.http.routers.crm-https.middlewares: gzip
-      traefik.http.services.crm.loadbalancer.server.port: "3024"
-    healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3024/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 10s
       timeout: 5s
       retries: 6
