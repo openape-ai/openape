@@ -5,7 +5,7 @@
   "owner": "Patrick Hofmann",
   "date": "2026-10-15",
   "revision": 1,
-  "status": "draft",
+  "status": "active",
   "title": "Parallel UI verification migration",
   "goal": "Verify UI behavior and appearance quickly with real components and styles while retaining meaningful integration coverage.",
   "summary": "Prepare three independent worktree sessions for Git/Issues, Inbox/PWA and Reports. Coordinate shared files and heavy checks centrally; keep authentication, persistence, offline and security boundaries in their appropriate suites. Troop is excluded.",
@@ -15,7 +15,7 @@
     "approach": "Transfer the Pods pattern into three disjoint areas using real Vue components, production CSS and deterministic transport boundaries.",
     "outcome": "Each area has a documented fast UI command, replacement evidence and a smaller, explicitly retained integration set."
   },
-  "context": "Source assessment: canonical main bc6fa362e84614c5a12352849d6875dc2c215e4c, October 15. PR 429 separated Pods browser layout from native acceptance; PR 432 consolidated local gates. This is a proposal, not implementation approval. Patrick explicitly excludes Troop because a separate worktree is moving it into a legacy repository. Refresh main and the dependency graph before launch.",
+  "context": "Patrick approved revision 1 on October 15 and authorized launch, coordination messages and merges. Preparation starts from canonical main 7d0caa8b67a939284d008761efe977dc76fbe288. PR 429 separated Pods browser layout from native acceptance; PR 432 consolidated local gates. Troop remains excluded; its extraction worktree is untouched.",
   "scope": [
     "First wave: Git/Issues, Pods Inbox/PWA and Reports; three area sessions plus coordination in this chat.",
     "Move existing UI assertions only after replacement proof; add lasting cases only for important missing behavior.",
@@ -57,7 +57,7 @@
       "id": "m0",
       "title": "M0 — Approval and parallel launch preparation",
       "goal": "Publish one approved base and remove shared-file conflicts before dispatch.",
-      "status": "planned",
+      "status": "active",
       "steps": [
         "Bind Patrick’s actual approval to proposal revision 1; creating or merging the planning PR does not approve implementation.",
         "Refresh canonical main and inspect the ongoing legacy extraction. Inventory existing declared browser/CSS dependencies, app commands and graph generation for A/B/C; avoid new dependencies when existing ones suffice.",
@@ -163,7 +163,7 @@
       "mitigation": "Exclude Troop. Refresh and inspect the extraction’s merged changes at preparation and integration. Request only the specific shared dependency clarification if needed; never edit or reset its worktree."
     }
   ],
-  "handoff": "Review proposal revision 1. After Patrick approves this revision and requests launch, complete M0 in the coordinator, publish the frozen base and start A, B and C as separate chats with their own worktrees. No area sessions or implementation have started.",
+  "handoff": "M0 is active. Add the existing catalog browser dependencies to Git and Inbox centrally, then merge preparation and freeze its SHA for all three sessions. Reports already declares these dependencies. Existing test commands remain until replacements are proven. The coordinator owns shared files, heavy-check scheduling and merges.",
   "changelog": [
     {
       "date": "2026-10-15",
@@ -224,8 +224,8 @@
       },
       {
         "path": "context",
-        "source": "Source assessment: canonical main bc6fa362e84614c5a12352849d6875dc2c215e4c, October 15. PR 429 separated Pods browser layout from native acceptance; PR 432 consolidated local gates. This is a proposal, not implementation approval. Patrick explicitly excludes Troop because a separate worktree is moving it into a legacy repository. Refresh main and the dependency graph before launch.",
-        "text": "Bewerteter Quellstand: kanonischer main bc6fa362e84614c5a12352849d6875dc2c215e4c, 15. Oktober. PR 429 trennte Pods-Browserlayout von nativer Abnahme; PR 432 bündelte lokale Gates. Dies ist ein Vorschlag, keine Umsetzungsfreigabe. Patrick schließt Troop ausdrücklich aus, weil ein anderer Worktree es in ein Legacy-Repository ausgliedert. Vor dem Start main und den Abhängigkeitsgraphen aktualisieren."
+        "source": "Patrick approved revision 1 on October 15 and authorized launch, coordination messages and merges. Preparation starts from canonical main 7d0caa8b67a939284d008761efe977dc76fbe288. PR 429 separated Pods browser layout from native acceptance; PR 432 consolidated local gates. Troop remains excluded; its extraction worktree is untouched.",
+        "text": "Patrick hat Revision 1 am 15. Oktober freigegeben und Start, Koordinationsnachrichten und Merges beauftragt. Die Vorbereitung beginnt auf dem kanonischen main 7d0caa8b67a939284d008761efe977dc76fbe288. PR 429 hat Pods-Browserprüfungen von nativer Abnahme getrennt; PR 432 hat lokale Gates gebündelt. Troop bleibt ausgeschlossen; sein Ausgliederungs-Worktree bleibt unberührt."
       },
       {
         "path": "scope.0",
@@ -594,8 +594,8 @@
       },
       {
         "path": "handoff",
-        "source": "Review proposal revision 1. After Patrick approves this revision and requests launch, complete M0 in the coordinator, publish the frozen base and start A, B and C as separate chats with their own worktrees. No area sessions or implementation have started.",
-        "text": "Vorschlagsrevision 1 prüfen. Nach Patricks Freigabe dieser Revision und Startauftrag führt die Koordination M0 aus, veröffentlicht die feste Basis und startet A, B und C als getrennte Chats mit eigenen Worktrees. Noch keine Bereichssessions oder Umsetzung gestartet."
+        "source": "M0 is active. Add the existing catalog browser dependencies to Git and Inbox centrally, then merge preparation and freeze its SHA for all three sessions. Reports already declares these dependencies. Existing test commands remain until replacements are proven. The coordinator owns shared files, heavy-check scheduling and merges.",
+        "text": "M0 läuft. Die vorhandenen Browser-Abhängigkeiten aus dem Katalog werden zentral für Git und Inbox ergänzt. Danach wird die Vorbereitung gemergt und ihr SHA als gemeinsame Basis festgehalten. Reports deklariert diese Abhängigkeiten bereits. Bestehende Prüfkommandos bleiben bis zum Nachweis ihrer Ablösung erhalten. Die Koordination verwaltet gemeinsame Dateien, aufwendige Prüfungen und Merges."
       },
       {
         "path": "changelog.0.text",
@@ -603,5 +603,14 @@
         "text": "Vorschlag aus Repository-Inspektion und Patricks Wunsch nach parallelen Worktrees erstellt; Troop nach seiner ausdrücklichen Korrektur vor der Veröffentlichung ausgeschlossen."
       }
     ]
+  },
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-15",
+    "reference": "Plan Revision 1 ist freigegeben. Bereite die gemeinsame Basis vor und starte Git/Issues, Inbox/PWA und Reports parallel in eigenen Sessions und Worktrees. Koordiniere sie von hier aus, inklusive Nachrichten und Merges. Troop bleibt außen vor.",
+    "target": {
+      "revision": 1
+    },
+    "scope": "Revision 1 implementation, three isolated sessions, coordinator messages and sequential merges; Troop excluded."
   }
 }
