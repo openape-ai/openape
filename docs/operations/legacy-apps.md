@@ -42,7 +42,10 @@ not rewrite either repository's history or restore stale production data.
 Question Service joined the legacy repository under issue 1488 after a usage
 audit on October 15, 2026. Production held three completed July questions and
 no pending work; none of the 16 active Pods referenced it. The active service
-agent targets zaz instead. The uptime monitor still checks the homepage.
+agent targets zaz instead. The initial audit also found a homepage uptime monitor.
 No access logs were available, so historical reads and unknown external clients
 cannot be excluded. Source/history and independent build instructions are
-preserved; production image/data/router configuration and monitoring remain.
+preserved. In the separately authorized runtime retirement (issue 1489), the
+Question Service container, Compose service, reverse-proxy route, uptime monitor
+and its check history, and the obsolete question database were removed. Other
+legacy applications retain their previously documented runtime boundary.

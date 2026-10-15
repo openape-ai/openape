@@ -2082,3 +2082,10 @@ are implied by merging this preparation increment.
 - Read-only usage audit found three completed July questions, no pending work and no reference in the 16 active Pods. The uptime monitor still checks the existing service; access logs are unavailable.
 - Preserve source/history in `patrick/legacy`; remove active workspace/check/build/deploy targets. Keep production service/data/monitoring, shared sp-tasks and the zaz Pod unchanged.
 - Final native PR, exact-source validation and Reports receipts are recorded on the issue.
+
+## Question Service runtime retirement — issue 1489
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1489
+- Branch: `feature/issue-1489-retire-question-service`; checkout `openape-monorepo.releases/release-1479`.
+- Owner explicitly authorized container/monitor/data removal after source preservation. Remove this Compose service and its live proxy route; use the monitor owner API for its record/history, then remove the exact container and three-question SQLite database.
+- Preserve unrelated services, monitors and the legacy source. Final object counts, configuration comparisons, gate and runtime receipts belong on the native PR and issue.
