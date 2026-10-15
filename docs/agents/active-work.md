@@ -1,5 +1,14 @@
 # Active work
 
+## Complete mail processing — issue 1492
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1492. Branch `bugfix/issue-1492-mail-processing`, checkout `openape-monorepo.worktrees/mail-processing-1492`, base `01ea0ac93240f92b354c4ad453c3d35711c6ccad`.
+- Owner authorized fixing the silent newsletter routing failure and reprocessing the 33 identified messages; every archive still requires exact owner approval. No invoice filing or Outlook draft delivery is added.
+- Intake refetches inflated text, stores complete long text in immutable `delta-mind/mail/body-parts` records, and keeps its existing bounded preview. Define this namespace with Intake as writer and Triage as reader before activation. Triage checkpoints bounded section analysis, aggregates positive invoice/reply/security evidence, and distinguishes newsletter labels from archive eligibility. Unexamined attachments remain visible for review.
+- Activate classification rule version 5 for both declared operations after activating the new script. The bounded `refresh-message-ids` variable refreshes up to five selected Inbox messages per Intake run; its checkpoint makes retries resumable. Remove the variable after recovery. No mailbox mutations bypass the existing approval service.
+- Verification: the focused autonomous mail suite passes 16 tests, including multi-run long content, resumable targeted refresh, exact approval before a move, HTML normalization, incomplete-content visibility and an invoice found in the last section. The Pods application build also passes. Retain these regressions because silent completion and premature archival have consequential effects. The mandatory pre-push affected gate and live acceptance follow; receipts belong on the PR and issue.
+- Limit: assigned-program output is still capped by the native transport at 200,000 bytes. A provider response beyond that boundary fails visibly; this recipe fix does not claim unlimited transport. Original messages remain in the mailbox.
+
 ## CI instruction reconciliation — issue 1483
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1483; the native implementation PR is linked there. Branch `bugfix/issue-1483-knowledge-ci-guidance`, checkout `openape-monorepo.worktrees/knowledge-ci-1483`, base `7d0caa8b67a939284d008761efe977dc76fbe288`.
