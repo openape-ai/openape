@@ -40,9 +40,10 @@ pnpm --filter @openape/pods test:e2e
 ```
 
 During editing, rerun the focused cases after each relevant change. Run the
-required repository lint/typecheck and affected unit gate before committing or
-pushing; reuse successful results only while their source and dependencies are
-unchanged. Run the broader relevant acceptance once at handoff, rather than
+affected unit gate (including lint/typecheck) through the pre-push hook once;
+commits retain only branch and lockfile guards. For handoff without a push, run
+that gate explicitly. Reuse successful focused results only while their source
+and dependencies are unchanged. Run the broader relevant acceptance once at handoff, rather than
 repeating build/package/native suites after each visual edit. Existing coverage
 must remain: move UI assertions only after their replacement proves the same
 behavior, retain real native effects, and record the mapping in the PR.

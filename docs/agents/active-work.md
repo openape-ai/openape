@@ -1,5 +1,14 @@
 # Active work
 
+
+## Affected selection and local gates — issue 1480
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1480. Branch `bugfix/issue-1480-check-gates`, base `c5b02ac94777f2562d329e659d50685c97b1c43e`, isolated checkout `openape-monorepo.worktrees/check-gates-1480`.
+- Owner requested narrowing affected selection and eliminating duplicate gates without losing meaningful coverage. The runner compares the branch merge base, includes dirty/untracked paths, retains transitive consumers and full scope for global configuration. Equal base/head no longer pulls in the previous commit.
+- Pre-commit retains branch/lockfile guards; pre-push owns the complete affected contract. Instructions no longer add full lint/typecheck or an extra affected run before commits. Full deployment checks and all product test suites remain.
+- Permanent tests extend `scripts/check.test.mjs` because incorrect selection could silently omit consumers or cause repeated whole-repository work. Real Git histories cover equal/divergent bases and local files; actual hook execution covers one push gate and failure propagation.
+- Validation and exact-head report will be recorded on the implementation PR. No application deployment or CI reactivation.
+
 ## OpenClaw retirement — issue 1479
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1479. Branch `feature/issue-1479-remove-openclaw`, base `ba7c4d827f82a556ddfe8009e592e905ce7221ed`.

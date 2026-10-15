@@ -44,6 +44,18 @@ export function affectedWorkspaces(packages, files) {
   return packages.filter(p => selected.has(p.name))
 }
 
+export function changedFiles(directory, candidate, head) {
+  const run = args => execFileSync('git', args, { cwd: directory, encoding: 'utf8' })
+  const base = run(['merge-base', candidate, head]).trim()
+  const paths = args => run(args).split('\0').filter(Boolean)
+  const files = new Set([
+    ...paths(['diff', '--no-renames', '--name-only', '-z', base, head]),
+    ...paths(['diff', '--no-renames', '--name-only', '-z', head]),
+    ...paths(['ls-files', '--others', '--exclude-standard', '-z']),
+  ])
+  return { base, files: [...files] }
+}
+
 export function validateScripts(packages, policy = contract) {
   for (const p of packages) {
     for (const task of ['lint', 'typecheck', 'test']) {
@@ -131,12 +143,9 @@ async function main() {
   let selected = packages
   if (mode === 'affected') {
     const candidate = value('--base') || `${resolveTruthRemote(gitRemotes(root))}/${repository.defaultBranch}`
-    base = git(['rev-parse', '--verify', `${candidate}^{commit}`])
-    if (base === head) base = git(['rev-parse', '--verify', `${head}^`])
-    const files = new Set(git(['diff', '--name-only', base, head]).split('\n').filter(Boolean))
-    for (const f of git(['diff', '--name-only', head]).split('\n').filter(Boolean)) files.add(f)
-    for (const f of git(['ls-files', '--others', '--exclude-standard']).split('\n').filter(Boolean)) files.add(f)
-    selected = affectedWorkspaces(packages, [...files])
+    const changes = changedFiles(root, candidate, head)
+    base = changes.base
+    selected = affectedWorkspaces(packages, changes.files)
   }
   const steps = checkCommands(packages, selected, suites)
   const summary = { contract: contract.version, mode, suites, base, head, dirty, workspaces: selected.map(p => p.name), exceptions: contract.unitExceptions, steps, results: [], status: 'pending' }

@@ -1,10 +1,8 @@
 #!/bin/bash
 set -o pipefail
-# Pre-commit hook for OpenAPE monorepo
-# 1. Lockfile sync check (only when package.json changes)
-# 2. Lint + typecheck on affected packages (via turbo --affected)
+# Cheap commit guards; the complete affected contract runs once before push.
 
-# Skip in CI — these checks run in the CI workflow
+# Skip local guards in CI
 if [ -n "$CI" ]; then
   exit 0
 fi
@@ -23,11 +21,11 @@ if [ "$branch" = "main" ]; then
   non_infra=$(echo "$staged_files" | grep -vE '^(\.(claude|github|githooks|changeset)/|scripts/|apps/docs/content/|\.gitignore|\.gitattributes|\.npmrc|eslint\.config\.mjs|turbo\.json|pnpm-workspace\.yaml|pnpm-lock\.yaml|LICENSE|README\.md|CHANGELOG\.md|CONTRIBUTING\.md|package\.json$)' || true)
 
   if [ -n "$non_infra" ]; then
-    echo "[pre-commit] BLOCKED — Source-Änderungen auf 'main' nicht erlaubt:"
+    echo "[pre-commit] BLOCKED — Source changes on 'main' are not allowed:"
     echo "$non_infra" | head -10
     echo ""
-    echo "  Feature-Branch erstellen:  git checkout -b <type>/issue-<nr>-<desc> origin/main"
-    echo "  Oder in Claude Code:       /issue <nr>"
+    echo "  Create a feature branch:  git checkout -b <type>/issue-<nr>-<desc> origin/main"
+    echo "  Or in Claude Code:       /issue <nr>"
     echo "  Skip:                      SKIP_HOOKS=1 git commit ..."
     exit 1
   fi
@@ -63,12 +61,6 @@ if [ -n "$staged_package_jsons" ]; then
   else
     echo "[pre-commit] lockfile staged, OK"
   fi
-fi
-
-# --- Same contract as CI; only affected consumers before a commit. ---
-staged_src=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx|js|jsx|mjs|vue)$' || true)
-if [ -n "$staged_src" ]; then
-  if ! pnpm check:affected --suite unit; then errors=1; fi
 fi
 
 if [ "$errors" -ne 0 ]; then
