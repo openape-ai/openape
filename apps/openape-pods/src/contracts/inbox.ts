@@ -175,8 +175,15 @@ export function parseInboxMessage(value: unknown): InboxMessage {
     return { title: messageText(entry.title, inboxMessageLimits.linkTitle), url: url.href }
   })
   return {
-    id: messageId(item.id), title: messageText(item.title, inboxMessageLimits.title), body: messageText(item.body, inboxMessageLimits.bodyBytes),
-    pod, runId: item.runId === null ? null : messageId(item.runId), links, created: stamp(item.created, false)!, read: stamp(item.read, true), archived: stamp(item.archived, true),
+    id: messageId(item.id),
+    title: messageText(item.title, inboxMessageLimits.title),
+    body: messageText(item.body, inboxMessageLimits.bodyBytes),
+    pod,
+    runId: item.runId === null ? null : messageId(item.runId),
+    links,
+    created: stamp(item.created, false)!,
+    read: stamp(item.read, true),
+    archived: stamp(item.archived, true),
   }
 }
 
