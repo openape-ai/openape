@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
     inputs:
       targets:
-        description: 'free-idp | troop | chat | tasks | plans | testrun | timetrack | pr | monitor | question-service | --all (space-separated)'
+        description: 'free-idp | troop | chat | tasks | plans | testrun | timetrack | pr | monitor | --all (space-separated)'
         required: true
 
 concurrency:

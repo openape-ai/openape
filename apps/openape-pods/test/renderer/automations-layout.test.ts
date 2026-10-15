@@ -79,12 +79,10 @@ it('eases nodes towards their targets, bends curves by link type and sizes parti
 
 it('derives KPI subtitles from the data only', () => {
   expect(kpiFacts(view)).toEqual({
-    active: 5,
-    paused: { total: 25, drafts: 1, archived: 1 },
+    active: { running: 5, total: 29 },
     // Only the current state counts; zaz Service-Agent failed earlier but recovered.
-    errors: [{ name: 'IURIO PR monitor', reason: 'completedWithGaps' }],
+    errors: [{ podId: byName('IURIO PR monitor').id, name: 'IURIO PR monitor', reason: 'completedWithGaps' }],
     // The run waiting for an IdP approval and the grant requested at the IdP are rights, as in Entscheidungen.
     decisions: { count: 24, questions: 17, approvals: 4, rights: 2, reconcile: 1, secrets: 0 },
-    unknownDeliveries: 1,
   })
 })
