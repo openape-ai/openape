@@ -22,6 +22,7 @@
     "@openape/nuxt-auth-sp",
     "@openape-testrun/app",
     "@openape/pods",
-    "@openape-git/app"
+    "@openape-git/app",
+    "@openape-pods-relay/app"
   ]
 }
