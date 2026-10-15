@@ -1,0 +1,3 @@
+.artifacts/
+test/layout/__screenshots__/
+.vitest-attachments/

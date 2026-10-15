@@ -1,0 +1,189 @@
+import type { Browser, Page } from 'playwright'
+import { mkdirSync } from 'node:fs'
+import { resolve } from 'node:path'
+import process from 'node:process'
+import { chromium } from 'playwright'
+import { afterAll, afterEach, beforeAll, expect, it } from 'vitest'
+import { owner, startIssueFixture } from './fixture'
+
+let fixture: Awaited<ReturnType<typeof startIssueFixture>>
+let user: Awaited<ReturnType<typeof fixture.identity>>
+let browser: Browser
+let page: Page
+const artifactDir = resolve('.artifacts/issues')
+beforeAll(async () => {
+  fixture = await startIssueFixture()
+  user = await fixture.identity(owner)
+  expect((await user.call('POST', '/api/repos', { owner: 'owner', name: 'project' })).ok).toBe(true)
+  browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', headless: true })
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
+  await context.addCookies(user.cookie.split('; ').map((cookie) => {
+    const index = cookie.indexOf('=')
+    return { name: cookie.slice(0, index), value: cookie.slice(index + 1), url: fixture.base, httpOnly: true, sameSite: 'Lax' as const }
+  }))
+  page = await context.newPage()
+  page.on('pageerror', error => console.error('Browser error:', error.message))
+  mkdirSync(artifactDir, { recursive: true })
+})
+afterEach(async ({ task }) => { if (task.result?.state === 'fail' && page) { await page.screenshot({ path: `${artifactDir}/failure.png`, fullPage: true }); console.error(await page.locator('body').textContent()) } })
+afterAll(async () => { await browser?.close(); await fixture?.stop() })
+
+async function visible(text: string) { await page.getByText(text, { exact: true }).first().waitFor() }
+async function signIn(reader: Page, email: string, idpToken: string) {
+  const login = await reader.request.post(`${fixture.base}/api/login`, { data: { email } })
+  expect(login.status()).toBe(200)
+  const { redirectUrl } = await login.json()
+  const authorization = await reader.request.get(redirectUrl, { headers: { authorization: `Bearer ${idpToken}` }, maxRedirects: 0 })
+  expect(authorization.status()).toBe(302)
+  const callback = authorization.headers().location
+  expect(callback).toContain(`${fixture.base}/api/callback?`)
+  await reader.goto(callback!)
+}
+
+it('persists creation, preview, comments and triage through real routes and URL history', async () => {
+  await page.goto(`${fixture.base}/owner/project/issues/new`)
+  await page.getByLabel('Title', { exact: true }).fill('Report a problem without losing context')
+  await page.getByLabel('Description', { exact: true }).fill(`## Expected behavior\nKeep **product context** after login.\n\n\`\`\`text\n${'a'.repeat(160)}\n\`\`\``)
+  const previewResponse = page.waitForResponse(response => response.url().endsWith('/api/issue-preview'))
+  await page.getByRole('button', { name: 'Preview', exact: true }).click()
+  const preview = await previewResponse
+  expect(await preview.json()).toMatchObject({ bodyHtml: expect.stringContaining('Expected behavior') })
+  await page.getByRole('heading', { name: 'Expected behavior' }).waitFor()
+  await page.getByRole('button', { name: 'Create issue', exact: true }).focus()
+  await page.keyboard.press('Enter')
+  await page.waitForURL('**/owner/project/issues/1')
+  await page.getByRole('heading', { name: /Report a problem/ }).waitFor()
+  await page.getByLabel('Leave a comment', { exact: true }).fill('Confirmed on mobile. Ready for triage.')
+  await page.getByRole('button', { name: 'Comment', exact: true }).focus()
+  await page.keyboard.press('Enter')
+  await visible('Confirmed on mobile. Ready for triage.')
+  await page.reload()
+  await visible('Confirmed on mobile. Ready for triage.')
+  await page.locator('summary').filter({ hasText: 'Create label' }).click()
+  await page.getByLabel('Label name').fill('bug')
+  await page.getByRole('button', { name: 'Create label', exact: true }).click()
+  await page.getByLabel('bug', { exact: true }).check()
+  await page.getByLabel('Assign to').selectOption(owner)
+  await page.getByRole('button', { name: 'Save metadata' }).click()
+  await page.getByRole('button', { name: 'Save metadata' }).waitFor()
+  await expect.poll(async () => (await (await user.call('GET', '/api/repos/owner/project/issues/1')).json()).labels.length).toBe(1)
+  await page.getByRole('button', { name: 'Close issue', exact: true }).click()
+  await page.getByRole('button', { name: 'Reopen issue', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Reopen issue', exact: true }).click()
+  await page.getByRole('button', { name: 'Close issue', exact: true }).waitFor()
+  await page.goto(`${fixture.base}/owner/project/issues`)
+  await visible('Report a problem without losing context')
+  await page.goto(`${fixture.base}/issues`)
+  await visible('Report a problem without losing context')
+  await page.getByLabel('Search issues').fill('missing')
+  await page.getByRole('button', { name: 'Search', exact: true }).click()
+  await visible('No issues match these filters.')
+  await page.reload()
+  await visible('No issues match these filters.')
+  expect(await page.getByLabel('Search issues').inputValue()).toBe('missing')
+  await page.goBack()
+  await visible('Report a problem without losing context')
+})
+
+it('keeps product selection across login and gives reporters only their own discussion', async () => {
+  expect((await user.call('PATCH', '/api/repos/owner/project/issue-policy', { reportingEnabled: true, expectedVersion: 1 })).ok).toBe(true)
+  expect((await user.call('PUT', '/api/repos/owner/project/issue-products/plans', { name: 'Plans', enabled: true, expectedVersion: 0 })).ok).toBe(true)
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
+  const reporterPage = await context.newPage()
+  try {
+    await reporterPage.goto(`${fixture.base}/report?product=plans`)
+    await reporterPage.waitForURL(`${fixture.base}/`)
+    const reporter = await fixture.identity('reporter@issues.test')
+    await signIn(reporterPage, 'reporter@issues.test', reporter.idpToken)
+    await reporterPage.waitForURL('**/report?product=plans')
+    await reporterPage.getByLabel('What happened?').fill('Plans lost my selected product after login')
+    await reporterPage.getByLabel('Expected and actual behavior', { exact: true }).fill('Expected: retain Plans. Actual: context is missing. Reproduced with a new session.')
+    expect(await reporterPage.getByLabel('Product', { exact: true }).inputValue()).toBe('plans')
+
+    await reporterPage.getByRole('button', { name: 'Submit report', exact: true }).focus()
+    await reporterPage.keyboard.press('Enter')
+    await reporterPage.waitForURL('**/i/*')
+    await reporterPage.getByRole('heading', { name: 'Plans lost my selected product after login' }).waitFor()
+    expect(await reporterPage.locator('body').textContent()).not.toContain('owner/project')
+    expect(await reporterPage.getByRole('button', { name: 'Save metadata' }).count()).toBe(0)
+    await reporterPage.getByLabel('Leave a comment', { exact: true }).fill('I can follow my own report.')
+    await reporterPage.getByRole('button', { name: 'Comment', exact: true }).click()
+    await reporterPage.getByText('I can follow my own report.', { exact: true }).waitFor()
+    expect((await reporter.call('GET', '/api/repos/owner/project/issues')).status).toBe(404)
+    const id = new URL(reporterPage.url()).pathname.split('/').at(-1)
+    const issue = await (await user.call('GET', `/api/issue-records/${id}`)).json()
+    expect((await user.call('POST', `/api/issue-records/${id}/moderation`, { revokeParticipant: 'reporter@issues.test', reason: 'Verify revocation', expectedVersion: issue.version })).ok).toBe(true)
+    await reporterPage.reload()
+    await reporterPage.getByRole('alert').waitFor()
+    expect(await reporterPage.locator('body').textContent()).not.toContain('I can follow my own report.')
+  }
+  finally { await context.close() }
+})
+
+it('shows reciprocal related links and a merged PR without implicitly closing its issue', async () => {
+  const heads = await fixture.seedBranches('owner', 'project')
+  const pull = await (await user.call('POST', '/api/repos/owner/project/pulls', { title: 'Preserve product context', source: 'fix-issue', target: 'main' })).json()
+  await page.goto(`${fixture.base}/owner/project/issues/1`)
+  await page.getByRole('region', { name: 'Linked pull requests' }).getByText('No visible links.', { exact: true }).waitFor()
+  await page.locator('summary').filter({ hasText: 'Link pull request' }).click()
+  await page.getByLabel('Pull request repository', { exact: true }).fill('owner/project')
+  await page.getByLabel('Pull request number', { exact: true }).fill(String(pull.number))
+  await page.getByRole('button', { name: 'Add related pull request', exact: true }).click()
+  await page.getByRole('link', { name: 'Preserve product context', exact: true }).waitFor()
+
+  for (const [path, text] of [
+    ['/owner/project/issues/1', 'Preserve product context'],
+    [`/owner/project/pulls/${pull.number}`, 'Report a problem without losing context'],
+  ]) {
+    await page.goto(`${fixture.base}${path}`)
+    await page.getByRole('link', { name: text, exact: true }).waitFor()
+  }
+  const merged = await user.call('POST', `/api/repos/owner/project/pulls/${pull.number}/merge`, { expectedSourceSha: heads.sourceSha, expectedTargetSha: heads.targetSha })
+  expect(merged.status).toBe(200)
+  await page.goto(`${fixture.base}/owner/project/issues/1`)
+  await page.getByRole('region', { name: 'Linked pull requests' }).getByText(/Related.*merged/).waitFor()
+  await page.getByRole('button', { name: 'Close issue', exact: true }).waitFor()
+  await page.getByRole('button', { name: 'Unlink Preserve product context', exact: true }).click()
+  await page.getByRole('region', { name: 'Linked pull requests' }).getByText('No visible links.', { exact: true }).waitFor()
+})
+
+it('creates an external-code issue home and hides native code, pull and mirror controls', async () => {
+  await page.goto(fixture.base)
+  await page.getByLabel('Repository owner', { exact: true }).fill('owner')
+  await page.getByLabel('Repository name', { exact: true }).fill('external')
+  await page.getByLabel('Issues only; keep code at its current host', { exact: true }).check()
+  await page.getByLabel('External code URL', { exact: true }).fill('https://code.example/owner/external')
+  await page.getByRole('button', { name: 'Create', exact: true }).click()
+  await page.waitForURL('**/owner/external/issues')
+  await page.getByRole('link', { name: 'View external code', exact: true }).waitFor()
+  expect(await page.getByRole('link', { name: 'Code', exact: true }).count()).toBe(0)
+  expect(await page.getByRole('link', { name: 'Pulls', exact: true }).count()).toBe(0)
+
+  await page.getByRole('link', { name: 'Access', exact: true }).click()
+  await page.getByRole('heading', { name: 'Product issue reporting' }).waitFor()
+  expect(await page.getByText('Push mirrors', { exact: true }).count()).toBe(0)
+  expect(await page.getByText('Webhooks', { exact: true }).count()).toBe(0)
+  await page.goto(`${fixture.base}/owner/external`)
+  await page.waitForURL('**/owner/external/issues')
+})
+
+it('opens a migrated comment after login and displays original attribution and protected downloads', async () => {
+  const repository = await (await user.call('POST', '/api/repos', { owner: 'owner', name: 'archive' })).json()
+  const imported = await fixture.seedImport({ id: repository.id, owner: 'owner', name: 'archive' })
+  const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } })
+  const reader = await context.newPage()
+  try {
+    await reader.goto(`${fixture.base}/legacy?url=${encodeURIComponent(imported.sourceUrl)}#issuecomment-99`)
+    await reader.waitForURL(`${fixture.base}/`)
+    await signIn(reader, owner, user.idpToken)
+    await reader.waitForURL(`**/i/${imported.issueId}#comment-${imported.commentId}`)
+    await reader.getByText('Original comment retained across migration.', { exact: true }).waitFor()
+    await reader.getByText('Imported from Forgejo: Ghost', { exact: true }).waitFor()
+    expect(await reader.getByLabel('Leave a comment', { exact: true }).count()).toBe(0)
+
+    const download = reader.waitForEvent('download')
+    await reader.getByRole('link', { name: 'diagnostic.html', exact: true }).click()
+    expect((await download).suggestedFilename()).toBe('diagnostic.html')
+  }
+  finally { await context.close() }
+})

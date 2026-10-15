@@ -58,8 +58,10 @@ thin shells around exactly these modules (see their `nuxt.config.ts`).
 `apps/openape-troop` (agent control plane, includes the company/org view),
 `apps/openape-chat` (human↔agent chat), and the proof-link services
 `openape-tasks`, `openape-plans`, `openape-testrun`, `openape-timetrack`,
-`openape-pr`, `openape-monitor` (uptime checks + mail alerts) and
-`openape-question-service` (the sp-tasks Q&A surface).
+`openape-pr` and `openape-monitor` (uptime checks + mail alerts).
+The Question Service Q&A surface is preserved in the separate legacy repository;
+its production container, route, monitoring and obsolete question database were
+retired with owner authorization on October 15, 2026.
 Beside them: `apps/openape-nest` (local daemon supervising agents on a
 machine), `apps/openape-ape-agent` (one runtime process per agent),
 `apps/openape-llm` (LLM proxy container), `apps/docs` (documentation site,
@@ -94,7 +96,6 @@ by `compose/chatty.yml` (compose project `openape-prod`), each publishing on
 | `testrun` | `testrun` | openape-testrun | 3006 | testrun.openape.ai |
 | `timetrack` | `timetrack` | openape-timetrack | 3011 | timetrack.openape.ai |
 | `pr` | `pr` | openape-pr | 3014 | pr.openape.ai |
-| `question-service` | `question-service` | openape-question-service | 3017 | question-service.openape.ai |
 | `monitor` | `monitor` | openape-monitor | 3018 | monitor.openape.ai |
 | `dashboard` | `dashboard` | openape-dashboard | 3022 | dashboard.openape.ai |
 | `crm` | `crm` | openape-crm | 3024 | crm.openape.ai |
