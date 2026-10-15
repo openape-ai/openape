@@ -1,7 +1,7 @@
 {
   "schema": "openape.plan/2",
   "language": "en",
-  "status": "active",
+  "status": "done",
   "revision": 5,
   "project": "OpenApe Pods",
   "owner": "Patrick Hofmann",
@@ -73,7 +73,11 @@
         "Two standalone CLI starts produce exactly one profile owner. An active desktop lock is refused without modifying it. Concurrent desktop/CLI operation is unsupported and documented.",
         "Existing Pod identity material can be consumed securely without credential-format migration or owner-login changes. Missing or revoked identity is refused; list/create/edit do not initialize run identity or application-secret services."
       ],
-      "rollback": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback."
+      "rollback": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback.",
+      "proof": "Node transport and runtime-only assets execute without Electron. Native fixtures prove exclusive CLI ownership and both HOME contexts; metadata commands do not initialize identity services. The independent v10 vector passes. Real owner keychain ACL access remains untested.",
+      "evidenceIds": [
+        "acceptance"
+      ]
     },
     {
       "id": "crud",
@@ -89,7 +93,11 @@
         "create returns a durable paused Pod; edit changes only requested fields, supports clearing tags and rejects stale revisions.",
         "The commands have meaningful TTY and non-TTY behavior, deterministic JSON output and tested failure exits."
       ],
-      "rollback": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback."
+      "rollback": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback.",
+      "proof": "Built Node commands create, edit, list and reopen the production database schema. Tests preserve Pod IDs and unrelated metadata, clear tags and edit archived tags with current revision checks. CLI parsing and non-TTY refusals pass.",
+      "evidenceIds": [
+        "acceptance"
+      ]
     },
     {
       "id": "run",
@@ -107,13 +115,17 @@
         "Ctrl+C, crash recovery and unknown effects preserve existing recovery semantics; unrelated schedules never start in the CLI host.",
         "A CLI run reads and writes authorized shared data, rejects an unassigned namespace and a foreign work claim, and preserves records/results after reopen. These checks pass in both home contexts without owner-administrator data privileges or another Pod running."
       ],
-      "rollback": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback."
+      "rollback": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback.",
+      "proof": "Native sandbox runs with a signed local IdP preserve Pod identity, owner/isolated HOME, workspace, authorized shared data and checkpoint. Foreign namespaces and protected synthetic owner login are refused; no sibling run starts. Cancellation and missing-identity refusal pass. Existing shared-data/work unit coverage passes in the complete gate.",
+      "evidenceIds": [
+        "acceptance"
+      ]
     },
     {
       "id": "acceptance",
       "title": "Verify and document the development workflow",
       "goal": "Deliver a reviewable native PR and actual CLI evidence.",
-      "status": "active",
+      "status": "done",
       "steps": [
         "Run focused CLI/store/host tests, runtime build, real native fixture acceptance and the required affected unit gate. Exercise desktop adapter compatibility where changed.",
         "Document local ape-pods installation and the recommended list/create/edit/run workflow. Publish a private Test Runs report, update this plan and active-work.md and open a native PR related to the issue."
@@ -123,7 +135,11 @@
         "Actual logs and process evidence distinguish real local execution from synthetic external services and show no Electron build, package, notary, install or launch requirement for the development cycle.",
         "The native PR, maintained plan and verified Test Runs document state the source SHA, remaining compatibility requirements and next action."
       ],
-      "rollback": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback."
+      "rollback": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback.",
+      "proof": "Runtime build, native acceptance and required affected gate passed on source f652d6de. Pods: 1729 unit tests; relay: 104. Private report edition 1 was exported and compared byte-for-byte. Native PR 463 is open with explicit issue relation. The local command prints help; the development guide documents setup and limits.",
+      "evidenceIds": [
+        "acceptance"
+      ]
     }
   ],
   "decisions": [
@@ -187,10 +203,10 @@
     "Retain focused desktop host and worker-entry coverage, runtime build and the affected unit gate. Publish source SHA, exact commands and actual identity/context evidence. Isolated fixtures can test identity compatibility; do not unlock or mutate the real owner keychain or run owner Pods as fixtures. Distinguish protocol fixtures from live-provider acceptance.",
     "Use real shared-data tables and runtime operations in disposable production-schema fixtures: allowed reader/writer, refused namespace, stale expected revision, claim ownership and durable result after restart. Verify that owner HOME never switches the data principal to owner, and that only the requested Pod starts."
   ],
-  "handoff": "Implementation and focused acceptance are complete in feature/issue-1499-ape-pods-cli. Runtime-only build, 33 focused cases, four native Node CLI cases and generated documentation checks pass. The required affected unit gate, publication of actual evidence and native PR handoff are next. Desktop remains separate and must stay closed during a CLI command.",
+  "handoff": "Ready for review in PR 463. Verified executable source: f652d6de6d2616da7d4e6d861019aac1dba1cf96; documentation-only handoff follows. Local ape-pods points to this worktree runtime build. Close the desktop before commands against the real profile. No owner Pod was used as a fixture. The owner may review and use the CLI; merge or release remains separate.",
   "completion": {
-    "result": "not-assessed",
-    "summary": "Implementation is complete; final affected checks and review handoff are pending. No release, merge or desktop installation is part of this task."
+    "result": "achieved",
+    "summary": "Implemented the four commands as a standalone Node CLI and installed the local executable link. Runtime-only build, 33 focused cases, four native cases, 12 targeted regression cases and the complete affected unit gate pass. PR 463 is open and explicitly related to issue 1499. Actual private Test Runs evidence is published and its exported bytes verified. Existing owner keychain ACL and live-provider acceptance were not exercised. No merge, release or desktop installation occurred."
   },
   "changelog": [
     {
@@ -216,6 +232,10 @@
     {
       "date": "2026-10-15",
       "text": "Revision 5 records the owner instruction to keep the CLI standalone for now. Removed desktop attachment and upgrade coordination; require desktop closed and share an OS lease between CLI workers."
+    },
+    {
+      "date": "2026-10-15",
+      "text": "Completed standalone implementation, native fixture acceptance and required local gate. Published verified Test Runs evidence and opened PR 463; no merge or release."
     }
   ],
   "targets": [
@@ -252,6 +272,13 @@
       "title": "Existing shared-data operations and Pod-scoped access checks",
       "path": "shared-data-inspection.txt",
       "targetId": "baseline"
+    },
+    {
+      "id": "acceptance",
+      "title": "Actual CLI acceptance and required affected gate",
+      "kind": "link",
+      "role": "evidence",
+      "url": "https://report.openape.ai/d/01M50P2TGQ0JVAGAVC95KGDFGY?v=1"
     }
   ],
   "translations": {
@@ -604,13 +631,13 @@
       },
       {
         "path": "handoff",
-        "source": "Implementation and focused acceptance are complete in feature/issue-1499-ape-pods-cli. Runtime-only build, 33 focused cases, four native Node CLI cases and generated documentation checks pass. The required affected unit gate, publication of actual evidence and native PR handoff are next. Desktop remains separate and must stay closed during a CLI command.",
-        "text": "Umsetzung und fokussierte Abnahme in feature/issue-1499-ape-pods-cli sind abgeschlossen. Runtime-Build, 33 fokussierte Fälle, vier native Node-CLI-Fälle und Prüfung der generierten Dokumentation bestehen. Als Nächstes folgen der vorgeschriebene betroffene Prüflauf, Veröffentlichung tatsächlicher Nachweise und native PR-Übergabe. Der Desktop bleibt separat und muss während eines CLI-Befehls geschlossen sein."
+        "source": "Ready for review in PR 463. Verified executable source: f652d6de6d2616da7d4e6d861019aac1dba1cf96; documentation-only handoff follows. Local ape-pods points to this worktree runtime build. Close the desktop before commands against the real profile. No owner Pod was used as a fixture. The owner may review and use the CLI; merge or release remains separate.",
+        "text": "Bereit zur Durchsicht in PR 463. Geprüfter ausführbarer Quellstand: f652d6de6d2616da7d4e6d861019aac1dba1cf96; danach folgt nur die Übergabedokumentation. Der lokale Befehl ape-pods verweist auf den Runtime-Build dieses Worktrees. Vor Befehlen gegen das echte Profil den Desktop schließen. Kein Eigentümer-Pod wurde als Fixture verwendet. Der Eigentümer kann CLI und PR prüfen; Merge oder Release bleiben separat."
       },
       {
         "path": "completion.summary",
-        "source": "Implementation is complete; final affected checks and review handoff are pending. No release, merge or desktop installation is part of this task.",
-        "text": "Die Umsetzung ist abgeschlossen; abschließende betroffene Prüfungen und Übergabe zur Durchsicht stehen noch aus. Release, Merge und Desktop-Installation gehören nicht zu diesem Auftrag."
+        "source": "Implemented the four commands as a standalone Node CLI and installed the local executable link. Runtime-only build, 33 focused cases, four native cases, 12 targeted regression cases and the complete affected unit gate pass. PR 463 is open and explicitly related to issue 1499. Actual private Test Runs evidence is published and its exported bytes verified. Existing owner keychain ACL and live-provider acceptance were not exercised. No merge, release or desktop installation occurred.",
+        "text": "Die vier Befehle sind als eigenständige Node-CLI umgesetzt und der lokale Befehlslink ist eingerichtet. Runtime-Build, 33 fokussierte Fälle, vier native Fälle, zwölf gezielte Regressionstests und der vollständige betroffene Prüflauf bestehen. PR 463 ist offen und ausdrücklich mit Issue 1499 verknüpft. Tatsächliche private Testnachweise sind veröffentlicht; die exportierten Bytes wurden verglichen. Bestehende Eigentümer-Keychain-ACL und Live-Provider wurden nicht geprüft. Es erfolgten weder Merge noch Release oder Desktop-Installation."
       },
       {
         "path": "changelog.0.text",
@@ -706,6 +733,31 @@
         "path": "changelog.5.text",
         "source": "Revision 5 records the owner instruction to keep the CLI standalone for now. Removed desktop attachment and upgrade coordination; require desktop closed and share an OS lease between CLI workers.",
         "text": "Revision 5 hält die Anweisung des Eigentümers fest, die CLI vorerst eigenständig zu halten. Desktop-Anbindung und Update-Abstimmung entfernt; Desktop muss geschlossen bleiben, CLI-Worker teilen eine Betriebssystem-Sperre."
+      },
+      {
+        "path": "milestones.0.proof",
+        "source": "Node transport and runtime-only assets execute without Electron. Native fixtures prove exclusive CLI ownership and both HOME contexts; metadata commands do not initialize identity services. The independent v10 vector passes. Real owner keychain ACL access remains untested.",
+        "text": "Node-Transport und Runtime-Assets funktionieren ohne Electron. Native Fixtures belegen exklusive CLI-Verantwortung und beide HOME-Kontexte; Metadatenbefehle initialisieren keine Identitätsdienste. Der unabhängige v10-Testvektor besteht. Der Zugriff über die echte Eigentümer-Keychain-ACL bleibt ungeprüft."
+      },
+      {
+        "path": "milestones.1.proof",
+        "source": "Built Node commands create, edit, list and reopen the production database schema. Tests preserve Pod IDs and unrelated metadata, clear tags and edit archived tags with current revision checks. CLI parsing and non-TTY refusals pass.",
+        "text": "Gebaute Node-Befehle erstellen, ändern, listen und öffnen das Produktionsschema erneut. Tests erhalten Pod-IDs und unberührte Metadaten, leeren Tags und ändern archivierte Tags mit aktuellen Revisionsprüfungen. Befehlsparser und Ablehnungen ohne Terminal bestehen."
+      },
+      {
+        "path": "milestones.2.proof",
+        "source": "Native sandbox runs with a signed local IdP preserve Pod identity, owner/isolated HOME, workspace, authorized shared data and checkpoint. Foreign namespaces and protected synthetic owner login are refused; no sibling run starts. Cancellation and missing-identity refusal pass. Existing shared-data/work unit coverage passes in the complete gate.",
+        "text": "Native Sandbox-Läufe mit signiertem lokalem IdP erhalten Pod-Identität, Owner-/isoliertes HOME, Arbeitsverzeichnis, berechtigte gemeinsame Daten und Checkpoint. Fremde Namespaces und geschützter synthetischer Eigentümer-Login werden abgelehnt; kein weiterer Pod startet. Abbruch und Ablehnung fehlender Identität bestehen. Bestehende Unit-Abdeckung für gemeinsame Daten und Arbeit besteht im Gesamtprüflauf."
+      },
+      {
+        "path": "milestones.3.proof",
+        "source": "Runtime build, native acceptance and required affected gate passed on source f652d6de. Pods: 1729 unit tests; relay: 104. Private report edition 1 was exported and compared byte-for-byte. Native PR 463 is open with explicit issue relation. The local command prints help; the development guide documents setup and limits.",
+        "text": "Runtime-Build, native Abnahme und vorgeschriebener betroffener Prüflauf bestehen auf Quellstand f652d6de. Pods: 1729 Unit-Tests; Relay: 104. Edition 1 des privaten Berichts wurde exportiert und bytegenau verglichen. Nativer PR 463 ist offen und ausdrücklich mit dem Issue verknüpft. Der lokale Befehl zeigt Hilfe; die Entwicklungsanleitung beschreibt Einrichtung und Grenzen."
+      },
+      {
+        "path": "changelog.6.text",
+        "source": "Completed standalone implementation, native fixture acceptance and required local gate. Published verified Test Runs evidence and opened PR 463; no merge or release.",
+        "text": "Eigenständige Umsetzung, native Fixture-Abnahme und vorgeschriebener lokaler Prüflauf abgeschlossen. Verifizierte Testnachweise veröffentlicht und PR 463 geöffnet; kein Merge oder Release."
       }
     ]
   },
@@ -719,5 +771,11 @@
       "version": 5
     },
     "scope": "Implement the four CLI commands against the real database with existing Pod identity, configured home context and shared-data access; no additional application-secret management or storage migration."
-  }
+  },
+  "links": [
+    {
+      "title": "Native implementation PR 463",
+      "url": "https://repos.openape.ai/patrick/monorepo/pulls/463"
+    }
+  ]
 }

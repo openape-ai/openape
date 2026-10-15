@@ -11,6 +11,8 @@ From the monorepo root:
 ```sh
 . ./scripts/activate-node.sh
 pnpm run doctor
+pnpm install --frozen-lockfile
+pnpm exec turbo run build --filter='@openape/pods^...' --concurrency=1
 pnpm --filter @openape/pods build:runtime
 node apps/openape-pods/dist/cli/entry.cjs --help
 ```
