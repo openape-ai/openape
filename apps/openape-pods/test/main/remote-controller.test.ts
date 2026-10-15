@@ -12,7 +12,7 @@ import { InboxStore, parsePublication } from '../../../openape-pods-relay/server
 import { RemoteController } from '../../src/main/remote/controller'
 import { InboxOutbox, parseNotify } from '../../src/worker/inbox/outbox'
 import type { InboxOutboxCommand, InboxPublication } from '../../src/worker/inbox/outbox'
-import { parseInboxDecisions } from '../../src/contracts/inbox'
+import { parseInboxDecisions, parseInboxMessagesCommand } from '../../src/contracts/inbox'
 import type { InboxDecision } from '../../src/contracts/inbox'
 import type { FixtureWorker } from '../../src/main/worker'
 import { PodDatabase } from '../../src/worker/storage/database'
@@ -43,7 +43,8 @@ async function fixture() {
   remote.execute({ type: 'configure', registration })
   const outbox = new InboxOutbox(store)
   const inbox = new InboxStore(':memory:')
-  const worker = { inboxOutbox: vi.fn(async (command: InboxOutboxCommand) => outbox.execute(command)), remote: vi.fn(async (command: RemoteInternal) => remote.execute(command)), remoteOwner: async () => ({ owner, email: owner.subject }), indexRemotePods: vi.fn(async () => {}) }
+  let ownerOf = owner
+  const worker = { inboxOutbox: vi.fn(async (command: InboxOutboxCommand) => outbox.execute(command)), remote: vi.fn(async (command: RemoteInternal) => remote.execute(command)), remoteOwner: async () => ({ owner: ownerOf, email: ownerOf.subject }), indexRemotePods: vi.fn(async () => {}) }
   const auth = new RelayAuth(relay, 'https://pods.example.test')
   browser.mockImplementation(async (url: string) => {
     const id = new URL(url).searchParams.get('id')!
@@ -68,6 +69,12 @@ async function fixture() {
         if (h.get('x-pods-body-digest') !== sha256(String(init.body))) throw new ProtocolError('invalid_request_body', 401)
         return Response.json(inbox.syncDecisions(caller.owner, caller.id, parseInboxDecisions(body)))
       }
+      if (path === '/api/runtime/v1/inbox/messages') {
+        const h = new Headers(init.headers)
+        const caller = relay.authenticateRequest(h.get('authorization')!.slice(7), 'POST', path, { id: h.get('x-pods-request-id')!, at: h.get('x-pods-request-at')!, digest: h.get('x-pods-body-digest')!, signature: h.get('x-pods-proof')! })
+        if (h.get('x-pods-body-digest') !== sha256(String(init.body))) throw new ProtocolError('invalid_request_body', 401)
+        return Response.json(inbox.messages(caller.owner, parseInboxMessagesCommand(body)))
+      }
       if (path === '/api/runtime/v1/inbox') {
         const h = new Headers(init.headers)
         const caller = relay.authenticateRequest(h.get('authorization')!.slice(7), 'POST', path, { id: h.get('x-pods-request-id')!, at: h.get('x-pods-request-at')!, digest: h.get('x-pods-body-digest')!, signature: h.get('x-pods-proof')! })
@@ -83,7 +90,7 @@ async function fixture() {
   cleanups.push(async () => { controller.stop(); relay.close(); inbox.close(); store.close(); await rm(root, { recursive: true, force: true }) })
   const readSaved = async () => JSON.parse(await readFile(join(root, 'remote/registration.enc'), 'utf8')) as typeof saved
   const revoke = () => { relay.db.prepare('UPDATE registrations SET revoked=1 WHERE id=?').run(registration.id) }
-  return { root, relay, store, remote, outbox, inbox, owner, registration, saved, rotated, worker, controller, requests, fetcher, readSaved, revoke, enable: () => controller.enable({ owner, email: owner.subject }) }
+  return { switchOwner: (next: typeof owner) => { ownerOf = next }, root, relay, store, remote, outbox, inbox, owner, registration, saved, rotated, worker, controller, requests, fetcher, readSaved, revoke, enable: () => controller.enable({ owner, email: owner.subject }) }
 }
 
 it('reauthenticates a replay-revoked session with the same runtime, keys and generation', async () => {
@@ -177,4 +184,30 @@ it('publishes the owner decision set with the signed runtime session only when i
   current = []
   await publish()
   expect(f.inbox.list(f.owner, { kind: 'decision' }).items).toMatchObject([{ state: 'resolved' }])
+})
+
+it('reads and marks the account messages with the signed session and refuses decisions and other accounts (issue 1487)', async () => {
+  const f = await fixture()
+  await f.enable()
+  const pod = f.store.createPod({ name: 'Belege' })
+  f.outbox.queue(pod, randomUUID(), parseNotify({ key: 'invoice-42', title: 'Rechnung abgelegt', body: 'Rechnung 42 liegt im Archiv.' }))
+  await f.controller.deliverInbox()
+  // A message from another Mac of the same account is part of the account inbox, too.
+  f.inbox.publish(f.owner, randomUUID(), parsePublication({ eventId: 'other-mac', kind: 'message', title: 'Wochenbericht', body: 'Bereit.' }))
+  await f.controller.publishDecisions(async () => [{ sourceId: 'secret:request-1', type: 'secret', digest: 'a'.repeat(64), podId: null, podName: null, title: 'Geheimnis', body: 'Postfach', authority: 'secrets', options: [], link: null }])
+  const page = await f.controller.messages({ type: 'list' })
+  expect(page!.messages.map(item => item.title)).toEqual(['Wochenbericht', 'Rechnung abgelegt'])
+  const [other, own] = page!.messages
+  expect(await f.controller.messages({ type: 'mark', id: own!.id, archived: true, read: true })).toBeNull()
+  expect((await f.controller.messages({ type: 'list', archived: true }))!.messages).toMatchObject([{ id: own!.id, read: expect.any(Number) }])
+  const decision = f.inbox.list(f.owner, { kind: 'decision' }).items[0]!
+  await expect(f.controller.messages({ type: 'mark', id: decision.id, deleted: true })).rejects.toThrow('not_found')
+  expect(f.inbox.list(f.owner, { kind: 'decision' }).items[0]).toMatchObject({ deleted: null })
+  // With another apes owner signed in on this Mac the desktop reads nothing and changes nothing.
+  f.switchOwner({ ...f.owner, subject: 'someone-else@example.test' })
+  const before = f.requests.length
+  expect(await f.controller.messages({ type: 'list' })).toBeNull()
+  expect(await f.controller.messages({ type: 'mark', id: other!.id, deleted: true })).toBeNull()
+  expect(f.requests.length).toBe(before)
+  expect(f.inbox.list(f.owner, { kind: 'message' }).items.map(item => item.id)).toContain(other!.id)
 })

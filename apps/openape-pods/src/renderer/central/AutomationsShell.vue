@@ -5,6 +5,8 @@ import { language, t } from '../i18n'
 import { clock } from '../utils/cadence'
 import AutomationInfo from './AutomationInfo.vue'
 import DecisionsInbox from './DecisionsInbox.vue'
+import MessagesInbox from './MessagesInbox.vue'
+import type { MessagesAccessCommand, MessagesView } from '../workspace-access'
 import type { DomainCommand, DomainOverview } from '../../contracts/domain-admin'
 import type { CentralCommand } from '../../contracts/central'
 import AutomationsList from './AutomationsList.vue'
@@ -17,11 +19,12 @@ import { decisionCounts } from '../utils/kpis'
 import { allTags, tagCounts, untagged, withTags } from '../utils/tags'
 
 /**
- * The two product surfaces behind one tab bar: Automatisierungen (this file) and Entscheidungen
- * (the `decisions` slot). The gear opens the one settings page of the host; creation hands a brief to Codex.
+ * The product surfaces behind one tab bar: Automatisierungen (this file), Entscheidungen and, when the
+ * host reads the account inbox, Mitteilungen. The gear opens the one settings page of the host; creation hands a brief to Codex.
  */
-const props = defineProps<{ view: MapView | null, live: boolean, now: number, tab?: 'automations' | 'decisions', desktop?: boolean, codex?: 'connected' | 'disconnected', domain?: DomainOverview | null, inboxUrl?: string, secrets?: SecretsView | null, sharing?: boolean }>()
-const emit = defineEmits<{ 'update:tab': [tab: 'automations' | 'decisions'], 'settings': [], 'codex': [pinned: string | null, tags: string[]], 'command': [command: CentralCommand], 'secrets': [command: SecretsCommand], 'openPod': [id: string], 'domain': [command: DomainCommand, settle?: (error: string | null) => void] }>()
+type Tab = 'automations' | 'decisions' | 'messages'
+const props = defineProps<{ view: MapView | null, live: boolean, now: number, tab?: Tab, messages?: MessagesView | null, desktop?: boolean, codex?: 'connected' | 'disconnected', domain?: DomainOverview | null, inboxUrl?: string, secrets?: SecretsView | null, sharing?: boolean }>()
+const emit = defineEmits<{ 'update:tab': [tab: Tab], 'messages': [command: MessagesAccessCommand], 'settings': [], 'codex': [pinned: string | null, tags: string[]], 'command': [command: CentralCommand], 'secrets': [command: SecretsCommand], 'openPod': [id: string], 'domain': [command: DomainCommand, settle?: (error: string | null) => void] }>()
 const layers = ref<Layers>({ data: true, read: true, write: true, auth: true, paused: true })
 const playing = ref(true)
 // Archived Pods are listed on request; they have no other place in the app.
@@ -32,7 +35,8 @@ const hovered = ref<string | null>(null)
 const handoff = ref(false)
 // The tab badge, the KPI and the Entscheidungen counters share one computation.
 const waiting = computed(() => props.view ? decisionCounts(props.view, props.secrets?.requests ?? []).count : 0)
-const current = computed(() => props.tab ?? 'automations')
+const unread = computed(() => props.messages?.messages.filter(item => !item.read && !item.archived).length ?? 0)
+const current = computed(() => props.tab === 'messages' && !props.messages ? 'automations' : props.tab ?? 'automations')
 // The tag selection is a per-device preference; private windows or blocked storage start without one.
 const tagKey = 'pods.automations.tags'
 function storedTags(): string[] {
@@ -95,6 +99,9 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
         </button>
         <button role="tab" :aria-selected="current === 'decisions'" @click="emit('update:tab', 'decisions')">
           {{ t('Decisions') }} <span v-if="waiting" class="n">{{ waiting }}</span>
+        </button>
+        <button v-if="messages" role="tab" :aria-selected="current === 'messages'" @click="emit('update:tab', 'messages')">
+          {{ t('Messages') }} <span v-if="unread" class="n info">{{ unread }}</span>
         </button>
       </nav>
       <button class="gear" type="button" :title="t('Settings')" @click="emit('settings')">
@@ -165,6 +172,9 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
         </div>
       </template>
     </section>
+    <section v-else-if="current === 'messages' && messages" role="tabpanel">
+      <MessagesInbox :messages="messages.messages" :more="messages.more" :error="messages.error" :now="now" @mark="emit('messages', $event)" @more="emit('messages', { type: 'more', archived: $event })" @open-pod="emit('openPod', $event)" />
+    </section>
     <section v-else role="tabpanel">
       <p v-if="!view" class="muted" role="status">
         {{ t('Loading workspace…') }}
@@ -181,6 +191,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
 .automations-top nav button{font-weight:500;border:1px solid transparent;border-radius:6px;color:var(--muted);padding:6px 12px}
 .automations-top nav button[aria-selected="true"]{background:var(--surface);border-color:var(--border);color:var(--text)}
 .automations-top .n{display:inline-block;min-width:20px;padding:0 6px;border-radius:10px;background:var(--warn-soft);color:var(--warn);font-size:12px;font-weight:600;margin-left:6px;font-variant-numeric:tabular-nums}
+.automations-top .n.info{background:var(--tint);color:var(--accent)}
 .automations-top .gear{margin-left:auto;font-size:13px;border:1px solid var(--border);background:var(--surface);color:var(--muted);border-radius:6px;padding:5px 10px}
 .automations-toolbar{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;justify-content:space-between;margin:10px 0}
 .automations-toolbar .tb-left,.automations-toolbar .tb-right{display:flex;flex-wrap:wrap;gap:8px;align-items:center}

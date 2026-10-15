@@ -5,7 +5,7 @@ import { DatabaseSync } from 'node:sqlite'
 import { ProtocolError } from '@openape/pods-protocol'
 import type { Owner } from '@openape/pods-protocol'
 import { parseInboxTags } from '../../../openape-pods/src/contracts/inbox'
-import type { InboxApprovals, InboxDecision } from '../../../openape-pods/src/contracts/inbox'
+import type { InboxApprovals, InboxDecision, InboxMessage, InboxMessagePage, InboxMessagesCommand } from '../../../openape-pods/src/contracts/inbox'
 import type { InboxApprovalCount, InboxDecisionData, InboxDevice, InboxItem, InboxPublication, InboxSubscription, OutboxEntry } from '../../shared/inbox-types'
 
 // Push services that browsers hand out today; anything else is refused before the server ever connects to it.
@@ -248,6 +248,20 @@ export class InboxStore {
     })
   }
 
+  /**
+   * The workspace view of the account inbox (issue 1487): only messages, account-wide like the phone inbox.
+   * Decisions keep their own answer flow and are never listed or changed here.
+   */
+  messages(owner: Owner, command: InboxMessagesCommand): InboxMessagePage | { message: InboxMessage | null } {
+    if (command.type === 'list') {
+      const page = this.list(owner, { kind: 'message', archived: command.archived ?? false, before: command.before })
+      return { messages: page.items.map(message), next: page.next }
+    }
+    if (this.item(owner, command.id).kind !== 'message') throw new ProtocolError('not_found', 404)
+    const changed = this.mark(owner, command.id, { read: command.read, archived: command.archived, deleted: command.deleted })
+    return { message: changed && message(changed) }
+  }
+
   /** A runtime reports the grants waiting for the owner at the IdP; the newest report of any runtime counts. */
   setApprovals(owner: Owner, runtimeId: string, approvals: InboxApprovals): void {
     this.db.prepare('INSERT INTO approvals(owner,runtime_id,pending,url,updated) VALUES(?,?,?,?,?) ON CONFLICT(owner,runtime_id) DO UPDATE SET pending=excluded.pending,url=excluded.url,updated=excluded.updated')
@@ -297,6 +311,10 @@ export class InboxStore {
       return { expired: stale.length, purged: Number(purged.changes) }
     })
   }
+}
+
+function message(value: InboxItem): InboxMessage {
+  return { id: value.id, title: value.title, body: value.body, pod: value.pod, runId: value.runId, links: value.links, created: value.created, read: value.read, archived: value.archived }
 }
 
 function item(row: Record<string, unknown>): InboxItem {
