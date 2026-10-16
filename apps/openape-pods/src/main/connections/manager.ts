@@ -330,17 +330,18 @@ export class ConnectionManager {
     signal = AbortSignal.any([signal, this.typesafeSession.signal])
     const item = await this.connection(id, 'typesafe')
     if (item.state !== 'ready') throw new Error('TypeSafe is not connected; reconnect in App settings')
-    let key = this.jevKey?.()
+    const suppliedKey = this.jevKey?.()
+    let key = suppliedKey
     if (key === undefined) {
       const record = await this.credentials.readConnection(id)
       if (record.kind !== 'typesafe') throw new Error('Invalid TypeSafe credential record')
       key = parseTypesafeKey(record.key)
     }
-    else key = parseTypesafeKey(key)
+    else { key = parseTypesafeKey(key) }
     signal.throwIfAborted()
     const response = await fetch(`${typesafeOrigin}/v1/systemone`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body, redirect: 'error', signal })
     signal.throwIfAborted()
-    if ([401, 403].includes(response.status) && this.jevKey?.() === undefined) {
+    if ([401, 403].includes(response.status) && suppliedKey === undefined) {
       await this.save({ ...item, state: 'expired', error: 'TypeSafe API key is invalid or access was denied; reconnect' }, await this.metadata(id))
       await this.availability()
     }
