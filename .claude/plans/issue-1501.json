@@ -6,7 +6,7 @@
   "milestones": [
     {
       "id": "bindings",
-      "status": "planned",
+      "status": "done",
       "acceptance": [
         "Interpreter files, inline code and complete arguments have identical authorization bindings; changed inputs are refused."
       ],
@@ -15,7 +15,7 @@
     },
     {
       "id": "owner-start",
-      "status": "planned",
+      "status": "done",
       "acceptance": [
         "Only the authenticated owner start of the pinned script is authorized; scheduled and downstream calls retain their grants."
       ],
@@ -24,7 +24,7 @@
     },
     {
       "id": "recovery",
-      "status": "planned",
+      "status": "active",
       "acceptance": [
         "Prove stopped execution domains, retain unknown-effect holds until reviewed, then verify Mail review through the native CLI."
       ],

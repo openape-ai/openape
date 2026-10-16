@@ -199,6 +199,29 @@ it('executes an assigned owner program without opening its encrypted application
   expect(await readFile(encryptedPath)).toEqual(encryptedBefore)
 })
 
+it('refuses missing Pod keys despite a valid owner CLI login without falling back to that owner identity', async () => {
+  outputs.length = 0; events.length = 0
+  root = await realpath(await mkdtemp(join(tmpdir(), 'pods-cli-missing-identity-')))
+  const profile = join(root, 'profile'); const ownerHome = join(root, 'owner')
+  await mkdir(profile); await mkdir(join(ownerHome, '.config/apes'), { recursive: true, mode: 0o700 })
+  vi.stubEnv('HOME', ownerHome)
+  const store = new PodDatabase(profile)
+  const pod = store.createPod({ name: 'Missing Pod key' })
+  try {
+    const manifest = JSON.parse(await readFile(resolve('dist/vendor/manifest.json'), 'utf8'))
+    installExample(store, new ResourceRegistry(store, () => {}), pod.id, 'deterministic', manifest.dependencyLockHash)
+  }
+  finally { store.close() }
+  identity = await fixtureShellIdentity(profile, [], false, false, true)
+  await writeFile(join(ownerHome, '.config/apes/auth.json'), identity.ownerLogin, { mode: 0o600 })
+  client = await open(profile)
+  expect(await executeCli(cliArguments(['run', pod.id]), client, io())).toBe(1)
+  expect(outputs.at(-1)).toMatchObject({ state: 'failed', checkpointRevision: 0 })
+  expect(events.some(value => (value as { type?: string }).type === 'process')).toBe(false)
+  expect(identity.ownerDecisions()).toEqual([])
+  expect(identity.authorizations()).toEqual([])
+})
+
 it('refuses an unauthenticated CLI start before creating a run or starting a script process', async () => {
   outputs.length = 0; events.length = 0
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-cli-refusal-')))

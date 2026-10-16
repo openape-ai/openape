@@ -3235,5 +3235,15 @@
   "Invalid Pod identity file": "Ungültige Pod-Identitätsdatei",
   "Credential store is locked or unavailable; legacy or application credentials require the desktop credential store; open the updated desktop once to migrate Pod identities": "Der Zugangsspeicher ist gesperrt oder nicht verfügbar. Alte Identitäten und Anwendungs-Zugangsdaten benötigen den Desktop-Speicher. Öffne einmal den aktualisierten Desktop, um die Pod-Identitäten zu migrieren.",
   "Application credential store is locked or unavailable; use the desktop credential store": "Der Speicher für Anwendungs-Zugangsdaten ist gesperrt oder nicht verfügbar; verwende den Desktop-Speicher",
-  "Cannot replace a Pod identity with another credential type": "Eine Pod-Identität darf nicht durch einen anderen Zugangsdaten-Typ ersetzt werden"
+  "Cannot replace a Pod identity with another credential type": "Eine Pod-Identität darf nicht durch einen anderen Zugangsdaten-Typ ersetzt werden",
+  "Prepare this state-directory command in its reserved application terminal": "Bereite diesen Aufruf mit Anwendungszustand im dafür reservierten Anwendungsterminal vor.",
+  "An owner CLI start requires its selected script": "Ein Owner-CLI-Start benötigt das konkret ausgewählte Skript.",
+  "Sign in as the Pod owner with apes before starting a Pod": "Melde dich vor dem Pod-Start mit apes als Pod-Eigentümer an.",
+  "This Pod already has a pending owner start": "Für diesen Pod wartet bereits ein Owner-Start.",
+  "The owner start belongs to another run or has ended": "Der Owner-Start gehört zu einem anderen Lauf oder ist abgelaufen.",
+  "Owner start does not match the selected script invocation": "Der Owner-Start passt nicht zum ausgewählten Skriptaufruf.",
+  "Owner start runtime or entry code changed": "Die Laufzeit oder der Einstiegscode des Owner-Starts wurde geändert.",
+  "Pod grant authority is unavailable": "Die Freigabeinstanz des Pods ist nicht verfügbar.",
+  "The owner start already belongs to another run": "Der Owner-Start ist bereits einem anderen Lauf zugeordnet.",
+  "Assigned executable changed before authorization": "Das zugewiesene Programm wurde vor der Freigabe geändert."
 }
