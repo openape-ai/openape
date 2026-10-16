@@ -1,5 +1,12 @@
 # Active work
 
+## Portable HTTP and model credentials — issue 1507
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1507. Branch `bugfix/issue-1507-portable-provider-credentials`, checkout `openape-monorepo.worktrees/ape-pods-cli-1499`, base `9b28b50860fd61573243fad03a8dd5dbe434deb8`.
+- Owner approved proposal revision 1 ("Passt los jetzt"): https://report.openape.ai/d/01M52M2X28M3VZ9MTJTFHYZ0PN?v=2. Source: `~/.claude/plans/issue-1507/plan.json`.
+- Extend private portable storage only to assigned authenticated HTTP credentials and connected ChatGPT authentication. Preserve identities, account/resource bindings, sandbox denial, exact-call grants and refresh persistence; ProgramState remains issue 1500.
+- Next: focused refusal/native checks, affected gate, native PR, full deployment gate, signed local rollout, selective real migration and actual Service-Agent/editorial/publication CLI acceptance. Personal scripts and credential values remain outside Git.
+
 ## Private briefing recovery — issues 1503, 1504 and 1505
 
 - Resume the approved repair plan after removing personal recipes from Git. Private Calendar, Editorial, Publication and Mail scripts stay outside the checkout and use supported script-version activation.
