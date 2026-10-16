@@ -1,4 +1,5 @@
 import type { CliRequest } from '../contracts/cli'
+import type { ProgramCall, GrantPresentation  } from './broker/authorization'
 import { executeRecordedProgram } from './programs/effect-execution'
 import type { ProgramExecutionCheck } from '../contracts/program-execution'
 import { podIdentityFile } from './connections/identity-file'
@@ -84,7 +85,6 @@ import { parseRunContext, parseServiceScope, serviceKinds } from '../contracts/s
 import type { CredentialCache } from './connections/cache'
 import type { RuntimeHost, RuntimeChild } from './runtime-host'
 import { RunGrantTokens } from './broker/authorization'
-import type { GrantPresentation } from './broker/authorization'
 import { grantSummary, parseScriptSummary } from '../contracts/grant-summary'
 import { parsePodDetails } from '../contracts/details'
 import type { DetailsCommand, PodDetails } from '../contracts/details'
@@ -97,7 +97,7 @@ import type { InternalResourceCommand, ResourceState } from '../contracts/resour
 import { createHash, randomUUID } from 'node:crypto'
 import { parseWorkspace } from '../contracts/control'
 import type { WorkspaceCommand, WorkspaceState } from '../contracts/control'
-import { dirname, join } from 'node:path'
+import { basename, dirname, join } from 'node:path'
 import type { WorkerStatus } from '../contracts/ipc'
 import type { ApprovalManifest } from '../contracts/approvals'
 import { parseStorageFailure, storageReadinessMs } from '../contracts/storage'
@@ -137,6 +137,7 @@ export class RuntimeWorker {
   private shellIdentities = new Map<string, { refresh: (signal: AbortSignal) => Promise<void>, close: () => Promise<void> }>()
   private runTokens = new Map<string, RunGrantTokens>()
   private openedApprovals = new Set<string>()
+  private cliStarts = new Map<string, { scriptHash: string, owner: OwnerSession, runId?: string }>()
   private programs: ProgramManager | null = null
   private connections: ConnectionManager | null = null
   private grants: PodGrants | null = null
@@ -349,6 +350,8 @@ export class RuntimeWorker {
   cancelProgram(podId: string): void { this.programs?.cancelPod(podId) }
 
   private async closeShellIdentities(): Promise<void> {
+    const starts = [...this.cliStarts.values()]; this.cliStarts.clear()
+    await Promise.all(starts.map(start => start.owner.close()))
     const identities = [...this.shellIdentities.values()]; this.shellIdentities.clear(); this.runTokens.clear(); this.jevAttempts.clear()
     await Promise.all(identities.map(identity => identity.close()))
   }
@@ -546,7 +549,14 @@ export class RuntimeWorker {
     }
     if (command.command.type === 'start') {
       await this.executionReady()
-      return this.dispatch({ cliRun: command.command })
+      if (!this.host.oneShot || !command.command.expectedScript) throw new Error('An owner CLI start requires its selected script')
+      const owner = await this.mcpApesSession(Date.now() + 15 * 60000, AbortSignal.timeout(30000))
+      if (!owner) throw new Error('Sign in as the Pod owner with apes before starting a Pod')
+      const podId = command.command.podId
+      if (this.cliStarts.has(podId)) { await owner.close(); throw new Error('This Pod already has a pending owner start') }
+      this.cliStarts.set(podId, { scriptHash: command.command.expectedScript, owner })
+      try { return await this.dispatch({ cliRun: command.command }) }
+      catch (error) { this.cliStarts.delete(podId); await owner.close(); throw error }
     }
     return this.runs(command.command)
   }
@@ -983,6 +993,28 @@ export class RuntimeWorker {
         await this.shellIdentities.get(scope.runId)?.close(); this.shellIdentities.delete(scope.runId); this.runTokens.delete(scope.runId); return true
       }
       const context = parseRunContext(await this.dispatch({ runContext: { scope } }))
+      if (request.kind === 'scriptGrant') {
+        const start = this.cliStarts.get(scope.podId)
+        if (!start) return true
+        this.cliStarts.delete(scope.podId)
+        try {
+          if (start.runId !== scope.runId || !start.owner.active) throw new Error('The owner start belongs to another run or has ended')
+          const call = request.body as ProgramCall
+          const artifact = join(this.root, 'runs', 'script-artifacts', `${start.scriptHash}.mjs`)
+          const entry = join(this.directory, 'runtime/script-entry.mjs')
+          if (call.argv?.[0] !== entry || call.argv[1] !== '--input-channel' || call.argv[2] !== artifact || call.argv[4] !== start.scriptHash || call.argv.length !== 5 || !call.files?.some(file => file.path === artifact && file.sha256 === start.scriptHash)) throw new Error('Owner start does not match the selected script invocation')
+          const executableHash = createHash('sha256').update(await readFile(process.execPath)).digest('hex')
+          const entryHash = createHash('sha256').update(await readFile(entry)).digest('hex')
+          if (call.program.name !== basename(process.execPath) || call.program.sha256 !== executableHash || call.files.length !== 2 || !call.files.some(file => file.path === entry && file.sha256 === entryHash)) throw new Error('Owner start runtime or entry code changed')
+          const grants = this.podGrants()
+          if (!grants) throw new Error('Pod grant authority is unavailable')
+          const { grantId, approval } = await grants.requestProgram(scope.podId, { ...call, grantType: 'once' }, controller.signal)
+          if (approval) await grants.approve(start.owner, scope.podId, grantId, 'once', controller.signal)
+          await check()
+          return true
+        }
+        finally { await start.owner.close() }
+      }
       // The Pod's name and, for a script call, its own summary; the IdP shows them when the call needs a new grant (issue 1473).
       const presentation: GrantPresentation = { origin: grantPodName(context.name), ...(request.summary === undefined ? {} : { summary: parseScriptSummary(request.summary) }) }
       // Every grant this Pod requests or observes is recorded; a later call or run reuses it by coverage.
@@ -1011,6 +1043,11 @@ export class RuntimeWorker {
         catch (error) { await identity.close(); throw error }
         this.shellIdentities.set(scope.runId, { refresh: async (signal) => { signal.throwIfAborted(); identity.assertActive() }, close: identity.close })
         const reach = this.host.oneShot ? await this.sandboxReach(scope.podId) : undefined
+        const start = this.cliStarts.get(scope.podId)
+        if (start) {
+          if (start.runId && start.runId !== scope.runId) throw new Error('The owner start already belongs to another run')
+          start.runId = scope.runId
+        }
         const home = programHome(reach, environment.home)
         return {
           home,
@@ -1020,6 +1057,7 @@ export class RuntimeWorker {
             runtime: { executable: runtime.executable, cli: runtime.cli, environment: { APES_AUTH_FILE: identity.path, APES_IGNORE_USER_CONFIG: '1' } },
             targetHost: connection.targetHost,
             issuer: connection.decisionIssuer ?? connection.issuer,
+            ...(start ? { grantType: 'once' as const } : {}),
             summary: grantSummary('Execute the selected Pod script', grantPodName(context.name)),
             waitMs: 7 * 24 * 60 * 60 * 1000,
           },

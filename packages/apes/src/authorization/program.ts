@@ -1,14 +1,13 @@
-import { createHash } from 'node:crypto'
-import { accessSync, constants, createReadStream, realpathSync, statSync } from 'node:fs'
-import { basename, delimiter, join, resolve } from 'node:path'
 import type { BrokeredGrant, OpenApeAuthZClaims, OpenApeGrantBatch, OpenApeGrantSummary } from '@openape/core'
 import { computeArgvHash, sameBrokeredGrant, verifyAuthzJWT } from '@openape/grants'
 import { ApiError, apiFetch, discoverEndpoints, getGrantsEndpoint } from '../http.js'
 import { GRANT_WAIT_MS } from '../shapes/grants.js'
 import { createWaitProgressReporter } from '../wait-progress.js'
-import { interpreterProgramFiles } from './program-files.js'
+import { bindProgramCall } from './program-files.js'
 import type { ProgramFile } from './program-files.js'
 import { loadAuth } from '../config.js'
+
+export { locateProgram, findExecutable, hashFile } from './program-location.js'
 
 /**
  * Per-call program authorization at the IdP (issue 1473, revision 4). apes sends the exact command and the hash of
@@ -70,46 +69,6 @@ export class AuthorizationTimeoutError extends Error {
     super(`Grant ${grantId} approval timed out after ${Math.round(waitMs / 1000)} s; nothing was executed`)
     this.name = 'AuthorizationTimeoutError'
   }
-}
-
-function isExecutableFile(path: string): boolean {
-  try {
-    if (!statSync(path).isFile()) return false
-    accessSync(path, constants.X_OK)
-    return true
-  }
-  catch {
-    return false
-  }
-}
-
-/** The file a shell would run for `executable`: the path itself when it has a slash, else the first PATH match. */
-export function findExecutable(executable: string, pathVariable = process.env.PATH ?? ''): string | null {
-  if (executable.includes('/')) {
-    const path = resolve(executable)
-    return isExecutableFile(path) ? path : null
-  }
-  for (const directory of pathVariable.split(delimiter)) {
-    if (!directory) continue
-    const candidate = resolve(join(directory, executable))
-    if (isExecutableFile(candidate)) return candidate
-  }
-  return null
-}
-
-export async function hashFile(path: string): Promise<string> {
-  const hash = createHash('sha256')
-  for await (const chunk of createReadStream(path)) hash.update(chunk as Buffer)
-  return hash.digest('hex')
-}
-
-/** Locates and hashes the program; null when no executable file exists for it. */
-export async function locateProgram(executable: string): Promise<LocatedProgram | null> {
-  const found = findExecutable(executable)
-  if (!found) return null
-  // The resolved file is hashed and later executed, so retargeting a symlink cannot swap the program in between.
-  const path = realpathSync(found)
-  return { path, argv0: found, name: basename(found), sha256: await hashFile(path) }
 }
 
 /** The argv the IdP resolves and hashes: the program name followed by the arguments. */
@@ -256,12 +215,7 @@ export interface AuthorizeProgramOptions extends AuthorizationRequest {
  * they expire; single-use tokens never are.
  */
 export async function authorizeProgramCall(call: ProgramCall, options: AuthorizeProgramOptions): Promise<ProgramAuthorization> {
-  const detected = interpreterProgramFiles(call, options.context)
-  for (const file of detected) {
-    const pinned = call.files?.find(candidate => candidate.path === file.path)
-    if (pinned && pinned.sha256 !== file.sha256) throw new Error(`${file.path} changed before authorization; nothing was executed`)
-  }
-  call.files = [...new Map([...(call.files ?? []), ...detected].map(file => [file.path, file])).values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
+  call.files = bindProgramCall(call, options.context).files
   const auth = loadAuth()
   const ownAuth = auth?.email === options.subject && issuerOf(auth.idp) === issuerOf(options.idp) ? auth : undefined
   const decisionIssuer = ownAuth?.decision_issuer ?? options.idp

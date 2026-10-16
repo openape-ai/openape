@@ -1,0 +1,138 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "status": "active",
+  "revision": 1,
+  "milestones": [
+    {
+      "id": "bindings",
+      "status": "done",
+      "acceptance": [
+        "Interpreter files, inline code and complete arguments have identical authorization bindings; changed inputs are refused."
+      ],
+      "title": "Unify concrete invocation preparation",
+      "goal": "Interpreter files, inline code and complete arguments have identical authorization bindings; changed inputs are refused."
+    },
+    {
+      "id": "owner-start",
+      "status": "done",
+      "acceptance": [
+        "Only the authenticated owner start of the pinned script is authorized; scheduled and downstream calls retain their grants."
+      ],
+      "title": "Authorize the explicit owner CLI start",
+      "goal": "Only the authenticated owner start of the pinned script is authorized; scheduled and downstream calls retain their grants."
+    },
+    {
+      "id": "recovery",
+      "status": "active",
+      "acceptance": [
+        "Prove stopped execution domains, retain unknown-effect holds until reviewed, then verify Mail review through the native CLI."
+      ],
+      "title": "Reconcile and retest Mail review",
+      "goal": "Prove stopped execution domains, retain unknown-effect holds until reviewed, then verify Mail review through the native CLI."
+    }
+  ],
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "Exact Pod grants and explicit owner CLI starts",
+        "text": "Genaue Pod-Freigaben und bewusste Owner-CLI-Starts"
+      },
+      {
+        "path": "goal",
+        "source": "Resolve issue 1501, reconcile the cancelled mail preview and verify a real CLI run without weakening protections.",
+        "text": "Issue 1501 beheben, die abgebrochene Mail-Prüfung sicher abgleichen und einen echten CLI-Lauf ohne schwächere Absicherungen prüfen."
+      },
+      {
+        "path": "summary",
+        "source": "Use the same concrete invocation for grant preparation and execution. An authenticated owner CLI call authorizes only its selected Pod start; downstream calls retain their exact grants.",
+        "text": "Für Vorbereitung und Ausführung denselben konkreten Aufruf verwenden. Ein authentifizierter Owner-CLI-Aufruf autorisiert nur den gewählten Pod-Start; nachfolgende Aufrufe behalten ihre genauen Freigaben."
+      },
+      {
+        "path": "problem.statement",
+        "source": "Pre-grants currently describe the logical program while ape-shell executes its interpreter and code.",
+        "text": "Vorabfreigaben beschreiben derzeit das logische Programm, während ape-shell dessen Interpreter und Code ausführt."
+      },
+      {
+        "path": "problem.impact",
+        "source": "Approvals are not reused and interrupted runs can retain unresolved execution intents.",
+        "text": "Freigaben werden nicht wiederverwendet; unterbrochene Läufe können ungeklärte Ausführungsabsichten hinterlassen."
+      },
+      {
+        "path": "problem.approach",
+        "source": "Share invocation binding, limit owner authorization to the selected start and reconcile only with execution evidence.",
+        "text": "Die Aufrufbindung gemeinsam verwenden, die Owner-Autorisierung auf den gewählten Start begrenzen und nur anhand von Ausführungsbelegen abgleichen."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "The tested CLI preview completes with accurate grants and preserved identity, sandbox and recovery checks.",
+        "text": "Die geprüfte CLI-Vorschau läuft mit passenden Freigaben und erhaltenen Identitäts-, Sandbox- und Wiederherstellungsprüfungen."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Unify concrete invocation preparation",
+        "text": "Die konkrete Aufrufvorbereitung vereinheitlichen"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Interpreter files, inline code and complete arguments have identical authorization bindings; changed inputs are refused.",
+        "text": "Interpreterdateien, Inline-Code und vollständige Argumente haben identische Freigabebindungen; geänderte Eingaben werden abgewiesen."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "Interpreter files, inline code and complete arguments have identical authorization bindings; changed inputs are refused.",
+        "text": "Interpreterdateien, Inline-Code und vollständige Argumente haben identische Freigabebindungen; geänderte Eingaben werden abgewiesen."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "Authorize the explicit owner CLI start",
+        "text": "Den bewussten Owner-CLI-Start autorisieren"
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "Only the authenticated owner start of the pinned script is authorized; scheduled and downstream calls retain their grants.",
+        "text": "Nur der authentifizierte Owner-Start des gebundenen Skripts wird autorisiert; geplante und nachfolgende Aufrufe behalten ihre Freigaben."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "Only the authenticated owner start of the pinned script is authorized; scheduled and downstream calls retain their grants.",
+        "text": "Nur der authentifizierte Owner-Start des gebundenen Skripts wird autorisiert; geplante und nachfolgende Aufrufe behalten ihre Freigaben."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "Reconcile and retest Mail review",
+        "text": "Mail-Prüfung abgleichen und erneut testen"
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "Prove stopped execution domains, retain unknown-effect holds until reviewed, then verify Mail review through the native CLI.",
+        "text": "Beendete Ausführungsdomänen nachweisen, Sperren ungeklärter Effekte bis zur Prüfung erhalten und danach die Mail-Prüfung über die native CLI prüfen."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "Prove stopped execution domains, retain unknown-effect holds until reviewed, then verify Mail review through the native CLI.",
+        "text": "Beendete Ausführungsdomänen nachweisen, Sperren ungeklärter Effekte bis zur Prüfung erhalten und danach die Mail-Prüfung über die native CLI prüfen."
+      }
+    ]
+  },
+  "title": "Exact Pod grants and explicit owner CLI starts",
+  "goal": "Resolve issue 1501, reconcile the cancelled mail preview and verify a real CLI run without weakening protections.",
+  "summary": "Use the same concrete invocation for grant preparation and execution. An authenticated owner CLI call authorizes only its selected Pod start; downstream calls retain their exact grants.",
+  "problem": {
+    "statement": "Pre-grants currently describe the logical program while ape-shell executes its interpreter and code.",
+    "impact": "Approvals are not reused and interrupted runs can retain unresolved execution intents.",
+    "approach": "Share invocation binding, limit owner authorization to the selected start and reconcile only with execution evidence.",
+    "outcome": "The tested CLI preview completes with accurate grants and preserved identity, sandbox and recovery checks."
+  },
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-16",
+    "reference": "Dann setz das bitte so um und behebe Issue 1501. Gleiche den abgebrochenen Lauf sicher ab und teste die Mail-Prüfung danach über die CLI. Die bestehenden Absicherungen müssen erhalten bleiben.",
+    "target": {
+      "url": "https://repos.openape.ai/patrick/monorepo/issues/1501",
+      "version": 1
+    }
+  }
+}

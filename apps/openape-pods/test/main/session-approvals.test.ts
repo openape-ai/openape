@@ -1,8 +1,8 @@
 // @vitest-environment node
 import { createHash, randomUUID } from 'node:crypto'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { basename, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OwnerSession } from '../../src/main/connections/owner-session'
 import { AgentAuthority } from '../../src/main/broker/authorization'
@@ -14,7 +14,7 @@ import { brokered, brokerRejections, closeProfiles, deniedPodId, identityProvide
 // requests can be approved in that session without the human. Outside an active owner session no code path
 // approves, the persisted setup login is never used for it, and a decision only reaches own-Pod grants.
 vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent', isPackaged: false }, shell: { openExternal: vi.fn(async () => {}) } }))
-vi.mock('../../src/runtime/environment', () => ({ podEnvironment: async () => ({ workspace: '/fixture/workspace', home: '/fixture/home', environment: {} }), podEnvironmentValues: () => ({}), visibleEnvironment: () => ({}) }))
+vi.mock('../../src/runtime/environment', () => ({ podDirectories: async () => ({ workspace: '/fixture/workspace', home: '/fixture/home' }), podEnvironment: async () => ({ workspace: '/fixture/workspace', home: '/fixture/home', environment: {} }), podEnvironmentValues: () => ({}), visibleEnvironment: () => ({}) }))
 
 let idp: ReturnType<typeof identityProvider>
 let root = ''
@@ -28,6 +28,36 @@ function session(clock = { now: Date.now() }) {
 }
 const mcp = (f: Awaited<ReturnType<typeof workerFixture>>, action: Record<string, unknown>, ownerSession: OwnerSession | null) => f.worker.codex({ id: randomUUID(), action }, ownerSession)
 const httpGrant = (approve?: boolean) => ({ action: 'grants', command: { type: 'request', target: { podId }, grants: { http: [{ origin: 'https://hooks.example.test', methods: ['POST'] }] }, ...(approve === undefined ? {} : { approve }) } })
+
+it('authorizes only one pinned owner CLI start and leaves downstream calls pending', async () => {
+  const f = await workerFixture(); const owner = session(); const runId = randomUUID()
+  const hash = (bytes: Buffer | string) => createHash('sha256').update(bytes).digest('hex')
+  const scriptHash = hash('Synthetic Pod source')
+  const entry = join(root, 'runtime/script-entry.mjs'); mkdirSync(join(root, 'runtime')); writeFileSync(entry, 'Synthetic runtime entry')
+  Object.assign((f.worker as unknown as { host: object }).host, { directory: root })
+  Object.assign(f.worker, { cliStarts: new Map([[podId, { scriptHash, runId, owner }]]) })
+  const run = f.start(podId, runId); await run.run
+  const artifact = join(f.store.root, 'runs/script-artifacts', `${scriptHash}.mjs`)
+  const call = { program: { name: basename(process.execPath), sha256: hash(readFileSync(process.execPath)) }, argv: [entry, '--input-channel', artifact, '', scriptHash], files: [{ path: artifact, sha256: scriptHash }, { path: entry, sha256: hash(readFileSync(entry)) }] }
+  await expect(run.call('scriptGrant', call)).resolves.toBe(true)
+  expect(idp.state.decisions).toEqual([{ action: 'approve', id: 'grant-1', bearer: ownerToken, body: { grant_type: 'once' } }])
+  expect(idp.state.authorizations[0]).toMatchObject({ ...call, grant_type: 'once' })
+  const authority = new AgentAuthority(f.connection(podId), undefined, f.grants.port(podId))
+  await expect(authority.requestProgram({ ...call, argv: ['-e', 'console.log(2 + 2)'] }, AbortSignal.timeout(1000))).resolves.toMatchObject({ state: 'pending' })
+  await expect(run.call('scriptGrant', call)).resolves.toBe(true)
+  expect(idp.state.decisions).toHaveLength(1)
+  expect(owner.active).toBe(false)
+})
+
+it.each(['foreign-run', 'changed-script', 'ended-session'])('refuses %s before automatically deciding a CLI start grant', async (change) => {
+  const f = await workerFixture(); const owner = session(); const runId = randomUUID()
+  if (change === 'ended-session') await owner.close()
+  const run = f.start(podId, runId); await run.run
+  Object.assign(f.worker, { cliStarts: new Map([[podId, { scriptHash: 'a'.repeat(64), runId: change === 'foreign-run' ? randomUUID() : runId, owner }]]) })
+  await expect(run.call('scriptGrant', { argv: ['foreign-script'] })).rejects.toThrow(/another run|ended|selected script/)
+  expect(idp.state.authorizations).toEqual([])
+  expect(idp.state.decisions).toEqual([])
+})
 
 it('without an owner session every approve path throws or only requests, and the IdP sees no approve call', async () => {
   const f = await workerFixture()
