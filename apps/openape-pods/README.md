@@ -726,3 +726,7 @@ Changing assigned program or script content invalidates earlier exact-call autho
 ### Personal Pod recipes
 
 Machine-specific Pod scripts, policies and their recipe tests are private machine state. Keep one local `pod-script.mjs` per Pod and use the Pod script manager for validation, activation and version history. This repository contains the generic runtime, CLI adapters and synthetic runtime tests; it does not distribute personal automation recipes.
+
+Scripts can read `await context.timing()` as `{activeMs, waitingMs}` for their current leased run. Approval waits are excluded from active time and overlapping waits count once. The call accepts no run or Pod selector and does not reset or extend any hard execution or inference limit. Cancelled, fenced or changed assignments cannot use it. Use this read-only observation for soft processing deadlines and checkpoint resumable work through `context.progress.commit`.
+
+For a stopped program with verified partial effects, owner recovery can submit `{type:"resolveHttp",podId,runId,key,applied:true,programOutcome:"partial",evidence}`. Execution domains must be stopped and the effect must belong to that run and remain unknown. This records a partial owner observation without claiming exit code zero, changing the failed run to success or replaying the program. HTTP effects and non-applied observations reject this option. Completed work and its outputs remain intact; inspect and explicitly retry only the unsettled work.
