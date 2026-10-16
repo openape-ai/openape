@@ -26,6 +26,7 @@ import { assertImportSetupFinished } from '../sharing/setup'
 import { parseWorkDeclarations } from '../../contracts/work'
 import type { WorkDeclaration } from '../../contracts/work'
 import type { ScriptResult } from '../../contracts/runs'
+import { assertTimingRequest } from '../../contracts/runs'
 
 /** Validation is a contract smoke check: any well-formed result passes, unless the script ended unsuccessfully after a refused service request. */
 function assertValidationResult(result: ScriptResult, refusal: Error | undefined): void {
@@ -72,7 +73,12 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
     let work: WorkDeclaration[] | undefined
     let polls = false
     let refusal: Error | undefined
+    const startedAt = Date.now()
     const synthetic = async (operation: string, input: unknown): Promise<unknown> => {
+      if (operation === 'run.timing') {
+        assertTimingRequest(input)
+        return { activeMs: Math.max(0, Date.now() - startedAt), waitingMs: 0 }
+      }
       // A summary of a tool or HTTP call is checked like at run time and leaves the call itself unchanged.
       const { payload } = operation === 'tools.invoke' || operation === 'http.request' ? splitScriptSummary(input) : { payload: input }
       if (operation === 'graph.contract') throw new Error('Network contracts (takes/gives) are retired; declare work and use shared data instead')

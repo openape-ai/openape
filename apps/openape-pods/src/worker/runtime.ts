@@ -447,7 +447,7 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'run' in request.command) {
       const command = parseRunCommand(request.command.run)
       if (command.type === 'installExample') await dispatcher.install(command.podId, command.variant)
-      if (command.type === 'resolveHttp') await recovery.resolveHttp(command.podId, command.runId, command.key, command.applied, command.evidence)
+      if (command.type === 'resolveHttp') await recovery.resolveHttp(command.podId, command.runId, command.key, command.applied, command.evidence, command.programOutcome)
       if (command.type === 'recover') { if (command.action === 'inspect') await recovery.inspect(command.podId, command.runId); else await recovery.retry(command.podId, command.runId) }
       if (command.type === 'retryQueue') recovery.retryQueue(command.podId)
       if (command.type === 'start') scheduler.requestManual(command.podId, command.expectedScript)
