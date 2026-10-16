@@ -115,13 +115,16 @@ export function identityProvider(options: { brokered?: typeof brokered } = {}) {
    */
   async function authorize(body: Record<string, unknown>): Promise<Response> {
     state.authorizations.push(body)
-    if (Object.keys(body).some(key => !['target_host', 'audience', 'program', 'argv', 'grant_type', 'summary', 'batch'].includes(key))) return json({ statusCode: 400, data: { title: 'Invalid request' } }, 400)
+    if (Object.keys(body).some(key => !['target_host', 'audience', 'program', 'argv', 'files', 'grant_type', 'summary', 'batch'].includes(key))) return json({ statusCode: 400, data: { title: 'Invalid request' } }, 400)
     const program = body.program as { name: string, sha256: string }; const executionArgv = [program.name, ...body.argv as string[]]
     const argvHash = await computeArgvHash(executionArgv)
     const requester = podSubject(String(body.target_host).slice(5))
     const own = [...grants.entries()].filter(([, grant]) => grant.request.requester === requester && grant.request.target_host === body.target_host && grant.request.audience === 'shapes')
     const details = (grant: StubGrant) => (grant.request.authorization_details ?? []) as { cli_id: string, operation_id: string }[]
-    const covers = (grant: StubGrant) => (grant.request.execution_context as { argv_hash?: string } | undefined)?.argv_hash === argvHash || details(grant).some(detail => detail.cli_id === program.name && detail.operation_id === '*')
+    const covers = (grant: StubGrant) => {
+      const context = grant.request.execution_context as { argv_hash?: string, program_sha256?: string, files?: unknown } | undefined
+      return (context?.argv_hash === argvHash && context.program_sha256 === program.sha256 && JSON.stringify(context.files ?? []) === JSON.stringify(body.files ?? [])) || details(grant).some(detail => detail.cli_id === program.name && detail.operation_id === '*')
+    }
     const approved = own.find(([, grant]) => grant.status === 'approved' && covers(grant))
     if (approved) {
       const [id, grant] = approved; const now = Math.floor(Date.now() / 1000)
@@ -133,7 +136,7 @@ export function identityProvider(options: { brokered?: typeof brokered } = {}) {
     if (newest?.[1].status === 'pending') return json({ state: 'pending', grant_id: newest[0], approval_url: `${issuer}/grant-approval?grant_id=${newest[0]}` }, 202)
     const id = `grant-${grants.size + 1}`
     const detail = { type: 'openape_cli', cli_id: program.name, operation_id: '_exact', resource_chain: [], action: 'exec', permission: `${program.name}.command[argv_hash=${argvHash}]#exec`, display: executionArgv.join(' '), risk: 'high', constraints: { exact_command: true } }
-    grants.set(id, { status: 'pending', request: { requester, target_host: body.target_host, audience: 'shapes', grant_type: body.grant_type ?? 'always', command: executionArgv, authorization_details: [detail], execution_context: { argv: executionArgv, argv_hash: argvHash, program_sha256: program.sha256 }, summary: body.summary } })
+    grants.set(id, { status: 'pending', request: { requester, target_host: body.target_host, audience: 'shapes', grant_type: body.grant_type ?? 'always', command: executionArgv, authorization_details: [detail], execution_context: { argv: executionArgv, argv_hash: argvHash, program_sha256: program.sha256, ...(body.files ? { files: body.files } : {}) }, summary: body.summary } })
     return json({ state: 'pending', grant_id: id, approval_url: `${issuer}/grant-approval?grant_id=${id}` }, 202)
   }
   /** A decision made outside Pods, by the owner at the IdP or by its expiry. */

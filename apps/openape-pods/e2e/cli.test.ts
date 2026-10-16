@@ -74,7 +74,8 @@ it.each(['owner', 'isolated'] as const)('executes with the real Pod identity, %s
     new GrantLedger(store).execute({ type: 'level', podId: id, level })
   }
   finally { store.close() }
-  identity = await fixtureShellIdentity(profile)
+  identity = await fixtureShellIdentity(profile, [], false, false, true)
+  await writeFile(protectedFile, identity.ownerLogin, { mode: 0o600 })
   await identity.persistCredentials(value => cipher().encrypt(value))
   const credentialRoot = join(profile, 'credentials')
   const desktop = new CredentialCache(credentialRoot, cipher())
@@ -119,10 +120,15 @@ export async function run(context) {
     expect(records).toEqual([{ state: 'completed', error: null }])
   }
   finally { store.close() }
-  expect(await readFile(protectedFile, 'utf8')).toBe('SYNTHETIC_OWNER_LOGIN_DO_NOT_READ')
+  expect(await readFile(protectedFile, 'utf8')).toBe(identity.ownerLogin)
+  expect(identity.ownerDecisions()).toHaveLength(1)
+  const startCalls = identity.authorizations().filter(item => item.call.grant_type === 'once')
+  expect(startCalls).toHaveLength(2)
+  expect(startCalls[0]!.grantId).toBe(startCalls[1]!.grantId)
+  for (const field of ['program', 'argv', 'files', 'grant_type', 'target_host']) expect(startCalls[0]!.call[field]).toEqual(startCalls[1]!.call[field])
   if (level === 'owner') {
     await writeFile(script, `export async function run(context) {
-      if (!context.input.validation) await new Promise(resolve => setTimeout(resolve, 30000));
+      if (!context.input.validation) { context.log('Started waiting'); await new Promise(resolve => setTimeout(resolve, 30000)); }
       return {status:'completed',summary:'Finished waiting',completedInputIds:[],gapIds:[]};
     }`)
     client = await open(profile)
@@ -133,10 +139,17 @@ export async function run(context) {
       const exit = await executeCli(cliArguments(['run', id]), client, {
         signal: controller.signal,
         output: value => outputs.push(value),
-        progress: (value) => { events.push(value); if ((value as { type?: string }).type === 'process') controller.abort() },
+        progress: (value) => { events.push(value); if ((value as { type?: string }).type === 'log') controller.abort() },
       })
       expect(exit).toBe(130)
       expect(outputs.at(-1)).toMatchObject({ podId: id, state: 'cancelled' })
+      await client.close(); client = undefined
+      const cancelled = new PodDatabase(profile)
+      try {
+        expect(cancelled.db.prepare("SELECT count(*) AS n FROM effect_ledger WHERE state='intent'").get()!.n).toBe(0)
+        expect(cancelled.db.prepare("SELECT count(*) AS n FROM effect_ledger WHERE state='unknown'").get()!.n).toBe(1)
+      }
+      finally { cancelled.close() }
     }
     finally { clearTimeout(deadline) }
   }
@@ -145,6 +158,8 @@ export async function run(context) {
 it('executes an assigned owner program without opening its encrypted application state', async () => {
   outputs.length = 0; events.length = 0
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-cli-owner-program-')))
+  const ownerHome = join(root, 'owner'); await mkdir(join(ownerHome, '.config/apes'), { recursive: true, mode: 0o700 })
+  vi.stubEnv('HOME', ownerHome)
   const profile = join(root, 'profile'); await mkdir(profile, { mode: 0o700 })
   const store = new PodDatabase(profile)
   const applicationId = randomUUID(); const capability = `tool.app_${applicationId.replaceAll('-', '')}.invoke`
@@ -161,7 +176,8 @@ it('executes an assigned owner program without opening its encrypted application
   finally { store.close() }
   const encryptedPath = join(profile, 'credentials', `${stateId}.encrypted`)
   const encryptedBefore = await readFile(encryptedPath)
-  identity = await fixtureShellIdentity(profile)
+  identity = await fixtureShellIdentity(profile, [], false, false, true)
+  await writeFile(join(ownerHome, '.config/apes/auth.json'), identity.ownerLogin, { mode: 0o600 })
   await identity.persistCredentials(value => cipher().encrypt(value))
   for (const file of await readdir(join(profile, 'credentials'))) {
     if (file.endsWith('.encrypted') && file !== `${stateId}.encrypted`) await desktop.readConnection(file.slice(0, -'.encrypted'.length))
@@ -183,7 +199,7 @@ it('executes an assigned owner program without opening its encrypted application
   expect(await readFile(encryptedPath)).toEqual(encryptedBefore)
 })
 
-it('refuses a run without a Pod identity before any script process starts', async () => {
+it('refuses an unauthenticated CLI start before creating a run or starting a script process', async () => {
   outputs.length = 0; events.length = 0
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-cli-refusal-')))
   const store = new PodDatabase(root)
@@ -194,12 +210,12 @@ it('refuses a run without a Pod identity before any script process starts', asyn
   }
   finally { store.close() }
   client = await open(root)
-  expect(await executeCli(cliArguments(['run', pod.id]), client, io())).toBe(1)
-  expect(outputs.at(-1)).toMatchObject({ state: 'failed', checkpointRevision: 0, error: expect.stringMatching(/DDISA|identity/) })
+  await expect(executeCli(cliArguments(['run', pod.id]), client, io())).rejects.toThrow(/DDISA|owner|identity/)
   await client.close(); client = undefined
   const reopened = new PodDatabase(root)
   try {
     expect(reopened.checkpoint(pod.id).revision).toBe(0)
+    expect(reopened.db.prepare('SELECT count(*) AS n FROM runs').get()!.n).toBe(0)
     expect(reopened.db.prepare('SELECT count(*) AS n FROM run_events WHERE type=\'process\'').get()!.n).toBe(0)
   }
   finally { reopened.close() }

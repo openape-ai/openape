@@ -13,6 +13,10 @@
     "ape-shell": "./scripts/ape-shell-wrapper.sh"
   },
   "exports": {
+    "./program": {
+      "import": "./dist/authorization/program-binding.js",
+      "types": "./dist/authorization/program-binding.d.ts"
+    },
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"

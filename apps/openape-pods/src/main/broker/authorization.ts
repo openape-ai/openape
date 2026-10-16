@@ -59,10 +59,9 @@ export interface PermissionAuthorization {
   grantId: string
 }
 /**
- * One program call as the IdP decides it (issue 1473, revision 4): the program's command name and file hash, and the
- * arguments exactly as executed, without the executable.
+ * One concrete call as the IdP decides it: the actual executable, complete arguments and script-content bindings.
  */
-export interface ProgramCall { program: { name: string, sha256: string }, argv: string[] }
+export interface ProgramCall { program: { name: string, sha256: string }, argv: string[], files?: { path: string, sha256: string }[], grantType?: 'once' | 'always' }
 interface MintedGrant { grantId: string, token: string, jwks: VerifyAuthzOptions['jwks'], reusableUntil: number }
 export const grantTokenReuseMs = 60 * 1000
 // The IdP issues a command token for at most five minutes (issue 1473, revision 4).
@@ -244,7 +243,7 @@ export class AgentAuthority {
 
   private async authorizeCall(call: ProgramCall, signal: AbortSignal): Promise<AuthorizeReply> {
     const title = commandLine([call.program.name, ...call.argv])
-    const reply = await this.send('/api/grants/authorize', 'POST', signal, { target_host: this.connection.targetHost, audience: 'shapes', program: call.program, argv: call.argv, grant_type: 'always', summary: grantSummary(title, this.presentation?.origin, this.presentation?.summary) })
+    const reply = await this.send('/api/grants/authorize', 'POST', signal, { target_host: this.connection.targetHost, audience: 'shapes', program: call.program, argv: call.argv, ...(call.files?.length ? { files: call.files } : {}), grant_type: call.grantType ?? 'always', summary: grantSummary(title, this.presentation?.origin, this.presentation?.summary) })
     let body: Record<string, unknown> | null = null
     try { body = JSON.parse(reply.text) as Record<string, unknown> }
     catch { body = null }

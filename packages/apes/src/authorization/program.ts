@@ -6,7 +6,7 @@ import { computeArgvHash, sameBrokeredGrant, verifyAuthzJWT } from '@openape/gra
 import { ApiError, apiFetch, discoverEndpoints, getGrantsEndpoint } from '../http.js'
 import { GRANT_WAIT_MS } from '../shapes/grants.js'
 import { createWaitProgressReporter } from '../wait-progress.js'
-import { interpreterProgramFiles } from './program-files.js'
+import { bindProgramCall } from './program-files.js'
 import type { ProgramFile } from './program-files.js'
 import { loadAuth } from '../config.js'
 
@@ -256,12 +256,7 @@ export interface AuthorizeProgramOptions extends AuthorizationRequest {
  * they expire; single-use tokens never are.
  */
 export async function authorizeProgramCall(call: ProgramCall, options: AuthorizeProgramOptions): Promise<ProgramAuthorization> {
-  const detected = interpreterProgramFiles(call, options.context)
-  for (const file of detected) {
-    const pinned = call.files?.find(candidate => candidate.path === file.path)
-    if (pinned && pinned.sha256 !== file.sha256) throw new Error(`${file.path} changed before authorization; nothing was executed`)
-  }
-  call.files = [...new Map([...(call.files ?? []), ...detected].map(file => [file.path, file])).values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
+  call.files = bindProgramCall(call, options.context).files
   const auth = loadAuth()
   const ownAuth = auth?.email === options.subject && issuerOf(auth.idp) === issuerOf(options.idp) ? auth : undefined
   const decisionIssuer = ownAuth?.decision_issuer ?? options.idp
