@@ -17,7 +17,7 @@ import { SetupControl } from '../../src/worker/onboarding/control'
 const cleanups: (() => Promise<void>)[] = []
 vi.mock('../../src/main/connections/broker', async original => ({ ...await original<typeof import('../../src/main/connections/broker')>(), podBrokerReceipt: vi.fn(async () => 'synthetic-receipt') }))
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
-async function fixture(locked = false, architecture = process.arch) {
+async function fixture(locked = false, architecture = process.arch, jevKey?: () => string | undefined) {
   const root = await mkdtemp(join(tmpdir(), 'pods-connect-')); const vendor = join(root, 'vendor'); await mkdir(vendor)
   await writeFile(join(vendor, 'codex'), 'synthetic-codex')
   await writeFile(join(vendor, 'manifest.json'), JSON.stringify({ sdk: '0.153.4', cli: `0.153.4-${process.platform}-${architecture}`, binaryHash: digest('synthetic-codex') }))
@@ -25,7 +25,7 @@ async function fixture(locked = false, architecture = process.arch) {
   const credentials = new CredentialCache(join(root, 'credentials'), { available: () => !locked, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
   const runtime = { helper: 'unused-fixture-helper', executable: process.execPath, entry: 'unused-entry', runtimeDirectories: [], environment: {}, binary: join(vendor, 'codex'), manifest: join(vendor, 'manifest.json'), catalog: 'unused-catalog', sdkHost: 'unused-host' }
   const availability = vi.fn(async () => {})
-  const manager = new ConnectionManager(root, runtime, credentials, async command => control.execute(command), availability)
+  const manager = new ConnectionManager(root, runtime, credentials, async command => control.execute(command), availability, false, jevKey)
   cleanups.push(async () => { await manager.stop(); store.close(); await rm(root, { recursive: true, force: true }) })
   await manager.initialize(async () => {})
   return { root, manager, store, control, credentials, availability }
@@ -278,4 +278,27 @@ it('fails visibly when the account reports no default model', async () => {
   const server = fakeAppServer(); const { manager } = await connectedChatGPT()
   server.default = null
   await expect(manager.model(new AbortController().signal)).rejects.toThrow('The connected ChatGPT account reports no default model')
+})
+
+it('uses an explicit CLI Jev key without decrypting or replacing desktop credentials', async () => {
+  const { manager, control, credentials } = await fixture(true, process.arch, () => 'synthetic-env-key')
+  const id = randomUUID()
+  control.execute({ type: 'save', connection: { id, provider: 'typesafe', account: 'TypeSafe / Jev', state: 'ready', error: null }, metadata: {} })
+  const read = vi.spyOn(credentials, 'readConnection')
+  const transport = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce(Response.json({ result: 'synthetic-result' }))
+  expect(await (await manager.typesafeRequest(id, '{}', new AbortController().signal)).json()).toEqual({ result: 'synthetic-result' })
+  expect(transport).toHaveBeenCalledWith('https://api.typesafe.ai/v1/systemone', expect.objectContaining({ headers: expect.objectContaining({ Authorization: 'Bearer synthetic-env-key' }) }))
+  expect(read).not.toHaveBeenCalled()
+  transport.mockResolvedValueOnce(new Response('rejected', { status: 401 }))
+  expect((await manager.typesafeRequest(id, '{}', new AbortController().signal)).status).toBe(401)
+  expect((await manager.view()).connections.find(item => item.id === id)?.state).toBe('ready')
+  transport.mockResolvedValueOnce(Response.json({ echo: 'synthetic-env-key' }))
+  await expect(manager.typesafeRequest(id, '{}', new AbortController().signal)).rejects.toThrow('exposed authentication data')
+  const cancelled = new AbortController(); cancelled.abort()
+  const count = transport.mock.calls.length
+  await expect(manager.typesafeRequest(id, '{}', cancelled.signal)).rejects.toThrow()
+  expect(transport).toHaveBeenCalledTimes(count)
+  await manager.execute({ type: 'disconnect', id })
+  await expect(manager.typesafeRequest(id, '{}', new AbortController().signal)).rejects.toThrow('not connected')
+  expect(transport).toHaveBeenCalledTimes(count)
 })
