@@ -3263,5 +3263,6 @@
   "HTTP credential binding does not match its assignment": "Die Bindung der HTTP-Zugangsdaten stimmt nicht mit der Zuweisung überein",
   "ChatGPT credential account binding does not match; reconnect": "Die Kontobindung der ChatGPT-Zugangsdaten stimmt nicht überein. Verbinde das Konto erneut.",
   "Invalid portable credential record": "Ungültiger portabler Zugangsdaten-Datensatz",
-  "Invalid portable credential binding": "Ungültige Bindung der portablen Zugangsdaten"
+  "Invalid portable credential binding": "Ungültige Bindung der portablen Zugangsdaten",
+  "Store a protected value for this pod. HTTP authentication keys stay with the runtime. Saving or replacing pauses the pod and requires script validation again.": "Speichere einen geschützten Wert für diesen Pod. Schlüssel für die HTTP-Anmeldung bleiben bei der Laufzeit. Speichern oder Ersetzen pausiert den Pod und erfordert eine erneute Skriptprüfung."
 }
