@@ -1,4 +1,6 @@
-import { parseNetworkHosts, programIdentity } from '../../contracts/programs'
+import { parseNetworkHosts } from '../../contracts/programs'
+import { programInvocation } from '../../runtime/program-invocation'
+import { programLaunch } from './runtime'
 import { assignedDirectories, directoryPolicy } from '../../runtime/directories'
 import { ApplicationLaunch } from './launch'
 import { ExternalShell } from '../shell/session'
@@ -55,7 +57,10 @@ export class ProgramManager {
   async grantCall(command: Extract<ProgramCommand, { type: 'grant' }>): Promise<ProgramCall> {
     const assignment = await this.assignment(command.podId, command.applicationId, command.epoch)
     await verifyProgram(assignment)
-    return { program: programIdentity(assignment), argv: command.argv }
+    const launch = programLaunch(assignment)
+    const reach = await this.access(command.podId).reach()
+    if (assignment.cacheArgument && reach.level !== 'owner') throw new Error('Prepare this state-directory command in its reserved application terminal')
+    return programInvocation(launch.executable, launch.executableHash, [...launch.prefix, ...command.argv], assignment.entryFiles.map(file => ({ path: file.path, sha256: file.hash })), await podWorkspace(dirname(this.root), command.podId), launch.environment)
   }
 
   async importFile(podId: string, applicationId: string, epoch: number, source: string): Promise<void> {

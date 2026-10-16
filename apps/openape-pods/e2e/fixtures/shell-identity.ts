@@ -7,7 +7,7 @@ import { join } from 'node:path'
 import type { ElectronApplication } from 'playwright'
 import { PodDatabase } from '../../src/worker/storage/database'
 
-export async function fixtureShellIdentity(root: string, ownerPermissions: string[] = [], networkGates = false, provisioning = false) {
+export async function fixtureShellIdentity(root: string, ownerPermissions: string[] = [], networkGates = false, provisioning = false, ownerCli = false) {
   const fixtureKey = randomBytes(32).toString('hex')
   let origin = ''
   const records: { path: string, value: string }[] = []
@@ -17,6 +17,10 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
   let failEnrollment = false
   const brokerId = randomUUID()
   const keys = generateKeyPairSync('ed25519')
+  let ownerToken = ''
+  const exactCalls = new Map<string, string>()
+  const authorizations: { grantId: string, call: Record<string, unknown> }[] = []
+  const ownerDecisions: string[] = []
   const heldConsumes = new Map<string, { wait: Promise<void>, release: () => void }>()
   const consumes = new Map<string, number>()
   const grants = new Map<string, { requester: string, target_host: string, audience: string, grant_type: string, authorization_details: unknown[], execution_context: unknown, command?: string[], status?: 'pending' | 'approved' | 'denied' | 'used' }>()
@@ -71,12 +75,17 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
         const call = JSON.parse(raw)
         const subject = [...subjects].find(([, pod]) => call.target_host === `pods:${pod}`)?.[0]
         if (!subject || request.headers.authorization !== 'Bearer LOCAL_SYNTHETIC_TOKEN') { response.writeHead(403).end('{}'); return }
-        const id = randomUUID(); const now = Math.floor(Date.now() / 1000)
+        const key = JSON.stringify([subject, call.program, call.argv, call.files ?? []])
+        const id = (ownerCli && exactCalls.get(key)) || randomUUID(); const now = Math.floor(Date.now() / 1000)
         const brokered = enrollmentKeys.has(subject) ? { connection_id: brokerId, broker_issuer: origin, agent_issuer: origin, owner: 'fixture-owner@example.test', key_id: enrollmentKeys.get(subject) } : undefined
-        const grant = { requester: subject, target_host: call.target_host, audience: 'shapes', grant_type: 'always', authorization_details: [{ type: 'openape_cli', cli_id: call.program.name, action: 'read' }], execution_context: { files: call.files } }
+        const effect = ownerCli && call.grant_type === 'once' ? 'run' : 'read'
+        const grant = grants.get(id) ?? { requester: subject, target_host: call.target_host, audience: 'shapes', grant_type: call.grant_type ?? 'always', authorization_details: [{ type: 'openape_cli', cli_id: call.program.name, operation_id: 'exact', action: effect, resource_chain: [], permission: `${call.program.name}#${effect}`, display: 'Exact fixture call', risk: 'low' }], execution_context: { files: call.files }, ...(ownerCli && call.grant_type === 'once' ? { status: 'pending' as const } : {}) }
         grants.set(id, grant)
+        if (ownerCli) { exactCalls.set(key, id); authorizations.push({ grantId: id, call }) }
+        if (grant.status === 'pending') { response.writeHead(202).end(JSON.stringify({ state: 'pending', grant_id: id, approval_url: `${origin}/grant-approval?grant_id=${id}` })); return }
+        if (grant.status === 'denied' || grant.status === 'used') { response.writeHead(403).end(JSON.stringify({ state: 'denied', grant_id: id })); return }
         const head = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')
-        const body = Buffer.from(JSON.stringify({ iss: origin, sub: subject, aud: 'shapes', target_host: call.target_host, grant_id: id, grant_type: 'always', iat: now, exp: now + 300, ...(brokered ? { brokered, decided_by: brokered.owner } : {}), jti: randomUUID(), argv_hash: await computeArgvHash([call.program.name, ...call.argv]), program_sha256: call.program.sha256, authorization_details: grant.authorization_details, execution_context: grant.execution_context })).toString('base64url')
+        const body = Buffer.from(JSON.stringify({ iss: origin, sub: subject, aud: 'shapes', target_host: call.target_host, grant_id: id, grant_type: grant.grant_type, iat: now, exp: now + 300, ...(brokered ? { brokered, decided_by: brokered.owner } : {}), jti: randomUUID(), argv_hash: await computeArgvHash([call.program.name, ...call.argv]), program_sha256: call.program.sha256, authorization_details: grant.authorization_details, execution_context: grant.execution_context })).toString('base64url')
         response.end(JSON.stringify({ state: 'approved', grant_id: id, authz_jwt: `${head}.${body}.${sign(null, Buffer.from(`${head}.${body}`), keys.privateKey).toString('base64url')}`, expires_at: now + 60 }))
       }
       else if (request.url === '/api/grants' && request.method === 'POST') {
@@ -99,6 +108,11 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
         const grant = grants.get(id!)
         if (!grant) { response.writeHead(404).end('{}'); return }
         const gate = grant.command?.[0] === 'pods-graph-gate'
+        if (ownerCli && action === 'approve') {
+          if (request.headers.authorization !== `Bearer ${ownerToken}` || grant.status !== 'pending' || grant.grant_type !== 'once') { response.writeHead(403).end('{}'); return }
+          grant.status = 'approved'; ownerDecisions.push(id!)
+          response.end(JSON.stringify({ grant: { id, status: 'approved', request: grant } })); return
+        }
         if (action === 'token') {
           if (gate && grant.status !== 'approved') { response.writeHead(403).end('{}'); return }
           const now = Math.floor(Date.now() / 1000)
@@ -107,6 +121,10 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
           response.end(JSON.stringify({ authz_jwt: `${head}.${body}.${sign(null, Buffer.from(`${head}.${body}`), keys.privateKey).toString('base64url')}` }))
         }
         else if (action === 'consume') {
+          if (ownerCli && grant.grant_type === 'once') {
+            if (grant.status !== 'approved') { response.writeHead(409).end('{}'); return }
+            grant.status = 'used'; response.end(JSON.stringify({ status: 'consumed' })); return
+          }
           if (gate) consumes.set(id!, (consumes.get(id!) ?? 0) + 1)
           if (gate && grant.status !== 'approved') { response.writeHead(409).end(JSON.stringify({ error: 'Once-grant cannot be consumed again' })); return }
           if (gate) grant.status = 'used'
@@ -121,6 +139,9 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`
+  const ownerHead = Buffer.from(JSON.stringify({ alg: 'EdDSA', kid: 'key' })).toString('base64url')
+  const ownerBody = Buffer.from(JSON.stringify({ iss: origin, sub: 'fixture-owner@example.test', act: 'human', aud: 'apes-cli', exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url')
+  ownerToken = `${ownerHead}.${ownerBody}.${sign(null, Buffer.from(`${ownerHead}.${ownerBody}`), keys.privateKey).toString('base64url')}`
   const ownerId = randomUUID()
   const pods: Record<string, unknown> = {}
   function registerPods(store: PodDatabase) {
@@ -144,6 +165,9 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
     failNextEnrollment: () => { if (!provisioning) throw new Error('Provisioning fixture is disabled'); failEnrollment = true },
     enrollmentAttempts: () => structuredClone(enrollmentAttempts),
     owner: { issuer: origin, subject: 'fixture-owner@example.test' },
+    ownerLogin: JSON.stringify({ idp: origin, email: 'fixture-owner@example.test', access_token: ownerToken, expires_at: Math.floor(Date.now() / 1000) + 3600 }),
+    authorizations: () => structuredClone(authorizations),
+    ownerDecisions: () => [...ownerDecisions],
     attachPods: () => {
       const database = new PodDatabase(root)
       try {

@@ -2,6 +2,7 @@ import type { SandboxReach } from '../../contracts/sandbox'
 import { ApprovalHistory } from '../data/approval-history'
 import { isProgramCall } from '../../contracts/program-execution'
 import type { ScriptRuntime, ScriptServices } from './runner'
+import type { ProgramCall } from '../../main/broker/authorization'
 import { executeRecordedProgram } from '../../main/programs/effect-execution'
 import { recordProgramExecution } from './program-execution'
 import { InboxOutbox, parseNotify } from '../inbox/outbox'
@@ -56,6 +57,7 @@ export interface RunServiceScope {
   registerDomain: (path: string, ownerPid: number) => void
 }
 export interface RunServices {
+  prepareStart?: (scope: RunServiceScope, call: ProgramCall, signal: AbortSignal) => Promise<void>
   jev?: (request: JevRequest, signal: AbortSignal, scope: RunServiceScope) => Promise<JevEvaluation>
   shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ reach?: SandboxReach, home: string, environment: Record<string, string>, shell?: { cli: string, environment: Record<string, string> }, machine?: ScriptRuntime['machine'] }>
   closeShell?: (scope: RunServiceScope) => Promise<void>
@@ -224,6 +226,7 @@ export class RunDispatcher {
         shellScope = scope
       }
       const scriptServices: ScriptServices = {
+        ...(this.services?.prepareStart ? { prepareStart: async (call: ProgramCall) => { assertCurrent(); await this.services!.prepareStart!(scope, call, signal); assertCurrent() } } : {}),
         budgetPaused: () => infrastructureWaiting > 0 || agentBudgetPaused() || this.runs.approvals(pod.id).some(item => item.runId === id),
         event: (type, data) => { assertCurrent(); appendEvent(type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, call, operationSignal) => {
@@ -309,7 +312,7 @@ export class RunDispatcher {
               },
             }),
           }), async (record) => {
-            assertCurrent()
+            if (record.phase !== 'unknown') assertCurrent()
             recordProgramExecution(this.store, this.runs, { scope, operationId: id, record })
           }, async (grantId, url) => { appendEvent('approval', { grantId, issuer: new URL(url).origin, title: 'Pod script execution', state: 'pending' }) })).result
         : await execute()

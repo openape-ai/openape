@@ -11,9 +11,11 @@ import { parseFrame, parseResult } from '../../contracts/runs'
 import type { RunInput, ScriptResult } from '../../contracts/runs'
 import type { SandboxReach } from '../../contracts/sandbox'
 import type { RuntimePolicy } from '../runtime/sandbox'
+import { programInvocation } from '../../runtime/program-invocation'
+import type { ProgramCall } from '../../main/broker/authorization'
 
 export interface ScriptRuntime { reach?: SandboxReach, prepareExecution?: (podId: string, purpose: PreparationPurpose, signal: AbortSignal) => Promise<{ machine: PreparedMachine, close: () => Promise<void> }>, machine?: Omit<MachineLaunch, 'operationId' | 'executableHash' | 'files'> & { issuer?: string }, dependencyRoot?: string, home?: string, registerDomain?: (path: string, ownerPid: number) => void | Promise<void>, helper: string, executable: string, entry: string, runtimeDirectories: string[], environment: Record<string, string> }
-export interface ScriptServices { execution?: ExecutionObserver, budgetPaused?: () => boolean,  request: (operation: string, payload: unknown, signal: AbortSignal) => Promise<unknown>, event: (type: string, data: unknown) => void }
+export interface ScriptServices { prepareStart?: (call: ProgramCall) => Promise<void>, execution?: ExecutionObserver, budgetPaused?: () => boolean,  request: (operation: string, payload: unknown, signal: AbortSignal) => Promise<unknown>, event: (type: string, data: unknown) => void }
 async function interruptible<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted()
   let stop: () => void = () => {}
@@ -45,12 +47,17 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
   }
   if (runtime.machine && !services.execution) throw new Error('Script execution requires its durable lifecycle observer')
   const environment = { ...runtime.environment, HOME: home, TMPDIR: runtime.environment.TMPDIR ?? home }
-  const domain = await launchApeShell(runtime.helper, directory, policy, [runtime.entry, '--input-channel', artifact, runtime.dependencyRoot ?? '', input.scriptHash], environment, {
+  const argv = [runtime.entry, '--input-channel', artifact, runtime.dependencyRoot ?? '', input.scriptHash]
+  const executableHash = createHash('sha256').update(await readFile(runtime.executable)).digest('hex')
+  const files = [{ path: runtime.entry, sha256: createHash('sha256').update(await readFile(runtime.entry)).digest('hex') }, { path: artifact, sha256: input.scriptHash }]
+  if (services.prepareStart) await services.prepareStart(await programInvocation(runtime.executable, executableHash, argv, files, input.workspace, environment))
+  signal.throwIfAborted()
+  const domain = await launchApeShell(runtime.helper, directory, policy, argv, environment, {
     ...runtime.machine,
     operationId: input.runId,
     forwardChannel: true,
-    executableHash: createHash('sha256').update(await readFile(runtime.executable)).digest('hex'),
-    files: [{ path: runtime.entry, sha256: createHash('sha256').update(await readFile(runtime.entry)).digest('hex') }, { path: artifact, sha256: input.scriptHash }],
+    executableHash,
+    files,
   }, runtime.registerDomain)
   if (runtime.machine) {
     const frame = `${JSON.stringify(input)}\n`
