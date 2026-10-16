@@ -773,6 +773,7 @@ export class RuntimeWorker {
       podName: podId => this.podName(podId),
       ledger: command => this.dispatch({ grants: command }),
       programDefinition: async entry => entry.path.endsWith('.app') ? applicationDefinition(entry.path) : this.installedProgram(entry.path, { runtimePath: entry.runtimePath }),
+      grantCall: command => this.programs!.grantCall(command),
       addProgram: async (podId, definition) => { await this.program({ type: 'add', podId, epoch: (await this.resources({ type: 'list', podId })).epoch }, definition) },
       assignHttp: async (podId, permission) => { await this.dispatch({ resource: { type: 'bindHttp', podId, epoch: (await this.resources({ type: 'list', podId })).epoch, permission } }) },
       assignDirectory: async (podId, path, access) => { await this.resources({ type: 'assignDirectory', podId, path, access, epoch: (await this.resources({ type: 'list', podId })).epoch }) },

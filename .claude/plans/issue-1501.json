@@ -6,7 +6,7 @@
   "milestones": [
     {
       "id": "bindings",
-      "status": "done",
+      "status": "active",
       "acceptance": [
         "Interpreter files, inline code and complete arguments have identical authorization bindings; changed inputs are refused."
       ],
