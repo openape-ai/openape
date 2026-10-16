@@ -1,5 +1,12 @@
 # Active work
 
+## Remove personal Pod recipes — issue 1506
+
+- Owner explicitly authorized removing personal Pod scripts from Git history. Personal recipes, their policies and recipe-only tests are private machine state; generic runtime and safety tests remain in the repository.
+- Branch `bugfix/issue-1506-remove-personal-pods`, base `09e580c85635070ba29b8532bd5de0d670667951`. Maintenance uses an isolated mirror clone and expected-old ref checks; other worktrees and installed Pods remain unchanged.
+- Next: affected checks and native PR, then filter all canonical refs and historical mirror PR refs, reconcile the existing mirror chain, prune unreachable served objects and report host-managed cache limitations.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1506.
+
 ## Exact runtime grants and owner CLI starts — issue 1501
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1501. PR 465 merged as `ffe0d274004cead6431b6dc81f61cb3f5fce7bee`; signed local app and native CLI are installed from that source. Full affected/deployment unit checks, seven native CLI cases and mounted signed DMG acceptance passed.

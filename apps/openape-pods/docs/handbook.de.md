@@ -427,7 +427,7 @@ Wähle für einen Mail-Benachrichtigungs-Pod dein installiertes o365-cli unter B
 
 Speichere telegram_chat_id als Variable und telegram_bot_token als Geheimnis. Das ausgewählte CLI bestimmt, ob das Skript eine eigene Mailbox-Variable benötigt. Erlaube POST an https://api.telegram.org unter Berechtigungen. Telegram braucht weder eine eigene Konto-Karte noch ein mitgeliefertes Programm.
 
-Verwende examples/mail-notification.mjs aus dem Quellcode. Der erste erfolgreiche Lauf speichert still eine Ausgangsbasis der letzten 24 Stunden. Spätere Läufe melden neue Nachrichtenkennungen mit fünf Minuten Überlappung. Das Rezept begrenzt ein Zeitfenster auf 20 Seiten und 1000 Nachrichten und bricht bei unvollständiger Abfrage sichtbar ab. Beim ersten Einsatz werden keine historischen Nachrichten gemeldet; gesendet werden nur Anzahl und Kontoname.
+Bewahre dein persönliches Mail-Benachrichtigungsskript lokal auf und aktiviere es über die Pod-Skriptverwaltung. Der erste erfolgreiche Lauf speichert still eine Ausgangsbasis der letzten 24 Stunden. Spätere Läufe melden neue Nachrichtenkennungen mit fünf Minuten Überlappung. Das Rezept begrenzt ein Zeitfenster auf 20 Seiten und 1000 Nachrichten und bricht bei unvollständiger Abfrage sichtbar ab. Beim ersten Einsatz werden keine historischen Nachrichten gemeldet; gesendet werden nur Anzahl und Kontoname.
 
 Prüfe das Skript und führe es manuell aus, bevor du in Einstellungen ein 15-Minuten-Intervall aktivierst. Bestätige den Geheimniszugriff für den exakten Quelltext. Das Rezept speichert eine ausstehende Meldung vor dem Versand und die Empfangsbestätigung vor dem Fortschritt. Bei unklarem Versand prüfst du das Ziel und klärst das Ergebnis in Historie, bevor du erneut startest.
 
