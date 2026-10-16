@@ -1,5 +1,8 @@
 # OpenApe Pods
 
+For the standalone `ape-pods list/run/create/edit` development workflow, see
+[CLI development](docs/cli-development.md).
+
 OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 40.9.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pods, reference snapshots and manual example scripts. Codex execution uses the pinned TypeScript SDK and native CLI with a synthetic transport in acceptance tests. Owner-driven ChatGPT and OpenApe connection flows are implemented; third-party accounts are configured in assigned applications; live provider and tenant acceptance remain unverified. Schedules default to disabled, and new pods are paused.
 
 Start with the [Pods model](docs/model.md): Pods, networks, sandbox and grants,

@@ -1,5 +1,15 @@
 # Active work
 
+## Standalone Pods CLI — issue 1499
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1499. Branch `feature/issue-1499-ape-pods-cli`, worktree `openape-monorepo.worktrees/ape-pods-cli-1499`, canonical base `b46051395a10b010b933efde9f71665d0c11a9d8`.
+- Owner approved proposal revision 4, then directed that CLI and desktop remain separate for now. Current source: `.claude/plans/2026-10-15-ape-pods-cli/plan.json`; revision 5 records the explicit standalone condition under the existing authorization.
+- The four commands use the real selected database, existing Pod identity, configured owner/isolated context and shared-data permissions. Desktop must remain closed during CLI use. The owner approved filesystem protection for Pod execution identities on October 16; follow-up source: `.claude/plans/2026-10-16-pods-file-identities/plan.json`.
+- Pod execution keys now use shared private identity files; provider secrets and owner login retain their existing protection. The desktop migrates legacy identities without rotating keys or grants. Existing profiles need an updated desktop once for decryption; the standalone CLI no longer contains a keychain helper.
+- Focused storage/migration/refusal tests and native CLI acceptance pass, including both home contexts, shared-data permissions and denial of direct identity-file reads/writes. The required gate passes on `ce8170d1ebadb3e06b7c9df1a7004145725c222c`: Pods 1732 and relay 104 tests, lint/typecheck/audit/tooling. Packaged credentials and ape-shell acceptance pass 29 cases (one optional parser case skipped); the five native CLI cases also pass. Evidence: https://report.openape.ai/d/01M51P0WGCZYXK295K16G4CV7Z?v=1.
+- PR: https://repos.openape.ai/patrick/monorepo/pulls/463, explicitly related to the issue. Local `~/.local/bin/ape-pods` points to this worktree runtime build.
+- Next: review/integrate PR 463, then install the updated desktop for existing-profile migration. The completed follow-up plan is https://report.openape.ai/d/01M51NQ7AY2V6Q4XNWMSKBBQB6. No merge or installation of this follow-up has occurred; the live Task monitor still has the independent missing `$HOME/.env` startup dependency.
+
 ## Unified Pods execution — issue 1497
 
 - Approved proposal revision 2: https://report.openape.ai/d/01M4ZXED8YT88G56VGCG9C9JR7?v=2. Current progress: https://report.openape.ai/d/01M4ZXED8YT88G56VGCG9C9JR7.

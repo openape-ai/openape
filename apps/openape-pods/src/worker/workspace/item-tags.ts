@@ -7,8 +7,8 @@ const parse = (value: unknown): string[] => JSON.parse(String(value)) as string[
 export class ItemTagStore {
   constructor(private readonly store: PodDatabase) {}
 
-  view(): ItemTags[] {
-    return this.store.db.prepare(`SELECT id,tags,revision FROM item_tags WHERE id IN (SELECT id FROM pods WHERE lifecycle!='archived') ORDER BY rowid`).all().map(row => ({ id: row.id as string, tags: parse(row.tags), revision: Number(row.revision) }))
+  view(includeArchived = false): ItemTags[] {
+    return this.store.db.prepare(`SELECT id,tags,revision FROM item_tags WHERE id IN (SELECT id FROM pods WHERE (? OR lifecycle!='archived')) ORDER BY rowid`).all(includeArchived ? 1 : 0).map(row => ({ id: row.id as string, tags: parse(row.tags), revision: Number(row.revision) }))
   }
 
   /** What the inbox shows for a Pod (issue 1461). */

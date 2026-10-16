@@ -14,7 +14,7 @@ let root = ''
 afterEach(async () => { if (server) await new Promise<void>((resolve, reject) => server!.close(error => error ? reject(error) : resolve())); server = undefined; if (root) await rm(root, { recursive: true, force: true }) })
 async function setup() {
   root = await mkdtemp(join(tmpdir(), 'pods-agent-'))
-  const cache = new CredentialCache(root, { available: () => true, encrypt: value => Buffer.from(value, 'utf8').reverse(), decrypt: value => Buffer.from(value).reverse().toString() })
+  const cache = new CredentialCache(root)
   const identity = new PodIdentityManager(cache)
   const state = { key: '', podId: '', challenges: 0, authenticated: 0, denied: false }
   server = createServer(async (request, response) => {
@@ -61,7 +61,8 @@ describe('pod identity credential isolation', () => {
     const restarted = new PodIdentityManager(fixture.cache).connection(reference, 'fixture-mac')
     expect(await restarted.accessToken()).toBe('SYNTHETIC_POD_TOKEN_2')
     expect(await readdir(join(root, 'temporary'))).toEqual([])
-    expect(await readFile(join(root, `${fixture.connectionId}.encrypted`), 'utf8')).not.toContain('PRIVATE KEY')
+    expect(await readFile(join(root, `${fixture.connectionId}.identity.json`), 'utf8')).toContain('PRIVATE KEY')
+    expect(await readdir(root)).not.toContain(`${fixture.connectionId}.encrypted`)
     expect(JSON.stringify(reference)).not.toContain('Token')
   })
   it('fails closed on cross-pod cache references and denied refresh without using owner credentials', async () => {
@@ -105,4 +106,13 @@ it('enrolls through a receipt without sending owner credentials and pins the sep
     expect(JSON.stringify(reference)).not.toContain('RECEIPT')
   }
   finally { fetch.mockRestore() }
+})
+
+it('fails with a missing established identity instead of generating a key or using owner credentials', async () => {
+  const fixture = await setup()
+  const reference = await fixture.identity.provision(fixture.connectionId, 'Fixture', 'SYNTHETIC_OWNER')
+  await fixture.cache.erasePodKey(fixture.connectionId, fixture.podId)
+  await expect(fixture.identity.connection(reference, 'fixture-mac').accessToken()).rejects.toMatchObject({ code: 'ENOENT' })
+  expect(fixture.state.authenticated).toBe(0)
+  expect((await readdir(root)).filter(name => name.endsWith('.identity.json'))).toEqual([])
 })
