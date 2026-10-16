@@ -117,6 +117,12 @@ release adds no credential-management commands and refuses
 `context.credentials.get` for additional assigned script secrets. The CLI cannot
 use application credentials which require desktop decryption.
 
+Owner-level assigned program calls and application terminals use the owner HOME
+and temporary working files without opening or updating private ProgramState.
+They do not append a private-state cache-directory argument. Isolated programs
+retain their encrypted application state; making that state usable by the CLI
+without an OS keychain is tracked separately in issue 1500.
+
 This is filesystem and sandbox protection, not encryption at rest: unsandboxed
 processes running as the owner can read these identities. Owner mode already means
 trust in the Pod code; its direct path denials do not prevent indirect execution

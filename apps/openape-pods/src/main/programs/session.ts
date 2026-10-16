@@ -84,15 +84,15 @@ export class ProgramSession {
       await verifyProgram(assignment)
       identity = await podIdentityFile(root, connection)
       await check(); signal.throwIfAborted()
-      const proxy = assignment.networkHosts.length && (await access.reach()).level === 'isolated' ? await startNetworkProxy(signal, assignment.networkHosts) : undefined
+      const reach = await access.reach()
+      const proxy = assignment.networkHosts.length && reach.level === 'isolated' ? await startNetworkProxy(signal, assignment.networkHosts) : undefined
       try {
-        await new ProgramState(credentials).use(assignment.stateId, { podId: this.podId, applicationId }, async (workspace) => {
+        const execute = async (workspace: string) => {
           await check(); signal.throwIfAborted()
           const launch = programLaunch(assignment)
           // The process gets exactly the arguments the IdP authorized, after the owner-configured runtime prefix.
-          const executed = [...argv, ...(assignment.cacheArgument ? [assignment.cacheArgument, workspace] : [])]
+          const executed = [...argv, ...(assignment.cacheArgument && reach.level !== 'owner' ? [assignment.cacheArgument, workspace] : [])]
           const args = [...launch.prefix, ...executed]
-          const reach = await access.reach()
           const temporary = reach.level === 'owner' ? ownerTemporary : workspace
           if (temporary === ownerTemporary) await mkdir(temporary, { mode: 0o700 })
           await check(); signal.throwIfAborted()
@@ -124,7 +124,9 @@ export class ProgramSession {
             try { await domain.completed; await inspectDomainRecords([{ path: domain.recordPath, owner_pid: process.pid }], root, helper); verifiedClosed = true }
             finally { await watched }
           }
-        }, signal)
+        }
+        if (reach.level === 'owner') await execute(ownerTemporary)
+        else await new ProgramState(credentials).use(assignment.stateId, { podId: this.podId, applicationId }, execute, signal)
       }
       finally { await proxy?.close(); await rm(ownerTemporary, { recursive: true, force: true }) }
     }
