@@ -37,7 +37,8 @@ async function legacyProfile() {
   insert.run(rows.codex, 'chatgpt', 'model@example.invalid', 'ready', null, JSON.stringify({ accountId: 'synthetic' }))
   store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), pods[0].id, 'connection', 'ready', 'Historical OpenApe pod agent', JSON.stringify({ provider: 'openape', identity: bindings.delta.identity, ownerConnection: rows.deltaReady }))
   store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(randomUUID(), pods[2].id, 'connection', 'ready', 'Historical OpenApe pod agent', JSON.stringify({ provider: 'openape', identity: bindings.duplicate.identity, ownerConnection: rows.ownerDuplicate }))
-  for (const [index, item] of [bindings.delta, bindings.owner, bindings.duplicate].entries()) await credentials.create(item.connectionId, JSON.stringify({ podId: pods[index].id, privateKey: 'synthetic-key' }))
+  await mkdir(join(root, 'credentials'), { mode: 0o700 })
+  for (const item of [bindings.delta, bindings.owner, bindings.duplicate]) await writeFile(join(root, 'credentials', `${item.connectionId}.encrypted`), JSON.stringify({ ...item.identity, privateKey: 'synthetic-key', publicKey: 'synthetic-public-key' }), { mode: 0o600 })
   for (const id of Object.values(rows)) await credentials.create(id, JSON.stringify({ issuer, account: 'synthetic' }))
   const runtime = { helper: 'unused-fixture-helper', executable: process.execPath, entry: 'unused-entry', runtimeDirectories: [], environment: {}, binary: join(vendor, 'codex'), manifest: join(vendor, 'manifest.json'), catalog: 'unused-catalog', sdkHost: 'unused-host' }
   const start = async () => { const manager = new ConnectionManager(root, runtime, credentials, async command => control.execute(command), async () => {}); await manager.initialize(async () => {}); return manager }
@@ -57,8 +58,10 @@ it('reduces a September 22 profile to one Codex and one DDISA owner without re-p
   expect(resources.list(pods[2].id)[0]).toMatchObject({ state: 'ready', configuration: { ownerConnection: rows.owner } })
   expect(resources.list(pods[0].id)[0].state).toBe('revoked')
   const file = (id: string) => exists(join(root, 'credentials', `${id}.encrypted`))
-  expect(await Promise.all([bindings.owner, bindings.duplicate].map(item => file(item.connectionId)))).toEqual([true, true])
+  expect(await Promise.all([bindings.owner, bindings.duplicate].map(item => exists(join(root, 'credentials', `${item.connectionId}.identity.json`))))).toEqual([true, true])
+  expect(await Promise.all([bindings.owner, bindings.duplicate].map(item => file(item.connectionId)))).toEqual([false, false])
   expect(await file(bindings.delta.connectionId)).toBe(false)
+  expect(await exists(join(root, 'credentials', `${bindings.delta.connectionId}.identity.json`))).toBe(false)
   expect(await Promise.all([rows.owner, rows.codex].map(file))).toEqual([true, true])
   expect(await Promise.all([rows.deltaReady, rows.deltaFailed, rows.ownerDuplicate, rows.codexFailed].map(file))).toEqual([false, false, false, false])
   expect(provision).not.toHaveBeenCalled(); expect(prepare).not.toHaveBeenCalled()

@@ -9,9 +9,10 @@ import { mkdir, readFile, writeFile, realpath, lstat } from 'node:fs/promises'
 import { join, dirname } from 'node:path'
 import { parseFrame, parseResult } from '../../contracts/runs'
 import type { RunInput, ScriptResult } from '../../contracts/runs'
+import type { SandboxReach } from '../../contracts/sandbox'
 import type { RuntimePolicy } from '../runtime/sandbox'
 
-export interface ScriptRuntime { prepareExecution?: (podId: string, purpose: PreparationPurpose, signal: AbortSignal) => Promise<{ machine: PreparedMachine, close: () => Promise<void> }>, machine?: Omit<MachineLaunch, 'operationId' | 'executableHash' | 'files'> & { issuer?: string }, dependencyRoot?: string, home?: string, registerDomain?: (path: string, ownerPid: number) => void | Promise<void>, helper: string, executable: string, entry: string, runtimeDirectories: string[], environment: Record<string, string> }
+export interface ScriptRuntime { reach?: SandboxReach, prepareExecution?: (podId: string, purpose: PreparationPurpose, signal: AbortSignal) => Promise<{ machine: PreparedMachine, close: () => Promise<void> }>, machine?: Omit<MachineLaunch, 'operationId' | 'executableHash' | 'files'> & { issuer?: string }, dependencyRoot?: string, home?: string, registerDomain?: (path: string, ownerPid: number) => void | Promise<void>, helper: string, executable: string, entry: string, runtimeDirectories: string[], environment: Record<string, string> }
 export interface ScriptServices { execution?: ExecutionObserver, budgetPaused?: () => boolean,  request: (operation: string, payload: unknown, signal: AbortSignal) => Promise<unknown>, event: (type: string, data: unknown) => void }
 async function interruptible<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted()
@@ -33,7 +34,15 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
     artifact = stable
   }
   const home = runtime.home ?? input.home ?? input.workspace
-  const policy: RuntimePolicy = { executable: runtime.executable, workspace: input.workspace, readFiles: [artifact, runtime.entry, ...input.references.map(reference => reference.path)], runtimeDirectories: runtime.runtimeDirectories, readDirectories: [...(runtime.dependencyRoot ? [runtime.dependencyRoot] : []), ...(input.directories ?? []).filter(item => item.access === 'read').map(item => item.path)], writeDirectories: [home, ...(input.directories ?? []).filter(item => item.access === 'readWrite').map(item => item.path)] }
+  const policy: RuntimePolicy = { ...(runtime.reach ? { reach: runtime.reach } : {}), executable: runtime.executable, workspace: input.workspace, readFiles: [artifact, runtime.entry, ...input.references.map(reference => reference.path)], runtimeDirectories: runtime.runtimeDirectories, readDirectories: [...(runtime.dependencyRoot ? [runtime.dependencyRoot] : []), ...(input.directories ?? []).filter(item => item.access === 'read').map(item => item.path)], writeDirectories: [...(runtime.reach?.level === 'owner' ? [] : [home]), ...(input.directories ?? []).filter(item => item.access === 'readWrite').map(item => item.path)] }
+  if (runtime.reach?.level === 'owner') {
+    const parents = new Set<string>()
+    for (const file of policy.readFiles) {
+      let parent = dirname(file)
+      for (;;) { parents.add(parent); const next = dirname(parent); if (next === parent) break; parent = next }
+    }
+    policy.metadataPaths = [...parents]
+  }
   if (runtime.machine && !services.execution) throw new Error('Script execution requires its durable lifecycle observer')
   const environment = { ...runtime.environment, HOME: home, TMPDIR: runtime.environment.TMPDIR ?? home }
   const domain = await launchApeShell(runtime.helper, directory, policy, [runtime.entry, '--input-channel', artifact, runtime.dependencyRoot ?? '', input.scriptHash], environment, {

@@ -1,3 +1,5 @@
+import { releaseProfileLease } from './profile-lease'
+import { runtimeParentPort } from './parent-port'
 import { ExecutionIdentityBridge } from './runtime/execution-identity'
 import { recordProgramExecution } from './runs/program-execution'
 import type { ProgramExecutionCheck } from '../contracts/program-execution'
@@ -70,8 +72,7 @@ import type { GrantLedgerCommand } from './resources/grants'
 import { parseCommand } from '../contracts/control'
 import { openedStore } from './storage/readiness'
 
-const port = process.parentPort
-if (!port) throw new Error('Pods worker requires its owning Electron process')
+const port = runtimeParentPort()
 const store = openedStore()
 const executionIdentities = new ExecutionIdentityBridge(value => port.postMessage(value))
 const serviceBridge = new ServiceBridge(value => port.postMessage(value))
@@ -144,6 +145,7 @@ function registeredOwner() {
   return parseOwner((JSON.parse(row.body as string) as { owner: unknown }).owner)
 }
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
+const oneShot = process.env.PODS_ONESHOT === '1'
 let centralUntil = process.env.PODS_CENTRAL_ENABLED === '1' ? 0 : Infinity
 let scanAt = 0
 let storageAt = 0
@@ -174,7 +176,7 @@ function schedule(): void {
 }
 
 function startControlledRun(podId: string, operationId: string, accepted?: (runId: string) => void): string {
-  const schedulingAllowed = Date.now() < centralUntil
+  const schedulingAllowed = !oneShot && Date.now() < centralUntil
   if (!startupReady || suspended || maintenance || (!schedulingAllowed && ownerOperations.getStore() !== true)) throw new Error('Controlled execution requires a ready local runtime')
   const maximum = Number(store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency)
   if (occupiedRunSlots(store) >= maximum) throw new Error('No execution slot available; retry after pending work progresses')
@@ -184,7 +186,7 @@ function startControlledRun(podId: string, operationId: string, accepted?: (runI
 }
 
 const timer = setInterval(() => {
-  if (ticking || suspended || !startupReady || maintenance || Date.now() >= centralUntil) return
+  if (oneShot || ticking || suspended || !startupReady || maintenance || Date.now() >= centralUntil) return
   tickStartedAt = Date.now()
   ticking = (async () => {
     try {
@@ -221,12 +223,12 @@ const timer = setInterval(() => {
   })().finally(() => { ticking = null; lastTickAt = Date.now(); tickPhase = '' })
 }, 1000)
 port.on('message', async (event) => {
-  if (event.data && typeof event.data === 'object' && 'executionIdentityReply' in event.data) { executionIdentities.accept(event.data.executionIdentityReply); return }
+  if (event.data && typeof event.data === 'object' && 'executionIdentityReply' in event.data) { executionIdentities.accept(event.data.executionIdentityReply as Parameters<typeof executionIdentities.accept>[0]); return }
   if (event.data && typeof event.data === 'object' && 'serviceReply' in event.data) { serviceBridge.accept(event.data.serviceReply); return }
   if (event.data && typeof event.data === 'object' && 'serviceParked' in event.data) { const { id, parked } = event.data.serviceParked as { id: string, parked: boolean }; serviceBridge.park(id, parked === true); return }
   if (event.data === 'suspend') { suspended = true; return }
   if (event.data === 'resume') { suspended = false; scanAt = 0; return }
-  if (event.data === 'stop') { scriptController.abort(); suspended = true; clearInterval(timer); await ticking; await Promise.allSettled(preparing ? [preparing] : []); await master.stop(); await dispatcher.stop(); store.close(); process.exit(0) }
+  if (event.data === 'stop') { scriptController.abort(); suspended = true; clearInterval(timer); await ticking; await Promise.allSettled(preparing ? [preparing] : []); await master.stop(); await dispatcher.stop(); store.close(); await releaseProfileLease(); process.exit(0) }
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
@@ -430,6 +432,14 @@ port.on('message', async (event) => {
       port.postMessage({ id: request.id, state: scheduler.view(command.podId) })
       return
     }
+    if (request.command && typeof request.command === 'object' && 'cliRun' in request.command) {
+      const command = parseRunCommand(request.command.cliRun)
+      if (command.type !== 'start') throw new Error('Invalid one-shot run')
+      const pod = store.getPod(command.podId)
+      if (command.expectedScript && command.expectedScript !== pod.activeScript) throw new Error('Active script changed; inspect before running')
+      const runId = ownerOperations.run(true, () => startControlledRun(command.podId, request.id as string))
+      port.postMessage({ id: request.id, state: { runId, view: dispatcher.view(command.podId, runId) } }); return
+    }
     if (request.command && typeof request.command === 'object' && 'run' in request.command) {
       const command = parseRunCommand(request.command.run)
       if (command.type === 'installExample') await dispatcher.install(command.podId, command.variant)
@@ -471,7 +481,7 @@ port.on('message', async (event) => {
     if (command.type === 'pauseAll') store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE lifecycle=\'active\'').run()
     if (command.type === 'create') store.createPod({ name: command.name })
     if (command.type === 'update') { store.updatePod(command.id, command.revision, { name: command.name, lifecycle: command.lifecycle }); if (command.lifecycle === 'archived') dispatcher.cancelPod(command.id, 'Pod archived') }
-    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: listedPods(store), tags: new ItemTagStore(store).view(), ...(command.type === 'map' ? { map: mapView(store) } : {}) } })
+    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: listedPods(store), tags: new ItemTagStore(store).view(oneShot), ...(command.type === 'map' ? { map: mapView(store) } : {}) } })
   }
   catch (error) { port.postMessage({ id: request.id, error: error instanceof Error ? error.message : 'Workspace operation failed' }) }
 })

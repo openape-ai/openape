@@ -1,3 +1,4 @@
+import type { SandboxReach } from '../../contracts/sandbox'
 import { ApprovalHistory } from '../data/approval-history'
 import { isProgramCall } from '../../contracts/program-execution'
 import type { ScriptRuntime, ScriptServices } from './runner'
@@ -56,7 +57,7 @@ export interface RunServiceScope {
 }
 export interface RunServices {
   jev?: (request: JevRequest, signal: AbortSignal, scope: RunServiceScope) => Promise<JevEvaluation>
-  shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ home: string, environment: Record<string, string>, shell?: { cli: string, environment: Record<string, string> }, machine?: ScriptRuntime['machine'] }>
+  shell?: (scope: RunServiceScope, signal: AbortSignal) => Promise<{ reach?: SandboxReach, home: string, environment: Record<string, string>, shell?: { cli: string, environment: Record<string, string> }, machine?: ScriptRuntime['machine'] }>
   closeShell?: (scope: RunServiceScope) => Promise<void>
   http?: (request: HttpRequest, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary) => Promise<HttpReply>
   credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
@@ -98,7 +99,7 @@ export class RunDispatcher {
     }
     const selectedId = id ?? runs[0]?.id
     const effects = this.store.db.prepare('SELECT effect_key AS key,run_id AS runId FROM effect_ledger WHERE pod_id=? AND operation IN (\'http.request\',\'program.call\') AND state=\'unknown\' LIMIT 100').all(podId) as { key: string, runId: string }[]
-    return { ...(selectedId ? { timing: this.runs.timing(podId, selectedId) } : {}), approvals: this.runs.approvals(podId), effects, runs, events: selectedId ? (after ? this.runs.events(podId, selectedId, after) : this.runs.recentEvents(podId, selectedId)) : [] }
+    return { ...(selectedId ? { timing: this.runs.timing(podId, selectedId) } : {}), approvals: this.runs.approvals(podId), effects, runs, events: selectedId ? (after !== undefined ? this.runs.events(podId, selectedId, after) : this.runs.recentEvents(podId, selectedId)) : [] }
   }
 
   async install(podId: string, variant: 'deterministic' | 'agent'): Promise<void> {
@@ -219,7 +220,7 @@ export class RunDispatcher {
       const scriptTool = async (payload: unknown, toolSignal: AbortSignal, summary?: ScriptSummary) => invokeTool(payload, toolSignal, summary)
       if (this.services?.shell) {
         const environment = await retryService('runtime authorization', () => this.services!.shell!(scope, signal), signal, 30000)
-        Object.assign(runtime, { home: environment.home, machine: environment.machine, environment: { ...environment.environment, ...runtime.environment } })
+        Object.assign(runtime, { reach: environment.reach, home: environment.home, machine: environment.machine, environment: { ...environment.environment, ...runtime.environment } })
         shellScope = scope
       }
       const scriptServices: ScriptServices = {

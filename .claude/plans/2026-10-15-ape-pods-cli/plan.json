@@ -1,0 +1,790 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "status": "done",
+  "revision": 5,
+  "project": "OpenApe Pods",
+  "owner": "Patrick Hofmann",
+  "date": "2026-10-15",
+  "title": "ape-pods: develop and run Pods against the real database",
+  "goal": "Provide the four requested ape-pods commands as a standalone Node CLI against the real selected database, with Pod identity, configured owner/isolated home and shared-data permissions.",
+  "summary": "The CLI is standalone for this increment: no desktop attachment, desktop protocol upgrade or Electron build/install/start is required. It reuses the execution core and real selected database, retains identity/home/shared-data behavior and refuses an active desktop profile. Extra application-secret management and storage migration remain excluded.",
+  "problem": {
+    "statement": "The existing runner can execute in Node tests, but product initialization and privileged services still depend on Electron.",
+    "impact": "There is no supported terminal workflow to manage real Pods and run them without launching the desktop.",
+    "approach": "Add a thin CLI, a runtime-only build and shared host adapters while retaining the real database, resources and authorization checks.",
+    "outcome": "The same Pod IDs and edits appear in CLI and desktop, and a foreground run returns a durable result without packaging or launching Electron."
+  },
+  "context": "The owner requested four commands, metadata editing including tags, and the real database. The owner then excluded credential support and clarified that the Pod must still execute under its identity and the owner or Pod home context. Revision 3 therefore excludes additional application-secret management while retaining existing identity authentication, grants and configured execution context. The source baseline is main 2d24afe92c3dc3f994ba626c93e725ea90ac01b0. Unrelated untracked work is preserved. The command scope is authorized; this newly authored implementation plan is awaiting approval. Revision 4 adds the owner requirement to retain current shared-storage access. The owner also stated that every Pod should function alone and solve one very small task, with a future move toward Pod-owned storage. This is future architecture direction; shared-storage replacement is not part of the current implementation. After approving revision 4, the owner explicitly narrowed the implementation: \"Lass den Desktop mal Desktop sein. Cli einfach separat inzwischen.\" This instruction removes desktop attachment and upgrade coordination; revision 5 records that condition under the existing implementation authorization. Worktree base is canonical main b46051395a10b010b933efde9f71665d0c11a9d8.",
+  "scope": [
+    "Use the real selected desktop profile by default, including selected-profile.json; --profile PATH explicitly selects another real profile. Never silently copy or replace the owner database. Automated tests use disposable databases with the production schema.",
+    "Expose exactly the four requested commands with --help and --json. create and edit accept terminal input only when interactive; explicit flags support automation. edit ID changes name, tags and supported lifecycle metadata through existing revision checks; optional --script imports the canonical pod-script.mjs through the existing validation and activation flow.",
+    "A run uses the active validated script, original Pod identity, existing runtime and exact-command grants, configured home context, checkpoints and durable history. owner uses the OS owner home for the existing owner-context boundaries; isolated uses the Pod home and scoped resources. Never inherit the invoking terminal environment blindly or substitute owner identity for Pod identity. Additional application-secret injection is unsupported and fails explicitly.",
+    "Reuse the same runtime/command producers through a shared host seam. Provide a runtime-only build and local ape-pods executable. Do not add desktop CLI channels, attach to a running desktop or require a new signed desktop installation.",
+    "Retain existing shared domain-data access, namespaces, reader/writer permissions, revision checks and work-claim semantics through the same runtime APIs. A CLI run uses its Pod ID and run ID as data principal; owner home never grants owner-level access to all shared data. No parallel data store is created."
+  ],
+  "nonGoals": [
+    "A permanent daemon, automatic CLI scheduling, cross-platform execution, full desktop replacement and npm or signed desktop releases are outside this increment.",
+    "New application credential CRUD, assigned-secret import or injection, new login flows and credential-format migration are outside version 1. Existing Pod identity material and identity/grant services may be consumed as required for a real run; existing owner-home application logins may be used under the configured owner policy. No plaintext replacement, owner-login mutation or permission bypass is introduced.",
+    "Do not run, edit or migrate existing owner Pods as acceptance fixtures, change owner login files, or ship a reduced mock executor as a successful real run.",
+    "Replacing shared storage with Pod-owned storage, migrating domain data or redesigning Pod collaboration is outside this CLI increment. Treat each Pod as one small independently executable responsibility and avoid new hidden coupling. No separate physical database per Pod is decided by this proposal."
+  ],
+  "sections": [
+    {
+      "id": "commands",
+      "title": "Command behavior",
+      "placement": "before-details",
+      "body": "`ape-pods list [--json]` shows IDs, names, tags, lifecycle and last run status.\n\n`ape-pods run <id> [--json]` executes the active script once and waits; human progress goes to stderr, structured output to stdout. Exit codes distinguish success, failed/blocked runs, invalid input, unavailable runtime and cancellation. Unknown external effects retain the existing recovery state and are never automatically replayed.\n\n`ape-pods create [--name NAME] [--tags a,b] [--script pod-script.mjs]` creates a paused Pod in the selected real profile. A script is saved, prepared, validated and activated through current commands; a validation error leaves the Pod paused and reports its ID and draft state.\n\n`ape-pods edit [<id>] [--name NAME] [--tags a,b] [--lifecycle active|paused|archived] [--script pod-script.mjs]` edits metadata and optionally replaces the script through the same flow. No-ID selection and field prompts are TTY-only; automation must provide an ID and changes. Clearing tags is explicit. A stale revision is rejected. Failed script validation preserves the previous active version. Editing lifecycle may affect the existing desktop scheduler; the CLI host does not start a scheduler."
+    },
+    {
+      "id": "architecture",
+      "title": "Repository orientation and architecture",
+      "body": "Keep the CLI entry in apps/openape-pods/src/cli and reuse the existing worker and RunDispatcher. Extract the current host implementation once into src/main/runtime-worker.ts; the existing Electron wrapper retains its default behavior, while Node supplies process transport, paths and identity-cipher access. This source extraction adds no desktop integration feature and requires no desktop build for CLI use.\n\nNode forks the existing worker entry over IPC. PODS_ONESHOT disables scheduler intake and starts only the explicit manual run. The worker holds an OS profile lease through child cleanup and storage close, preventing concurrent standalone CLI workers. Before starting and before each command, check the existing desktop SingletonLock and refuse an active owner. Desktop and CLI are not supported concurrently; the owner must keep desktop closed for the full command. No claim is made that the installed desktop participates in the new CLI lease.\n\nThe CLI uses the real selected profile and existing command validators. Shared state, script validation, checkpoints, recovery and Pod authorization remain common. Extract reusable asset preparation from the existing build recipe, and compile the CLI/worker/native helpers without Electron main/preload or Vite renderer output."
+    },
+    {
+      "id": "credentials",
+      "title": "Pod identity and home context remain mandatory",
+      "body": "Pod identity and home context are independent. The DDISA principal remains the selected Pod and the existing owner binding and runtime/exact-command grants are verified. owner does not mean authorizing every request as the human owner. OS processes continue to use the supported local OS user and sandbox; no new OS-user switching is introduced.\n\nRead the stored sandbox level instead of selecting a context from the CLI environment. At owner-context boundaries, HOME resolves to the owner home, including its existing application settings and logins where policy permits. At isolated boundaries, HOME resolves to the Pod home; do not copy or mount owner login stores into it. Preserve the workspace, Pod ID, scoped PATH, environment allowlist, denylist and protected profile/control-socket/owner-apes-login paths. Test the actual top-level script and spawned application boundaries separately: the current runner passes a Pod home while programHome applies owner versus isolated reach to program execution. Match desktop semantics explicitly instead of claiming that every existing script already receives owner HOME. If the requested top-level context requires a behavior change, document and verify that change with the shared producer; never expand filesystem reach silently.\n\nThe exclusion of credentials applies to new application-secret management and injection. Existing Pod identity keys, tokens, grant checks and owner-home application logins remain usable through current services. The Node host may require a minimal adapter to read existing identity material safely; prove compatibility, locked-store refusal and unchanged owner login without migrating owner data. Missing identity or revoked authority fails before script execution. No mock identity, fixture grant or host-environment fallback is allowed. list/create/edit remain independent of run credential initialization.\n\nThe CLI is standalone for now. A live desktop profile is refused; do not add a desktop socket protocol or upgrade prerequisite. Coordinate source overlap with existing host changes without implementing a separate consolidation proposal."
+    },
+    {
+      "id": "setup",
+      "title": "Setup and delivery",
+      "body": "After plan approval create a canonical native development issue, inspect current origin/main and worktrees, and implement in a dedicated feature/issue-N-ape-pods-cli worktree. Preserve all existing checkouts. Activate the pinned toolchain in every shell with `. ./scripts/activate-node.sh`, then `pnpm run doctor`. Use the existing workspace and established tests; retain current automatic and manual check selection.\n\nDuring implementation use focused existing test files first, build consumed packages serially, build the changed runtime and execute the four CLI commands against an isolated production-schema fixture. Run the complete affected unit gate once at handoff or through the mandatory pre-push hook. Add the recommended create/edit/run development workflow to the Pods documentation, update active-work.md and any generated workspace/script maps, then open a native PR with an explicit issue relation. Publish actual output in a private Test Runs report. No merge, release, installation or owner-profile migration is implied by this plan."
+    },
+    {
+      "id": "shared-data",
+      "title": "Current shared data and future Pod-owned state",
+      "placement": "before-details",
+      "body": "Current increment: run uses the existing data and work APIs in the selected real profile. Reuse DomainData, WorkLedger and the runtime data-operation boundary. Preserve namespace reader/writer checks, schema validation, expected revisions, writer epochs, claim ownership, checkpoints and restart durability. A Pod running with owner HOME still accesses shared data as that Pod, not as the owner administrator. Deny unassigned namespaces and foreign claims, and keep existing unknown-effect handling.\n\nFuture direction from the owner: every Pod should function alone and solve one very small task; state should eventually be owned by that Pod. Keep new CLI code behind the existing data-operation boundary, without creating a second store abstraction for a future backend. Do not make a command implicitly launch sibling Pods or require a whole Pod network to run. External inputs and outputs may need a separate explicit contract when the storage redesign is planned. Backend layout, migration and data-exchange mechanics remain undecided; this CLI implementation does not replace shared storage."
+    }
+  ],
+  "milestones": [
+    {
+      "id": "host-proof",
+      "title": "Prove real-profile access and exclusive runtime ownership",
+      "goal": "Resolve the risky host boundaries before product implementation expands.",
+      "status": "done",
+      "steps": [
+        "Create the native issue and isolated feature worktree after approval; freeze the reviewed baseline and inspect the existing ape-shell overlap.",
+        "Prototype standalone Node transport, runtime paths and CLI profile leasing with real-schema fixtures. Prove Pod identity and both home contexts; metadata commands must not initialize run authentication."
+      ],
+      "acceptance": [
+        "A normal Node process boots the unchanged execution core without an Electron process or a second database copy.",
+        "Two standalone CLI starts produce exactly one profile owner. An active desktop lock is refused without modifying it. Concurrent desktop/CLI operation is unsupported and documented.",
+        "Existing Pod identity material can be consumed securely without credential-format migration or owner-login changes. Missing or revoked identity is refused; list/create/edit do not initialize run identity or application-secret services."
+      ],
+      "rollback": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback.",
+      "proof": "Node transport and runtime-only assets execute without Electron. Native fixtures prove exclusive CLI ownership and both HOME contexts; metadata commands do not initialize identity services. The independent v10 vector passes. Real owner keychain ACL access remains untested. A native SIGINT case additionally proves that terminal cancellation retains the profile lease until the worker closes its pipe; the unpatched helper exits immediately in the counterproof.",
+      "evidenceIds": [
+        "acceptance"
+      ]
+    },
+    {
+      "id": "crud",
+      "title": "Implement list, create and metadata editing",
+      "goal": "Make the four-command interface useful with the real selected profile.",
+      "status": "done",
+      "steps": [
+        "Add the CLI parser, profile discovery, shared command client and human/JSON output. Route list/create/edit through the existing command validators and revision handling.",
+        "Support name, tags and lifecycle updates; optional script import uses draft, dependency preparation, validation and activation from the canonical script file."
+      ],
+      "acceptance": [
+        "list displays the same IDs and metadata as the selected profile in desktop.",
+        "create returns a durable paused Pod; edit changes only requested fields, supports clearing tags and rejects stale revisions.",
+        "The commands have meaningful TTY and non-TTY behavior, deterministic JSON output and tested failure exits."
+      ],
+      "rollback": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback.",
+      "proof": "Built Node commands create, edit, list and reopen the production database schema. Tests preserve Pod IDs and unrelated metadata, clear tags and edit archived tags with current revision checks. CLI parsing and non-TTY refusals pass.",
+      "evidenceIds": [
+        "acceptance"
+      ]
+    },
+    {
+      "id": "run",
+      "title": "Implement the real one-shot run and runtime-only build",
+      "goal": "Run an existing Pod under its real identity and configured owner or isolated home context without additional application-secret support.",
+      "status": "done",
+      "steps": [
+        "Reuse existing Pod identity and runtime authorization, resolve the stored home/sandbox context and start only the requested run through the existing worker. Use a standalone Node host under the CLI profile lease, with desktop closed.",
+        "Prepare runtime assets without main/preload/renderer packaging, stream bounded events, wait for the terminal run state and close children and storage on exit or cancellation.",
+        "Connect the existing runtime data/work operations to the selected real database under the selected Pod identity. Preserve namespace permissions and transaction/recovery behavior; start no sibling Pod."
+      ],
+      "acceptance": [
+        "A real native sandbox run preserves Pod identity, owner binding, grants, configured owner/isolated context, checkpoint and history without Electron. Tests observe HOME, working directory, scoped environment and the identity used for authorization at script and child-program boundaries.",
+        "Invalid scripts, missing or revoked identity, incompatible profiles and unsupported assigned-secret operations fail explicitly. The CLI never substitutes owner identity, a fixture grant, an arbitrary HOME or a synthetic provider.",
+        "Ctrl+C, crash recovery and unknown effects preserve existing recovery semantics; unrelated schedules never start in the CLI host.",
+        "A CLI run reads and writes authorized shared data, rejects an unassigned namespace and a foreign work claim, and preserves records/results after reopen. These checks pass in both home contexts without owner-administrator data privileges or another Pod running."
+      ],
+      "rollback": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback.",
+      "proof": "Native sandbox runs with a signed local IdP preserve Pod identity, owner/isolated HOME, workspace, authorized shared data and checkpoint. Foreign namespaces and protected synthetic owner login are refused; no sibling run starts. Cancellation and missing-identity refusal pass. Existing shared-data/work unit coverage passes in the complete gate.",
+      "evidenceIds": [
+        "acceptance"
+      ]
+    },
+    {
+      "id": "acceptance",
+      "title": "Verify and document the development workflow",
+      "goal": "Deliver a reviewable native PR and actual CLI evidence.",
+      "status": "done",
+      "steps": [
+        "Run focused CLI/store/host tests, runtime build, real native fixture acceptance and the required affected unit gate. Exercise desktop adapter compatibility where changed.",
+        "Document local ape-pods installation and the recommended list/create/edit/run workflow. Publish a private Test Runs report, update this plan and active-work.md and open a native PR related to the issue."
+      ],
+      "acceptance": [
+        "All four commands pass a create/edit/run/reopen journey against the real database engine and production schema.",
+        "Actual logs and process evidence distinguish real local execution from synthetic external services and show no Electron build, package, notary, install or launch requirement for the development cycle.",
+        "The native PR, maintained plan and verified Test Runs document state the source SHA, remaining compatibility requirements and next action."
+      ],
+      "rollback": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback.",
+      "proof": "Runtime build, native acceptance and required affected gate passed on source 564bda42. Pods: 1729 unit tests; relay: 104. Private report edition 2 was exported and compared byte-for-byte. Native PR 463 is open with explicit issue relation. The local command prints help; the development guide documents setup and limits.",
+      "evidenceIds": [
+        "acceptance"
+      ]
+    }
+  ],
+  "decisions": [
+    {
+      "title": "Four commands and the real database",
+      "description": "Use ape-pods list/run/create/edit; edit includes tags and metadata and all commands refer to real Pod records.",
+      "status": "accepted",
+      "by": "Patrick Hofmann",
+      "date": "2026-10-15",
+      "reference": "Chat: \"Passt, wir machen das jetzt. Wir brauchen ape-pods list / ape-pods run <id> / ape-pods create / ape-pods edit\"; clarification: \"Edit ist zum ändern von Tags usw. Wir sollten die echte Datenbank nutzen\". This approves the requested scope, not an unseen implementation plan."
+    },
+    {
+      "title": "One shared execution implementation",
+      "description": "Reuse existing contracts, dispatcher and privileged services through host adapters. Per the subsequent owner instruction, the CLI runs separately with desktop closed; desktop attachment and update coordination are excluded.",
+      "status": "accepted",
+      "reference": "Owner approved implementation of revision 4, then instructed: \"Lass den Desktop mal Desktop sein. Cli einfach separat inzwischen.\""
+    },
+    {
+      "title": "Exclude additional application-secret management",
+      "description": "No new application credential CRUD or assigned-secret import/injection. Existing identity authentication and grants remain mandatory; the owner clarification explicitly requires the configured owner or Pod home context.",
+      "status": "accepted",
+      "by": "Patrick Hofmann",
+      "date": "2026-10-15",
+      "reference": "Chat: \"Ich denke wir brauchen noch leinenes credentials in dieser Version.\" Interpreted in context as no credentials in this version; this narrows the requested scope and does not approve an unseen plan revision. Follow-up clarification: \"Wichtig ist trotzdem dass der pod unter der Identität, im home context des owners oder pods ausgeführt wird\"."
+    },
+    {
+      "title": "Preserve identity and configured home context",
+      "description": "Pod identity and runtime grants are required independently of owner versus isolated HOME. Existing identity material may be consumed; missing identity is an error, never a fallback to the CLI owner.",
+      "status": "accepted",
+      "by": "Patrick Hofmann",
+      "date": "2026-10-15",
+      "reference": "Chat: \"Wichtig ist trotzdem dass der pod unter der Identität, im home context des owners oder pods ausgeführt wird\". This is a scope clarification, not approval of the full unseen implementation plan."
+    },
+    {
+      "title": "Keep shared data now; favor independent single-purpose Pods",
+      "description": "This CLI version retains existing shared-storage access under Pod permissions. Future architecture should give each Pod its own state and one very small independently executable responsibility; storage replacement is a separate proposal.",
+      "status": "accepted",
+      "by": "Patrick Hofmann",
+      "date": "2026-10-15",
+      "reference": "Chat: \"Der Zugriff auf den gemeinsamen Speicher brauchen wir wohl auch noch, obwohl ich den gerne in Zukunft gegen einen pod eigenen Speicher auflösen möchte. Ich finde jeder pod muss für sich ganz alleine funktionieren. Jeder pod löst eine ganz kleine Aufgabe\". This sets current scope and future direction, not migration approval."
+    }
+  ],
+  "risks": [
+    {
+      "title": "Concurrent use of the same profile",
+      "mitigation": "CLI workers share an OS lease and refuse an active desktop SingletonLock. Desktop must remain closed while a CLI command runs; no desktop protocol or update is added. Preserve data and fail before opening mutable storage when another owner is detected."
+    },
+    {
+      "title": "Real profile implies real side effects",
+      "mitigation": "Run uses the same grants and exact-call checks as desktop. Automated verification uses disposable production-schema fixtures; real-profile acceptance is read-only list unless an exact further action is authorized. Preserve unknown-effect recovery and do not retry automatically."
+    },
+    {
+      "title": "Hidden Electron dependencies and concurrent host work",
+      "mitigation": "Trace transitive imports, prove the Node binary runs without Electron imports, and keep extraction narrow. Reconcile changes with the active ape-shell worktree instead of copying its unmerged implementation or changing its scope."
+    }
+  ],
+  "verification": [
+    "CLI argument and output tests cover list/create/edit/run, non-TTY errors, JSON separation, explicit tag clearing and stale revisions using real PodDatabase stores.",
+    "Native Node acceptance creates a Pod, edits tags, runs the active script, reopens the same database and verifies identity, metadata, events, checkpoint and result. The process tree contains Node and the native helper, with no Electron launch or package/notary/install step.",
+    "Cover competing profile owners, startup races, wrong or revoked Pod identity, owner/isolated HOME and working directory, hostile caller environment, protected paths, unsupported assigned-secret calls, Ctrl+C and crash recovery. Identity access is scoped to existing runtime needs; isolated execution never copies owner login stores.",
+    "Retain focused desktop host and worker-entry coverage, runtime build and the affected unit gate. Publish source SHA, exact commands and actual identity/context evidence. Isolated fixtures can test identity compatibility; do not unlock or mutate the real owner keychain or run owner Pods as fixtures. Distinguish protocol fixtures from live-provider acceptance.",
+    "Use real shared-data tables and runtime operations in disposable production-schema fixtures: allowed reader/writer, refused namespace, stale expected revision, claim ownership and durable result after restart. Verify that owner HOME never switches the data principal to owner, and that only the requested Pod starts."
+  ],
+  "handoff": "Ready for review in PR 463. Verified executable source: 564bda422dbe6590b4386516fbcaa2c0a14168b6; documentation-only handoff follows. Local ape-pods points to this worktree runtime build. Close the desktop before commands against the real profile. No owner Pod was used as a fixture. The owner may review and use the CLI; merge or release remains separate.",
+  "completion": {
+    "result": "achieved",
+    "summary": "Implemented the four commands as a standalone Node CLI and installed the local executable link. Runtime-only build, 33 focused cases, five native cases, 12 targeted regression cases and the complete affected unit gate pass. PR 463 is open and explicitly related to issue 1499. Actual private Test Runs evidence is published and its exported bytes verified. Existing owner keychain ACL and live-provider acceptance were not exercised. No merge, release or desktop installation occurred."
+  },
+  "changelog": [
+    {
+      "date": "2026-10-15",
+      "text": "Created revision 1 after the owner clarified metadata editing and use of the real database. Recorded the previously underestimated host extraction and installed-profile compatibility work."
+    },
+    {
+      "date": "2026-10-15",
+      "text": "Revision 2 removes credential compatibility, keychain integration and secret/login support at the owner request. The real database, four commands and exclusive profile ownership remain in scope."
+    },
+    {
+      "date": "2026-10-15",
+      "text": "Revision 3 corrects the overly broad credential exclusion after the owner required real Pod identity and owner/Pod home context. Existing identity authentication is mandatory; only additional application-secret management remains excluded. Source inspection distinguishes top-level script HOME from programHome."
+    },
+    {
+      "date": "2026-10-15",
+      "text": "Revision 4 adds explicit shared-domain-data and work access with Pod-scoped authorization. Records the owner direction of small independent Pods with Pod-owned state, while keeping storage replacement outside this implementation."
+    },
+    {
+      "date": "2026-10-15",
+      "text": "Patrick approved revision 4 in the chat: \"Passt. Setze das cli um\". Started implementation from current canonical main; no owner Pod has been modified."
+    },
+    {
+      "date": "2026-10-15",
+      "text": "Revision 5 records the owner instruction to keep the CLI standalone for now. Removed desktop attachment and upgrade coordination; require desktop closed and share an OS lease between CLI workers."
+    },
+    {
+      "date": "2026-10-15",
+      "text": "Completed standalone implementation, native fixture acceptance and required local gate. Published verified Test Runs evidence and opened PR 463; no merge or release."
+    },
+    {
+      "date": "2026-10-15",
+      "text": "Final signal review found that terminal Ctrl+C could reach the lock helper before worker cleanup. The helper now ignores SIGINT; native exclusivity/cancellation acceptance and the full affected gate pass again. Test Runs edition 2 records source 564bda42 and the counterproof."
+    }
+  ],
+  "targets": [
+    {
+      "id": "baseline",
+      "label": "Committed monorepo source inspected for planning",
+      "kind": "source",
+      "commit": "2d24afe92c3dc3f994ba626c93e725ea90ac01b0",
+      "dirty": false,
+      "notes": "Reference target is the committed snapshot, not an acceptance claim about the shared working directory. Unrelated untracked paths were inspected by status and preserved."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "source",
+      "kind": "text",
+      "role": "reference",
+      "title": "Committed source excerpts; no execution acceptance",
+      "path": "source-inspection.txt",
+      "targetId": "baseline"
+    },
+    {
+      "id": "identity-context",
+      "kind": "text",
+      "role": "reference",
+      "title": "Existing runtime identity and home-context boundaries",
+      "path": "identity-context-inspection.txt",
+      "targetId": "baseline"
+    },
+    {
+      "id": "shared-data",
+      "kind": "text",
+      "role": "reference",
+      "title": "Existing shared-data operations and Pod-scoped access checks",
+      "path": "shared-data-inspection.txt",
+      "targetId": "baseline"
+    },
+    {
+      "id": "acceptance",
+      "title": "Actual CLI acceptance and required affected gate",
+      "kind": "link",
+      "role": "evidence",
+      "url": "https://report.openape.ai/d/01M50P2TGQ0JVAGAVC95KGDFGY?v=2"
+    }
+  ],
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "ape-pods: develop and run Pods against the real database",
+        "text": "ape-pods: Pods mit der echten Datenbank entwickeln und ausführen"
+      },
+      {
+        "path": "goal",
+        "source": "Provide the four requested ape-pods commands as a standalone Node CLI against the real selected database, with Pod identity, configured owner/isolated home and shared-data permissions.",
+        "text": "Die vier gewünschten ape-pods-Befehle als eigenständige Node-CLI mit echter ausgewählter Datenbank, Pod-Identität, konfiguriertem Owner-/isoliertem Home und Rechten für gemeinsame Daten bereitstellen."
+      },
+      {
+        "path": "summary",
+        "source": "The CLI is standalone for this increment: no desktop attachment, desktop protocol upgrade or Electron build/install/start is required. It reuses the execution core and real selected database, retains identity/home/shared-data behavior and refuses an active desktop profile. Extra application-secret management and storage migration remain excluded.",
+        "text": "Die CLI ist für diesen Schritt eigenständig: keine Desktop-Anbindung, kein Desktop-Protokollupdate und kein Electron-Build/-Installieren/-Starten erforderlich. Sie verwendet Ausführungskern und echte ausgewählte Datenbank gemeinsam, erhält Identitäts-/Home-/Speicherverhalten und lehnt ein aktives Desktop-Profil ab. Zusätzliche Verwaltung von Anwendungs-Secrets und Speichermigration bleiben ausgeschlossen."
+      },
+      {
+        "path": "problem.statement",
+        "source": "The existing runner can execute in Node tests, but product initialization and privileged services still depend on Electron.",
+        "text": "Der bestehende Runner kann in Node-Tests ausführen; die Produktinitialisierung und privilegierte Dienste hängen jedoch noch von Electron ab."
+      },
+      {
+        "path": "problem.impact",
+        "source": "There is no supported terminal workflow to manage real Pods and run them without launching the desktop.",
+        "text": "Es fehlt ein unterstützter Terminalablauf, um echte Pods zu verwalten und ohne Desktopstart auszuführen."
+      },
+      {
+        "path": "problem.approach",
+        "source": "Add a thin CLI, a runtime-only build and shared host adapters while retaining the real database, resources and authorization checks.",
+        "text": "Eine schlanke CLI, einen Runtime-Build und gemeinsame Host-Adapter ergänzen; echte Datenbank, Ressourcen und Berechtigungsprüfungen bleiben erhalten."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "The same Pod IDs and edits appear in CLI and desktop, and a foreground run returns a durable result without packaging or launching Electron.",
+        "text": "CLI und Desktop zeigen dieselben Pod-IDs und Änderungen; ein Vordergrundlauf liefert ohne Paketieren oder Starten von Electron ein dauerhaft gespeichertes Ergebnis."
+      },
+      {
+        "path": "context",
+        "source": "The owner requested four commands, metadata editing including tags, and the real database. The owner then excluded credential support and clarified that the Pod must still execute under its identity and the owner or Pod home context. Revision 3 therefore excludes additional application-secret management while retaining existing identity authentication, grants and configured execution context. The source baseline is main 2d24afe92c3dc3f994ba626c93e725ea90ac01b0. Unrelated untracked work is preserved. The command scope is authorized; this newly authored implementation plan is awaiting approval. Revision 4 adds the owner requirement to retain current shared-storage access. The owner also stated that every Pod should function alone and solve one very small task, with a future move toward Pod-owned storage. This is future architecture direction; shared-storage replacement is not part of the current implementation. After approving revision 4, the owner explicitly narrowed the implementation: \"Lass den Desktop mal Desktop sein. Cli einfach separat inzwischen.\" This instruction removes desktop attachment and upgrade coordination; revision 5 records that condition under the existing implementation authorization. Worktree base is canonical main b46051395a10b010b933efde9f71665d0c11a9d8.",
+        "text": "Der Eigentümer hat vier Befehle, Metadatenbearbeitung einschließlich Tags und die echte Datenbank angefordert. Anschließend hat er Credential-Support ausgeschlossen und klargestellt, dass der Pod weiterhin unter seiner Identität und im Owner- oder Pod-Home-Kontext laufen muss. Revision 3 schließt deshalb zusätzliche Verwaltung von Anwendungs-Secrets aus und erhält vorhandene Identitätsauthentifizierung, Grants und konfigurierten Ausführungskontext. Quellcode-Ausgangsbasis ist main 2d24afe92c3dc3f994ba626c93e725ea90ac01b0. Fremde unversionierte Arbeiten bleiben erhalten. Der Befehlsumfang ist beauftragt; dieser neu erstellte Umsetzungsplan wartet auf Freigabe. Revision 4 ergänzt die Anforderung des Eigentümers, den aktuellen gemeinsamen Speicher zugänglich zu halten. Jeder Pod soll außerdem allein funktionieren und eine sehr kleine Aufgabe lösen; Speicher soll künftig dem einzelnen Pod gehören. Dies ist die künftige Architekturrichtung; der Austausch des gemeinsamen Speichers gehört nicht zur aktuellen Umsetzung. Nach Freigabe von Revision 4 hat der Eigentümer die Umsetzung ausdrücklich begrenzt: \"Lass den Desktop mal Desktop sein. Cli einfach separat inzwischen.\" Damit entfallen Desktop-Anbindung und Update-Abstimmung; Revision 5 hält diese Bedingung unter der bestehenden Umsetzungsfreigabe fest. Worktree-Basis ist kanonisches main b46051395a10b010b933efde9f71665d0c11a9d8."
+      },
+      {
+        "path": "scope.0",
+        "source": "Use the real selected desktop profile by default, including selected-profile.json; --profile PATH explicitly selects another real profile. Never silently copy or replace the owner database. Automated tests use disposable databases with the production schema.",
+        "text": "Standardmäßig das echte ausgewählte Desktop-Profil einschließlich selected-profile.json verwenden; --profile PATH wählt ausdrücklich ein anderes echtes Profil. Die Eigentümerdatenbank niemals stillschweigend kopieren oder ersetzen. Automatisierte Tests verwenden wegwerfbare Datenbanken mit dem Produktionsschema."
+      },
+      {
+        "path": "scope.1",
+        "source": "Expose exactly the four requested commands with --help and --json. create and edit accept terminal input only when interactive; explicit flags support automation. edit ID changes name, tags and supported lifecycle metadata through existing revision checks; optional --script imports the canonical pod-script.mjs through the existing validation and activation flow.",
+        "text": "Genau die vier gewünschten Befehle mit --help und --json anbieten. create und edit fragen nur interaktiv nach Eingaben; ausdrückliche Flags unterstützen Automatisierung. edit ID ändert Name, Tags und unterstützte Lebenszyklusdaten mit den bestehenden Revisionsprüfungen; optionales --script übernimmt das maßgebliche pod-script.mjs über die bestehende Validierung und Aktivierung."
+      },
+      {
+        "path": "scope.2",
+        "source": "A run uses the active validated script, original Pod identity, existing runtime and exact-command grants, configured home context, checkpoints and durable history. owner uses the OS owner home for the existing owner-context boundaries; isolated uses the Pod home and scoped resources. Never inherit the invoking terminal environment blindly or substitute owner identity for Pod identity. Additional application-secret injection is unsupported and fails explicitly.",
+        "text": "Ein Lauf verwendet das aktive validierte Skript, die ursprüngliche Pod-Identität, bestehende Runtime- und Exact-Command-Grants, den konfigurierten Home-Kontext, Checkpoints und dauerhafte Historie. owner verwendet das Home des Betriebssystem-Eigentümers an den bestehenden Owner-Kontext-Grenzen; isolated verwendet das Pod-Home und zugewiesene Ressourcen. Die Umgebung des aufrufenden Terminals niemals ungeprüft übernehmen und die Pod-Identität niemals durch die Eigentümeridentität ersetzen. Zusätzliche Bereitstellung von Anwendungs-Secrets wird nicht unterstützt und scheitert ausdrücklich."
+      },
+      {
+        "path": "scope.3",
+        "source": "Reuse the same runtime/command producers through a shared host seam. Provide a runtime-only build and local ape-pods executable. Do not add desktop CLI channels, attach to a running desktop or require a new signed desktop installation.",
+        "text": "Dieselben Runtime-/Befehlsimplementierungen über eine gemeinsame Host-Schnittstelle wiederverwenden. Einen Runtime-Build und lokalen ape-pods-Befehl bereitstellen. Keine Desktop-CLI-Kanäle ergänzen, nicht an einen laufenden Desktop anbinden und keine neue signierte Desktop-Installation voraussetzen."
+      },
+      {
+        "path": "nonGoals.0",
+        "source": "A permanent daemon, automatic CLI scheduling, cross-platform execution, full desktop replacement and npm or signed desktop releases are outside this increment.",
+        "text": "Ein dauerhafter Dienst, automatische CLI-Zeitpläne, plattformübergreifende Ausführung, ein vollständiger Desktop-Ersatz sowie npm- oder signierte Desktop-Releases gehören nicht zu diesem Schritt."
+      },
+      {
+        "path": "nonGoals.1",
+        "source": "New application credential CRUD, assigned-secret import or injection, new login flows and credential-format migration are outside version 1. Existing Pod identity material and identity/grant services may be consumed as required for a real run; existing owner-home application logins may be used under the configured owner policy. No plaintext replacement, owner-login mutation or permission bypass is introduced.",
+        "text": "Neue CRUD-Verwaltung von Anwendungs-Credentials, Import oder Bereitstellung zugewiesener Secrets, neue Login-Abläufe und Credential-Formatmigration gehören nicht zu Version 1. Vorhandenes Pod-Identitätsmaterial und Identitäts-/Grant-Dienste dürfen nach Bedarf für einen echten Lauf verwendet werden; vorhandene Anwendungs-Anmeldungen im Owner-Home dürfen unter der konfigurierten Owner-Policy genutzt werden. Es gibt weder Klartext-Ersatz noch Änderung der Eigentümer-Anmeldung oder Berechtigungsumgehung."
+      },
+      {
+        "path": "nonGoals.2",
+        "source": "Do not run, edit or migrate existing owner Pods as acceptance fixtures, change owner login files, or ship a reduced mock executor as a successful real run.",
+        "text": "Vorhandene Eigentümer-Pods nicht als Abnahme-Fixtures ausführen, ändern oder migrieren, keine Eigentümer-Anmeldedateien ändern und keinen vereinfachten Mock-Executor als erfolgreichen echten Lauf ausliefern."
+      },
+      {
+        "path": "sections.0.title",
+        "source": "Command behavior",
+        "text": "Verhalten der Befehle"
+      },
+      {
+        "path": "sections.0.body",
+        "source": "`ape-pods list [--json]` shows IDs, names, tags, lifecycle and last run status.\n\n`ape-pods run <id> [--json]` executes the active script once and waits; human progress goes to stderr, structured output to stdout. Exit codes distinguish success, failed/blocked runs, invalid input, unavailable runtime and cancellation. Unknown external effects retain the existing recovery state and are never automatically replayed.\n\n`ape-pods create [--name NAME] [--tags a,b] [--script pod-script.mjs]` creates a paused Pod in the selected real profile. A script is saved, prepared, validated and activated through current commands; a validation error leaves the Pod paused and reports its ID and draft state.\n\n`ape-pods edit [<id>] [--name NAME] [--tags a,b] [--lifecycle active|paused|archived] [--script pod-script.mjs]` edits metadata and optionally replaces the script through the same flow. No-ID selection and field prompts are TTY-only; automation must provide an ID and changes. Clearing tags is explicit. A stale revision is rejected. Failed script validation preserves the previous active version. Editing lifecycle may affect the existing desktop scheduler; the CLI host does not start a scheduler.",
+        "text": "`ape-pods list [--json]` zeigt IDs, Namen, Tags, Lebenszyklus und den letzten Laufstatus.\n\n`ape-pods run <id> [--json]` führt das aktive Skript einmal aus und wartet; lesbarer Fortschritt geht an stderr, strukturierte Ausgabe an stdout. Exitcodes unterscheiden Erfolg, fehlgeschlagene/blockierte Läufe, ungültige Eingaben, nicht verfügbare Runtime und Abbruch. Unklare externe Effekte behalten den bestehenden Recovery-Status und werden niemals automatisch wiederholt.\n\n`ape-pods create [--name NAME] [--tags a,b] [--script pod-script.mjs]` erstellt einen pausierten Pod im ausgewählten echten Profil. Ein Skript wird über die bestehenden Befehle gespeichert, vorbereitet, validiert und aktiviert; bei Validierungsfehlern bleibt der Pod pausiert und ID sowie Entwurfsstatus werden ausgegeben.\n\n`ape-pods edit [<id>] [--name NAME] [--tags a,b] [--lifecycle active|paused|archived] [--script pod-script.mjs]` ändert Metadaten und optional das Skript über denselben Ablauf. Auswahl ohne ID und Feldabfragen sind nur mit TTY möglich; Automatisierung muss ID und Änderungen angeben. Das Leeren von Tags ist ausdrücklich. Veraltete Revisionen werden abgelehnt. Fehlgeschlagene Skriptvalidierung erhält die vorherige aktive Version. Lebenszyklusänderungen können den bestehenden Desktop-Scheduler beeinflussen; der CLI-Host startet keinen Scheduler."
+      },
+      {
+        "path": "sections.1.title",
+        "source": "Repository orientation and architecture",
+        "text": "Repository-Orientierung und Architektur"
+      },
+      {
+        "path": "sections.1.body",
+        "source": "Keep the CLI entry in apps/openape-pods/src/cli and reuse the existing worker and RunDispatcher. Extract the current host implementation once into src/main/runtime-worker.ts; the existing Electron wrapper retains its default behavior, while Node supplies process transport, paths and identity-cipher access. This source extraction adds no desktop integration feature and requires no desktop build for CLI use.\n\nNode forks the existing worker entry over IPC. PODS_ONESHOT disables scheduler intake and starts only the explicit manual run. The worker holds an OS profile lease through child cleanup and storage close, preventing concurrent standalone CLI workers. Before starting and before each command, check the existing desktop SingletonLock and refuse an active owner. Desktop and CLI are not supported concurrently; the owner must keep desktop closed for the full command. No claim is made that the installed desktop participates in the new CLI lease.\n\nThe CLI uses the real selected profile and existing command validators. Shared state, script validation, checkpoints, recovery and Pod authorization remain common. Extract reusable asset preparation from the existing build recipe, and compile the CLI/worker/native helpers without Electron main/preload or Vite renderer output.",
+        "text": "CLI-Einstieg unter apps/openape-pods/src/cli halten und bestehenden Worker sowie RunDispatcher wiederverwenden. Die aktuelle Host-Implementierung einmal nach src/main/runtime-worker.ts herauslösen; der vorhandene Electron-Wrapper behält sein Standardverhalten, während Node Prozesstransport, Pfade und Identitäts-Cipher-Zugriff bereitstellt. Diese Quellcode-Extraktion ergänzt keine Desktop-Integrationsfunktion und benötigt für die CLI keinen Desktop-Build.\n\nNode startet den bestehenden Worker-Einstieg über IPC. PODS_ONESHOT deaktiviert Scheduler-Intake und startet ausschließlich den ausdrücklich angeforderten manuellen Lauf. Der Worker hält eine Betriebssystem-Profilsperre bis nach Kindprozessbereinigung und Datenbankabschluss; dadurch werden parallele eigenständige CLI-Worker verhindert. Vor dem Start und vor jedem Befehl die bestehende Desktop-SingletonLock prüfen und einen aktiven Verantwortlichen ablehnen. Desktop und CLI werden nicht gleichzeitig unterstützt; der Eigentümer muss den Desktop während des gesamten Befehls geschlossen halten. Es wird nicht behauptet, dass der installierte Desktop an der neuen CLI-Sperre teilnimmt.\n\nDie CLI verwendet echtes ausgewähltes Profil und bestehende Befehlsvalidatoren. Gemeinsame Daten, Skriptvalidierung, Checkpoints, Recovery und Pod-Berechtigungen bleiben gemeinsam implementiert. Wiederverwendbare Artefaktvorbereitung aus dem bestehenden Build-Rezept herauslösen und CLI/Worker/native Helper ohne Electron-Main-/Preload- oder Vite-Renderer-Ausgabe bauen."
+      },
+      {
+        "path": "sections.2.title",
+        "source": "Pod identity and home context remain mandatory",
+        "text": "Pod-Identität und Home-Kontext bleiben verpflichtend"
+      },
+      {
+        "path": "sections.2.body",
+        "source": "Pod identity and home context are independent. The DDISA principal remains the selected Pod and the existing owner binding and runtime/exact-command grants are verified. owner does not mean authorizing every request as the human owner. OS processes continue to use the supported local OS user and sandbox; no new OS-user switching is introduced.\n\nRead the stored sandbox level instead of selecting a context from the CLI environment. At owner-context boundaries, HOME resolves to the owner home, including its existing application settings and logins where policy permits. At isolated boundaries, HOME resolves to the Pod home; do not copy or mount owner login stores into it. Preserve the workspace, Pod ID, scoped PATH, environment allowlist, denylist and protected profile/control-socket/owner-apes-login paths. Test the actual top-level script and spawned application boundaries separately: the current runner passes a Pod home while programHome applies owner versus isolated reach to program execution. Match desktop semantics explicitly instead of claiming that every existing script already receives owner HOME. If the requested top-level context requires a behavior change, document and verify that change with the shared producer; never expand filesystem reach silently.\n\nThe exclusion of credentials applies to new application-secret management and injection. Existing Pod identity keys, tokens, grant checks and owner-home application logins remain usable through current services. The Node host may require a minimal adapter to read existing identity material safely; prove compatibility, locked-store refusal and unchanged owner login without migrating owner data. Missing identity or revoked authority fails before script execution. No mock identity, fixture grant or host-environment fallback is allowed. list/create/edit remain independent of run credential initialization.\n\nThe CLI is standalone for now. A live desktop profile is refused; do not add a desktop socket protocol or upgrade prerequisite. Coordinate source overlap with existing host changes without implementing a separate consolidation proposal.",
+        "text": "Pod-Identität und Home-Kontext sind unabhängig. DDISA-Identität bleibt der ausgewählte Pod; bestehende Owner-Bindung sowie Runtime-/Exact-Command-Grants werden geprüft. owner bedeutet nicht, jeden Aufruf als menschlichen Eigentümer zu autorisieren. Betriebssystemprozesse verwenden weiterhin den unterstützten lokalen Betriebssystembenutzer und die Sandbox; ein neuer Wechsel von Betriebssystembenutzern wird nicht eingeführt.\n\nDen gespeicherten Sandbox-Level lesen, statt den Kontext aus der CLI-Umgebung abzuleiten. An Owner-Kontext-Grenzen zeigt HOME auf das Owner-Home einschließlich vorhandener Anwendungs-Einstellungen und Anmeldungen, soweit die Policy dies erlaubt. An isolierten Grenzen zeigt HOME auf das Pod-Home; Eigentümer-Anmeldespeicher weder hineinkopieren noch einbinden. Workspace, Pod-ID, begrenzten PATH, Umgebungs-Allowlist, Denylist und geschützte Profil-/Steuersocket-/Eigentümer-apes-Anmeldepfade erhalten. Tatsächliches Top-Level-Skript und gestartete Anwendungen getrennt prüfen: Der aktuelle Runner übergibt ein Pod-Home, während programHome den Owner-/isolierten Zugriff für Programme anwendet. Desktop-Semantik ausdrücklich abgleichen, statt zu behaupten, dass bereits jedes Skript Owner-HOME erhält. Erfordert der gewünschte Top-Level-Kontext eine Verhaltensänderung, diese am gemeinsamen Produzenten dokumentieren und prüfen; Dateisystemzugriff niemals still ausweiten.\n\nDer Ausschluss von Credentials bezieht sich auf neue Verwaltung und Bereitstellung von Anwendungs-Secrets. Vorhandene Pod-Identitätsschlüssel, Tokens, Grant-Prüfungen und Anwendungs-Anmeldungen im Owner-Home bleiben über bestehende Dienste nutzbar. Der Node-Host kann einen minimalen Adapter zum sicheren Lesen vorhandenen Identitätsmaterials benötigen; Kompatibilität, Ablehnung gesperrten Speichers und unveränderte Eigentümer-Anmeldung ohne Migration der Eigentümerdaten nachweisen. Fehlende Identität oder widerrufene Berechtigung scheitert vor Skriptausführung. Mock-Identität, Fixture-Grant oder Fallback auf die Host-Umgebung sind ausgeschlossen. list/create/edit bleiben unabhängig von der Credential-Initialisierung für Runs.\n\nDie CLI ist vorerst eigenständig. Ein aktives Desktop-Profil wird abgelehnt; weder Desktop-Socket-Protokoll noch Update-Voraussetzung ergänzen. Quellcodeüberschneidungen mit bestehenden Host-Änderungen abstimmen, ohne einen separaten Konsolidierungsvorschlag umzusetzen."
+      },
+      {
+        "path": "sections.3.title",
+        "source": "Setup and delivery",
+        "text": "Setup und Lieferung"
+      },
+      {
+        "path": "sections.3.body",
+        "source": "After plan approval create a canonical native development issue, inspect current origin/main and worktrees, and implement in a dedicated feature/issue-N-ape-pods-cli worktree. Preserve all existing checkouts. Activate the pinned toolchain in every shell with `. ./scripts/activate-node.sh`, then `pnpm run doctor`. Use the existing workspace and established tests; retain current automatic and manual check selection.\n\nDuring implementation use focused existing test files first, build consumed packages serially, build the changed runtime and execute the four CLI commands against an isolated production-schema fixture. Run the complete affected unit gate once at handoff or through the mandatory pre-push hook. Add the recommended create/edit/run development workflow to the Pods documentation, update active-work.md and any generated workspace/script maps, then open a native PR with an explicit issue relation. Publish actual output in a private Test Runs report. No merge, release, installation or owner-profile migration is implied by this plan.",
+        "text": "Nach Planfreigabe ein kanonisches natives Entwicklungsissue anlegen, origin/main und Worktrees prüfen und in einem eigenen feature/issue-N-ape-pods-cli-Worktree umsetzen. Alle bestehenden Checkouts erhalten. In jeder Shell die gepinnte Toolchain mit `. ./scripts/activate-node.sh` aktivieren, danach `pnpm run doctor` ausführen. Den bestehenden Workspace und etablierte Tests verwenden; die aktuelle automatische und manuelle Prüfauswahl erhalten.\n\nWährend der Umsetzung zuerst gezielte bestehende Testdateien verwenden, konsumierte Packages nacheinander bauen, die geänderte Runtime bauen und alle vier CLI-Befehle gegen eine isolierte Fixture mit Produktionsschema ausführen. Den vollständigen betroffenen Unit-Gate einmal bei Übergabe oder über den verpflichtenden Pre-Push-Hook ausführen. Den empfohlenen create/edit/run-Entwicklungsablauf in der Pods-Dokumentation ergänzen, active-work.md und gegebenenfalls generierte Workspace-/Skriptübersichten aktualisieren und einen nativen PR mit ausdrücklichem Issue-Bezug erstellen. Tatsächliche Ausgaben in einem privaten Test-Runs-Bericht veröffentlichen. Dieser Plan beinhaltet weder Merge, Release, Installation noch Migration des Eigentümerprofils."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Prove real-profile access and exclusive runtime ownership",
+        "text": "Zugriff auf das echte Profil und exklusive Runtime-Verantwortung nachweisen"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Resolve the risky host boundaries before product implementation expands.",
+        "text": "Die riskanten Host-Grenzen klären, bevor die Produktumsetzung ausgeweitet wird."
+      },
+      {
+        "path": "milestones.0.steps.0",
+        "source": "Create the native issue and isolated feature worktree after approval; freeze the reviewed baseline and inspect the existing ape-shell overlap.",
+        "text": "Nach Freigabe natives Issue und isolierten Feature-Worktree anlegen; geprüfte Ausgangsbasis festhalten und Überschneidungen mit ape-shell prüfen."
+      },
+      {
+        "path": "milestones.0.steps.1",
+        "source": "Prototype standalone Node transport, runtime paths and CLI profile leasing with real-schema fixtures. Prove Pod identity and both home contexts; metadata commands must not initialize run authentication.",
+        "text": "Eigenständigen Node-Transport, Runtime-Pfade und CLI-Profilsperre mit Fixtures mit echtem Schema prototypisch prüfen. Pod-Identität und beide Home-Kontexte nachweisen; Metadatenbefehle dürfen keine Run-Authentifizierung initialisieren."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "A normal Node process boots the unchanged execution core without an Electron process or a second database copy.",
+        "text": "Ein normaler Node-Prozess startet den unveränderten Ausführungskern ohne Electron-Prozess oder zweite Datenbankkopie."
+      },
+      {
+        "path": "milestones.0.acceptance.1",
+        "source": "Two standalone CLI starts produce exactly one profile owner. An active desktop lock is refused without modifying it. Concurrent desktop/CLI operation is unsupported and documented.",
+        "text": "Zwei eigenständige CLI-Starts ergeben genau einen Profilverantwortlichen. Eine aktive Desktop-Sperre wird ohne Änderung abgelehnt. Gleichzeitiger Desktop-/CLI-Betrieb wird nicht unterstützt und ist dokumentiert."
+      },
+      {
+        "path": "milestones.0.acceptance.2",
+        "source": "Existing Pod identity material can be consumed securely without credential-format migration or owner-login changes. Missing or revoked identity is refused; list/create/edit do not initialize run identity or application-secret services.",
+        "text": "Vorhandenes Pod-Identitätsmaterial kann ohne Credential-Formatmigration oder Änderung der Eigentümer-Anmeldung sicher genutzt werden. Fehlende oder widerrufene Identität wird abgelehnt; list/create/edit initialisieren weder Run-Identität noch Anwendungs-Secret-Dienste."
+      },
+      {
+        "path": "milestones.0.rollback",
+        "source": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback.",
+        "text": "Die isolierten Feature-Änderungen zurücknehmen; Eigentümerdaten erhalten und die vorherige Desktop-Runtime verwenden. Rollback beinhaltet keine automatische Profilmigration."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "Implement list, create and metadata editing",
+        "text": "list, create und Metadatenbearbeitung umsetzen"
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "Make the four-command interface useful with the real selected profile.",
+        "text": "Die Oberfläche mit vier Befehlen für das echte ausgewählte Profil nutzbar machen."
+      },
+      {
+        "path": "milestones.1.steps.0",
+        "source": "Add the CLI parser, profile discovery, shared command client and human/JSON output. Route list/create/edit through the existing command validators and revision handling.",
+        "text": "CLI-Parser, Profilauswahl, gemeinsamen Befehlsclient und lesbare/JSON-Ausgabe ergänzen. list/create/edit über die bestehenden Befehlsvalidatoren und Revisionsprüfungen leiten."
+      },
+      {
+        "path": "milestones.1.steps.1",
+        "source": "Support name, tags and lifecycle updates; optional script import uses draft, dependency preparation, validation and activation from the canonical script file.",
+        "text": "Änderungen an Name, Tags und Lebenszyklus unterstützen; optionale Skriptübernahme verwendet Entwurf, Abhängigkeitsvorbereitung, Validierung und Aktivierung aus der maßgeblichen Skriptdatei."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "list displays the same IDs and metadata as the selected profile in desktop.",
+        "text": "list zeigt dieselben IDs und Metadaten wie das ausgewählte Profil im Desktop."
+      },
+      {
+        "path": "milestones.1.acceptance.1",
+        "source": "create returns a durable paused Pod; edit changes only requested fields, supports clearing tags and rejects stale revisions.",
+        "text": "create liefert einen dauerhaft gespeicherten pausierten Pod; edit ändert nur angeforderte Felder, unterstützt das Leeren von Tags und lehnt veraltete Revisionen ab."
+      },
+      {
+        "path": "milestones.1.acceptance.2",
+        "source": "The commands have meaningful TTY and non-TTY behavior, deterministic JSON output and tested failure exits.",
+        "text": "Die Befehle haben sinnvolles TTY- und Non-TTY-Verhalten, deterministische JSON-Ausgabe und geprüfte Fehler-Exitcodes."
+      },
+      {
+        "path": "milestones.1.rollback",
+        "source": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback.",
+        "text": "Die isolierten Feature-Änderungen zurücknehmen; Eigentümerdaten erhalten und die vorherige Desktop-Runtime verwenden. Rollback beinhaltet keine automatische Profilmigration."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "Implement the real one-shot run and runtime-only build",
+        "text": "Echten einmaligen Lauf und Runtime-Build umsetzen"
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "Run an existing Pod under its real identity and configured owner or isolated home context without additional application-secret support.",
+        "text": "Einen vorhandenen Pod unter seiner echten Identität und im konfigurierten Owner- oder isolierten Home-Kontext ohne zusätzlichen Anwendungs-Secret-Support ausführen."
+      },
+      {
+        "path": "milestones.2.steps.0",
+        "source": "Reuse existing Pod identity and runtime authorization, resolve the stored home/sandbox context and start only the requested run through the existing worker. Use a standalone Node host under the CLI profile lease, with desktop closed.",
+        "text": "Vorhandene Pod-Identität und Runtime-Berechtigung wiederverwenden, gespeicherten Home-/Sandbox-Kontext auflösen und ausschließlich den angeforderten Lauf über den bestehenden Worker starten. Einen eigenständigen Node-Host unter der CLI-Profilsperre verwenden; Desktop bleibt geschlossen."
+      },
+      {
+        "path": "milestones.2.steps.1",
+        "source": "Prepare runtime assets without main/preload/renderer packaging, stream bounded events, wait for the terminal run state and close children and storage on exit or cancellation.",
+        "text": "Runtime-Artefakte ohne Main-/Preload-/Renderer-Paketierung vorbereiten, begrenzte Ereignisse ausgeben, auf den endgültigen Laufstatus warten und Kindprozesse sowie Datenbank bei Ende oder Abbruch schließen."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "A real native sandbox run preserves Pod identity, owner binding, grants, configured owner/isolated context, checkpoint and history without Electron. Tests observe HOME, working directory, scoped environment and the identity used for authorization at script and child-program boundaries.",
+        "text": "Ein echter nativer Sandbox-Lauf erhält Pod-Identität, Owner-Bindung, Grants, konfigurierten Owner-/isolierten Kontext, Checkpoint und Historie ohne Electron. Tests beobachten HOME, Arbeitsverzeichnis, begrenzte Umgebung und die zur Autorisierung verwendete Identität an Skript- und Kindprogramm-Grenzen."
+      },
+      {
+        "path": "milestones.2.acceptance.1",
+        "source": "Invalid scripts, missing or revoked identity, incompatible profiles and unsupported assigned-secret operations fail explicitly. The CLI never substitutes owner identity, a fixture grant, an arbitrary HOME or a synthetic provider.",
+        "text": "Ungültige Skripte, fehlende oder widerrufene Identität, inkompatible Profile und nicht unterstützte Aktionen mit zugewiesenen Secrets scheitern ausdrücklich. Die CLI ersetzt dies niemals durch Owner-Identität, Fixture-Grant, beliebiges HOME oder synthetischen Provider."
+      },
+      {
+        "path": "milestones.2.acceptance.2",
+        "source": "Ctrl+C, crash recovery and unknown effects preserve existing recovery semantics; unrelated schedules never start in the CLI host.",
+        "text": "Ctrl+C, Crash-Recovery und unklare Effekte erhalten die bestehende Recovery-Semantik; fremde Zeitpläne starten niemals im CLI-Host."
+      },
+      {
+        "path": "milestones.2.rollback",
+        "source": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback.",
+        "text": "Die isolierten Feature-Änderungen zurücknehmen; Eigentümerdaten erhalten und die vorherige Desktop-Runtime verwenden. Rollback beinhaltet keine automatische Profilmigration."
+      },
+      {
+        "path": "milestones.3.title",
+        "source": "Verify and document the development workflow",
+        "text": "Entwicklungsablauf prüfen und dokumentieren"
+      },
+      {
+        "path": "milestones.3.goal",
+        "source": "Deliver a reviewable native PR and actual CLI evidence.",
+        "text": "Einen prüfbaren nativen PR und tatsächliche CLI-Nachweise liefern."
+      },
+      {
+        "path": "milestones.3.steps.0",
+        "source": "Run focused CLI/store/host tests, runtime build, real native fixture acceptance and the required affected unit gate. Exercise desktop adapter compatibility where changed.",
+        "text": "Gezielte CLI-/Store-/Host-Tests, Runtime-Build, echte native Fixture-Abnahme und erforderlichen betroffenen Unit-Gate ausführen. Geänderte Desktop-Adapter auf Kompatibilität prüfen."
+      },
+      {
+        "path": "milestones.3.steps.1",
+        "source": "Document local ape-pods installation and the recommended list/create/edit/run workflow. Publish a private Test Runs report, update this plan and active-work.md and open a native PR related to the issue.",
+        "text": "Lokale ape-pods-Installation und empfohlenen list/create/edit/run-Ablauf dokumentieren. Privaten Test-Runs-Bericht veröffentlichen, diesen Plan und active-work.md aktualisieren und nativen PR mit Issue-Bezug eröffnen."
+      },
+      {
+        "path": "milestones.3.acceptance.0",
+        "source": "All four commands pass a create/edit/run/reopen journey against the real database engine and production schema.",
+        "text": "Alle vier Befehle bestehen einen create/edit/run/reopen-Ablauf mit echter Datenbankengine und Produktionsschema."
+      },
+      {
+        "path": "milestones.3.acceptance.1",
+        "source": "Actual logs and process evidence distinguish real local execution from synthetic external services and show no Electron build, package, notary, install or launch requirement for the development cycle.",
+        "text": "Tatsächliche Logs und Prozessnachweise unterscheiden echte lokale Ausführung von synthetischen externen Diensten und belegen, dass der Entwicklungsablauf keinen Electron-Build, keine Paketierung, Notarisierung, Installation oder Electron-Start benötigt."
+      },
+      {
+        "path": "milestones.3.acceptance.2",
+        "source": "The native PR, maintained plan and verified Test Runs document state the source SHA, remaining compatibility requirements and next action.",
+        "text": "Nativer PR, gepflegter Plan und verifiziertes Test-Runs-Dokument nennen Quell-SHA, verbleibende Kompatibilitätsvoraussetzungen und nächsten Schritt."
+      },
+      {
+        "path": "milestones.3.rollback",
+        "source": "Revert the isolated feature changes; preserve owner data and use the previous desktop runtime. No automatic profile migration is part of rollback.",
+        "text": "Die isolierten Feature-Änderungen zurücknehmen; Eigentümerdaten erhalten und die vorherige Desktop-Runtime verwenden. Rollback beinhaltet keine automatische Profilmigration."
+      },
+      {
+        "path": "decisions.0.title",
+        "source": "Four commands and the real database",
+        "text": "Vier Befehle und die echte Datenbank"
+      },
+      {
+        "path": "decisions.0.description",
+        "source": "Use ape-pods list/run/create/edit; edit includes tags and metadata and all commands refer to real Pod records.",
+        "text": "ape-pods list/run/create/edit verwenden; edit umfasst Tags und Metadaten und alle Befehle beziehen sich auf echte Pod-Datensätze."
+      },
+      {
+        "path": "decisions.1.title",
+        "source": "One shared execution implementation",
+        "text": "Eine gemeinsame Ausführungsimplementierung"
+      },
+      {
+        "path": "decisions.1.description",
+        "source": "Reuse existing contracts, dispatcher and privileged services through host adapters. Per the subsequent owner instruction, the CLI runs separately with desktop closed; desktop attachment and update coordination are excluded.",
+        "text": "Bestehende Verträge, Dispatcher und privilegierte Dienste über Host-Adapter wiederverwenden. Gemäß späterer Anweisung des Eigentümers läuft die CLI separat bei geschlossenem Desktop; Desktop-Anbindung und Update-Abstimmung sind ausgeschlossen."
+      },
+      {
+        "path": "risks.0.title",
+        "source": "Concurrent use of the same profile",
+        "text": "Gleichzeitige Nutzung desselben Profils"
+      },
+      {
+        "path": "risks.0.mitigation",
+        "source": "CLI workers share an OS lease and refuse an active desktop SingletonLock. Desktop must remain closed while a CLI command runs; no desktop protocol or update is added. Preserve data and fail before opening mutable storage when another owner is detected.",
+        "text": "CLI-Worker teilen eine Betriebssystem-Sperre und lehnen eine aktive Desktop-SingletonLock ab. Der Desktop muss während eines CLI-Befehls geschlossen bleiben; kein Desktop-Protokoll oder Update wird ergänzt. Daten erhalten und beim Erkennen eines anderen Verantwortlichen vor schreibendem Datenbankzugriff ablehnen."
+      },
+      {
+        "path": "risks.1.title",
+        "source": "Real profile implies real side effects",
+        "text": "Echtes Profil bedeutet echte Nebenwirkungen"
+      },
+      {
+        "path": "risks.1.mitigation",
+        "source": "Run uses the same grants and exact-call checks as desktop. Automated verification uses disposable production-schema fixtures; real-profile acceptance is read-only list unless an exact further action is authorized. Preserve unknown-effect recovery and do not retry automatically.",
+        "text": "run verwendet dieselben Grants und Prüfungen exakter Aufrufe wie der Desktop. Automatisierte Verifikation verwendet wegwerfbare Fixtures mit Produktionsschema; die Abnahme am echten Profil beschränkt sich auf lesendes list, sofern keine konkrete weitere Aktion beauftragt wird. Recovery für unklare Effekte erhalten und nicht automatisch wiederholen."
+      },
+      {
+        "path": "risks.2.title",
+        "source": "Hidden Electron dependencies and concurrent host work",
+        "text": "Verdeckte Electron-Abhängigkeiten und parallele Host-Arbeiten"
+      },
+      {
+        "path": "risks.2.mitigation",
+        "source": "Trace transitive imports, prove the Node binary runs without Electron imports, and keep extraction narrow. Reconcile changes with the active ape-shell worktree instead of copying its unmerged implementation or changing its scope.",
+        "text": "Transitive Imports verfolgen, Ausführung mit dem Node-Binary ohne Electron-Imports nachweisen und die Extraktion begrenzen. Änderungen mit dem aktiven ape-shell-Worktree abstimmen, statt dessen ungemergte Umsetzung zu kopieren oder seinen Umfang zu ändern."
+      },
+      {
+        "path": "verification.0",
+        "source": "CLI argument and output tests cover list/create/edit/run, non-TTY errors, JSON separation, explicit tag clearing and stale revisions using real PodDatabase stores.",
+        "text": "CLI-Argument- und Ausgabetests decken list/create/edit/run, Non-TTY-Fehler, getrennte JSON-Ausgabe, ausdrückliches Leeren von Tags und veraltete Revisionen mit echten PodDatabase-Stores ab."
+      },
+      {
+        "path": "verification.1",
+        "source": "Native Node acceptance creates a Pod, edits tags, runs the active script, reopens the same database and verifies identity, metadata, events, checkpoint and result. The process tree contains Node and the native helper, with no Electron launch or package/notary/install step.",
+        "text": "Native Node-Abnahme erstellt einen Pod, ändert Tags, führt das aktive Skript aus, öffnet dieselbe Datenbank erneut und prüft Identität, Metadaten, Ereignisse, Checkpoint und Ergebnis. Der Prozessbaum enthält Node und den nativen Helper, ohne Electron-Start oder Paketierungs-/Notarisierungs-/Installationsschritt."
+      },
+      {
+        "path": "verification.2",
+        "source": "Cover competing profile owners, startup races, wrong or revoked Pod identity, owner/isolated HOME and working directory, hostile caller environment, protected paths, unsupported assigned-secret calls, Ctrl+C and crash recovery. Identity access is scoped to existing runtime needs; isolated execution never copies owner login stores.",
+        "text": "Konkurrierende Profilverantwortliche, Startrennen, falsche oder widerrufene Pod-Identität, Owner-/isoliertes HOME und Arbeitsverzeichnis, feindliche Aufruferumgebung, geschützte Pfade, nicht unterstützte Aufrufe zugewiesener Secrets, Ctrl+C und Crash-Recovery prüfen. Identitätszugriff bleibt auf bestehende Runtime-Anforderungen begrenzt; isolierte Ausführung kopiert niemals Eigentümer-Anmeldespeicher."
+      },
+      {
+        "path": "verification.3",
+        "source": "Retain focused desktop host and worker-entry coverage, runtime build and the affected unit gate. Publish source SHA, exact commands and actual identity/context evidence. Isolated fixtures can test identity compatibility; do not unlock or mutate the real owner keychain or run owner Pods as fixtures. Distinguish protocol fixtures from live-provider acceptance.",
+        "text": "Gezielte Desktop-Host- und Worker-Entry-Abdeckung, Runtime-Build und betroffenen Unit-Gate erhalten. Quell-SHA, exakte Befehle und tatsächliche Identitäts-/Kontextnachweise veröffentlichen. Isolierte Fixtures können Identitätskompatibilität prüfen; die echte Eigentümer-Keychain weder entsperren noch verändern und keine Eigentümer-Pods als Fixtures ausführen. Protokoll-Fixtures von Live-Provider-Abnahme unterscheiden."
+      },
+      {
+        "path": "handoff",
+        "source": "Ready for review in PR 463. Verified executable source: 564bda422dbe6590b4386516fbcaa2c0a14168b6; documentation-only handoff follows. Local ape-pods points to this worktree runtime build. Close the desktop before commands against the real profile. No owner Pod was used as a fixture. The owner may review and use the CLI; merge or release remains separate.",
+        "text": "Bereit zur Durchsicht in PR 463. Geprüfter ausführbarer Quellstand: 564bda422dbe6590b4386516fbcaa2c0a14168b6; danach folgt nur die Übergabedokumentation. Der lokale Befehl ape-pods verweist auf den Runtime-Build dieses Worktrees. Vor Befehlen gegen das echte Profil den Desktop schließen. Kein Eigentümer-Pod wurde als Fixture verwendet. Der Eigentümer kann CLI und PR prüfen; Merge oder Release bleiben separat."
+      },
+      {
+        "path": "completion.summary",
+        "source": "Implemented the four commands as a standalone Node CLI and installed the local executable link. Runtime-only build, 33 focused cases, five native cases, 12 targeted regression cases and the complete affected unit gate pass. PR 463 is open and explicitly related to issue 1499. Actual private Test Runs evidence is published and its exported bytes verified. Existing owner keychain ACL and live-provider acceptance were not exercised. No merge, release or desktop installation occurred.",
+        "text": "Die vier Befehle sind als eigenständige Node-CLI umgesetzt und der lokale Befehlslink ist eingerichtet. Runtime-Build, 33 fokussierte Fälle, fünf native Fälle, zwölf gezielte Regressionstests und der vollständige betroffene Prüflauf bestehen. PR 463 ist offen und ausdrücklich mit Issue 1499 verknüpft. Tatsächliche private Testnachweise sind veröffentlicht; die exportierten Bytes wurden verglichen. Bestehende Eigentümer-Keychain-ACL und Live-Provider wurden nicht geprüft. Es erfolgten weder Merge noch Release oder Desktop-Installation."
+      },
+      {
+        "path": "changelog.0.text",
+        "source": "Created revision 1 after the owner clarified metadata editing and use of the real database. Recorded the previously underestimated host extraction and installed-profile compatibility work.",
+        "text": "Revision 1 nach der Klarstellung des Eigentümers zu Metadatenbearbeitung und echter Datenbank erstellt. Den zuvor unterschätzten Aufwand für Host-Entkopplung und Kompatibilität des installierten Profils festgehalten."
+      },
+      {
+        "path": "decisions.2.title",
+        "source": "Exclude additional application-secret management",
+        "text": "Zusätzliche Verwaltung von Anwendungs-Secrets ausschließen"
+      },
+      {
+        "path": "decisions.2.description",
+        "source": "No new application credential CRUD or assigned-secret import/injection. Existing identity authentication and grants remain mandatory; the owner clarification explicitly requires the configured owner or Pod home context.",
+        "text": "Keine neue CRUD-Verwaltung von Anwendungs-Credentials und kein Import oder Bereitstellen zugewiesener Secrets. Bestehende Identitätsauthentifizierung und Grants bleiben verpflichtend; die Klarstellung des Eigentümers verlangt ausdrücklich den konfigurierten Owner- oder Pod-Home-Kontext."
+      },
+      {
+        "path": "changelog.1.text",
+        "source": "Revision 2 removes credential compatibility, keychain integration and secret/login support at the owner request. The real database, four commands and exclusive profile ownership remain in scope.",
+        "text": "Revision 2 entfernt auf Wunsch des Eigentümers Credential-Kompatibilität, Keychain-Integration sowie Secret-/Login-Support. Echte Datenbank, vier Befehle und exklusive Profilverantwortung bleiben im Umfang."
+      },
+      {
+        "path": "decisions.3.title",
+        "source": "Preserve identity and configured home context",
+        "text": "Identität und konfigurierten Home-Kontext erhalten"
+      },
+      {
+        "path": "decisions.3.description",
+        "source": "Pod identity and runtime grants are required independently of owner versus isolated HOME. Existing identity material may be consumed; missing identity is an error, never a fallback to the CLI owner.",
+        "text": "Pod-Identität und Runtime-Grants sind unabhängig von Owner- oder isoliertem HOME erforderlich. Vorhandenes Identitätsmaterial darf verwendet werden; fehlende Identität ist ein Fehler und niemals ein Fallback auf den CLI-Eigentümer."
+      },
+      {
+        "path": "changelog.2.text",
+        "source": "Revision 3 corrects the overly broad credential exclusion after the owner required real Pod identity and owner/Pod home context. Existing identity authentication is mandatory; only additional application-secret management remains excluded. Source inspection distinguishes top-level script HOME from programHome.",
+        "text": "Revision 3 korrigiert den zu weitgehenden Credential-Ausschluss, nachdem der Eigentümer echte Pod-Identität und Owner-/Pod-Home-Kontext verlangt hat. Bestehende Identitätsauthentifizierung ist verpflichtend; nur zusätzliche Verwaltung von Anwendungs-Secrets bleibt ausgeschlossen. Die Quellcodeanalyse unterscheidet Top-Level-Skript-HOME von programHome."
+      },
+      {
+        "path": "scope.4",
+        "source": "Retain existing shared domain-data access, namespaces, reader/writer permissions, revision checks and work-claim semantics through the same runtime APIs. A CLI run uses its Pod ID and run ID as data principal; owner home never grants owner-level access to all shared data. No parallel data store is created.",
+        "text": "Bestehenden gemeinsamen Domain-Datenzugriff, Namespaces, Leser-/Schreibrechte, Revisionsprüfungen und Work-Claim-Semantik über dieselben Runtime-APIs erhalten. Ein CLI-Lauf verwendet Pod-ID und Run-ID als Datenidentität; Owner-Home gewährt niemals Eigentümerzugriff auf alle gemeinsamen Daten. Es entsteht kein paralleler Datenspeicher."
+      },
+      {
+        "path": "nonGoals.3",
+        "source": "Replacing shared storage with Pod-owned storage, migrating domain data or redesigning Pod collaboration is outside this CLI increment. Treat each Pod as one small independently executable responsibility and avoid new hidden coupling. No separate physical database per Pod is decided by this proposal.",
+        "text": "Gemeinsamen Speicher durch pod-eigenen Speicher ersetzen, Domain-Daten migrieren oder Pod-Zusammenarbeit neu gestalten gehört nicht zu diesem CLI-Schritt. Jeden Pod als eine kleine eigenständig ausführbare Aufgabe behandeln und neue versteckte Kopplung vermeiden. Dieser Vorschlag legt keine separate physische Datenbank pro Pod fest."
+      },
+      {
+        "path": "sections.4.title",
+        "source": "Current shared data and future Pod-owned state",
+        "text": "Aktueller gemeinsamer Speicher und künftiger Pod-eigener Zustand"
+      },
+      {
+        "path": "sections.4.body",
+        "source": "Current increment: run uses the existing data and work APIs in the selected real profile. Reuse DomainData, WorkLedger and the runtime data-operation boundary. Preserve namespace reader/writer checks, schema validation, expected revisions, writer epochs, claim ownership, checkpoints and restart durability. A Pod running with owner HOME still accesses shared data as that Pod, not as the owner administrator. Deny unassigned namespaces and foreign claims, and keep existing unknown-effect handling.\n\nFuture direction from the owner: every Pod should function alone and solve one very small task; state should eventually be owned by that Pod. Keep new CLI code behind the existing data-operation boundary, without creating a second store abstraction for a future backend. Do not make a command implicitly launch sibling Pods or require a whole Pod network to run. External inputs and outputs may need a separate explicit contract when the storage redesign is planned. Backend layout, migration and data-exchange mechanics remain undecided; this CLI implementation does not replace shared storage.",
+        "text": "Aktueller Schritt: run verwendet die bestehenden Daten- und Work-APIs im ausgewählten echten Profil. DomainData, WorkLedger und die Runtime-Grenze für Datenoperationen wiederverwenden. Namespace-Leser-/Schreibprüfungen, Schemavalidierung, erwartete Revisionen, Writer-Epochen, Claim-Verantwortung, Checkpoints und Dauerhaftigkeit nach Neustart erhalten. Ein Pod mit Owner-HOME greift weiterhin als dieser Pod auf gemeinsame Daten zu, nicht als Eigentümeradministrator. Nicht zugewiesene Namespaces und fremde Claims ablehnen und die bestehende Behandlung unklarer Effekte erhalten.\n\nKünftige Richtung des Eigentümers: Jeder Pod soll allein funktionieren und eine sehr kleine Aufgabe lösen; Zustand soll künftig diesem Pod gehören. Neuen CLI-Code hinter der vorhandenen Grenze für Datenoperationen halten, ohne eine zweite Speicherabstraktion für einen künftigen Backend-Wechsel einzuführen. Kein Befehl startet implizit andere Pods oder benötigt ein ganzes Pod-Netzwerk zum Ausführen. Externe Eingaben und Ausgaben können bei der späteren Speicherplanung einen eigenen ausdrücklichen Vertrag benötigen. Backend-Aufteilung, Migration und Datenaustauschmechanik bleiben offen; diese CLI-Umsetzung ersetzt den gemeinsamen Speicher nicht."
+      },
+      {
+        "path": "milestones.2.steps.2",
+        "source": "Connect the existing runtime data/work operations to the selected real database under the selected Pod identity. Preserve namespace permissions and transaction/recovery behavior; start no sibling Pod.",
+        "text": "Bestehende Runtime-Daten-/Work-Operationen unter der ausgewählten Pod-Identität mit der echten ausgewählten Datenbank verbinden. Namespace-Rechte sowie Transaktions-/Recovery-Verhalten erhalten; keinen anderen Pod starten."
+      },
+      {
+        "path": "milestones.2.acceptance.3",
+        "source": "A CLI run reads and writes authorized shared data, rejects an unassigned namespace and a foreign work claim, and preserves records/results after reopen. These checks pass in both home contexts without owner-administrator data privileges or another Pod running.",
+        "text": "Ein CLI-Lauf liest und schreibt berechtigte gemeinsame Daten, lehnt einen nicht zugewiesenen Namespace sowie fremden Work-Claim ab und erhält Datensätze/Ergebnisse nach erneutem Öffnen. Diese Prüfungen bestehen in beiden Home-Kontexten ohne Datenrechte des Eigentümeradministrators und ohne weiteren laufenden Pod."
+      },
+      {
+        "path": "verification.4",
+        "source": "Use real shared-data tables and runtime operations in disposable production-schema fixtures: allowed reader/writer, refused namespace, stale expected revision, claim ownership and durable result after restart. Verify that owner HOME never switches the data principal to owner, and that only the requested Pod starts.",
+        "text": "Echte Tabellen gemeinsamer Daten und Runtime-Operationen in wegwerfbaren Fixtures mit Produktionsschema verwenden: berechtigter Leser/Schreiber, abgelehnter Namespace, veraltete erwartete Revision, Claim-Verantwortung und dauerhaftes Ergebnis nach Neustart. Nachweisen, dass Owner-HOME die Datenidentität niemals auf owner umschaltet und ausschließlich der angeforderte Pod startet."
+      },
+      {
+        "path": "decisions.4.title",
+        "source": "Keep shared data now; favor independent single-purpose Pods",
+        "text": "Gemeinsamen Speicher erhalten; eigenständige Pods mit kleiner Aufgabe bevorzugen"
+      },
+      {
+        "path": "decisions.4.description",
+        "source": "This CLI version retains existing shared-storage access under Pod permissions. Future architecture should give each Pod its own state and one very small independently executable responsibility; storage replacement is a separate proposal.",
+        "text": "Diese CLI-Version erhält bestehenden gemeinsamen Speicherzugriff unter den Pod-Berechtigungen. Die künftige Architektur soll jedem Pod eigenen Zustand und eine sehr kleine eigenständig ausführbare Aufgabe geben; der Speicheraustausch ist ein eigener Vorschlag."
+      },
+      {
+        "path": "changelog.3.text",
+        "source": "Revision 4 adds explicit shared-domain-data and work access with Pod-scoped authorization. Records the owner direction of small independent Pods with Pod-owned state, while keeping storage replacement outside this implementation.",
+        "text": "Revision 4 ergänzt ausdrücklichen Zugriff auf gemeinsame Domain-Daten und Work mit Pod-bezogenen Berechtigungen. Die Richtung des Eigentümers zu kleinen eigenständigen Pods mit Pod-eigenem Zustand festgehalten; der Speicheraustausch bleibt außerhalb dieser Umsetzung."
+      },
+      {
+        "path": "changelog.4.text",
+        "source": "Patrick approved revision 4 in the chat: \"Passt. Setze das cli um\". Started implementation from current canonical main; no owner Pod has been modified.",
+        "text": "Patrick hat Revision 4 im Chat freigegeben: \"Passt. Setze das cli um\". Umsetzung aus aktuellem kanonischem main begonnen; kein Eigentümer-Pod wurde verändert."
+      },
+      {
+        "path": "changelog.5.text",
+        "source": "Revision 5 records the owner instruction to keep the CLI standalone for now. Removed desktop attachment and upgrade coordination; require desktop closed and share an OS lease between CLI workers.",
+        "text": "Revision 5 hält die Anweisung des Eigentümers fest, die CLI vorerst eigenständig zu halten. Desktop-Anbindung und Update-Abstimmung entfernt; Desktop muss geschlossen bleiben, CLI-Worker teilen eine Betriebssystem-Sperre."
+      },
+      {
+        "path": "milestones.0.proof",
+        "source": "Node transport and runtime-only assets execute without Electron. Native fixtures prove exclusive CLI ownership and both HOME contexts; metadata commands do not initialize identity services. The independent v10 vector passes. Real owner keychain ACL access remains untested. A native SIGINT case additionally proves that terminal cancellation retains the profile lease until the worker closes its pipe; the unpatched helper exits immediately in the counterproof.",
+        "text": "Node-Transport und Runtime-Assets funktionieren ohne Electron. Native Fixtures belegen exklusive CLI-Verantwortung und beide HOME-Kontexte; Metadatenbefehle initialisieren keine Identitätsdienste. Der unabhängige v10-Testvektor besteht. Der Zugriff über die echte Eigentümer-Keychain-ACL bleibt ungeprüft. Ein nativer SIGINT-Fall belegt zusätzlich, dass ein Terminal-Abbruch die Profilsperre erhält, bis der Worker seine Pipe schließt; der unveränderte Helfer beendet sich im Gegenbeweis sofort."
+      },
+      {
+        "path": "milestones.1.proof",
+        "source": "Built Node commands create, edit, list and reopen the production database schema. Tests preserve Pod IDs and unrelated metadata, clear tags and edit archived tags with current revision checks. CLI parsing and non-TTY refusals pass.",
+        "text": "Gebaute Node-Befehle erstellen, ändern, listen und öffnen das Produktionsschema erneut. Tests erhalten Pod-IDs und unberührte Metadaten, leeren Tags und ändern archivierte Tags mit aktuellen Revisionsprüfungen. Befehlsparser und Ablehnungen ohne Terminal bestehen."
+      },
+      {
+        "path": "milestones.2.proof",
+        "source": "Native sandbox runs with a signed local IdP preserve Pod identity, owner/isolated HOME, workspace, authorized shared data and checkpoint. Foreign namespaces and protected synthetic owner login are refused; no sibling run starts. Cancellation and missing-identity refusal pass. Existing shared-data/work unit coverage passes in the complete gate.",
+        "text": "Native Sandbox-Läufe mit signiertem lokalem IdP erhalten Pod-Identität, Owner-/isoliertes HOME, Arbeitsverzeichnis, berechtigte gemeinsame Daten und Checkpoint. Fremde Namespaces und geschützter synthetischer Eigentümer-Login werden abgelehnt; kein weiterer Pod startet. Abbruch und Ablehnung fehlender Identität bestehen. Bestehende Unit-Abdeckung für gemeinsame Daten und Arbeit besteht im Gesamtprüflauf."
+      },
+      {
+        "path": "milestones.3.proof",
+        "source": "Runtime build, native acceptance and required affected gate passed on source 564bda42. Pods: 1729 unit tests; relay: 104. Private report edition 2 was exported and compared byte-for-byte. Native PR 463 is open with explicit issue relation. The local command prints help; the development guide documents setup and limits.",
+        "text": "Runtime-Build, native Abnahme und vorgeschriebener betroffener Prüflauf bestehen auf Quellstand 564bda42. Pods: 1729 Unit-Tests; Relay: 104. Edition 2 des privaten Berichts wurde exportiert und bytegenau verglichen. Nativer PR 463 ist offen und ausdrücklich mit dem Issue verknüpft. Der lokale Befehl zeigt Hilfe; die Entwicklungsanleitung beschreibt Einrichtung und Grenzen."
+      },
+      {
+        "path": "changelog.6.text",
+        "source": "Completed standalone implementation, native fixture acceptance and required local gate. Published verified Test Runs evidence and opened PR 463; no merge or release.",
+        "text": "Eigenständige Umsetzung, native Fixture-Abnahme und vorgeschriebener lokaler Prüflauf abgeschlossen. Verifizierte Testnachweise veröffentlicht und PR 463 geöffnet; kein Merge oder Release."
+      },
+      {
+        "path": "changelog.7.text",
+        "source": "Final signal review found that terminal Ctrl+C could reach the lock helper before worker cleanup. The helper now ignores SIGINT; native exclusivity/cancellation acceptance and the full affected gate pass again. Test Runs edition 2 records source 564bda42 and the counterproof.",
+        "text": "Die abschließende Signalprüfung zeigte, dass Ctrl+C den Sperrhelfer vor der Worker-Bereinigung erreichen kann. Der Helfer ignoriert jetzt SIGINT; native Prüfung von Exklusivität und Abbruch sowie der vollständige betroffene Prüflauf bestehen erneut. Testbericht-Edition 2 hält Quellstand 564bda42 und den Gegenbeweis fest."
+      }
+    ]
+  },
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-15",
+    "reference": "User, after reviewing proposal revision 4: \"Passt. Setze das cli um\".",
+    "target": {
+      "revision": 4,
+      "url": "https://report.openape.ai/d/01M50K93YEXRPTM0GZRKDXB9DF?v=5",
+      "version": 5
+    },
+    "scope": "Implement the four CLI commands against the real database with existing Pod identity, configured home context and shared-data access; no additional application-secret management or storage migration."
+  },
+  "links": [
+    {
+      "title": "Native implementation PR 463",
+      "url": "https://repos.openape.ai/patrick/monorepo/pulls/463"
+    }
+  ]
+}

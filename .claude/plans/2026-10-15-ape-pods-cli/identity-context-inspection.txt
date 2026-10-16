@@ -1,0 +1,66 @@
+Identity/context reference at committed baseline 2d24afe92c3dc3f994ba626c93e725ea90ac01b0; no runtime acceptance performed.
+
+apps/openape-pods/src/main/worker.ts
+960:       }
+961:       if (request.kind === 'shell') {
+962:         await check()
+963:         if (!this.connections || this.shellIdentities.has(scope.runId)) throw new Error('Pod execution authority is unavailable or already in use')
+964:         // A run starts with no reused tokens (its id is new), so the runtime grant, owner, identity and key are checked at
+965:         // the IdP; parallel calls of the run share its request and decision wait.
+966:         const tokens = this.grantTokens(scope.runId)
+967:         const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+968:         const runtime = { executable: process.execPath, cli: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs'), client: join(dist, 'runtime/shell-client.mjs') }
+969:         const environment = await podEnvironment(this.root, scope.podId, runtime)
+970:         const connection = await this.connections.podConnection(scope.podId)
+971:         const authority = new AgentAuthority(connection, observe, ledger, tokens, presentation)
+972:         const name = grantPodName(context.name)
+973:         const permission = runtimePermission({ podId: scope.podId, name, script: join(this.root, 'runs', scope.runId, 'run.mjs'), workspace: environment.workspace, home: environment.home, environment: visibleEnvironment(environment.environment) })
+974:         const assignment = { grantId: '', permission }
+975:         await authority.authorize(assignment, controller.signal)
+976:         await check(); controller.signal.throwIfAborted()
+977:         const monitoring = new AbortController()
+978:         const monitor = (async () => {
+979:           try { while (!monitoring.signal.aborted) { await delay(runAuthorityWatchMs, undefined, { signal: monitoring.signal }); await retryInfrastructure(() => authority.assertActive(assignment.grantId, monitoring.signal), monitoring.signal, async (retry) => { if (!monitoring.signal.aborted) await this.dispatch({ serviceCheck: { scope, infrastructure: retry } }) }) } }
+980:           catch (error) {
+981:             if (!monitoring.signal.aborted) {
+982:               console.error('Pod execution authority lost', error)
+983:               try { await this.dispatch({ serviceCheck: { scope, authorityLost: true } }) }
+984:               catch (cancelError) { console.error('Could not cancel the revoked Pod run', cancelError) }
+985:             }
+
+apps/openape-pods/src/worker/runtime/sandbox.ts
+110: }
+111: 
+112: /**
+113:  * The HOME a Pod program runs with. At the owner level it is the owner's home, so the owner's command line logins and
+114:  * settings (az, gh, git) apply as they do outside Pods; the protected paths stay closed whatever HOME says. At the
+115:  * isolated level it is the Pod-scoped folder the caller passes (owner decision, issue 1468).
+116:  */
+117: export function programHome(reach: Pick<SandboxReach, 'level'> | undefined, podHome: string): string {
+118:   return reach?.level === 'owner' ? homedir() : podHome
+119: }
+120: 
+121: /** The configured denylist as absolute paths: `~/` is the owner's home, and each path is listed as written and as resolved. */
+122: export function deniedPaths(entries: string[], home: string): string[] {
+123:   return [...new Set(entries.map(entry => entry.startsWith('~/') ? join(home, entry.slice(2)) : entry).flatMap(forms))]
+
+apps/openape-pods/src/worker/runs/dispatcher.ts
+204:       const checkpoint = this.store.checkpoint(pod.id)
+205:       const folders = await podDirectories(this.store.root, pod.id)
+206:       const directories = await assignedDirectories(this.store.root, pod.id, this.resources.list(pod.id))
+207:       assertCurrent()
+208:       const input: RunInput = { home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: new PodVariables(this.store).values(pod.id), version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: scriptTimeLimitMs, frameBytes: 256 * 1024 } }
+209:       const aliases = this.resources.aliases(pod.id)
+210:       if (aliases.length) input.aliases = runAliases(aliases, input.references)
+
+apps/openape-pods/src/worker/runs/runner.ts
+17: }
+18: export async function executeScript(runtime: ScriptRuntime, directory: string, artifact: string, input: RunInput, signal: AbortSignal, services: ScriptServices): Promise<ScriptResult> {
+19:   await mkdir(directory, { recursive: true, mode: 0o700 }); await mkdir(input.workspace, { recursive: true, mode: 0o700 })
+20:   const config = join(directory, 'input.json')
+21:   await writeFile(config, JSON.stringify({ entry: artifact, input, dependencyRoot: runtime.dependencyRoot }), { flag: 'wx', mode: 0o400 })
+22:   if (createHash('sha256').update(await readFile(artifact)).digest('hex') !== input.scriptHash) throw new Error('Script artifact does not match the selected source')
+23:   const home = runtime.home ?? input.home ?? input.workspace
+24:   const policy: RuntimePolicy = { executable: runtime.executable, workspace: input.workspace, readFiles: [artifact, runtime.entry, config, ...input.references.map(reference => reference.path)], runtimeDirectories: runtime.runtimeDirectories, readDirectories: [...(runtime.dependencyRoot ? [runtime.dependencyRoot] : []), ...(input.directories ?? []).filter(item => item.access === 'read').map(item => item.path)], writeDirectories: [home, ...(input.directories ?? []).filter(item => item.access === 'readWrite').map(item => item.path)] }
+25:   const domain = await launchSandbox(runtime.helper, directory, policy, [runtime.entry, config], { ...runtime.environment, HOME: home, TMPDIR: runtime.environment.TMPDIR ?? home }, runtime.registerDomain, runtime.shell)
+26:   const local = new AbortController()

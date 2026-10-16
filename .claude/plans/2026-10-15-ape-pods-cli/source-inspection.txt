@@ -1,0 +1,207 @@
+Committed source inspection at 2d24afe92c3dc3f994ba626c93e725ea90ac01b0. Reference evidence only; no tests or owner Pod runs executed.
+
+
+apps/openape-pods/src/main/worker.ts:176-188
+176:   constructor(private readonly publish: (status: WorkerStatus) => void) {}
+177:   start(root: string, profileBase: string): void {
+178:     try { assertPilotRuntime() }
+179:     catch (error) { this.state = { state: 'error', pid: null, error: error instanceof Error ? error.message : 'Unsupported Mac' }; this.publish(this.state); return }
+180:     this.root = realpathSync(root)
+181:     this.profileBase = profileBase
+182:     this.credentials = createMacOSCredentialCache(join(this.root, 'credentials'))
+183:     const fixturePort = process.env.NODE_ENV === 'test' ? process.env.OPENAPE_PODS_FIXTURE_MODEL_PORT : undefined
+184:     if (fixturePort && (!/^\d+$/.test(fixturePort) || Number(fixturePort) < 1024 || Number(fixturePort) > 65535)) throw new Error('Invalid synthetic model port')
+185:     // Synthetic fixtures freeze approval batches at once instead of collecting inputs for two minutes.
+186:     const fixtureGates = process.env.NODE_ENV === 'test' && !!process.env.OPENAPE_PODS_FIXTURE_DIR
+187:     this.child = utilityProcess.fork(join(__dirname, '../worker/entry.cjs'), [], { cwd: root, env: { HOME: root, TMPDIR: root, PATH: '/usr/bin:/bin', PODS_RUNTIME_EXECUTABLE: process.execPath, PODS_BACKUP_DIRECTORY: automaticBackupDirectory(profileBase), ...(process.env.OPENAPE_PODS_CENTRAL_ENABLED === '1' ? { PODS_CENTRAL_ENABLED: '1' } : {}), ...(fixturePort ? { PODS_FIXTURE_MODEL_PORT: fixturePort } : {}), ...(fixtureGates ? { PODS_FIXTURE_GATE_COLLECT: '0' } : {}) }, serviceName: 'OpenApe Pods Fixture Worker', stdio: 'pipe' })
+188:     const child = this.child
+
+apps/openape-pods/src/main/worker.ts:480-490
+480:   async mcpApesSession(endsAt: number, signal: AbortSignal): Promise<OwnerSession | null> {
+481:     await this.setupReady
+482:     if (!this.connections) throw new Error('Connection service unavailable')
+483:     return this.connections.apesOwnerSession(endsAt, signal, this.ownerApesLogin())
+484:   }
+485: 
+486:   // The bundled apes CLI renews an expired key login under its own lock; Pods only reads the login.
+487:   private ownerApesLogin(): ApesLogin {
+488:     const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+489:     this.apesLogin ??= apesLogin({ executable: process.execPath, script: app.isPackaged ? join(process.resourcesPath, 'apes/ape-shell.mjs') : join(dist, 'vendor/apes/ape-shell.mjs') })
+490:     return this.apesLogin
+
+apps/openape-pods/src/worker/runtime.ts:78-92
+78: const port = process.parentPort
+79: if (!port) throw new Error('Pods worker requires its owning Electron process')
+80: const store = openedStore()
+81: const mailBridge = new MailBridge(value => port.postMessage(value))
+82: let dispatcher: RunDispatcher
+83: store.onActivated = podId => port.postMessage({ programCancel: podId })
+84: const registry = new ResourceRegistry(store, (podId) => { dispatcher.cancelPod(podId, 'Resource permissions changed', 'authority'); port.postMessage({ programCancel: podId }) })
+85: const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+86: const executable = process.env.PODS_RUNTIME_EXECUTABLE
+87: if (!executable) throw new Error('Trusted runtime executable is missing')
+88: const runtime: AgentRuntime = {
+89:   helper: join(dist, 'native/pods-helper'), executable, entry: join(dist, 'runtime/script-entry.mjs'),
+90:   runtimeDirectories: [dirname(dirname(executable))], environment: { ELECTRON_RUN_AS_NODE: '1' },
+91:   binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs'),
+92: }
+
+apps/openape-pods/src/worker/runs/dispatcher.ts:91-142
+91:   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly runtime: AgentRuntime, private readonly services?: RunServices) {
+92:     this.runs = new RunStore(store)
+93:     this.data = new DomainData(store)
+94:     this.work = new WorkLedger(store, this.data)
+95:     this.questions = new OwnerQuestions(store, this.data)
+96:     this.approvals = new Approvals(store, () => {
+97:       const registration = store.db.prepare('SELECT body FROM remote_registration WHERE id=1').get()
+98:       if (!registration) throw new Error('Owner approvals require an initialized owner identity')
+99:       return parseOwner((JSON.parse(String(registration.body)) as { owner: unknown }).owner)
+100:     })
+101:     store.transaction(() => {
+102:       store.db.prepare('UPDATE runs SET state=\'interrupted\',error=\'Previous worker stopped; explicit recovery is required\',checkpoint_revision=(SELECT revision FROM checkpoints WHERE pod_id=runs.pod_id) WHERE state=\'running\' AND id IN (SELECT run_id FROM run_leases)').run()
+103:       store.db.prepare('UPDATE run_leases SET boot_id=?').run(`fenced:${this.runs.bootId}`)
+104:       store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE state=\'intent\'').run()
+105:       store.db.prepare('UPDATE effect_attempts SET state=\'unknown\' WHERE state=\'intent\'').run()
+106:     })
+107:   }
+108: 
+109:   view(podId: string, id?: string, after = 0): RunView {
+110:     const runs = this.runs.list(podId)
+111:     if (id && !runs.some(run => run.id === id)) {
+112:       const selected = this.runs.get(id)
+113:       if (selected.podId !== podId) throw new Error('Run belongs to another Pod')
+114:       if (runs.length === 100) runs.pop()
+115:       runs.unshift(selected)
+116:     }
+117:     const selectedId = id ?? runs[0]?.id
+118:     const effects = this.store.db.prepare('SELECT effect_key AS key,run_id AS runId FROM effect_ledger WHERE pod_id=? AND operation IN (\'http.request\',\'program.call\') AND state=\'unknown\' LIMIT 100').all(podId) as { key: string, runId: string }[]
+119:     return { ...(selectedId ? { timing: this.runs.timing(podId, selectedId) } : {}), approvals: this.runs.approvals(podId), effects, runs, events: selectedId ? (after ? this.runs.events(podId, selectedId, after) : this.runs.recentEvents(podId, selectedId)) : [] }
+120:   }
+121: 
+122:   async install(podId: string, variant: 'deterministic' | 'agent'): Promise<void> {
+123:     const manifest = JSON.parse(await readFile(this.runtime.manifest, 'utf8')) as { dependencyLockHash: string }
+124:     installExample(this.store, this.resources, podId, variant, manifest.dependencyLockHash)
+125:   }
+126: 
+127:   start(podId: string, trigger: RunTrigger = { reason: 'manual', eventIds: [] }, accepted?: (runId: string) => void): string {
+128:     this.store.assertStorage()
+129:     if (unresolvedOperation(this.store, podId)) throw new Error('An operation without replay evidence requires review')
+130:     if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE pod_id=? AND state IN (\'intent\',\'unknown\')').get(podId)) throw new Error('An HTTP delivery needs review before this pod can run again')
+131:     const pod = this.store.getPod(podId)
+132:     if (!pod.activeScript) throw new Error('Choose and validate a script before running this pod')
+133:     const epoch = this.resources.epoch(podId)
+134:     const reservation = this.store.transaction(() => {
+135:       const reserved = this.runs.reserve(podId, pod.activeScript!, epoch, trigger)
+136:       accepted?.(reserved.run.id)
+137:       return reserved
+138:     })
+139:     if (reservation.existing) return reservation.run.id
+140:     const controller = new AbortController()
+141:     const work = this.execute(reservation.run.id, epoch, controller.signal, trigger)
+142:     this.active.set(podId, { controller, work })
+
+apps/openape-pods/src/contracts/codex.ts:23-29
+23: export const desktopHelp = {
+24:   usage: 'Use action=desktop with channel and command for desktop settings that the other actions do not cover. The command is the same body the desktop window sends and runs through the same checks. Every command except list and map needs a stable requestId: the same requestId with the same arguments returns the recorded result without running again, different arguments are refused, and an interrupted request requires inspection before a new requestId.',
+25:   definitions: ['{type:list}', '{type:adopt}', '{type:prepareLocal,podId,expectedScript,name,defaults:{}} pins the paused instance\'s active script as its own local definition', '{type:publish,podId,expectedScript,name,defaults:{}}', '{type:instantiate,requestId:UUID,definitionId,version,name} creates a fresh paused instance of a published definition', '{type:retryProvision,requestId}', '{type:previewUpdate|prepareUpdate,podId,definitionId,version,expectedBinding}', '{type:activateUpdate,draftId,podId,expectedBinding}'],
+26:   scheduling: ['{type:list,podId}', '{type:concurrency,podId,maximum:1..16}', '{type:save,podId,revision,spec,enabled}', '{type:lifecycle,podId,revision,lifecycle:active|paused}'],
+27:   workspace: ['{type:list}', '{type:map}', '{type:pauseAll} pauses every Pod', '{type:create,name}', '{type:update,id,revision,name,lifecycle:active|paused|archived}', '{type:tag,id,revision,tags}'],
+28:   excluded: 'The MCP session itself, account sign-in, backups, restores, updates and file pickers stay in the desktop window. Grant decisions use the grants action of the owner session.',
+29: }
+
+apps/openape-pods/src/contracts/codex.ts:62-65
+62: export const codexTool = {
+63:   name: masterTool.name,
+64:   title: 'OpenApe Pods',
+65:   description: 'Administers OpenApe Pods on this Mac as the signed-in owner through one action per call: runtime returns the versioned reference and Jev decision availability; list, select and inspect read local Pods; create, revise, draft, validate, activate and rollback change Pods and scripts; run, pause, resume and setSchedule control execution; resources, importSecret (by file path), program and recovery handle setup and recovery; workspace reads and commands the central inventory (inventory/read/submit/operation); domain administers shared domain data as the owner: namespaces with one writer and explicit readers, owner records, declared work, owner questions, object approvals and uncertain effects; sandbox shows and applies what a Pod can reach (programs, HTTPS origins, folders, secrets, sandbox level); grants lists, requests, approves, denies and revokes the grants Pods request, with the owner identity of this session; desktop sends the desktop definitions, scheduling and workspace commands; session (no other fields, allowed without sign-in) returns {state: signed_in|pending|signed_out|expired|denied, via, expiresAt} to poll while the owner confirms a login_required sign-in. Returns JSON. Mutations require current revisions; secret values are never accepted or returned.',
+
+apps/openape-pods/src/main/connections/macos.ts:1-10
+1: import { safeStorage } from 'electron'
+2: import { CredentialCache } from './cache'
+3: 
+4: export function createMacOSCredentialCache(root: string): CredentialCache {
+5:   return new CredentialCache(root, {
+6:     available: () => process.platform === 'darwin' && safeStorage.isEncryptionAvailable(),
+7:     encrypt: value => safeStorage.encryptString(value),
+8:     decrypt: value => safeStorage.decryptString(value),
+9:   })
+10: }
+
+apps/openape-pods/src/main/profile.ts:1-17
+1: import { closeSync, existsSync, fsyncSync, lstatSync, openSync, readFileSync, realpathSync, renameSync, writeFileSync } from 'node:fs'
+2: import { join, relative } from 'node:path'
+3: import { randomUUID } from 'node:crypto'
+4: import { localDirectory } from './fixture'
+5: 
+6: export function selectedProfile(base: string): string {
+7:   const canonical = realpathSync(base); const path = join(canonical, 'selected-profile.json')
+8:   if (!existsSync(path)) return canonical
+9:   const info = lstatSync(path)
+10:   if (!info.isFile() || info.isSymbolicLink() || info.size > 1024) throw new Error('Invalid selected profile record')
+11:   const value = JSON.parse(readFileSync(path, 'utf8')) as { profile?: string }
+12:   if (typeof value.profile !== 'string' || !/^profiles\/[a-f0-9-]{36}$/.test(value.profile)) throw new Error('Invalid selected profile path')
+13:   const profile = join(canonical, value.profile)
+14:   if (realpathSync(profile) !== profile) throw new Error('Selected profile must not contain links')
+15:   return localDirectory(profile)
+16: }
+17: export function selectProfile(base: string, profile: string): void {
+
+apps/openape-pods/src/main/support.ts:1-5
+1: import { release } from 'node:os'
+2: 
+3: export function assertPilotRuntime(platform = process.platform, architecture = process.arch, kernel = release()): void {
+4:   if (platform !== 'darwin' || architecture !== 'arm64' || kernel !== '25.6.0') throw new Error('This pilot executes only on verified macOS Darwin 25.6.0 / Apple silicon. Other OS or CPU combinations require the complete packaged boundary acceptance before execution is enabled.')
+5: }
+
+apps/openape-pods/e2e/dispatcher.test.ts:18-39
+18:   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-dispatch-')))
+19:   store = new PodDatabase(root)
+20:   const resources = new ResourceRegistry(store, id => dispatcher?.cancelPod(id))
+21:   dispatcher = new RunDispatcher(store, resources, { helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: resolve('dist/vendor/codex'), catalog: resolve('dist/vendor/models.json'), manifest: resolve('dist/vendor/manifest.json'), sdkHost: resolve('dist/runtime/sdk-host.mjs') }, services)
+22:   return { store, dispatcher, resources, pod: store.createPod({ name: 'Synthetic pod' }) }
+23: }
+24: describe('manual dispatch', () => {
+25:   it('pins the version, shares one lease, persists acknowledged progress and replays ordered events', async () => {
+26:     const { store, dispatcher, pod } = await setup()
+27:     await dispatcher.install(pod.id, 'deterministic')
+28:     const id = dispatcher.start(pod.id)
+29:     expect(dispatcher.start(pod.id)).toBe(id)
+30:     await expect.poll(() => dispatcher.runs.get(id).state).toBe('completed')
+31:     expect(store.checkpoint(pod.id)).toMatchObject({ revision: 1, body: { exampleRuns: 1 } })
+32:     const events = dispatcher.view(pod.id, id).events
+33:     expect(events.map(event => event.sequence)).toEqual(events.map((_event, i) => i + 1))
+34:     expect(events.map(event => event.type)).toContain('checkpoint')
+35:     expect(dispatcher.view(pod.id, id, events[1]!.sequence).events).toEqual(events.slice(2))
+36:     const next = dispatcher.start(pod.id)
+37:     await expect.poll(() => dispatcher.runs.get(next).state).toBe('completed')
+38:     expect(store.checkpoint(pod.id)).toMatchObject({ revision: 2, body: { exampleRuns: 2 } })
+39:   })
+
+apps/openape-pods/scripts/build.mjs:1-27
+1: import { bundleNpm } from './npm-runtime.mjs'
+2: import { bundleApes } from './apes-runtime.mjs'
+3: import { bundleCodex } from './codex-runtime.mjs'
+4: import { execFileSync } from 'node:child_process'
+5: import { mkdirSync, copyFileSync, readFileSync, writeFileSync } from 'node:fs'
+6: import { createHash } from 'node:crypto'
+7: import { build as buildScripts } from 'tsup'
+8: import { build as buildRenderer } from 'vite'
+9: 
+10: await buildScripts({ entry: { 'main/app': 'src/main/app.ts', 'preload/index': 'src/preload/index.ts', 'worker/entry': 'src/worker/entry.ts' }, format: ['cjs'], platform: 'node', target: 'node24', outDir: 'dist', clean: true, splitting: false, removeNodeProtocol: false, external: ['electron'], noExternal: ['croner', '@openape/pods-protocol', 'electron-updater', 'builder-util-runtime', 'fs-extra', 'lazy-val', 'lodash.escaperegexp', 'lodash.isequal', 'semver', 'tiny-typed-emitter', 'js-yaml', 'argparse', 'sax', 'debug', 'ms', 'graceful-fs', 'universalify', 'jsonfile'], outExtension: () => ({ js: '.cjs' }) })
+11: if (process.platform === 'darwin') {
+12:   mkdirSync('dist/native', { recursive: true })
+13:   execFileSync('/usr/bin/xcrun', ['clang', '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', 'native/pods-helper.c', '-o', 'dist/native/pods-helper'], { stdio: 'inherit' })
+14: }
+15: const podsVersion = `${JSON.parse(readFileSync('package.json', 'utf8')).version}+${execFileSync('git', ['rev-parse', '--short=8', 'HEAD'], { encoding: 'utf8' }).trim()}`
+16: await buildScripts({ entry: { 'runtime/shell-client': 'src/runtime/shell-client.ts', 'runtime/codex-mcp': 'src/runtime/codex-mcp.ts', 'runtime/script-entry': 'src/worker/runs/script-entry.ts', 'runtime/sdk-host': 'src/worker/agent/sdk-host.ts', 'runtime/master-host': 'src/worker/master/host.ts', 'runtime/auth-host': 'src/main/connections/auth-host.ts' }, format: ['esm'], platform: 'node', target: 'node24', outDir: 'dist', clean: false, splitting: false, removeNodeProtocol: false, noExternal: ['@openai/codex-sdk', 'croner'], define: { __OPENAPE_PODS_VERSION__: JSON.stringify(podsVersion) }, outExtension: () => ({ js: '.mjs' }) })
+17: await buildScripts({ entry: { 'runtime/mail-parser': 'src/worker/mail/parsers/entry.ts' }, format: ['esm'], platform: 'node', target: 'node24', outDir: 'dist', clean: false, splitting: false, removeNodeProtocol: false, noExternal: ['pdfjs-dist', 'html-to-text', 'fflate'], outExtension: () => ({ js: '.mjs' }) })
+18: copyFileSync('node_modules/pdfjs-dist/legacy/build/pdf.worker.mjs', 'dist/runtime/pdf.worker.mjs')
+19: const parserHash = path => createHash('sha256').update(readFileSync(path)).digest('hex')
+20: writeFileSync('dist/runtime/parser-manifest.json', JSON.stringify({ entry: parserHash('dist/runtime/mail-parser.mjs'), worker: parserHash('dist/runtime/pdf.worker.mjs') }))
+21: bundleCodex()
+22: bundleNpm()
+23: 
+24: await bundleApes()
+25: await buildRenderer()
+26: 
+27: writeFileSync('dist/build-inputs.json', JSON.stringify({ sourceRevision: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(), clean: execFileSync('git', ['status', '--porcelain'], { encoding: 'utf8' }).trim() === '', dependencyLockHash: createHash('sha256').update(readFileSync('../../pnpm-lock.yaml')).digest('hex') }, null, 2))

@@ -1,6 +1,8 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Script validation failed; previous active script is unchanged (Pod {p0})',
+  'Run {p0} is missing; inspect before retrying',
   'Demo: {p0} is unavailable here. Nothing outside the demo was changed.',
   'Unsupported workspace channel: {p0}',
   'Application {p0} is not in this Pod\'s sandbox; assign it before granting its commands',
