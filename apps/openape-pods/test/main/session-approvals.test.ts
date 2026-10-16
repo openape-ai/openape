@@ -6,7 +6,7 @@ import { basename, join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { OwnerSession } from '../../src/main/connections/owner-session'
 import { AgentAuthority } from '../../src/main/broker/authorization'
-import { programCall } from '../../src/main/programs/session'
+import { programIdentity } from '../../src/contracts/programs'
 import type { ProgramAssignment } from '../../src/contracts/programs'
 import { brokered, brokerRejections, closeProfiles, deniedPodId, identityProvider, issuer, owner, ownerToken, podId, podSubject, program, workerFixture } from './idp-fixture'
 
@@ -122,6 +122,7 @@ function application(cliId: string): { resource: Record<string, unknown>, assign
   return { resource: { id, podId, revision: 1, kind: 'tool', state: 'ready', name: cliId, configuration: assignment }, assignment }
 }
 const ghApplication = () => application('gh')
+const programCall = (assignment: ProgramAssignment, argv: string[]) => ({ program: programIdentity(assignment), argv })
 /** A grant the owner approved at the IdP before; the IdP decides which commands it covers. */
 function approvedGrant(details: Record<string, unknown>[], extra: Record<string, unknown> = {}): string {
   const id = idp.foreign({ requester: podSubject(podId), target_host: `pods:${podId}`, authorization_details: details, ...extra }); idp.decide(id, 'approved'); return id
@@ -171,6 +172,29 @@ it('previews and approves one exact command; a different argv still requires its
   expect(idp.state.tokens).toEqual(['grant-1'])
   // The exact grant covers no other argv: its preview asks again and stays pending.
   await expect(authority.requestProgram(programCall(gh.assignment, [...argv, '--private']), AbortSignal.timeout(5000))).resolves.toMatchObject({ state: 'pending' })
+})
+
+it('uses the same concrete interpreter grant through bulk MCP preparation and the application grant command', async () => {
+  const reader = application('reader')
+  const digest = (value: Buffer | string) => createHash('sha256').update(value).digest('hex')
+  const script = join(root, 'reader.cjs'); writeFileSync(script, 'throw new Error("Preparation must not execute code")')
+  const descriptor = join(root, 'runtime.json'); writeFileSync(descriptor, '{}')
+  Object.assign(reader.assignment, { executable: script, executableHash: digest(readFileSync(script)), runtime: { executable: process.execPath, executableHash: digest(readFileSync(process.execPath)), arguments: ['--use-env-proxy', script], readDirectories: [], environment: {}, descriptor: { path: descriptor, hash: digest('{}') } } })
+  const f = await workerFixture({ resources: () => [program, reader.resource] })
+  const request = (argv: string[], approve = true) => ({ action: 'grants', command: { type: 'request', target: { podId }, grants: { programs: [{ application: 'reader', argv }] }, approve } })
+  const result = await mcp(f, request(['list']), session()) as { outcomes: { grantId: string }[] }
+  expect(result.outcomes[0]!.grantId).toBe('grant-1')
+  expect(idp.state.authorizations[0]).toMatchObject({ program: { name: basename(process.execPath), sha256: digest(readFileSync(process.execPath)) }, argv: ['--use-env-proxy', script, 'list'], files: [{ path: script, sha256: reader.assignment.executableHash }] })
+  await f.worker.program({ type: 'grant', podId, applicationId: reader.resource.id as string, epoch: 1, argv: ['list'] })
+  for (const key of ['program', 'argv', 'files', 'grant_type']) expect(idp.state.authorizations[1]![key]).toEqual(idp.state.authorizations[0]![key])
+  expect(idp.state.tokens).toEqual(['grant-1'])
+  const changed = await mcp(f, request(['list', '--new-argument'], false), session()) as { outcomes: { state: string }[] }
+  expect(changed.outcomes[0]!.state).toBe('pending')
+  const count = idp.state.authorizations.length
+  writeFileSync(descriptor, '{"changed":true}')
+  const replaced = await mcp(f, request(['list']), session()) as { outcomes: { error: string }[] }
+  expect(replaced.outcomes[0]!.error).toContain('integrity mismatch')
+  expect(idp.state.authorizations).toHaveLength(count)
 })
 
 it('keeps a Pod\'s own HTTP destination when a sandbox declares the same origin again', async () => {

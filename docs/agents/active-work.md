@@ -2,12 +2,11 @@
 
 ## Exact runtime grants and owner CLI starts — issue 1501
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1501. Branch `bugfix/issue-1501-exact-runtime-grants`, worktree `openape-monorepo.worktrees/ape-pods-cli-1499`, base `70cce1ca521a96bd9f0f3a22e8462bf1de509151`.
-- Authorized scope and maintained bilingual source: `.claude/plans/issue-1501.json`; published plan: https://report.openape.ai/d/01M5273F0QZ09PJ7N79HHAS0VF?v=1.
-- Grant preparation now uses the actual runtime, complete argv and the same interpreter file binder as ape-shell. An authenticated owner CLI start prepares one exact single-use root grant; downstream and scheduled calls retain their separate authorization. CLI pending approvals print links without opening browsers.
-- Cancellation retains unknown-effect holds while allowing the terminal unknown receipt to settle its own durable intent. The cancelled Mail review `81d20f5e-c1db-44d3-b43a-e27f86319cb1` remains held until native domain checks and owner reconciliation establish safe retry. Mail review remains paused meanwhile.
-- Next: finish security regression and affected checks, merge the native PR, run full deployment checks, install the signed local build and verify Mail review through the standalone CLI. Portable isolated ProgramState remains separate issue 1500.
-
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1501. PR 465 merged as `ffe0d274004cead6431b6dc81f61cb3f5fce7bee`; signed local app and native CLI are installed from that source. Full affected/deployment unit checks, seven native CLI cases and mounted signed DMG acceptance passed.
+- Live CLI run `c7183163-e086-4d27-87c5-abb077324502` verified the implicit exact single-use owner start and four real mailbox reads. It completed with two explicit gaps because the shared Jev credential still requires desktop decryption. Provider encryption was preserved; portable isolated ProgramState remains separate issue 1500.
+- The live cross-check caught a second bulk MCP preparation path in `main/grants/administration.ts` still sending the logical program identity. Follow-up branch `bugfix/issue-1501-bulk-runtime-grants` from the merge routes this path through ProgramManager.grantCall too; the new regression fails before the correction. Keep issue 1501 open until the installed bulk path is verified against actual Node/file grants.
+- Mail cancellation `81d20f5e-c1db-44d3-b43a-e27f86319cb1` was reconciled through the owner API after matching all 15 child input hashes to read-only commands and proving 17 domains stopped. The shutdown-interrupted rebase root was separately reconciled after 18 verified read boundaries, no child writes and 20 stopped domains. Both recovery reviews are ready; no SQL business-state mutation or fabricated success was used.
+- Next: merge and roll out the bulk-path correction, retest the native preparation and CLI call, restore existing schedules and publish actual evidence with the Jev limitation explicit. Current plan: `.claude/plans/issue-1501.json`, https://report.openape.ai/d/01M5273F0QZ09PJ7N79HHAS0VF.
 
 ## Standalone Pods CLI — issue 1499
 
