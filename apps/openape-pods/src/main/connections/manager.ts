@@ -59,6 +59,12 @@ export class ConnectionManager {
           try { await this.credentials.readConnection(entry.connectionId) }
           catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
         }
+        for (const connection of (await this.state()).connections) {
+          if (connection.provider !== 'chatgpt' || connection.state !== 'ready') continue
+          const metadata = await this.metadata(connection.id)
+          if (typeof metadata.accountId !== 'string') throw new Error('ChatGPT account binding is missing')
+          await this.credentials.migrateChatgpt(connection.id, metadata.accountId)
+        }
         await rm(join(this.root, 'credentials/temporary'), { recursive: true, force: true })
       }
       const manifest = JSON.parse(await readFile(this.runtime.manifest, 'utf8')) as { binaryHash: string, cli: string }
@@ -167,8 +173,11 @@ export class ConnectionManager {
           this.typesafeSession.abort(new Error('TypeSafe connection removed')); this.typesafeSession = new AbortController()
           await this.credentials.eraseConnection(item.id)
         }
-        if (item.provider === 'chatgpt') { this.providerSession.abort(new Error('ChatGPT connection removed')); this.providerSession = new AbortController(); this.accountModel = null }
+        if (item.provider === 'chatgpt') {
+          this.providerSession.abort(new Error('ChatGPT connection removed')); this.providerSession = new AbortController(); this.accountModel = null
+        }
         await this.dispatch({ type: 'revoke', id: item.id }); await this.save({ ...item, state: 'revoked', error: null }, await this.metadata(item.id))
+        if (item.provider === 'chatgpt') await this.credentials.eraseConnection(item.id)
         await this.availability()
       }
       return this.view()
@@ -219,6 +228,7 @@ export class ConnectionManager {
   private async startLogin(previous: ConnectionView, metadata: Record<string, unknown>, fresh: boolean, account = previous.account): Promise<OnboardingView> {
     if (this.jobs.size >= 3 || this.jobs.has(previous.id)) throw new Error('Finish or cancel another sign-in first')
     if (fresh) await this.credentials.create(previous.id, '{}')
+    else if (previous.provider === 'chatgpt' && previous.state === 'revoked') await this.credentials.connect(previous.id, '{}')
     const connection: ConnectionView = { ...previous, state: 'connecting', error: null, login: null }
     await this.save(connection, fresh ? metadata : await this.metadata(previous.id))
     const controller = new AbortController(); const timer = setTimeout(() => controller.abort(new Error('Sign-in expired; start again')), 15 * 60 * 1000)

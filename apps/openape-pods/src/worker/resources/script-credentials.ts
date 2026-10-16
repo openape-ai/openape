@@ -1,3 +1,4 @@
+import { parseHttpAuthentication } from '../../contracts/http'
 import { parseCredentialAlias } from '../../contracts/credentials'
 import { parseManifest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
@@ -11,6 +12,16 @@ export class ScriptCredentials {
     const resource = this.resources.list(podId).find(resource => resource.kind === 'credential' && resource.state === 'ready' && resource.configuration.alias === alias)
     if (!resource || typeof resource.configuration.credentialId !== 'string' || !/^[a-f0-9-]{36}$/.test(resource.configuration.credentialId)) throw new Error('Credential is missing, revoked or requires reassignment')
     return resource
+  }
+
+  httpAssignments(podId: string): { id: string, podId: string, alias: string }[] {
+    return this.resources.list(podId).flatMap((resource) => {
+      if (resource.kind !== 'tool' || resource.state !== 'ready' || resource.configuration.type !== 'http' || !resource.configuration.authentication) return []
+      const authentication = parseHttpAuthentication(resource.configuration.authentication)
+      if (!this.resources.list(podId).some(item => item.kind === 'credential' && item.state === 'ready' && item.configuration.alias === authentication.credential)) return []
+      const credential = this.assigned(podId, authentication.credential)
+      return [{ id: credential.configuration.credentialId as string, podId, alias: authentication.credential }]
+    })
   }
 
   // A key that authenticates an HTTP destination stays with the runtime; a script

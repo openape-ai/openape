@@ -45,11 +45,12 @@ export class CodexConnection {
         await writeFile(file, raw, { mode: 0o600 }); return { account: account.account.email, accountId: value.account_id }
       }
       finally { await process.close() }
-    }, signal)
+    }, signal, true)
   }
 
   /** The account's default model as the bundled Codex app-server lists it for this ChatGPT sign-in. */
   async defaultModel(id: string, accountId: string, signal: AbortSignal): Promise<string> {
+    await this.credentials.migrateChatgpt(id, accountId, signal)
     return this.credentials.withCache(id, async (file) => {
       const raw = await readFile(file, 'utf8')
       if (tokens(raw).account_id !== accountId) throw new Error('ChatGPT account changed; review and reconnect')
@@ -64,6 +65,7 @@ export class CodexConnection {
   }
 
   async bearer(id: string, accountId: string, signal: AbortSignal): Promise<string> {
+    await this.credentials.migrateChatgpt(id, accountId, signal)
     return this.credentials.withCache(id, async (file) => {
       let raw = await readFile(file, 'utf8'); let value = tokens(raw)
       if (value.account_id !== accountId) throw new Error('ChatGPT account changed; review and reconnect')

@@ -83,6 +83,10 @@ it.each(['owner', 'isolated'] as const)('executes with the real Pod identity, %s
   const files = await readdir(credentialRoot)
   for (const file of files.filter(file => file.endsWith('.encrypted'))) await desktop.readConnection(file.slice(0, -'.encrypted'.length))
   const protectedIdentity = join(credentialRoot, (await readdir(credentialRoot)).find(file => file.endsWith('.identity.json'))!)
+  const modelId = randomUUID(); const portableCache = new CredentialCache(credentialRoot, cipher())
+  await portableCache.create(modelId, JSON.stringify({ tokens: { account_id: 'synthetic-account', access_token: 'synthetic-access', refresh_token: 'synthetic-refresh' } }))
+  await portableCache.migrateChatgpt(modelId, 'synthetic-account')
+  const protectedCredential = join(credentialRoot, `${modelId}.credential.json`)
   const script = join(root, 'pod-script.mjs')
   await writeFile(script, `import { readFile, writeFile } from 'node:fs/promises';
 export const contractVersion = 2;
@@ -93,7 +97,7 @@ export async function run(context) {
   if (!denied) throw new Error('Foreign namespace was readable');
   let protectedDenied = false; try { await readFile(${JSON.stringify(protectedFile)}, 'utf8'); } catch { protectedDenied = true; }
   if (!protectedDenied) throw new Error('Owner authentication store was readable');
-  for (const path of [${JSON.stringify(protectedIdentity)},${JSON.stringify(protectedIdentity)} + '.new']) {
+  for (const path of [${JSON.stringify(protectedCredential)},${JSON.stringify(protectedIdentity)},${JSON.stringify(protectedIdentity)} + '.new']) {
     let readDenied = false; try { await readFile(path, 'utf8'); } catch { readDenied = true; }
     let writeDenied = false; try { await writeFile(path, 'DO_NOT_WRITE'); } catch { writeDenied = true; }
     if (!readDenied || !writeDenied) throw new Error('Pod identity store was accessible');

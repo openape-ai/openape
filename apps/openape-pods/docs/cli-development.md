@@ -118,12 +118,31 @@ identities use the file format immediately. Older desktop versions do not unders
 the new format; rollback requires restoring a consistent pre-migration profile
 backup while both runtimes are closed, not reinstalling the old binary alone.
 
-Only Pod execution identities move. Provider credentials, assigned application
-secrets, owner login and relay registration retain their existing protection. This
-release adds no credential-management commands and refuses
-`context.credentials.get` for additional assigned script secrets. The CLI cannot
-use application credentials which require desktop decryption, except for an
-explicit Jev API key supplied as `JEV_API_KEY` in the invoking environment.
+Assigned authenticated HTTP destination keys and the connected ChatGPT token
+cache also use private portable records after a one-time desktop migration.
+Selection follows current ready HTTP resource/credential assignments and the
+ready ChatGPT connection; arbitrary encrypted records are not converted. Records
+retain their credential reference, kind, Pod/alias or ChatGPT account binding.
+The runtime still checks destination origin/audience, assignments and revocation.
+Only the controller reads these credentials; Pod scripts and child environments
+cannot access the files or authentication values. Direct CLI
+`context.credentials.get` remains unavailable.
+
+The updated desktop migrates eligible existing records with its original Safe
+Storage access, commits each private file atomically, then removes its encrypted
+source. Desktop and CLI subsequently share the same authoritative record,
+including refreshed tokens. Corruption, unsafe permissions, links or a binding
+mismatch fail closed without falling back to an old encrypted copy. An unmigrated
+CLI record requires opening the updated desktop once. Disconnect and deletion
+remove portable and encrypted representations. Unrelated provider credentials,
+assigned application secrets, owner login and relay registration retain their
+existing protection.
+
+Create a consistent app/profile backup with both runtimes closed before migration.
+After a token refresh, do not restore stale refresh tokens: retain the current
+credential state for forward repair, or reconnect the account. Reinstalling an
+old binary alone is not a safe rollback, nor is replaying business effects from
+an older database snapshot.
 
 For a configured Jev connection, the CLI can use `JEV_API_KEY` instead of reading
 the encrypted desktop key. Supply it through your secret manager or existing
@@ -141,7 +160,7 @@ retain their encrypted application state; making that state usable by the CLI
 without an OS keychain is tracked separately in issue 1500.
 
 This is filesystem and sandbox protection, not encryption at rest: unsandboxed
-processes running as the owner can read these identities. Owner mode already means
+processes running as the owner can read these identities and portable credentials. Owner mode already means
 trust in the Pod code; its direct path denials do not prevent indirect execution
 through owner startup files. The storage format has no OS-keychain dependency;
 this change does not add Windows or Linux runtime/sandbox support.
