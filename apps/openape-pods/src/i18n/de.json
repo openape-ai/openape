@@ -1,4 +1,8 @@
 {
+  "A partial program outcome requires an applied observation": "Ein teilweises Programmergebnis erfordert die Bestätigung einer beobachteten Wirkung",
+  "Run timing accepts no parameters": "Die Laufzeitabfrage akzeptiert keine Parameter",
+  "Partial outcomes apply only to observed program effects": "Teilweise Ergebnisse gelten nur für beobachtete Programmwirkungen",
+  "Current run timing is unavailable": "Die Laufzeitangaben des aktuellen Laufs sind nicht verfügbar",
   "Unclassified publication table: {p0}": "Nicht klassifizierte Veröffentlichungstabelle: {p0}",
   "Help": "Hilfe",
   "Report a problem": "Problem melden",
