@@ -130,7 +130,7 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
       const identity = { connectionId: id, podId: pod.id, issuer: origin, owner, subject, keyId: 'fixture-key' }
       subjects.set(subject, pod.id)
       pods[pod.id] = { connectionId: id, prepared: true, identity }
-      records.push({ path: join(root, 'credentials', `${id}.encrypted`), value: JSON.stringify({ ...identity, privateKey: 'SYNTHETIC_NOT_A_REAL_KEY', accessToken: 'LOCAL_SYNTHETIC_TOKEN', expiresAt: Date.now() / 1000 + 3600 }) })
+      records.push({ path: join(root, 'credentials', `${id}.encrypted`), value: JSON.stringify({ ...identity, privateKey: 'SYNTHETIC_NOT_A_REAL_KEY', publicKey: 'SYNTHETIC_PUBLIC_KEY', accessToken: 'LOCAL_SYNTHETIC_TOKEN', expiresAt: Date.now() / 1000 + 3600 }) })
     }
   }
   const store = new PodDatabase(root)

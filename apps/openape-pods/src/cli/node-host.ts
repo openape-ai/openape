@@ -2,14 +2,13 @@ import { EventEmitter } from 'node:events'
 import { fork, spawn } from 'node:child_process'
 import type { RuntimeHost } from '../main/runtime-host'
 import { CredentialCache } from '../main/connections/cache'
-import { macOSCipher } from './safe-storage'
 
 export function nodeHost(dist: string): RuntimeHost {
   return {
     directory: dist,
     oneShot: true,
     apesCli: `${dist}/vendor/apes/ape-shell.mjs`,
-    credentials: root => new CredentialCache(root, macOSCipher(`${dist}/native/pods-keychain`)),
+    credentials: root => new CredentialCache(root),
     openExternal: async (url) => {
       process.stderr.write(`Approval: ${url}\n`)
       await new Promise<void>((resolve, reject) => {

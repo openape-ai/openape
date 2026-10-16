@@ -4,10 +4,11 @@
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1499. Branch `feature/issue-1499-ape-pods-cli`, worktree `openape-monorepo.worktrees/ape-pods-cli-1499`, canonical base `b46051395a10b010b933efde9f71665d0c11a9d8`.
 - Owner approved proposal revision 4, then directed that CLI and desktop remain separate for now. Current source: `.claude/plans/2026-10-15-ape-pods-cli/plan.json`; revision 5 records the explicit standalone condition under the existing authorization.
-- The four commands use the real selected database, existing Pod identity, configured owner/isolated context and shared-data permissions. Extra assigned-script secrets and storage migration remain excluded. Desktop must remain closed; no desktop protocol or signed update is required.
-- Runtime-only build, 33 focused cases and five native CLI cases pass, including both home contexts, shared-data permissions, identity refusal, profile exclusion, cancellation, SIGINT lease retention and paged event output. Generated documentation is current. The complete affected unit gate passes (Pods 1729, relay 104) on executable source `564bda422dbe6590b4386516fbcaa2c0a14168b6`; no owner Pod was used as a fixture.
-- PR: https://repos.openape.ai/patrick/monorepo/pulls/463, explicitly related to the issue. Actual private Test Runs: https://report.openape.ai/d/01M50P2TGQ0JVAGAVC95KGDFGY?v=2 (exported bytes verified). Local `~/.local/bin/ape-pods` points to this worktree runtime build.
-- Next: owner review and use with desktop closed. Live owner keychain ACL/provider acceptance remains untested; native cases use signed local fixtures. No merge, release or desktop installation has occurred.
+- The four commands use the real selected database, existing Pod identity, configured owner/isolated context and shared-data permissions. Desktop must remain closed during CLI use. The owner approved filesystem protection for Pod execution identities on October 16; follow-up source: `.claude/plans/2026-10-16-pods-file-identities/plan.json`.
+- Pod execution keys now use shared private identity files; provider secrets and owner login retain their existing protection. The desktop migrates legacy identities without rotating keys or grants. Existing profiles need an updated desktop once for decryption; the standalone CLI no longer contains a keychain helper.
+- Focused storage/migration/refusal tests and native CLI acceptance pass, including both home contexts, shared-data permissions and denial of direct identity-file reads/writes. Final affected gate and packaged acceptance are in progress. The original CLI evidence remains in its October 15 plan.
+- PR: https://repos.openape.ai/patrick/monorepo/pulls/463, explicitly related to the issue. Local `~/.local/bin/ape-pods` points to this worktree runtime build.
+- Next: complete checks and publish exact-source evidence. No merge or installation of this follow-up has occurred; the live Task monitor still has the independent missing `$HOME/.env` startup dependency.
 
 ## Unified Pods execution — issue 1497
 
