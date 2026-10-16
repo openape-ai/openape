@@ -1,0 +1,258 @@
+{
+  "schema": "openape.test-run/1",
+  "language": "de",
+  "project": "OpenApe Pods",
+  "title": "Pod-Identitäten: gemeinsamer Dateispeicher für Desktop und CLI",
+  "purpose": "verification",
+  "summary": "Gemeinsame private Identitätsdateien ersetzen den Schlüsselbundzugriff der CLI. Migration, Bindungen und Sandbox-Sperren sind geprüft; das installierte Eigentümerprofil wurde nicht migriert.",
+  "targets": [
+    {
+      "id": "source",
+      "label": "PR 463 filesystem identity implementation",
+      "kind": "source",
+      "commit": "ce8170d1ebadb3e06b7c9df1a7004145725c222c",
+      "dirty": false
+    },
+    {
+      "id": "native",
+      "label": "Local macOS ARM64 fixture builds",
+      "kind": "build",
+      "notes": "Native acceptance used implementation 3a7cfefdb6b161b2467df18c43d87ca1cdf22536. Final gate source differs only in the German diagnostic catalog. Disposable profiles and local signed IdP; no installed owner-profile acceptance."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "focused",
+      "title": "focused",
+      "kind": "text",
+      "role": "evidence",
+      "text": "\n RUN  v4.1.10 /Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/apps/openape-pods\n\n\n Test Files  6 passed (6)\n      Tests  34 passed (34)\n   Start at  08:15:31\n   Duration  1.21s (transform 630ms, setup 0ms, import 939ms, tests 2.00s, environment 238ms)\n"
+    },
+    {
+      "id": "native-cli",
+      "title": "native-cli",
+      "kind": "text",
+      "role": "evidence",
+      "text": "\n RUN  v4.1.10 /Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/apps/openape-pods\n\n\n Test Files  1 passed (1)\n      Tests  5 passed (5)\n   Start at  08:15:55\n   Duration  8.05s (transform 329ms, setup 0ms, import 432ms, tests 7.10s, environment 0ms)\n"
+    },
+    {
+      "id": "desktop-native",
+      "title": "desktop-native",
+      "kind": "text",
+      "role": "evidence",
+      "text": "\n RUN  v4.1.10 /Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/apps/openape-pods\n\n\n Test Files  2 passed (2)\n      Tests  29 passed | 1 skipped (30)\n   Start at  08:15:08\n   Duration  35.09s (transform 263ms, setup 0ms, import 533ms, tests 34.09s, environment 0ms)\n"
+    },
+    {
+      "id": "runtime-build",
+      "title": "runtime-build",
+      "kind": "text",
+      "role": "evidence",
+      "text": "\n> @openape/pods@0.1.3 build:runtime /Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/apps/openape-pods\n> node scripts/build-runtime.mjs\n\nCLI Building entry: {\"worker/entry\":\"src/worker/entry.ts\"}\nCLI Using tsconfig: tsconfig.json\nCLI tsup v8.5.1\nCLI Target: node24\nCLI Cleaning output folder\nCJS Build start\nCJS dist/worker/entry.cjs 866.14 KB\nCJS ⚡️ Build success in 147ms\nCLI Building entry: {\"runtime/shell-client\":\"src/runtime/shell-client.ts\",\"runtime/program-client\":\"src/runtime/program-client.ts\",\"runtime/codex-mcp\":\"src/runtime/codex-mcp.ts\",\"runtime/script-entry\":\"src/worker/runs/script-entry.ts\",\"runtime/sdk-host\":\"src/worker/agent/sdk-host.ts\",\"runtime/master-host\":\"src/worker/master/host.ts\",\"runtime/auth-host\":\"src/main/connections/auth-host.ts\"}\nCLI Using tsconfig: tsconfig.json\nCLI tsup v8.5.1\nCLI Target: node24\nESM Build start\nESM dist/runtime/script-entry.mjs   7.84 KB\nESM dist/runtime/master-host.mjs    1.19 KB\nESM dist/runtime/codex-mcp.mjs      16.81 KB\nESM dist/runtime/shell-client.mjs   3.65 KB\nESM dist/runtime/sdk-host.mjs       18.11 KB\nESM dist/runtime/auth-host.mjs      1.13 KB\nESM dist/runtime/program-client.mjs 18.60 KB\nESM ⚡️ Build success in 11ms\nCLI Building entry: {\"ape-shell\":\"/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/packages/apes/src/cli.ts\"}\nCLI Using tsconfig: tsconfig.json\nCLI tsup v8.5.1\nCLI Target: node24\nCLI Cleaning output folder\nESM Build start\nESM dist/vendor/apes/ape-shell.mjs 3.54 MB\nESM ⚡️ Build success in 144ms\nCLI Building entry: {\"cli/entry\":\"src/cli/entry.ts\"}\nCLI Using tsconfig: tsconfig.json\nCLI tsup v8.5.1\nCLI Target: node24\nCJS Build start\nCJS dist/cli/entry.cjs 563.84 KB\nCJS ⚡️ Build success in 34ms"
+    },
+    {
+      "id": "desktop-build",
+      "title": "desktop-build",
+      "kind": "text",
+      "role": "evidence",
+      "text": "CJS dist/preload/index.cjs 105.04 KB\nCJS dist/worker/entry.cjs  866.14 KB\nCJS dist/main/app.cjs      1.63 MB\nCJS ⚡️ Build success in 170ms\nCLI Building entry: {\"runtime/shell-client\":\"src/runtime/shell-client.ts\",\"runtime/program-client\":\"src/runtime/program-client.ts\",\"runtime/codex-mcp\":\"src/runtime/codex-mcp.ts\",\"runtime/script-entry\":\"src/worker/runs/script-entry.ts\",\"runtime/sdk-host\":\"src/worker/agent/sdk-host.ts\",\"runtime/master-host\":\"src/worker/master/host.ts\",\"runtime/auth-host\":\"src/main/connections/auth-host.ts\"}\nCLI Using tsconfig: tsconfig.json\nCLI tsup v8.5.1\nCLI Target: node24\nESM Build start\nESM dist/runtime/sdk-host.mjs       18.11 KB\nESM dist/runtime/script-entry.mjs   7.84 KB\nESM dist/runtime/auth-host.mjs      1.13 KB\nESM dist/runtime/shell-client.mjs   3.65 KB\nESM dist/runtime/program-client.mjs 18.60 KB\nESM dist/runtime/master-host.mjs    1.19 KB\nESM dist/runtime/codex-mcp.mjs      16.81 KB\nESM ⚡️ Build success in 10ms\nCLI Building entry: {\"ape-shell\":\"/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/packages/apes/src/cli.ts\"}\nCLI Using tsconfig: tsconfig.json\nCLI tsup v8.5.1\nCLI Target: node24\nCLI Cleaning output folder\nESM Build start\nESM dist/vendor/apes/ape-shell.mjs 3.54 MB\nESM ⚡️ Build success in 127ms\nvite v8.2.1 building client environment for production...\n\u001b[2K\ntransforming...✓ 200 modules transformed.\nrendering chunks...\ncomputing gzip size...\ndist/renderer/index.html                   0.35 kB │ gzip:   0.26 kB\ndist/renderer/assets/index-DxDyV5kM.css   68.29 kB │ gzip:  12.47 kB\ndist/renderer/assets/index-CF162EvF.js   663.79 kB │ gzip: 196.77 kB\n\n✓ built in 279ms\n[plugin builtin:vite-reporter] \n(!) Some chunks are larger than 500 kB after minification. Consider:\n- Using dynamic import() to code-split the application\n- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting\n- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit."
+    },
+    {
+      "id": "package",
+      "title": "package",
+      "kind": "text",
+      "role": "evidence",
+      "text": "\n> @openape/pods@0.1.3 package:mac /Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/apps/openape-pods\n> node scripts/package.mjs\n\n  • electron-builder  version=26.15.3 os=25.6.0\n  • packageManager not detected by file, falling back to environment detection  resolvedPackageManager=pnpm detected=/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/apps/openape-pods\n  • detected workspace root for project using packageManager field  pm=pnpm config=pnpm@10.29.3 resolved=/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499 projectDir=/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/apps/openape-pods\n  • skipped dependencies rebuild  reason=npmRebuild is set to false\n  • packaging       platform=darwin arch=arm64 electron=40.9.3 appOutDir=release/mac-arm64\n  • downloaded      label=electron progress=100%\n  • downloaded electron zip extracted successfully  output=/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/apps/openape-pods/release/mac-arm64\n  • searching for node modules  pm=pnpm searchDir=/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/apps/openape-pods\n  • duplicate dependency references  dependencies=[\"@vue/compiler-ssr@3.5.43\",\"@babel/parser@7.29.8\",\"@vue/compiler-core@3.5.43\"]\n  • skipped macOS code signing  reason=identity explicitly is set to null"
+    },
+    {
+      "id": "gate",
+      "title": "gate",
+      "kind": "text",
+      "role": "evidence",
+      "text": "@openape-pods-relay/app:test: \n@openape-pods-relay/app:test:  Test Files  14 passed (14)\n@openape-pods-relay/app:test:       Tests  104 passed (104)\n@openape-pods-relay/app:test:    Start at  08:20:17\n@openape-pods-relay/app:test:    Duration  3.32s (transform 465ms, setup 0ms, import 1.11s, tests 460ms, environment 574ms)\n@openape-pods-relay/app:test: \n@openape/pods:test: Owner-authorized publication with pending acceptance: licenses\n@openape/pods:test: Owner-authorized publication with pending acceptance: signedBoundaries\n@openape/pods:test: Owner-authorized publication with pending acceptance: cleanMachine\n@openape/pods:test: Owner-authorized publication with pending acceptance: realProvider\n@openape/pods:test: Owner-authorized publication with pending acceptance: realTenantRefresh\n@openape/pods:test: Owner-authorized publication with pending acceptance: physicalSleepWake\n@openape/pods:test: Owner-authorized publication with pending acceptance: osCpuMatrix\n@openape/pods:test: DOMException [AbortError]: The operation was aborted.\n@openape/pods:test:     at Fetch.onAsyncTaskManagerAbort (file:///Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/node_modules/.pnpm/happy-dom@20.11.1/node_modules/happy-dom/lib/fetch/Fetch.js:546:23)\n@openape/pods:test:     at Object.<anonymous> (file:///Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/node_modules/.pnpm/happy-dom@20.11.1/node_modules/happy-dom/lib/fetch/Fetch.js:416:101)\n@openape/pods:test:     at AsyncTaskManager.abortAll (file:///Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/node_modules/.pnpm/happy-dom@20.11.1/node_modules/happy-dom/lib/async-task-manager/AsyncTaskManager.js:292:30)\n@openape/pods:test:     at AsyncTaskManager.abort (file:///Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/node_modules/.pnpm/happy-dom@20.11.1/node_modules/happy-dom/lib/async-task-manager/AsyncTaskManager.js:52:21)\n@openape/pods:test:     at DetachedBrowserFrame.abort (file:///Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/node_modules/.pnpm/happy-dom@20.11.1/node_modules/happy-dom/lib/browser/detached-browser/DetachedBrowserFrame.js:112:58)\n@openape/pods:test:     at DetachedWindowAPI.abort (file:///Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/node_modules/.pnpm/happy-dom@20.11.1/node_modules/happy-dom/lib/window/DetachedWindowAPI.js:51:35)\n@openape/pods:test:     at teardownWindow (file:///Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/node_modules/.pnpm/vitest@4.1.10_@opentelemetry+api@1.9.1_@types+node@22.20.0_@vitest+browser-playwright@4_90dd011f3fe22d14125385d6d1e32043/node_modules/vitest/dist/chunks/index.DC7d2Pf8.js:331:22)\n@openape/pods:test:     at Object.teardown (file:///Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/node_modules/.pnpm/vitest@4.1.10_@opentelemetry+api@1.9.1_@types+node@22.20.0_@vitest+browser-playwright@4_90dd011f3fe22d14125385d6d1e32043/node_modules/vitest/dist/chunks/index.DC7d2Pf8.js:392:10)\n@openape/pods:test:     at file:///Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/node_modules/.pnpm/vitest@4.1.10_@opentelemetry+api@1.9.1_@types+node@22.20.0_@vitest+browser-playwright@4_90dd011f3fe22d14125385d6d1e32043/node_modules/vitest/dist/chunks/base.B6Opl8PE.js:168:65\n@openape/pods:test:     at Traces.$ (file:///Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/node_modules/.pnpm/vitest@4.1.10_@opentelemetry+api@1.9.1_@types+node@22.20.0_@vitest+browser-playwright@4_90dd011f3fe22d14125385d6d1e32043/node_modules/vitest/dist/chunks/traces.DT5aQ62U.js:142:27)\n@openape/pods:test: \n@openape/pods:test:  Test Files  155 passed (155)\n@openape/pods:test:       Tests  1732 passed (1732)\n@openape/pods:test:    Start at  08:20:17\n@openape/pods:test:    Duration  123.58s (transform 3.25s, setup 0ms, import 9.49s, tests 97.82s, environment 6.25s)\n@openape/pods:test: \n\n Tasks:    14 successful, 14 total\nCached:    11 cached, 14 total\n  Time:    2m6.421s \n\n WARNING  no output files found for task @openape-pods-relay/app#test. Please check your `outputs` key in `turbo.json`\n WARNING  no output files found for task @openape/pods#test. Please check your `outputs` key in `turbo.json`\n[check] SUCCESS; /Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/.openape/check-results/1792131586708-ce8170d1-unit/summary.json\nTo https://repos.openape.ai/patrick/monorepo.git\n   747b57f5..ce8170d1  HEAD -> feature/issue-1499-ape-pods-cli"
+    },
+    {
+      "id": "gate-summary",
+      "title": "Affected gate source and outcomes",
+      "kind": "text",
+      "role": "evidence",
+      "text": "{\n  \"contract\": 1,\n  \"mode\": \"affected\",\n  \"suites\": [\n    \"unit\"\n  ],\n  \"base\": \"b46051395a10b010b933efde9f71665d0c11a9d8\",\n  \"head\": \"ce8170d1ebadb3e06b7c9df1a7004145725c222c\",\n  \"dirty\": false,\n  \"workspaces\": [\n    \"@openape-pods-relay/app\",\n    \"@openape/pods\"\n  ],\n  \"exceptions\": {\n    \"@openape/ape-secrets:test\": \"No unit suite yet; CLI build and typecheck remain mandatory.\",\n    \"openape-idp-example:test\": \"Covered by the dedicated openape-e2e suite.\",\n    \"openape-sp-example:test\": \"Covered by the dedicated openape-e2e suite.\",\n    \"openape-e2e:typecheck\": \"The fixture workspace has no standalone typecheck script.\",\n    \"openape-e2e:test\": \"Executed as test:e2e in the e2e suite, not twice.\",\n    \"@openape/report-contracts:test\": \"Behavior is exercised by Reports HTML publication/Plans consolidation tests and built ape-reports CLI tests; the shared private workspace has no separate runner.\"\n  },\n  \"steps\": [\n    {\n      \"name\": \"prebuild\",\n      \"command\": \"pnpm\",\n      \"args\": [\n        \"turbo\",\n        \"run\",\n        \"build\",\n        \"--filter=@openape/agent-runtime\",\n        \"--filter=@openape/apes\",\n        \"--filter=@openape/auth\",\n        \"--filter=@openape/cli-auth\",\n        \"--filter=@openape/core\",\n        \"--filter=@openape/grants\",\n        \"--filter=@openape/nuxt-auth-idp\",\n        \"--filter=@openape/nuxt-auth-sp\",\n        \"--filter=@openape/pods-protocol\",\n        \"--filter=@openape/proxy\",\n        \"--filter=@openape/shapes\",\n        \"--concurrency=1\"\n      ]\n    },\n    {\n      \"name\": \"audit\",\n      \"command\": \"pnpm\",\n      \"args\": [\n        \"audit\",\n        \"--prod\",\n        \"--audit-level=high\"\n      ]\n    },\n    {\n      \"name\": \"workspace-docs\",\n      \"command\": \"node\",\n      \"args\": [\n        \"scripts/workspace-map.mjs\",\n        \"--check\"\n      ]\n    },\n    {\n      \"name\": \"tooling\",\n      \"command\": \"node\",\n      \"args\": [\n        \"--test\",\n        \"scripts/activate-node.test.mjs\",\n        \"scripts/aggregate-guides.test.mjs\",\n        \"scripts/ape-git.test.mjs\",\n        \"scripts/check.test.mjs\",\n        \"scripts/deploy-image.test.mjs\",\n        \"scripts/desktop-own-shapes.test.mjs\",\n        \"scripts/doctor.test.mjs\",\n        \"scripts/e2e-manifest.test.mjs\",\n        \"scripts/e2e.test.mjs\",\n        \"scripts/native-issues-inventory.test.mjs\",\n        \"scripts/native-issues-migration.test.mjs\",\n        \"scripts/release-scope.test.mjs\",\n        \"scripts/repository.test.mjs\"\n      ]\n    },\n    {\n      \"name\": \"lint\",\n      \"command\": \"pnpm\",\n      \"args\": [\n        \"turbo\",\n        \"run\",\n        \"lint\",\n        \"--filter=@openape-pods-relay/app\",\n        \"--filter=@openape/pods\",\n        \"--concurrency=4\"\n      ]\n    },\n    {\n      \"name\": \"typecheck\",\n      \"command\": \"pnpm\",\n      \"args\": [\n        \"turbo\",\n        \"run\",\n        \"typecheck\",\n        \"--filter=@openape-pods-relay/app\",\n        \"--filter=@openape/pods\",\n        \"--concurrency=4\"\n      ]\n    },\n    {\n      \"name\": \"test\",\n      \"command\": \"pnpm\",\n      \"args\": [\n        \"turbo\",\n        \"run\",\n        \"test\",\n        \"--filter=@openape-pods-relay/app\",\n        \"--filter=@openape/pods\",\n        \"--concurrency=4\"\n      ]\n    }\n  ],\n  \"results\": [\n    {\n      \"name\": \"prebuild\",\n      \"code\": 0,\n      \"durationMs\": 2882,\n      \"log\": \"/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/.openape/check-results/1792131586708-ce8170d1-unit/prebuild.log\"\n    },\n    {\n      \"name\": \"audit\",\n      \"code\": 0,\n      \"durationMs\": 1640,\n      \"log\": \"/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/.openape/check-results/1792131586708-ce8170d1-unit/audit.log\"\n    },\n    {\n      \"name\": \"workspace-docs\",\n      \"code\": 0,\n      \"durationMs\": 217,\n      \"log\": \"/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/.openape/check-results/1792131586708-ce8170d1-unit/workspace-docs.log\"\n    },\n    {\n      \"name\": \"tooling\",\n      \"code\": 0,\n      \"durationMs\": 1409,\n      \"log\": \"/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/.openape/check-results/1792131586708-ce8170d1-unit/tooling.log\"\n    },\n    {\n      \"name\": \"lint\",\n      \"code\": 0,\n      \"durationMs\": 11145,\n      \"log\": \"/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/.openape/check-results/1792131586708-ce8170d1-unit/lint.log\"\n    },\n    {\n      \"name\": \"typecheck\",\n      \"code\": 0,\n      \"durationMs\": 10002,\n      \"log\": \"/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/.openape/check-results/1792131586708-ce8170d1-unit/typecheck.log\"\n    },\n    {\n      \"name\": \"test\",\n      \"code\": 0,\n      \"durationMs\": 126699,\n      \"log\": \"/Users/patrickhofmann/Companies/private/repos/openape/openape-monorepo.worktrees/ape-pods-cli-1499/.openape/check-results/1792131586708-ce8170d1-unit/test.log\"\n    }\n  ],\n  \"status\": \"success\"\n}"
+    }
+  ],
+  "commands": [
+    {
+      "id": "focused",
+      "command": "pnpm --filter @openape/pods exec vitest run test/credentials/cache.test.ts test/agent-connection.test.ts test/resources/cache.test.ts test/onboarding/manager.test.ts test/onboarding/reconcile.test.ts test/main/cli.test.ts --maxWorkers=4",
+      "outcome": "exited",
+      "exitCode": 0,
+      "targetId": "native",
+      "evidenceIds": [
+        "focused"
+      ]
+    },
+    {
+      "id": "native-cli",
+      "command": "pnpm --filter @openape/pods exec vitest run --config vitest.electron.config.ts e2e/cli.test.ts --maxWorkers=1",
+      "outcome": "exited",
+      "exitCode": 0,
+      "targetId": "native",
+      "evidenceIds": [
+        "native-cli"
+      ]
+    },
+    {
+      "id": "desktop-native",
+      "command": "pnpm --filter @openape/pods exec vitest run --config vitest.electron.config.ts e2e/credentials.test.ts e2e/ape-shell-machine.test.ts --maxWorkers=1",
+      "outcome": "exited",
+      "exitCode": 0,
+      "targetId": "native",
+      "evidenceIds": [
+        "desktop-native"
+      ]
+    },
+    {
+      "id": "runtime-build",
+      "command": "pnpm --filter @openape/pods build:runtime",
+      "outcome": "exited",
+      "exitCode": 0,
+      "targetId": "native",
+      "evidenceIds": [
+        "runtime-build"
+      ]
+    },
+    {
+      "id": "desktop-build",
+      "command": "pnpm --filter @openape/pods build",
+      "outcome": "exited",
+      "exitCode": 0,
+      "targetId": "native",
+      "evidenceIds": [
+        "desktop-build"
+      ]
+    },
+    {
+      "id": "package",
+      "command": "pnpm --filter @openape/pods package:mac",
+      "outcome": "exited",
+      "exitCode": 0,
+      "targetId": "native",
+      "evidenceIds": [
+        "package"
+      ]
+    },
+    {
+      "id": "gate",
+      "command": "VITEST_MAX_WORKERS=1 TURBO_ENV_MODE=loose git push origin HEAD",
+      "outcome": "exited",
+      "exitCode": 0,
+      "targetId": "source",
+      "evidenceIds": [
+        "gate"
+      ]
+    }
+  ],
+  "tests": [
+    {
+      "id": "focused",
+      "title": "Storage, migration and identity bindings",
+      "status": "passed",
+      "observed": "34 focused cases pass, including real signed challenge refresh without a cipher, failed migration preservation, private permissions, symlink/hardlink/corruption refusal, cross-Pod denial and missing-established-identity refusal.",
+      "targetId": "native",
+      "commandIds": [
+        "focused"
+      ],
+      "evidenceIds": [
+        "focused"
+      ]
+    },
+    {
+      "id": "native-cli",
+      "title": "Standalone CLI and protected identity files",
+      "status": "passed",
+      "observed": "Five native CLI cases pass using the production Node host without a cipher override. Both HOME contexts reject direct identity-file reads/writes and foreign shared data; cancellation and profile exclusion remain.",
+      "targetId": "native",
+      "commandIds": [
+        "native-cli"
+      ],
+      "evidenceIds": [
+        "native-cli"
+      ]
+    },
+    {
+      "id": "desktop-native",
+      "title": "Packaged desktop and ape-shell security boundary",
+      "status": "passed",
+      "observed": "29 cases pass; one optional external-parser case skipped. Assigned secrets survive desktop restart and retain encryption. Exact authorization, denial, timeout, changed inline code, script replacement and cancellation remain enforced.",
+      "targetId": "native",
+      "commandIds": [
+        "desktop-native"
+      ],
+      "evidenceIds": [
+        "desktop-native"
+      ]
+    },
+    {
+      "id": "runtime-build",
+      "title": "Runtime-only build",
+      "status": "passed",
+      "observed": "Runtime build succeeds; no native keychain helper is built.",
+      "targetId": "native",
+      "commandIds": [
+        "runtime-build"
+      ],
+      "evidenceIds": [
+        "runtime-build"
+      ]
+    },
+    {
+      "id": "desktop-build",
+      "title": "Desktop build",
+      "status": "passed",
+      "observed": "Desktop build succeeds.",
+      "targetId": "native",
+      "commandIds": [
+        "desktop-build"
+      ],
+      "evidenceIds": [
+        "desktop-build"
+      ]
+    },
+    {
+      "id": "package",
+      "title": "Fixture package",
+      "status": "passed",
+      "observed": "Unsigned disposable fixture package succeeds. No signed installation or stable release.",
+      "targetId": "native",
+      "commandIds": [
+        "package"
+      ],
+      "evidenceIds": [
+        "package"
+      ]
+    },
+    {
+      "id": "gate",
+      "title": "Required affected unit gate",
+      "status": "passed",
+      "observed": "Pre-push affected contract passes including lint, typecheck, builds, tooling, audit and affected unit tests.",
+      "targetId": "source",
+      "commandIds": [
+        "gate"
+      ],
+      "evidenceIds": [
+        "gate"
+      ]
+    }
+  ],
+  "limitations": [
+    "Die installierte App und das reale Profil wurden nicht umgestellt. Bestehende Profile brauchen einen aktualisierten Desktop für die einmalige Migration.",
+    "Keine Windows-/Linux-Runtime-Abnahme. Speicherformat und CLI-Identitätszugriff sind unabhängig vom OS-Schlüsselbund; native Ausführung bleibt auf dem bisherigen macOS-Supportstand.",
+    "Ein optionaler externer Mail-Parser-Test wurde ohne PODS_EXTERNAL_MAIL_PARSER übersprungen.",
+    "Anwendungs-Secrets, Owner-Anmeldung und Relay-Registrierung bleiben separat geschützt. Ein Pod mit entsprechenden Anforderungen kann weiterhin Desktop-Entschlüsselung benötigen.",
+    "Dateischutz ersetzt keine Verschlüsselung gegen ungesandboxte Prozesse desselben Benutzers. Der Owner-Modus bleibt vollständiges Vertrauen in den Pod-Code."
+  ],
+  "assessment": {
+    "outcome": "acceptable",
+    "summary": "Implementierung und lokale Fixture-Abnahme bestanden. Das ist keine Behauptung einer produktiven Migration oder eines erfolgreichen IURIO-Provider-Aufrufs."
+  },
+  "nextStep": "PR 463 prüfen und integrieren; danach aktualisierten Desktop installieren und bestehendes Profil kontrolliert migrieren."
+}

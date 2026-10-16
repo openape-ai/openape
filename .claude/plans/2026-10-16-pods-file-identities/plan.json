@@ -1,7 +1,7 @@
 {
   "schema": "openape.plan/2",
   "language": "en",
-  "status": "active",
+  "status": "done",
   "revision": 1,
   "project": "OpenApe Pods",
   "owner": "Patrick Hofmann",
@@ -29,12 +29,13 @@
     },
     {
       "id": "m3",
-      "status": "active",
+      "status": "done",
       "acceptance": [
         "Build and required affected gate pass; native evidence names its actual scope; PR and operational limits are current."
       ],
       "title": "Publish evidence and update PR 463.",
-      "goal": "Publish evidence and update PR 463."
+      "goal": "Publish evidence and update PR 463.",
+      "proof": "Required gate passed on ce8170d1: 1732 Pods and 104 relay tests, lint, typecheck, tooling and audit. Runtime build and local CLI help pass. Private Test Runs published; native PR 463 contains the implementation."
     }
   ],
   "translations": {
@@ -131,11 +132,6 @@
         "text": "Keine unabhängigen Pod-Reparaturen, erweiterten Freigaben, neues Desktop-Anbindungsprotokoll oder Behauptung einer Windows-/Linux-Runtime."
       },
       {
-        "path": "handoff",
-        "source": "Implement and verify on feature/issue-1499-ape-pods-cli. Existing profile use needs the updated desktop to decrypt legacy records once.",
-        "text": "Auf feature/issue-1499-ape-pods-cli implementieren und prüfen. Für bestehende Profile muss der aktualisierte Desktop alte Datensätze einmal entschlüsseln."
-      },
-      {
         "path": "milestones.0.proof",
         "source": "Shared CredentialCache writes private identity files, migrates legacy records atomically, retains encrypted application credentials and removes the CLI keychain helper.",
         "text": "Gemeinsamer CredentialCache schreibt private Identitätsdateien, migriert Altbestände atomar, erhält verschlüsselte Anwendungs-Secrets und entfernt den Schlüsselbund-Helfer der CLI."
@@ -144,6 +140,21 @@
         "path": "milestones.1.proof",
         "source": "34 focused cases and five native CLI cases pass. Packaged credentials and ape-shell boundary suites pass 29 cases; one optional external-parser case is skipped.",
         "text": "34 gezielte Fälle und fünf native CLI-Fälle bestehen. Gepackte Credentials- und ape-shell-Grenztests bestehen mit 29 Fällen; ein optionaler externer Parserfall wird übersprungen."
+      },
+      {
+        "path": "milestones.2.proof",
+        "source": "Required gate passed on ce8170d1: 1732 Pods and 104 relay tests, lint, typecheck, tooling and audit. Runtime build and local CLI help pass. Private Test Runs published; native PR 463 contains the implementation.",
+        "text": "Vorgeschriebener Prüflauf auf ce8170d1 bestanden: 1732 Pods- und 104 Relay-Tests, Lint, Typprüfung, Tooling und Audit. Runtime-Build und lokale CLI-Hilfe bestehen. Privater Testbericht veröffentlicht; nativer PR 463 enthält die Umsetzung."
+      },
+      {
+        "path": "completion.summary",
+        "source": "Implementation and local acceptance are complete. Native fixtures pass 34 cases, with one optional external-parser case skipped. Existing owner profile migration and signed deployment were not performed.",
+        "text": "Umsetzung und lokale Abnahme sind abgeschlossen. Native Fixtures bestehen mit 34 Fällen; ein optionaler externer Parserfall wurde übersprungen. Das bestehende Eigentümerprofil wurde nicht migriert und kein signierter Rollout durchgeführt."
+      },
+      {
+        "path": "handoff",
+        "source": "Review and integrate PR 463. For the existing profile, install the updated desktop and migrate once before using the CLI. Preserve a consistent pre-migration profile backup; older binaries do not read the new identity format. The unrelated IURIO HOME/.env failure remains.",
+        "text": "PR 463 prüfen und integrieren. Für das bestehende Profil den aktualisierten Desktop installieren und einmal migrieren, bevor die CLI verwendet wird. Ein konsistentes Profil-Backup vor der Migration erhalten; ältere Programme lesen das neue Identitätsformat nicht. Der unabhängige IURIO-Fehler zu HOME/.env bleibt bestehen."
       }
     ]
   },
@@ -162,7 +173,7 @@
   "nonGoals": [
     "No unrelated Pod repair, grant widening, new desktop attachment protocol or claim of Windows/Linux runtime support."
   ],
-  "handoff": "Implement and verify on feature/issue-1499-ape-pods-cli. Existing profile use needs the updated desktop to decrypt legacy records once.",
+  "handoff": "Review and integrate PR 463. For the existing profile, install the updated desktop and migrate once before using the CLI. Preserve a consistent pre-migration profile backup; older binaries do not read the new identity format. The unrelated IURIO HOME/.env failure remains.",
   "approval": {
     "by": "Patrick Hofmann",
     "date": "2026-10-16",
@@ -170,5 +181,19 @@
     "target": {
       "sourceDigest": "4b867226fadc1807c8f09a4a7feba90cacceef03447a05ba6d7d2232d30cfc71"
     }
-  }
+  },
+  "completion": {
+    "result": "achieved",
+    "summary": "Implementation and local acceptance are complete. Native fixtures pass 34 cases, with one optional external-parser case skipped. Existing owner profile migration and signed deployment were not performed."
+  },
+  "links": [
+    {
+      "title": "Test Runs",
+      "url": "https://report.openape.ai/d/01M51P0WGCZYXK295K16G4CV7Z?v=1"
+    },
+    {
+      "title": "PR 463",
+      "url": "https://repos.openape.ai/patrick/monorepo/pulls/463"
+    }
+  ]
 }
