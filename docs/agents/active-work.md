@@ -2,13 +2,12 @@
 
 ## Standalone Pods CLI — issue 1499
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1499. Branch `feature/issue-1499-ape-pods-cli`, worktree `openape-monorepo.worktrees/ape-pods-cli-1499`, canonical base `b46051395a10b010b933efde9f71665d0c11a9d8`.
-- Owner approved proposal revision 4, then directed that CLI and desktop remain separate for now. Current source: `.claude/plans/2026-10-15-ape-pods-cli/plan.json`; revision 5 records the explicit standalone condition under the existing authorization.
-- The four commands use the real selected database, existing Pod identity, configured owner/isolated context and shared-data permissions. Desktop must remain closed during CLI use. The owner approved filesystem protection for Pod execution identities on October 16; follow-up source: `.claude/plans/2026-10-16-pods-file-identities/plan.json`.
-- Pod execution keys now use shared private identity files; provider secrets and owner login retain their existing protection. The desktop migrates legacy identities without rotating keys or grants. Existing profiles need an updated desktop once for decryption; the standalone CLI no longer contains a keychain helper.
-- Focused storage/migration/refusal tests and native CLI acceptance pass, including both home contexts, shared-data permissions and denial of direct identity-file reads/writes. The required gate passes on `ce8170d1ebadb3e06b7c9df1a7004145725c222c`: Pods 1732 and relay 104 tests, lint/typecheck/audit/tooling. Packaged credentials and ape-shell acceptance pass 29 cases (one optional parser case skipped); the five native CLI cases also pass. Evidence: https://report.openape.ai/d/01M51P0WGCZYXK295K16G4CV7Z?v=1.
-- PR: https://repos.openape.ai/patrick/monorepo/pulls/463, explicitly related to the issue. Local `~/.local/bin/ape-pods` points to this worktree runtime build.
-- Next: review/integrate PR 463, then install the updated desktop for existing-profile migration. The completed follow-up plan is https://report.openape.ai/d/01M51NQ7AY2V6Q4XNWMSKBBQB6. No merge or installation of this follow-up has occurred; the live Task monitor still has the independent missing `$HOME/.env` startup dependency.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1499. Follow-up branch `bugfix/issue-1499-owner-program-state`, worktree `openape-monorepo.worktrees/ape-pods-cli-1499`, canonical base `877162d1dc9a992a42dca7436f1ffc90607b14a4`.
+- PR 463 is merged. The local signed desktop migrated all 44 execution identities, preserving bindings and existing protections. The subsequent real CLI test exposed unconditional encrypted ProgramState access before assigned owner-program launch. Actual rollout receipt: https://report.openape.ai/d/01M51V4TRBA1KSE1P6JN8MZKDR?v=1.
+- Owner instruction October 16: fix unnecessary ProgramState access in owner mode first. Keep OS-keychain-independent, CLI-usable ProgramState as separate issue 1500: https://repos.openape.ai/patrick/monorepo/issues/1500.
+- Owner script invocations and application terminals now use owner HOME and temporary workspaces without reading or updating private ProgramState. Isolated state persistence, Pod identity, ape-shell authorization, file hashes, lease checks and protected paths remain enforced.
+- Focused acceptance: 14 cases pass; the old source fails four strengthened owner cases. Six native CLI cases pass, including an actual assigned owner program through the production no-cipher host with unchanged encrypted state. The local CLI points to this runtime build; the installed signed desktop remains the PR 463 build until a separate desktop rollout.
+- Next: complete the mandatory affected gate and native PR, then inspect the real Task monitor CLI result. Its known IURIO HOME/.env dependency remains separate. Keep issue 1499 open until actual acceptance is reconciled; record final source and evidence on the PR.
 
 ## Unified Pods execution — issue 1497
 

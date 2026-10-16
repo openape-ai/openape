@@ -82,7 +82,7 @@ export class PodToolBroker {
     // A program with a cache argument is authorized in launch, with the cache folder it actually receives.
     lease.assertCurrent(); lease.signal.throwIfAborted()
     await mkdir(this.root, { recursive: true, mode: 0o700 })
-    if (assignment.programState) {
+    if (assignment.programState && assignment.reach?.level !== 'owner') {
       const state = assignment.programState
       return new ProgramState(this.credentials).use(state.id, state, async directory => this.run(assignment, lease, directory, assignment.cacheArgument ? join(directory, 'token.json') : undefined), lease.signal)
     }
