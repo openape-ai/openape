@@ -42,4 +42,3 @@ export async function locateProgram(executable: string): Promise<LocatedProgram 
   const path = realpathSync(found)
   return { path, argv0: found, name: basename(found), sha256: await hashFile(path) }
 }
-
