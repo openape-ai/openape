@@ -2,10 +2,10 @@
 # Local use: git config blame.ignoreRevsFile .git-blame-ignore-revs
 
 # style: apply consistent object and list newlines
-d5ac18b81cfeb11c71c947e1c0ff9bace5f73700
+d2e0724cdb11d4d93e6d4e1c00c7fea93d818eed
 
 # style: apply newline rules to code merged from main
-62087ae2cb836aba2b402b69c3a1c3dfcf6cab31
+6421efaac9ec0158bf548acefbe3e765b59bb315
 
 # style: apply newline rules to code merged from main again
-928463c8fb01e68267077a953e8cf6bd449e1846
+c731e89acc058e7ea4d989e663999f6eb649faab
