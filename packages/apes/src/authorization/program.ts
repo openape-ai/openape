@@ -1,4 +1,3 @@
-export { locateProgram, findExecutable, hashFile } from './program-location.js'
 import type { BrokeredGrant, OpenApeAuthZClaims, OpenApeGrantBatch, OpenApeGrantSummary } from '@openape/core'
 import { computeArgvHash, sameBrokeredGrant, verifyAuthzJWT } from '@openape/grants'
 import { ApiError, apiFetch, discoverEndpoints, getGrantsEndpoint } from '../http.js'
@@ -7,6 +6,8 @@ import { createWaitProgressReporter } from '../wait-progress.js'
 import { bindProgramCall } from './program-files.js'
 import type { ProgramFile } from './program-files.js'
 import { loadAuth } from '../config.js'
+
+export { locateProgram, findExecutable, hashFile } from './program-location.js'
 
 /**
  * Per-call program authorization at the IdP (issue 1473, revision 4). apes sends the exact command and the hash of
