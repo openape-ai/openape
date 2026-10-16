@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { access, mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { access, mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { PodIdentityManager } from '../../src/main/connections/agent'
@@ -28,7 +28,7 @@ async function fixture(locked = false, architecture = process.arch, jevKey?: () 
   const manager = new ConnectionManager(root, runtime, credentials, async command => control.execute(command), availability, false, jevKey)
   cleanups.push(async () => { await manager.stop(); store.close(); await rm(root, { recursive: true, force: true }) })
   await manager.initialize(async () => {})
-  return { root, manager, store, control, credentials, availability }
+  return { root, manager, store, control, credentials, availability, runtime }
 }
 it('records explicit sign-in cancellation and supports a separate retry without auto-activating work', async () => {
   vi.spyOn(CodexConnection.prototype, 'login').mockImplementation(async (_id, signal, present) => { present({ url: 'https://auth.openai.com/device', code: 'SYNTHETIC' }); return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('Cancelled')), { once: true })) })
@@ -301,4 +301,46 @@ it('uses an explicit CLI Jev key without decrypting or replacing desktop credent
   await manager.execute({ type: 'disconnect', id })
   await expect(manager.typesafeRequest(id, '{}', new AbortController().signal)).rejects.toThrow('not connected')
   expect(transport).toHaveBeenCalledTimes(count)
+})
+
+it('uses one migrated ChatGPT cache from a cipherless runtime, saves refreshed tokens and removes it on disconnect', async () => {
+  const server = fakeAppServer()
+  const { root, manager, credentials, runtime, id } = await connectedChatGPT()
+  expect(await manager.model(new AbortController().signal)).toBe('fixture-model-a')
+  const cliCache = new CredentialCache(join(root, 'credentials'))
+  const cliConnection = new CodexConnection(cliCache, runtime, join(root, 'authentication'))
+  server.default = 'fixture-cli-model'
+  expect(await cliConnection.defaultModel(id, 'synthetic-account', new AbortController().signal)).toBe('fixture-cli-model')
+  const futureToken = `synthetic.${Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url')}.signature`
+  await cliCache.withCache(id, async (file) => {
+    const value = JSON.parse(await readFile(file, 'utf8'))
+    await writeFile(file, JSON.stringify({ ...value, tokens: { ...value.tokens, access_token: futureToken, refresh_token: 'synthetic-refreshed-token' } }))
+  })
+  expect(await cliConnection.bearer(id, 'synthetic-account', new AbortController().signal)).toBe(futureToken)
+  expect(await credentials.readConnection(id)).toMatchObject({ tokens: { refresh_token: 'synthetic-refreshed-token' } })
+  await expect(cliConnection.bearer(id, 'foreign', new AbortController().signal)).rejects.toThrow('binding')
+  await manager.execute({ type: 'disconnect', id })
+  await expect(cliCache.readConnection(id)).rejects.toThrow()
+  await expect(manager.model(new AbortController().signal)).rejects.toThrow('Connect ChatGPT')
+})
+
+it('refreshes ChatGPT through the cipherless controller and preserves the newest token for desktop reuse', async () => {
+  const { root, credentials, runtime, id } = await connectedChatGPT()
+  const token = (expiry: number) => `synthetic.${Buffer.from(JSON.stringify({ exp: expiry })).toString('base64url')}.signature`
+  await credentials.connect(id, JSON.stringify({ tokens: { account_id: 'synthetic-account', access_token: token(1), refresh_token: 'old-synthetic-refresh' } }))
+  await credentials.migrateChatgpt(id, 'synthetic-account')
+  const refreshed = token(Math.floor(Date.now() / 1000) + 3600)
+  vi.spyOn(AuthProcess, 'start').mockImplementation(async (_runtime, _root, _binary, _argv, home) => ({
+    initialized: () => {},
+    close: async () => {},
+    request: async (method: string) => {
+      if (method === 'initialize') return {}
+      if (method !== 'account/read') throw new Error(`Unexpected ${method}`)
+      await writeFile(join(home, 'auth.json'), JSON.stringify({ tokens: { account_id: 'synthetic-account', access_token: refreshed, refresh_token: 'new-synthetic-refresh' } }))
+      return { account: { type: 'chatgpt' } }
+    },
+  }) as unknown as AuthProcess)
+  const cli = new CodexConnection(new CredentialCache(join(root, 'credentials')), runtime, join(root, 'authentication'))
+  expect(await cli.bearer(id, 'synthetic-account', new AbortController().signal)).toBe(refreshed)
+  expect(await credentials.readConnection(id)).toMatchObject({ tokens: { access_token: refreshed, refresh_token: 'new-synthetic-refresh' } })
 })

@@ -272,7 +272,14 @@ export class RuntimeWorker {
     const connections = this.connections
     const grants = this.podGrants()!
     this.programs = new ProgramManager(join(this.root, 'authentication'), runtime.helper, this.credentials!, this.connections, podId => this.resources({ type: 'list', podId }), command => this.dispatch({ program: command }), podId => ({ connection: () => connections.podConnection(podId), ledger: grants.port(podId), reach: () => this.sandboxReach(podId), origin: () => this.podName(podId), runtime: { executable: process.execPath, cli: this.host.apesCli, environment: {} } }))
-    await this.connections.initialize(async () => { await this.dispatch({ inspectCredentials: true }); if (!this.host.oneShot) { await this.credentials!.reconcileScriptSecrets(await this.dispatch({ credentialInventory: true }) as { id: string, podId: string }[]); await this.finishDeletions() } }, !this.host.oneShot)
+    await this.connections.initialize(async () => {
+      await this.dispatch({ inspectCredentials: true })
+      if (this.host.oneShot) return
+      await this.credentials!.reconcileScriptSecrets(await this.dispatch({ credentialInventory: true }) as { id: string, podId: string }[])
+      await this.finishDeletions()
+      const assignments = await this.dispatch({ httpCredentialInventory: true }) as { id: string, podId: string, alias: string }[]
+      for (const assignment of assignments) await this.credentials!.migrateHttp(assignment.id, assignment.podId, assignment.alias)
+    }, !this.host.oneShot)
     if (this.host.oneShot) return
     this.secretsGate = new SecretsGate({
       origin: secretsOrigin,
@@ -947,7 +954,7 @@ export class RuntimeWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { cliRun: Extract<RunCommand, { type: 'start' }> } | { programExecution: ProgramExecutionCheck } | { approvalRelease: { type: 'list' } | { type: 'released', keys: string[] } } | { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { domain: DomainCommand } | { central: { type: 'snapshot', owner: Owner } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { cliRun: Extract<RunCommand, { type: 'start' }> } | { programExecution: ProgramExecutionCheck } | { approvalRelease: { type: 'list' } | { type: 'released', keys: string[] } } | { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { domain: DomainCommand } | { central: { type: 'snapshot', owner: Owner } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { httpCredentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     if (this.updateFrozen && !('data' in command && ['prepareUpdate', 'releaseUpdate'].includes(command.data.type))) return Promise.reject(new Error('Pods is preparing an update; retry after restart'))
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
@@ -1114,7 +1121,7 @@ export class RuntimeWorker {
           token: async (authentication, origin) => {
             const id = await this.dispatch({ credentialCheck: { scope, alias: authentication.credential } })
             if (typeof id !== 'string') throw new Error('Invalid credential broker binding')
-            return this.agentTokens.destination(scope.podId, authentication, origin, id, () => credentials.readScriptSecret(id, scope.podId, authentication.credential), controller.signal)
+            return this.agentTokens.destination(scope.podId, authentication, origin, id, () => credentials.readHttpSecret(id, scope.podId, authentication.credential, controller.signal), controller.signal)
           },
           reject: authentication => this.agentTokens.reject(scope.podId, authentication),
         }

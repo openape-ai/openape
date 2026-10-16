@@ -76,3 +76,18 @@ it('keeps a key that authenticates an HTTP destination away from scripts', () =>
   expect(f.authority.assigned(f.pod.id, 'agent_key').configuration.alias).toBe('agent_key')
   expect(f.authority.readable(f.pod.id, 'crm').configuration.alias).toBe('crm')
 })
+
+it('selects only current HTTP credential assignments for portable migration', () => {
+  const f = fixture(); const key = randomUUID(); const other = randomUUID()
+  f.registry.assignCredential(f.pod.id, 'destination', key, 0)
+  f.registry.assignCredential(f.pod.id, 'unrelated', other, f.registry.epoch(f.pod.id))
+  expect(f.authority.httpAssignments(f.pod.id)).toEqual([])
+  const http = f.registry.assignHttp(f.pod.id, { origin: 'https://destination.example.test', methods: ['GET'] }, f.registry.epoch(f.pod.id), { type: 'ddisaAgent', credential: 'destination', subject: 'agent@example.test', issuer: 'https://id.example.test' })
+  expect(f.authority.httpAssignments(f.pod.id)).toEqual([{ id: key, podId: f.pod.id, alias: 'destination' }])
+  expect(() => f.authority.readable(f.pod.id, 'destination')).toThrow('not readable')
+  const credential = f.authority.assigned(f.pod.id, 'destination')
+  f.registry.revoke(f.pod.id, credential.id, credential.revision)
+  expect(() => f.authority.httpAssignments(f.pod.id)).toThrow('revoked')
+  f.registry.revoke(f.pod.id, http, 1)
+  expect(f.authority.httpAssignments(f.pod.id)).toEqual([])
+})

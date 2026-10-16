@@ -1,3 +1,4 @@
+import { ScriptCredentials } from './resources/script-credentials'
 import { releaseProfileLease } from './profile-lease'
 import { runtimeParentPort } from './parent-port'
 import { ExecutionIdentityBridge } from './runtime/execution-identity'
@@ -297,6 +298,11 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'program' in request.command) { port.postMessage({ id: request.id, state: new ProgramControl(store, registry).execute(request.command.program as ProgramInternal) }); return }
     if (request.command && typeof request.command === 'object' && 'setup' in request.command) {
       port.postMessage({ id: request.id, state: setup.execute(request.command.setup as SetupInternal) }); return
+    }
+    if (request.command && typeof request.command === 'object' && 'httpCredentialInventory' in request.command) {
+      const credentials = new ScriptCredentials(store, registry)
+      const assignments = store.listPods().flatMap(pod => credentials.httpAssignments(pod.id))
+      port.postMessage({ id: request.id, state: assignments }); return
     }
     if (request.command && typeof request.command === 'object' && 'credentialInventory' in request.command) {
       const assignments = store.listPods().flatMap(pod => registry.list(pod.id).filter(item => (item.kind === 'credential' || item.configuration.type === 'program') && item.state === 'ready').map(item => ({ podId: pod.id, id: (item.configuration.credentialId ?? item.configuration.stateId) as string })))

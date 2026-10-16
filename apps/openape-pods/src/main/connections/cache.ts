@@ -1,3 +1,5 @@
+import { parsePortableCredential, validatePortableValue } from './portable'
+import type { PortableBinding, PortableCredential } from './portable'
 import { parseCredentialAlias, parseCredentialValue } from '../../contracts/credentials'
 import { constants } from 'node:fs'
 import { randomUUID } from 'node:crypto'
@@ -36,25 +38,44 @@ export class CredentialCache {
     await chmod(this.root, 0o700)
   }
 
-  private async readIdentity(id: string): Promise<string> {
+  private portablePath(id: string): string { this.path(id); return join(this.root, `${id}.credential.json`) }
+
+  private async readPrivate(path: string): Promise<string> {
     const directory = await lstat(this.root)
-    if (!directory.isDirectory() || directory.isSymbolicLink() || (process.platform !== 'win32' && (directory.mode & 0o077))) throw new Error('Pod identity directory must be private')
-    const file = await open(this.identityPath(id), constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
+    if (!directory.isDirectory() || directory.isSymbolicLink() || (process.platform !== 'win32' && (directory.mode & 0o077))) throw new Error('Credential directory must be private')
+    const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
     try {
       const info = await file.stat()
-      if (!info.isFile() || info.nlink !== 1 || (process.platform !== 'win32' && (info.mode & 0o077))) throw new Error('Pod identity file must be private with a single link')
+      if (info.size > 10 * 1024 * 1024) throw new Error('Invalid credential cache size')
+      if (!info.isFile() || info.nlink !== 1 || (process.platform !== 'win32' && (info.mode & 0o077))) throw new Error('Credential file must be private with a single link')
       const text = await file.readFile('utf8')
-      if (!podIdentity(parseCredentialJSON(text))) throw new Error('Invalid Pod identity file')
       return text
     }
     finally { await file.close() }
   }
 
-  private async read(id: string): Promise<string> {
-    try { return await this.readIdentity(id) }
+  private async readIdentity(id: string): Promise<string> {
+    const text = await this.readPrivate(this.identityPath(id))
+    if (!podIdentity(parseCredentialJSON(text))) throw new Error('Invalid Pod identity file')
+    return text
+  }
+
+  private async portable(id: string): Promise<PortableCredential | undefined> {
+    try { return parsePortableCredential(parseCredentialJSON(await this.readPrivate(this.portablePath(id))), id) }
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+  }
+
+  private async read(id: string): Promise<string> {
+    try {
+      const identity = await this.readIdentity(id)
+      if (await this.portable(id)) throw new Error('Conflicting credential representations')
+      return identity
+    }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+    const portable = await this.portable(id)
+    if (portable) return JSON.stringify(portable.value)
     const bytes = await readFile(this.path(id))
-    if (!this.cipher?.available()) throw new Error('Credential store is locked or unavailable; legacy or application credentials require the desktop credential store; open the updated desktop once to migrate Pod identities')
+    if (!this.cipher?.available()) throw new Error('Credential store is locked or unavailable; unmigrated credentials require the desktop credential store; open the updated desktop once to migrate eligible credentials')
     const text = this.cipher.decrypt(bytes)
     if (podIdentity(parseCredentialJSON(text))) await this.persist(id, text)
     return text
@@ -79,16 +100,26 @@ export class CredentialCache {
     else this.queues.delete(id)
   }
 
-  private async persist(id: string, cache: string): Promise<void> {
-    const identity = podIdentity(parseCredentialJSON(cache))
+  private async persist(id: string, cache: string, selected?: PortableBinding): Promise<void> {
+    const value = parseCredentialJSON(cache)
+    const identity = podIdentity(value)
+    const portable = await this.portable(id)
+    const binding = selected ?? portable?.binding
+    if (binding && identity) throw new Error('Cannot replace a portable credential with a Pod identity')
+    if (binding) validatePortableValue(value, binding)
     let bytes: string | Buffer = cache
-    if (!identity) {
+    if (!identity && !binding) {
       if (!this.cipher?.available()) throw new Error('Application credential store is locked or unavailable; use the desktop credential store')
       bytes = this.cipher.encrypt(cache)
       try { await lstat(this.identityPath(id)); throw new Error('Cannot replace a Pod identity with another credential type') }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
     }
-    const target = identity ? this.identityPath(id) : this.path(id)
+    if (binding) {
+      try { await lstat(this.identityPath(id)); throw new Error('Cannot replace a Pod identity with a portable credential') }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+      bytes = JSON.stringify({ version: 1, id, binding, value })
+    }
+    const target = identity ? this.identityPath(id) : binding ? this.portablePath(id) : this.path(id)
     await this.privateDirectory()
     const staging = join(this.root, `.stage-${randomUUID()}`)
     try {
@@ -99,17 +130,48 @@ export class CredentialCache {
       const directory = await open(this.root, 'r')
       try {
         await directory.sync()
-        if (identity) { await rm(this.path(id), { force: true }); await directory.sync() }
+        if (identity || binding) { await rm(this.path(id), { force: true }); await directory.sync() }
       }
       finally { await directory.close() }
     }
     finally { await rm(staging, { force: true }) }
   }
 
+  private async migrate(id: string, binding: PortableBinding, signal?: AbortSignal): Promise<void> {
+    this.path(id); await this.acquire(id, signal)
+    try {
+      const portable = await this.portable(id)
+      if (portable) {
+        if (portable.binding.kind !== binding.kind) throw new Error('Portable credential kind changed; review its assignment')
+        validatePortableValue(portable.value, binding)
+        return
+      }
+      const text = await this.read(id)
+      validatePortableValue(parseCredentialJSON(text), binding)
+      signal?.throwIfAborted()
+      await this.persist(id, text, binding)
+    }
+    finally { this.release(id) }
+  }
+
+  async migrateHttp(id: string, podId: string, alias: string, signal?: AbortSignal): Promise<void> {
+    await this.migrate(id, { kind: 'http', podId, alias }, signal)
+  }
+
+  async migrateChatgpt(id: string, accountId: string, signal?: AbortSignal): Promise<void> {
+    await this.migrate(id, { kind: 'chatgpt', accountId }, signal)
+  }
+
+  async readHttpSecret(id: string, podId: string, alias: string, signal?: AbortSignal): Promise<string> {
+    await this.migrateHttp(id, podId, alias, signal)
+    signal?.throwIfAborted()
+    return this.readScriptSecret(id, podId, alias)
+  }
+
   async create(id: string, cache: string): Promise<void> {
     this.path(id); await this.acquire(id)
     try {
-      for (const path of [this.identityPath(id), this.path(id)]) {
+      for (const path of [this.identityPath(id), this.portablePath(id), this.path(id)]) {
         try { await lstat(path); throw new Error('Connection already exists') }
         catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
       }
@@ -127,7 +189,15 @@ export class CredentialCache {
   async eraseConnection(id: string): Promise<void> {
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid connection reference')
     await this.acquire(id)
-    try { await rm(this.identityPath(id), { force: true }); await rm(this.path(id), { force: true }) }
+    try {
+      await rm(this.identityPath(id), { force: true }); await rm(this.portablePath(id), { force: true }); await rm(this.path(id), { force: true })
+      try {
+        const directory = await open(this.root, 'r')
+        try { await directory.sync() }
+        finally { await directory.close() }
+      }
+      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+    }
     finally { this.release(id) }
   }
 
@@ -139,7 +209,7 @@ export class CredentialCache {
       catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error }
       const value = parseCredentialJSON(text)
       if (value.podId !== podId || (typeof value.privateKey !== 'string' && !['script-credential', 'program-state'].includes(String(value.kind)))) throw new Error('Refusing to erase a shared or foreign connection')
-      await rm(this.identityPath(id), { force: true }); await rm(this.path(id), { force: true }); await rm(join(this.root, `.script-${id}.json`), { force: true }); const directory = await open(this.root, 'r')
+      await rm(this.identityPath(id), { force: true }); await rm(this.portablePath(id), { force: true }); await rm(this.path(id), { force: true }); await rm(join(this.root, `.script-${id}.json`), { force: true }); const directory = await open(this.root, 'r')
       try { await directory.sync() }
       finally { await directory.close() }
     }
@@ -194,7 +264,7 @@ export class CredentialCache {
     finally { this.release(id) }
   }
 
-  async withCache<T>(id: string, operation: (file: string) => Promise<T>, signal?: AbortSignal): Promise<T> {
+  async withCache<T>(id: string, operation: (file: string) => Promise<T>, signal?: AbortSignal, chatgptLogin = false): Promise<T> {
     this.path(id); await this.acquire(id, signal)
     let temporary: string | undefined
     try {
@@ -207,7 +277,19 @@ export class CredentialCache {
       let outcome: { ok: true, value: T } | { ok: false, error: unknown }
       try { outcome = { ok: true, value: await operation(path) } }
       catch (error) { outcome = { ok: false, error } }
-      try { await this.persist(id, await readFile(path, 'utf8')) }
+      try {
+        const updated = await readFile(path, 'utf8')
+        let binding: PortableBinding | undefined
+        if (chatgptLogin && outcome.ok) {
+          const value = parseCredentialJSON(updated)
+          const accountId = (value.tokens as { account_id?: unknown } | undefined)?.account_id
+          if (typeof accountId !== 'string') throw new Error('ChatGPT login account is missing')
+          const previous = await this.portable(id)
+          if (previous && previous.binding.kind !== 'chatgpt') throw new Error('Cannot replace another credential type with ChatGPT')
+          binding = { kind: 'chatgpt', accountId }
+        }
+        await this.persist(id, updated, binding)
+      }
       catch (error) {
         if (!outcome.ok) throw new AggregateError([outcome.error, error], 'Tool failed and its authentication cache could not be saved')
         throw error
