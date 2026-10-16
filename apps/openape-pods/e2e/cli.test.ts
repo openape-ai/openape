@@ -1,3 +1,6 @@
+import { createHash, randomUUID } from 'node:crypto'
+import { ProgramState } from '../src/main/programs/state'
+import { parseScriptView } from '../src/contracts/scripts'
 import { execFile, spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { promisify } from 'node:util'
@@ -137,6 +140,47 @@ export async function run(context) {
     }
     finally { clearTimeout(deadline) }
   }
+})
+
+it('executes an assigned owner program without opening its encrypted application state', async () => {
+  outputs.length = 0; events.length = 0
+  root = await realpath(await mkdtemp(join(tmpdir(), 'pods-cli-owner-program-')))
+  const profile = join(root, 'profile'); await mkdir(profile, { mode: 0o700 })
+  const store = new PodDatabase(profile)
+  const applicationId = randomUUID(); const capability = `tool.app_${applicationId.replaceAll('-', '')}.invoke`
+  const desktop = new CredentialCache(join(profile, 'credentials'), cipher())
+  let podId = ''; let stateId = ''
+  try {
+    podId = store.createPod({ name: 'Owner program proof' }).id
+    new GrantLedger(store).execute({ type: 'level', podId, level: 'owner' })
+    stateId = await new ProgramState(desktop).create({ podId, applicationId })
+    const executable = '/usr/bin/printenv'
+    const registry = new ResourceRegistry(store, () => {})
+    registry.assignProgram(podId, applicationId, { type: 'program', name: 'printenv', cliId: 'printenv', executable, executableHash: createHash('sha256').update(await readFile(executable)).digest('hex'), stateId, capability, networkHosts: [], entryFiles: [], environment: {} }, registry.epoch(podId))
+  }
+  finally { store.close() }
+  const encryptedPath = join(profile, 'credentials', `${stateId}.encrypted`)
+  const encryptedBefore = await readFile(encryptedPath)
+  identity = await fixtureShellIdentity(profile)
+  await identity.persistCredentials(value => cipher().encrypt(value))
+  for (const file of await readdir(join(profile, 'credentials'))) {
+    if (file.endsWith('.encrypted') && file !== `${stateId}.encrypted`) await desktop.readConnection(file.slice(0, -'.encrypted'.length))
+  }
+  client = await open(profile)
+  let view = parseScriptView(await client.request({ channel: 'scripts', command: { type: 'list', podId } }))
+  const code = `export async function run(context) {
+    if (context.input.validation) return {status:'completed',summary:'Contract check',completedInputIds:[],gapIds:[]};
+    const result = await context.tools.invoke({application:'printenv',argv:['HOME']});
+    if (result.exitCode !== 0 || result.stdout.trim() !== ${JSON.stringify(homedir())}) throw new Error('Owner program HOME mismatch');
+    return {status:'completed',summary:'Assigned owner program executed without a credential cipher',completedInputIds:[],gapIds:[]};
+  }`
+  view = parseScriptView(await client.request({ channel: 'scripts', command: { type: 'save', podId, revision: view.pod.revision, draftId: null, draftRevision: 0, code, capabilities: [capability] } }))
+  view = parseScriptView(await client.request({ channel: 'scripts', command: { type: 'validate', podId, revision: view.pod.revision, draftId: view.source!.id, draftRevision: view.source!.revision } }))
+  expect(view.source!.validated, view.source!.evidence ?? '').toBe(true)
+  await client.request({ channel: 'scripts', command: { type: 'activate', podId, revision: view.pod.revision, hash: view.source!.hash, expectedActive: null } })
+  expect(await executeCli(cliArguments(['run', podId]), client, io()), JSON.stringify(outputs.at(-1))).toBe(0)
+  expect(outputs.at(-1)).toMatchObject({ state: 'completed', summary: 'Assigned owner program executed without a credential cipher' })
+  expect(await readFile(encryptedPath)).toEqual(encryptedBefore)
 })
 
 it('refuses a run without a Pod identity before any script process starts', async () => {
