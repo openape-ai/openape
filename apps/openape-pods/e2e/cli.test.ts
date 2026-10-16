@@ -177,7 +177,7 @@ it('executes an assigned owner program without opening its encrypted application
   view = parseScriptView(await client.request({ channel: 'scripts', command: { type: 'save', podId, revision: view.pod.revision, draftId: null, draftRevision: 0, code, capabilities: [capability] } }))
   view = parseScriptView(await client.request({ channel: 'scripts', command: { type: 'validate', podId, revision: view.pod.revision, draftId: view.source!.id, draftRevision: view.source!.revision } }))
   expect(view.source!.validated, view.source!.evidence ?? '').toBe(true)
-  await client.request({ channel: 'scripts', command: { type: 'activate', podId, revision: view.pod.revision, hash: view.source!.hash, expectedActive: null } })
+  await client.request({ channel: 'scripts', command: { type: 'activate', podId, revision: view.pod.revision, hash: view.source!.hash!, expectedActive: null } })
   expect(await executeCli(cliArguments(['run', podId]), client, io()), JSON.stringify(outputs.at(-1))).toBe(0)
   expect(outputs.at(-1)).toMatchObject({ state: 'completed', summary: 'Assigned owner program executed without a credential cipher' })
   expect(await readFile(encryptedPath)).toEqual(encryptedBefore)
