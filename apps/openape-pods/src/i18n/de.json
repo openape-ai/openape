@@ -3217,9 +3217,6 @@
   "The desktop profile has an unsupported active lock; close the desktop before using ape-pods": "Das Desktop-Profil hat eine nicht unterstützte aktive Sperre; vor Verwendung von ape-pods den Desktop schließen",
   "The Pods profile belongs to another desktop session": "Das Pods-Profil gehört zu einer anderen Desktop-Sitzung",
   "Close OpenApe Pods before using ape-pods with this profile; concurrent desktop/CLI access is not supported": "OpenApe Pods schließen, bevor ape-pods dieses Profil verwendet; gleichzeitiger Desktop-/CLI-Zugriff wird nicht unterstützt",
-  "Unsupported Pods identity encryption; no migration was performed": "Nicht unterstützte Verschlüsselung der Pod-Identität; es wurde keine Migration durchgeführt",
-  "Cannot decrypt the existing Pods identity; use its original keychain": "Die bestehende Pod-Identität kann nicht entschlüsselt werden; den ursprünglichen Schlüsselbund verwenden",
-  "Pods identity keychain is locked, missing or denies CLI access; no key was created or changed": "Der Schlüsselbund der Pod-Identität ist gesperrt, fehlt oder verweigert CLI-Zugriff; kein Schlüssel wurde erstellt oder geändert",
   "Invalid CLI command": "Ungültiger CLI-Befehl",
   "Unsupported CLI fields": "Nicht unterstützte CLI-Felder",
   "Unsupported CLI workspace command": "Nicht unterstützter CLI-Arbeitsbereichsbefehl",
@@ -3231,5 +3228,12 @@
   "Profile lease helper timed out": "Zeitüberschreitung beim Helfer für die Profilsperre",
   "Invalid profile lease reply": "Ungültige Antwort der Profilsperre",
   "Invalid one-shot run": "Ungültiger Einzellauf",
-  "Active script changed; inspect before running": "Das aktive Skript wurde geändert; vor der Ausführung prüfen"
+  "Active script changed; inspect before running": "Das aktive Skript wurde geändert; vor der Ausführung prüfen",
+  "Credential directory must be a real directory": "Das Zugangsdatenverzeichnis muss ein echtes Verzeichnis sein",
+  "Pod identity directory must be private": "Auf das Verzeichnis der Pod-Identitäten darf nur der Eigentümer zugreifen",
+  "Pod identity file must be private with a single link": "Auf die Pod-Identitätsdatei darf nur der Eigentümer zugreifen; sie darf keine zusätzlichen Hardlinks haben",
+  "Invalid Pod identity file": "Ungültige Pod-Identitätsdatei",
+  "Credential store is locked or unavailable; legacy or application credentials require the desktop credential store; open the updated desktop once to migrate Pod identities": "Der Zugangsspeicher ist gesperrt oder nicht verfügbar. Alte Identitäten und Anwendungs-Zugangsdaten benötigen den Desktop-Speicher. Öffne einmal den aktualisierten Desktop, um die Pod-Identitäten zu migrieren.",
+  "Application credential store is locked or unavailable; use the desktop credential store": "Der Speicher für Anwendungs-Zugangsdaten ist gesperrt oder nicht verfügbar; verwende den Desktop-Speicher",
+  "Cannot replace a Pod identity with another credential type": "Eine Pod-Identität darf nicht durch einen anderen Zugangsdaten-Typ ersetzt werden"
 }
