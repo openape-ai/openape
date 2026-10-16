@@ -12,6 +12,7 @@ export interface RuntimeHost {
   directory?: string
   apesCli: string
   oneShot?: boolean
+  jevKey?: () => string | undefined
   credentials: (root: string) => CredentialCache
   openExternal: (url: string) => Promise<void>
   fork: (entry: string, options: { cwd: string, env: Record<string, string>, serviceName: string, stdio: 'pipe' }) => RuntimeChild

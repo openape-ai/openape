@@ -42,7 +42,7 @@ export class ConnectionManager {
   private modelRejected = false
   private codex: CodexConnection
   private owner: OwnerConnection
-  constructor(private readonly root: string, private readonly runtime: AgentRuntime, private readonly credentials: CredentialCache, private readonly dispatch: (command: SetupInternal) => Promise<unknown>, private readonly availability: () => Promise<void>, private readonly directAgents = false) {
+  constructor(private readonly root: string, private readonly runtime: AgentRuntime, private readonly credentials: CredentialCache, private readonly dispatch: (command: SetupInternal) => Promise<unknown>, private readonly availability: () => Promise<void>, private readonly directAgents = false, private readonly jevKey?: () => string | undefined) {
     this.codex = new CodexConnection(credentials, runtime, join(root, 'authentication'))
     this.owner = new OwnerConnection(credentials)
   }
@@ -330,13 +330,17 @@ export class ConnectionManager {
     signal = AbortSignal.any([signal, this.typesafeSession.signal])
     const item = await this.connection(id, 'typesafe')
     if (item.state !== 'ready') throw new Error('TypeSafe is not connected; reconnect in App settings')
-    const record = await this.credentials.readConnection(id)
-    if (record.kind !== 'typesafe') throw new Error('Invalid TypeSafe credential record')
-    const key = parseTypesafeKey(record.key)
+    let key = this.jevKey?.()
+    if (key === undefined) {
+      const record = await this.credentials.readConnection(id)
+      if (record.kind !== 'typesafe') throw new Error('Invalid TypeSafe credential record')
+      key = parseTypesafeKey(record.key)
+    }
+    else key = parseTypesafeKey(key)
     signal.throwIfAborted()
     const response = await fetch(`${typesafeOrigin}/v1/systemone`, { method: 'POST', headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' }, body, redirect: 'error', signal })
     signal.throwIfAborted()
-    if ([401, 403].includes(response.status)) {
+    if ([401, 403].includes(response.status) && this.jevKey?.() === undefined) {
       await this.save({ ...item, state: 'expired', error: 'TypeSafe API key is invalid or access was denied; reconnect' }, await this.metadata(id))
       await this.availability()
     }

@@ -122,7 +122,17 @@ Only Pod execution identities move. Provider credentials, assigned application
 secrets, owner login and relay registration retain their existing protection. This
 release adds no credential-management commands and refuses
 `context.credentials.get` for additional assigned script secrets. The CLI cannot
-use application credentials which require desktop decryption.
+use application credentials which require desktop decryption, except for an
+explicit Jev API key supplied as `JEV_API_KEY` in the invoking environment.
+
+For a configured Jev connection, the CLI can use `JEV_API_KEY` instead of reading
+the encrypted desktop key. Supply it through your secret manager or existing
+shell environment, then run `ape-pods run <pod-id> --json`. No new connection is
+created and no key is persisted. The CLI removes this variable from its process
+environment before starting workers and keeps it only in its controller. Pod
+scripts and assigned programs do not inherit it. Existing connection readiness,
+Pod assignments, grants, limits and cancellation checks still apply. A rejected
+environment key does not invalidate the independently stored desktop key.
 
 Owner-level assigned program calls and application terminals use the owner HOME
 and temporary working files without opening or updating private ProgramState.
