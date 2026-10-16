@@ -146,8 +146,8 @@ export async function run(context) {
       await client.close(); client = undefined
       const cancelled = new PodDatabase(profile)
       try {
-        expect(cancelled.db.prepare("SELECT count(*) AS n FROM effect_ledger WHERE state='intent'").get()!.n).toBe(0)
-        expect(cancelled.db.prepare("SELECT count(*) AS n FROM effect_ledger WHERE state='unknown'").get()!.n).toBe(1)
+        expect(cancelled.db.prepare('SELECT count(*) AS n FROM effect_ledger WHERE state=\'intent\'').get()!.n).toBe(0)
+        expect(cancelled.db.prepare('SELECT count(*) AS n FROM effect_ledger WHERE state=\'unknown\'').get()!.n).toBe(1)
       }
       finally { cancelled.close() }
     }

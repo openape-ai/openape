@@ -86,7 +86,7 @@ export default antfu({
         { name: '@openape/shapes', message: 'The Pods desktop sends program calls to the IdP (POST /api/grants/authorize); it never loads Shapes adapters or resolves commands.' },
         { name: '@openape/grants', importNames: ['resolveServerShape', 'matchArgvToOperation', 'buildCliAuthDetail', 'createInMemoryShapeStore', 'parseShapePresentation', 'parseShapeCliVersions', 'readCliVersion', 'presentationBindings', 'GENERIC_OPERATION_ID'], message: 'Shapes resolution belongs to the IdP; the Pods desktop only verifies the command token it returns.' },
       ],
-      patterns: [{ group: ['@openape/apes/*', '@openape/shapes/*'], message: 'The Pods desktop never loads Shapes adapters or resolves commands; the IdP does.' }],
+      patterns: [{ group: ['@openape/apes/*', '!@openape/apes/program', '@openape/shapes/*'], message: 'The Pods desktop never loads Shapes adapters or resolves commands; the IdP does.' }],
     }],
     // Issue 1475: the model comes from the connected ChatGPT account at runtime; a model change at OpenAI must
     // never need a desktop code change or signed build. The first two selectors repeat the shared defaults.
