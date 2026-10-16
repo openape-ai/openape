@@ -6,7 +6,6 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { cliArguments } from '../../src/cli/arguments'
 import { executeCli } from '../../src/cli/commands'
 import { assertDesktopClosed } from '../../src/cli/profile'
-import { safeStorageCipher } from '../../src/cli/safe-storage'
 import { parseCliRequest } from '../../src/contracts/cli'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { ItemTagStore } from '../../src/worker/workspace/item-tags'
@@ -68,23 +67,6 @@ it('refuses an active desktop lock without modifying it and permits a missing lo
   await symlink(value, join(root, 'SingletonLock'))
   await expect(assertDesktopClosed(root)).rejects.toThrow('Close OpenApe Pods')
   expect(await readlink(join(root, 'SingletonLock'))).toBe(value)
-})
-
-it('round-trips existing v10 identity data, rejects wrong keys and never falls back to plaintext', () => {
-  const password = vi.fn(() => Buffer.from('synthetic-cli-keychain'))
-  const cipher = safeStorageCipher(password)
-  const encrypted = cipher.encrypt('SYNTHETIC_IDENTITY_RECORD')
-  // Fixed fixture produced independently with OpenSSL PBKDF2 and AES-CBC.
-  expect(encrypted.toString('base64')).toBe('djEwQ3iB73ySO1w3R1yFJ9UnXviKxt2jD0z+zgUR6RTcJqQ=')
-  expect(encrypted.subarray(0, 3).toString()).toBe('v10')
-  expect(encrypted.includes(Buffer.from('SYNTHETIC_IDENTITY_RECORD'))).toBe(false)
-  expect(cipher.decrypt(encrypted)).toBe('SYNTHETIC_IDENTITY_RECORD')
-  expect(password).toHaveBeenCalledTimes(1)
-  expect(() => safeStorageCipher(() => Buffer.from('different')).decrypt(encrypted)).toThrow('Cannot decrypt')
-  const missing = vi.fn(() => { throw new Error('Keychain denied') })
-  expect(() => safeStorageCipher(missing).decrypt(Buffer.from('PLAINTEXT'))).toThrow('Unsupported')
-  expect(missing).not.toHaveBeenCalled()
-  expect(() => safeStorageCipher(missing).decrypt(encrypted)).toThrow('Keychain denied')
 })
 
 it('cancels only the selected run and returns the cancellation exit code', async () => {

@@ -1,0 +1,174 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "status": "active",
+  "revision": 1,
+  "project": "OpenApe Pods",
+  "owner": "Patrick Hofmann",
+  "date": "2026-10-16",
+  "milestones": [
+    {
+      "id": "m1",
+      "status": "done",
+      "acceptance": [
+        "Desktop and CLI retain identical keys and Pod bindings; application secrets remain encrypted; failed migration preserves legacy data."
+      ],
+      "title": "Implement the shared identity format and atomic legacy migration.",
+      "goal": "Implement the shared identity format and atomic legacy migration.",
+      "proof": "Shared CredentialCache writes private identity files, migrates legacy records atomically, retains encrypted application credentials and removes the CLI keychain helper."
+    },
+    {
+      "id": "m2",
+      "status": "done",
+      "acceptance": [
+        "Private file modes, restart/refresh, wrong-Pod refusal and sandbox read/write denial pass; missing or corrupt identities never fall back to owner."
+      ],
+      "title": "Verify persistence, refusal paths and real native CLI execution.",
+      "goal": "Verify persistence, refusal paths and real native CLI execution.",
+      "proof": "34 focused cases and five native CLI cases pass. Packaged credentials and ape-shell boundary suites pass 29 cases; one optional external-parser case is skipped."
+    },
+    {
+      "id": "m3",
+      "status": "active",
+      "acceptance": [
+        "Build and required affected gate pass; native evidence names its actual scope; PR and operational limits are current."
+      ],
+      "title": "Publish evidence and update PR 463.",
+      "goal": "Publish evidence and update PR 463."
+    }
+  ],
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "Shared file storage for Pod execution identities",
+        "text": "Gemeinsamer Dateispeicher für Pod-Ausführungsidentitäten"
+      },
+      {
+        "path": "goal",
+        "source": "Run desktop and CLI with the same Pod identity without requiring CLI keychain access.",
+        "text": "Desktop und CLI verwenden dieselbe Pod-Identität, ohne Schlüsselbundzugriff der CLI."
+      },
+      {
+        "path": "summary",
+        "source": "Store Pod execution keys in private files behind the existing sandbox boundary. Migrate existing identities through the desktop without changing their grants or keys.",
+        "text": "Pod-Ausführungsschlüssel als private Dateien hinter der bestehenden Sandbox-Grenze speichern. Bestehende Identitäten über den Desktop migrieren, ohne ihre Freigaben oder Schlüssel zu ändern."
+      },
+      {
+        "path": "problem.statement",
+        "source": "The standalone CLI cannot read the desktop encryption key.",
+        "text": "Die eigenständige CLI kann den Verschlüsselungsschlüssel des Desktops nicht lesen."
+      },
+      {
+        "path": "problem.impact",
+        "source": "Real Pod runs fail before script execution.",
+        "text": "Echte Pod-Läufe scheitern vor der Skriptausführung."
+      },
+      {
+        "path": "problem.approach",
+        "source": "Share private identity files and retain sandbox denial of direct access.",
+        "text": "Private Identitätsdateien gemeinsam verwenden und direkten Zugriff durch die Sandbox sperren."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "Migrated identities work without an OS keychain in the CLI.",
+        "text": "Migrierte Identitäten funktionieren in der CLI ohne Betriebssystem-Schlüsselbund."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Implement the shared identity format and atomic legacy migration.",
+        "text": "Gemeinsames Identitätsformat und atomare Migration implementieren."
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Implement the shared identity format and atomic legacy migration.",
+        "text": "Gemeinsames Identitätsformat und atomare Migration implementieren."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "Verify persistence, refusal paths and real native CLI execution.",
+        "text": "Persistenz, Ablehnungen und native CLI-Ausführung prüfen."
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "Verify persistence, refusal paths and real native CLI execution.",
+        "text": "Persistenz, Ablehnungen und native CLI-Ausführung prüfen."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "Publish evidence and update PR 463.",
+        "text": "Nachweise veröffentlichen und PR 463 aktualisieren."
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "Publish evidence and update PR 463.",
+        "text": "Nachweise veröffentlichen und PR 463 aktualisieren."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "Desktop and CLI retain identical keys and Pod bindings; application secrets remain encrypted; failed migration preserves legacy data.",
+        "text": "Desktop und CLI erhalten identische Schlüssel und Pod-Bindungen; Anwendungs-Secrets bleiben verschlüsselt; fehlgeschlagene Migration erhält Altbestände."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "Private file modes, restart/refresh, wrong-Pod refusal and sandbox read/write denial pass; missing or corrupt identities never fall back to owner.",
+        "text": "Private Dateirechte, Neustart/Erneuerung, fremde Pod-Bindungen und Sandbox-Lese-/Schreibsperren bestehen; fehlende oder defekte Identitäten führen nie zum Owner-Fallback."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "Build and required affected gate pass; native evidence names its actual scope; PR and operational limits are current.",
+        "text": "Build und vorgeschriebener betroffener Prüflauf bestehen; native Nachweise nennen ihren tatsächlichen Umfang; PR und Betriebsgrenzen sind aktuell."
+      },
+      {
+        "path": "scope.0",
+        "source": "Extend PR 463 in its clean existing worktree. Migrate only Pod execution identities, not provider secrets, owner login or relay registration.",
+        "text": "PR 463 im bestehenden sauberen Worktree erweitern. Nur Pod-Ausführungsidentitäten migrieren, keine Anbieter-Secrets, Owner-Anmeldung oder Relay-Registrierung."
+      },
+      {
+        "path": "nonGoals.0",
+        "source": "No unrelated Pod repair, grant widening, new desktop attachment protocol or claim of Windows/Linux runtime support.",
+        "text": "Keine unabhängigen Pod-Reparaturen, erweiterten Freigaben, neues Desktop-Anbindungsprotokoll oder Behauptung einer Windows-/Linux-Runtime."
+      },
+      {
+        "path": "handoff",
+        "source": "Implement and verify on feature/issue-1499-ape-pods-cli. Existing profile use needs the updated desktop to decrypt legacy records once.",
+        "text": "Auf feature/issue-1499-ape-pods-cli implementieren und prüfen. Für bestehende Profile muss der aktualisierte Desktop alte Datensätze einmal entschlüsseln."
+      },
+      {
+        "path": "milestones.0.proof",
+        "source": "Shared CredentialCache writes private identity files, migrates legacy records atomically, retains encrypted application credentials and removes the CLI keychain helper.",
+        "text": "Gemeinsamer CredentialCache schreibt private Identitätsdateien, migriert Altbestände atomar, erhält verschlüsselte Anwendungs-Secrets und entfernt den Schlüsselbund-Helfer der CLI."
+      },
+      {
+        "path": "milestones.1.proof",
+        "source": "34 focused cases and five native CLI cases pass. Packaged credentials and ape-shell boundary suites pass 29 cases; one optional external-parser case is skipped.",
+        "text": "34 gezielte Fälle und fünf native CLI-Fälle bestehen. Gepackte Credentials- und ape-shell-Grenztests bestehen mit 29 Fällen; ein optionaler externer Parserfall wird übersprungen."
+      }
+    ]
+  },
+  "title": "Shared file storage for Pod execution identities",
+  "goal": "Run desktop and CLI with the same Pod identity without requiring CLI keychain access.",
+  "summary": "Store Pod execution keys in private files behind the existing sandbox boundary. Migrate existing identities through the desktop without changing their grants or keys.",
+  "problem": {
+    "statement": "The standalone CLI cannot read the desktop encryption key.",
+    "impact": "Real Pod runs fail before script execution.",
+    "approach": "Share private identity files and retain sandbox denial of direct access.",
+    "outcome": "Migrated identities work without an OS keychain in the CLI."
+  },
+  "scope": [
+    "Extend PR 463 in its clean existing worktree. Migrate only Pod execution identities, not provider secrets, owner login or relay registration."
+  ],
+  "nonGoals": [
+    "No unrelated Pod repair, grant widening, new desktop attachment protocol or claim of Windows/Linux runtime support."
+  ],
+  "handoff": "Implement and verify on feature/issue-1499-ape-pods-cli. Existing profile use needs the updated desktop to decrypt legacy records once.",
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-16",
+    "reference": "Chat approval of the filesystem/sandbox approach: \"Ja das passt. Setz das um, dann tun wir uns viel leichter.\" The attached direction records the approved concept; this execution breakdown was written afterward.",
+    "target": {
+      "sourceDigest": "4b867226fadc1807c8f09a4a7feba90cacceef03447a05ba6d7d2232d30cfc71"
+    }
+  }
+}

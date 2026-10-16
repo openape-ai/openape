@@ -1,7 +1,7 @@
 import { execFile, spawn } from 'node:child_process'
 import { once } from 'node:events'
 import { promisify } from 'node:util'
-import { mkdtemp, realpath, rm, mkdir, writeFile, readFile } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, mkdir, writeFile, readFile, readdir } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -10,7 +10,6 @@ import type { CliClient } from '../src/cli/client'
 import { nodeHost } from '../src/cli/node-host'
 import { executeCli } from '../src/cli/commands'
 import { cliArguments } from '../src/cli/arguments'
-import { safeStorageCipher } from '../src/cli/safe-storage'
 import { CredentialCache } from '../src/main/connections/cache'
 import { PodDatabase } from '../src/worker/storage/database'
 import { DomainData } from '../src/worker/data/domain'
@@ -24,13 +23,13 @@ const exec = promisify(execFile)
 let root = ''; let client: CliClient | undefined
 let identity: Awaited<ReturnType<typeof fixtureShellIdentity>> | undefined
 afterEach(async () => { await client?.close(); client = undefined; await identity?.close(); identity = undefined; vi.unstubAllEnvs(); if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
-const cipher = () => safeStorageCipher(() => Buffer.from('SYNTHETIC_CLI_KEYCHAIN'))
+const cipher = () => ({ available: () => true, encrypt: (value: string) => Buffer.from(value).reverse(), decrypt: (value: Buffer) => Buffer.from(value).reverse().toString() })
 const outputs: unknown[] = []
 const events: unknown[] = []
 const io = () => ({ signal: new AbortController().signal, output: (value: unknown) => outputs.push(value), progress: (value: unknown) => events.push(value) })
 async function open(profile: string) {
   const host = nodeHost(resolve('dist'))
-  return startCliClient(profile, profile, { ...host, credentials: path => new CredentialCache(path, cipher()) })
+  return startCliClient(profile, profile, host)
 }
 
 it('runs the built create/list/edit commands as Node processes and reopens the real database', async () => {
@@ -74,8 +73,13 @@ it.each(['owner', 'isolated'] as const)('executes with the real Pod identity, %s
   finally { store.close() }
   identity = await fixtureShellIdentity(profile)
   await identity.persistCredentials(value => cipher().encrypt(value))
+  const credentialRoot = join(profile, 'credentials')
+  const desktop = new CredentialCache(credentialRoot, cipher())
+  const files = await readdir(credentialRoot)
+  for (const file of files.filter(file => file.endsWith('.encrypted'))) await desktop.readConnection(file.slice(0, -'.encrypted'.length))
+  const protectedIdentity = join(credentialRoot, (await readdir(credentialRoot)).find(file => file.endsWith('.identity.json'))!)
   const script = join(root, 'pod-script.mjs')
-  await writeFile(script, `import { readFile } from 'node:fs/promises';
+  await writeFile(script, `import { readFile, writeFile } from 'node:fs/promises';
 export const contractVersion = 2;
 export async function run(context) {
   if (context.input.validation) return {status:'completed',summary:'Synthetic contract check',completedInputIds:[],gapIds:[]};
@@ -83,6 +87,11 @@ export async function run(context) {
   if (!denied) throw new Error('Foreign namespace was readable');
   let protectedDenied = false; try { await readFile(${JSON.stringify(protectedFile)}, 'utf8'); } catch { protectedDenied = true; }
   if (!protectedDenied) throw new Error('Owner authentication store was readable');
+  for (const path of [${JSON.stringify(protectedIdentity)},${JSON.stringify(protectedIdentity)} + '.new']) {
+    let readDenied = false; try { await readFile(path, 'utf8'); } catch { readDenied = true; }
+    let writeDenied = false; try { await writeFile(path, 'DO_NOT_WRITE'); } catch { writeDenied = true; }
+    if (!readDenied || !writeDenied) throw new Error('Pod identity store was accessible');
+  }
   const value = {home:process.env.HOME,cwd:process.cwd(),podId:context.input.podId,denied,protectedDenied};
   await context.data.set('cli/state/context',value,{expectedRevision:0});
   await context.progress.commit({expectedRevision:context.input.checkpointRevision,checkpoint:{checked:true},sources:[],claims:[]});

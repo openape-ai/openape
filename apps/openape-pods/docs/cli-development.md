@@ -95,11 +95,33 @@ the Pod workspace. The caller's shell environment is not inherited wholesale.
 Protected profile, control-socket, owner apes-login and denylist paths remain
 closed in both contexts.
 
-Existing Pod identity records use the current encrypted store. A minimal macOS
-adapter reads the existing Safe Storage key without creating or changing a
-keychain item or displaying a system prompt. A missing, locked or denied item
-fails explicitly. This release adds no credential-management commands and
-refuses `context.credentials.get` for additional assigned script secrets.
+Pod execution identities use private `credentials/<connection-id>.identity.json`
+files shared by desktop and CLI. The credential directory is mode `0700` and each
+identity file is `0600` on supported Unix hosts. The trusted runtime reads the
+permanent key; ape-shell receives the existing short-lived token file. Pod
+programs remain unable to directly read or write the protected profile.
+
+Open the updated desktop once before using an existing profile with this CLI.
+It decrypts legacy Pod identity records through its original Safe Storage access,
+atomically writes the private identity file, and only then removes that identity's
+old encrypted record. Keys, subjects, references and grants are preserved. Failed
+migration preserves the encrypted source; the CLI reports the migration requirement
+without accessing the keychain or generating a replacement identity. Fresh Pod
+identities use the file format immediately. Older desktop versions do not understand
+the new format; rollback requires restoring a consistent pre-migration profile
+backup while both runtimes are closed, not reinstalling the old binary alone.
+
+Only Pod execution identities move. Provider credentials, assigned application
+secrets, owner login and relay registration retain their existing protection. This
+release adds no credential-management commands and refuses
+`context.credentials.get` for additional assigned script secrets. The CLI cannot
+use application credentials which require desktop decryption.
+
+This is filesystem and sandbox protection, not encryption at rest: unsandboxed
+processes running as the owner can read these identities. Owner mode already means
+trust in the Pod code; its direct path denials do not prevent indirect execution
+through owner startup files. The storage format has no OS-keychain dependency;
+this change does not add Windows or Linux runtime/sandbox support.
 
 Shared domain data and work use the existing runtime APIs with Pod-scoped
 reader/writer permissions, revisions and claims. Owner HOME does not grant owner

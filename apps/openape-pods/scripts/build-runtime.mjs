@@ -6,8 +6,8 @@ import { buildRuntimeAssets } from './runtime-build.mjs'
 await build({ entry: { 'worker/entry': 'src/worker/entry.ts' }, format: ['cjs'], platform: 'node', target: 'node24', outDir: 'dist', clean: true, splitting: false, removeNodeProtocol: false, noExternal: [/.*/], outExtension: () => ({ js: '.cjs' }) })
 await buildRuntimeAssets()
 if (process.platform === 'darwin') {
-  for (const name of ['pods-profile-lock', 'pods-keychain']) {
-    execFileSync('/usr/bin/xcrun', ['clang', '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', `native/${name}.c`, '-o', `dist/native/${name}`, ...(name === 'pods-keychain' ? ['-framework', 'Security'] : [])], { stdio: 'inherit' })
+  for (const name of ['pods-profile-lock']) {
+    execFileSync('/usr/bin/xcrun', ['clang', '-std=c11', '-O2', '-Wall', '-Wextra', '-Werror', `native/${name}.c`, '-o', `dist/native/${name}`], { stdio: 'inherit' })
   }
 }
 await build({ entry: { 'cli/entry': 'src/cli/entry.ts' }, format: ['cjs'], platform: 'node', target: 'node24', outDir: 'dist', clean: false, splitting: false, removeNodeProtocol: false, noExternal: [/.*/], banner: { js: '#!/usr/bin/env node' }, outExtension: () => ({ js: '.cjs' }) })
