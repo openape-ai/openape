@@ -40,6 +40,7 @@ async function legacyProfile() {
   await mkdir(join(root, 'credentials'), { mode: 0o700 })
   for (const item of [bindings.delta, bindings.owner, bindings.duplicate]) await writeFile(join(root, 'credentials', `${item.connectionId}.encrypted`), JSON.stringify({ ...item.identity, privateKey: 'synthetic-key', publicKey: 'synthetic-public-key' }), { mode: 0o600 })
   for (const id of Object.values(rows)) await credentials.create(id, JSON.stringify({ issuer, account: 'synthetic' }))
+  await credentials.connect(rows.codex, JSON.stringify({ auth_mode: 'chatgpt', tokens: { account_id: 'synthetic', access_token: 'synthetic-access', refresh_token: 'synthetic-refresh' } }))
   const runtime = { helper: 'unused-fixture-helper', executable: process.execPath, entry: 'unused-entry', runtimeDirectories: [], environment: {}, binary: join(vendor, 'codex'), manifest: join(vendor, 'manifest.json'), catalog: 'unused-catalog', sdkHost: 'unused-host' }
   const start = async () => { const manager = new ConnectionManager(root, runtime, credentials, async command => control.execute(command), async () => {}); await manager.initialize(async () => {}); return manager }
   cleanups.push(async () => { store.close(); await rm(root, { recursive: true, force: true }) })
@@ -51,6 +52,7 @@ it('reduces a September 22 profile to one Codex and one DDISA owner without re-p
   const provision = vi.spyOn(PodIdentityManager.prototype, 'provision'); const prepare = vi.spyOn(PodIdentityManager.prototype, 'ensurePrepared')
   const manager = await start()
   const view = await manager.view()
+  expect(view.runtime).toEqual({ ready: true, error: null })
   expect(view.connections.map(item => [item.provider, item.account, item.state])).toEqual([['openape', 'patrick@example.invalid', 'ready'], ['chatgpt', 'model@example.invalid', 'ready']])
   expect(view.owner).toBe(rows.owner)
   expect(control.connections.metadata(rows.owner).pods).toEqual({ [pods[1].id]: bindings.owner, [pods[2].id]: bindings.duplicate })
@@ -62,7 +64,8 @@ it('reduces a September 22 profile to one Codex and one DDISA owner without re-p
   expect(await Promise.all([bindings.owner, bindings.duplicate].map(item => file(item.connectionId)))).toEqual([false, false])
   expect(await file(bindings.delta.connectionId)).toBe(false)
   expect(await exists(join(root, 'credentials', `${bindings.delta.connectionId}.identity.json`))).toBe(false)
-  expect(await Promise.all([rows.owner, rows.codex].map(file))).toEqual([true, true])
+  expect(await Promise.all([rows.owner, rows.codex].map(file))).toEqual([true, false])
+  expect(await exists(join(root, 'credentials', `${rows.codex}.credential.json`))).toBe(true)
   expect(await Promise.all([rows.deltaReady, rows.deltaFailed, rows.ownerDuplicate, rows.codexFailed].map(file))).toEqual([false, false, false, false])
   expect(provision).not.toHaveBeenCalled(); expect(prepare).not.toHaveBeenCalled()
   await manager.stop()

@@ -3249,5 +3249,20 @@
   "Owner start runtime or entry code changed": "Die Laufzeit oder der Einstiegscode des Owner-Starts wurde geändert.",
   "Pod grant authority is unavailable": "Die Freigabeinstanz des Pods ist nicht verfügbar.",
   "The owner start already belongs to another run": "Der Owner-Start ist bereits einem anderen Lauf zugeordnet.",
-  "Assigned executable changed before authorization": "Das zugewiesene Programm wurde vor der Freigabe geändert."
+  "Assigned executable changed before authorization": "Das zugewiesene Programm wurde vor der Freigabe geändert.",
+  "Credential directory must be private": "Auf das Zugangsdaten-Verzeichnis darf nur der Eigentümer zugreifen",
+  "Invalid credential cache size": "Ungültige Größe des Zugangsdaten-Caches",
+  "Credential file must be private with a single link": "Die Zugangsdaten-Datei darf nur für den Eigentümer zugänglich sein und genau einen Dateiverweis haben",
+  "Conflicting credential representations": "Widersprüchliche Zugangsdaten-Dateien",
+  "Credential store is locked or unavailable; unmigrated credentials require the desktop credential store; open the updated desktop once to migrate eligible credentials": "Der Zugangsspeicher ist gesperrt oder nicht verfügbar. Noch nicht migrierte Zugangsdaten benötigen den Desktop-Speicher. Öffne einmal den aktualisierten Desktop, um die dafür vorgesehenen Zugangsdaten zu migrieren.",
+  "Cannot replace a portable credential with a Pod identity": "Portable Zugangsdaten können nicht durch eine Pod-Identität ersetzt werden",
+  "Cannot replace a Pod identity with a portable credential": "Eine Pod-Identität kann nicht durch portable Zugangsdaten ersetzt werden",
+  "Portable credential kind changed; review its assignment": "Der Typ der portablen Zugangsdaten hat sich geändert. Prüfe die Zuweisung.",
+  "ChatGPT login account is missing": "Die Kontokennung der ChatGPT-Anmeldung fehlt",
+  "Cannot replace another credential type with ChatGPT": "Ein anderer Zugangsdaten-Typ kann nicht durch ChatGPT ersetzt werden",
+  "HTTP credential binding does not match its assignment": "Die Bindung der HTTP-Zugangsdaten stimmt nicht mit der Zuweisung überein",
+  "ChatGPT credential account binding does not match; reconnect": "Die Kontobindung der ChatGPT-Zugangsdaten stimmt nicht überein. Verbinde das Konto erneut.",
+  "Invalid portable credential record": "Ungültiger portabler Zugangsdaten-Datensatz",
+  "Invalid portable credential binding": "Ungültige Bindung der portablen Zugangsdaten",
+  "Store a protected value for this pod. HTTP authentication keys stay with the runtime. Saving or replacing pauses the pod and requires script validation again.": "Speichere einen geschützten Wert für diesen Pod. Schlüssel für die HTTP-Anmeldung bleiben bei der Laufzeit. Speichern oder Ersetzen pausiert den Pod und erfordert eine erneute Skriptprüfung."
 }

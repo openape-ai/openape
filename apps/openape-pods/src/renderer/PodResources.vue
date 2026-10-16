@@ -83,7 +83,7 @@ export default defineComponent({
       <div v-if="mode === 'values' && !access.remote" class="credential-form">
         <h3>{{ t('Script credentials') }}</h3>
         <p class="muted">
-          {{ t('Store an encrypted value for this pod. Its scripts can use every assigned secret. Saving or replacing pauses the pod and requires script validation again.') }}
+          {{ t('Store a protected value for this pod. HTTP authentication keys stay with the runtime. Saving or replacing pauses the pod and requires script validation again.') }}
         </p>
         <SecretForm :key="credentialAlias" :pod-id="podId" :alias="credentialAlias || null" desktop @save="saveCredential" @file="(podId, alias) => secrets({ type: 'importFile', podId, alias })" @request="(podId, alias, purpose) => secrets({ type: 'request', podId, alias, purpose })" @cancel="credentialAlias = ''" />
         <p v-if="message" role="status">
