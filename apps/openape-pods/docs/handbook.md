@@ -427,7 +427,7 @@ For a mail notification pod, select your installed o365-cli in Permissions and c
 
 Store telegram_chat_id as a variable and telegram_bot_token as a secret. The selected CLI determines whether the script needs an explicit mailbox variable. Allow POST to https://api.telegram.org in Permissions. Telegram needs no separate account card or bundled executable.
 
-Use examples/mail-notification.mjs from the source checkout. The first successful run establishes a quiet baseline over the previous 24 hours. Later runs report new message identities using a five-minute overlap. The recipe caps reads at 20 pages and 1000 messages per window and fails visibly if the window is incomplete. It never sends historical messages on first use and sends only a count and account name.
+Keep your personal mail notification script locally and activate it through the Pod script manager. The first successful run establishes a quiet baseline over the previous 24 hours. Later runs report new message identities using a five-minute overlap. The recipe caps reads at 20 pages and 1000 messages per window and fails visibly if the window is incomplete. It never sends historical messages on first use and sends only a count and account name.
 
 Validate and run manually before enabling a 15-minute interval in Settings. Review the secrets assigned to this Pod. The recipe records a pending notification before sending it and stores the receipt before acknowledging progress. When delivery is uncertain, inspect the destination and resolve the outcome in History before retrying.
 
