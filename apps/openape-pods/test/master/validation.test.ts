@@ -60,3 +60,13 @@ it('refuses retired program approval requests during validation', async () => {
   })
   await expect(validate()).rejects.toThrow('Validation rejected an undeclared service request')
 })
+
+it('provides only local elapsed timing during synthetic validation', async () => {
+  const { validate } = await drafted()
+  vi.mocked(executeScript).mockImplementation(async (_runtime, _root, _artifact, _input, signal, services) => {
+    expect(await services.request('run.timing', {}, signal)).toEqual({ activeMs: expect.any(Number), waitingMs: 0 })
+    await expect(services.request('run.timing', { runId: randomUUID() }, signal)).rejects.toThrow('no parameters')
+    return { status: 'completed', summary: 'Synthetic timing checked', completedInputIds: [], gapIds: [] }
+  })
+  await expect(validate()).resolves.toMatchObject({ status: 'completed' })
+})

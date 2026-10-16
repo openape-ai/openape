@@ -50,6 +50,8 @@ it('exposes generic tools but no executable mail or object-approval ports to scr
   expect(context).not.toHaveProperty('mail')
   expect(context).not.toHaveProperty('approvals')
   expect(scriptOperations.some(operation => /^(?:mail|approvals)\./.test(operation))).toBe(false)
+  await (context.timing as () => Promise<unknown>)()
+  expect(request).toHaveBeenCalledWith('run.timing', {})
   await (context.tools as { invoke: (body: unknown) => Promise<unknown> }).invoke({ application: 'node', argv: ['-e', 'console.log(2 + 2)'] })
   expect(request).toHaveBeenCalledWith('tools.invoke', { application: 'node', argv: ['-e', 'console.log(2 + 2)'] })
 })
