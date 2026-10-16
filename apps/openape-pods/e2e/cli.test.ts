@@ -60,6 +60,7 @@ it.each(['owner', 'isolated'] as const)('executes with the real Pod identity, %s
   const protectedFile = join(ownerHome, '.config/apes/auth.json')
   await writeFile(protectedFile, 'SYNTHETIC_OWNER_LOGIN_DO_NOT_READ')
   vi.stubEnv('HOME', ownerHome)
+  vi.stubEnv('JEV_API_KEY', 'synthetic-cli-controller-only-key')
   expect(homedir()).toBe(ownerHome)
   client = await open(profile)
   await executeCli(cliArguments(['create', '--name', 'Context proof']), client, io())
@@ -87,6 +88,7 @@ it.each(['owner', 'isolated'] as const)('executes with the real Pod identity, %s
 export const contractVersion = 2;
 export async function run(context) {
   if (context.input.validation) return {status:'completed',summary:'Synthetic contract check',completedInputIds:[],gapIds:[]};
+  if (process.env.JEV_API_KEY !== undefined) throw new Error('Jev API key leaked into Pod environment');
   let denied = false; try { await context.data.get('cli/private/foreign'); } catch { denied = true; }
   if (!denied) throw new Error('Foreign namespace was readable');
   let protectedDenied = false; try { await readFile(${JSON.stringify(protectedFile)}, 'utf8'); } catch { protectedDenied = true; }

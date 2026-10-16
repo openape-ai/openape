@@ -1,10 +1,15 @@
 import { EventEmitter } from 'node:events'
 import { fork } from 'node:child_process'
 import type { RuntimeHost } from '../main/runtime-host'
+import { parseTypesafeKey } from '../contracts/jev'
 import { CredentialCache } from '../main/connections/cache'
 
 export function nodeHost(dist: string): RuntimeHost {
+  const suppliedKey = process.env.JEV_API_KEY
+  delete process.env.JEV_API_KEY
+  const key = suppliedKey === undefined ? undefined : parseTypesafeKey(suppliedKey)
   return {
+    jevKey: () => key,
     directory: dist,
     oneShot: true,
     apesCli: `${dist}/vendor/apes/ape-shell.mjs`,

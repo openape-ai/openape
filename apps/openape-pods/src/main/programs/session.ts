@@ -4,7 +4,7 @@ import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { setTimeout as delay } from 'node:timers/promises'
-import { assertProgramName, commandLine, programIdentity } from '../../contracts/programs'
+import { commandLine } from '../../contracts/programs'
 import type { ProgramAssignment, TerminalView } from '../../contracts/programs'
 import type { SandboxReach } from '../../contracts/sandbox'
 import { launchApeShell } from '../../worker/runtime/ape-shell'
@@ -12,7 +12,7 @@ import type { ApeShellRuntime } from '../../worker/runtime/ape-shell'
 import { podIdentityFile } from '../connections/identity-file'
 import { observeExecution } from './execution'
 import { programHome, verifyExecutable } from '../../worker/runtime/sandbox'
-import type { AgentConnection, GrantLedgerPort, ProgramCall } from '../broker/authorization'
+import type { AgentConnection, GrantLedgerPort } from '../broker/authorization'
 import type { CredentialCache } from '../connections/cache'
 import { registerAuthDomain } from '../connections/ledger'
 import { startNetworkProxy } from '../network/proxy'
@@ -28,12 +28,6 @@ export async function verifyProgram(assignment: ProgramAssignment): Promise<void
   await verifyExecutable(assignment.executable, assignment.executableHash)
   await verifyProgramRuntime(assignment)
   for (const file of assignment.entryFiles) await verifyExecutable(file.path, file.hash)
-}
-
-/** One command of an assigned application as the IdP authorizes it: the program's name and file hash and the exact arguments. */
-export function programCall(assignment: ProgramAssignment, argv: string[]): ProgramCall {
-  assertProgramName(assignment.cliId)
-  return { program: programIdentity(assignment), argv }
 }
 
 /** What the owner sees of one command a script asks approval for: the exact command line (issue 1468). */

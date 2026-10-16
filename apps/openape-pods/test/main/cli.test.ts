@@ -3,6 +3,7 @@ import { mkdtemp, realpath, rm, symlink, readlink } from 'node:fs/promises'
 import { tmpdir, hostname } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
+import { nodeHost } from '../../src/cli/node-host'
 import { cliArguments } from '../../src/cli/arguments'
 import { executeCli } from '../../src/cli/commands'
 import { assertDesktopClosed } from '../../src/cli/profile'
@@ -98,4 +99,23 @@ it('drains paged run events before printing the final result', async () => {
   expect(exit).toBe(0)
   expect(observed).toEqual([1, 2, 3, 4, 5])
   expect(output).toHaveBeenCalledTimes(1)
+})
+
+it('captures a supplied Jev key only in the CLI controller and removes inherited exposure', () => {
+  const previous = process.env.JEV_API_KEY
+  try {
+    process.env.JEV_API_KEY = 'synthetic-env-key'
+    const host = nodeHost('/synthetic-dist')
+    expect(host.jevKey?.()).toBe('synthetic-env-key')
+    expect(process.env.JEV_API_KEY).toBeUndefined()
+    expect(JSON.stringify(host)).not.toContain('synthetic-env-key')
+    expect(nodeHost('/synthetic-dist').jevKey?.()).toBeUndefined()
+    process.env.JEV_API_KEY = 'invalid key'
+    expect(() => nodeHost('/synthetic-dist')).toThrow('without whitespace')
+    expect(process.env.JEV_API_KEY).toBeUndefined()
+  }
+  finally {
+    if (previous === undefined) delete process.env.JEV_API_KEY
+    else process.env.JEV_API_KEY = previous
+  }
 })
