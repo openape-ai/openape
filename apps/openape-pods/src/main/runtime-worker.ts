@@ -267,7 +267,7 @@ export class RuntimeWorker {
     this.connections = new ConnectionManager(this.root, runtime, this.credentials!, command => this.dispatch({ setup: command }), async () => {
       const ready = await this.connections!.providerReady()
       await this.dispatch({ provider: ready && this.providerGateway ? { port: this.providerGateway.port, capability: this.providerGateway.capability } : null })
-    }, !!process.env.OPENAPE_PODS_FIXTURE_DIR && process.env.NODE_ENV === 'test')
+    }, !!process.env.OPENAPE_PODS_FIXTURE_DIR && process.env.NODE_ENV === 'test', this.host.oneShot ? this.host.jevKey : undefined)
     this.providerGateway = await startAgentGateway({ provider: (body, signal) => this.connections!.provider(body, signal), model: signal => this.connections!.model(signal), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
     const connections = this.connections
     const grants = this.podGrants()!

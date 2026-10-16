@@ -30,6 +30,15 @@
       ],
       "title": "Reconcile and retest Mail review",
       "goal": "Prove stopped execution domains, retain unknown-effect holds until reviewed, then verify Mail review through the native CLI."
+    },
+    {
+      "id": "jev-cli",
+      "status": "active",
+      "title": "Use an explicit Jev environment key",
+      "goal": "Accept JEV_API_KEY in the CLI controller without forwarding or persisting it; preserve connection, grant and limit checks.",
+      "acceptance": [
+        "The configured Jev resource works through the CLI without desktop decryption; scripts and programs never inherit the key."
+      ]
     }
   ],
   "translations": {
@@ -114,6 +123,21 @@
         "path": "milestones.2.acceptance.0",
         "source": "Prove stopped execution domains, retain unknown-effect holds until reviewed, then verify Mail review through the native CLI.",
         "text": "Beendete Ausführungsdomänen nachweisen, Sperren ungeklärter Effekte bis zur Prüfung erhalten und danach die Mail-Prüfung über die native CLI prüfen."
+      },
+      {
+        "path": "milestones.3.title",
+        "source": "Use an explicit Jev environment key",
+        "text": "Einen ausdrücklich übergebenen Jev-Umgebungsschlüssel verwenden"
+      },
+      {
+        "path": "milestones.3.goal",
+        "source": "Accept JEV_API_KEY in the CLI controller without forwarding or persisting it; preserve connection, grant and limit checks.",
+        "text": "JEV_API_KEY im CLI-Controller verwenden, ohne ihn weiterzugeben oder zu speichern; Verbindungs-, Freigabe- und Limitprüfungen erhalten."
+      },
+      {
+        "path": "milestones.3.acceptance.0",
+        "source": "The configured Jev resource works through the CLI without desktop decryption; scripts and programs never inherit the key.",
+        "text": "Die konfigurierte Jev-Ressource funktioniert über das CLI ohne Desktop-Entschlüsselung; Skripte und Programme erben den Schlüssel niemals."
       }
     ]
   },
@@ -129,7 +153,7 @@
   "approval": {
     "by": "Patrick Hofmann",
     "date": "2026-10-16",
-    "reference": "Dann setz das bitte so um und behebe Issue 1501. Gleiche den abgebrochenen Lauf sicher ab und teste die Mail-Prüfung danach über die CLI. Die bestehenden Absicherungen müssen erhalten bleiben.",
+    "reference": "Dann setz das bitte so um und behebe Issue 1501. Gleiche den abgebrochenen Lauf sicher ab und teste die Mail-Prüfung danach über die CLI. Die bestehenden Absicherungen müssen erhalten bleiben. Additional authorization: wenn wir das CLI mit dem API key in der environment aufrufen würden wäre das auch schon ok...",
     "target": {
       "url": "https://repos.openape.ai/patrick/monorepo/issues/1501",
       "version": 1
