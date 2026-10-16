@@ -277,8 +277,7 @@ export class RuntimeWorker {
       if (this.host.oneShot) return
       await this.credentials!.reconcileScriptSecrets(await this.dispatch({ credentialInventory: true }) as { id: string, podId: string }[])
       await this.finishDeletions()
-      const assignments = await this.dispatch({ httpCredentialInventory: true }) as { id: string, podId: string, alias: string }[]
-      for (const assignment of assignments) await this.credentials!.migrateHttp(assignment.id, assignment.podId, assignment.alias)
+      await this.migrateHttpCredentials()
     }, !this.host.oneShot)
     if (this.host.oneShot) return
     this.secretsGate = new SecretsGate({
@@ -699,6 +698,14 @@ export class RuntimeWorker {
 
   async request(command: WorkspaceCommand): Promise<WorkspaceState> { const central = this.centralAction(command.type); if (central) return central.local(() => this.request(command)); return parseWorkspace(await this.dispatch(command)) }
 
+  private async migrateHttpCredentials(podId?: string): Promise<void> {
+    const assignments = await this.dispatch({ httpCredentialInventory: true }) as { id: string, podId: string, alias: string }[]
+    for (const assignment of assignments) {
+      if (podId && assignment.podId !== podId) continue
+      await this.credentials!.migrateHttp(assignment.id, assignment.podId, assignment.alias)
+    }
+  }
+
   async resources(command: InternalResourceCommand): Promise<ResourceState> {
     const central = this.centralAction(command.type === 'sandbox' ? 'list' : command.type); if (central) return central.local(() => this.resources(command))
     await this.setupReady
@@ -717,10 +724,12 @@ export class RuntimeWorker {
         throw error
       }
       for (const old of before.resources.filter(item => item.kind === 'credential' && item.configuration.alias === command.alias)) await this.credentials.erasePodKey(old.configuration.credentialId as string, command.podId)
+      await this.migrateHttpCredentials(command.podId)
       return view
     }
     const before = command.type === 'revoke' ? parseResourceState(await this.dispatch({ resource: { type: 'list', podId: command.podId } })).resources.find(item => item.id === command.id) : undefined
     const view = parseResourceState(await this.dispatch({ resource: command }))
+    if (command.type === 'bindHttp') await this.migrateHttpCredentials(command.podId)
     if (before?.kind === 'credential' || before?.configuration.type === 'program') {
       if (!this.credentials) throw new Error('Credential store is unavailable')
       await this.credentials.erasePodKey((before.configuration.credentialId ?? before.configuration.stateId) as string, command.podId)
@@ -755,6 +764,7 @@ export class RuntimeWorker {
     if (before.epoch !== command.epoch) throw new Error('Pod or HTTP permissions changed; reload before assigning access')
     const permission = parseHttpPermission(command.permission)
     const view = parseResourceState(await this.dispatch({ resource: { type: 'bindHttp', podId: command.podId, epoch: command.epoch, permission, ...(command.authentication ? { authentication: command.authentication } : {}) } }))
+    await this.migrateHttpCredentials(command.podId)
     const { approval } = await this.provisionGrant(command.podId, httpSpec(permission.origin, permission.methods), owner)
     return { view, approval }
   }

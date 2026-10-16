@@ -18,6 +18,7 @@ export class ScriptCredentials {
     return this.resources.list(podId).flatMap((resource) => {
       if (resource.kind !== 'tool' || resource.state !== 'ready' || resource.configuration.type !== 'http' || !resource.configuration.authentication) return []
       const authentication = parseHttpAuthentication(resource.configuration.authentication)
+      if (!this.resources.list(podId).some(item => item.kind === 'credential' && item.state === 'ready' && item.configuration.alias === authentication.credential)) return []
       const credential = this.assigned(podId, authentication.credential)
       return [{ id: credential.configuration.credentialId as string, podId, alias: authentication.credential }]
     })
