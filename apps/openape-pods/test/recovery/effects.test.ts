@@ -164,3 +164,33 @@ it('drops only a private-channel not-started intent and keeps failed or complete
     else { await result; expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()?.state).toBe(scenario === 'completed' ? 'completed' : 'unknown') }
   }
 })
+
+it('records owner-confirmed partial program effects without inventing success or allowing replay', async () => {
+  const f = fixture()
+  const key = `program:${f.run.id}:${f.run.id}`
+  const input = { synthetic: 'partial work committed before failure' }
+  f.ledger.begin(f.pod.id, f.run.id, key, 'program.call', input)
+  f.ledger.markUnknown(f.pod.id, key)
+  f.runs.finish(f.run.id, 'failed', 'Partially completed', 'Synthetic program error')
+  const recovery = new Recovery(f.store, f.resources, {} as never, '/unused')
+  await expect(recovery.resolveHttp(randomUUID(), f.run.id, key, true, 'Wrong Pod', 'partial')).rejects.toThrow('not awaiting')
+  await recovery.resolveHttp(f.pod.id, f.run.id, key, true, 'First synthetic work result verified; second result absent; domains stopped', 'partial')
+  const next = f.runs.reserve(f.pod.id, f.store.getPod(f.pod.id).activeScript!, 0).run
+  expect(f.ledger.begin(f.pod.id, next.id, key, 'program.call', input)).toEqual({ execute: false, result: { outcome: 'partial', reconciled: 'owner' } })
+  expect(f.runs.get(f.run.id).state).toBe('failed')
+  expect(f.runs.events(f.pod.id, f.run.id).at(-1)?.data).toMatchObject({ programOutcome: 'partial', applied: true })
+  await expect(recovery.resolveHttp(f.pod.id, f.run.id, key, true, 'Repeated observation', 'partial')).rejects.toThrow('not awaiting')
+})
+
+it('refuses partial observations for HTTP, active runs and non-applied effects', async () => {
+  const f = fixture()
+  const recovery = new Recovery(f.store, f.resources, {} as never, '/unused')
+  const key = 'synthetic-http'
+  f.ledger.begin(f.pod.id, f.run.id, key, 'http.request', {})
+  f.ledger.markUnknown(f.pod.id, key)
+  await expect(recovery.resolveHttp(f.pod.id, f.run.id, key, true, 'Observation', 'partial')).rejects.toThrow('not awaiting')
+  f.runs.finish(f.run.id, 'failed', 'Failed', 'Synthetic error')
+  await expect(recovery.resolveHttp(f.pod.id, f.run.id, key, true, 'Observation', 'partial')).rejects.toThrow('only to observed program')
+  await expect(recovery.resolveHttp(f.pod.id, f.run.id, key, false, 'Observation', 'partial')).rejects.toThrow('only to observed program')
+  expect(f.store.db.prepare('SELECT state FROM effect_ledger WHERE effect_key=?').get(key)?.state).toBe('unknown')
+})

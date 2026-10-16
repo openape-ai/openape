@@ -143,7 +143,7 @@ export const workspaceHelp = {
     details: ['{type:describe,podId,revision,text} — a local-only Pod (published as a placeholder) is changed on the desktop only.'],
     scripts: ['{type:save,podId,revision,draftId,draftRevision,code,capabilities,packages?}', '{type:validate,podId,revision,draftId,draftRevision}', '{type:activate,podId,revision,hash,expectedActive}', '{type:prepareDependencies,podId,revision,draftId,draftRevision}'],
     scheduling: ['{type:save,podId,revision,spec:{kind:interval,seconds}|{kind:daily,time,timezone},enabled}', '{type:lifecycle,podId,revision,lifecycle:active|paused}'],
-    runs: ['{type:start,podId,expectedScript?}', '{type:cancel,podId,runId}', '{type:recover,podId,runId,action:inspect|retry}', '{type:retryQueue,podId}', '{type:resolveHttp,podId,runId,key,applied,evidence}'],
+    runs: ['{type:start,podId,expectedScript?}', '{type:cancel,podId,runId}', '{type:recover,podId,runId,action:inspect|retry}', '{type:retryQueue,podId}', '{type:resolveHttp,podId,runId,key,applied,evidence,programOutcome?:partial}'],
     resources: ['{type:saveVariable,podId,name,value,revision}', '{type:removeVariable,podId,name,revision}', '{type:revoke,podId,id,revision}'],
   },
   local: 'For native program/folder/credential setup use existing list/select and administration actions with a stable requestId. Existing account sign-in and execution grants still apply. No additional Pods approval queue. Do not copy native login stores or pass secret values in arguments.',

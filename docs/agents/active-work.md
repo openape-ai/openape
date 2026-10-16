@@ -1,5 +1,12 @@
 # Active work
 
+## Private briefing recovery — issues 1503, 1504 and 1505
+
+- Resume the approved repair plan after removing personal recipes from Git. Private Calendar, Editorial, Publication and Mail scripts stay outside the checkout and use supported script-version activation.
+- Branch `bugfix/issue-1505-run-timing`, clean canonical base `253115f89e34cf0754dba56cb951fc5643cb7133`. Generic changes expose current-run timing and owner-confirmed partial program effects without inventing exit-code success. Existing grants, stopped-domain checks and lease fencing remain enforced.
+- Focused checks: 28 generic cases and 12 private recipe cases pass. Native CLI, required gates, signed rollout, exact private-script activation and actual partial-output recovery remain pending.
+- Issues: https://repos.openape.ai/patrick/monorepo/issues/1503, https://repos.openape.ai/patrick/monorepo/issues/1504, https://repos.openape.ai/patrick/monorepo/issues/1505.
+
 ## Remove personal Pod recipes — issue 1506
 
 - Owner explicitly authorized removing personal Pod scripts from Git history. Personal recipes, their policies and recipe-only tests are private machine state; generic runtime and safety tests remain in the repository.

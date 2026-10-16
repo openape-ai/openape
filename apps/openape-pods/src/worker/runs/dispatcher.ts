@@ -26,7 +26,7 @@ import { PodVariables } from '../resources/variables'
 import { parseCredentialRead } from '../../contracts/credentials'
 import { ScriptCredentials } from '../resources/script-credentials'
 import { confirmDomainsStopped } from '../recovery/domains'
-import { runAliases, scriptTimeLimitMs } from '../../contracts/runs'
+import { assertTimingRequest, runAliases, scriptTimeLimitMs } from '../../contracts/runs'
 import type { RunState, RunInput, RunView  } from '../../contracts/runs'
 import type { RunTrigger } from './store'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
@@ -231,6 +231,13 @@ export class RunDispatcher {
         event: (type, data) => { assertCurrent(); appendEvent(type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
         request: async (operation, call, operationSignal) => {
           assertCurrent()
+          if (operation === 'run.timing') {
+            assertTimingRequest(call)
+            operationSignal.throwIfAborted()
+            const timing = this.runs.timing(pod.id, id)
+            if (!timing) throw new Error('Current run timing is unavailable')
+            return timing
+          }
           // A script's own summary of a tool or HTTP call is split off, so the call and its effect stay the same (issue 1473).
           const { payload, summary } = operation === 'tools.invoke' || operation === 'http.request' ? splitScriptSummary(call) : { payload: call, summary: undefined }
           if (operation === 'jev.evaluate') {

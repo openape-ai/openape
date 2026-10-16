@@ -98,7 +98,9 @@ export async function run(context) {
     let writeDenied = false; try { await writeFile(path, 'DO_NOT_WRITE'); } catch { writeDenied = true; }
     if (!readDenied || !writeDenied) throw new Error('Pod identity store was accessible');
   }
-  const value = {home:process.env.HOME,cwd:process.cwd(),podId:context.input.podId,denied,protectedDenied};
+  const timing = await context.timing();
+  if (!Number.isSafeInteger(timing.activeMs) || timing.activeMs < 0 || !Number.isSafeInteger(timing.waitingMs) || timing.waitingMs < 0) throw new Error('Invalid native timing receipt');
+  const value = {home:process.env.HOME,cwd:process.cwd(),podId:context.input.podId,denied,protectedDenied,timing};
   await context.data.set('cli/state/context',value,{expectedRevision:0});
   await context.progress.commit({expectedRevision:context.input.checkpointRevision,checkpoint:{checked:true},sources:[],claims:[]});
   context.log(JSON.stringify(value));
@@ -114,7 +116,9 @@ export async function run(context) {
   store = new PodDatabase(profile)
   try {
     const value = new DomainData(store).get({ podId: id, runId: 'inspection' }, 'cli/state/context')!.value
-    expect(value).toEqual({ home: level === 'owner' ? ownerHome : join(profile, 'pods', id, 'home'), cwd: join(profile, 'pods', id, 'workspace'), podId: id, denied: true, protectedDenied: true })
+    const { timing, ...identity } = value as Record<string, unknown>
+    expect(timing).toEqual({ activeMs: expect.any(Number), waitingMs: expect.any(Number) })
+    expect(identity).toEqual({ home: level === 'owner' ? ownerHome : join(profile, 'pods', id, 'home'), cwd: join(profile, 'pods', id, 'workspace'), podId: id, denied: true, protectedDenied: true })
     expect(store.checkpoint(id).body).toEqual({ checked: true })
     expect(store.db.prepare('SELECT DISTINCT pod_id FROM runs').all()).toEqual([{ pod_id: id }])
     expect(new ItemTagStore(store).own(id)).toEqual(['native', 'verified'])

@@ -21,16 +21,19 @@ export class Recovery {
     if (!this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, pod.activeScript, pod.bindingRevision, this.resources.epoch(podId))) throw new Error('Validate the script for current permissions before retrying')
   }
 
-  async resolveHttp(podId: string, runId: string, key: string, applied: boolean, evidence: string): Promise<void> {
+  async resolveHttp(podId: string, runId: string, key: string, applied: boolean, evidence: string, programOutcome?: 'partial'): Promise<void> {
     const run = this.store.db.prepare('SELECT state FROM runs WHERE id=? AND pod_id=?').get(runId, podId)
     const effect = this.store.db.prepare('SELECT operation,state FROM effect_ledger WHERE pod_id=? AND run_id=? AND effect_key=?').get(podId, runId, key)
     if (!run || run.state === 'running' || !['http.request', 'program.call'].includes(effect?.operation as string) || effect?.state !== 'unknown') throw new Error('HTTP delivery or application write is not awaiting owner review')
+    if (programOutcome && (!applied || effect.operation !== 'program.call')) throw new Error('Partial outcomes apply only to observed program effects')
     await confirmDomainsStopped(this.store, runId, this.helper)
     this.store.transaction(() => {
       const ledger = new EffectLedger(this.store)
-      ledger.reconcile(podId, key, applied ? { applied: true, result: effect.operation === 'program.call' ? { exitCode: 0, reconciled: 'owner' } : { status: 200, headers: { 'x-pods-reconciled': 'owner' }, body: '' } } : { applied: false })
+      const programResult = programOutcome === 'partial' ? { outcome: 'partial', reconciled: 'owner' } : { exitCode: 0, reconciled: 'owner' }
+      const result = effect.operation === 'program.call' ? programResult : { status: 200, headers: { 'x-pods-reconciled': 'owner' }, body: '' }
+      ledger.reconcile(podId, key, applied ? { applied: true, result } : { applied: false })
       const sequence = this.store.db.prepare('SELECT coalesce(max(sequence),0)+1 AS next FROM run_events WHERE run_id=?').get(runId)!.next as number
-      this.store.db.prepare('INSERT INTO run_events VALUES(?,?,?,?,?)').run(runId, sequence, 'http-reconciled', JSON.stringify({ key, applied, evidence }), Date.now())
+      this.store.db.prepare('INSERT INTO run_events VALUES(?,?,?,?,?)').run(runId, sequence, 'http-reconciled', JSON.stringify({ key, applied, evidence, ...(programOutcome ? { programOutcome } : {}) }), Date.now())
     })
   }
 

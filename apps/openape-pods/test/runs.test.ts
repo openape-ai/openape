@@ -85,3 +85,10 @@ describe('script frames', () => {
     for (const operation of operations) expect(() => parseFrame({ version: 1, runId: 'r', sequence: 1, type: 'request', id: 'a', operation, payload: {} }, 'r', 1), operation).not.toThrow()
   })
 })
+
+it('accepts explicit partial program observations but refuses invented or non-applied outcomes', () => {
+  const observation = { type: 'resolveHttp', podId, runId: podId, key: 'program:synthetic', applied: true, evidence: 'Verified first result and missing second result', programOutcome: 'partial' }
+  expect(parseRunCommand(observation)).toEqual(observation)
+  expect(() => parseRunCommand({ ...observation, applied: false })).toThrow('partial program outcome')
+  expect(() => parseRunCommand({ ...observation, programOutcome: 'success' })).toThrow('partial program outcome')
+})

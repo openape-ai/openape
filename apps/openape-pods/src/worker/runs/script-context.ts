@@ -21,6 +21,7 @@ export async function scriptContext(script: ScriptModule, input: RunInput, reque
   const data = Object.freeze({ get: (key: unknown) => request('data.get', { key }), set: (key: unknown, value: unknown, settings?: unknown) => request('data.set', { ...options(settings), key, value }), delete: (key: unknown, settings?: unknown) => request('data.delete', { ...options(settings), key }), list: (prefix: unknown, settings?: unknown) => request('data.list', { ...options(settings), prefix }) })
   const work = Object.freeze({ find: (query: unknown) => request('work.find', query ?? {}), claim: (query: unknown) => request('work.claim', query), complete: (query: unknown) => request('work.complete', query), defer: (query: unknown) => request('work.defer', query), fail: (query: unknown) => request('work.fail', query) })
   return Object.freeze({
+    timing: () => request('run.timing', {}),
     data,
     work,
     decisions: Object.freeze({ ask: (question: unknown) => request('decisions.ask', question), withdraw: (question: unknown) => request('decisions.withdraw', question) }),
