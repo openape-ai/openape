@@ -55,12 +55,15 @@ async function brokerCall(level: SandboxLevel, identityConnection: AgentConnecti
   const program = await executable(); const stateId = await new ProgramState(credentials).create({ podId, applicationId })
   const argv = ['repos', 'pr', 'list']
   const assignment: ToolAssignment = { id: applicationId, identityConnection, program: { path: program.path, name: 'az', sha256: program.hash }, argv, reach: reach(level), programState: { id: stateId, podId, applicationId }, capability: 'tool.az.invoke', executable: program.path, executableHash: program.hash, entryFiles: [], prefix: [], runtimeDirectories: [], environment: {}, runtimeEnvironment: { HOME: '/descriptor/home' }, networkPorts: [] }
-  const broker = new PodToolBroker('/fixture/helper', join(root, 'broker'), { runtime: { executable: process.execPath, cli: '/fixture/ape-shell.mjs' }, targetHost: identityConnection.targetHost, operationId: randomUUID(), observer: { authorized: async () => {} } }, credentials)
+  const executionCredentials = level === 'owner' ? new CredentialCache(join(root, 'credentials')) : credentials
+  const before = await readFile(join(root, 'credentials', `${stateId}.encrypted`))
+  const broker = new PodToolBroker('/fixture/helper', join(root, 'broker'), { runtime: { executable: process.execPath, cli: '/fixture/ape-shell.mjs' }, targetHost: identityConnection.targetHost, operationId: randomUUID(), observer: { authorized: async () => {} } }, executionCredentials)
   const reply = await broker.execute(assignment, { toolId: applicationId, argv }, { capabilities: ['tool.az.invoke'], assertCurrent: () => {}, signal: AbortSignal.timeout(5000) })
+  if (level === 'owner') expect(await readFile(join(root, 'credentials', `${stateId}.encrypted`))).toEqual(before)
   return { reply, launch: launches.at(-1)! }
 }
 
-it('runs an owner-level program with the owner HOME and a temporary folder outside its saved application state', async () => {
+it('runs an owner-level program without decrypting or updating its saved application state', async () => {
   const { reply, launch } = await brokerCall('owner')
   expect(reply).toEqual({ exitCode: 0, stdout: '', stderr: '' })
   // A runtime descriptor cannot redirect HOME; the owner's home is the one the protected paths are computed for.
@@ -87,9 +90,12 @@ async function terminal(level: SandboxLevel) {
   const assignment = { type: 'program', name: 'az', cliId: 'az', executable: program.path, executableHash: program.hash, stateId, capability: 'tool.az.invoke', networkHosts: [], entryFiles: [], environment: {} } as unknown as ProgramAssignment
   const workspace = join(root, 'workspace'); await mkdir(workspace)
   const sessionId = randomUUID()
-  const session = new ProgramSession(sessionId, podId, applicationId, assignment, ['login'], '/fixture/helper', join(root, 'authentication'), credentials, async () => {}, async () => {}, workspace, { readDirectories: [], writeDirectories: [] }, { connection: async () => connection(), runtime: { executable: '/fixture/node', cli: '/fixture/ape-shell.mjs', environment: {} }, ledger: {} as never, origin: async () => 'Pod', reach: async () => reach(level) })
+  const executionCredentials = level === 'owner' ? new CredentialCache(join(root, 'credentials')) : credentials
+  const before = await readFile(join(root, 'credentials', `${stateId}.encrypted`))
+  const session = new ProgramSession(sessionId, podId, applicationId, assignment, ['login'], '/fixture/helper', join(root, 'authentication'), executionCredentials, async () => {}, async () => {}, workspace, { readDirectories: [], writeDirectories: [] }, { connection: async () => connection(), runtime: { executable: '/fixture/node', cli: '/fixture/ape-shell.mjs', environment: {} }, ledger: {} as never, origin: async () => 'Pod', reach: async () => reach(level) })
   await session.completed
   expect(session.view().error).toBeNull()
+  if (level === 'owner') expect(await readFile(join(root, 'credentials', `${stateId}.encrypted`))).toEqual(before)
   return { launch: launches.at(-1)!, sessionDirectory: join(root, 'authentication', sessionId) }
 }
 
@@ -98,7 +104,7 @@ it('opens the owner-level application terminal with the owner HOME, so a login t
   expect(launch.environment.HOME).toBe(homedir())
   expect(launch.environment.TMPDIR).toBe(join(sessionDirectory, 'tmp'))
   expect(launch.temporaryExisted).toBe(true)
-  expect(launch.policy.writeDirectories).toEqual([applicationState, join(sessionDirectory, 'tmp')])
+  expect(launch.policy.writeDirectories).toEqual([join(sessionDirectory, 'tmp')])
   expect(existsSync(join(sessionDirectory, 'tmp'))).toBe(false)
 })
 
