@@ -14,7 +14,7 @@ import { brokered, brokerRejections, closeProfiles, deniedPodId, identityProvide
 // requests can be approved in that session without the human. Outside an active owner session no code path
 // approves, the persisted setup login is never used for it, and a decision only reaches own-Pod grants.
 vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent', isPackaged: false }, shell: { openExternal: vi.fn(async () => {}) } }))
-vi.mock('../../src/runtime/environment', () => ({ podEnvironment: async () => ({ workspace: '/fixture/workspace', home: '/fixture/home', environment: {} }), podEnvironmentValues: () => ({}), visibleEnvironment: () => ({}) }))
+vi.mock('../../src/runtime/environment', () => ({ podDirectories: async () => ({ workspace: '/fixture/workspace', home: '/fixture/home' }), podEnvironment: async () => ({ workspace: '/fixture/workspace', home: '/fixture/home', environment: {} }), podEnvironmentValues: () => ({}), visibleEnvironment: () => ({}) }))
 
 let idp: ReturnType<typeof identityProvider>
 let root = ''

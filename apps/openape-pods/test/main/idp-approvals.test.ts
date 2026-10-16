@@ -11,7 +11,7 @@ import { applicationId, brokerRejections, closeProfiles, deniedPodId, identityPr
 // itself (DDISA: the requester is never its own approver). The stub IdP records every approve call and the test
 // fails on any. Approvals inside an owner session are covered in session-approvals.test.ts.
 vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent', isPackaged: false }, shell: { openExternal: vi.fn(async () => {}) } }))
-vi.mock('../../src/runtime/environment', () => ({ podEnvironment: async () => ({ workspace: '/fixture/workspace', home: '/fixture/home', environment: {} }), podEnvironmentValues: () => ({}), visibleEnvironment: () => ({}) }))
+vi.mock('../../src/runtime/environment', () => ({ podDirectories: async () => ({ workspace: '/fixture/workspace', home: '/fixture/home' }), podEnvironment: async () => ({ workspace: '/fixture/workspace', home: '/fixture/home', environment: {} }), podEnvironmentValues: () => ({}), visibleEnvironment: () => ({}) }))
 
 let idp: ReturnType<typeof identityProvider>
 beforeEach(() => { idp = identityProvider(); vi.stubGlobal('fetch', idp.fetch) })
