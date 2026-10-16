@@ -183,6 +183,7 @@ export async function workerFixture(options: { pods?: string[], resources?: () =
     if (command.serviceCheck?.approval) approvals.push(command.serviceCheck.approval)
     if (command.runContext) return { name: names.get(command.runContext.scope.runId) ?? 'Synthetic Pod', reason: reasons.get(command.runContext.scope.runId) ?? 'schedule' }
     if (command.credentialCheck) return 'secret-id'
+    if (command.httpCredentialInventory) return []
     if (command.codexAdministration) {
       const { type, request, result } = command.codexAdministration
       if (type === 'complete') receipts.set(request.id, result)
