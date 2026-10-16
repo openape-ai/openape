@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events'
-import { fork, spawn } from 'node:child_process'
+import { fork } from 'node:child_process'
 import type { RuntimeHost } from '../main/runtime-host'
 import { CredentialCache } from '../main/connections/cache'
 
@@ -11,11 +11,6 @@ export function nodeHost(dist: string): RuntimeHost {
     credentials: root => new CredentialCache(root),
     openExternal: async (url) => {
       process.stderr.write(`Approval: ${url}\n`)
-      await new Promise<void>((resolve, reject) => {
-        const child = spawn('/usr/bin/open', [url], { stdio: 'ignore' })
-        child.once('error', reject)
-        child.once('exit', code => code === 0 ? resolve() : reject(new Error('Could not open the approval page')))
-      })
     },
     fork: (entry, options) => {
       const child = fork(entry, [], { cwd: options.cwd, env: options.env, stdio: ['ignore', 'pipe', 'pipe', 'ipc'], execArgv: [] })

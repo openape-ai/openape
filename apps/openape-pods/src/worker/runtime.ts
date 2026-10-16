@@ -95,6 +95,10 @@ const runtime: AgentRuntime = {
   sdkHost: join(dist, 'runtime/sdk-host.mjs'),
 }
 const runServices: RunServices = {
+  prepareStart: async (scope, call, signal) => {
+    const { podId, runId, epoch, assignmentRevision, capabilities } = scope
+    await serviceBridge.execute({ podId, runId, epoch, assignmentRevision, capabilities }, call, signal, 'scriptGrant')
+  },
   shell: async (scope, signal) => {
     const { podId, runId, epoch, assignmentRevision, capabilities } = scope
     return await serviceBridge.execute({ podId, runId, epoch, assignmentRevision, capabilities }, {}, signal, 'shell') as Awaited<ReturnType<NonNullable<RunServices['shell']>>>

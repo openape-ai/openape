@@ -7,6 +7,18 @@ import type { ProgramCall } from './program.js'
 
 export interface ProgramFile { path: string, sha256: string }
 
+/** The same concrete code binding for preparation and execution; this runs no program. */
+export function bindProgramCall(call: ProgramCall, context?: { cwd: string, env: NodeJS.ProcessEnv }): ProgramCall {
+  const detected = interpreterProgramFiles(call, context)
+  for (const file of detected) {
+    const pinned = call.files?.find(candidate => candidate.path === file.path)
+    if (pinned && pinned.sha256 !== file.sha256) throw new Error(`${file.path} changed before authorization; nothing was executed`)
+  }
+  const files = [...new Map([...(call.files ?? []), ...detected].map(file => [file.path, file])).values()].sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
+  assertProgramFiles(files)
+  return { ...call, files }
+}
+
 function bindFile(path: string): ProgramFile {
   const absolute = resolve(path)
   if (!statSync(absolute).isFile()) throw new Error(`Program input is not a regular file: ${absolute}`)

@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import type { OpenApeProgramExecutionRequest } from '@openape/core'
 import { sandboxPolicy, superviseProcess } from './sandbox'
 import type { ProcessDomain, RuntimePolicy } from './sandbox'
+import { programInvocation } from '../../runtime/program-invocation'
 
 export interface ApeShellRuntime { executable: string, cli: string, environment: Record<string, string> }
 export interface MachineLaunch {
@@ -25,6 +26,7 @@ export async function launchApeShell(helper: string, privateDirectory: string, p
   const executable = await realpath(policy.executable)
   const workspace = await realpath(policy.workspace)
   if (workspace !== policy.workspace) throw new Error('Program workspace changed before launch')
+  const call = await programInvocation(executable, launch.executableHash, argv, launch.files, workspace, environment)
   const profile = join(privateDirectory, `policy-${randomUUID()}.sb`)
   const content = sandboxPolicy({ ...policy, executable, workspace }) + (terminal ? '\n(allow file-ioctl (regex #"^/dev/ttys[0-9]+$"))\n' : '')
   await writeFile(profile, content, { flag: 'wx', mode: 0o400 })
@@ -32,8 +34,8 @@ export async function launchApeShell(helper: string, privateDirectory: string, p
     version: 1,
     operationId: launch.operationId,
     executable: { path: executable, sha256: launch.executableHash },
-    argv,
-    ...(launch.files.length ? { files: launch.files } : {}),
+    argv: call.argv,
+    ...(call.files?.length ? { files: call.files } : {}),
     cwd: workspace,
     environment: { ...(terminal ? { TERM: 'xterm-256color' } : {}), ...environment },
     targetHost: launch.targetHost,

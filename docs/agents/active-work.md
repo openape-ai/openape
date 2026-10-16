@@ -1,5 +1,14 @@
 # Active work
 
+## Exact runtime grants and owner CLI starts — issue 1501
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1501. Branch `bugfix/issue-1501-exact-runtime-grants`, worktree `openape-monorepo.worktrees/ape-pods-cli-1499`, base `70cce1ca521a96bd9f0f3a22e8462bf1de509151`.
+- Authorized scope and maintained bilingual source: `.claude/plans/issue-1501.json`; published plan: https://report.openape.ai/d/01M5273F0QZ09PJ7N79HHAS0VF?v=1.
+- Grant preparation now uses the actual runtime, complete argv and the same interpreter file binder as ape-shell. An authenticated owner CLI start prepares one exact single-use root grant; downstream and scheduled calls retain their separate authorization. CLI pending approvals print links without opening browsers.
+- Cancellation retains unknown-effect holds while allowing the terminal unknown receipt to settle its own durable intent. The cancelled Mail review `81d20f5e-c1db-44d3-b43a-e27f86319cb1` remains held until native domain checks and owner reconciliation establish safe retry. Mail review remains paused meanwhile.
+- Next: finish security regression and affected checks, merge the native PR, run full deployment checks, install the signed local build and verify Mail review through the standalone CLI. Portable isolated ProgramState remains separate issue 1500.
+
+
 ## Standalone Pods CLI — issue 1499
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1499. Follow-up branch `bugfix/issue-1499-owner-program-state`, worktree `openape-monorepo.worktrees/ape-pods-cli-1499`, canonical base `877162d1dc9a992a42dca7436f1ffc90607b14a4`.

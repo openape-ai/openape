@@ -80,6 +80,13 @@ without that setup can still list, create and edit metadata. Creating a record
 does not manufacture an unauthenticated identity or grant. Existing configured
 identity provisioning remains responsible for binding a new Pod.
 
+A manual `run` also verifies the owner's current `apes` login. That explicit
+owner call authorizes one start of the selected script through an exact
+single-use IdP grant, including the runtime and script content. It does not
+approve downstream programs or scheduled runs. Their existing grants, sandbox
+constraints and recovery holds still apply. Pending downstream approvals are
+printed on stderr; the CLI does not open browser windows automatically.
+
 ## Identity, context and storage
 
 `run` executes only the requested active validated script, waits for its durable
