@@ -1,5 +1,12 @@
 # Active work
 
+## Pending approval listing size — issue 1508
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1508. Branch `bugfix/issue-1508-approval-count`, checkout `openape-monorepo.worktrees/pods-approval-counter`, base `31181ab78f94e7eb9d7b94c7e41477aff0e66e2e`.
+- The approval counter uses an explicit 1 MiB JSON response budget; other connection reads retain their 128 KiB default. Requester, expiration, batch and unknown-on-error semantics remain unchanged.
+- Focused verification: seven approval-count/streaming/refusal cases pass, including a synthetic 31-grant response larger than 128 KiB. No owner data or request payloads are included in fixtures.
+- Next: independent diff review, affected pre-push gate, native PR, full deployment gate and signed local installation with a verified relay count. The existing one-page bound is unchanged; timestamp-cursor pagination is a separate issue.
+
 ## Portable HTTP and model credentials — issue 1507
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1507. Branch `bugfix/issue-1507-portable-provider-credentials`, checkout `openape-monorepo.worktrees/ape-pods-cli-1499`, base `9b28b50860fd61573243fad03a8dd5dbe434deb8`.

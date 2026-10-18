@@ -1,4 +1,4 @@
-export async function readJSON(response: Response): Promise<Record<string, unknown>> {
+export async function readJSON(response: Response, maximumBytes = 128 * 1024): Promise<Record<string, unknown>> {
   if (!response.ok) throw new Error(`Connection service rejected the request (${response.status})`)
   if (!response.body) throw new Error('Connection service returned no response')
   const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let size = 0
@@ -6,7 +6,7 @@ export async function readJSON(response: Response): Promise<Record<string, unkno
     for (;;) {
       const next = await reader.read(); if (next.done) break
       size += next.value.byteLength
-      if (size > 128 * 1024) throw new Error('Connection response exceeds its limit')
+      if (size > maximumBytes) throw new Error('Connection response exceeds its limit')
       chunks.push(next.value)
     }
   }
