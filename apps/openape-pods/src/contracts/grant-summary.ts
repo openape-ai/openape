@@ -1,5 +1,6 @@
 import type { OpenApeGrantSummary } from '@openape/core'
 import { parseGrantSummary } from '@openape/grants'
+import type { RunContext } from './services'
 
 /**
  * The DDISA request summary (grants.md §3.4, issue 1473): the requester's own claim of what a grant request is about.
@@ -57,6 +58,16 @@ export function grantSummary(dataTitle: string, origin?: string, script: ScriptS
     ...(origin === undefined ? {} : { origin: summaryLine(origin, grantSummaryLimits.origin, 'Pod') }),
     ...(script.link === undefined ? {} : { link: script.link }),
   }
+}
+
+export function savedScriptSummary(context: RunContext): GrantSummary {
+  const reason = { manual: 'Manual start', schedule: 'Scheduled start', event: 'Event-triggered start' }[context.reason]
+  const label = 'Pod context:\n'
+  const footer = `\n\n${reason}. Tool and HTTP calls require their own permissions.`
+  const description = context.description?.trim()
+    ? `${label}${summaryLine(context.description, 2000 - label.length - footer.length)}${footer}`
+    : `Run the selected saved script.\n${reason}.`
+  return parseSummary(grantSummary(`Run saved script: ${context.name}`, context.name, { description }))
 }
 
 /**

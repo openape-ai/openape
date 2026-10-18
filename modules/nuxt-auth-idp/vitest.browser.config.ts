@@ -3,6 +3,7 @@ import ui from '@nuxt/ui/vite'
 import vue from '@vitejs/plugin-vue'
 import { playwright } from '@vitest/browser-playwright'
 import { defineConfig } from 'vitest/config'
+import appConfig from '../../apps/openape-free-idp/app/app.config.ts'
 
 // Screenshot checks of the grant approval card: a real browser with the real
 // Tailwind and Nuxt UI styles, which happy-dom cannot evaluate. The Nuxt UI
@@ -11,7 +12,7 @@ import { defineConfig } from 'vitest/config'
 export default defineConfig({
   plugins: [
     vue(),
-    ui({ router: false, autoImport: { dts: false }, components: { dts: false } }),
+    ui({ ui: appConfig.ui, router: false, autoImport: { dts: false }, components: { dts: false } }),
   ],
   resolve: {
     alias: {
@@ -24,6 +25,7 @@ export default defineConfig({
     setupFiles: ['test/browser/setup.ts'],
     browser: {
       enabled: true,
+      api: { host: '127.0.0.1', port: 5488, strictPort: true },
       // Drive the installed Google Chrome instead of a downloaded build.
       provider: playwright({
         launchOptions: { executablePath: process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },

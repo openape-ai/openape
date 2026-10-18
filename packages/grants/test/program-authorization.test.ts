@@ -50,8 +50,9 @@ describe('parseProgramAuthorizeRequest', () => {
 
   it('accepts the contract body and defaults to a continuing grant', () => {
     expect(parseProgramAuthorizeRequest(valid)).toEqual({ ...valid, grant_type: 'always' })
-    const full = parseProgramAuthorizeRequest({ ...valid, grant_type: 'once', summary: { title: 'Check the repository' }, batch: { id: 'b-1' } })
-    expect(full).toMatchObject({ grant_type: 'once', summary: { title: 'Check the repository' }, batch: { id: 'b-1' } })
+    const batch = { id: 'b-1', description: 'Check the selected repositories.\nNo changes are requested.' }
+    const full = parseProgramAuthorizeRequest({ ...valid, grant_type: 'once', summary: { title: 'Check the repository' }, batch })
+    expect(full).toMatchObject({ grant_type: 'once', summary: { title: 'Check the repository' }, batch })
     expect(parseProgramAuthorizeRequest({ ...valid, argv: [] }).argv).toEqual([])
   })
 

@@ -5,17 +5,6 @@ import { unwrapShellCommand } from './command-display'
 import type { CommandStructure } from './command-structure'
 import { HIDDEN_CHARACTERS, MAX_VALUE_LENGTH, structureCommand, worthStructuring } from './command-structure'
 
-/**
- * One generic grant card (issue 1473). Three labeled sources answer the
- * approver's questions: the registry adapter the IdP holds (what happens and
- * what it means), the IdP's own records (who asks, grant type, validity) and
- * the requester's summary (its claim). The binding identity — the registry
- * title or, without one, the exact command — always stays visible as the
- * primary line; a requester title can only add to it, and values the approval
- * does not bind carry an "as requested" marker. Only above an exact command
- * may that marked title lead (`requesterHeadline`).
- */
-
 export type CardLanguage = 'de' | 'en'
 
 /**
@@ -175,7 +164,7 @@ export interface BindingLine {
   structure?: CommandStructure
 }
 
-/** The primary line of every card and batch row: what the approval binds. */
+/** Complete technical binding retained alongside the requester's context. */
 export function grantBindingLine(grant: GrantWithCard, language: CardLanguage): BindingLine {
   const registry = grant.card?.registry
   if (registry) return { kind: 'registry', text: registry.title[language], ...(registry.title.requested ? { requested: true as const } : {}) }
@@ -196,16 +185,7 @@ const MAX_HEADLINE_LENGTH = 120
 // Characters that can make displayed text differ from what was sent (grants.md §3.4).
 const UNSAFE_TITLE = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
 
-/**
- * The requester's summary title as the headline above an exact command line
- * (owner decision, issue 1477). Only when the IdP verified that the approval
- * binds nothing but the command shown directly beneath
- * (`card.binds_exact_command`) can the title not widen it. Registry and
- * permission lines keep the lead; so does the command line when the title is
- * missing or contains control or format characters.
- */
-export function requesterHeadline(grant: GrantWithCard, line: BindingLine): string | null {
-  if (line.kind !== 'command' || grant.card?.binds_exact_command !== true) return null
+export function requesterHeadline(grant: GrantWithCard, _line?: BindingLine): string | null {
   const title = grant.request.summary?.title?.trim()
   if (!title || [...title].length > MAX_HEADLINE_LENGTH || UNSAFE_TITLE.test(title)) return null
   return title
@@ -222,9 +202,49 @@ export function grantValidity(grant: OpenApeGrant, language: CardLanguage): stri
   const type = grant.request.grant_type ?? 'once'
   if (type === 'always') return german ? 'Dauerhaft, bis zum Widerruf' : 'Continuing, until revoked'
   if (type === 'timed') {
-    const minutes = Math.round((grant.request.duration ?? 0) / 60)
-    const span = minutes >= 60 ? `${Math.round(minutes / 60)} h` : `${minutes} min`
+    const span = formatGrantDuration(grant.request.duration ?? 0)
     return german ? `Befristet, ${span}` : `Timed, ${span}`
   }
   return german ? 'Einmalig' : 'Single use'
+}
+
+export function formatGrantDuration(seconds: number): string {
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const remaining = seconds % 60
+  return [hours ? `${hours} h` : '', minutes ? `${minutes} min` : '', remaining ? `${remaining} s` : ''].filter(Boolean).join(' ') || '0 s'
+}
+
+export function grantScope(grant: GrantWithCard, language: CardLanguage): string {
+  const german = language === 'de'
+  const registry = grant.card?.registry
+  if (registry?.allows && !registry.allows.requested) return registry.allows[language]
+  if (grant.card?.binds_exact_command) {
+    const files = grant.request.execution_context?.files?.length ?? 0
+    return german
+      ? `Genau dieser Aufruf${files ? ` mit ${files} gebundenen Dateien` : ''}`
+      : `This exact invocation${files ? ` with ${files} bound files` : ''}`
+  }
+  const details = getCliAuthorizationDetails(grant.request.authorization_details)
+  if (details.length) {
+    return details.map((detail) => {
+      const origin = detail.resource_chain.find(resource => resource.resource === 'https-origin')?.selector?.url
+      if (origin) {
+        const method = detail.resource_chain.find(resource => resource.resource === 'http-method')?.selector?.name
+        return `${method ?? (german ? 'Alle HTTP-Methoden' : 'All HTTP methods')} → ${origin}`
+      }
+      const resources = detail.resource_chain.map(resource => resource.selector ? Object.values(resource.selector).join(', ') : '*')
+      return `${detail.action} · ${resources.join(' · ')}`
+    }).join('; ')
+  }
+  const request = grant.request
+  if (request.delegate || request.scopes?.length) return ['Delegation', request.delegate, ...request.scopes ?? [], request.audience, request.target_host].filter(Boolean).join(' · ')
+  return [...request.permissions ?? [], request.audience, request.target_host].join(' · ')
+}
+
+export function grantScopeNote(grant: GrantWithCard, language: CardLanguage): string | null {
+  if (getCliAuthorizationDetails(grant.request.authorization_details).some(detail => detail.resource_chain.some(resource => resource.resource === 'https-origin')))
+    return language === 'de' ? 'Pfad, Nachrichteninhalt und Empfänger sind nicht an diese Freigabe gebunden.' : 'The path, message body and recipient are not bound by this approval.'
+  const boundary = grant.card?.registry?.does_not_allow
+  return boundary && !boundary.requested ? boundary[language] : null
 }

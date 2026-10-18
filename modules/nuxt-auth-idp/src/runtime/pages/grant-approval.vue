@@ -1,643 +1,138 @@
-<script setup>
-import { requiresSingleUse, formatWidenedPreview, getCliAuthorizationDetails  } from '../utils/cli-grants'
+<script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { navigateTo, useIdpAuth, useRoute } from '#imports'
-import { buildRuleProposals, ruleTemplatePreview, suggestAllowPattern } from '../utils/rule-suggestions'
+import type { ApprovalGrant, GrantDecisionResult } from '../utils/grant-decision'
+import { grantDecisionError } from '../utils/grant-decision'
 import { callerState, formatCountdown, formatWaited } from '../utils/caller-liveness'
 import GrantBatchDecision from '../components/GrantBatchDecision.vue'
 import GrantCard from '../components/GrantCard.vue'
-import { unwrapShellCommand } from '../utils/command-display'
+import GrantDecisionForm from '../components/GrantDecisionForm.vue'
 
+type ApprovalPageGrant = ApprovalGrant & { pending_diagnostics?: { source: string, summary: string, detail?: { unmatchedSegments?: string[], deniedSegment?: string, substitutionSegments?: string[] } }[] }
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const route = useRoute()
-const grant = ref(null)
+const grant = ref<ApprovalPageGrant | null>(null)
 const loading = ref(true)
 const error = ref('')
-const processing = ref(false)
-const selectedExtendMode = ref('separate')
-const grantId = computed(() => route.query.grant_id)
-// grants.md §3.4: batch ids are scoped to their requester.
-const batchQuery = computed(() => typeof route.query.batch === 'string' && typeof route.query.requester === 'string' && !route.query.grant_id ? { requester: route.query.requester, batchId: route.query.batch } : null)
-const callbackUrl = computed(() => route.query.callback)
-const isDelegate = computed(() => grant.value?.request?.permissions?.includes('delegate'))
-const hasSimilarGrants = computed(() => !requiresSingleUse(grant.value) && grant.value?.similar_grants?.similar_grants?.length > 0)
-const similarGrants = computed(() => grant.value?.similar_grants?.similar_grants ?? [])
-const widenedPreview = computed(() => formatWidenedPreview(grant.value?.similar_grants?.widened_details ?? []))
-const mergedPreview = computed(() => formatWidenedPreview(grant.value?.similar_grants?.merged_details ?? []))
-const wideningSuggestions = computed(() => grant.value?.widening_suggestions ?? [])
-const hasWideningSuggestions = computed(() => !requiresSingleUse(grant.value) && wideningSuggestions.value.length > 0)
-// One selected scope index per detail; defaults to 0 (exact) for conservative behavior.
-const selectedWideningByIndex = ref({})
-const EXTEND_MODE_OPTIONS = [
-  { label: 'Extend to wildcard', value: 'widen', description: 'Widen scope with wildcards (replaces existing grant)' },
-  { label: 'Add this value', value: 'merge', description: 'Merge into single grant keeping specific selectors' },
-  { label: 'Approve as separate', value: 'separate', description: 'Create a new independent grant' },
-]
 const german = ref(false)
-onMounted(() => { german.value = navigator.language.startsWith('de') })
-const cliDetails = computed(() => getCliAuthorizationDetails(grant.value?.request?.authorization_details))
-// Why is this still pending? Filled by the IdP's diagnostic hooks — one entry
-// per auto-approval mechanism that could have fired and didn't.
-const pendingDiagnostics = computed(() => grant.value?.pending_diagnostics ?? [])
-const commandDisplay = computed(() => unwrapShellCommand(grant.value?.request?.command))
-/**
- * True when this grant was requested via the `apes` generic-fallback path.
- * Such CLIs have no registered shape — the approver should see a prominent
- * banner explaining the lack of structured validation and the single-use
- * nature of the grant.
- */
-const isGenericGrant = computed(() =>
-  cliDetails.value.some(d => d?.operation_id === '_generic.exec'))
-
-// "Always allow" opens a rule panel instead of granting an exact always-grant
-// (#1277): an exact grant would never match the next command line. Shaped
-// requests become standing-grant templates, free-form commands an allow-pattern
-// on the requester's policy. Either way the triggering request runs once.
-// Proposal derivation lives in utils/rule-suggestions, shared with /grants.
-const ruleProposals = computed(() => buildRuleProposals(cliDetails.value))
-const alwaysOpen = ref(false)
-const patternDraft = ref('')
-const ruleError = ref('')
-const ruleBusy = ref(false)
-const moreOptionsOpen = ref(false)
-// The landing page is where a push lands, often minutes later — the one place
-// this matters most.
+const grantId = computed(() => typeof route.query.grant_id === 'string' ? route.query.grant_id : '')
+const batchQuery = computed(() => typeof route.query.batch === 'string' && typeof route.query.requester === 'string' && !grantId.value ? { requester: route.query.requester, batchId: route.query.batch } : null)
 const nowSec = ref(Math.floor(Date.now() / 1000))
-let clock
-onMounted(() => {
-  clock = setInterval(() => { nowSec.value = Math.floor(Date.now() / 1000) }, 1000)
-})
-onUnmounted(() => clearInterval(clock))
 const liveness = computed(() => callerState(grant.value?.request, grant.value?.created_at ?? 0, nowSec.value))
+let clock: ReturnType<typeof setInterval> | undefined
 
-async function toggleAlwaysPanel() {
-  if (grant.value?.brokered) { await handleApprove('always'); return }
-  alwaysOpen.value = !alwaysOpen.value
-  if (alwaysOpen.value && !patternDraft.value) {
-    patternDraft.value = commandDisplay.value ? (suggestAllowPattern(commandDisplay.value.text) ?? '') : ''
-  }
-}
-
-async function createRuleAndApproveOnce() {
-  ruleBusy.value = true
-  ruleError.value = ''
-  try {
-    if (ruleProposals.value.length) {
-      for (const proposal of ruleProposals.value) {
-        await $fetch('/api/standing-grants', {
-          method: 'POST',
-          body: {
-            delegate: grant.value.request.requester,
-            audience: grant.value.request.audience,
-            // Host-bound on purpose: the narrower default. Owners who want a
-            // host-independent rule manage it on the agent page instead.
-            ...(grant.value.request.target_host ? { target_host: grant.value.request.target_host } : {}),
-            cli_id: proposal.cliId,
-            resource_chain_template: proposal.template,
-            max_risk: proposal.maxRisk,
-            grant_type: 'always',
-            reason: `Rule created from grant ${grantId.value}`,
-          },
-        })
-      }
-    }
-    else {
-      const pattern = patternDraft.value.trim()
-      if (!pattern) {
-        ruleError.value = 'Enter a pattern first — or approve only this exact request.'
-        return
-      }
-      const base = `/api/users/${encodeURIComponent(grant.value.request.requester)}/yolo-policy?audience=${encodeURIComponent(grant.value.request.audience)}`
-      const existing = await $fetch(base).catch(() => null)
-      const policy = existing?.policy ?? null
-      const allowPatterns = policy?.allowPatterns ?? []
-      if (!allowPatterns.includes(pattern)) {
-        await $fetch(base, {
-          method: 'PUT',
-          body: {
-            mode: policy?.mode ?? 'allow-list',
-            denyRiskThreshold: policy?.denyRiskThreshold ?? null,
-            denyPatterns: policy?.denyPatterns ?? [],
-            allowPatterns: [...allowPatterns, pattern],
-            expiresAt: policy?.expiresAt ?? null,
-          },
-        })
-      }
-    }
-    alwaysOpen.value = false
-    await handleApprove('once')
-  }
-  catch (err) {
-    const e = err
-    ruleError.value = `${e.data?.title ?? e.message ?? 'Rule creation failed'} — you can still approve only this exact request.`
-  }
-  finally {
-    ruleBusy.value = false
-  }
-}
-const delegateDuration = computed(() => {
-  const req = grant.value?.request
-  if (!req?.duration) return null
-  const h = Math.floor(req.duration / 3600)
-  const m = Math.floor(req.duration % 3600 / 60)
-  return h > 0 ? `${h}h ${m}m` : `${m}m`
-})
-const selectedGrantType = ref('once')
-const selectedDurationPreset = ref('3600')
-const customDuration = ref(3600)
-const DURATION_PRESETS = [
-  { label: '1 hour', value: '3600' },
-  { label: '4 hours', value: '14400' },
-  { label: '1 day', value: '86400' },
-  { label: '1 week', value: '604800' },
-  { label: 'Custom', value: 'custom' },
-]
-const asRequestedOption = computed(() => {
-  if (!grant.value?.request) return null
-  const req = grant.value.request
-  const type = req.grant_type || 'once'
-  let desc = `${type}`
-  if (type === 'timed' && req.duration) {
-    const mins = Math.round(req.duration / 60)
-    desc = mins >= 60 ? `timed (${Math.round(mins / 60)}h)` : `timed (${mins}m)`
-  }
-  return { label: 'As requested', value: 'as_requested', description: desc }
-})
-const grantTypeOptions = computed(() => {
-  if (requiresSingleUse(grant.value)) return [{ label: 'Once', value: 'once', description: 'This operation requires one exact approval' }]
-  const base = [
-    { label: 'Once', value: 'once', description: 'Single use only' },
-    { label: 'Timed', value: 'timed', description: 'Time-limited' },
-    { label: 'Always', value: 'always', description: 'Until revoked' },
-  ]
-  const asReq = asRequestedOption.value
-  return asReq ? [asReq, ...base] : base
-})
-const effectiveDuration = computed(() => {
-  if (selectedGrantType.value === 'as_requested') {
-    return grant.value?.request?.duration
-  }
-  if (selectedGrantType.value !== 'timed') return void 0
-  return selectedDurationPreset.value === 'custom' ? customDuration.value : Number(selectedDurationPreset.value)
-})
 async function loadGrant() {
-  if (!grantId.value) {
-    error.value = 'Missing grant_id parameter'
-    loading.value = false
-    return
-  }
+  if (!grantId.value) return
+  const requestedId = grantId.value
   loading.value = true
   error.value = ''
   try {
-    grant.value = await $fetch(`/api/grants/${grantId.value}`)
-    // Initialize widening selection to exact (0) for every detail so the
-    // conservative default is always preselected before the user acts.
-    if (Array.isArray(grant.value?.widening_suggestions)) {
-      const init = {}
-      grant.value.widening_suggestions.forEach((_, idx) => {
-        init[idx] = '0'
-      })
-      selectedWideningByIndex.value = init
-    }
+    const response = await $fetch<ApprovalPageGrant>(`/api/grants/${requestedId}`)
+    if (grantId.value === requestedId) grant.value = response
   }
-  catch {
-    error.value = 'Grant not found'
-  }
-  finally {
-    loading.value = false
-  }
+  catch (failure) { if (grantId.value === requestedId) error.value = grantDecisionError(failure) }
+  finally { if (grantId.value === requestedId) loading.value = false }
 }
 
-// Refetch when the grant_id changes — happens when a push notification
-// navigates an already-mounted page from one grant to another (Vue reuses
-// the component since the path is identical, so onMounted won't fire).
-watch(grantId, async (next, prev) => {
-  if (next && next !== prev && user.value) await loadGrant()
-})
+async function decided(result: GrantDecisionResult) {
+  if (result.grant.id !== grantId.value) return
+  grant.value = { ...grant.value, ...result.grant }
+  if (typeof route.query.callback !== 'string') return
+  try {
+    const url = new URL(route.query.callback)
+    url.searchParams.set('grant_id', result.grant.id)
+    url.searchParams.set('status', result.grant.status)
+    if (result.authz_jwt) url.searchParams.set('authz_jwt', result.authz_jwt)
+    await navigateTo(url.toString(), { external: true })
+  }
+  catch (failure) { error.value = grantDecisionError(failure) }
+}
 
-// Refetch when the PWA returns to the foreground. A grant may have been
-// approved/denied/expired on another device; without this the page would
-// keep showing stale data after the user taps the push and the existing
-// window is focused.
 function onVisibilityChange() {
-  if (typeof document !== 'undefined' && document.visibilityState === 'visible' && user.value && grantId.value) {
-    loadGrant()
-  }
+  if (document.visibilityState === 'visible' && user.value && grantId.value) void loadGrant()
 }
-
+watch(grantId, async (next, previous) => {
+  if (next && next !== previous && user.value) { grant.value = null; await loadGrant() }
+})
 onMounted(async () => {
+  german.value = navigator.language.startsWith('de')
+  clock = setInterval(() => { nowSec.value = Math.floor(Date.now() / 1000) }, 1000)
   await fetchUser()
   if (!user.value) {
-    const returnTo = `/grant-approval?${new URLSearchParams(route.query).toString()}`
+    const returnTo = `/grant-approval?${new URLSearchParams(route.query as Record<string, string>).toString()}`
     await navigateTo(`/login?returnTo=${encodeURIComponent(returnTo)}`)
     return
   }
+  document.addEventListener('visibilitychange', onVisibilityChange)
   if (batchQuery.value) return
-  if (typeof document !== 'undefined') {
-    document.addEventListener('visibilitychange', onVisibilityChange)
-  }
+  if (!grantId.value) { error.value = 'Missing grant_id parameter'; loading.value = false; return }
   await loadGrant()
 })
-
-onUnmounted(() => {
-  if (typeof document !== 'undefined') {
-    document.removeEventListener('visibilitychange', onVisibilityChange)
-  }
-})
-async function handleApprove(grantTypeOverride) {
-  processing.value = true
-  try {
-    const extendBody = hasSimilarGrants.value && selectedExtendMode.value !== 'separate'
-      ? {
-          extend_mode: selectedExtendMode.value,
-          extend_grant_ids: similarGrants.value.map(s => s.grant.id),
-        }
-      : {}
-    // Build widened_details only when the user actually chose a non-exact scope
-    // and the similar-grants extend flow is NOT in play (mutually exclusive).
-    let wideningBody = {}
-    if (hasWideningSuggestions.value && !hasSimilarGrants.value) {
-      const chosen = wideningSuggestions.value.map((suggestions, idx) => {
-        const selectedIdx = Number(selectedWideningByIndex.value[idx] ?? '0')
-        return suggestions[selectedIdx]?.detail
-      }).filter(Boolean)
-      const originalDetails = cliDetails.value
-      const hasAnyNonExact = chosen.some((detail, idx) => {
-        return detail.permission !== originalDetails[idx]?.permission
-      })
-      if (hasAnyNonExact) {
-        wideningBody = { widened_details: chosen }
-      }
-    }
-    const resolvedGrantType = grantTypeOverride
-      ?? (selectedGrantType.value === 'as_requested'
-        ? (grant.value?.request?.grant_type || 'once')
-        : selectedGrantType.value)
-    const resolvedDuration = grantTypeOverride
-      ? void 0
-      : (selectedGrantType.value === 'as_requested'
-          ? grant.value?.request?.duration
-          : effectiveDuration.value)
-    const result = await $fetch(
-      `/api/grants/${grantId.value}/approve`,
-      {
-        method: 'POST',
-        body: {
-          grant_type: resolvedGrantType,
-          ...resolvedGrantType === 'timed' && resolvedDuration ? { duration: resolvedDuration } : {},
-          ...extendBody,
-          ...wideningBody,
-        },
-      },
-    )
-    if (callbackUrl.value) {
-      const url = new URL(callbackUrl.value)
-      url.searchParams.set('grant_id', grantId.value)
-      url.searchParams.set('authz_jwt', result.authz_jwt)
-      url.searchParams.set('status', 'approved')
-      await navigateTo(url.toString(), { external: true })
-    }
-    else {
-      grant.value = result.grant
-    }
-  }
-  catch (err) {
-    const e = err
-    error.value = e.data?.statusMessage ?? e.message ?? 'Approval failed'
-  }
-  finally {
-    processing.value = false
-  }
-}
-async function handleDeny() {
-  processing.value = true
-  try {
-    await $fetch(`/api/grants/${grantId.value}/deny`, { method: 'POST' })
-    if (callbackUrl.value) {
-      const url = new URL(callbackUrl.value)
-      url.searchParams.set('grant_id', grantId.value)
-      url.searchParams.set('status', 'denied')
-      await navigateTo(url.toString(), { external: true })
-    }
-    else {
-      grant.value = { ...grant.value ?? {}, status: 'denied' }
-    }
-  }
-  catch (err) {
-    const e = err
-    error.value = e.data?.statusMessage ?? e.message ?? 'Denial failed'
-  }
-  finally {
-    processing.value = false
-  }
-}
+onUnmounted(() => { clearInterval(clock); document.removeEventListener('visibilitychange', onVisibilityChange) })
 </script>
 
 <template>
-  <GrantBatchDecision v-if="batchQuery && user" :requester="batchQuery.requester" :batch-id="batchQuery.batchId" />
+  <GrantBatchDecision v-if="batchQuery && user" :key="`${batchQuery.requester}:${batchQuery.batchId}`" :requester="batchQuery.requester" :batch-id="batchQuery.batchId" />
   <div v-else-if="batchQuery" class="min-h-screen flex items-center justify-center p-4 text-muted">
     Loading...
   </div>
-  <div v-else class="min-h-screen flex items-center justify-center p-4">
-    <UCard class="w-full max-w-lg">
-      <template #header>
-        <h1 class="text-2xl font-bold text-center">
-          {{ german ? 'Freigabe' : 'Permission Request' }}
-        </h1>
-      </template>
-
-      <div v-if="loading || authLoading" class="text-center text-muted">
+  <div v-else class="min-h-screen flex items-start sm:items-center justify-center p-4">
+    <div class="w-full max-w-xl space-y-4">
+      <h1 class="text-2xl font-bold">
+        {{ german ? 'Freigabe' : 'Permission request' }}
+      </h1>
+      <p v-if="(loading && !grant) || authLoading" class="text-muted">
         Loading...
-      </div>
-
-      <UAlert v-else-if="error" color="error" :title="error" />
-
-      <template v-else-if="grant">
-        <div v-if="grant.status === 'pending'" class="space-y-4">
-          <UAlert
-            v-if="isDelegate"
-            color="error"
-            title="Identity Delegation Request"
-          >
-            <template #description>
-              <p class="font-semibold">
-                {{ grant.request?.requester }} is requesting to act <strong>as you</strong> at {{ grant.request?.target_host }}.
-              </p>
-              <p v-if="delegateDuration" class="mt-1 text-sm">
-                Duration: {{ delegateDuration }}
-              </p>
-              <p v-else-if="grant.request?.grant_type === 'once'" class="mt-1 text-sm">
-                Single use only.
-              </p>
-              <p v-else-if="grant.request?.grant_type === 'always'" class="mt-1 text-sm">
-                Permanent — until revoked.
-              </p>
-            </template>
-          </UAlert>
-
-          <UAlert
-            v-if="isGenericGrant"
-            color="error"
-            icon="i-lucide-alert-triangle"
-            title="⚠ Unshaped CLI"
-            class="mb-4"
-          >
-            <template #description>
-              This command has no registered shape. Approving grants
-              <strong>single-use</strong> access to execute the exact command shown below.
-              No structured validation is possible — review carefully.
-            </template>
-          </UAlert>
-
-          <div v-if="grant.brokered" class="mb-4 rounded-lg border border-default p-4 text-sm space-y-2">
-            <p><strong>{{ grant.request?.requester }}</strong> uses the agent provider <strong>{{ grant.brokered.agent_issuer }}</strong>.</p>
-            <p>The request is addressed to {{ grant.brokered.owner }}. Only this account can approve it; the provider cannot decide.</p>
-          </div>
-          <GrantCard :grant="grant" :german="german" @language="german = $event" />
-
-          <details v-if="pendingDiagnostics.length" class="rounded-lg border border-default p-4 space-y-3">
-            <summary class="cursor-pointer text-sm">
-              {{ german ? 'Warum die Anfrage wartet' : 'Why this is waiting' }}
-            </summary>
-            <div v-for="d in pendingDiagnostics" :key="d.source" class="space-y-1">
-              <p class="text-sm">
-                <span class="text-dimmed">{{ d.source }}:</span> {{ d.summary }}
-              </p>
-              <ul v-if="d.detail?.unmatchedSegments?.length" class="space-y-1">
-                <li
-                  v-for="seg in d.detail.unmatchedSegments"
-                  :key="seg"
-                  class="break-all rounded bg-elevated px-2 py-1 font-mono text-xs"
-                >
-                  {{ seg }}
-                </li>
-              </ul>
-              <p v-if="d.detail?.deniedSegment" class="break-all rounded bg-elevated px-2 py-1 font-mono text-xs">
-                {{ d.detail.deniedSegment }}
-              </p>
-              <p v-if="d.detail?.substitutionSegments?.length" class="text-xs text-muted">
-                Contains command substitution — a pattern must spell the construct out to allow it.
-              </p>
-            </div>
-          </details>
-
-          <UAlert
-            v-if="liveness.kind === 'abandoned'"
-            color="warning"
-            title="Aufgegeben — niemand wartet mehr"
-          >
-            <template #description>
-              Der Aufrufer hat {{ formatWaited(liveness.waitedSeconds) }} gewartet und weitergemacht.
-              Eine Freigabe lässt dieses Kommando nicht mehr laufen; sie wirkt nur noch als Regel für künftige Anfragen.
-            </template>
-          </UAlert>
-          <p v-else-if="liveness.kind === 'waiting'" class="text-sm text-success">
-            Der Prozess wartet noch — {{ formatCountdown(liveness.secondsLeft) }}
-          </p>
-
-          <div class="flex gap-2">
-            <UButton color="error" variant="soft" :loading="processing" class="flex-1" @click="handleDeny">
-              {{ german ? 'Ablehnen' : 'Deny' }}
-            </UButton>
-            <UButton
-              v-if="liveness.kind !== 'abandoned'"
-              color="success"
-              :loading="processing"
-              class="flex-1"
-              @click="handleApprove('once')"
-            >
-              {{ german ? 'Nur dieses Mal' : 'Just this once' }}
-            </UButton>
-            <UButton v-if="!requiresSingleUse(grant)" color="success" variant="outline" class="flex-1" @click="toggleAlwaysPanel">
-              {{ german ? 'Immer erlauben' : 'Always allow' }}
-            </UButton>
-          </div>
-
-          <div v-if="alwaysOpen && !requiresSingleUse(grant)" class="rounded border border-success/30 bg-success/5 px-3 py-2 space-y-2">
-            <p class="text-xs text-muted">
-              Make a rule so future requests like this auto-approve. This request itself runs once.
+      </p>
+      <UAlert v-if="error" color="error" :title="error" />
+      <template v-if="grant && !authLoading">
+        <UAlert v-if="grant.status !== 'pending'" :color="grant.status === 'approved' ? 'success' : grant.status === 'denied' ? 'error' : 'neutral'" :title="`Grant ${grant.status}`">
+          <template v-if="grant.decided_by" #description>
+            {{ german ? 'Entschieden von' : 'Decided by' }} {{ grant.decided_by }}
+          </template>
+        </UAlert>
+        <GrantCard :grant="grant" :german="german" :show-validity="grant.status !== 'pending'" :technical="grant.status !== 'pending'" @language="german = $event">
+          <template v-if="grant.status === 'pending'">
+            <p v-if="grant.request.permissions?.includes('delegate')" class="rounded border border-warning p-3 text-sm">
+              {{ german ? 'Identitätsdelegation: Der Antragsteller möchte in deinem Namen handeln.' : 'Identity delegation: the requester wants to act as you.' }}
             </p>
-            <template v-if="ruleProposals.length">
-              <p
-                v-for="proposal in ruleProposals"
-                :key="proposal.cliId"
-                class="font-mono text-xs break-all"
-              >
-                {{ ruleTemplatePreview(proposal) }}
-              </p>
-            </template>
-            <template v-else>
-              <UInput
-                v-model="patternDraft"
-                placeholder="command pattern, e.g. o365-cli mail list *"
-                class="w-full font-mono text-xs"
-              />
-              <p class="text-xs text-dimmed">
-                Glob pattern matched against future command lines (* = anything). Only requests matching it auto-approve.
-              </p>
-            </template>
-            <UAlert v-if="ruleError" color="error" variant="subtle" :title="ruleError" />
-            <div class="flex flex-wrap gap-2">
-              <UButton color="success" size="sm" :loading="ruleBusy" @click="createRuleAndApproveOnce">
-                Create rule + run once
-              </UButton>
-              <UButton color="success" variant="outline" size="sm" @click="handleApprove('always')">
-                Only this exact request, always
-              </UButton>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            class="flex items-center gap-2 text-xs text-muted hover:text-default"
-            @click="moreOptionsOpen = !moreOptionsOpen"
-          >
-            <span>{{ moreOptionsOpen ? '▾' : '▸' }} More options</span>
-            <UBadge v-if="hasSimilarGrants" color="info" variant="soft" size="xs" label="similar grants exist" />
-          </button>
-
-          <div v-if="moreOptionsOpen" class="space-y-3">
-            <p class="font-mono text-xs text-dimmed break-all">
-              Grant {{ grantId.slice(0, 8) }}… · Audience: {{ grant.request?.audience }}
+            <p v-if="grant.brokered" class="text-xs text-muted break-words">
+              {{ german ? 'Angefragt über' : 'Requested via' }} {{ grant.brokered.agent_issuer }} · {{ german ? 'Entscheidendes Konto' : 'Decision account' }}: {{ grant.brokered.owner }}
             </p>
-            <p v-if="grant.request?.cmd_hash" class="font-mono text-xs text-dimmed break-all">
-              Hash: {{ grant.request.cmd_hash }}
+            <p v-if="liveness.kind === 'waiting'" class="text-xs text-success">
+              {{ german ? 'Der Prozess wartet noch' : 'The process is still waiting' }} — {{ formatCountdown(liveness.secondsLeft) }}
             </p>
-            <div
-              v-if="hasWideningSuggestions && !hasSimilarGrants"
-              class="rounded-lg border border-default p-4 space-y-3"
-            >
-              <div>
-                <h3 class="text-sm font-semibold">
-                  Approve scope
-                </h3>
-                <p class="text-xs text-muted mt-1">
-                  Choose how broad this grant should be. Conservative default is exact.
-                </p>
-              </div>
-              <div v-for="(suggestions, detailIdx) in wideningSuggestions" :key="detailIdx" class="space-y-2">
-                <p v-if="cliDetails[detailIdx]" class="text-xs text-muted">
-                  For: <span class="font-mono break-all">{{ cliDetails[detailIdx].display }}</span>
-                </p>
-                <URadioGroup
-                  v-model="selectedWideningByIndex[detailIdx]"
-                  :items="suggestions.map((s, i) => ({
-                    label: s.label,
-                    value: String(i),
-                    description: s.permission,
-                  }))"
-                  :ui="{ description: 'font-mono text-xs break-all' }"
-                />
-              </div>
-            </div>
-
-            <UAlert
-              v-if="hasSimilarGrants"
-              color="info"
-              title="Similar grant(s) exist"
-            >
-              <template #description>
-                <div class="text-sm space-y-2 mt-2">
-                  <div v-for="similar in similarGrants" :key="similar.grant.id">
-                    <p class="text-muted">
-                      Existing grant: <span class="font-mono text-xs">{{ similar.grant.id.slice(0, 8) }}...</span>
-                    </p>
-                    <div
-                      v-for="detail in getCliAuthorizationDetails(similar.grant.request.authorization_details)"
-                      :key="detail.permission"
-                      class="font-mono text-xs text-dimmed break-all"
-                    >
-                      {{ detail.permission }}
-                    </div>
-                  </div>
-                  <div class="mt-2 space-y-1">
-                    <p class="text-muted font-medium">
-                      Extension options:
-                    </p>
-                    <URadioGroup
-                      v-model="selectedExtendMode"
-                      :items="EXTEND_MODE_OPTIONS"
-                    />
-                    <div v-if="selectedExtendMode === 'widen'" class="mt-1 rounded bg-gray-950/50 px-2 py-1">
-                      <p class="text-xs text-muted">
-                        Result:
-                      </p>
-                      <p v-for="perm in widenedPreview" :key="perm" class="font-mono text-xs text-green-400">
-                        {{ perm }}
-                      </p>
-                    </div>
-                    <div v-if="selectedExtendMode === 'merge'" class="mt-1 rounded bg-gray-950/50 px-2 py-1">
-                      <p class="text-xs text-muted">
-                        Result:
-                      </p>
-                      <p v-for="perm in mergedPreview" :key="perm" class="font-mono text-xs text-blue-400">
-                        {{ perm }}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </template>
-            </UAlert>
-
-            <div class="space-y-3">
-              <div>
-                <label class="text-sm font-medium text-muted block mb-2">Approval Type</label>
-                <p v-if="grant.request?.grant_type" class="text-xs text-dimmed mb-2">
-                  Requested: {{ grant.request.grant_type }}
-                </p>
-                <URadioGroup
-                  v-model="selectedGrantType"
-                  :items="grantTypeOptions"
-                />
-              </div>
-              <div v-if="selectedGrantType === 'timed'" class="space-y-2">
-                <label class="text-sm font-medium text-muted block">Duration</label>
-                <USelect
-                  v-model="selectedDurationPreset"
-                  :items="DURATION_PRESETS"
-                />
-                <UInput
-                  v-if="selectedDurationPreset === 'custom'"
-                  v-model.number="customDuration"
-                  type="number"
-                  :min="60"
-                  placeholder="Duration in seconds"
-                />
-              </div>
-            </div>
-            <UButton
-              color="success"
-              variant="outline"
-              size="sm"
-              :loading="processing"
-              @click="handleApprove()"
-            >
-              Approve with selected options
-            </UButton>
+            <p v-else-if="liveness.kind === 'abandoned'" class="text-xs text-warning">
+              {{ german ? 'Aufgegeben — niemand wartet mehr' : 'The requester has stopped waiting' }} · {{ formatWaited(liveness.waitedSeconds) }}
+            </p>
+            <GrantDecisionForm :key="grant.id" :grant="grant" :german="german" :can-approve="liveness.kind !== 'abandoned'" @decided="decided" />
+          </template>
+        </GrantCard>
+        <details v-if="grant.pending_diagnostics?.length && grant.status === 'pending'" class="rounded-lg border border-default p-4">
+          <summary class="cursor-pointer text-sm">
+            {{ german ? 'Warum die Anfrage wartet' : 'Why this is waiting' }}
+          </summary>
+          <div v-for="diagnostic in grant.pending_diagnostics" :key="diagnostic.source" class="mt-3 text-xs space-y-1">
+            <p>{{ diagnostic.source }}: {{ diagnostic.summary }}</p>
+            <p v-for="segment in diagnostic.detail?.unmatchedSegments" :key="segment" class="font-mono break-all">
+              {{ segment }}
+            </p>
+            <p v-if="diagnostic.detail?.deniedSegment" class="font-mono break-all">
+              {{ diagnostic.detail.deniedSegment }}
+            </p>
+            <p v-if="diagnostic.detail?.substitutionSegments?.length">
+              {{ german ? 'Enthält Befehlssubstitution; ein Muster muss das Konstrukt ausdrücklich benennen.' : 'Contains command substitution; a pattern must spell the construct out.' }}
+            </p>
           </div>
-        </div>
-
-        <div v-else class="space-y-4">
-          <UAlert
-            :color="grant.status === 'approved' ? 'success' : grant.status === 'denied' ? 'error' : 'neutral'"
-            :title="`Grant ${grant.status}`"
-          >
-            <template v-if="grant.decided_by" #description>
-              {{ german ? 'Entschieden von' : 'Decided by' }} {{ grant.decided_by }}
-            </template>
-          </UAlert>
-          <GrantCard :grant="grant" :german="german" @language="german = $event" />
-
-          <div class="flex gap-3">
-            <UButton to="/grants" variant="soft" color="primary" block class="flex-1">
-              All grants
-            </UButton>
-            <UButton to="/" variant="soft" color="neutral" block class="flex-1">
-              Home
-            </UButton>
-          </div>
+        </details>
+        <div v-if="grant.status !== 'pending'" class="flex gap-3">
+          <UButton to="/grants" variant="soft">
+            {{ german ? 'Alle Freigaben' : 'All grants' }}
+          </UButton><UButton to="/" variant="soft" color="neutral">
+            Home
+          </UButton>
         </div>
       </template>
-    </UCard>
+    </div>
   </div>
 </template>

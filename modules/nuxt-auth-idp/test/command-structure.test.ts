@@ -95,7 +95,7 @@ describe('compactCommand', () => {
       head: 'pods-graph-gate approve',
       facts: [
         { label: 'action:', value: 'mail.archive' },
-        { label: 'batchId:', value: 'ed50790c…7c9a0e' },
+        { label: 'batchId:', value: '11111111…111111' },
         { label: 'expiresAt:', value: '1792478942037' },
       ],
       hidden: 6,
@@ -107,13 +107,13 @@ describe('compactCommand', () => {
     expect(compact.hidden).toBe(0)
     expect(compact.facts.map(fact => `${fact.label} ${fact.value}`)).toEqual([
       'action: mail.archive',
-      'batchId: ed50790c-7d3b-4f0e-9c51-2a8b4f7c9a0e',
+      'batchId: 11111111-1111-4111-8111-111111111111',
       'expiresAt: 1792478942037',
-      'hash: fac5678a9e0d4c7b8f2e1a3d5c6b9e0f4a7d2c1b8e3f6a9d0c5b2e7f4a7f8091',
-      'object: phofmann@delta-mind.at:AAkALgAAAAAAHYQDEapmEc2byACqAC-EWg0Aihx0qtzv3k_XDmEEfSdYlgAJOdNU0wAA',
-      'owner.issuer: https://id.openape.ai',
-      'owner.subject: patrick@hofmann.eco',
-      'podId: 129579b8-e03d-44b5-a44b-4de9f8cd7f89',
+      'hash: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      'object: owner@example.test:synthetic-message-000000000000000000000000000000000000000000000000000001',
+      'owner.issuer: https://id.example.test',
+      'owner.subject: owner@example.test',
+      'podId: 22222222-2222-4222-8222-222222222222',
       'version: 5',
     ])
   })
@@ -154,8 +154,8 @@ describe('distinctCompactCommands', () => {
 
   it('adds the first fact in which otherwise equal-looking commands differ', () => {
     const [first, second] = distinctCompactCommands([gate({}), gate({ object: 'other-mail-id', podId: '22222222-0000-4000-8000-000000000000' })])
-    expect(shown(first)).toEqual(['action: mail.archive', 'batchId: ed50790c…7c9a0e', 'expiresAt: 1792478942037', 'object: phofmann…NU0wAA'])
-    expect(shown(second)).toEqual(['action: mail.archive', 'batchId: ed50790c…7c9a0e', 'expiresAt: 1792478942037', 'object: other-mail-id'])
+    expect(shown(first)).toEqual(['action: mail.archive', 'batchId: 11111111…111111', 'expiresAt: 1792478942037', 'object: owner@ex…000001'])
+    expect(shown(second)).toEqual(['action: mail.archive', 'batchId: 11111111…111111', 'expiresAt: 1792478942037', 'object: other-mail-id'])
     expect(first!.hidden).toBe(5)
   })
 
@@ -185,7 +185,7 @@ describe('distinctCompactCommands', () => {
 
 describe('truncateMiddle', () => {
   it('keeps start and end around a visible ellipsis', () => {
-    expect(truncateMiddle('129579b8-e03d-44b5-a44b-4de9f8cd7f89', 15)).toBe('129579b8…cd7f89')
+    expect(truncateMiddle('22222222-2222-4222-8222-222222222222', 15)).toBe('22222222…222222')
     expect(truncateMiddle('short', 15)).toBe('short')
     expect(truncateMiddle('😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀😀', 15)).toBe('😀😀😀😀😀😀😀😀…😀😀😀😀😀😀')
   })

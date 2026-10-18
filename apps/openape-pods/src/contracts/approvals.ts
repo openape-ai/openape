@@ -19,7 +19,7 @@ export interface ApprovalAuthority { version: 5, podId: string, owner: Owner, ba
 /** `summary` is what the IdP shows about the item (issue 1473); the authority alone binds what it allows. */
 export interface ApprovalItem { key: string, authority: ApprovalAuthority, summary: GrantSummary }
 /** What the worker sends the desktop for one batch operation; `grants` name the item grants of status/consume. */
-export interface ApprovalManifest { podId: string, owner: Owner, batchId: string, title: string, expiresAt: number, items: ApprovalItem[] }
+export interface ApprovalManifest { podId: string, owner: Owner, batchId: string, title: string, description?: string, expiresAt: number, items: ApprovalItem[] }
 export interface ApprovalView { id: string, action: ApprovalAction, object: string, title: string, description: string | null, link: string | null, state: ApprovalState, reason: string | null, batchId: string | null, batchUrl: string | null, updatedAt: number }
 
 const uuid = (value: unknown): value is string => typeof value === 'string' && /^[a-f0-9]{8}-[a-f0-9]{4}-[1-8][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/.test(value)
@@ -38,9 +38,10 @@ export function parseApprovalAuthority(value: unknown): ApprovalAuthority {
 
 export function parseApprovalManifest(value: unknown): ApprovalManifest {
   const input = value as Record<string, unknown> | null
-  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['podId', 'owner', 'batchId', 'title', 'expiresAt', 'items'].includes(key))) throw new Error('Invalid approval batch')
+  if (!input || typeof input !== 'object' || Array.isArray(input) || Object.keys(input).some(key => !['podId', 'owner', 'batchId', 'title', 'description', 'expiresAt', 'items'].includes(key))) throw new Error('Invalid approval batch')
   if (!uuid(input.podId) || !uuid(input.batchId) || typeof input.title !== 'string' || !input.title.trim() || input.title.length > 120 || !Number.isSafeInteger(input.expiresAt) || !Array.isArray(input.items) || !input.items.length || input.items.length > 100) throw new Error('Invalid approval batch')
   const owner = parseOwner(input.owner)
+  const description = input.description === undefined ? undefined : parseSummary({ title: 'Batch context', description: input.description }).description
   const items = input.items.map((entry) => {
     const item = entry as Record<string, unknown>
     if (!item || typeof item !== 'object' || Object.keys(item).some(key => !['key', 'authority', 'summary'].includes(key)) || !uuid(item.key)) throw new Error('Invalid approval item')
@@ -50,5 +51,5 @@ export function parseApprovalManifest(value: unknown): ApprovalManifest {
     return { key: item.key, authority, summary }
   })
   if (new Set(items.map(item => item.key)).size !== items.length) throw new Error('Duplicate approval item')
-  return { podId: input.podId, owner, batchId: input.batchId, title: input.title, expiresAt: Number(input.expiresAt), items }
+  return { podId: input.podId, owner, batchId: input.batchId, title: input.title, ...(description === undefined ? {} : { description }), expiresAt: Number(input.expiresAt), items }
 }

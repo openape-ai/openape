@@ -324,11 +324,11 @@ describe('grant create endpoint', () => {
       audience: 'pods-graph-gate',
       grant_type: 'once',
       command: ['pods-graph-gate', 'approve', '{"item":"a"}'],
-      batch: { id: 'b-1', title: 'Newsletters', size: 2 },
+      batch: { id: 'b-1', title: 'Newsletters', description: 'Archive selected newsletters.\nKeep all other messages.', size: 2 },
     })
     const { default: handler } = await import('../src/runtime/server/api/grants/index.post')
     const result = await handler({} as any)
-    expect((await grantStore.findById(result.id))?.request.batch).toEqual({ id: 'b-1', title: 'Newsletters', size: 2 })
+    expect((await grantStore.findById(result.id))?.request.batch).toEqual({ id: 'b-1', title: 'Newsletters', description: 'Archive selected newsletters.\nKeep all other messages.', size: 2 })
   })
 
   it.each([
@@ -337,6 +337,8 @@ describe('grant create endpoint', () => {
     [{ id: 'x', size: 0 }],
     [{ id: 'x', size: 101 }],
     [{ id: 'x', approve: true }],
+    [{ id: 'x', description: 'Archive\u202Emessages' }],
+    [{ id: 'x', description: 'x'.repeat(2001) }],
   ])('rejects an invalid request batch %j (400)', async (batch) => {
     readBodyMock.mockResolvedValue({ requester: 'agent@example.com', target_host: 'pods:demo', audience: 'pods-graph-gate', grant_type: 'once', command: ['x'], batch })
     const { default: handler } = await import('../src/runtime/server/api/grants/index.post')

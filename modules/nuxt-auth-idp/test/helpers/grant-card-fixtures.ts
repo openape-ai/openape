@@ -52,15 +52,15 @@ export async function shapedRequest(loaded: LoadedAdapter, argv: string[], extra
 
 export const podArgv = ['pod-runtime', 'run', '--pod', POD_ID, '--name', 'Mail digest', '--script', '/Users/owner/Pods/mail-digest/run.mjs', '--workspace', '/Users/owner/Pods/mail-digest/workspace', '--environment', '{"HOME":"/Users/owner/Pods/mail-digest/home","LANG":"de_AT.UTF-8"}']
 export const pushArgv = ['git', '-C', '/Users/owner/repos/iurio', 'push', '--force-with-lease', 'origin', 'feature/rebase']
-// The Pods graph gate decision from the owner's batch approval screenshot (issue 1477); no registry adapter describes it.
+// Synthetic graph-gate authority with long mailbox identifiers; no registry adapter describes it.
 export const graphGateArgv = ['pods-graph-gate', 'approve', JSON.stringify({
   action: 'mail.archive',
-  batchId: 'ed50790c-7d3b-4f0e-9c51-2a8b4f7c9a0e',
+  batchId: '11111111-1111-4111-8111-111111111111',
   expiresAt: 1792478942037,
-  hash: 'fac5678a9e0d4c7b8f2e1a3d5c6b9e0f4a7d2c1b8e3f6a9d0c5b2e7f4a7f8091',
-  object: 'phofmann@delta-mind.at:AAkALgAAAAAAHYQDEapmEc2byACqAC-EWg0Aihx0qtzv3k_XDmEEfSdYlgAJOdNU0wAA',
-  owner: { issuer: 'https://id.openape.ai', subject: 'patrick@hofmann.eco' },
-  podId: '129579b8-e03d-44b5-a44b-4de9f8cd7f89',
+  hash: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+  object: 'owner@example.test:synthetic-message-000000000000000000000000000000000000000000000000000001',
+  owner: { issuer: 'https://id.example.test', subject: 'owner@example.test' },
+  podId: '22222222-2222-4222-8222-222222222222',
   version: 5,
 })]
 
@@ -109,9 +109,9 @@ export async function buildCardFixtures(): Promise<CardFixtures> {
   }))
   const graphGate = pending('grant-graph-gate', await unshapedRequest(graphGateArgv, {
     requester: 'mail-triage+owner+example_com@id.example.com',
-    target_host: 'pods:129579b8-e03d-44b5-a44b-4de9f8cd7f89',
+    target_host: 'pods:22222222-2222-4222-8222-222222222222',
     audience: 'pods-graph-gate',
-    summary: { title: '62 Personen haben sich Ihr Profil angesehen' },
+    summary: { title: 'Produktneuigkeiten für Oktober' },
   }))
   const [podRunCard, gitPushCard, unknownCard, gitUntestedCard, graphGateCard] = await withGrantCards([podRun, gitPush, unknown, gitUntested, graphGate], { getShape, findUser })
   return { podRun: podRunCard!, gitPush: gitPushCard!, unknown: unknownCard!, gitUntested: gitUntestedCard!, graphGate: graphGateCard! }
