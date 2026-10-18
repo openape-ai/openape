@@ -181,6 +181,8 @@ export interface OpenApeGrantBatch {
   id: string
   /** The requester's own title for the batch. */
   title?: string
+  /** The requester's own description, with the same text rules as summary.description. */
+  description?: string
   /** Number of grants the requester intends to submit under this id. */
   size?: number
 }

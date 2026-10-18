@@ -4,7 +4,7 @@ import type { OpenApeGrantRequest } from '@openape/core'
 import { grantSummaryView } from '../utils/grant-summary'
 
 // `withoutTitle`: the card already leads with the summary title (`requesterHeadline`).
-const props = defineProps<{ request: OpenApeGrantRequest, german: boolean, withoutTitle?: boolean }>()
+const props = defineProps<{ request: OpenApeGrantRequest, german: boolean, withoutTitle?: boolean, compact?: boolean }>()
 
 const summary = computed(() => grantSummaryView(props.request.summary))
 // The Pods desktop sends its display text both as reason and as title.
@@ -20,14 +20,14 @@ const shown = computed(() => {
 </script>
 
 <template>
-  <section v-if="shown || reason" class="rounded border border-default bg-elevated/50 px-3 py-2 space-y-1" data-requester-claims>
+  <section v-if="shown || reason" class="min-w-0 space-y-2" data-requester-claims>
     <p class="text-xs text-muted">
-      {{ german ? 'Angabe des Antragstellers' : 'Requester\'s statement' }}
+      {{ german ? 'Beschreibung vom Antragsteller' : 'Description from the requester' }}
     </p>
     <template v-if="shown">
-      <p v-if="!withoutTitle" class="text-sm font-medium break-words">
+      <h2 v-if="!withoutTitle" class="font-semibold leading-tight break-words" :class="compact ? 'text-base' : 'text-xl'" data-requester-headline>
         {{ shown.title }}
-      </p>
+      </h2>
       <p v-if="shown.description" class="text-sm whitespace-pre-wrap break-words">
         {{ shown.description }}
       </p>

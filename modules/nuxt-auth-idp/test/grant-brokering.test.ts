@@ -81,6 +81,22 @@ beforeEach(async () => {
 afterEach(async () => { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())) })
 
 describe('brokered decision lifecycle', () => {
+  it('preserves a batch description and rejects inconsistent or concealed group claims', async () => {
+    const request = { requester: agent, command: ['printf', 'fixture'], target_host: 'fixture', audience: 'shapes', grant_type: 'once', batch: { id: 'review-1', title: 'Review selected calls', description: 'Review each call.\nOnly selected calls will be approved.', size: 2 } }
+    const response = await send('create', undefined, { request })
+    expect(response.status).toBe(201)
+    const grant = await response.json()
+    expect(grant.request.batch).toEqual(request.batch)
+    expect((await grantStore.findById(grant.id))?.request.batch).toEqual(request.batch)
+
+    for (const description of ['A different group purpose', 'Review\u202Eselected calls']) {
+      const rejected = await send('create', undefined, { request: { ...request, batch: { ...request.batch, description } } })
+      expect(rejected.status).toBe(400)
+    }
+    expect((await grantStore.listGrants({ requester: agent })).data).toHaveLength(1)
+    expect((await grantStore.findById(grant.id))?.status).toBe('pending')
+  })
+
   it('notifies the external owner and returns the original owner-signed grant without a local agent row', async () => {
     const created = await send('create')
     expect(created.status).toBe(201)

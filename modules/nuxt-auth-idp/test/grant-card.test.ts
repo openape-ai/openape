@@ -1,8 +1,7 @@
 // The generic grant card (issue 1473): registry meaning only from adapters in
 // the IdP's shapes table, matched by adapter digest and re-derived from the
-// grant's own argv; the binding line always stays visible (a requester title
-// leads only above an exact command), and values the approval does not bind
-// are marked as requested.
+// grant's own argv. Requester context leads the card, while bound authority
+// stays visible and the complete technical description remains inspectable.
 
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
@@ -10,7 +9,7 @@ import type { OpenApeGrant } from '@openape/core'
 import { computeArgvHash } from '@openape/grants'
 import { describe, expect, it, vi } from 'vitest'
 import { bindsExactCommand, registryCard, withGrantCards } from '../src/runtime/server/utils/grant-card'
-import { grantBindingLine, requesterHeadline } from '../src/runtime/utils/grant-card'
+import { formatGrantDuration, grantBindingLine, grantScope, grantScopeNote, grantValidity, requesterHeadline } from '../src/runtime/utils/grant-card'
 import type { GrantWithCard } from '../src/runtime/utils/grant-card'
 import { buildCardFixtures, findUser, getShape, gitAdapter, graphGateArgv, idpResolvedRequest, POD_ID, podArgv, podRuntimeAdapter, pushArgv, shapedRequest, UNTESTED_GIT_SHA256 } from './helpers/grant-card-fixtures'
 
@@ -128,7 +127,7 @@ describe('grant cards', () => {
     expect(await bindsExactCommand({ ...gate, permissions: [...gate.permissions!, 'pods.approval:b-gate'] })).toBe(false)
     expect(await bindsExactCommand({ ...plain, permissions: ['files.read'] })).toBe(false)
     // The Pods gate batch permission is not bound to the command (issue 1477 follow-up).
-    expect(await bindsExactCommand({ ...gate, authorization_details: undefined, permissions: ['pods.approval:ed50790c-7d3b-4f0e-9c51-2a8b4f7c9a0e'] })).toBe(false)
+    expect(await bindsExactCommand({ ...gate, authorization_details: undefined, permissions: ['pods.approval:11111111-1111-4111-8111-111111111111'] })).toBe(false)
     // A detail of another type, or one that is not exact-only.
     expect(await bindsExactCommand({ ...gate, authorization_details: [detail!, { type: 'openape_grant', action: 'exec' }] })).toBe(false)
     expect(await bindsExactCommand({ ...gate, authorization_details: [{ ...detail!, constraints: {} } as typeof detail] })).toBe(false)
@@ -143,20 +142,43 @@ describe('grant cards', () => {
     expect(await bindsExactCommand({ ...plain, command: [] })).toBe(false)
   })
 
-  it('lead with the requester title only when the IdP verified the exact command binding', async () => {
+  it('lead with safe requester context independently of the binding type', async () => {
     const { gitPush, unknown, graphGate } = await buildCardFixtures()
     const headline = (grant: GrantWithCard) => requesterHeadline(grant, grantBindingLine(grant, 'en'))
 
     expect(graphGate.card?.binds_exact_command).toBe(true)
     expect(headline(unknown)).toBe('Deploy the hotfix')
-    expect(headline(graphGate)).toBe('62 Personen haben sich Ihr Profil angesehen')
-    // A registry title keeps the lead; without the registry card, a shaped permission is broader than the line.
+    expect(headline(graphGate)).toBe('Produktneuigkeiten für Oktober')
     expect(gitPush.card?.binds_exact_command).toBe(false)
-    expect(headline(gitPush)).toBeNull()
-    expect(headline({ ...gitPush, card: { ...gitPush.card!, registry: null } })).toBeNull()
-    // Without the IdP's verification there is no headline.
-    expect(headline({ ...graphGate, card: undefined })).toBeNull()
-    expect(headline({ ...graphGate, card: { ...graphGate.card!, binds_exact_command: false } })).toBeNull()
+    expect(headline(gitPush)).toBe('Read-only status check')
+    expect(headline({ ...gitPush, card: { ...gitPush.card!, registry: null } })).toBe('Read-only status check')
+    expect(headline({ ...graphGate, card: undefined })).toBe('Produktneuigkeiten für Oktober')
+    expect(headline({ ...graphGate, card: { ...graphGate.card!, binds_exact_command: false } })).toBe('Produktneuigkeiten für Oktober')
+  })
+
+  it('formats requested durations exactly instead of rounding ninety minutes to two hours', async () => {
+    const { unknown } = await buildCardFixtures()
+    expect(formatGrantDuration(5400)).toBe('1 h 30 min')
+    expect(formatGrantDuration(3661)).toBe('1 h 1 min 1 s')
+    expect(grantValidity({ ...unknown, request: { ...unknown.request, grant_type: 'timed', duration: 5400 } }, 'de')).toBe('Befristet, 1 h 30 min')
+  })
+
+  it('never promotes a requested registry consequence into a bound-scope claim', async () => {
+    const { gitPush } = await buildCardFixtures()
+    const card = { ...gitPush, card: { ...gitPush.card!, registry: { ...gitPush.card!.registry!, allows: { de: 'Alle Dateien lesen', en: 'Read all files', requested: true as const }, does_not_allow: { de: 'Keine Änderungen', en: 'No writes', requested: true as const } } } }
+    expect(grantScope(card, 'en')).not.toContain('Read all files')
+    expect(grantScopeNote(card, 'en')).toBeNull()
+    expect(grantBindingLine(card, 'en').text).toBe('Push feature/rebase to origin')
+  })
+
+  it('keeps plain permissions and delegation scopes visible without a registry card', async () => {
+    const { unknown } = await buildCardFixtures()
+    const plain = { ...unknown, card: { ...unknown.card!, binds_exact_command: false }, request: { ...unknown.request, authorization_details: undefined, permissions: ['files:read'] } }
+    expect(grantScope(plain, 'en')).toContain('files:read')
+    expect(grantScope(plain, 'en')).toContain(plain.request.target_host)
+    const delegation = { ...plain, request: { ...plain.request, delegate: 'helper@example.test', scopes: ['grants:read'] } }
+    expect(grantScope(delegation, 'en')).toContain('helper@example.test')
+    expect(grantScope(delegation, 'en')).toContain('grants:read')
   })
 
   it('keep the command line in the lead without a title or with an unsafe title', async () => {

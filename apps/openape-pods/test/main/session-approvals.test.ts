@@ -36,12 +36,16 @@ it('authorizes only one pinned owner CLI start and leaves downstream calls pendi
   const entry = join(root, 'runtime/script-entry.mjs'); mkdirSync(join(root, 'runtime')); writeFileSync(entry, 'Synthetic runtime entry')
   Object.assign((f.worker as unknown as { host: object }).host, { directory: root })
   Object.assign(f.worker, { cliStarts: new Map([[podId, { scriptHash, runId, owner }]]) })
-  const run = f.start(podId, runId); await run.run
+  f.store.db.prepare('INSERT INTO pod_descriptions(pod_id,body) VALUES(?,?)').run(podId, 'Owner-provided context for the selected Pod')
+  const run = f.start(podId, runId, 'manual', f.store.getPod(podId).name)
+  const prepared = await run.run as { machine: { summary: unknown } }
   const artifact = join(f.store.root, 'runs/script-artifacts', `${scriptHash}.mjs`)
   const call = { program: { name: basename(process.execPath), sha256: hash(readFileSync(process.execPath)) }, argv: [entry, '--input-channel', artifact, '', scriptHash], files: [{ path: artifact, sha256: scriptHash }, { path: entry, sha256: hash(readFileSync(entry)) }] }
   await expect(run.call('scriptGrant', call)).resolves.toBe(true)
   expect(idp.state.decisions).toEqual([{ action: 'approve', id: 'grant-1', bearer: ownerToken, body: { grant_type: 'once' } }])
   expect(idp.state.authorizations[0]).toMatchObject({ ...call, grant_type: 'once' })
+  expect(idp.state.authorizations[0].summary).toEqual(prepared.machine.summary)
+  expect(idp.state.authorizations[0].summary).toMatchObject({ title: 'Run saved script: Pod 0001', description: expect.stringContaining('Pod context:\nOwner-provided context for the selected Pod') })
   const authority = new AgentAuthority(f.connection(podId), undefined, f.grants.port(podId))
   await expect(authority.requestProgram({ ...call, argv: ['-e', 'console.log(2 + 2)'] }, AbortSignal.timeout(1000))).resolves.toMatchObject({ state: 'pending' })
   await expect(run.call('scriptGrant', call)).resolves.toBe(true)

@@ -1,10 +1,10 @@
 import { defineComponent } from 'vue'
-import { flushPromises, mount } from '@vue/test-utils'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import GrantApprovalPage from '../src/runtime/pages/grant-approval.vue'
 import GrantsPage from '../src/runtime/pages/grants.vue'
 import type { GrantWithCard } from '../src/runtime/utils/grant-card'
-import { grantBatchRows, grantBatchSections } from '../src/runtime/utils/grant-batch'
+import { grantBatchInfo, grantBatchOperations, grantBatchRows, grantBatchSections } from '../src/runtime/utils/grant-batch'
 import cardFixtures from './fixtures/grant-cards.json'
 import { __resetNuxtImportsMocks, __setFetchUser, __setRouteQuery, __setUser } from './mocks/nuxt-imports'
 
@@ -13,9 +13,15 @@ const stubs = {
   UAlert: defineComponent({ props: { title: { type: String, default: '' } }, template: '<div role="alert">{{ title }}<slot name="description" /></div>' }),
   UButton: defineComponent({ props: { to: { type: String, default: undefined }, disabled: { type: Boolean, default: false } }, emits: ['click'], template: '<button :data-to="to" :disabled="disabled" @click="$emit(\'click\')"><slot /></button>' }),
   UBadge: defineComponent({ props: { label: { type: String, default: '' } }, template: '<span>{{ label }}</span>' }),
+  UModal: true,
+  USelect: true,
+  UInput: true,
+  URadioGroup: true,
+  IdpPage: defineComponent({ template: '<main><slot /></main>' }),
 }
 
 const future = Math.floor(Date.now() / 1000) + 3600
+enableAutoUnmount(afterEach)
 
 function member(id: string, index: number, overrides: Record<string, unknown> = {}) {
   return {
@@ -28,22 +34,30 @@ function member(id: string, index: number, overrides: Record<string, unknown> = 
       audience: 'pods-graph-gate',
       grant_type: 'once',
       command: ['pods-graph-gate', 'approve', `{"item":"${id}"}`],
-      summary: { title: `"Newsletter XY" <news@xy.example> – Issue ${index}`, description: 'more detail' },
+      summary: { title: `"Newsletter XY" <news@xy.example> – Issue ${index}`, description: `Description of ${id}` },
       waits_until: future,
       batch: { id: 'b-1', title: 'Newsletters, October 7', size: 3 },
     },
     // What the IdP attaches: this plain command binds nothing but itself (`bindsExactCommand`).
-    card: { registry: null, requester: null, binds_exact_command: true },
+    card: { registry: null, requester: { name: 'Newsletter assistant', owner: 'owner@example.com' }, binds_exact_command: true },
     ...overrides,
   }
 }
 
 function batchFetch(members: unknown[]) {
+  let current = members as { id: string, status: string, decided_at?: number }[]
   const calls: { url: string, opts?: { method?: string, body?: unknown, query?: unknown } }[] = []
   const fetchMock = vi.fn(async (url: string, opts?: { method?: string, body?: { operations: { id: string, action: string }[] } }) => {
     calls.push({ url, opts })
-    if (url === '/api/grants/batch') return { results: opts!.body!.operations.map(op => ({ id: op.id, status: op.action === 'approve' ? 'approved' : 'denied', success: true })) }
-    return { data: members, pagination: { cursor: null, has_more: false } }
+    if (url === '/api/grants/batch') {
+      const results = opts!.body!.operations.map(op => ({ id: op.id, status: op.action === 'approve' ? 'approved' : 'denied', success: true }))
+      current = current.map((grant) => {
+        const result = results.find(item => item.id === grant.id)
+        return result ? { ...grant, status: result.status, decided_at: Math.floor(Date.now() / 1000) } : grant
+      })
+      return { results }
+    }
+    return { data: current, pagination: { cursor: null, has_more: false } }
   })
   return { fetchMock, calls }
 }
@@ -72,26 +86,86 @@ describe('grant batch approval', () => {
     const { wrapper, calls } = await mountBatch([member('g-1', 1), member('g-2', 2), member('g-3', 3)])
 
     expect(calls[0]).toMatchObject({ url: '/api/grants', opts: { query: { requester: 'pod-agent@example.com', batch: 'b-1', limit: 100 } } })
-    expect(wrapper.text()).toContain('"Newsletters, October 7"')
+    expect(wrapper.text()).toContain('Newsletters, October 7')
     expect(wrapper.text()).toContain('3 of 3 requests received')
     expect(wrapper.text()).toContain('"Newsletter XY" <news@xy.example> – Issue 1')
-    expect(wrapper.text()).not.toContain('more detail')
+    for (const id of ['g-1', 'g-2', 'g-3']) {
+      const row = wrapper.find(`[data-batch-row="${id}"]`)
+      expect(row.text()).toContain(`Description of ${id}`)
+      expect(row.text()).toContain('Description from the requester')
+      const details = row.find('[data-grant-technical]')
+      expect((details.element as HTMLDetailsElement).open).toBe(false)
+      expect(details.find('[data-raw-command]').text()).toContain('pods-graph-gate approve')
+      expect(details.find('[data-raw-command]').text()).toContain(`{"item":"${id}"}`)
+      expect(row.text()).toContain('Single use')
+    }
     expect(wrapper.find('[data-batch-row="g-2"] a').attributes('href')).toBe('/grant-approval?grant_id=g-2')
     expect(wrapper.findAll('[data-batch-rows] input[type="checkbox"]').every(box => (box.element as HTMLInputElement).checked)).toBe(true)
   })
 
-  it('names the shared scope and leaves a differently scoped member to its single view', async () => {
+  it('shows the registered requester and its identity with an explicitly supplied group description', async () => {
+    const described = member('g-1', 1, { request: { ...member('g-1', 1).request, batch: { id: 'b-1', title: 'Newsletters, October 7', description: 'Archive the selected newsletter messages after review.', size: 1 } } })
+    const { wrapper } = await mountBatch([described])
+
+    expect(wrapper.text()).toContain('Newsletter assistant')
+    expect(wrapper.text()).toContain('pod-agent@example.com')
+    expect(wrapper.text()).toContain('Archive the selected newsletter messages after review.')
+    expect(wrapper.text()).toContain('Description of g-1')
+    expect(wrapper.find('[data-batch-requester]').text()).toContain('Newsletter assistant')
+    expect(wrapper.find('[data-batch-requester]').text()).toContain('pod-agent@example.com')
+    expect(wrapper.find('[data-grant-card] [data-requester-identity]').exists()).toBe(false)
+  })
+
+  it('uses a neutral group selection hint without inventing a description from member summaries', async () => {
+    const { wrapper } = await mountBatch([member('g-1', 1), member('g-2', 2)])
+
+    expect(wrapper.find('[data-batch-description]').text()).toBe('Select the requests you want to approve')
+    for (const id of ['g-1', 'g-2']) {
+      expect(wrapper.find(`[data-batch-row="${id}"]`).text()).toContain(`Description of ${id}`)
+    }
+  })
+
+  it('shows single-use validity and leaves a differently scoped member to its single view', async () => {
     const lasting = member('g-2', 2, { request: { ...member('g-2', 2).request, grant_type: 'always' } })
     const foreign = member('g-3', 3, { request: { ...member('g-3', 3).request, target_host: 'pods:other' } })
     const { wrapper, calls } = await mountBatch([member('g-1', 1), lasting, foreign])
 
-    expect(wrapper.find('[data-batch-scope]').text()).toBe('Single-use approvals for pods:demo · pods-graph-gate')
+    const scope = wrapper.find('[data-batch-scope]')
+    expect(scope.text()).toContain('Single use · as requested')
+    expect(scope.text()).toContain('Target: pods:demo · Audience: pods-graph-gate')
+    expect(scope.element.closest('details')).toBeNull()
+    const details = wrapper.find('[data-batch-row="g-1"] [data-grant-technical]')
+    expect((details.element as HTMLDetailsElement).open).toBe(false)
+    expect(details.text()).toContain('pods:demo')
+    expect(details.text()).toContain('pods-graph-gate')
     expect(wrapper.find('#batch-g-2').exists()).toBe(false)
     expect(wrapper.find('#batch-g-3').exists()).toBe(false)
     expect(wrapper.find('[data-batch-row="g-2"]').text()).toContain('Review individually')
     await button(wrapper, 'Approve 1').trigger('click')
     await flushPromises()
     expect(calls.find(call => call.url === '/api/grants/batch')?.opts?.body).toEqual({ operations: [{ id: 'g-1', action: 'approve' }] })
+  })
+
+  it('leaves timed, delegated and run-as members for individual review', async () => {
+    const different = (id: string, index: number, request: Record<string, unknown>) => member(id, index, { request: { ...member(id, index).request, ...request } })
+    const { wrapper, calls } = await mountBatch([
+      member('g-1', 1),
+      different('g-2', 2, { grant_type: 'timed', duration: 3600 }),
+      different('g-3', 3, { delegate: 'delegate@example.com' }),
+      different('g-4', 4, { run_as: 'admin' }),
+      different('g-5', 5, { audience: 'other-service' }),
+    ])
+
+    for (const id of ['g-2', 'g-3', 'g-4', 'g-5']) {
+      const row = wrapper.find(`[data-batch-separate] [data-batch-row="${id}"]`)
+      expect(row.find('input').exists()).toBe(false)
+      expect(row.text()).toContain('Review individually')
+      expect(row.text()).toContain(`Description of ${id}`)
+      expect(row.find('a').attributes('href')).toBe(`/grant-approval?grant_id=${id}`)
+    }
+    await button(wrapper, 'Deny all').trigger('click')
+    await flushPromises()
+    expect(calls.find(call => call.url === '/api/grants/batch')?.opts?.body).toEqual({ operations: [{ id: 'g-1', action: 'deny' }] })
   })
 
   it('keeps members of the same second in a stable binding-line order', async () => {
@@ -105,39 +179,46 @@ describe('grant batch approval', () => {
     const pod = { ...cardFixtures.podRun, id: 'g-1', request: { ...cardFixtures.podRun.request, requester: 'pod-agent@example.com', batch: { id: 'b-1', size: 1 } } }
     const { wrapper } = await mountBatch([pod])
     const row = wrapper.find('[data-batch-row="g-1"]')
-    expect(row.find('[data-binding-line="registry"]').text()).toBe('Mail digest')
+    expect(row.find('[data-binding-line="registry"]').text()).toContain('Mail digest')
     expect(row.find('[data-requested-marker]').text()).toBe('as requested')
+    expect(row.find('details').text()).toContain('Paths and values are supplied by the requesting application')
   })
 
-  it('leads an exact command row with the marked requester title and keeps the bound line below it', async () => {
+  it('leads open and historical rows with the marked requester title and keeps their exact commands inspectable', async () => {
     const titled = member('g-1', 1, { request: { ...member('g-1', 1).request, summary: { title: 'Read-only status check' } } })
     const { wrapper } = await mountBatch([titled, member('g-2', 2, { status: 'denied', decided_at: 1_710_000_100 })])
     for (const id of ['g-1', 'g-2']) {
       const row = wrapper.find(`[data-batch-row="${id}"]`)
       const headline = row.find('[data-requester-headline]')
-      expect(headline.text()).toBe(`${id === 'g-1' ? 'Read-only status check' : '"Newsletter XY" <news@xy.example> – Issue 2'}as requested`)
-      expect(headline.find('[data-requested-marker]').exists()).toBe(true)
-      expect(row.find('[data-command-head]').text()).toBe('pods-graph-gate approve')
-      expect(row.findAll('[data-command-fact]').map(fact => fact.text())).toEqual([`item:${id}`])
-      expect(row.find('[data-row-claim]').exists()).toBe(false)
+      expect(headline.text()).toBe(id === 'g-1' ? 'Read-only status check' : '"Newsletter XY" <news@xy.example> – Issue 2')
+      expect(row.text()).toContain('Description from the requester')
+      const details = row.find('[data-grant-technical]')
+      expect((details.element as HTMLDetailsElement).open).toBe(false)
+      expect(details.find('[data-command-head]').text()).toBe('pods-graph-gate approve')
+      expect(details.text()).toContain(id)
     }
   })
 
-  it('lets the bound line lead without a usable title and keeps a registry title in the lead', async () => {
+  it('uses a neutral fallback for missing or unsafe summaries and keeps registry effects inspectable', async () => {
     const untitled = member('g-1', 1, { request: { ...member('g-1', 1).request, summary: undefined } })
     const unsafe = member('g-2', 2, { request: { ...member('g-2', 2).request, summary: { title: 'Archive\u202Eevil' } } })
     const shaped = { ...cardFixtures.gitPush, id: 'g-3', created_at: 1_710_000_003, request: { ...cardFixtures.gitPush.request, requester: 'pod-agent@example.com', batch: { id: 'b-1', size: 3 } } }
     const { wrapper } = await mountBatch([untitled, unsafe, shaped])
 
-    expect(wrapper.find('[data-requester-headline]').exists()).toBe(false)
-    expect(wrapper.find('[data-batch-row="g-1"] [data-row-claim]').exists()).toBe(false)
-    expect(wrapper.find('[data-batch-row="g-2"] [data-row-claim]').text()).toBe('requester\'s description: "Archive\u202Eevil"')
+    for (const id of ['g-1', 'g-2']) {
+      const row = wrapper.find(`[data-batch-row="${id}"]`)
+      expect(row.find('[data-requester-headline]').exists()).toBe(false)
+      expect(row.find('h2').text()).toBe('Permission request')
+      expect(row.find('details').text()).toContain('pods-graph-gate approve')
+    }
+    expect(wrapper.find('[data-batch-row="g-2"] h2').text()).not.toContain('Archive\u202Eevil')
     const registry = wrapper.find('[data-batch-row="g-3"]')
-    expect(registry.find('[data-binding-line="registry"]').text()).toBe('Push feature/rebase to origin')
-    expect(registry.find('[data-row-claim]').text()).toBe('requester\'s description: "Read-only status check"')
+    expect(registry.find('[data-requester-headline]').text()).toBe('Read-only status check')
+    expect(registry.find('details [data-binding-line="registry"]').text()).toBe('Push feature/rebase to origin')
+    expect(registry.find('details').text()).toContain('Writes to the server')
   })
 
-  it('selects the row headline only for exact commands with a safe title', () => {
+  it('accepts safe requester titles without inferring a different binding or permission', () => {
     const rows = grantBatchRows([
       member('g-1', 1) as unknown as GrantWithCard,
       member('g-2', 2, { request: { ...member('g-2', 2).request, summary: { title: 'two\nlines' } } }) as unknown as GrantWithCard,
@@ -147,9 +228,9 @@ describe('grant batch approval', () => {
     ], 'en')
     expect(rows.map(row => [row.id, row.headline, row.claim])).toEqual([
       ['g-1', '"Newsletter XY" <news@xy.example> – Issue 1', null],
-      ['g-2', null, 'two\nlines'],
-      ['g-3', null, 'Read-only status check'],
-      ['g-4', null, '"Newsletter XY" <news@xy.example> – Issue 4'],
+      ['g-2', null, null],
+      ['g-3', 'Read-only status check', null],
+      ['g-4', '"Newsletter XY" <news@xy.example> – Issue 4', null],
     ])
   })
 
@@ -200,6 +281,33 @@ describe('grant batch approval', () => {
       method: 'POST',
       body: { operations: [{ id: 'g-1', action: 'approve' }, { id: 'g-2', action: 'approve' }, { id: 'g-3', action: 'deny' }] },
     })
+    expect(wrapper.find('[data-batch-rows]').exists()).toBe(false)
+    const history = wrapper.find('[data-batch-history]')
+    expect((history.element as HTMLDetailsElement).open).toBe(false)
+    expect(history.findAll('[data-row-status]').map(status => status.text()).sort()).toEqual(['approved', 'approved', 'denied'])
+  })
+
+  it('disables approval when no member is selected and keeps denial available', async () => {
+    const { wrapper, calls } = await mountBatch([member('g-1', 1), member('g-2', 2)])
+
+    await wrapper.find('[data-batch-rows] #batch-g-1').setValue(false)
+    await wrapper.find('[data-batch-rows] #batch-g-2').setValue(false)
+    expect(button(wrapper, 'Approve 0 selected, deny 2').attributes('disabled')).toBeDefined()
+    expect(button(wrapper, 'Deny all').attributes('disabled')).toBeUndefined()
+    expect(calls.filter(call => call.url === '/api/grants/batch')).toHaveLength(0)
+  })
+
+  it('restores all open selections without selecting individually reviewed members', async () => {
+    const lasting = member('g-3', 3, { request: { ...member('g-3', 3).request, grant_type: 'always' } })
+    const { wrapper } = await mountBatch([member('g-1', 1), member('g-2', 2), lasting])
+    const selectAll = wrapper.find('input[type="checkbox"]')
+
+    await selectAll.setValue(false)
+    expect(wrapper.findAll('[data-batch-rows] input').every(box => !(box.element as HTMLInputElement).checked)).toBe(true)
+    await selectAll.setValue(true)
+    expect(wrapper.findAll('[data-batch-rows] input').every(box => (box.element as HTMLInputElement).checked)).toBe(true)
+    expect(wrapper.find('[data-batch-separate] input').exists()).toBe(false)
+    expect(button(wrapper, 'Approve 2').attributes('disabled')).toBeUndefined()
   })
 
   it('denies every open member with "Deny all"', async () => {
@@ -235,7 +343,7 @@ describe('grant batch approval', () => {
     const cards = wrapper.findAll('[data-pending-batch]')
     expect(cards).toHaveLength(1)
     expect(cards[0]!.text()).toContain('2 / 3')
-    expect(cards[0]!.text()).toContain('„Newsletters, October 7“')
+    expect(cards[0]!.text()).toContain('Newsletters, October 7')
     expect(cards[0]!.find('button').attributes('data-to')).toBe('/grant-approval?requester=pod-agent%40example.com&batch=b-1')
     expect(wrapper.text()).not.toContain('Issue 1')
     expect(wrapper.text()).toContain('other@example.com')
@@ -267,5 +375,22 @@ describe('grant batch sections', () => {
     expect(sections.separate.map(row => row.id)).toEqual(['p-2'])
     // Use, then decision time; members without a recorded time last, the later submission first.
     expect(sections.decided.map(row => row.id)).toEqual(['d-used', 'd-new', 'd-old', 'd-expired-b', 'd-expired-a'])
+  })
+
+  it('uses only the earliest member for group context and does not infer a description', () => {
+    const first = grant('g-1', 1, 'pending', { request: { ...grant('g-1', 1, 'pending').request, summary: { title: 'Item title', description: 'Individual item intent' }, batch: { id: 'b-1', title: 'Group title', description: 'Explicit group intent', size: 4 }, waits_until: 1234 } })
+    const later = grant('g-2', 2, 'pending', { request: { ...grant('g-2', 2, 'pending').request, batch: { id: 'b-1', title: 'Later title', description: 'Later intent', size: 8 } } })
+
+    expect(grantBatchInfo([later, first])).toEqual({ title: 'Group title', description: 'Explicit group intent', size: 4, missing: 2, waitsUntil: 1234 })
+    expect(grantBatchInfo([grant('g-3', 3, 'pending', { request: { ...grant('g-3', 3, 'pending').request, summary: { title: 'Item title', description: 'Individual item intent' }, batch: { id: 'b-2' } } })])).toMatchObject({ title: null, description: null, size: null, missing: 0 })
+    expect(grantBatchInfo([])).toEqual({ title: null, description: null, size: null, missing: 0, waitsUntil: null })
+  })
+
+  it('approves only selected eligible rows and denies the other eligible rows', () => {
+    const lasting = { ...grant('lasting', 3, 'pending'), request: { ...grant('lasting', 3, 'pending').request, grant_type: 'always' } } as GrantWithCard
+    const rows = grantBatchRows([grant('selected', 1, 'pending'), grant('unselected', 2, 'pending'), lasting, grant('done', 4, 'approved')], 'en')
+
+    expect(grantBatchOperations(rows, new Set(['selected', 'lasting', 'done', 'unknown']))).toEqual([{ id: 'selected', action: 'approve' }, { id: 'unselected', action: 'deny' }])
+    expect(grantBatchOperations(rows, new Set())).toEqual([{ id: 'selected', action: 'deny' }, { id: 'unselected', action: 'deny' }])
   })
 })

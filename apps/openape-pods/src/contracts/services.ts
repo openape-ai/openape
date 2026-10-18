@@ -21,9 +21,10 @@ export type RunContextRequest = ServiceCheck
 
 /** Interval at which a running Pod's runtime grant, owner, identity and key are re-checked at the IdP. */
 export const runAuthorityWatchMs = 60 * 1000
-export interface RunContext { name: string, reason: string }
+export interface RunContext { name: string, reason: 'manual' | 'schedule' | 'event', description?: string }
 export function parseRunContext(value: unknown): RunContext {
   const context = value as RunContext | null
-  if (!context || typeof context !== 'object' || typeof context.name !== 'string' || typeof context.reason !== 'string') throw new Error('Invalid run context')
+  if (!context || typeof context !== 'object' || Array.isArray(context) || Object.keys(context).some(key => !['name', 'reason', 'description'].includes(key)) || typeof context.name !== 'string' || !context.name.trim() || context.name.length > 100 || typeof context.reason !== 'string' || !['manual', 'schedule', 'event'].includes(context.reason)) throw new Error('Invalid run context')
+  if (context.description !== undefined && (typeof context.description !== 'string' || context.description.length > 4000)) throw new Error('Invalid run context description')
   return context
 }

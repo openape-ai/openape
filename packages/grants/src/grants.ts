@@ -1,5 +1,6 @@
 import type { GrantType, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantBatch, OpenApeGrantRequest } from '@openape/core'
 import { canonicalizeCliPermission, cliAuthorizationDetailCovers, cliAuthorizationDetailIsSimilar, mergeCliAuthorizationDetails, resourceChainsStructurallyMatch, widenCliAuthorizationDetail } from './cli-permissions.js'
+import { codePointLength, GRANT_DESCRIPTION_LIMIT, hasHiddenCharacter } from './grant-summary.js'
 import type { GrantStore } from './stores.js'
 
 export type ExtendMode = 'widen' | 'merge'
@@ -137,11 +138,15 @@ export function parseGrantBatch(value: unknown): OpenApeGrantBatch | undefined {
   if (value === undefined) return undefined
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new InvalidGrantBatchError('batch must be an object')
   const batch = value as Record<string, unknown>
-  if (Object.keys(batch).some(key => !['id', 'title', 'size'].includes(key))) throw new InvalidGrantBatchError('batch has unknown fields')
+  if (Object.keys(batch).some(key => !['id', 'title', 'description', 'size'].includes(key))) throw new InvalidGrantBatchError('batch has unknown fields')
   if (typeof batch.id !== 'string' || !BATCH_ID.test(batch.id)) throw new InvalidGrantBatchError('batch.id must be 1-128 characters from A-Z a-z 0-9 . _ : -')
   if (batch.title !== undefined && (typeof batch.title !== 'string' || !batch.title.trim() || batch.title.length > 200)) throw new InvalidGrantBatchError('batch.title must be 1-200 characters')
+  if (batch.description !== undefined) {
+    if (typeof batch.description !== 'string' || codePointLength(batch.description) > GRANT_DESCRIPTION_LIMIT) throw new InvalidGrantBatchError(`batch.description must be a string of at most ${GRANT_DESCRIPTION_LIMIT} characters`)
+    if (hasHiddenCharacter(batch.description, true)) throw new InvalidGrantBatchError('batch.description must not contain control or format characters other than line feeds')
+  }
   if (batch.size !== undefined && (!Number.isInteger(batch.size) || Number(batch.size) < 1 || Number(batch.size) > 100)) throw new InvalidGrantBatchError('batch.size must be an integer from 1 to 100')
-  return { id: batch.id, ...(batch.title !== undefined ? { title: batch.title as string } : {}), ...(batch.size !== undefined ? { size: batch.size as number } : {}) }
+  return { id: batch.id, ...(batch.title !== undefined ? { title: batch.title as string } : {}), ...(batch.description !== undefined ? { description: batch.description as string } : {}), ...(batch.size !== undefined ? { size: batch.size as number } : {}) }
 }
 
 /**
@@ -160,8 +165,9 @@ export async function assertGrantBatchMember(request: OpenApeGrantRequest, store
     && first.request.target_host === request.target_host
     && first.request.waits_until === request.waits_until
     && first.request.batch?.title === request.batch.title
+    && first.request.batch?.description === request.batch.description
     && first.request.batch?.size === request.batch.size
-  if (!same) throw new InvalidGrantBatchError('batch members must share audience, target_host, waits_until, title and size')
+  if (!same) throw new InvalidGrantBatchError('batch members must share audience, target_host, waits_until, title, description and size')
   if (request.batch.size !== undefined && data.length >= request.batch.size) throw new InvalidGrantBatchError('batch already has its announced size')
 }
 

@@ -181,7 +181,10 @@ export async function workerFixture(options: { pods?: string[], resources?: () =
     if (command.resource?.type?.startsWith('bind')) bound.push(command.resource)
     if (command.program?.type === 'save') bound.push(command.program)
     if (command.serviceCheck?.approval) approvals.push(command.serviceCheck.approval)
-    if (command.runContext) return { name: names.get(command.runContext.scope.runId) ?? 'Synthetic Pod', reason: reasons.get(command.runContext.scope.runId) ?? 'schedule' }
+    if (command.runContext) {
+      const description = store.db.prepare('SELECT body FROM pod_descriptions WHERE pod_id=?').get(command.runContext.scope.podId)?.body
+      return { name: names.get(command.runContext.scope.runId) ?? 'Synthetic Pod', reason: reasons.get(command.runContext.scope.runId) ?? 'schedule', ...(description === undefined ? {} : { description }) }
+    }
     if (command.credentialCheck) return 'secret-id'
     if (command.httpCredentialInventory) return []
     if (command.codexAdministration) {

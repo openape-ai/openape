@@ -4,6 +4,8 @@ import { computeCmdHash } from '@openape/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createGrantAuthority } from '../../src/main/gates/authority'
 import type { GrantBinding } from '../../src/main/gates/authority'
+import { parseApprovalManifest } from '../../src/contracts/approvals'
+import { approvalMembers } from '../../src/main/gates/handler'
 
 const claims: Record<string, unknown> = {}
 vi.mock('@openape/grants', async original => ({ ...await original<typeof import('@openape/grants')>(), verifyAuthzJWT: vi.fn(async () => ({ valid: true, claims })) }))
@@ -72,4 +74,18 @@ describe('historical grant retirement', () => {
     expect(owner).toHaveBeenCalledWith('grant-1')
     expect(f.revoked).toEqual([])
   })
+})
+
+it('retains optional batch context through manifest transport without changing frozen item authority', () => {
+  const podId = randomUUID(); const batchId = randomUUID(); const expiresAt = Date.now() + 60000
+  const owner = { issuer, subject: 'owner@example.test' }
+  const legacy = { podId, batchId, owner, title: 'Reviewed objects', expiresAt, items: [{ key: randomUUID(), authority: { version: 5, podId, batchId, owner, expiresAt, action: 'program.run', object: 'synthetic-object', hash: 'a'.repeat(64) }, summary: { title: 'One reviewed action' } }] }
+  const withoutDescription = parseApprovalManifest(legacy)
+  expect(withoutDescription).not.toHaveProperty('description')
+  const description = `Requester context\n${'😀'.repeat(1982)}`
+  const manifest = parseApprovalManifest(JSON.parse(JSON.stringify({ ...legacy, description })))
+  expect(manifest.description).toBe(description)
+  expect(approvalMembers(manifest)).toEqual(approvalMembers(withoutDescription))
+  for (const invalid of [null, 42, 'x'.repeat(2001), 'Hidden\u202Econtext', 'Control\tcontext']) expect(() => parseApprovalManifest({ ...legacy, description: invalid })).toThrow()
+  expect(() => parseApprovalManifest({ ...legacy, items: [{ ...legacy.items[0], authority: { ...legacy.items[0].authority, batchId: randomUUID() } }] })).toThrow('differs from its batch')
 })

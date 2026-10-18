@@ -11,6 +11,9 @@ describe('ape-shell argv rewriting', () => {
   it('refuses caller-supplied approvals, arbitrary wrappers and implicit authority in machine context', () => {
     const request = { version: 1, operationId: 'operation', executable: { path: '/bin/tool', sha256: 'a'.repeat(64) }, argv: [], cwd: '/workspace', environment: {}, targetHost: 'host', grantType: 'once', sandbox: { path: '/private/profile.sb', sha256: 'b'.repeat(64) }, forwardChannel: false, waitMs: 0 }
     expect(parseMachineRequest(request)).toMatchObject({ operationId: 'operation', grantType: 'once' })
+    const batch = { id: 'selected-calls', title: 'Review selected calls', description: 'Review each selected call.\nEvery approval remains single-use.', size: 2 }
+    expect(parseMachineRequest({ ...request, batch }).batch).toEqual(batch)
+    expect(() => parseMachineRequest({ ...request, batch: { ...batch, description: 'Review\u202Eselected calls' } })).toThrow()
     for (const invalid of [{ ...request, approved: true }, { ...request, wrapper: '/bin/sh' }, { ...request, grantType: undefined }, { ...request, environment: { APES_SHELL_MODE: '1' } }, { ...request, executable: { ...request.executable, sha256: '' } }]) expect(() => parseMachineRequest(invalid)).toThrow()
   })
   it('forwards exact program arguments without enabling shell mode', () => {
