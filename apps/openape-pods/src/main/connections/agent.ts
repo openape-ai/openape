@@ -19,6 +19,11 @@ interface IdentityCache {
   expiresAt?: number
 }
 export interface PodIdentityReference { decisionIssuer?: string, brokerConnectionId?: string, connectionId: string, podId: string, issuer: string, owner: string, subject: string, keyId: string }
+export interface PodProvisionResult { identity: PodIdentityReference, registeredName?: string }
+export class PodIdentityBindingError extends Error {}
+function assertIdentityBinding(identity: IdentityCache, reference: PodIdentityReference): void {
+  if (identity.podId !== reference.podId || identity.issuer !== reference.issuer || identity.owner !== reference.owner || identity.subject !== reference.subject || identity.keyId !== reference.keyId || identity.decisionIssuer !== reference.decisionIssuer || identity.brokerConnectionId !== reference.brokerConnectionId) throw new PodIdentityBindingError('Pod identity cache binding mismatch')
+}
 function origin(value: string): string {
   const url = new URL(value)
   if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && url.hostname === '127.0.0.1')) || url.pathname !== '/' || url.search || url.hash || url.username || url.password) throw new Error('Invalid identity origin')
@@ -63,17 +68,21 @@ export class PodIdentityManager {
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; await this.prepare(connectionId, podId, issuer, owner, federation) }
   }
 
-  async provision(connectionId: string, name: string, ownerBearer: string, receipt?: string): Promise<PodIdentityReference> {
+  async provision(connectionId: string, name: string, ownerBearer: string, receipt?: string, existing?: PodIdentityReference): Promise<PodProvisionResult> {
     return this.credentials.withCache(connectionId, async (file) => {
       const identity = JSON.parse(await readFile(file, 'utf8')) as IdentityCache
+      if (existing) {
+        if (existing.connectionId !== connectionId) throw new PodIdentityBindingError('Pod identity cache binding mismatch')
+        assertIdentityBinding(identity, existing)
+      }
       if (identity.decisionIssuer && !receipt) throw new Error('Owner consent receipt is required for this agent provider')
       const enrollment = { podId: identity.podId, name, publicKey: identity.publicKey }
       const reply = identity.decisionIssuer ? await enrollBrokerAgent(identity.issuer, { ...enrollment, connection_receipt: receipt }) : await post(identity.issuer, '/api/pods/agents', enrollment, ownerBearer)
-      if (identity.decisionIssuer && (reply.decisionIssuer !== identity.decisionIssuer || reply.brokerConnectionId !== identity.brokerConnectionId)) throw new Error('Provisioned agent has a different decision authority')
-      if (reply.owner !== identity.owner || reply.keyId !== identity.keyId || reply.permissions !== 'none' || typeof reply.email !== 'string' || (identity.subject && reply.email !== identity.subject)) throw new Error('Provisioned identity does not match this pod')
+      if (identity.decisionIssuer && (reply.decisionIssuer !== identity.decisionIssuer || reply.brokerConnectionId !== identity.brokerConnectionId)) throw new PodIdentityBindingError('Provisioned agent has a different decision authority')
+      if (reply.owner !== identity.owner || reply.keyId !== identity.keyId || reply.permissions !== 'none' || typeof reply.email !== 'string' || (identity.subject && reply.email !== identity.subject)) throw new PodIdentityBindingError('Provisioned identity does not match this pod')
       identity.subject = reply.email
       await writeFile(file, JSON.stringify(identity), { mode: 0o600 })
-      return { decisionIssuer: identity.decisionIssuer, brokerConnectionId: identity.brokerConnectionId, connectionId, podId: identity.podId, issuer: identity.issuer, owner: identity.owner, subject: identity.subject, keyId: identity.keyId }
+      return { identity: { decisionIssuer: identity.decisionIssuer, brokerConnectionId: identity.brokerConnectionId, connectionId, podId: identity.podId, issuer: identity.issuer, owner: identity.owner, subject: identity.subject, keyId: identity.keyId }, ...(reply.name === name ? { registeredName: name } : {}) }
     })
   }
 
@@ -90,7 +99,7 @@ export class PodIdentityManager {
       targetHost,
       accessToken: async () => this.credentials.withCache(reference.connectionId, async (file) => {
         const identity = JSON.parse(await readFile(file, 'utf8')) as IdentityCache
-        if (identity.podId !== reference.podId || identity.issuer !== reference.issuer || identity.owner !== reference.owner || identity.subject !== reference.subject || identity.keyId !== reference.keyId || identity.decisionIssuer !== reference.decisionIssuer || identity.brokerConnectionId !== reference.brokerConnectionId) throw new Error('Pod identity cache binding mismatch')
+        assertIdentityBinding(identity, reference)
         if (identity.accessToken && (identity.expiresAt ?? 0) > Date.now() / 1000 + 60) return identity.accessToken
         const challenge = await post(identity.issuer, '/api/auth/challenge', { id: identity.subject })
         if (typeof challenge.challenge !== 'string' || challenge.challenge.length > 4096) throw new Error('Invalid pod identity challenge')

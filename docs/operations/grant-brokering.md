@@ -38,6 +38,15 @@ separator characters. Invalid legacy registration names are omitted so display
 metadata does not block the existing operation; an invalid signed claim is rejected.
 Requester-written summary or origin text never supplies a registered name.
 
+Pod registration uses the Pod's readable title as its registered display name.
+Repeating broker enrollment with a verified owner receipt and the same active
+subject, owner, issuer, connection and single matching public key refreshes only
+the local agent's display name. The agent must remain active, have agent type
+and have no local owner or approver. Unchanged names perform no update.
+The enrollment response includes optional `name` only when the registration
+store confirms the persisted name after commit. Clients cache only that explicit
+confirmation; legacy replies remain usable and do not confirm a name refresh.
+
 The decision provider stores this display value in `brokered.requester_name` and
 uses it beside the stable requester identity. Normal signed create, authorize,
 get and token operations refresh names on grants with the same complete broker

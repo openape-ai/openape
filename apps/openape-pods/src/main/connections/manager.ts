@@ -15,14 +15,15 @@ import { CodexConnection } from './codex'
 import { OwnerConnection } from './owner'
 import type { OwnerSession } from './owner-session'
 import type { ApesLogin } from './apes-login'
-import { PodIdentityManager } from './agent'
+import { PodIdentityBindingError, PodIdentityManager } from './agent'
 import type { PodIdentityReference } from './agent'
 import { recoverAuthDomains } from './ledger'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
 import type { AccountCleanup } from '../../worker/onboarding/reconcile'
+import { summaryLine } from '../../contracts/grant-summary'
 
 interface SetupState { connections: ConnectionView[], owner: string | null, complete: boolean }
-interface PodEntry { connectionId: string, prepared: boolean, broker?: PodBrokerConnection, identity?: PodIdentityReference }
+interface PodEntry { connectionId: string, prepared: boolean, broker?: PodBrokerConnection, identity?: PodIdentityReference, registeredName?: string }
 async function discoverIssuer(account: string): Promise<string> {
   const idp = await resolveIdP(extractDomain(account))
   if (!idp) throw new Error('No DDISA identity provider is published for this email domain')
@@ -40,9 +41,10 @@ export class ConnectionManager {
   private providerSession = new AbortController()
   private accountModel: { key: string, model: string, expiresAt: number, afterRejection: boolean } | null = null
   private modelRejected = false
+  private readonly nameRefreshRetry = new Map<string, { name: string, after: number }>()
   private codex: CodexConnection
   private owner: OwnerConnection
-  constructor(private readonly root: string, private readonly runtime: AgentRuntime, private readonly credentials: CredentialCache, private readonly dispatch: (command: SetupInternal) => Promise<unknown>, private readonly availability: () => Promise<void>, private readonly directAgents = false, private readonly jevKey?: () => string | undefined) {
+  constructor(private readonly root: string, private readonly runtime: AgentRuntime, private readonly credentials: CredentialCache, private readonly dispatch: (command: SetupInternal) => Promise<unknown>, private readonly availability: () => Promise<void>, private readonly podName: (podId: string) => Promise<string>, private readonly directAgents = false, private readonly jevKey?: () => string | undefined) {
     this.codex = new CodexConnection(credentials, runtime, join(root, 'authentication'))
     this.owner = new OwnerConnection(credentials)
   }
@@ -294,10 +296,38 @@ export class ConnectionManager {
       entry = { connectionId: randomUUID(), prepared: false, ...(metadata.broker ? { broker: metadata.broker as PodBrokerConnection } : {}) }; pods[podId] = entry; metadata.pods = pods; await this.save(owner, metadata)
     }
     if (!entry.prepared) { await identities.ensurePrepared(entry.connectionId, podId, entry.broker?.issuer ?? metadata.issuer, owner.account, entry.broker ? { decisionIssuer: metadata.issuer, brokerConnectionId: entry.broker.connectionId } : undefined); entry.prepared = true; await this.save(owner, metadata) }
+    const name = summaryLine((await this.podName(podId)).normalize('NFC'), 100, 'Pod')
     if (!entry.identity) {
       const bearer = await this.owner.bearer(owner.id, metadata.issuer, owner.account, AbortSignal.timeout(120000))
       const receipt = entry.broker ? await podBrokerReceipt(metadata.issuer, entry.broker, bearer, AbortSignal.timeout(10000)) : undefined
-      entry.identity = await identities.provision(entry.connectionId, `Pod ${podId}`, bearer, receipt); await this.save(owner, metadata)
+      const provisioned = await identities.provision(entry.connectionId, name, bearer, receipt)
+      entry.identity = provisioned.identity
+      if (provisioned.registeredName === name) entry.registeredName = name
+      else if (entry.identity.decisionIssuer) this.nameRefreshRetry.set(podId, { name, after: Date.now() + 60000 })
+      await this.save(owner, metadata)
+    }
+    else if (entry.identity.decisionIssuer && entry.registeredName !== name) {
+      const identity = entry.identity
+      if (identity.decisionIssuer !== metadata.issuer || identity.owner !== owner.account || identity.podId !== podId || identity.connectionId !== entry.connectionId || !identity.brokerConnectionId) throw new PodIdentityBindingError('Pod identity cache binding mismatch')
+      const retry = this.nameRefreshRetry.get(podId)
+      if (retry?.name !== name || retry.after <= Date.now()) {
+        this.nameRefreshRetry.set(podId, { name, after: Date.now() + 60000 })
+        try {
+          const bearer = await this.owner.bearer(owner.id, metadata.issuer, owner.account, AbortSignal.timeout(10000))
+          const broker = { issuer: identity.issuer, domain: new URL(identity.issuer).hostname, connectionId: identity.brokerConnectionId }
+          const receipt = await podBrokerReceipt(metadata.issuer, broker, bearer, AbortSignal.timeout(10000))
+          const refreshed = await identities.provision(entry.connectionId, name, bearer, receipt, identity)
+          if (refreshed.registeredName === name) {
+            entry.registeredName = name; await this.save(owner, metadata)
+            this.nameRefreshRetry.delete(podId)
+          }
+        }
+        catch (error) {
+          if (error instanceof PodIdentityBindingError) { this.nameRefreshRetry.delete(podId); throw error }
+          // A display-name refresh must never replace a working identity or stop its work.
+          console.error('Could not refresh the registered Pod name', error)
+        }
+      }
     }
     return { ...identities.connection(entry.identity, `pods:${podId}`), identity: entry.identity, ownerConnection: owner.id }
   }

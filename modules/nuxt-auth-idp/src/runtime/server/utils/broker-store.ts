@@ -22,7 +22,7 @@ export interface BrokerStore {
   recordToken: (grant: OpenApeGrant) => Promise<void>
   consume: (grantId: string, claims: OpenApeAuthZClaims) => Promise<{ status: string, error?: string, grant?: OpenApeGrant }>
   getAgent: (subject: string) => Promise<BrokerAgentBinding | null>
-  bindAgent: (binding: BrokerAgentBinding, name: string, publicKey: string) => Promise<void>
+  bindAgent: (binding: BrokerAgentBinding, name: string, publicKey: string) => Promise<string | void>
 }
 
 export function defineBrokerStore(factory: (event: H3Event) => BrokerStore): void {
