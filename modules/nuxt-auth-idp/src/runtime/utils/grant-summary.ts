@@ -33,7 +33,7 @@ export function safeSummaryLink(link: string | undefined): string | null {
 /** Nothing to render without a title; empty optional fields render as absent. */
 export function grantSummaryView(summary: OpenApeGrantSummary | undefined): GrantSummaryView | null {
   const title = summary?.title?.trim()
-  if (!summary || !title) return null
+  if (!summary || !title || [...title].length > 120 || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(title)) return null
   return {
     title,
     description: summary.description?.trim() || null,

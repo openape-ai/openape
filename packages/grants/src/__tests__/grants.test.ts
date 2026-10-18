@@ -506,8 +506,8 @@ describe('grant lifecycle', () => {
   describe('delegation grants', () => {
     it('creates a delegation grant (auto-approved)', async () => {
       const grant = await createDelegation({
-        delegator: 'patrick@hofmann.eco',
-        delegate: 'agent+patrick@id.openape.at',
+        delegator: 'owner@example.test',
+        delegate: 'agent+owner@id.example.test',
         audience: 'bank.example.com',
         scopes: ['account:read', 'account:balance'],
         grant_type: 'once',
@@ -515,16 +515,16 @@ describe('grant lifecycle', () => {
 
       expect(grant.type).toBe('delegation')
       expect(grant.status).toBe('approved')
-      expect(grant.request.delegator).toBe('patrick@hofmann.eco')
-      expect(grant.request.delegate).toBe('agent+patrick@id.openape.at')
+      expect(grant.request.delegator).toBe('owner@example.test')
+      expect(grant.request.delegate).toBe('agent+owner@id.example.test')
       expect(grant.request.audience).toBe('bank.example.com')
       expect(grant.request.scopes).toEqual(['account:read', 'account:balance'])
-      expect(grant.decided_by).toBe('patrick@hofmann.eco')
+      expect(grant.decided_by).toBe('owner@example.test')
     })
 
     it('creates timed delegation with expiry', async () => {
       const grant = await createDelegation({
-        delegator: 'patrick@hofmann.eco',
+        delegator: 'owner@example.test',
         delegate: 'lisa@firma.at',
         audience: 'email.firma.at',
         scopes: ['email:read', 'email:send'],
@@ -538,15 +538,15 @@ describe('grant lifecycle', () => {
 
     it('validates delegation grant for correct delegate', async () => {
       const grant = await createDelegation({
-        delegator: 'patrick@hofmann.eco',
-        delegate: 'agent+patrick@id.openape.at',
+        delegator: 'owner@example.test',
+        delegate: 'agent+owner@id.example.test',
         audience: 'bank.example.com',
         grant_type: 'always',
       }, store)
 
       const validated = await validateDelegation(
         grant.id,
-        'agent+patrick@id.openape.at',
+        'agent+owner@id.example.test',
         'bank.example.com',
         store,
       )
@@ -556,7 +556,7 @@ describe('grant lifecycle', () => {
     it('throws for non-existent delegation grant', async () => {
       await expect(validateDelegation(
         'non-existent',
-        'agent+patrick@id.openape.at',
+        'agent+owner@id.example.test',
         'bank.example.com',
         store,
       )).rejects.toThrow('Delegation grant not found')
@@ -564,8 +564,8 @@ describe('grant lifecycle', () => {
 
     it('rejects delegation for wrong delegate', async () => {
       const grant = await createDelegation({
-        delegator: 'patrick@hofmann.eco',
-        delegate: 'agent+patrick@id.openape.at',
+        delegator: 'owner@example.test',
+        delegate: 'agent+owner@id.example.test',
         audience: 'bank.example.com',
         grant_type: 'always',
       }, store)
@@ -580,15 +580,15 @@ describe('grant lifecycle', () => {
 
     it('rejects delegation for wrong audience', async () => {
       const grant = await createDelegation({
-        delegator: 'patrick@hofmann.eco',
-        delegate: 'agent+patrick@id.openape.at',
+        delegator: 'owner@example.test',
+        delegate: 'agent+owner@id.example.test',
         audience: 'bank.example.com',
         grant_type: 'always',
       }, store)
 
       await expect(validateDelegation(
         grant.id,
-        'agent+patrick@id.openape.at',
+        'agent+owner@id.example.test',
         'other.example.com',
         store,
       )).rejects.toThrow('Audience does not match')
@@ -596,15 +596,15 @@ describe('grant lifecycle', () => {
 
     it('allows wildcard audience', async () => {
       const grant = await createDelegation({
-        delegator: 'patrick@hofmann.eco',
-        delegate: 'agent+patrick@id.openape.at',
+        delegator: 'owner@example.test',
+        delegate: 'agent+owner@id.example.test',
         audience: '*',
         grant_type: 'always',
       }, store)
 
       const validated = await validateDelegation(
         grant.id,
-        'agent+patrick@id.openape.at',
+        'agent+owner@id.example.test',
         'any-sp.example.com',
         store,
       )
@@ -613,8 +613,8 @@ describe('grant lifecycle', () => {
 
     it('rejects revoked delegation', async () => {
       const grant = await createDelegation({
-        delegator: 'patrick@hofmann.eco',
-        delegate: 'agent+patrick@id.openape.at',
+        delegator: 'owner@example.test',
+        delegate: 'agent+owner@id.example.test',
         audience: 'bank.example.com',
         grant_type: 'always',
       }, store)
@@ -623,7 +623,7 @@ describe('grant lifecycle', () => {
 
       await expect(validateDelegation(
         grant.id,
-        'agent+patrick@id.openape.at',
+        'agent+owner@id.example.test',
         'bank.example.com',
         store,
       )).rejects.toThrow('not approved')
@@ -643,30 +643,30 @@ describe('grant lifecycle', () => {
 
     it('findByDelegate returns delegation grants', async () => {
       await createDelegation({
-        delegator: 'patrick@hofmann.eco',
-        delegate: 'agent+patrick@id.openape.at',
+        delegator: 'owner@example.test',
+        delegate: 'agent+owner@id.example.test',
         audience: 'bank.example.com',
         grant_type: 'always',
       }, store)
       await createGrant(onceRequest, store)
 
-      const grants = await store.findByDelegate('agent+patrick@id.openape.at')
+      const grants = await store.findByDelegate('agent+owner@id.example.test')
       expect(grants).toHaveLength(1)
       expect(grants[0]!.type).toBe('delegation')
     })
 
     it('findByDelegator returns delegation grants', async () => {
       await createDelegation({
-        delegator: 'patrick@hofmann.eco',
-        delegate: 'agent+patrick@id.openape.at',
+        delegator: 'owner@example.test',
+        delegate: 'agent+owner@id.example.test',
         audience: 'bank.example.com',
         grant_type: 'always',
       }, store)
       await createGrant(onceRequest, store)
 
-      const grants = await store.findByDelegator('patrick@hofmann.eco')
+      const grants = await store.findByDelegator('owner@example.test')
       expect(grants).toHaveLength(1)
-      expect(grants[0]!.request.delegate).toBe('agent+patrick@id.openape.at')
+      expect(grants[0]!.request.delegate).toBe('agent+owner@id.example.test')
     })
   })
 
@@ -1217,6 +1217,10 @@ describe('request batches', () => {
     expect(parseGrantBatch(undefined)).toBeUndefined()
     expect(parseGrantBatch({ id: 'b:1_x.y-z' })).toEqual({ id: 'b:1_x.y-z' })
     expect(parseGrantBatch({ id: 'b', title: 'Newsletters', size: 30 })).toEqual({ id: 'b', title: 'Newsletters', size: 30 })
+    const batch = { id: 'b', title: 'Newsletters', description: 'Move these messages to the archive.\nKeep other messages in the inbox.', size: 3 }
+    expect(parseGrantBatch(batch)).toEqual(batch)
+    expect(parseGrantBatch({ id: 'b', description: '🦍'.repeat(2000) })?.description).toBe('🦍'.repeat(2000))
+    expect(parseGrantBatch({ id: 'b', description: '' })).toEqual({ id: 'b', description: '' })
   })
 
   it.each([
@@ -1229,6 +1233,14 @@ describe('request batches', () => {
     [{ id: 'a'.repeat(129) }],
     [{ id: 'b', title: ' ' }],
     [{ id: 'b', title: 'x'.repeat(201) }],
+    [{ id: 'b', description: null }],
+    [{ id: 'b', description: 42 }],
+    [{ id: 'b', description: 'x'.repeat(2001) }],
+    [{ id: 'b', description: '🦍'.repeat(2001) }],
+    [{ id: 'b', description: 'Archive\rthese messages' }],
+    [{ id: 'b', description: 'Archive\u202Ethese messages' }],
+    [{ id: 'b', description: 'Archive\u200Bthese messages' }],
+    [{ id: 'b', description: 'Archive\u2028these messages' }],
     [{ id: 'b', size: 0 }],
     [{ id: 'b', size: 1.5 }],
     [{ id: 'b', size: 101 }],
@@ -1272,6 +1284,7 @@ describe('request batch members', () => {
     ['audience', { audience: 'other' }],
     ['deadline', { waits_until: 3000 }],
     ['title', { batch: { id: 'b-1', title: 'Other', size: 2 } }],
+    ['description', { batch: { id: 'b-1', title: 'Mail', description: 'A different group purpose', size: 2 } }],
   ])('rejects a member with a different %s than the batch', async (_name, overrides) => {
     const store = new InMemoryGrantStore()
     await store.save({ id: 'a', status: 'pending', created_at: 1, request: member() })

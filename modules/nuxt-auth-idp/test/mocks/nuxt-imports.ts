@@ -1,10 +1,10 @@
-import { ref } from 'vue'
+import { reactive, ref } from 'vue'
 
 const user = ref<Record<string, unknown> | null>({ email: 'approver@example.com' })
 const loading = ref(false)
-const route = {
+const route = reactive({
   query: {} as Record<string, string>,
-}
+})
 
 let navigateImpl: (...args: unknown[]) => unknown | Promise<unknown> = async () => {}
 let fetchUserImpl: () => unknown | Promise<unknown> = async () => {}

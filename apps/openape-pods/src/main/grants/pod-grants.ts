@@ -3,6 +3,7 @@ import { cliAuthorizationDetailsCover, sameBrokeredGrant } from '@openape/grants
 import { approvalURL } from '../../contracts/activity'
 import { approvalAudience } from '../../contracts/approvals'
 import { grantSummary } from '../../contracts/grant-summary'
+import type { ScriptSummary } from '../../contracts/grant-summary'
 import { parsePodGrant, grantTypes  } from '../../contracts/grants'
 import type { GrantState, GrantType, PodGrant } from '../../contracts/grants'
 import { AgentAuthority, grantCoverage, ownGrant } from '../broker/authorization'
@@ -118,9 +119,9 @@ export class PodGrants {
    * Asks the IdP once about one program command as the Pod, without running it (issue 1473, revision 4): an approved
    * grant that covers it needs nothing; otherwise the IdP's pending request is recorded and its approval page returned.
    */
-  async requestProgram(podId: string, call: ProgramCall, signal: AbortSignal): Promise<{ grantId: string, approval: string | null }> {
+  async requestProgram(podId: string, call: ProgramCall, signal: AbortSignal, summary?: ScriptSummary): Promise<{ grantId: string, approval: string | null }> {
     const connection = await this.dependencies.connection(podId)
-    const authority = new AgentAuthority(connection, undefined, this.port(podId), undefined, { origin: await this.dependencies.podName(podId) })
+    const authority = new AgentAuthority(connection, undefined, this.port(podId), undefined, { origin: await this.dependencies.podName(podId), ...(summary ? { summary } : {}) })
     const reply = await authority.requestProgram(call, signal)
     if (reply.state === 'approved') return { grantId: reply.grantId, approval: null }
     const recorded = (await this.list({ podId })).find(grant => grant.id === reply.grantId)

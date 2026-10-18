@@ -16,8 +16,8 @@ import type { OpenApeCliAuthorizationDetail } from '@openape/core'
  * remain, e.g. `ls -la` or `bash deploy.sh`) — a `<binary> *` pattern is
  * broader than an approver scanning the preview would expect.
  */
-export function suggestAllowPattern(command: string): string | null {
-  const tokens = command.trim().split(/\s+/).filter(Boolean)
+export function suggestAllowPattern(command: string | string[]): string | null {
+  const tokens = typeof command === 'string' ? command.trim().split(/\s+/).filter(Boolean) : command
   if (tokens.length < 2) return null
   const keep: string[] = [tokens[0]!]
   for (const token of tokens.slice(1)) {

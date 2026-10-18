@@ -249,6 +249,22 @@ Schema 53 preserves historical records, pauses active Pods and invalidates old
 validation before the new execution boundary can be used. See the
 [migration contract](../../docs/operations/pods-ape-shell-migration.md).
 
+Saved-script launch requests identify the selected Pod in their title and describe
+the start reason. An existing Pod description is sent as explicitly labeled Pod
+context, not as verified script behavior; technical code identity remains in the
+authorized command and file hashes. Desktop and owner CLI starts use the same
+summary. This presentation changes neither the CLI's once approval nor the
+desktop's requested continuing approval, and preserves custom summaries on later
+tool and HTTP calls.
+
+Batch manifests accept optional requester-authored `description` text using the
+summary text rules (up to 2,000 Unicode code points; line feeds allowed). It is
+presentation context and never changes an item's frozen approval command. The
+schema-53 app only reads and retires historical object approvals; it creates no
+new object-approval batches. Their legacy SQLite rows therefore need no schema
+change or inferred description. Active batch producers live in the assigned
+external tools and must use receiver support before sending this optional field.
+
 ## M4: manual runs and pinned Codex execution
 
 Runs installs one of two bundled, content-addressed example versions and starts

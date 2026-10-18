@@ -30,6 +30,21 @@ create → [pending] → approve → [approved] → use / revoke
 - `introspectGrant(grantId, store)` — Look up a grant by ID
 - `useGrant(grantId, store)` — Mark a `once` grant as used
 
+### Request presentation
+
+`summary.title` and optional `summary.description` describe an individual request.
+`batch` groups requests from one requester for a joint decision; it accepts `id`,
+optional `title`, optional `description` and optional `size`. The group description
+is requester-authored context, separate from each member's description. It accepts
+up to 2,000 Unicode code points and preserves line feeds; control, format and
+line/paragraph separator characters are refused otherwise.
+
+Validate incoming metadata with `parseGrantSummary` and `parseGrantBatch`, then
+check group consistency with `assertGrantBatchMember`. Members must share their
+group description, including whether it is present. Older requests may omit it.
+Metadata never broadens a member's authority: batch submissions remain compatible
+single-use requests, and every member is decided and consumed individually.
+
 ### Authorization JWT
 
 - `issueAuthzJWT(payload, privateKey, kid?)` — Issue a signed authorization JWT for an approved grant

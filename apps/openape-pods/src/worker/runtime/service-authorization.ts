@@ -1,13 +1,20 @@
 import { parseRunApproval } from '../../contracts/activity'
 import { ScriptCredentials } from '../resources/script-credentials'
 import { parseCredentialAlias } from '../../contracts/credentials'
-import { parseServiceScope } from '../../contracts/services'
-import type { ServiceCheck } from '../../contracts/services'
+import { parseRunContext, parseServiceScope } from '../../contracts/services'
+import type { RunContext, ServiceCheck, ServiceScope } from '../../contracts/services'
 import type { ResourceState } from '../../contracts/resources'
 import { parseManifest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
 import type { ResourceRegistry } from '../resources/registry'
 import type { RunStore } from '../runs/store'
+
+export function readRunContext(store: PodDatabase, runs: RunStore, scope: ServiceScope): RunContext {
+  const description = store.db.prepare('SELECT body FROM pod_descriptions WHERE pod_id=?').get(scope.podId)?.body
+  const events = runs.events(scope.podId, scope.runId)
+  const reason = (events.find(item => item.type === 'started')?.data as { reason?: string } | undefined)?.reason ?? 'manual'
+  return parseRunContext({ name: store.getPod(scope.podId).name, reason, ...(description === undefined ? {} : { description }) })
+}
 
 export function authorizeRunService(store: PodDatabase, registry: ResourceRegistry, runs: RunStore, check: ServiceCheck): ResourceState {
   const scope = parseServiceScope(check.scope)

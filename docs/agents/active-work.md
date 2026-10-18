@@ -1,5 +1,15 @@
 # Active work
 
+## Approval presentation and sender context — issue 1509
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1509. Branch `feature/issue-1509-approval-ui`, checkout `openape-monorepo.worktrees/approval-ui-1509`, canonical base `a3afc979234046e01d0b878b7b2cae32e9954a57`.
+- Patrick approved proposal revision 1 with “Super, setz das um”. Living source: `.claude/plans/2026-10-18-approval-ui/plan.json`; reviewed proposal: https://report.openape.ai/d/01M56ZD1STG23FGPVKYVY4XJKG?v=4.
+- Implement the shared title/description, registered name and identity, compact bound authority and technical disclosure across individual/list/batch views. Preserve requested validity and explicit scope expansion. Enrich generic saved-script context and transport optional requester-written batch descriptions without changing authorization semantics.
+- Native PR: https://repos.openape.ai/patrick/monorepo/pulls/472. Product implementation `a9195c47c22d3fea4622a151774b9ca9e27cd856` passed the full affected unit gate under Node 24.15.0 across 43 workspaces without cache reuse, including 1,710 Pods cases. Independent final review has no open findings.
+- Formal metadata contract: https://repos.openape.ai/patrick/protocol/pulls/6, merged as `45845a49f7d1eb66b0c856b5a0879f3f3e179771` after 11 schema and 32 focused validation checks. Legacy batches can omit the description; member authority remains individual and unchanged.
+- Focused verification: 161 grant validation/authorization cases, 31 direct/brokered API cases, 28 machine-request cases, 33 Pods cases, 114 UI unit cases and 24 real-CSS browser cases pass. Module/Pods typechecks and scoped lint pass; Pods builds successfully. Seven final synthetic-data screenshots were personally inspected, including selected batches, exact timed validity, technical disclosure and broader-scope opt-in.
+- Next: final free IdP app build, actual Test Run publication and checked PR merge. Final source, merge and evidence receipts belong on that PR; release is outside this implementation handoff.
+
 ## Pending approval listing size — issue 1508
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1508. Branch `bugfix/issue-1508-approval-count`, checkout `openape-monorepo.worktrees/pods-approval-counter`, base `31181ab78f94e7eb9d7b94c7e41477aff0e66e2e`.

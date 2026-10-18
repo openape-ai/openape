@@ -60,6 +60,7 @@ it('delegates execution approval to ape-shell and removes its identity on close'
   const f = await fixture()
   const prepared = await f.service.executeService(request('shell'))
   expect(prepared).toMatchObject({ machine: { targetHost: 'pods:fixture', issuer: 'https://id.example.test', runtime: { environment: { APES_AUTH_FILE: '/fixture/auth.json', APES_IGNORE_USER_CONFIG: '1' } } } })
+  expect(prepared).toMatchObject({ machine: { summary: { title: 'Run saved script: Synthetic Pod', origin: 'Synthetic Pod', description: expect.stringContaining('Scheduled start') } } })
   expect(mocks.authorize).not.toHaveBeenCalled()
   expect(mocks.refresh).not.toHaveBeenCalled()
   expect(mocks.assertActive).not.toHaveBeenCalled()

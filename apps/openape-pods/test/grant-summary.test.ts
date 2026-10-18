@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { expect, it } from 'vitest'
-import { grantSummary, parseSummary, splitScriptSummary, summaryLine } from '../src/contracts/grant-summary'
+import { grantSummary, parseSummary, savedScriptSummary, splitScriptSummary, summaryLine } from '../src/contracts/grant-summary'
+import { parseRunContext } from '../src/contracts/services'
 import { translateDiagnostic } from '../src/i18n'
 
 // Issue 1473: a script's summary of a call is passed through; it never becomes part of the call or its effect.
@@ -27,4 +28,24 @@ it('builds the summary from the script claim or from data, with the Pod as one b
 it('translates the protocol\'s summary refusals for the owner', () => {
   expect(translateDiagnostic('de', 'summary.title must be at most 120 characters')).toBe('summary.title darf höchstens 120 Zeichen haben')
   expect(translateDiagnostic('de', 'summary.description must not contain control or format characters other than line feeds')).toBe('summary.description darf außer Zeilenumbrüchen keine Steuer- oder Formatzeichen enthalten')
+})
+
+it('identifies saved-script launches without claiming that Pod context proves their effects', () => {
+  const context = parseRunContext({ name: 'Invoice review', reason: 'schedule', description: 'Organizes invoices.\nMay submit payments.' })
+  const summary = savedScriptSummary(context)
+  expect(summary).toEqual({ title: 'Run saved script: Invoice review', origin: 'Invoice review', description: 'Pod context:\nOrganizes invoices. May submit payments.\n\nScheduled start. Tool and HTTP calls require their own permissions.' })
+  expect(savedScriptSummary(parseRunContext({ name: 'Selected Pod', reason: 'manual' }))).toEqual({ title: 'Run saved script: Selected Pod', origin: 'Selected Pod', description: 'Run the selected saved script.\nManual start.' })
+  const bounded = savedScriptSummary(parseRunContext({ name: '😀'.repeat(50), reason: 'event', description: `Context\twith\u202Ehidden markers ${'😀'.repeat(1900)}` }))
+  expect(parseSummary(bounded)).toEqual(bounded)
+  expect([...bounded.title].length).toBeLessThanOrEqual(120)
+  expect([...bounded.description!].length).toBeLessThanOrEqual(2000)
+  expect(bounded.description).toContain('Event-triggered start')
+  expect(bounded.description).not.toMatch(/[\t\u202E]/u)
+  expect(bounded.description).toContain('…')
+})
+
+it('validates optional run context while accepting older workers without a description', () => {
+  const legacy = { name: 'Selected Pod', reason: 'manual' }
+  expect(parseRunContext(legacy)).toEqual(legacy)
+  for (const value of [{ ...legacy, description: null }, { ...legacy, description: 'x'.repeat(4001) }, { ...legacy, reason: 'unknown' }, { ...legacy, title: 'Injected purpose' }, []]) expect(() => parseRunContext(value)).toThrow('run context')
 })

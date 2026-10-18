@@ -13,6 +13,7 @@ import { Scheduler } from '../../src/worker/scheduling/scheduler'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
 import { parseCommand } from '../../src/contracts/control'
 import { parseMasterAction } from '../../src/contracts/master'
+import { authorizeRunService, readRunContext } from '../../src/worker/runtime/service-authorization'
 
 const stores: PodDatabase[] = []
 afterEach(() => { for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) } })
@@ -36,4 +37,20 @@ it('creates and renames without a second instruction, retaining active script va
   expect(() => store.updatePod(pod.id, 1, { name: 'Stale', lifecycle: 'paused' })).toThrow('Stale')
   expect(() => parseCommand({ type: 'create', name: 'Bad', assignment: 'Hidden instruction' })).toThrow()
   expect(() => parseMasterAction({ action: 'create', name: 'Bad', assignment: 'Hidden instruction' })).toThrow()
+})
+
+it('reads launch context from the stored Pod description while retaining the pinned run authority', () => {
+  const store = new PodDatabase(mkdtempSync(join(tmpdir(), 'pods-launch-context-'))); stores.push(store)
+  const pod = store.createPod({ name: 'Invoice review' })
+  const resources = new ResourceRegistry(store, () => {})
+  installExample(store, resources, pod.id, 'deterministic', 'a'.repeat(64))
+  const runs = new RunStore(store)
+  const { run } = runs.reserve(pod.id, store.getPod(pod.id).activeScript!, resources.epoch(pod.id), { reason: 'event', eventIds: [] })
+  const scope = { podId: pod.id, runId: run.id, epoch: resources.epoch(pod.id), assignmentRevision: pod.bindingRevision, capabilities: [] }
+  authorizeRunService(store, resources, runs, { scope })
+  expect(readRunContext(store, runs, scope)).toEqual({ name: 'Invoice review', reason: 'event' })
+  store.db.prepare('INSERT INTO pod_descriptions(pod_id,body) VALUES(?,?)').run(pod.id, 'Owner context for this Pod')
+  expect(readRunContext(store, runs, scope)).toEqual({ name: 'Invoice review', reason: 'event', description: 'Owner context for this Pod' })
+  expect(runs.get(run.id).scriptHash).toBe(run.scriptHash)
+  expect(() => authorizeRunService(store, resources, runs, { scope: { ...scope, assignmentRevision: pod.bindingRevision + 1 } })).toThrow('binding changed')
 })

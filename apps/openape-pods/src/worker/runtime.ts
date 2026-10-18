@@ -54,7 +54,7 @@ import { CodexControl } from './codex/control'
 import { parseCodexRequest } from '../contracts/codex'
 import type { AgentRuntime } from './agent/executor'
 import { endpointModel } from './agent/model'
-import { authorizeRunService, authorizeCredentialService } from './runtime/service-authorization'
+import { authorizeRunService, authorizeCredentialService, readRunContext } from './runtime/service-authorization'
 import { ServiceBridge } from './runtime/service-bridge'
 import { parseDetailsCommand } from '../contracts/details'
 import { WorkspaceDetails } from './workspace/details'
@@ -387,9 +387,7 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'runContext' in request.command) {
       const check = request.command.runContext as RunContextRequest
       authorizeRunService(store, registry, dispatcher.runs, check)
-      const events = dispatcher.runs.events(check.scope.podId, check.scope.runId)
-      const reason = (events.find(item => item.type === 'started')?.data as { reason?: string } | undefined)?.reason ?? 'manual'
-      port.postMessage({ id: request.id, state: { name: store.getPod(check.scope.podId).name, reason } }); return
+      port.postMessage({ id: request.id, state: readRunContext(store, dispatcher.runs, check.scope) }); return
     }
     if (request.command && typeof request.command === 'object' && 'approvalRelease' in request.command) {
       const release = request.command.approvalRelease as { type?: unknown, keys?: unknown }
