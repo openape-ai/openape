@@ -3,7 +3,7 @@ import { InMemoryGrantStore } from '../stores'
 import { generateKeyPair } from '@openape/core'
 import { randomUUID } from 'node:crypto'
 import { describe, expect, it } from 'vitest'
-import { BROKER_RECEIPT_TYPE, BROKER_REQUEST_TYPE, brokerDomain, brokerOrigin, parseBrokerReceipt, parseBrokerRequest, sameBrokeredGrant, signBrokerToken, verifyBrokerToken } from '../brokering'
+import { BROKER_RECEIPT_TYPE, BROKER_REQUEST_TYPE, brokerDomain, brokerOrigin, brokerRequesterName, parseBrokerReceipt, parseBrokerRequest, sameBrokeredGrant, signBrokerToken, verifyBrokerToken } from '../brokering'
 
 function receipt(): BrokerReceipt {
   const now = Math.floor(Date.now() / 1000)
@@ -14,6 +14,20 @@ function request(): BrokerRequest {
   return { iss: value.aud, aud: value.iss, owner: value.sub, iat: value.iat, exp: value.iat + 60, jti: randomUUID(), connection_id: value.connection_id, operation: 'connection' }
 }
 describe('typed broker assertions', () => {
+  it('validates signed display metadata without adding authority or accepting unsigned connection names', async () => {
+    const base = { ...request(), operation: 'get' as const, sub: 'agent@pods.example.test', key_id: 'key', grant_id: randomUUID(), requester_name: '  Morning briefing  ' }
+    const keys = await generateKeyPair()
+    const token = await signBrokerToken(base, keys.privateKey, 'broker-key', BROKER_REQUEST_TYPE)
+    expect(await verifyBrokerToken(token, keys.publicKey, base.iss, base.aud, BROKER_REQUEST_TYPE)).toMatchObject({ requester_name: 'Morning briefing' })
+    const other = await generateKeyPair()
+    await expect(verifyBrokerToken(token, other.publicKey, base.iss, base.aud, BROKER_REQUEST_TYPE)).rejects.toThrow()
+    expect(() => parseBrokerRequest({ ...request(), requester_name: 'Not an agent' })).toThrow()
+    expect(brokerRequesterName('🦍'.repeat(120))).toBe('🦍'.repeat(120))
+    for (const invalid of ['', '  ', 123, 'x'.repeat(121), ' x'.padEnd(121), 'Hidden\u202Ename', 'Line\nfeed']) {
+      expect(brokerRequesterName(invalid)).toBeUndefined()
+      expect(() => parseBrokerRequest({ ...base, requester_name: invalid })).toThrow('requester name')
+    }
+  })
   it('verifies dedicated signatures and rejects wrong keys, audiences, issuers and receipt substitution', async () => {
     const keys = await generateKeyPair()
     const other = await generateKeyPair()
@@ -47,6 +61,7 @@ describe('typed broker assertions', () => {
 it('compares every immutable provenance field and distinguishes direct grants', () => {
   const binding = { connection_id: randomUUID(), broker_issuer: 'https://pods.example.test', agent_issuer: 'https://pods.example.test', owner: 'owner@example.test', key_id: 'key' }
   expect(sameBrokeredGrant(binding, { ...binding })).toBe(true)
+  expect(sameBrokeredGrant({ ...binding, requester_name: 'Old name' }, { ...binding, requester_name: 'New name' })).toBe(true)
   expect(sameBrokeredGrant(undefined, undefined)).toBe(true)
   expect(sameBrokeredGrant(undefined, binding)).toBe(false)
   expect(sameBrokeredGrant(binding, undefined)).toBe(false)

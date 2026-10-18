@@ -1,7 +1,7 @@
 import type { User } from '@openape/auth'
 import type { OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
 import type { ServerShape } from '@openape/grants'
-import { buildCliAuthDetail, canonicalizeCliPermission, computeArgvHash, GENERIC_OPERATION_ID, matchArgvToOperation } from '@openape/grants'
+import { brokerRequesterName, buildCliAuthDetail, canonicalizeCliPermission, computeArgvHash, GENERIC_OPERATION_ID, matchArgvToOperation } from '@openape/grants'
 import type { GrantCardContext, RegistryCard } from '../../utils/grant-card'
 import { renderRegistryCard } from '../../utils/grant-card'
 import { getCliAuthorizationDetails } from '../../utils/cli-grants'
@@ -139,7 +139,9 @@ export async function withGrantCards<T extends OpenApeGrant>(grants: T[], source
   const getShape = memoize(sources.getShape)
   const findUser = memoize(sources.findUser)
   return await Promise.all(grants.map(async (grant) => {
-    const [registry, user, exactCommand] = await Promise.all([registryCard(grant.request, getShape), findUser(grant.request.requester), bindsExactCommand(grant.request)])
-    return { ...grant, card: { registry, requester: user ? { name: user.name, owner: user.owner ?? null } : null, program: programFacts(grant.request), binds_exact_command: exactCommand } }
+    const [registry, user, exactCommand] = await Promise.all([registryCard(grant.request, getShape), grant.brokered ? null : findUser(grant.request.requester), bindsExactCommand(grant.request)])
+    const providerName = brokerRequesterName(grant.brokered?.requester_name)
+    const requester = grant.brokered ? providerName ? { name: providerName, owner: grant.brokered.owner } : null : user ? { name: user.name, owner: user.owner ?? null } : null
+    return { ...grant, card: { registry, requester, program: programFacts(grant.request), binds_exact_command: exactCommand } }
   }))
 }

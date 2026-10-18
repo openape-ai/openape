@@ -1,5 +1,13 @@
 # Active work
 
+## Federated registered requester names — issue 1510
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1510. Branch `bugfix/issue-1510-federated-requester-name`, checkout `openape-monorepo.worktrees/federated-requester-name-1510`, canonical base `339384910a4a001b8f7c6aed5e48238caf427006`.
+- This bounded correction completes the registered-name requirement of the owner-approved approval UI and rollout. A decision provider previously queried only local registrations, while brokered Pod registrations live at their agent provider.
+- Negotiate signed optional `requester_name` through the exact discovery capability; derive it from the active registered agent and validated key. Persist only matching broker JSON metadata, preserve decisions and binding fields, omit names from authorization tokens, and refresh existing pending requests during normal agent traffic. No foreign local users or directory privilege is introduced.
+- Focused verification passes: 76 module/API/card/page cases, 38 broker/token cases, 60 durable store cases and 24 real-CSS browser cases. Core, grants, module and free IdP typechecks and scoped lint pass. SQLite trigger evidence confirms that identical polls perform no row rewrite; both commit orders preserve decisions and token bindings during metadata refresh.
+- Next: independent final review, required repository gate, native PR and coordinated IdP rollout. Formal protocol integration is coordinated separately. Existing pending requests gain names on the next normal authenticated agent call; owner reads alone do not query a foreign directory.
+
 ## Approval presentation and sender context — issue 1509
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1509. Branch `feature/issue-1509-approval-ui`, checkout `openape-monorepo.worktrees/approval-ui-1509`, canonical base `a3afc979234046e01d0b878b7b2cae32e9954a57`.

@@ -1,8 +1,8 @@
 // @vitest-environment node
-import type { BrokerConnection, BrokerRequest } from '@openape/core'
+import type { BrokerConnection, BrokerRequest, OpenApeGrant } from '@openape/core'
 import type { H3Event } from 'h3'
 import { generateKeyPair } from '@openape/core'
-import { BROKER_REQUEST_TYPE, InMemoryGrantStore, signBrokerToken, verifyAuthzJWT } from '@openape/grants'
+import { BROKER_REQUEST_TYPE, InMemoryGrantStore, sameBrokeredGrant, signBrokerToken, verifyAuthzJWT } from '@openape/grants'
 import { createServer } from 'node:http'
 import { randomUUID } from 'node:crypto'
 import { createApp, createError, createRouter, getHeader, toNodeListener } from 'h3'
@@ -31,8 +31,10 @@ vi.mock('nitropack/runtime', () => ({ useRuntimeConfig: () => ({}), useEvent: ()
 vi.mock('../src/runtime/server/utils/agent-auth', () => ({ tryBearerAuth: async (event: H3Event) => actor(event) }))
 vi.mock('../src/runtime/server/utils/admin', () => ({ requireAuth: async (event: H3Event) => actor(event)?.sub ?? 'anonymous' }))
 vi.mock('../src/runtime/server/utils/session', () => ({ getAppSession: async (event: H3Event) => ({ data: { userId: getHeader(event, 'x-session') } }) }))
-// Card enrichment (registry adapters, registrations) is covered in grant-card.test.ts.
-vi.mock('../src/runtime/server/utils/grant-card', () => ({ withGrantCards: async (grants: unknown[]) => grants }))
+vi.mock('../src/runtime/server/utils/grant-card', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../src/runtime/server/utils/grant-card')>()
+  return { withGrantCards: async (grants: OpenApeGrant[]) => original.withGrantCards(grants, { getShape: async () => null, findUser: async () => null }) }
+})
 vi.mock('../src/runtime/server/utils/grant-stores', () => ({ useGrantStores: () => ({ grantStore }) }))
 vi.mock('../src/runtime/server/utils/grant-pending-hooks', () => ({ runGrantPendingHooks: async (grant: unknown) => notified(grant) }))
 vi.mock('../src/runtime/server/utils/stores', () => ({
@@ -48,6 +50,11 @@ vi.mock('../src/runtime/server/utils/broker-store', () => ({
     getAgent: async () => null,
     getConnection: async (id: string) => connection.id === id ? connection : null,
     assertConnection: async () => { if (connection.status !== 'active') throw createError({ statusCode: 403 }) },
+    updateRequesterName: async (subject: string, provenance: OpenApeGrant['brokered'], name: string) => {
+      for (const grant of await grantStore.findByRequester(subject)) {
+        if (grant.brokered && sameBrokeredGrant(grant.brokered, provenance)) await grantStore.save({ ...grant, brokered: { ...grant.brokered, requester_name: name } })
+      }
+    },
     acceptRequest: async (value: BrokerRequest) => {
       if (seen.has(value.jti)) throw createError({ statusCode: 409 })
       seen.add(value.jti)
@@ -81,6 +88,26 @@ beforeEach(async () => {
 afterEach(async () => { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())) })
 
 describe('brokered decision lifecycle', () => {
+  it('refreshes existing pending names on signed status polling and exposes them to the authenticated owner', async () => {
+    const grant = await (await send('create')).json()
+    expect(grant.brokered).not.toHaveProperty('requester_name')
+    expect((await send('get', grant.id, { requester_name: 'Registered briefing' })).status).toBe(200)
+    const read = () => fetch(`${base}/grants/${grant.id}`, { headers: { Authorization: `Bearer ${owner}` } })
+    const first = await (await read()).json()
+    expect(first.card.requester).toEqual({ name: 'Registered briefing', owner })
+    expect(first.status).toBe('pending')
+    await send('get', grant.id, { requester_name: 'Renamed briefing' })
+    expect((await (await read()).json()).card.requester.name).toBe('Renamed briefing')
+    expect((await grantStore.findById(grant.id))?.request).toEqual(grant.request)
+  })
+
+  it('refuses malformed signed names and unsigned substitutes without persisting them', async () => {
+    for (const requester_name of ['Invisible\u202Ename', '', 'x'.repeat(121)]) expect((await send('create', undefined, { requester_name })).status).toBe(400)
+    const now = Math.floor(Date.now() / 1000)
+    const assertion = await signBrokerToken({ iss: broker, aud: issuer, owner, connection_id: connection.id, sub: agent, key_id: 'agent-key', iat: now, exp: now + 60, jti: randomUUID(), operation: 'get', grant_id: randomUUID() }, brokerKeys.privateKey, 'broker-key', BROKER_REQUEST_TYPE)
+    expect((await fetch(`${base}/brokered`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ assertion, requester_name: 'Unsigned substitute' }) })).status).toBe(400)
+    expect((await grantStore.listGrants({ requester: agent })).data).toEqual([])
+  })
   it('preserves a batch description and rejects inconsistent or concealed group claims', async () => {
     const request = { requester: agent, command: ['printf', 'fixture'], target_host: 'fixture', audience: 'shapes', grant_type: 'once', batch: { id: 'review-1', title: 'Review selected calls', description: 'Review each call.\nOnly selected calls will be approved.', size: 2 } }
     const response = await send('create', undefined, { request })

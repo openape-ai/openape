@@ -33,12 +33,13 @@ export default defineEventHandler(async (event) => {
     throw error
   }
   if (request.operation === 'connection') return connection
-  const provenance: BrokeredGrant = { connection_id: connection.id, broker_issuer: connection.broker_issuer, agent_issuer: connection.broker_issuer, owner: connection.owner.subject, key_id: request.key_id }
+  const provenance: BrokeredGrant = { connection_id: connection.id, broker_issuer: connection.broker_issuer, agent_issuer: connection.broker_issuer, owner: connection.owner.subject, key_id: request.key_id, ...(request.requester_name !== undefined ? { requester_name: request.requester_name } : {}) }
   const { grantStore } = useGrantStores()
   if (request.operation === 'authorize') {
     enforceAuthorizeRateLimit(event, request.sub)
     const call = await brokerInput(() => parseProgramAuthorizeRequest(request.request))
     await store.assertConnection(provenance)
+    if (request.requester_name !== undefined) await store.updateRequesterName(request.sub, provenance, request.requester_name)
     const result = await authorizeProgramCall(event, { requester: request.sub, request: call, brokered: provenance, onToken: grant => store.recordToken(grant) })
     return sendProgramAuthorizeResult(event, result)
   }
@@ -49,6 +50,7 @@ export default defineEventHandler(async (event) => {
       if (!(error instanceof InvalidGrantBatchError)) throw error
       throw createProblemError({ status: 400, title: `Invalid batch: ${error.message}`, type: 'https://openape.org/errors/broker_request_invalid' })
     }
+    if (request.requester_name !== undefined) await store.updateRequesterName(request.sub, provenance, request.requester_name)
     // A continuing request that an approved grant of this binding already covers (for example a standing grant the
     // owner approved for a broader permission) needs no new decision. Single-use and batch requests always ask.
     if (grantRequest.grant_type !== 'once' && !grantRequest.batch) {
@@ -61,8 +63,13 @@ export default defineEventHandler(async (event) => {
     setResponseStatus(event, 201)
     return grant
   }
-  const grant = await introspectGrant(request.grant_id, grantStore)
+  let grant = await introspectGrant(request.grant_id, grantStore)
   if (!grant || grant.request.requester !== request.sub || !sameBrokeredGrant(grant.brokered, provenance)) throw createProblemError({ status: 403, title: 'Grant does not belong to this brokered identity' })
+  if (request.requester_name !== undefined) {
+    await store.updateRequesterName(request.sub, provenance, request.requester_name)
+    grant = await introspectGrant(request.grant_id, grantStore)
+    if (!grant) throw createProblemError({ status: 404, title: 'Grant was not found' })
+  }
   if (request.operation === 'get') return grant
   if (grant.status !== 'approved' || (grant.expires_at && grant.expires_at <= Date.now() / 1000)) throw createProblemError({ status: 400, title: 'Grant is not approved or has expired', type: 'https://openape.org/errors/grant_not_approved' })
   await store.assertConnection(provenance)
