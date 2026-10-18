@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import type { GrantWithCard } from '../utils/grant-card'
-import { formatRequesterName } from '../utils/command-display'
 import { grantBatchInfo, grantBatchOperations, grantBatchRows, grantBatchScope, grantBatchSections } from '../utils/grant-batch'
 import GrantBatchMemberRow from './GrantBatchMemberRow.vue'
+import GrantIdentity from './GrantIdentity.vue'
 
 const props = defineProps<{ requester: string, batchId: string }>()
 
@@ -90,10 +90,10 @@ onUnmounted(() => clearInterval(clock))
         <div class="flex items-start justify-between gap-3">
           <div class="min-w-0">
             <h1 class="text-2xl font-bold">
-              {{ text.heading }}
+              {{ info.title || text.heading }}
             </h1>
-            <p class="text-sm text-muted break-words">
-              {{ text.by }} <span class="font-semibold">{{ formatRequesterName(requester) }}</span>
+            <p v-if="info.title || info.description" class="mt-2 text-xs text-muted">
+              {{ text.own }}
             </p>
           </div>
           <button type="button" class="text-xs underline shrink-0" @click="german = !german">
@@ -111,12 +111,16 @@ onUnmounted(() => clearInterval(clock))
           {{ text.empty }}
         </p>
         <template v-if="members.length">
-          <p v-if="info.title" class="text-sm break-words">
-            <span class="text-muted">{{ text.own }}:</span> <span class="font-semibold">{{ text.quoted(info.title) }}</span>
+          <p class="text-sm whitespace-pre-wrap break-words" data-batch-description>
+            {{ info.description || (german ? 'Wähle die Anfragen aus, die du freigeben möchtest.' : 'Select the requests you want to approve') }}
           </p>
-          <p v-if="scope" class="text-sm break-words" data-batch-scope>
-            {{ text.scope(scope.targetHost, scope.audience) }}
-          </p>
+          <GrantIdentity v-if="members[0]" :grant="members[0]" :german="german" data-batch-requester />
+          <div class="space-y-1 text-xs text-muted" data-batch-scope>
+            <p>{{ german ? 'Einmalig · wie angefragt' : 'Single use · as requested' }}</p>
+            <p v-if="scope" class="break-all">
+              {{ german ? 'Ziel' : 'Target' }}: {{ scope.targetHost }} · {{ german ? 'Dienst' : 'Audience' }}: {{ scope.audience }}
+            </p>
+          </div>
           <p v-if="info.size" class="text-sm text-muted" data-batch-received>
             {{ text.received(members.length, info.size) }}
           </p>
@@ -127,15 +131,19 @@ onUnmounted(() => clearInterval(clock))
           </p>
 
           <label v-if="decidable.length" class="flex items-center gap-3 border-b border-default pb-2 text-sm font-medium">
-            <input type="checkbox" class="size-4 shrink-0" :checked="allSelected" :disabled="processing" @change="toggleAll(($event.target as HTMLInputElement).checked)">
+            <input type="checkbox" class="size-4 shrink-0 accent-primary" :checked="allSelected" :disabled="processing" @change="toggleAll(($event.target as HTMLInputElement).checked)">
             {{ text.all }}
           </label>
+          <p v-if="decidable.length" class="text-xs text-muted" data-batch-selection>
+            {{ german ? `${selectedCount} von ${decidable.length} ausgewählt` : `${selectedCount} of ${decidable.length} selected` }} · {{ german ? `${selectedCount} freigeben, ${decidable.length - selectedCount} ablehnen` : `Approve ${selectedCount}, deny ${decidable.length - selectedCount}` }}
+          </p>
           <ul v-if="decidable.length" class="divide-y divide-default" data-batch-rows>
             <GrantBatchMemberRow v-for="row in decidable" :key="row.id" :row="row" :german="german" :input-id="`batch-${row.id}`" :failure="failures[row.id]">
               <input
                 :id="`batch-${row.id}`"
                 type="checkbox"
-                class="mt-1 size-4 shrink-0"
+                :aria-label="row.headline || (german ? 'Anfrage auswählen' : 'Select request')"
+                class="mt-1 size-4 shrink-0 accent-primary"
                 :checked="selected.has(row.id)"
                 :disabled="processing"
                 @change="toggle(row.id, ($event.target as HTMLInputElement).checked)"
@@ -151,12 +159,12 @@ onUnmounted(() => clearInterval(clock))
           <p v-if="!decidable.length && !sections.separate.length" class="text-sm text-muted">
             {{ text.done }}
           </p>
-          <div v-if="decidable.length" class="sticky bottom-0 flex flex-col sm:flex-row gap-2 bg-default pt-2">
-            <UButton color="primary" class="justify-center" :loading="processing" :disabled="processing || stopped || !selectedCount" @click="decide(true)">
-              {{ text.approve(selectedCount, decidable.length - selectedCount) }}
-            </UButton>
-            <UButton color="error" variant="outline" class="justify-center" :disabled="processing" @click="decide(false)">
+          <div v-if="decidable.length" class="sticky bottom-0 grid grid-cols-2 gap-3 bg-default pt-3">
+            <UButton color="neutral" variant="outline" class="justify-center whitespace-normal" :disabled="processing" @click="decide(false)">
               {{ text.deny }}
+            </UButton>
+            <UButton color="primary" class="justify-center whitespace-normal" :loading="processing" :disabled="processing || stopped || !selectedCount" @click="decide(true)">
+              {{ text.approve(selectedCount, decidable.length - selectedCount) }}
             </UButton>
           </div>
 

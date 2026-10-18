@@ -12,7 +12,7 @@ export interface GrantBinding { grantId?: string, expiresAt: number, command: st
 /** One item of a batch, identified by a key that is unique within the batch; the summary is what the IdP shows about it. */
 export interface BatchMember { key: string, command: string[], summary: GrantSummary }
 /** `open`: announce no size, so later requests with the same batch id, title and expiry join it (grants.md §3.4). */
-export interface BatchRequest { id: string, title: string, expiresAt: number, permissions: string[], members: BatchMember[], open?: boolean }
+export interface BatchRequest { id: string, title: string, description?: string, expiresAt: number, permissions: string[], members: BatchMember[], open?: boolean }
 export interface BatchGrant { key: string, id: string }
 export type MemberState = 'pending' | 'approved' | 'denied' | 'expired'
 /** How the owner may decide an item at the IdP: once is consumed on release, always stays valid while approved; both stay bound to the item's exact command. */

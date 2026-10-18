@@ -85,7 +85,7 @@ import { parseRunContext, parseServiceScope, serviceKinds } from '../contracts/s
 import type { CredentialCache } from './connections/cache'
 import type { RuntimeHost, RuntimeChild } from './runtime-host'
 import { RunGrantTokens } from './broker/authorization'
-import { grantSummary, parseScriptSummary } from '../contracts/grant-summary'
+import { grantSummary, parseScriptSummary, savedScriptSummary } from '../contracts/grant-summary'
 import { parsePodDetails } from '../contracts/details'
 import type { DetailsCommand, PodDetails } from '../contracts/details'
 import { parseScheduleView } from '../contracts/scheduling'
@@ -1026,7 +1026,7 @@ export class RuntimeWorker {
           if (call.program.name !== basename(process.execPath) || call.program.sha256 !== executableHash || call.files.length !== 2 || !call.files.some(file => file.path === entry && file.sha256 === entryHash)) throw new Error('Owner start runtime or entry code changed')
           const grants = this.podGrants()
           if (!grants) throw new Error('Pod grant authority is unavailable')
-          const { grantId, approval } = await grants.requestProgram(scope.podId, { ...call, grantType: 'once' }, controller.signal)
+          const { grantId, approval } = await grants.requestProgram(scope.podId, { ...call, grantType: 'once' }, controller.signal, savedScriptSummary(context))
           if (approval) await grants.approve(start.owner, scope.podId, grantId, 'once', controller.signal)
           await check()
           return true
@@ -1076,7 +1076,7 @@ export class RuntimeWorker {
             targetHost: connection.targetHost,
             issuer: connection.decisionIssuer ?? connection.issuer,
             ...(start ? { grantType: 'once' as const } : {}),
-            summary: grantSummary('Execute the selected Pod script', grantPodName(context.name)),
+            summary: savedScriptSummary(context),
             waitMs: 7 * 24 * 60 * 60 * 1000,
           },
         }

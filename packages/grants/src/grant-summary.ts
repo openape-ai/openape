@@ -8,18 +8,19 @@ import type { OpenApeGrantSummary } from '@openape/core'
 const HIDDEN_CHARACTER = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u
 const HIDDEN_CHARACTERS = /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/gu
 
-const LIMITS = { title: 120, description: 2000, origin: 120, link: 2048 } as const
+export const GRANT_DESCRIPTION_LIMIT = 2000
+const LIMITS = { title: 120, description: GRANT_DESCRIPTION_LIMIT, origin: 120, link: 2048 } as const
 type SummaryField = keyof typeof LIMITS
 const FIELDS = Object.keys(LIMITS) as SummaryField[]
 
 /** A request summary that violates grants.md §3.4; callers answer it with 400. */
 export class InvalidGrantSummaryError extends Error {}
 
-function codePointLength(value: string): number {
+export function codePointLength(value: string): number {
   return [...value].length
 }
 
-function hasHiddenCharacter(value: string, multiline: boolean): boolean {
+export function hasHiddenCharacter(value: string, multiline: boolean): boolean {
   return HIDDEN_CHARACTER.test(multiline ? value.replaceAll('\n', '') : value)
 }
 

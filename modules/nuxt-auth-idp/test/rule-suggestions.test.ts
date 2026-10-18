@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { ruleTemplatePreview, standingRulePreview } from '../src/runtime/utils/rule-suggestions'
+import { ruleTemplatePreview, standingRulePreview, suggestAllowPattern } from '../src/runtime/utils/rule-suggestions'
+
+it('does not mistake spaces inside an executable name for subcommands', () => {
+  expect(suggestAllowPattern(['OpenApe Pods', '/Applications/OpenApe Pods.app/runtime/script-entry.mjs', '--input-channel'])).toBeNull()
+  expect(suggestAllowPattern(['tool', 'mail', 'list', '--top', '5'])).toBe('tool mail list *')
+  expect(suggestAllowPattern('tool mail list --top 5')).toBe('tool mail list *')
+})
 
 describe('standingRulePreview', () => {
   const rule = {
