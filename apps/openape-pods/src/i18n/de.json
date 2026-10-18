@@ -3265,5 +3265,19 @@
   "ChatGPT credential account binding does not match; reconnect": "Die Kontobindung der ChatGPT-Zugangsdaten stimmt nicht überein. Verbinde das Konto erneut.",
   "Invalid portable credential record": "Ungültiger portabler Zugangsdaten-Datensatz",
   "Invalid portable credential binding": "Ungültige Bindung der portablen Zugangsdaten",
-  "Store a protected value for this pod. HTTP authentication keys stay with the runtime. Saving or replacing pauses the pod and requires script validation again.": "Speichere einen geschützten Wert für diesen Pod. Schlüssel für die HTTP-Anmeldung bleiben bei der Laufzeit. Speichern oder Ersetzen pausiert den Pod und erfordert eine erneute Skriptprüfung."
+  "Store a protected value for this pod. HTTP authentication keys stay with the runtime. Saving or replacing pauses the pod and requires script validation again.": "Speichere einen geschützten Wert für diesen Pod. Schlüssel für die HTTP-Anmeldung bleiben bei der Laufzeit. Speichern oder Ersetzen pausiert den Pod und erfordert eine erneute Skriptprüfung.",
+  "An owner-activated script cannot request an IdP start decision": "Ein vom Eigentümer aktiviertes Skript kann keine zusätzliche Startfreigabe am IdP anfordern",
+  "ape-shell owner activation does not match the selected script": "Die Aktivierung durch den Eigentümer von ape-shell passt nicht zum ausgewählten Skript",
+  "Validation inputs changed during execution": "Die Eingaben für die Validierung haben sich während der Ausführung geändert",
+  "Effect is not awaiting dispatch": "Die Wirkung wartet nicht auf ihre Ausführung",
+  "Root execution authority changed": "Die Berechtigung zum Start des Pod-Skripts hat sich geändert",
+  "Root completion has no recorded start": "Für das Ende des Pod-Skripts ist kein Start protokolliert",
+  "Script execution requires its owner activation": "Die Skriptausführung benötigt die Aktivierung durch den Eigentümer",
+  "Owner activation does not match this script run": "Die Aktivierung durch den Eigentümer passt nicht zu diesem Skriptlauf",
+  "Owner activation changed before execution": "Die Aktivierung durch den Eigentümer hat sich vor der Ausführung geändert",
+  "ape-shell requires its explicit execution authority": "ape-shell benötigt eine ausdrückliche Ausführungsberechtigung",
+  "An application call requires its own IdP grant": "Ein Anwendungsaufruf benötigt eine eigene Freigabe am IdP",
+  "Owner activation changed; validate and activate the selected script": "Die Aktivierung durch den Eigentümer hat sich geändert. Validiere und aktiviere das ausgewählte Skript erneut.",
+  "Permission is unavailable; future schedules will check again": "Die Freigabe ist nicht verfügbar. Künftige geplante Starts prüfen sie erneut.",
+  "Pod execution permission is {p0}; review the Pod permissions before retrying": "Die Ausführungsfreigabe des Pods hat den Status {p0}. Prüfe vor einem erneuten Versuch die Pod-Berechtigungen."
 }

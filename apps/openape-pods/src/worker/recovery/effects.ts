@@ -31,6 +31,12 @@ export class EffectLedger {
     if (updated.changes !== 1) throw new Error('Effect is not awaiting completion')
   }
 
+  /** The trusted broker confirmed an authorization failure before request dispatch. */
+  notStarted(podId: string, runId: string, key: string): void {
+    const removed = this.store.db.prepare('DELETE FROM effect_ledger WHERE pod_id=? AND run_id=? AND effect_key=? AND state=\'intent\'').run(podId, runId, key)
+    if (removed.changes !== 1) throw new Error('Effect is not awaiting dispatch')
+  }
+
   markUnknown(podId: string, key: string): void {
     const updated = this.store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE pod_id=? AND effect_key=? AND state=\'intent\'').run(podId, key)
     if (updated.changes !== 1) throw new Error('Effect is not awaiting completion')

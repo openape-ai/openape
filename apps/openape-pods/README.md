@@ -47,10 +47,21 @@ Exit the shell cleanly to persist setup for later `context.tools.invoke` calls.
 An open shell reserves the pod and pauses automation; closing it does not resume
 automation. No account status is inferred.
 
-Saved Node.js `run(context)` artifacts also start through the bundled ape-shell,
-using the same HOME/cwd/SHELL and a preserved descriptor-3 result channel. The
-selected source hash is checked before launch. The existing macOS script sandbox
-and assigned-tool broker remain in place behind the shell grant.
+Saved Node.js `run(context)` artifacts start through the bundled
+`ape-shell --run-script` mode. The authenticated owner's activation authorizes
+the selected stored script; its start does not request a second IdP grant.
+Pods verifies the active source, validation and resource bindings before launch
+and before acknowledging execution. The private lifecycle records owner
+activation as its authority source, with the descriptor-3 result channel and
+native process supervision. Pods supplies the macOS sandbox profile; ape-shell
+applies it and macOS enforces it. Inner CLI and HTTP calls retain the Pod
+identity and their separate IdP authorization.
+
+A pre-effect permission wait or refusal ends the affected attempt while allowing
+a later normal trigger to check the current permission again. Existing requests
+are reused and denied or revoked permissions still refuse execution. Invalid
+identity/token/content bindings remain held. An uncertain effect, a previous
+external write or an untracked operation still requires evidence before replay.
 
 The interactive setup shell is a grant-mediated owner shell, not an OS sandbox.
 A granted command has the Mac user's filesystem/process privileges. Broad session
@@ -388,8 +399,10 @@ Mail ingestion, classification, extraction and protected archival live in the
 independently delivered o365-cli repository and its `automation/` package. Pods
 contains no mail port or bundled mail parser. Assign exact program/runtime files
 and use `tools.invoke`, generic model calls, data and progress. All controlled
-programs, including scripts, parsers, dependencies, terminals and applications,
-execute through `ape-shell -c` with the actual target and content bindings.
+programs execute through ape-shell with the actual target and content bindings.
+The activated top-level Pod script uses `--run-script`; inner tools, parsers,
+dependencies, terminals and applications keep their existing grant-mediated
+execution paths.
 
 The external package provides a standalone recipe bundle and a separate parser
 runtime. The parser uses a 192 MiB heap, a 15-second deadline, no network/identity,

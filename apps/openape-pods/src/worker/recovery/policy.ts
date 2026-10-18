@@ -1,6 +1,6 @@
 import type { PodDatabase } from '../storage/database'
 
-export type RecoveryCause = 'failure' | 'infrastructure' | 'shutdown' | 'owner-cancelled' | 'authority' | 'non-retryable'
+export type RecoveryCause = 'failure' | 'infrastructure' | 'shutdown' | 'owner-cancelled' | 'authority' | 'permission' | 'non-retryable'
 export interface RecoveryFailure { cause: RecoveryCause, retryAfterMs?: number }
 export interface RecoveryDecision { disposition: 'retry' | 'isolated' | 'hold', reason: string, nextAt: number | null, attempt: number }
 export class RunCancellation extends Error {
@@ -10,6 +10,7 @@ export const maximumRecoveryAttempts = 5
 export function recoveryDecision(failure: RecoveryFailure, previousAttempts: number, hold: string | null, now: number, maximumAttempts = maximumRecoveryAttempts): RecoveryDecision {
   const attempt = previousAttempts + 1
   if (hold) return { disposition: 'hold', reason: hold, nextAt: null, attempt }
+  if (failure.cause === 'permission') return { disposition: 'isolated', reason: 'Permission is unavailable; future schedules will check again', nextAt: null, attempt }
   if (failure.cause === 'authority') return { disposition: 'hold', reason: 'Execution permission requires owner review', nextAt: null, attempt }
   if (failure.cause === 'non-retryable') return { disposition: 'isolated', reason: 'The same input would fail again; future schedules remain eligible', nextAt: null, attempt }
   if (failure.cause === 'owner-cancelled') return { disposition: 'isolated', reason: 'Attempt cancelled by the owner; future schedules remain eligible', nextAt: null, attempt }
@@ -18,10 +19,10 @@ export function recoveryDecision(failure: RecoveryFailure, previousAttempts: num
   return { disposition: 'retry', reason: 'Automatic retry scheduled', nextAt: now + wait, attempt }
 }
 
-export function recoveryHold(store: PodDatabase, podId: string, runId?: string): string | null {
+export function recoveryHold(store: PodDatabase, podId: string, runId?: string, permissionRecheck = false): string | null {
   const effect = store.db.prepare('SELECT operation,effect_key FROM effect_ledger WHERE pod_id=? AND state IN (\'intent\',\'unknown\') LIMIT 1').get(podId)
   if (effect) return `External outcome requires review: ${effect.operation} (${effect.effect_key})`
-  if (runId && store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND type=\'approval\' AND json_extract(data,\'$.state\') IN (\'denied\',\'revoked\') LIMIT 1').get(runId)) return 'Execution permission was refused or revoked; review before retrying'
+  if (!permissionRecheck && runId && store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND type=\'approval\' AND json_extract(data,\'$.state\') IN (\'denied\',\'revoked\') LIMIT 1').get(runId)) return 'Execution permission was refused or revoked; review before retrying'
   // A run that sent an HTTP write or ran an application write is never replayed automatically; the owner reviews it.
   if (runId && store.db.prepare('SELECT 1 FROM effect_ledger WHERE run_id=? LIMIT 1').get(runId)) return 'This run already wrote externally; review its effects before retrying'
   if (unresolvedOperation(store, podId)) return 'An operation without replay evidence requires review'

@@ -18,6 +18,7 @@ import { PodDatabase, digest, parseManifest } from '../storage/database'
 import type { ScriptManifest } from '../storage/database'
 import { canonicalJson } from '../../contracts/canonical-json'
 import { executeScript } from '../runs/runner'
+import { ownerScriptAuthority } from '../runs/owner-script'
 import { parseProgress } from '../runs/progress'
 import { inputSchema, resultSchema } from '../runs/examples'
 import type { AgentRuntime } from '../agent/executor'
@@ -133,6 +134,12 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
     }
     let executing = !preparation
     const result = await executeScript({ ...runtime, dependencyRoot, ...(preparation ? { machine: preparation.machine } : {}) }, root, artifact, input, signal, {
+      authorizeStart: async () => {
+        signal.throwIfAborted()
+        if (store.getPod(pod.id).bindingRevision !== pod.bindingRevision || resources.epoch(pod.id) !== epoch || store.db.prepare('SELECT revision FROM script_drafts WHERE id=?').get(draftId)?.revision !== revision) throw new Error('Validation inputs changed during execution')
+        if (dependencyHash) await dependencies.verify(pod.id, dependencyHash)
+        return ownerScriptAuthority(input, `${draftId}:${revision}:${hash}`)
+      },
       event: () => {},
       budgetPaused: () => !executing,
       ...(preparation

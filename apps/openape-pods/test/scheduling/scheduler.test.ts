@@ -195,6 +195,42 @@ it('holds a failed run that already wrote externally instead of replaying it', (
   expect(f.started).toHaveLength(1)
 })
 
+it.each(['pending', 'denied', 'revoked'])('keeps later triggers eligible after a pre-effect %s permission result', (state) => {
+  const f = fixture(); const pod = f.pod()
+  const input = f.scheduler.acceptEvent(pod, 'schedule', 'permission-check', {})
+  f.scheduler.tick()
+  const id = f.started[0]!.id
+  f.runs.append(id, 'approval', { grantId: 'permission-1', issuer: 'https://id.example.test', title: 'Read assigned data', state })
+  f.runs.finish(id, 'failed', 'Permission unavailable', `Permission ${state}`, [], 0, { cause: 'permission' })
+  expect(f.scheduler.view(pod)).toMatchObject({ blocked: 0, pending: 0, failed: 1 })
+  expect(f.store.db.prepare('SELECT state FROM accepted_events WHERE id=?').get(input)?.state).toBe('failed')
+  const next = f.scheduler.acceptEvent(pod, 'schedule', 'next-permission-check', {})
+  f.scheduler.tick()
+  expect(f.started).toHaveLength(2)
+  expect(f.started[1]!.trigger.eventIds).toEqual([next])
+  f.runs.finish(f.started[1]!.id, 'completed', 'Permission checked again', null, [next])
+})
+
+it.each(['completed', 'unknown'])('preserves the %s external-effect hold when a later permission is unavailable', (state) => {
+  const f = fixture(); const pod = f.pod()
+  f.scheduler.acceptEvent(pod, 'schedule', 'effect-before-permission', {}); f.scheduler.tick()
+  const id = f.started[0]!.id
+  f.store.db.prepare('INSERT INTO effect_ledger VALUES(?,\'write\',\'http.request\',\'hash\',?,?,?)').run(pod, id, state, state === 'completed' ? '{}' : null)
+  f.runs.finish(id, 'failed', 'Permission unavailable', 'Permission denied', [], 0, { cause: 'permission' })
+  f.scheduler.acceptEvent(pod, 'schedule', 'next-permission-check', {}); f.scheduler.tick()
+  expect(f.started).toHaveLength(1)
+  expect(f.scheduler.view(pod).blocked).toBe(1)
+})
+
+it('keeps invalid authority held across later triggers', () => {
+  const f = fixture(); const pod = f.pod()
+  f.scheduler.acceptEvent(pod, 'schedule', 'invalid-authority', {}); f.scheduler.tick()
+  f.runs.finish(f.started[0]!.id, 'failed', 'Invalid authority', 'Token binding mismatch', [], 0, { cause: 'authority' })
+  f.scheduler.acceptEvent(pod, 'schedule', 'next-permission-check', {}); f.scheduler.tick()
+  expect(f.started).toHaveLength(1)
+  expect(f.scheduler.view(pod).blocked).toBe(1)
+})
+
 it.each(['process', 'checkpoint'])('recovers from %s work after verified settlement without losing committed progress', (kind) => {
   const f = fixture(); const pod = f.pod()
   f.scheduler.acceptEvent(pod, 'fixture', 'unsafe', {}); f.scheduler.tick()
