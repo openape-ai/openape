@@ -1,4 +1,4 @@
-import { AuthorityError, isTransientStatus, NonRetryableError, transientNetwork, transientResponse } from '../../contracts/infrastructure'
+import { AuthorityError, isTransientStatus, NonRetryableError, PermissionUnavailableError, transientNetwork, transientResponse } from '../../contracts/infrastructure'
 import type { BrokeredGrant, OpenApeAuthZClaims, OpenApeCliAuthorizationDetail } from '@openape/core'
 import { cliAuthorizationDetailsCover, coverableCliDetails, sameBrokeredGrant, verifyAuthzJWT } from '@openape/grants'
 import type { VerifyAuthzOptions } from '@openape/grants'
@@ -197,7 +197,7 @@ export class AgentAuthority {
     let category = ''
     try { const problem = JSON.parse(reply.text); const type = problem.type ?? problem.data?.type; category = type === 'https://openape.org/errors/grant_not_approved' ? 'grant_not_approved' : '' }
     catch { category = '' }
-    if (category === 'grant_not_approved') return new AuthorityError('The grant is no longer approved; review its current status before retrying')
+    if (category === 'grant_not_approved') return new PermissionUnavailableError('The grant is no longer approved; review its current status before retrying')
     if (reply.status === 401) return new AuthorityError('OpenApe authentication expired; reconnect the Pod owner in App settings')
     if (reply.status === 403) return new AuthorityError('OpenApe rejected this Pod identity; check its assigned owner and permissions')
     const message = `The permission service rejected the request (${serviceAnswer(reply.status, reply.text)}); inspect the grant before retrying`
@@ -250,7 +250,7 @@ export class AgentAuthority {
     const grantId = typeof body?.grant_id === 'string' && grantIdPattern.test(body.grant_id) ? body.grant_id : undefined
     if (reply.status === 200 && body?.state === 'approved' && grantId && typeof body.authz_jwt === 'string') return { state: 'approved', grantId, token: body.authz_jwt }
     if (reply.status === 202 && body?.state === 'pending' && grantId) return { state: 'pending', grantId }
-    if (reply.status === 403 && grantId && (body?.state === 'denied' || body?.state === 'revoked')) throw new AuthorityError(`Permission ${body.state}; review this Pod's permissions before retrying`)
+    if (reply.status === 403 && grantId && (body?.state === 'denied' || body?.state === 'revoked')) throw new PermissionUnavailableError(`Permission ${body.state}; review this Pod's permissions before retrying`)
     if (reply.status === 404 || reply.status === 405) throw new Error('The identity provider does not authorize program calls yet; update it before using this version of OpenApe Pods')
     if (reply.status >= 200 && reply.status <= 299) throw new Error('The permission service returned an invalid authorization')
     throw this.refusal(reply)
@@ -279,7 +279,7 @@ export class AgentAuthority {
     // stopped waiting can no longer run anything (DDISA grants §3.4) and is replaced.
     if (grant?.status === 'pending' && grant.request.grant_type === 'once' && (grant.request.waits_until ?? 0) * 1000 <= Date.now()) grant = undefined
     if (grant) await this.ledger?.record(grant, this.connection)
-    if (grant && ['denied', 'revoked'].includes(grant.status)) throw new AuthorityError(`Permission ${grant.status}; review this Pod's permissions before retrying`)
+    if (grant && ['denied', 'revoked'].includes(grant.status)) throw new PermissionUnavailableError(`Permission ${grant.status}; review this Pod's permissions before retrying`)
     if (!grant || grant.status === 'used' || grant.status === 'expired') {
       // Every Pod grant is a continuing grant (owner decision October 10, 2026); per-item approvals are gate batches.
       const create = async () => await this.request('/api/grants', 'POST', signal, { requester: this.connection.subject, target_host: this.connection.targetHost, audience: 'shapes', grant_type: 'always', command: assignment.permission.argv, permissions: [detail.permission], authorization_details: [detail], reason: detail.display, summary: grantSummary(detail.display, this.presentation?.origin, this.presentation?.summary) }) as { id?: unknown }
@@ -295,7 +295,7 @@ export class AgentAuthority {
       grant = await this.decision(grant, publish, signal)
       await this.ledger?.record(grant, this.connection)
     }
-    if (grant.status !== 'approved') throw new AuthorityError(grant.status === 'pending' ? 'Permission was not decided while this command waited; start it again and approve at the IdP' : grant.status === 'expired' ? 'Permission request expired at the IdP; start a new run to request it again' : `Permission ${grant.status}; review this Pod's permissions before retrying`)
+    if (grant.status !== 'approved') throw new PermissionUnavailableError(grant.status === 'pending' ? 'Permission was not decided while this command waited; start it again and approve at the IdP' : grant.status === 'expired' ? 'Permission request expired at the IdP; start a new run to request it again' : `Permission ${grant.status}; review this Pod's permissions before retrying`)
     if (!covers(grant, detail)) throw new AuthorityError('The approved grant no longer covers this permission; request it again')
     await publish('approved')
     return grant.id
@@ -356,7 +356,7 @@ export class AgentAuthority {
     // A once grant this run used up stays its authority; the IdP reports it active until it is revoked or expires.
     if (this.usedOnce.has(assignment.grantId)) return this.assertActive(assignment.grantId, signal)
     const grant = await this.grant(assignment.grantId, signal)
-    if (grant.status !== 'approved') throw new AuthorityError(`Pod execution permission is ${grant.status}; review the Pod permissions before retrying`)
+    if (grant.status !== 'approved') throw new PermissionUnavailableError(`Pod execution permission is ${grant.status}; review the Pod permissions before retrying`)
     await this.mint(assignment, signal)
   }
 
@@ -392,13 +392,13 @@ export class AgentAuthority {
    */
   private async verifyPermission(token: string, assignment: PermissionAuthorization, jwks: VerifyAuthzOptions['jwks']): Promise<OpenApeAuthZClaims> {
     const result = await verifyAuthzJWT(token, { expectedIss: this.decisionIssuer, expectedAud: 'shapes', jwks })
-    if (!result.valid || !result.claims) throw new Error(result.error ?? 'Grant verification failed')
+    if (!result.valid || !result.claims) throw new AuthorityError(result.error ?? 'Grant verification failed')
     const claims = result.claims
     const brokered = this.connection.brokered
-    if (!sameBrokeredGrant(brokered, claims.brokered) || (brokered && claims.decided_by !== brokered.owner)) throw new Error('Grant does not match the assigned broker connection')
-    if (claims.sub !== this.connection.subject || claims.target_host !== this.connection.targetHost || claims.grant_id !== assignment.grantId || claims.run_as !== undefined) throw new Error('Grant does not match the assigned identity or host')
+    if (!sameBrokeredGrant(brokered, claims.brokered) || (brokered && claims.decided_by !== brokered.owner)) throw new AuthorityError('Grant does not match the assigned broker connection')
+    if (claims.sub !== this.connection.subject || claims.target_host !== this.connection.targetHost || claims.grant_id !== assignment.grantId || claims.run_as !== undefined) throw new AuthorityError('Grant does not match the assigned identity or host')
     const details = (claims.authorization_details ?? []).filter((detail): detail is OpenApeCliAuthorizationDetail => detail.type === 'openape_cli')
-    if (!details.length || !cliAuthorizationDetailsCover(details, [assignment.permission.detail])) throw new Error(`Grant does not cover required permission: ${assignment.permission.detail.permission}`)
+    if (!details.length || !cliAuthorizationDetailsCover(details, [assignment.permission.detail])) throw new AuthorityError(`Grant does not cover required permission: ${assignment.permission.detail.permission}`)
     return claims
   }
 

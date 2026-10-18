@@ -19,3 +19,30 @@ export interface OpenApeProgramExecutionRequest {
   forwardChannel: boolean
   waitMs: number
 }
+
+/** Attested by the local owner controller over its private channel, never by the target script. */
+export interface OpenApeOwnerScriptAuthority {
+  source: 'owner-activation'
+  activationId: string
+  podId: string
+  scriptHash: string
+  assignmentRevision: number
+  resourceEpoch: number
+}
+
+export interface OpenApeOwnerScriptExecutionRequest extends Omit<OpenApeProgramExecutionRequest, 'grantType' | 'waitMs' | 'summary' | 'batch'> {
+  mode: 'owner-script'
+  authority: OpenApeOwnerScriptAuthority
+}
+
+export type OpenApeMachineExecutionRequest = OpenApeProgramExecutionRequest | OpenApeOwnerScriptExecutionRequest
+export type OpenApeExecutionAuthority = { source: 'grant', grantId: string } | OpenApeOwnerScriptAuthority
+export type OpenApeExecutionFailure =
+  | { kind: 'permission', state: 'missing' | 'pending' | 'denied' | 'revoked' | 'expired', grantId?: string }
+  | { kind: 'infrastructure', phase: 'authorization', retryAfterMs: number, status?: number, detail?: string }
+
+export interface OpenApeExecutionAuthorizationReceipt {
+  authority: OpenApeExecutionAuthority
+  write: boolean
+  grantId?: string
+}

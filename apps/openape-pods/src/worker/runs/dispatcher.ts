@@ -3,12 +3,11 @@ import { ApprovalHistory } from '../data/approval-history'
 import { isProgramCall } from '../../contracts/program-execution'
 import type { ScriptRuntime, ScriptServices } from './runner'
 import type { ProgramCall } from '../../main/broker/authorization'
-import { executeRecordedProgram } from '../../main/programs/effect-execution'
-import { recordProgramExecution } from './program-execution'
+import { executeOwnerScript, ownerScriptAuthority } from './owner-script'
 import { InboxOutbox, parseNotify } from '../inbox/outbox'
 import { RunCancellation, unresolvedOperation } from '../recovery/policy'
 import type { RecoveryFailure } from '../recovery/policy'
-import { AuthorityError, InfrastructureError, NonRetryableError, retryInfrastructure } from '../../contracts/infrastructure'
+import { AuthorityError, InfrastructureError, NonRetryableError, PermissionUnavailableError, retryInfrastructure } from '../../contracts/infrastructure'
 import { assignedJev, parseJevRequest, parseJevResult } from '../../contracts/jev'
 import type { JevRequest, JevEvaluation } from '../../contracts/jev'
 import { maxAgentPauseMs, parseAgentRequest } from '../../contracts/agent'
@@ -157,6 +156,16 @@ export class RunDispatcher {
     let agentCalls = 0
     let notifications = 0
     let infrastructureFailure: RecoveryFailure | undefined
+    const recordFailure = (failure: RecoveryFailure) => {
+      const priority = (cause: RecoveryFailure['cause']) => cause === 'authority' ? 3 : cause === 'non-retryable' ? 2 : cause === 'permission' ? 1 : 0
+      if (!infrastructureFailure || priority(failure.cause) >= priority(infrastructureFailure.cause)) infrastructureFailure = failure
+    }
+    const recordError = (error: unknown) => {
+      if (error instanceof PermissionUnavailableError) recordFailure({ cause: 'permission' })
+      else if (error instanceof AuthorityError) recordFailure({ cause: 'authority' })
+      else if (error instanceof NonRetryableError) recordFailure({ cause: 'non-retryable' })
+      else if (error instanceof InfrastructureError) recordFailure({ cause: 'infrastructure', retryAfterMs: error.failure.retryAfterMs })
+    }
     const retryService = async <T>(operation: string, work: () => Promise<T>, signal: AbortSignal, budgetMs = 30000) => {
       let waiting = false
       try {
@@ -167,7 +176,7 @@ export class RunDispatcher {
             signal.throwIfAborted()
           }
           try { return await work() }
-          catch (error) { if (error instanceof AuthorityError) infrastructureFailure = { cause: 'authority' }; if (error instanceof NonRetryableError && infrastructureFailure?.cause !== 'authority') infrastructureFailure = { cause: 'non-retryable' }; if (error instanceof InfrastructureError) infrastructureFailure = { cause: 'infrastructure', retryAfterMs: error.failure.retryAfterMs }; throw error }
+          catch (error) { recordError(error); throw error }
         }, signal, (retry) => {
           if (retry && !waiting) { waiting = true; infrastructureWaiting++ }
           appendEvent('infrastructure', { operation, ...(retry ?? { state: 'restored' }) })
@@ -210,6 +219,7 @@ export class RunDispatcher {
         pendingAgents.add(operation)
         try {
           const reply = await operation; assertCurrent()
+          if (isProgramCall(body) && reply && typeof reply === 'object' && 'exitCode' in reply && reply.exitCode === 75 && 'pending' in reply && reply.pending && typeof reply.pending === 'object' && 'grantId' in reply.pending && typeof reply.pending.grantId === 'string') recordFailure({ cause: 'permission' })
           if (artifactOutput && !(reply as { pending?: unknown }).pending && !(reply as { refusal?: unknown }).refusal) {
             const bytes = (reply as { stdoutArtifact?: { bytes?: number } }).stdoutArtifact?.bytes
             if (!Number.isSafeInteger(bytes) || bytes! < 0 || bytes! > 32 * 1024 * 1024) throw new Error('Invalid output artifact receipt')
@@ -226,6 +236,13 @@ export class RunDispatcher {
         shellScope = scope
       }
       const scriptServices: ScriptServices = {
+        authorizeStart: async () => {
+          assertCurrent()
+          if (this.store.getPod(pod.id).activeScript !== run.scriptHash || !this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(pod.id, run.scriptHash, pod.bindingRevision, epoch)) throw new AuthorityError('Owner activation changed; validate and activate the selected script')
+          if (dependencyHash) await dependencies.verify(pod.id, dependencyHash)
+          assertCurrent()
+          return ownerScriptAuthority(input)
+        },
         ...(this.services?.prepareStart ? { prepareStart: async (call: ProgramCall) => { assertCurrent(); await this.services!.prepareStart!(scope, call, signal); assertCurrent() } } : {}),
         budgetPaused: () => infrastructureWaiting > 0 || agentBudgetPaused() || this.runs.approvals(pod.id).some(item => item.runId === id),
         event: (type, data) => { assertCurrent(); appendEvent(type, data); if (type === 'process') this.store.db.prepare('UPDATE run_leases SET process_id=? WHERE run_id=?').run((data as { pid: number }).pid, id) },
@@ -305,24 +322,7 @@ export class RunDispatcher {
         },
       }
       const execute = async (execution?: ScriptServices['execution']) => executeScript(runtime, directory, artifact, input, signal, { ...scriptServices, execution })
-      const result = runtime.machine
-        ? (await executeRecordedProgram({ scriptHash: run.scriptHash, dependencyHash, assignmentRevision: pod.bindingRevision }, async observer => ({
-            exitCode: 0,
-            result: await execute({
-              ...observer,
-              authorized: async (value) => {
-                assertCurrent()
-                if (dependencyHash) await dependencies.verify(pod.id, dependencyHash)
-                assertCurrent()
-                await observer.authorized(value)
-                appendEvent('approval', { grantId: value.grantId, issuer: runtime.machine!.issuer, title: 'Pod script execution', state: 'approved' })
-              },
-            }),
-          }), async (record) => {
-            if (record.phase !== 'unknown') assertCurrent()
-            recordProgramExecution(this.store, this.runs, { scope, operationId: id, record })
-          }, async (grantId, url) => { appendEvent('approval', { grantId, issuer: new URL(url).origin, title: 'Pod script execution', state: 'pending' }) })).result
-        : await execute()
+      const result = await executeOwnerScript(this.runs, id, ownerScriptAuthority(input), execute)
       assertCurrent()
       if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE run_id=? AND state IN (\'intent\',\'unknown\')').get(id)) throw new Error('An HTTP delivery needs review before this pod can run again')
       for (const gap of result.gapIds) {
@@ -332,9 +332,10 @@ export class RunDispatcher {
       await this.finish(id, result.status, result.summary, result.status === 'failed' || result.status === 'blocked' ? result.summary : null, result.completedInputIds, epoch, infrastructureFailure ?? { cause: 'failure' })
     }
     catch (error) {
+      recordError(error)
       const message = (error instanceof Error ? error.message : 'Run failed').slice(0, 10000)
       await Promise.allSettled(pendingAgents)
-      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message, [], epoch, signal.aborted ? { cause: signal.reason instanceof RunCancellation ? signal.reason.cause : 'owner-cancelled' } : infrastructureFailure ?? { cause: error instanceof AuthorityError ? 'authority' : error instanceof InfrastructureError ? 'infrastructure' : 'failure', ...(error instanceof InfrastructureError ? { retryAfterMs: error.failure.retryAfterMs } : {}) })
+      await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message, [], epoch, signal.aborted ? { cause: signal.reason instanceof RunCancellation ? signal.reason.cause : 'owner-cancelled' } : infrastructureFailure ?? { cause: error instanceof PermissionUnavailableError ? 'permission' : error instanceof AuthorityError ? 'authority' : error instanceof InfrastructureError ? 'infrastructure' : 'failure', ...(error instanceof InfrastructureError ? { retryAfterMs: error.failure.retryAfterMs } : {}) })
     }
     finally {
       try { if (shellScope) await this.services?.closeShell?.(shellScope) }

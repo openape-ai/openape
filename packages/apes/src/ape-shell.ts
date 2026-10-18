@@ -14,6 +14,7 @@ export type ApeShellAction =
   | { action: 'error' }
   | { action: 'interactive' }
   | { action: 'machine' }
+  | { action: 'owner-script' }
 
 /**
  * Decides how `ape-shell` was invoked and what the caller should do next.
@@ -76,6 +77,11 @@ export function rewriteApeShellArgs(argv: string[], argv0?: string): ApeShellAct
     return null
 
   const shellArgs = argv.slice(2)
+
+  if (shellArgs[0] === '--run-script') {
+    if (shellArgs.length !== 3 || shellArgs[1] !== '--request-fd' || shellArgs[2] !== '6') return { action: 'error' }
+    return { action: 'owner-script' }
+  }
 
   if (shellArgs[0] === '-c' && shellArgs[1] === '--request-fd') {
     if (shellArgs.length !== 3 || shellArgs[2] !== '6') return { action: 'error' }

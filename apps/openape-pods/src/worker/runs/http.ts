@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto'
 import { isHttpEffect } from '../../contracts/http'
 import type { HttpRequest, HttpReply } from '../../contracts/http'
+import { InfrastructureError, PermissionUnavailableError } from '../../contracts/infrastructure'
 
 import type { EffectLedger } from '../recovery/effects'
 
@@ -18,7 +19,11 @@ export async function executeHttpEffect(ledger: EffectLedger, podId: string, run
     ledger.complete(podId, key, request.receipt === 'digest' || Buffer.byteLength(JSON.stringify(reply)) > maxFullReceiptBytes ? digestReceipt(reply) : reply)
     return reply
   }
-  catch (error) { ledger.markUnknown(podId, key); throw error }
+  catch (error) {
+    if (error instanceof PermissionUnavailableError || (error instanceof InfrastructureError && error.failure.phase === 'authorization')) ledger.notStarted(podId, runId, key)
+    else ledger.markUnknown(podId, key)
+    throw error
+  }
 }
 
 // A digest receipt proves which reply was received without storing its content.

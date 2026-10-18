@@ -4,7 +4,7 @@ import { generateKeyPairSync, randomUUID, sign } from 'node:crypto'
 import { afterEach, expect, it, vi } from 'vitest'
 import { AgentAuthority, decisionPollMs, grantTokenReuseMs, RunGrantTokens } from '../src/main/broker/authorization'
 import { httpPermission, runtimePermission } from '../src/main/grants/pod-permissions'
-import { AuthorityError, InfrastructureError, retryInfrastructure } from '../src/contracts/infrastructure'
+import { AuthorityError, InfrastructureError, PermissionUnavailableError, retryInfrastructure } from '../src/contracts/infrastructure'
 import type { RunApproval } from '../src/contracts/activity'
 
 const cleanup: (() => Promise<void>)[] = []
@@ -351,4 +351,29 @@ it('never lets a second application run on the token of another application with
   await run.authorize({ permission: f.permission, grantId: 'old' }, signal())
   await expect(run.authorize({ permission: f.permission, grantId: 'other-app' }, signal())).rejects.toThrow('denied')
   expect(f.state.tokens).toEqual(['old']); expect(f.state.consumes).toEqual(['old'])
+})
+
+it.each(['denied', 'revoked'])('rechecks an existing %s grant without replacing or approving it', async (state) => {
+  const f = await fixture(state)
+  f.state.grantType = 'always'
+  const assignment = { permission: f.permission, grantId: 'old' }
+  await expect(f.authority.authorize(assignment, new AbortController().signal)).rejects.toBeInstanceOf(PermissionUnavailableError)
+  await expect(f.authority.authorize(assignment, new AbortController().signal)).rejects.toBeInstanceOf(PermissionUnavailableError)
+  expect(f.state.creates).toBe(0)
+  expect(f.state.tokens).toEqual([])
+  expect(f.state.approvals).toEqual([])
+  f.state.initial = 'approved'
+  await f.authority.authorize(assignment, new AbortController().signal)
+  expect(f.state.creates).toBe(0)
+  expect(f.state.tokens).toEqual(['old'])
+})
+
+it('keeps a mismatched signed token distinct from a recheckable permission decision', async () => {
+  const f = await fixture('approved')
+  f.state.subject = 'other-pod@example.test'
+  const failure = await f.authority.authorize({ permission: f.permission, grantId: 'old' }, new AbortController().signal).catch(error => error)
+  expect(failure).toBeInstanceOf(AuthorityError)
+  expect(failure).not.toBeInstanceOf(PermissionUnavailableError)
+  expect(f.state.consumes).toEqual([])
+  expect(f.state.creates).toBe(0)
 })

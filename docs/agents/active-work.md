@@ -1,5 +1,15 @@
 # Active work
 
+## Owner-activated script starts — issue 1512
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1512. Branch `feature/issue-1512-owner-script`, checkout `openape-monorepo.worktrees/owner-script-1512`, canonical base `75251c743afda0ac01298d21e06b5331d7a4aa80`.
+- Owner approved revision 1 with "Passt dann legen wir los": https://report.openape.ai/d/01M585E4KP7X8STQPJGHCYBSA0?v=2. Living source: the primary checkout's `.claude/plans/2026-10-18-pod-owner-script/plan.json`.
+- Implement `ape-shell --run-script` with owner activation as top-level authority. Pods retains sandbox policy, exact active script/resource checks, private lifecycle, native process domains and honest authority receipts. CLI and desktop share the mode; inner CLI/HTTP calls retain the Pod identity and IdP authorization.
+- Separate safe permission-unavailable outcomes from invalid authority and unknown effects. Later triggers may recheck current grants; denied/revoked grants are not replaced or approved. Completed writes, intents, unknown effects and untracked operations retain replay holds.
+- Implemented: separate owner-script lifecycle with atomic lease fencing, strict private-channel receipts, typed pre-dispatch failures and sticky authority/refusal priority. Only confirmed pre-dispatch HTTP authorization failures release their own intent; delivery uncertainty remains held.
+- Focused verification passes: 75 Core/Apes checks; 80 distinct broker/recovery/scheduler checks; 51 Pods integration/ledger/lease checks; eight HTTP-effect checks. Native script/external-shell checks pass 15/15. The machine suite passed 31 cases initially, with one existing PDF skip and one missing packaged-fixture prerequisite; after building that fixture, its targeted recheck passed. Lint, library/app builds and Pods typecheck pass. Independent review's failure-priority finding is fixed; final exact-commit review follows the local gate.
+- Next: required affected unit gate, full deployment gate and native PR. Signed local rollout and evidence-bound Triage recovery follow those checks. No IdP/server deploy or other unknown-Pod recovery.
+
 ## Readable registered Pod names — issue 1511
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1511. Branch `bugfix/issue-1511-pod-registration-name`, checkout `openape-monorepo.worktrees/pod-registration-name-1511`, canonical base `b68849b08042555dd7922c8f235d713d1e2e79cf`.

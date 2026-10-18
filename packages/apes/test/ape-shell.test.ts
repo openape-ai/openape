@@ -3,6 +3,21 @@ import { rewriteApeShellArgs } from '../src/ape-shell'
 import { parseMachineRequest } from '../src/authorization/machine-request'
 
 describe('ape-shell argv rewriting', () => {
+  it('accepts owner scripts only over the private request channel', () => {
+    expect(rewriteApeShellArgs(['node', 'ape-shell', '--run-script', '--request-fd', '6'])).toEqual({ action: 'owner-script' })
+    for (const args of [[], ['script.mjs'], ['--request-fd', '3'], ['--request-fd', '6', 'extra'], ['--request-fd', '6', '-c', 'echo hello']]) expect(rewriteApeShellArgs(['node', 'ape-shell', '--run-script', ...args])).toEqual({ action: 'error' })
+  })
+
+  it('binds owner activation to the script and rejects mixing the two authority modes', () => {
+    const podId = '12345678-1234-4123-8123-123456789abc'
+    const scriptHash = 'c'.repeat(64)
+    const authority = { source: 'owner-activation', activationId: `${podId}:${scriptHash}:1:2`, podId, scriptHash, assignmentRevision: 1, resourceEpoch: 2 }
+    const request = { version: 1, mode: 'owner-script', authority, operationId: 'operation', executable: { path: '/bin/node', sha256: 'a'.repeat(64) }, argv: ['/workspace/script.mjs'], files: [{ path: '/workspace/script.mjs', sha256: scriptHash }], cwd: '/workspace', environment: {}, targetHost: `pods:${podId}`, sandbox: { path: '/private/profile.sb', sha256: 'b'.repeat(64) }, forwardChannel: true }
+    expect(parseMachineRequest(request, 'owner-script')).toEqual(request)
+    expect(() => parseMachineRequest(request)).toThrow()
+    for (const invalid of [{ ...request, authority: undefined }, { ...request, authority: { ...authority, scriptHash: 'd'.repeat(64) } }, { ...request, targetHost: 'pods:another-pod' }, { ...request, grantType: 'always' }, { ...request, waitMs: 1 }, { ...request, authority: { ...authority, approved: true } }, { ...request, authority: { ...authority, assignmentRevision: 0 } }, { ...request, authority: { ...authority, activationId: `${authority.activationId}\n` } }, { ...request, authority: { ...authority, scriptHash: `${scriptHash}\n` } }, { ...request, environment: { APES_SHELL_MODE: '1' } }]) expect(() => parseMachineRequest(invalid, 'owner-script')).toThrow()
+  })
+
   it('keeps structured requests separate from shell text, including malformed invocations', () => {
     expect(rewriteApeShellArgs(['node', 'ape-shell', '-c', '--request-fd', '6'])).toEqual({ action: 'machine' })
     for (const arguments_ of [[], [''], ['3'], ['6', 'extra']]) expect(rewriteApeShellArgs(['node', 'ape-shell', '-c', '--request-fd', ...arguments_])).toEqual({ action: 'error' })

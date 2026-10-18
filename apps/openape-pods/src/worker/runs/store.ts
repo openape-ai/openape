@@ -120,7 +120,7 @@ export class RunStore {
     const inputs = this.store.db.prepare('SELECT * FROM run_inputs WHERE run_id=?').get(id)!
     const initial = this.store.db.prepare('SELECT assignment_revision FROM runs WHERE id=?').get(id)!
     const changed = pod.activeScript !== run.scriptHash || pod.bindingRevision !== initial.assignment_revision || (this.store.db.prepare('SELECT epoch FROM resource_epochs WHERE pod_id=?').get(pod.id)?.epoch ?? 0) !== epoch
-    const hold = changed ? 'Script or permissions changed; review before retrying' : recoveryHold(this.store, pod.id, id)
+    const hold = changed ? 'Script or permissions changed; review before retrying' : recoveryHold(this.store, pod.id, id, failure.cause === 'permission')
     const decision = recoveryDecision(failure, Number(inputs.retry_attempt), hold, Date.now())
     const ids = JSON.parse(inputs.event_ids as string) as string[]
     if (!ids.length && decision.disposition === 'retry') {
