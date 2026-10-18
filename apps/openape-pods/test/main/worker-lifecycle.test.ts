@@ -176,3 +176,14 @@ it('sends desktop commands and approval page opening through the producers of th
   expect(dispatch.mock.calls.filter(([command]) => command.codexAdministration.type === 'begin')).toHaveLength(4)
   await expect(worker.codex({ id, action: { action: 'desktop', channel: 'runtimeApproval', command: { type: 'set', enabled: true } } })).rejects.toThrow('Unsupported desktop MCP channel')
 })
+
+it('keeps historical root authority discoverable in bounded MCP recovery results', async () => {
+  const { FixtureWorker } = await import('../../src/main/worker')
+  const worker = new FixtureWorker(() => {})
+  const podId = randomUUID(); const runId = randomUUID()
+  const authority = { source: 'owner-activation' as const, activationId: 'synthetic-activation', podId, scriptHash: 'a'.repeat(64), assignmentRevision: 1, resourceEpoch: 0 }
+  const effects = [{ key: `owner-script:${runId}`, runId, authority }, { key: 'legacy-delivery', runId }]
+  vi.spyOn(worker, 'runs').mockResolvedValue({ runs: [], events: [], effects })
+  Object.assign(worker, { dispatch: vi.fn(async () => ({ completed: false })) })
+  expect(await worker.codex({ id: randomUUID(), action: { action: 'recovery', revision: 1, command: { type: 'list', podId } } })).toEqual({ runs: [], effects, approvals: [] })
+})

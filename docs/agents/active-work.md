@@ -1,5 +1,15 @@
 # Active work
 
+## Manual recovery for cancelled owner scripts — issue 1513
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1513. Branch `bugfix/issue-1513-owner-script-recovery`, checkout `openape-monorepo.worktrees/owner-script-recovery-1513`, canonical base `f30d5ce7cb1a1ef937674f6440ca19da3ef98292`.
+- This is the necessary recovery follow-up to the approved owner-script implementation. Preserve its original approval; the current explicit Pod-repair request authorizes the operational recovery. The maintained plan source remains the primary checkout's `.claude/plans/2026-10-18-pod-owner-script/plan.json`.
+- Add evidence-bound manual settlement of an exact unresolved `owner-script:<runId>` through the existing recovery command. Require the historical full activation binding, positive stopped-domain evidence and an atomic recheck; retain the failed run, inner effects and separate explicit retry.
+- Expose open root keys through the existing recovery view. Do not create grants, change sandbox or macOS privacy permissions, clear unrelated holds, reset queues or replay work as a side effect of settlement.
+- Implemented: historical start/input/activation cross-checks, strict registered-domain confirmation, atomic evidence recheck and honest not-applied/partial receipts. Run/MCP/Map discovery, existing recovery controls and native confirmation preserve the separate retry step and additive legacy compatibility.
+- The working checkpoint passed lint/typecheck, 148 focused checks (37 root-reconciliation cases), app build and six real native guardian/recovery checks. Independent review has no open findings; exact-source gate/merge review follows the final commit. The native case refuses settlement while the real child remains alive, then verifies settlement and recovery readiness only after guardian-confirmed closure.
+- Next: mandatory affected and full deployment gates, native PR expected-head review, then a signed local installation and targeted live recovery. Actual outcomes and remaining OS-consent limitations belong in the separate Test Run.
+
 ## Owner-activated script starts — issue 1512
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1512. Branch `feature/issue-1512-owner-script`, checkout `openape-monorepo.worktrees/owner-script-1512`, canonical base `75251c743afda0ac01298d21e06b5331d7a4aa80`.

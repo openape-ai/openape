@@ -7,6 +7,7 @@ import type { ResourceRegistry } from '../resources/registry'
 import type { Scheduler } from '../scheduling/scheduler'
 import { DomainData } from '../data/domain'
 import { WorkLedger } from '../data/work'
+import { reconcileOwnerScript } from './owner-script'
 
 export class Recovery {
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly scheduler: Scheduler, private readonly helper: string) {}
@@ -22,6 +23,7 @@ export class Recovery {
   }
 
   async resolveHttp(podId: string, runId: string, key: string, applied: boolean, evidence: string, programOutcome?: 'partial'): Promise<void> {
+    if (key === `owner-script:${runId}`) return reconcileOwnerScript(this.store, this.helper, podId, runId, key, applied, evidence, programOutcome)
     const run = this.store.db.prepare('SELECT state FROM runs WHERE id=? AND pod_id=?').get(runId, podId)
     const effect = this.store.db.prepare('SELECT operation,state FROM effect_ledger WHERE pod_id=? AND run_id=? AND effect_key=?').get(podId, runId, key)
     if (!run || run.state === 'running' || !['http.request', 'program.call'].includes(effect?.operation as string) || effect?.state !== 'unknown') throw new Error('HTTP delivery or application write is not awaiting owner review')

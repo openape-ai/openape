@@ -276,15 +276,18 @@ defineExpose({ total })
       </div>
       <div v-for="item in unknown" :key="item.runId + item.key" class="item">
         <div class="row">
-          <span class="pill warn">{{ t('unknown deliveries') }}</span><span class="subj">{{ item.pod.name }}</span><span class="meta mono">{{ item.key }} · {{ item.runId.slice(0, 8) }}</span>
+          <span class="pill warn">{{ item.authority ? t('Uncertain script effects') : t('unknown deliveries') }}</span><span class="subj">{{ item.pod.name }}</span><span class="meta mono">{{ item.key }} · {{ item.runId.slice(0, 8) }}</span>
         </div>
+        <p v-if="item.authority" class="meta">
+          {{ t("Inspect the script's files and destinations. Recording an observation does not retry the run.") }}
+        </p>
         <label class="meta">{{ t('Observation') }} <input v-model="evidence[item.runId + item.key]" maxlength="4000"></label>
         <div class="opts">
-          <button class="secondary" type="button" :disabled="!evidence[item.runId + item.key]?.trim()" @click="emit('command', { channel: 'runs', body: { type: 'resolveHttp', podId: item.pod.id, runId: item.runId, key: item.key, applied: true, evidence: evidence[item.runId + item.key] ?? '' } })">
-            {{ t('Delivered') }}
+          <button class="secondary" type="button" :disabled="!evidence[item.runId + item.key]?.trim()" @click="emit('command', { channel: 'runs', body: { type: 'resolveHttp', podId: item.pod.id, runId: item.runId, key: item.key, applied: true, evidence: evidence[item.runId + item.key] ?? '', ...(item.authority ? { programOutcome: 'partial' as const } : {}) } })">
+            {{ item.authority ? t('Observed partial processing') : t('Delivered') }}
           </button>
           <button class="secondary" type="button" :disabled="!evidence[item.runId + item.key]?.trim()" @click="emit('command', { channel: 'runs', body: { type: 'resolveHttp', podId: item.pod.id, runId: item.runId, key: item.key, applied: false, evidence: evidence[item.runId + item.key] ?? '' } })">
-            {{ t('Not delivered, send again') }}
+            {{ item.authority ? t('No effects observed') : t('Not delivered, send again') }}
           </button>
         </div>
       </div>

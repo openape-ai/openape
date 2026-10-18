@@ -1,11 +1,13 @@
 import { parseRunApproval } from './activity'
 import type { RunApproval } from './activity'
+import type { OpenApeOwnerScriptAuthority } from '@openape/core'
 
 export type RunState = 'running' | 'completed' | 'completedWithGaps' | 'failed' | 'cancelled' | 'blocked' | 'interrupted'
 export interface AutomaticRecovery { retainedInputs?: boolean, disposition: 'retry' | 'isolated' | 'hold' | 'continued', reason: string, nextAt: number | null, attempt: number }
 export interface RunRecord { automaticRecovery?: AutomaticRecovery, id: string, podId: string, scriptHash: string, state: RunState, startedAt: number, finishedAt: number | null, summary: string, error: string | null, checkpointRevision: number, recovery: { state: 'ready' | 'needsReview' | 'retryQueued', error: string | null } | null }
 export interface RunEvent { sequence: number, type: string, data: unknown, at: number }
-export interface RunView { timing?: { activeMs: number, waitingMs: number }, approvals?: (RunApproval & { runId: string })[],  effects?: { key: string, runId: string }[], runs: RunRecord[], events: RunEvent[] }
+export interface RunEffect { key: string, runId: string, authority?: OpenApeOwnerScriptAuthority }
+export interface RunView { timing?: { activeMs: number, waitingMs: number }, approvals?: (RunApproval & { runId: string })[], effects?: RunEffect[], runs: RunRecord[], events: RunEvent[] }
 export type RunCommand = { type: 'openApproval', podId: string, runId: string, grantId: string } | { type: 'openGrant', podId: string, grantId: string } | { type: 'resolveHttp', podId: string, runId: string, key: string, applied: boolean, evidence: string, programOutcome?: 'partial' } | { type: 'list', podId: string, runId?: string, after?: number } | { type: 'installExample', podId: string, variant: 'deterministic' | 'agent' } | { type: 'start', podId: string, expectedScript?: string } | { type: 'cancel', podId: string, runId: string } | { type: 'recover', podId: string, runId: string, action: 'inspect' | 'retry' } | { type: 'retryQueue', podId: string }
 export function parseRunCommand(value: unknown): RunCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid run command')
@@ -27,6 +29,12 @@ export function parseRunView(value: unknown): RunView {
   const view = value as RunView
   if (!Array.isArray(view.runs) || view.runs.length > 100 || !Array.isArray(view.events) || view.events.length > 500) throw new Error('Invalid run view collections')
   if (view.effects && (!Array.isArray(view.effects) || view.effects.length > 100 || view.effects.some(item => typeof item.key !== 'string' || !/^[\w.:-]{1,160}$/.test(item.key) || !/^[a-f0-9-]{36}$/.test(item.runId)))) throw new Error('Invalid HTTP delivery review')
+  for (const effect of view.effects ?? []) {
+    if (effect.authority !== undefined) {
+      parseOwnerScriptAuthority(effect.authority)
+      if (effect.key !== `owner-script:${effect.runId}`) throw new Error('Owner-script review does not match its run')
+    }
+  }
   for (const run of view.runs) {
     if (run?.automaticRecovery && (!['retry', 'isolated', 'hold', 'continued'].includes(run.automaticRecovery.disposition) || typeof run.automaticRecovery.reason !== 'string' || !Number.isSafeInteger(run.automaticRecovery.attempt) || (run.automaticRecovery.nextAt !== null && !Number.isSafeInteger(run.automaticRecovery.nextAt)))) throw new Error('Invalid automatic recovery state')
     if (!run || (run.recovery !== null && (!run.recovery || !['ready', 'needsReview', 'retryQueued'].includes(run.recovery.state) || (run.recovery.error !== null && typeof run.recovery.error !== 'string'))) || !/^[a-f0-9-]{36}$/.test(run.id) || !/^[a-f0-9-]{36}$/.test(run.podId) || !/^[a-f0-9]{64}$/.test(run.scriptHash)
@@ -47,6 +55,14 @@ export function parseRunView(value: unknown): RunView {
     previous = event.sequence
   }
   return view
+}
+
+export function parseOwnerScriptAuthority(value: unknown): OpenApeOwnerScriptAuthority {
+  const authority = value as OpenApeOwnerScriptAuthority
+  if (!authority || typeof authority !== 'object' || Array.isArray(authority) || Object.keys(authority).sort().join(',') !== 'activationId,assignmentRevision,podId,resourceEpoch,scriptHash,source' || authority.source !== 'owner-activation') throw new Error('Invalid owner-script authority')
+  if (typeof authority.activationId !== 'string' || !/^[\w.:-]{1,200}$/.test(authority.activationId) || /[\r\n]/.test(authority.activationId) || typeof authority.podId !== 'string' || !/^[a-f0-9-]{36}$/.test(authority.podId) || typeof authority.scriptHash !== 'string' || !/^[a-f0-9]{64}$/.test(authority.scriptHash) || /[\r\n]/.test(authority.podId + authority.scriptHash)) throw new Error('Invalid owner-script authority binding')
+  if (!Number.isSafeInteger(authority.assignmentRevision) || authority.assignmentRevision < 1 || !Number.isSafeInteger(authority.resourceEpoch) || authority.resourceEpoch < 0) throw new Error('Invalid owner-script authority revision')
+  return { source: 'owner-activation', activationId: authority.activationId, podId: authority.podId, scriptHash: authority.scriptHash, assignmentRevision: authority.assignmentRevision, resourceEpoch: authority.resourceEpoch }
 }
 export interface RunAliases { applications: Record<string, string>, http: Record<string, string>, directories: Record<string, string>, references: Record<string, { id: string, hash: string, path: string }> }
 // Script-facing names for ready local resources, so shared source needs no local identity, path or origin.
