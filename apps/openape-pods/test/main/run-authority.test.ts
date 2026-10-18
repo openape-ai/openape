@@ -55,12 +55,13 @@ it('re-checks the assigned identity before credentials and cancels the run when 
   expect(mocks.close).toHaveBeenCalledTimes(1)
 })
 
-// Actual identity and grant revocation terminate the native process domain in e2e/ape-shell-machine.test.ts.
-it('delegates execution approval to ape-shell and removes its identity on close', async () => {
+// Inner program identity and grant revocation terminate the native domain in e2e/ape-shell-machine.test.ts.
+it('prepares the Pod identity without a root grant and removes it on close', async () => {
   const f = await fixture()
   const prepared = await f.service.executeService(request('shell'))
   expect(prepared).toMatchObject({ machine: { targetHost: 'pods:fixture', issuer: 'https://id.example.test', runtime: { environment: { APES_AUTH_FILE: '/fixture/auth.json', APES_IGNORE_USER_CONFIG: '1' } } } })
-  expect(prepared).toMatchObject({ machine: { summary: { title: 'Run saved script: Synthetic Pod', origin: 'Synthetic Pod', description: expect.stringContaining('Scheduled start') } } })
+  const machine = (prepared as { machine: Record<string, unknown> }).machine
+  for (const field of ['summary', 'grantType', 'waitMs']) expect(machine).not.toHaveProperty(field)
   expect(mocks.authorize).not.toHaveBeenCalled()
   expect(mocks.refresh).not.toHaveBeenCalled()
   expect(mocks.assertActive).not.toHaveBeenCalled()
