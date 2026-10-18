@@ -1,4 +1,5 @@
 import { NonRetryableError } from '../../contracts/infrastructure'
+import type { OpenApeOwnerScriptAuthority } from '@openape/core'
 import type { PreparedMachine, PreparationPurpose } from '../runtime/execution-identity'
 import { launchApeShell } from '../runtime/ape-shell'
 import type { MachineLaunch } from '../runtime/ape-shell'
@@ -15,7 +16,7 @@ import { programInvocation } from '../../runtime/program-invocation'
 import type { ProgramCall } from '../../main/broker/authorization'
 
 export interface ScriptRuntime { reach?: SandboxReach, prepareExecution?: (podId: string, purpose: PreparationPurpose, signal: AbortSignal) => Promise<{ machine: PreparedMachine, close: () => Promise<void> }>, machine?: Omit<MachineLaunch, 'operationId' | 'executableHash' | 'files'> & { issuer?: string }, dependencyRoot?: string, home?: string, registerDomain?: (path: string, ownerPid: number) => void | Promise<void>, helper: string, executable: string, entry: string, runtimeDirectories: string[], environment: Record<string, string> }
-export interface ScriptServices { prepareStart?: (call: ProgramCall) => Promise<void>, execution?: ExecutionObserver, budgetPaused?: () => boolean,  request: (operation: string, payload: unknown, signal: AbortSignal) => Promise<unknown>, event: (type: string, data: unknown) => void }
+export interface ScriptServices { authorizeStart?: () => Promise<OpenApeOwnerScriptAuthority>, prepareStart?: (call: ProgramCall) => Promise<void>, execution?: ExecutionObserver, budgetPaused?: () => boolean,  request: (operation: string, payload: unknown, signal: AbortSignal) => Promise<unknown>, event: (type: string, data: unknown) => void }
 async function interruptible<T>(operation: () => Promise<T>, signal: AbortSignal): Promise<T> {
   signal.throwIfAborted()
   let stop: () => void = () => {}
@@ -50,10 +51,22 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
   const argv = [runtime.entry, '--input-channel', artifact, runtime.dependencyRoot ?? '', input.scriptHash]
   const executableHash = createHash('sha256').update(await readFile(runtime.executable)).digest('hex')
   const files = [{ path: runtime.entry, sha256: createHash('sha256').update(await readFile(runtime.entry)).digest('hex') }, { path: artifact, sha256: input.scriptHash }]
-  if (services.prepareStart) await services.prepareStart(await programInvocation(runtime.executable, executableHash, argv, files, input.workspace, environment))
+  const authorizeStart = services.authorizeStart
+  if (!authorizeStart) throw new Error('Script execution requires its owner activation')
+  const authority = await authorizeStart()
+  if (authority.podId !== input.podId || authority.scriptHash !== input.scriptHash || authority.assignmentRevision !== input.assignmentRevision || authority.resourceEpoch !== input.resourceEpoch) throw new Error('Owner activation does not match this script run')
+  const checkStart = async () => {
+    const current = await authorizeStart()
+    if (Object.entries(authority).some(([key, value]) => current[key as keyof OpenApeOwnerScriptAuthority] !== value)) throw new Error('Owner activation changed before execution')
+    if (services.prepareStart) await services.prepareStart(await programInvocation(runtime.executable, executableHash, argv, files, input.workspace, environment))
+  }
+  await checkStart()
   signal.throwIfAborted()
   const domain = await launchApeShell(runtime.helper, directory, policy, argv, environment, {
     ...runtime.machine,
+    mode: 'owner-script',
+    authority,
+    targetHost: `pods:${input.podId}`,
     operationId: input.runId,
     forwardChannel: true,
     executableHash,
@@ -78,7 +91,7 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
     checkedAt = now
     if (remaining <= 0) { local.abort(new Error('Script exceeded its time limit')); stop() }
   }, 250)
-  let terminal: ScriptResult | undefined; let failure: Error | undefined; let sequence = 0; let logBytes = 0
+  let terminal: ScriptResult | undefined; let terminalError = false; let failure: Error | undefined; let sequence = 0; let logBytes = 0
   const log = (bytes: Buffer) => {
     logBytes += bytes.length
     if (logBytes > 256 * 1024) { failure = new Error('Script diagnostic output exceeded its limit'); stop(); return }
@@ -94,12 +107,12 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
         const text = buffer.slice(0, newline); buffer = buffer.slice(newline + 1)
         if (Buffer.byteLength(text) > input.limits.frameBytes) throw new Error('Script frame exceeds its size limit')
         const frame = parseFrame(JSON.parse(text), input.runId, ++sequence)
-        if (terminal) throw new Error('Script emitted data after its terminal result')
+        if (terminal || terminalError) throw new Error('Script emitted data after its terminal result')
         activeSignal.throwIfAborted()
         if (frame.type === 'result') terminal = parseResult(frame.payload, input)
         if (frame.type === 'error') {
           const message = frame.payload && typeof frame.payload === 'object' && 'message' in frame.payload && typeof frame.payload.message === 'string' ? frame.payload.message : 'Script failed without an error message'
-          throw new Error(message.slice(0, 4000))
+          failure = new Error(message.slice(0, 4000)); terminalError = true; continue
         }
         if (frame.type === 'log') services.event('log', frame.payload)
         if (frame.type === 'request') {
@@ -125,7 +138,7 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
   })()
   try {
     const pid = await domain.processId; services.event('process', { pid })
-    const observed = await observeExecution(domain, input.runId, { ...services.execution!, starting: () => { checkedAt = Date.now(); executing = true; services.execution!.starting?.() } }, activeSignal).catch((error: unknown) => {
+    const observed = await observeExecution(domain, input.runId, { ...services.execution!, authorized: async (value) => { await checkStart(); await services.execution!.authorized(value) }, starting: () => { checkedAt = Date.now(); executing = true; services.execution!.starting?.() } }, activeSignal, authority).catch((error: unknown) => {
       // Keep the script diagnostic without treating a missing execution receipt as safe to replay.
       if (failure) throw new NonRetryableError(`${failure.message}; ${error instanceof Error ? error.message : 'Execution receipt is unavailable'}`)
       throw error

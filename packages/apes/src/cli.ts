@@ -61,9 +61,9 @@ declare const __VERSION__: string
 // indirectly via the ape-shell-wrapper.sh shim.
 const shellRewrite = rewriteApeShellArgs(process.argv, process.argv0)
 if (shellRewrite) {
-  if (shellRewrite.action === 'machine') {
+  if (shellRewrite.action === 'machine' || shellRewrite.action === 'owner-script') {
     const { runMachineRequest } = await import('./authorization/machine.js')
-    process.exit(await runMachineRequest())
+    process.exit(await runMachineRequest(shellRewrite.action === 'owner-script' ? 'owner-script' : 'program'))
   }
   else if (shellRewrite.action === 'rewrite') {
     process.argv = shellRewrite.argv
@@ -80,6 +80,7 @@ if (shellRewrite) {
     console.log('  ape-shell -c <command>    Run a single command through the grant flow')
     console.log('  ape-shell -c -- <program> [args...]    Authorize exact arguments without shell interpretation')
     console.log('  ape-shell -c --request-fd 6           Receive a supervised request on the private control channel')
+    console.log('  ape-shell --run-script --request-fd 6 Run an owner-activated script from its trusted controller')
     console.log('  ape-shell -i | -l         Force interactive mode')
     console.log('')
     console.log('Options:')

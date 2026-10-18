@@ -5,6 +5,7 @@ import { ProgramState } from '../src/main/programs/state'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { executeScript } from '../src/worker/runs/runner'
+import { ownerScriptAuthority } from '../src/worker/runs/owner-script'
 import type { RunInput } from '../src/contracts/runs'
 import { createHash, generateKeyPairSync, randomUUID, sign } from 'node:crypto'
 import { createServer } from 'node:http'
@@ -13,12 +14,13 @@ import { mkdtemp, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promi
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { computeArgvHash } from '@openape/grants'
+import type { OpenApeOwnerScriptAuthority } from '@openape/core'
 import { afterEach, describe, expect, it } from 'vitest'
 import { launchApeShell } from '../src/worker/runtime/ape-shell'
 import { inspectDomainRecords } from '../src/worker/recovery/domains'
 import type { ProcessDomain } from '../src/worker/runtime/sandbox'
 import { observeExecution } from '../src/main/programs/execution'
-import type { ExecutionObserver } from '../src/main/programs/execution'
+import type { ExecutionAuthorization, ExecutionObserver } from '../src/main/programs/execution'
 import { PodDatabase } from '../src/worker/storage/database'
 import { ResourceRegistry } from '../src/worker/resources/registry'
 import { installExample } from '../src/worker/runs/examples'
@@ -45,7 +47,7 @@ async function fixture(code = 'console.log(JSON.stringify(process.argv.slice(1))
   await writeFile(script, `import fs from 'node:fs'; fs.writeFileSync(${JSON.stringify(marker)}, 'executed'); ${code}`)
   const keys = generateKeyPairSync('ed25519')
   let origin = ''
-  const state = { answer: 'approved', active: true, grantActive: true, consumes: 0, grantType: 'always', subject: 'pod@example.test', argvHash: '', fileHash: '', requests: [] as string[], calls: [] as { program: { name: string }, argv: string[], files?: { path: string, sha256: string }[] }[] }
+  const state = { answer: 'approved', authorizationStatus: 200, active: true, grantActive: true, consumes: 0, grantType: 'always', subject: 'pod@example.test', argvHash: '', fileHash: '', requests: [] as string[], calls: [] as { program: { name: string }, argv: string[], files?: { path: string, sha256: string }[] }[] }
   const server = createServer((request, response) => {
     const handle = async () => {
       response.setHeader('content-type', 'application/json')
@@ -55,6 +57,7 @@ async function fixture(code = 'console.log(JSON.stringify(process.argv.slice(1))
       if (request.url === '/api/grants/authorize') {
         let text = ''; for await (const chunk of request) text += chunk
         const body = JSON.parse(text); state.calls.push(body)
+        if (state.authorizationStatus !== 200) { response.writeHead(state.authorizationStatus).end(JSON.stringify({ type: 'https://openape.org/errors/broker_unavailable', title: 'Synthetic upstream broker unavailable (502)', status: state.authorizationStatus })); return }
         if (state.answer === 'pending') { response.end(JSON.stringify({ state: 'pending', grant_id: 'grant', approval_url: `${origin}/grant` })); return }
         if (state.answer !== 'approved') { response.writeHead(403).end(JSON.stringify({ state: state.answer, grant_id: 'grant' })); return }
         const now = Math.floor(Date.now() / 1000)
@@ -80,16 +83,18 @@ async function fixture(code = 'console.log(JSON.stringify(process.argv.slice(1))
   const bundle = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents')
   const executable = await realpath(packaged ? join(bundle, 'MacOS/OpenApe Pods Fixture') : process.execPath)
   const helper = packaged ? join(bundle, 'Resources/app.asar.unpacked/dist/native/pods-helper') : resolve('dist/native/pods-helper')
-  async function launch(options: { terminal?: boolean, waitMs?: number, argv?: string[], onAuthorized?: () => Promise<void>, acknowledge?: boolean, owner?: boolean, observer?: ExecutionObserver } = {}) {
+  const ownerAuthority: OpenApeOwnerScriptAuthority = { source: 'owner-activation', activationId: randomUUID(), podId: randomUUID(), scriptHash: digest(await readFile(script)), assignmentRevision: 1, resourceEpoch: 1 }
+  async function launch(options: { terminal?: boolean, waitMs?: number, argv?: string[], onAuthorized?: () => Promise<void>, acknowledge?: boolean, owner?: boolean, ownerAuthority?: OpenApeOwnerScriptAuthority, observer?: ExecutionObserver } = {}) {
     const operationId = randomUUID()
     const domain = await launchApeShell(helper, privateRoot, { executable, workspace, readFiles: [script], runtimeDirectories: packaged ? [bundle] : [], ...(options.owner ? { reach: { level: 'owner' as const, protectedPaths: [privateRoot], deny: [] } } : {}) }, options.argv ?? [script], { HOME: workspace, TMPDIR: workspace, ...(packaged ? { ELECTRON_RUN_AS_NODE: '1' } : {}) }, {
-      runtime: { executable, cli: packaged ? join(bundle, 'Resources/apes/ape-shell.mjs') : resolve('dist/vendor/apes/ape-shell.mjs'), environment: { HOME: privateRoot, APES_AUTH_FILE: auth } },
+      runtime: { executable, cli: packaged ? join(bundle, 'Resources/apes/ape-shell.mjs') : resolve('dist/vendor/apes/ape-shell.mjs'), environment: { HOME: privateRoot, ...options.ownerAuthority ? {} : { APES_AUTH_FILE: auth } } },
       operationId,
-      targetHost: 'fixture-mac',
+      targetHost: options.ownerAuthority ? `pods:${options.ownerAuthority.podId}` : 'fixture-mac',
       executableHash: digest(await readFile(executable)),
       files: [{ path: script, sha256: digest(await readFile(script)) }],
-      waitMs: options.waitMs ?? 0,
-      grantType: state.grantType as 'always' | 'once',
+      ...options.ownerAuthority
+        ? { mode: 'owner-script' as const, authority: options.ownerAuthority }
+        : { waitMs: options.waitMs ?? 0, grantType: state.grantType as 'always' | 'once' },
     }, undefined, options.terminal)
     domains.push(domain)
     let stdout = ''; let stderr = ''; let buffer = ''
@@ -112,12 +117,42 @@ async function fixture(code = 'console.log(JSON.stringify(process.argv.slice(1))
       })
     }
     await domain.processId
-    return { domain, events, observed, output: () => ({ stdout, stderr, events }), async completed() { const code = await domain.completed; await callback; return { code, stdout, stderr, events } } }
+    return { operationId, domain, events, observed, output: () => ({ stdout, stderr, events }), async completed() { const code = await domain.completed; await callback; return { code, stdout, stderr, events } } }
   }
-  return { state, marker, script, workspace, privateRoot, root, helper, executable, origin, auth, launch }
+  return { state, marker, script, workspace, privateRoot, root, helper, executable, origin, auth, ownerAuthority, launch }
 }
 
 describe('ape-shell machine native boundary', () => {
+  it('runs an owner-activated script without an IdP call while preserving sandbox and private-channel isolation', async () => {
+    const setup = await fixture(`let controlClosed=false; try { fs.writeSync(6,'forged') } catch { controlClosed=true }; let outsideDenied=false; try { fs.readFileSync(new URL('./outside.txt',import.meta.url)) } catch(error) { outsideDenied=['EPERM','EACCES'].includes(error.code) }; console.log(JSON.stringify({controlClosed,outsideDenied}));`)
+    await writeFile(join(setup.root, 'outside.txt'), 'Unavailable outside the sandbox')
+    await rm(setup.auth)
+    setup.state.answer = 'denied'
+    const run = await setup.launch({ ownerAuthority: setup.ownerAuthority })
+    const result = await run.completed()
+
+    expect(result.code, result.stderr).toBe(0)
+    expect(existsSync(setup.marker)).toBe(true)
+    expect(JSON.parse(result.stdout)).toEqual({ controlClosed: true, outsideDenied: true })
+    expect(result.events.map(event => event.state)).toEqual(['authorized', 'starting', 'started', 'completed'])
+    expect(result.events[0]).toEqual({ version: 1, operationId: run.operationId, state: 'authorized', authority: setup.ownerAuthority, write: false })
+    expect(setup.state.requests).toEqual([])
+    expect(setup.state.calls).toEqual([])
+    expect(setup.state.consumes).toBe(0)
+  })
+
+  it('refuses an owner activation that does not bind the script before starting or contacting an IdP', async () => {
+    const setup = await fixture()
+    await rm(setup.auth)
+    const result = await (await setup.launch({ ownerAuthority: { ...setup.ownerAuthority, scriptHash: '0'.repeat(64) } })).completed()
+
+    expect(result.code).not.toBe(0)
+    expect(result.events.at(-1)).toMatchObject({ state: 'not-started' })
+    expect(result.events.some(event => event.state === 'authorized' || event.state === 'started')).toBe(false)
+    expect(existsSync(setup.marker)).toBe(false)
+    expect(setup.state.requests).toEqual([])
+  })
+
   it.each(['approved', 'denied'])('forwards an external application wrapper to the actual program with an %s decision', async (answer) => {
     const setup = await fixture('console.log("external-forwarded")'); setup.state.answer = answer
     const podId = randomUUID(); const applicationId = randomUUID()
@@ -142,7 +177,7 @@ describe('ape-shell machine native boundary', () => {
     finally { shell.close(); await shell.completed }
   })
 
-  it.each(['approved', 'denied'])('validates a user script only after the shared %s decision', async (answer) => {
+  it.each(['approved', 'denied'])('validates a user script with owner authority when the IdP would answer %s', async (answer) => {
     const setup = await fixture(); setup.state.answer = answer
     const store = new PodDatabase(join(setup.root, 'validation-store'))
     const pod = store.createPod({ name: 'Synthetic validation' }); const resources = new ResourceRegistry(store, () => {})
@@ -150,13 +185,11 @@ describe('ape-shell machine native boundary', () => {
     store.db.prepare('INSERT INTO script_drafts VALUES(?,?,?,?,?,?,NULL,NULL)').run(draftId, pod.id, 1, pod.bindingRevision, 'export async function run(){ return {status:"completed",summary:"Validated through ape-shell",completedInputIds:[],gapIds:[]} }', '[]')
     const runtime = { helper: setup.helper, executable: setup.executable, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: '', catalog: '', sdkHost: '', manifest: resolve('dist/vendor/manifest.json'), prepareExecution: async () => ({ machine: { runtime: { executable: setup.executable, cli: resolve('dist/vendor/apes/ape-shell.mjs'), environment: { APES_AUTH_FILE: setup.auth } }, targetHost: 'fixture-mac', waitMs: 0 }, close: async () => { closed = true } }) }
     try {
-      const validate = validateDraft(store, resources, runtime, draftId, 1, AbortSignal.timeout(10000))
-      if (answer === 'approved') expect(await validate).toMatchObject({ status: 'completed' })
-      else await expect(validate).rejects.toThrow()
+      expect(await validateDraft(store, resources, runtime, draftId, 1, AbortSignal.timeout(10000))).toMatchObject({ status: 'completed' })
       expect(closed).toBe(true)
-      expect(setup.state.calls).toHaveLength(1)
-      expect(setup.state.calls[0]!.files).toHaveLength(2)
-      expect(store.db.prepare('SELECT count(*) AS n FROM validations').get()!.n).toBe(answer === 'approved' ? 1 : 0)
+      expect(setup.state.calls).toEqual([])
+      expect(setup.state.requests).toEqual([])
+      expect(store.db.prepare('SELECT count(*) AS n FROM validations').get()!.n).toBe(1)
     }
     finally { store.close() }
   })
@@ -178,17 +211,21 @@ describe('ape-shell machine native boundary', () => {
         waitMs: 0,
       },
     }
-    const input = (value: string): RunInput => ({ version: 1, runId: randomUUID(), podId: randomUUID(), scriptHash: digest(source), assignmentRevision: 1, reason: 'manual', eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: 0, workspace: setup.workspace, home: setup.workspace, references: [], variables: { value }, limits: { timeMs: 10000, frameBytes: 256 * 1024 } })
+    const podId = randomUUID()
+    const input = (value: string): RunInput => ({ version: 1, runId: randomUUID(), podId, scriptHash: digest(source), assignmentRevision: 1, reason: 'manual', eventIds: [], checkpointRevision: 0, checkpoint: {}, resourceEpoch: 0, workspace: setup.workspace, home: setup.workspace, references: [], variables: { value }, limits: { timeMs: 10000, frameBytes: 256 * 1024 } })
+    const runs: RunInput[] = []
+    const authorizations: ExecutionAuthorization[] = []
     for (const value of ['first run', 'second run']) {
-      const run = input(value); const directory = join(setup.privateRoot, 'runs', run.runId)
-      expect(await executeScript(runtime, directory, setup.script, run, AbortSignal.timeout(10000), { execution: { authorized: async () => {} }, event: () => {}, request: async () => { throw new Error('Unexpected service') } })).toMatchObject({ status: 'completed', summary: value })
+      const run = input(value); runs.push(run)
+      const directory = join(setup.privateRoot, 'runs', run.runId)
+      expect(await executeScript(runtime, directory, setup.script, run, AbortSignal.timeout(10000), { authorizeStart: async () => ownerScriptAuthority(run), execution: { authorized: async (value) => { authorizations.push(value) } }, event: () => {}, request: async () => { throw new Error('Unexpected service') } })).toMatchObject({ status: 'completed', summary: value })
       expect(await readFile(setup.marker, 'utf8')).toBe(value)
       expect(existsSync(join(directory, 'input.json'))).toBe(false)
     }
-    expect(setup.state.calls).toHaveLength(2)
-    expect(setup.state.calls[0]!.argv).toEqual(setup.state.calls[1]!.argv)
-    expect(setup.state.calls[0]!.files).toEqual(setup.state.calls[1]!.files)
-    expect(setup.state.calls[0]!.files).toContainEqual({ path: expect.stringContaining('/script-artifacts/'), sha256: digest(source) })
+    expect(authorizations).toEqual(runs.map(run => ({ authority: ownerScriptAuthority(run), write: false })))
+    expect(await readFile(join(setup.privateRoot, 'runs', 'script-artifacts', `${digest(source)}.mjs`), 'utf8')).toBe(source)
+    expect(setup.state.calls).toEqual([])
+    expect(setup.state.requests).toEqual([])
   })
 
   it('confines an isolated parser to its pinned input, without the Pod workspace or identity', async () => {
@@ -334,6 +371,20 @@ describe('ape-shell machine native boundary', () => {
     expect(result.code).not.toBe(0)
     expect(existsSync(setup.marker)).toBe(false)
     expect(result.events.some(event => event.state === 'started')).toBe(false)
+    if (answer === 'denied' || answer === 'revoked') expect(result.events.at(-1)).toMatchObject({ state: 'not-started', failure: { kind: 'permission', state: answer, grantId: 'grant' } })
+  })
+
+  it('reports an authorization HTTP 503 as infrastructure before dispatch without starting the target', async () => {
+    const setup = await fixture()
+    setup.state.authorizationStatus = 503
+    const result = await (await setup.launch()).completed()
+
+    expect(result.code).not.toBe(0)
+    expect(result.events).toHaveLength(1)
+    expect(result.events[0]).toMatchObject({ state: 'not-started', failure: { kind: 'infrastructure', phase: 'authorization', status: 503 } })
+    expect(existsSync(setup.marker)).toBe(false)
+    expect(setup.state.calls).toHaveLength(1)
+    expect(setup.state.consumes).toBe(0)
   })
 
   it('refuses a timed-out decision and foreign command tokens before dispatch', async () => {
@@ -380,12 +431,13 @@ describe('ape-shell machine native boundary', () => {
     await inspectDomainRecords([{ path: run.domain.recordPath, owner_pid: process.pid }], setup.privateRoot, setup.helper)
   })
 
-  it('refuses script replacement after authorization and before the effect acknowledgement', async () => {
+  it.each(['grant', 'owner-script'] as const)('refuses script replacement after %s authorization and before the effect acknowledgement', async (mode) => {
     const setup = await fixture()
-    const result = await (await setup.launch({ onAuthorized: () => writeFile(setup.script, 'console.log("substituted")') })).completed()
+    const result = await (await setup.launch({ ...mode === 'owner-script' ? { ownerAuthority: setup.ownerAuthority } : {}, onAuthorized: () => writeFile(setup.script, 'console.log("substituted")') })).completed()
     expect(result.code).not.toBe(0)
     expect(existsSync(setup.marker)).toBe(false)
     expect(result.events.map(event => event.state)).toEqual(['authorized', 'not-started'])
+    if (mode === 'owner-script') expect(setup.state.requests).toEqual([])
   })
 
   it('does not execute without the durable-effect acknowledgement', async () => {

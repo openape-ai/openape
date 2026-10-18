@@ -9,6 +9,7 @@ import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { installExample } from '../../src/worker/runs/examples'
 import { EffectLedger } from '../../src/worker/recovery/effects'
 import { executeHttpEffect } from '../../src/worker/runs/http'
+import { InfrastructureError, PermissionUnavailableError } from '../../src/contracts/infrastructure'
 
 const roots: string[] = []; const stores: PodDatabase[] = []
 afterEach(() => { for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
@@ -38,6 +39,37 @@ it('marks failed delivery unknown and prevents an automatic second request', asy
   expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()?.state).toBe('unknown')
   await expect(executeHttpEffect(f.ledger, f.pod.id, f.run.id, request, send)).rejects.toThrow('unknown')
   expect(deliveries).toBe(1)
+})
+
+it('drops only an intent refused by the trusted authorization broker before delivery', async () => {
+  const f = fixture(); let deliveries = 0
+  const refused = new PermissionUnavailableError('Grant is denied')
+  await expect(executeHttpEffect(f.ledger, f.pod.id, f.run.id, request, async () => { throw refused })).rejects.toBe(refused)
+  expect(f.store.db.prepare('SELECT * FROM effect_ledger').all()).toEqual([])
+  const send = async () => { deliveries++; return { status: 200, headers: {}, body: '{}' } }
+  await expect(executeHttpEffect(f.ledger, f.pod.id, f.run.id, request, send)).resolves.toMatchObject({ status: 200 })
+  expect(deliveries).toBe(1)
+  expect(() => f.ledger.notStarted(f.pod.id, f.run.id, request.key)).toThrow('not awaiting dispatch')
+  expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()?.state).toBe('completed')
+})
+
+it('cannot remove an uncertain delivery using a later permission refusal', async () => {
+  const f = fixture()
+  await expect(executeHttpEffect(f.ledger, f.pod.id, f.run.id, request, async () => { throw new Error('Grant is denied') })).rejects.toThrow('Grant is denied')
+  let checks = 0
+  await expect(executeHttpEffect(f.ledger, f.pod.id, f.run.id, request, async () => { checks++; throw new PermissionUnavailableError('Grant is denied') })).rejects.toThrow('unknown')
+  expect(checks).toBe(0)
+  expect(() => f.ledger.notStarted(f.pod.id, f.run.id, request.key)).toThrow('not awaiting dispatch')
+  expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()?.state).toBe('unknown')
+})
+
+it('clears only typed authorization outages and retains delivery uncertainty', async () => {
+  for (const phase of ['authorization', 'read'] as const) {
+    const f = fixture()
+    const failure = new InfrastructureError({ phase, retryAfterMs: 0 })
+    await expect(executeHttpEffect(f.ledger, f.pod.id, f.run.id, request, async () => { throw failure })).rejects.toBe(failure)
+    expect(f.store.db.prepare('SELECT state FROM effect_ledger').all()).toEqual(phase === 'authorization' ? [] : [{ state: 'unknown' }])
+  }
 })
 
 it('requires owner review of a mutating HTTP error response instead of retaining an unusable retry receipt', async () => {

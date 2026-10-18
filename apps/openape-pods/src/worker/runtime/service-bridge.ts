@@ -1,4 +1,4 @@
-import { AuthorityError, InfrastructureError, NonRetryableError, infrastructureFailure } from '../../contracts/infrastructure'
+import { AuthorityError, InfrastructureError, NonRetryableError, PermissionUnavailableError, infrastructureFailure } from '../../contracts/infrastructure'
 import { randomUUID } from 'node:crypto'
 import type { ServiceKind, ServiceScope } from '../../contracts/services'
 import type { ScriptSummary } from '../../contracts/grant-summary'
@@ -13,11 +13,11 @@ export class ServiceBridge {
   constructor(private readonly send: (value: unknown) => void) {}
   accept(value: unknown): void {
     if (!value || typeof value !== 'object') throw new Error('Invalid service broker reply')
-    const reply = value as { id?: string, error?: string, value?: unknown, infrastructure?: unknown, authority?: boolean, nonRetryable?: boolean }
+    const reply = value as { id?: string, error?: string, value?: unknown, infrastructure?: unknown, authority?: boolean, permissionUnavailable?: boolean, nonRetryable?: boolean }
     const pending = reply.id ? this.pending.get(reply.id) : undefined
     if (!pending || !reply.id) throw new Error('Unexpected service broker reply')
     this.pending.delete(reply.id)
-    if (reply.error) pending.reject(reply.authority === true ? new AuthorityError(reply.error) : reply.infrastructure ? new InfrastructureError(infrastructureFailure(reply.infrastructure)) : reply.nonRetryable === true ? new NonRetryableError(reply.error) : new Error(reply.error))
+    if (reply.error) pending.reject(reply.permissionUnavailable === true ? new PermissionUnavailableError(reply.error) : reply.authority === true ? new AuthorityError(reply.error) : reply.infrastructure ? new InfrastructureError(infrastructureFailure(reply.infrastructure)) : reply.nonRetryable === true ? new NonRetryableError(reply.error) : new Error(reply.error))
     else pending.resolve(reply.value)
   }
 

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { setTimeout as delay } from 'node:timers/promises'
 import { afterEach, expect, it, vi } from 'vitest'
-import { InfrastructureError, NonRetryableError, retryInfrastructure, transientNetwork, transientResponse } from '../src/contracts/infrastructure'
+import { InfrastructureError, NonRetryableError, PermissionUnavailableError, retryInfrastructure, transientNetwork, transientResponse } from '../src/contracts/infrastructure'
 import { recoveryDecision } from '../src/worker/recovery/policy'
 import { ServiceBridge } from '../src/worker/runtime/service-bridge'
 
@@ -76,6 +76,19 @@ it('carries a non-retryable tool failure through broker IPC and never schedules 
   await rejected
   expect(recoveryDecision({ cause: 'non-retryable' }, 0, null, 1000)).toMatchObject({ disposition: 'isolated', nextAt: null })
   expect(recoveryDecision({ cause: 'failure' }, 0, null, 1000)).toMatchObject({ disposition: 'retry' })
+})
+
+it('keeps permission waits distinct from invalid authority across broker IPC', async () => {
+  const send = vi.fn()
+  const bridge = new ServiceBridge(send)
+  const scope = { podId: 'pod', runId: 'run', epoch: 0, assignmentRevision: 1, capabilities: [] }
+  const work = bridge.execute(scope, {}, new AbortController().signal, 'http')
+  const rejected = expect(work).rejects.toBeInstanceOf(PermissionUnavailableError)
+  bridge.accept({ id: send.mock.calls[0]![0].service.id, error: 'Permission denied', authority: true, permissionUnavailable: true })
+  await rejected
+  expect(recoveryDecision({ cause: 'permission' }, 0, null, 1000)).toMatchObject({ disposition: 'isolated', nextAt: null })
+  expect(recoveryDecision({ cause: 'authority' }, 0, null, 1000)).toMatchObject({ disposition: 'hold', nextAt: null })
+  expect(recoveryDecision({ cause: 'permission' }, 0, 'External outcome requires review', 1000)).toMatchObject({ disposition: 'hold', nextAt: null })
 })
 
 it('parks broker calls that wait for an IdP decision outside the queue limit and the call timeout', async () => {

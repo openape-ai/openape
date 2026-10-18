@@ -38,22 +38,21 @@ it('authorizes only one pinned owner CLI start and leaves downstream calls pendi
   Object.assign(f.worker, { cliStarts: new Map([[podId, { scriptHash, runId, owner }]]) })
   f.store.db.prepare('INSERT INTO pod_descriptions(pod_id,body) VALUES(?,?)').run(podId, 'Owner-provided context for the selected Pod')
   const run = f.start(podId, runId, 'manual', f.store.getPod(podId).name)
-  const prepared = await run.run as { machine: { summary: unknown } }
+  await run.run
   const artifact = join(f.store.root, 'runs/script-artifacts', `${scriptHash}.mjs`)
   const call = { program: { name: basename(process.execPath), sha256: hash(readFileSync(process.execPath)) }, argv: [entry, '--input-channel', artifact, '', scriptHash], files: [{ path: artifact, sha256: scriptHash }, { path: entry, sha256: hash(readFileSync(entry)) }] }
   await expect(run.call('scriptGrant', call)).resolves.toBe(true)
-  expect(idp.state.decisions).toEqual([{ action: 'approve', id: 'grant-1', bearer: ownerToken, body: { grant_type: 'once' } }])
-  expect(idp.state.authorizations[0]).toMatchObject({ ...call, grant_type: 'once' })
-  expect(idp.state.authorizations[0].summary).toEqual(prepared.machine.summary)
-  expect(idp.state.authorizations[0].summary).toMatchObject({ title: 'Run saved script: Pod 0001', description: expect.stringContaining('Pod context:\nOwner-provided context for the selected Pod') })
+  expect(idp.state.decisions).toEqual([])
+  expect(idp.state.authorizations).toEqual([])
   const authority = new AgentAuthority(f.connection(podId), undefined, f.grants.port(podId))
   await expect(authority.requestProgram({ ...call, argv: ['-e', 'console.log(2 + 2)'] }, AbortSignal.timeout(1000))).resolves.toMatchObject({ state: 'pending' })
   await expect(run.call('scriptGrant', call)).resolves.toBe(true)
-  expect(idp.state.decisions).toHaveLength(1)
+  expect(idp.state.decisions).toEqual([])
+  expect(idp.state.authorizations).toHaveLength(1)
   expect(owner.active).toBe(false)
 })
 
-it.each(['foreign-run', 'changed-script', 'ended-session'])('refuses %s before automatically deciding a CLI start grant', async (change) => {
+it.each(['foreign-run', 'changed-script', 'ended-session'])('refuses %s before accepting an owner CLI start', async (change) => {
   const f = await workerFixture(); const owner = session(); const runId = randomUUID()
   if (change === 'ended-session') await owner.close()
   const run = f.start(podId, runId); await run.run

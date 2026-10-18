@@ -5,7 +5,7 @@ import { getAuthToken, getIdpUrl, loadAuth, loadConfig, saveAuth } from './confi
 const debug = process.argv.includes('--debug')
 
 export class ApiError extends Error {
-  constructor(public statusCode: number, message: string, public problemDetails?: Record<string, unknown>) {
+  constructor(public statusCode: number, message: string, public problemDetails?: Record<string, unknown>, public retryAfterMs = 0) {
     super(message)
     this.name = 'ApiError'
   }
@@ -299,6 +299,9 @@ export async function apiFetch<T = unknown>(
   }
 
   if (!response.ok) {
+    const retryAfter = response.headers.get('retry-after')
+    const delayMs = retryAfter && /^\d+$/.test(retryAfter) ? Number(retryAfter) * 1000 : retryAfter ? Date.parse(retryAfter) - Date.now() : 0
+    const retryAfterMs = Number.isFinite(delayMs) ? Math.min(60000, Math.max(0, Math.ceil(delayMs))) : 0
     const contentType = response.headers.get('content-type') || ''
 
     // Parse RFC 7807 Problem Details
@@ -306,7 +309,7 @@ export async function apiFetch<T = unknown>(
       try {
         const problem = await response.json() as Record<string, unknown>
         const message = (problem.detail as string) || (problem.title as string) || (problem.statusMessage as string) || (problem.message as string) || `${response.status} ${response.statusText}`
-        throw new ApiError(response.status, message, problem)
+        throw new ApiError(response.status, message, problem, retryAfterMs)
       }
       catch (e) {
         if (e instanceof ApiError)
@@ -315,7 +318,7 @@ export async function apiFetch<T = unknown>(
     }
 
     const text = await response.text()
-    throw new ApiError(response.status, text || `${response.status} ${response.statusText}`)
+    throw new ApiError(response.status, text || `${response.status} ${response.statusText}`, undefined, retryAfterMs)
   }
 
   return response.json() as Promise<T>

@@ -1,6 +1,7 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Pod execution permission is {p0}; review the Pod permissions before retrying',
   'Script validation failed; previous active script is unchanged (Pod {p0})',
   'Run {p0} is missing; inspect before retrying',
   'Demo: {p0} is unavailable here. Nothing outside the demo was changed.',
