@@ -163,6 +163,29 @@ describe('Entscheidungen', () => {
     expect(action.element.tagName).toBe('BUTTON')
   })
 
+  it('records honest owner-root observations without retrying or changing inner-effect decisions', async () => {
+    const rootView = structuredClone(view)
+    const pod = rootView.pods.find(item => item.unknown.length)!
+    const runId = '00000000-0000-4000-8000-000000000002'; const key = `owner-script:${runId}`
+    pod.unknown = [{ key, runId, authority: { source: 'owner-activation', activationId: 'synthetic-activation', podId: pod.id, scriptHash: 'a'.repeat(64), assignmentRevision: 1, resourceEpoch: 0 } }]
+    await mountInbox({ view: rootView })
+    const root = wrapper!.findAll('[data-testid="reconcile"] .item').find(item => item.text().includes(key))!
+    expect(root.text()).toContain('Ungewisse Skriptwirkungen')
+    expect(root.text()).toContain('Das Erfassen einer Beobachtung wiederholt den Lauf nicht.')
+    const [partial, none] = root.findAll('button')
+    expect(partial!.text()).toBe('Teilweise Verarbeitung beobachtet')
+    expect(none!.text()).toBe('Keine Wirkungen beobachtet')
+    expect(partial!.attributes('disabled')).toBeDefined()
+    await root.get('input').setValue('Synthetic effect evidence')
+    await partial!.trigger('click')
+    await none!.trigger('click')
+    expect(wrapper!.emitted('command')).toEqual([
+      [{ channel: 'runs', body: { type: 'resolveHttp', podId: pod.id, runId, key, applied: true, programOutcome: 'partial', evidence: 'Synthetic effect evidence' } }],
+      [{ channel: 'runs', body: { type: 'resolveHttp', podId: pod.id, runId, key, applied: false, evidence: 'Synthetic effect evidence' } }],
+    ])
+    expect(wrapper!.emitted('domain')).toBeUndefined()
+  })
+
   it('links a requested Pod grant to its IdP page in the browser', async () => {
     await mountInbox({ domain: null, desktop: false, inboxUrl: '/inbox/' })
     const link = wrapper!.find('[data-testid="rights"] [data-right="grant"] a.idp')

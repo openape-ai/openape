@@ -1,4 +1,6 @@
 import type { ScheduleSpec } from './scheduling'
+import type { RunEffect } from './runs'
+import { parseOwnerScriptAuthority } from './runs'
 import { normalizeTags } from './tags'
 
 /**
@@ -46,7 +48,7 @@ export interface MapPod {
   grants?: MapGrant[]
   /** Failed, interrupted and blocked runs started in the window; older publishers omit it. */
   failures?: number
-  unknown: { key: string, runId: string }[]
+  unknown: RunEffect[]
   tags?: MapTags
 }
 /** `data` runs from the writer Pod of a namespace to each reader Pod; channel names the namespace. */
@@ -122,6 +124,13 @@ export function parseMapView(value: unknown): MapView {
     tags(pod.tags)
     if (pod.failures !== undefined) integer(pod.failures)
     if (pod.grants !== undefined) grants(pod.grants)
+    for (const item of Array.isArray(pod.unknown) ? pod.unknown : []) {
+      const effect = object(item)
+      if (effect.authority !== undefined) {
+        const authority = parseOwnerScriptAuthority(effect.authority)
+        if (authority.podId !== id || typeof effect.runId !== 'string' || !/^[a-f0-9-]{36}$/.test(effect.runId) || effect.key !== `owner-script:${effect.runId}`) throw new Error('Owner-script review does not match its run')
+      }
+    }
     const data = object(pod.data)
     for (const path of [...list(data.writes, mapLimits.namespaces), ...list(data.reads, mapLimits.namespaces)]) text(path, 200)
     const work = object(pod.work); integer(work.pending); integer(work.held)

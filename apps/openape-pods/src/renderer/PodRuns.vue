@@ -160,15 +160,15 @@ export default defineComponent({
         </p>
       </section>
       <section v-if="view.effects?.length" class="http-review">
-        <h3>{{ t('Check the delivery before retrying') }}</h3>
-        <p>{{ t('Inspect the destination before retrying. Pods cannot tell whether a request without a receipt was delivered.') }}</p>
+        <h3>{{ t('Review uncertain effects') }}</h3>
         <article v-for="effect in view.effects" :key="effect.key">
+          <p>{{ effect.authority ? t("Inspect the script's files and destinations. Recording an observation does not retry the run.") : t('Inspect the destination before retrying. Pods cannot tell whether a request without a receipt was delivered.') }}</p>
           <label>{{ t('Your observation') }}<textarea v-model="observations[effect.key]" maxlength="4000" /></label>
-          <button :disabled="busy || !observations[effect.key]?.trim()" @click="act({ type: 'resolveHttp', podId, runId: effect.runId, key: effect.key, applied: true, evidence: observations[effect.key] ?? '' })">
-            {{ t('Already delivered') }}
+          <button :disabled="busy || !observations[effect.key]?.trim()" @click="act({ type: 'resolveHttp', podId, runId: effect.runId, key: effect.key, applied: true, evidence: observations[effect.key] ?? '', ...(effect.authority ? { programOutcome: 'partial' as const } : {}) })">
+            {{ effect.authority ? t('Observed partial processing') : t('Already delivered') }}
           </button>
           <button :disabled="busy || !observations[effect.key]?.trim()" @click="act({ type: 'resolveHttp', podId, runId: effect.runId, key: effect.key, applied: false, evidence: observations[effect.key] ?? '' })">
-            {{ t('Not delivered · allow retry') }}
+            {{ effect.authority ? t('No effects observed') : t('Not delivered · allow retry') }}
           </button>
           <small>{{ effect.key }}</small>
         </article>
