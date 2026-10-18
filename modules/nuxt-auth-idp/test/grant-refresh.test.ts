@@ -77,6 +77,103 @@ it('ignores a decision response that belongs to the previously displayed approva
   expect(navigate).not.toHaveBeenCalled()
 })
 
+it.each([
+  ['approve', 'approved', 'Approve'],
+  ['deny', 'denied', 'Deny'],
+])('keeps a successful %s decision when an older detail refresh returns pending', async (action, status, label) => {
+  const pending = grant('grant-a', 'Request awaiting a decision')
+  const oldRefresh = deferred<ReturnType<typeof grant>>()
+  let reads = 0
+  __setRouteQuery({ grant_id: pending.id })
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+  const fetch = vi.fn(async (url: string, options?: { method?: string }) => {
+    if (options?.method === 'POST') {
+      expect(url).toBe(`/api/grants/${pending.id}/${action}`)
+      return { grant: { ...pending, status } }
+    }
+    expect(url).toBe(`/api/grants/${pending.id}`)
+    reads++
+    return reads === 1 ? pending : oldRefresh.promise
+  })
+  vi.stubGlobal('$fetch', fetch)
+  const wrapper = mount(GrantApprovalPage, { global: { stubs } })
+  await flushPromises()
+  expect(wrapper.find('[data-grant-decision]').exists()).toBe(true)
+
+  document.dispatchEvent(new Event('visibilitychange'))
+  await flushPromises()
+  expect(reads).toBe(2)
+  await wrapper.findAll('button').find(button => button.text() === label)!.trigger('click')
+  await flushPromises()
+  expect(wrapper.text()).toContain(`Grant ${status}`)
+  expect(wrapper.find('[data-grant-decision]').exists()).toBe(false)
+
+  oldRefresh.resolve(structuredClone(pending))
+  await flushPromises()
+
+  expect(wrapper.text()).toContain(`Grant ${status}`)
+  expect(wrapper.find('[data-grant-decision]').exists()).toBe(false)
+  expect(fetch.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1)
+})
+
+it.each([
+  ['approve', 'approved', 'Approve'],
+  ['deny', 'denied', 'Deny'],
+])('keeps the fresh inbox state after %s when an older list refresh returns pending', async (action, status, label) => {
+  const pending = grant('grant-a', 'Request awaiting a decision')
+  const terminal = { ...pending, status, request: { ...pending.request, summary: { title: 'Fresh decided server snapshot' } } }
+  const oldActive = deferred<{ data: ReturnType<typeof grant>[] }>()
+  const oldHistory = deferred<{ data: ReturnType<typeof grant>[] }>()
+  let decided = false
+  let activeReads = 0
+  let historyReads = 0
+  vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible')
+  const fetch = vi.fn(async (url: string, options?: { method?: string }) => {
+    if (options?.method === 'POST') {
+      expect(url).toBe(`/api/grants/${pending.id}/${action}`)
+      decided = true
+      return { grant: terminal }
+    }
+    if (url.includes('section=active')) {
+      activeReads++
+      if (activeReads === 2) return oldActive.promise
+      return { data: decided ? status === 'approved' ? [terminal] : [] : [pending] }
+    }
+    if (url.includes('section=history')) {
+      historyReads++
+      if (historyReads === 2) return oldHistory.promise
+      return { data: decided && status === 'denied' ? [terminal] : [] }
+    }
+    expect(url).toBe(`/api/grants/${pending.id}`)
+    return pending
+  })
+  vi.stubGlobal('$fetch', fetch)
+  const wrapper = mount(GrantsPage, { global: { stubs } })
+  await flushPromises()
+  expect(wrapper.find('[data-grant-decision]').exists()).toBe(true)
+
+  document.dispatchEvent(new Event('visibilitychange'))
+  await flushPromises()
+  expect([activeReads, historyReads]).toEqual([2, 2])
+  await wrapper.findAll('button').find(button => button.text() === label)!.trigger('click')
+  await flushPromises()
+  expect([activeReads, historyReads]).toEqual([3, 3])
+  expect(wrapper.get('[data-requester-headline]').text()).toBe('Fresh decided server snapshot')
+  expect(wrapper.find('[data-grant-decision]').exists()).toBe(false)
+
+  oldActive.resolve({ data: [structuredClone(pending)] })
+  oldHistory.resolve({ data: [] })
+  await flushPromises()
+
+  expect(wrapper.get('[data-requester-headline]').text()).toBe('Fresh decided server snapshot')
+  expect(wrapper.find('[data-grant-decision]').exists()).toBe(false)
+  expect(wrapper.text()).toContain('Pending requests (0)')
+  expect(wrapper.text()).toContain(`Active Permissions (${status === 'approved' ? 1 : 0})`)
+  expect(wrapper.text()).toContain(`History (${status === 'denied' ? 1 : 0})`)
+  if (status === 'denied') expect(wrapper.text()).toContain('denied')
+  expect(fetch.mock.calls.filter(([, options]) => options?.method === 'POST')).toHaveLength(1)
+})
+
 it('uses fresh server scope and validity after an inbox decision instead of a cached pending request', async () => {
   const pending = grant('grant-a', 'Specific request')
   const approved = { ...pending, status: 'approved', request: { ...pending.request, grant_type: 'always', summary: { title: 'Fresh server request' }, permissions: ['new-server-scope'] } }

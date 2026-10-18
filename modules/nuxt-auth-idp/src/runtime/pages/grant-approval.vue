@@ -20,22 +20,26 @@ const batchQuery = computed(() => typeof route.query.batch === 'string' && typeo
 const nowSec = ref(Math.floor(Date.now() / 1000))
 const liveness = computed(() => callerState(grant.value?.request, grant.value?.created_at ?? 0, nowSec.value))
 let clock: ReturnType<typeof setInterval> | undefined
+let loadGeneration = 0
 
 async function loadGrant() {
   if (!grantId.value) return
   const requestedId = grantId.value
+  const generation = ++loadGeneration
   loading.value = true
   error.value = ''
   try {
     const response = await $fetch<ApprovalPageGrant>(`/api/grants/${requestedId}`)
-    if (grantId.value === requestedId) grant.value = response
+    if (grantId.value === requestedId && generation === loadGeneration) grant.value = response
   }
-  catch (failure) { if (grantId.value === requestedId) error.value = grantDecisionError(failure) }
-  finally { if (grantId.value === requestedId) loading.value = false }
+  catch (failure) { if (grantId.value === requestedId && generation === loadGeneration) error.value = grantDecisionError(failure) }
+  finally { if (grantId.value === requestedId && generation === loadGeneration) loading.value = false }
 }
 
 async function decided(result: GrantDecisionResult) {
   if (result.grant.id !== grantId.value) return
+  loadGeneration++
+  loading.value = false
   grant.value = { ...grant.value, ...result.grant }
   if (typeof route.query.callback !== 'string') return
   try {

@@ -29,6 +29,7 @@ const pendingGroups = computed(() => groupPendingGrantBatches(pendingGrants.valu
 const activeGrants = computed(() => activeAndPending.value.filter(grant => grant.status === 'approved'))
 const nowSec = ref(Math.floor(Date.now() / 1000))
 let clock: ReturnType<typeof setInterval> | undefined
+let loadGeneration = 0
 const liveness = (grant: ApprovalGrant) => callerState(grant.request, grant.created_at, nowSec.value)
 function livenessText(grant: ApprovalGrant) {
   const state = liveness(grant)
@@ -38,12 +39,14 @@ function livenessText(grant: ApprovalGrant) {
 }
 
 async function loadGrants() {
+  const generation = ++loadGeneration
   loading.value = true
   try {
     const [active, history] = await Promise.all([
       $fetch<PaginatedResponse<ApprovalGrant>>('/api/grants?section=active'),
       $fetch<PaginatedResponse<ApprovalGrant>>('/api/grants?section=history'),
     ])
+    if (generation !== loadGeneration) return
     activeAndPending.value = active.data.map(grant => ({ ...grant, ...grant.status === 'pending' ? detailsCache.get(grant.id) : {} }))
     historyGrants.value = history.data
     historyCursor.value = history.pagination?.cursor ?? null
@@ -51,17 +54,18 @@ async function loadGrants() {
     await Promise.all(active.data.filter(grant => grant.status === 'pending' && getCliAuthorizationDetails(grant.request.authorization_details).length && !detailsCache.has(grant.id)).map(async (grant) => {
       try {
         const detail = await $fetch<ApprovalGrant>(`/api/grants/${grant.id}`)
+        if (generation !== loadGeneration) return
         const suggestions = { similar_grants: detail.similar_grants, widening_suggestions: detail.widening_suggestions }
         detailsCache.set(grant.id, suggestions)
         const at = activeAndPending.value.findIndex(item => item.id === grant.id)
         const current = activeAndPending.value[at]
         if (current?.status === 'pending') activeAndPending.value[at] = { ...current, ...suggestions }
       }
-      catch (failure) { actionError.value = grantDecisionError(failure) }
+      catch (failure) { if (generation === loadGeneration) actionError.value = grantDecisionError(failure) }
     }))
   }
-  catch (failure) { actionError.value = grantDecisionError(failure) }
-  finally { loading.value = false }
+  catch (failure) { if (generation === loadGeneration) actionError.value = grantDecisionError(failure) }
+  finally { if (generation === loadGeneration) loading.value = false }
 }
 async function loadMoreHistory() {
   if (!historyCursor.value || loadingHistory.value) return
