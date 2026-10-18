@@ -30,6 +30,6 @@ export default defineEventHandler(async (event) => {
   const binding = { subject, key_id: keyId, owner: verified.sub, decision_issuer: verified.iss, connection_id: verified.connection_id }
   const connection = brokerObject(await forwardBrokerOperation(binding, 'connection'))
   if (connection.id !== verified.connection_id || connection.status !== 'active') throw createProblemError({ status: 403, title: 'The owner connection is no longer active', type: 'https://openape.org/errors/broker_connection_revoked' })
-  await useBrokerStore(event).bindAgent(binding, enrollment.name, enrollment.publicKey)
-  return { email: subject, owner: verified.sub, permissions: 'none', keyId, decisionIssuer: verified.iss, brokerConnectionId: verified.connection_id }
+  const name = await useBrokerStore(event).bindAgent(binding, enrollment.name, enrollment.publicKey)
+  return { email: subject, owner: verified.sub, permissions: 'none', keyId, decisionIssuer: verified.iss, brokerConnectionId: verified.connection_id, ...(name !== undefined ? { name } : {}) }
 })
