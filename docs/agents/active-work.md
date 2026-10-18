@@ -1,5 +1,14 @@
 # Active work
 
+## Readable registered Pod names — issue 1511
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1511. Branch `bugfix/issue-1511-pod-registration-name`, checkout `openape-monorepo.worktrees/pod-registration-name-1511`, canonical base `b68849b08042555dd7922c8f235d713d1e2e79cf`.
+- Complete the approved readable-requester-name requirement by registering the current Pod title and refreshing existing brokered registrations through their verified owner receipt. Preserve immutable identity/owner/issuer/connection/key bindings, active-agent checks and existing grants.
+- Repeated exact-match broker enrollment changes only `users.name`, skips identical names and returns optional persisted-name confirmation. Legacy responses remain compatible; clients confirm a synchronized name only when explicitly acknowledged. Existing direct identities retain their separate reprovisioning refusal contract.
+- IdP verification passes: 21 enrollment/transport/direct-provisioning cases and 76 durable store cases, including exact binding/user/key refusals, same-name no-op writes and commit-backed name confirmation. IdP module build, module/free IdP typechecks and scoped lint pass. Existing direct provisioning retains its refusal contract and correctly stores names for new identities.
+- Client verification passes: 44 focused identity/connection/reconciliation cases and scoped lint, including exact or absent name confirmation, unchanged credential bytes, title normalization, one refresh per rename, transport retry throttling and fail-closed binding substitutions on immediate retry.
+- Next: required repository gate, native PR and coordinated IdP plus signed desktop rollout. No new authority or registration schema is introduced.
+
 ## Federated registered requester names — issue 1510
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1510. Branch `bugfix/issue-1510-federated-requester-name`, checkout `openape-monorepo.worktrees/federated-requester-name-1510`, canonical base `339384910a4a001b8f7c6aed5e48238caf427006`.

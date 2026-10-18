@@ -2,7 +2,7 @@
 import { access, mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import { PodIdentityManager } from '../../src/main/connections/agent'
+import { PodIdentityBindingError, PodIdentityManager } from '../../src/main/connections/agent'
 import { OwnerConnection } from '../../src/main/connections/owner'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -17,7 +17,7 @@ import { SetupControl } from '../../src/worker/onboarding/control'
 const cleanups: (() => Promise<void>)[] = []
 vi.mock('../../src/main/connections/broker', async original => ({ ...await original<typeof import('../../src/main/connections/broker')>(), podBrokerReceipt: vi.fn(async () => 'synthetic-receipt') }))
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
-async function fixture(locked = false, architecture = process.arch, jevKey?: () => string | undefined) {
+async function fixture(locked = false, architecture = process.arch, jevKey?: () => string | undefined, directAgents = false) {
   const root = await mkdtemp(join(tmpdir(), 'pods-connect-')); const vendor = join(root, 'vendor'); await mkdir(vendor)
   await writeFile(join(vendor, 'codex'), 'synthetic-codex')
   await writeFile(join(vendor, 'manifest.json'), JSON.stringify({ sdk: '0.153.4', cli: `0.153.4-${process.platform}-${architecture}`, binaryHash: digest('synthetic-codex') }))
@@ -25,11 +25,101 @@ async function fixture(locked = false, architecture = process.arch, jevKey?: () 
   const credentials = new CredentialCache(join(root, 'credentials'), { available: () => !locked, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
   const runtime = { helper: 'unused-fixture-helper', executable: process.execPath, entry: 'unused-entry', runtimeDirectories: [], environment: {}, binary: join(vendor, 'codex'), manifest: join(vendor, 'manifest.json'), catalog: 'unused-catalog', sdkHost: 'unused-host' }
   const availability = vi.fn(async () => {})
-  const manager = new ConnectionManager(root, runtime, credentials, async command => control.execute(command), availability, false, jevKey)
+  const manager = new ConnectionManager(root, runtime, credentials, async command => control.execute(command), availability, async podId => store.getPod(podId).name, directAgents, jevKey)
   cleanups.push(async () => { await manager.stop(); store.close(); await rm(root, { recursive: true, force: true }) })
   await manager.initialize(async () => {})
   return { root, manager, store, control, credentials, availability, runtime }
 }
+async function namedBrokerFixture(registeredName?: string) {
+  const context = await fixture(); const pod = context.store.createPod({ name: 'Invoice review' })
+  const owner = randomUUID(); const account = 'owner@example.invalid'; const issuer = 'https://id.example.invalid'
+  const broker = { issuer: 'https://pods.example.invalid', domain: 'pods.example.invalid', connectionId: randomUUID() }
+  const identity = { connectionId: randomUUID(), podId: pod.id, issuer: broker.issuer, decisionIssuer: issuer, brokerConnectionId: broker.connectionId, owner: account, subject: 'pod@pods.example.invalid', keyId: 'existing-key' }
+  context.control.execute({ type: 'save', connection: { id: owner, provider: 'openape', account, state: 'ready', error: null }, metadata: { issuer, subject: account, broker, pods: { [pod.id]: { connectionId: identity.connectionId, prepared: true, broker, identity, ...(registeredName === undefined ? {} : { registeredName }) } } } })
+  const bearer = vi.spyOn(OwnerConnection.prototype, 'bearer').mockResolvedValue('synthetic-owner-token')
+  return { ...context, pod, owner, account, issuer, broker, identity, bearer }
+}
+
+it('registers the normalized saved title once and refreshes only a changed broker name', async () => {
+  const { manager, control, store, pod, owner, identity, bearer } = await namedBrokerFixture()
+  const provision = vi.spyOn(PodIdentityManager.prototype, 'provision').mockImplementation(async (_id, name) => ({ identity, registeredName: name }))
+  const prepare = vi.spyOn(PodIdentityManager.prototype, 'ensurePrepared'); const create = vi.spyOn(PodIdentityManager.prototype, 'prepare')
+  expect((await manager.podConnection(pod.id)).identity).toEqual(identity)
+  expect(provision).toHaveBeenCalledWith(identity.connectionId, 'Invoice review', 'synthetic-owner-token', 'synthetic-receipt', identity)
+  await manager.podConnection(pod.id)
+  expect(provision).toHaveBeenCalledOnce(); expect(bearer).toHaveBeenCalledOnce()
+  const renamed = store.updatePod(pod.id, pod.revision, { name: '  Cafe\u0301\u200B review  ', lifecycle: 'paused' })
+  await Promise.all([manager.podConnection(pod.id), manager.podConnection(pod.id)])
+  expect(provision).toHaveBeenCalledTimes(2); expect(bearer).toHaveBeenCalledTimes(2)
+  expect(provision.mock.calls[1][1]).toBe('Café review')
+  const entry = (control.connections.metadata(owner).pods as Record<string, { identity: unknown, registeredName: string }>)[pod.id]
+  expect(entry).toMatchObject({ identity, registeredName: 'Café review' })
+  store.updatePod(pod.id, renamed.revision, { name: 'Café review', lifecycle: 'paused' })
+  await manager.podConnection(pod.id); expect(provision).toHaveBeenCalledTimes(2)
+  expect(prepare).not.toHaveBeenCalled(); expect(create).not.toHaveBeenCalled()
+})
+
+it.each([undefined, 'A different title'])('keeps an unconfirmed provider name uncached and throttles retries (%s)', async (confirmed) => {
+  const { manager, control, pod, owner, identity, bearer } = await namedBrokerFixture()
+  const provision = vi.spyOn(PodIdentityManager.prototype, 'provision').mockResolvedValue({ identity, ...(confirmed === undefined ? {} : { registeredName: confirmed }) })
+  await manager.podConnection(pod.id); await manager.podConnection(pod.id)
+  expect(provision).toHaveBeenCalledOnce(); expect(bearer).toHaveBeenCalledOnce()
+  expect((control.connections.metadata(owner).pods as Record<string, unknown>)[pod.id]).not.toHaveProperty('registeredName')
+  const now = Date.now(); vi.spyOn(Date, 'now').mockReturnValue(now + 60001)
+  provision.mockResolvedValue({ identity, registeredName: pod.name })
+  await manager.podConnection(pod.id); await manager.podConnection(pod.id)
+  expect(provision).toHaveBeenCalledTimes(2)
+  expect((control.connections.metadata(owner).pods as Record<string, unknown>)[pod.id]).toMatchObject({ identity, registeredName: pod.name })
+})
+
+it('retains a working broker identity and retries a failed name refresh without changing grants', async () => {
+  const { manager, control, pod, owner, identity, bearer } = await namedBrokerFixture('Earlier name')
+  const provision = vi.spyOn(PodIdentityManager.prototype, 'provision').mockRejectedValue(new Error('Synthetic network failure'))
+  const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => {})
+  expect((await manager.podConnection(pod.id)).identity).toEqual(identity)
+  expect((await manager.podConnection(pod.id)).identity).toEqual(identity)
+  expect(provision).toHaveBeenCalledOnce(); expect(bearer).toHaveBeenCalledOnce(); expect(diagnostic).toHaveBeenCalledOnce()
+  expect((control.connections.metadata(owner).pods as Record<string, unknown>)[pod.id]).toMatchObject({ identity, registeredName: 'Earlier name' })
+})
+
+it('keeps binding failures closed on the immediate retry instead of treating them as name failures', async () => {
+  const { manager, pod, identity, bearer } = await namedBrokerFixture()
+  const provision = vi.spyOn(PodIdentityManager.prototype, 'provision').mockRejectedValue(new PodIdentityBindingError('Pod identity cache binding mismatch'))
+  const diagnostic = vi.spyOn(console, 'error').mockImplementation(() => {})
+  await expect(manager.podConnection(pod.id)).rejects.toBeInstanceOf(PodIdentityBindingError)
+  await expect(manager.podConnection(pod.id)).rejects.toBeInstanceOf(PodIdentityBindingError)
+  expect(provision).toHaveBeenCalledTimes(2); expect(bearer).toHaveBeenCalledTimes(2)
+  expect(provision.mock.calls.every(call => call[4] === identity || JSON.stringify(call[4]) === JSON.stringify(identity))).toBe(true)
+  expect(diagnostic).not.toHaveBeenCalled()
+})
+
+it('checks a changed owner binding even while a transport retry is throttled', async () => {
+  const { manager, control, pod, owner, identity } = await namedBrokerFixture()
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const provision = vi.spyOn(PodIdentityManager.prototype, 'provision').mockRejectedValue(new Error('Synthetic network failure'))
+  await manager.podConnection(pod.id)
+  const metadata = control.connections.metadata(owner)
+  const pods = metadata.pods as Record<string, { identity: typeof identity }>; pods[pod.id].identity.owner = 'another@example.invalid'
+  control.execute({ type: 'save', connection: { id: owner, provider: 'openape', account: identity.owner, state: 'ready', error: null }, metadata })
+  await expect(manager.podConnection(pod.id)).rejects.toBeInstanceOf(PodIdentityBindingError)
+  expect(provision).toHaveBeenCalledOnce()
+})
+
+it('uses the actual title for new direct identities without refreshing established direct registrations', async () => {
+  const { manager, control, store } = await fixture(false, process.arch, undefined, true)
+  const pod = store.createPod({ name: 'Direct invoice review' }); const owner = randomUUID()
+  const issuer = 'https://id.example.invalid'; const account = 'owner@example.invalid'
+  control.execute({ type: 'save', connection: { id: owner, provider: 'openape', account, state: 'ready', error: null }, metadata: { issuer, subject: account } })
+  vi.spyOn(PodIdentityManager.prototype, 'ensurePrepared').mockResolvedValue()
+  const provision = vi.spyOn(PodIdentityManager.prototype, 'provision').mockImplementation(async (connectionId, name) => ({ identity: { connectionId, podId: pod.id, issuer, owner: account, subject: 'direct@example.invalid', keyId: 'direct-key' }, registeredName: name }))
+  const bearer = vi.spyOn(OwnerConnection.prototype, 'bearer').mockResolvedValue('synthetic-owner')
+  const first = await manager.podConnection(pod.id)
+  expect(provision).toHaveBeenCalledWith(expect.any(String), pod.name, 'synthetic-owner', undefined)
+  store.updatePod(pod.id, pod.revision, { name: 'Renamed direct Pod', lifecycle: 'paused' })
+  expect((await manager.podConnection(pod.id)).identity).toEqual(first.identity)
+  expect(provision).toHaveBeenCalledOnce(); expect(bearer).toHaveBeenCalledOnce()
+  expect((control.connections.metadata(owner).pods as Record<string, unknown>)[pod.id]).toMatchObject({ registeredName: pod.name })
+})
 it('records explicit sign-in cancellation and supports a separate retry without auto-activating work', async () => {
   vi.spyOn(CodexConnection.prototype, 'login').mockImplementation(async (_id, signal, present) => { present({ url: 'https://auth.openai.com/device', code: 'SYNTHETIC' }); return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('Cancelled')), { once: true })) })
   const { manager, store } = await fixture()
@@ -96,7 +186,7 @@ it('uses the single owner for new pods, only through the Pods provider, without 
   expect((await manager.podConnection(existing.id)).identity).toEqual(identity)
   expect((await manager.podConnection(existing.id, { issuer, subject: account }, true)).identity).toEqual(identity)
   const broker = { issuer: 'https://pods.example.invalid', domain: 'pods.example.invalid', connectionId: randomUUID() }
-  const provision = vi.spyOn(PodIdentityManager.prototype, 'provision').mockImplementation(async connectionId => ({ ...identity, connectionId, podId: fresh.id, issuer: 'https://pods.example.invalid', decisionIssuer: issuer, brokerConnectionId: broker.connectionId }))
+  const provision = vi.spyOn(PodIdentityManager.prototype, 'provision').mockImplementation(async connectionId => ({ identity: { ...identity, connectionId, podId: fresh.id, issuer: 'https://pods.example.invalid', decisionIssuer: issuer, brokerConnectionId: broker.connectionId } }))
   await expect(manager.podConnection(fresh.id)).rejects.toThrow('Allow Pods to create agents')
   expect(provision).not.toHaveBeenCalled()
   control.execute({ type: 'save', connection: { id: owner, provider: 'openape', account, state: 'ready', error: null }, metadata: { ...control.connections.metadata(owner), broker } })
@@ -107,6 +197,9 @@ it('uses the single owner for new pods, only through the Pods provider, without 
   const before = (await manager.view()).connections
   expect((await manager.podConnection(fresh.id)).ownerConnection).toBe(owner)
   expect(bearer).toHaveBeenCalledWith(owner, issuer, account, expect.any(AbortSignal))
+  expect(provision).toHaveBeenCalledWith(expect.any(String), fresh.name, 'synthetic', 'synthetic-receipt')
+  await manager.podConnection(fresh.id)
+  expect(provision).toHaveBeenCalledOnce(); expect(bearer).toHaveBeenCalledOnce()
   expect((await manager.view()).connections).toEqual(before)
   await expect(manager.podConnection(fresh.id, { issuer, subject: 'someone-else' })).rejects.toThrow('another owner')
 })

@@ -42,7 +42,7 @@ async function legacyProfile() {
   for (const id of Object.values(rows)) await credentials.create(id, JSON.stringify({ issuer, account: 'synthetic' }))
   await credentials.connect(rows.codex, JSON.stringify({ auth_mode: 'chatgpt', tokens: { account_id: 'synthetic', access_token: 'synthetic-access', refresh_token: 'synthetic-refresh' } }))
   const runtime = { helper: 'unused-fixture-helper', executable: process.execPath, entry: 'unused-entry', runtimeDirectories: [], environment: {}, binary: join(vendor, 'codex'), manifest: join(vendor, 'manifest.json'), catalog: 'unused-catalog', sdkHost: 'unused-host' }
-  const start = async () => { const manager = new ConnectionManager(root, runtime, credentials, async command => control.execute(command), async () => {}); await manager.initialize(async () => {}); return manager }
+  const start = async () => { const manager = new ConnectionManager(root, runtime, credentials, async command => control.execute(command), async () => {}, async podId => store.getPod(podId).name); await manager.initialize(async () => {}); return manager }
   cleanups.push(async () => { store.close(); await rm(root, { recursive: true, force: true }) })
   return { root, store, resources, control, start, rows, pods, bindings }
 }
