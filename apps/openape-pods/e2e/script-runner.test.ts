@@ -5,6 +5,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { executeScript as executeScriptRuntime } from '../src/worker/runs/runner'
+import { PermissionUnavailableError } from '../src/contracts/infrastructure'
+import { ownerScriptAuthority } from '../src/worker/runs/owner-script'
 import type { RunInput } from '../src/contracts/runs'
 
 let root = ''
@@ -91,6 +93,30 @@ it('runs the Jev helper through the native script bridge without starting an LLM
 })
 
 function executeScript(...args: Parameters<typeof executeScriptRuntime>) {
-  args[5] = { ...args[5], execution: { authorized: async () => {} } }
+  args[5] = { ...args[5], authorizeStart: args[5].authorizeStart ?? (async () => ownerScriptAuthority(args[3])), execution: args[5].execution ?? { authorized: async () => {} } }
   return executeScriptRuntime(...args)
 }
+
+it('verifies a nonzero root completion when an inner service permission is unavailable', async () => {
+  const fixture = await setup(`export async function run(c){await c.agent.run({prompt:'Synthetic'});return ${result}}`)
+  const completed: number[] = []
+  await expect(executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, AbortSignal.timeout(10000), {
+    execution: { authorized: async () => {}, completed: async ({ exitCode }) => { completed.push(exitCode) } },
+    event: () => {},
+    request: async () => { throw new PermissionUnavailableError('Synthetic inner permission is pending') },
+  })).rejects.toThrow('Synthetic inner permission is pending')
+  expect(completed).toEqual([1])
+})
+
+it('rechecks owner activation before the execute acknowledgement and refuses a stale run', async () => {
+  const fixture = await setup(`import fs from 'node:fs'; export async function run(c){fs.writeFileSync(c.workspace+'/must-not-start','STARTED');return ${result}}`)
+  let checks = 0; let authorized = false
+  await expect(executeScript(fixture.runtime, fixture.directory, fixture.artifact, fixture.input, AbortSignal.timeout(10000), {
+    authorizeStart: async () => { if (++checks >= 3) throw new Error('Owner activation changed'); return ownerScriptAuthority(fixture.input) },
+    execution: { authorized: async () => { authorized = true } },
+    event: () => {},
+    request: async () => null,
+  })).rejects.toThrow('Owner activation changed')
+  expect(authorized).toBe(false)
+  await expect(readFile(join(fixture.input.workspace, 'must-not-start'))).rejects.toMatchObject({ code: 'ENOENT' })
+})

@@ -7,8 +7,10 @@ import { assertAuthorizedFile } from './execute.js'
 import { assertProgramFiles } from './program-files.js'
 import { authorizeProgramCall, locateProgram } from './program.js'
 import type { ProgramCall, ProgramTokenClaims } from './program.js'
+import type { OpenApeExecutionAuthority } from '@openape/core'
 import { parseMachineRequest } from './machine-request.js'
 import type { MachineRequest } from './machine-request.js'
+import { executionFailure } from './machine-failure.js'
 
 /** FD 6 belongs to ape-shell alone; the target receives only its standard streams and, optionally, FD 3. */
 export class MachineChannel {
@@ -53,7 +55,7 @@ export class MachineChannel {
     return JSON.parse(reply)
   }
 
-  async request(): Promise<MachineRequest> { return parseMachineRequest(await this.readFrame()) }
+  async request(mode: 'program' | 'owner-script'): Promise<MachineRequest> { return parseMachineRequest(await this.readFrame(), mode) }
 
   async executeAcknowledgement(operationId: string): Promise<void> {
     const value = await this.readFrame() as Record<string, unknown> | null
@@ -83,8 +85,8 @@ async function assertActive(grantId: string, signal: AbortSignal): Promise<void>
   if (!['approved', 'used'].includes(grant.status) || (grant.expires_at !== undefined && grant.expires_at <= Date.now() / 1000)) throw new Error('Execution grant is no longer active')
 }
 
-async function execute(request: MachineRequest, call: ProgramCall, grantId: string, channel: MachineChannel, onDispatch: () => void): Promise<number> {
-  await assertActive(grantId, AbortSignal.any([channel.signal, AbortSignal.timeout(10000)]))
+async function execute(request: MachineRequest, call: ProgramCall, authority: OpenApeExecutionAuthority, channel: MachineChannel, onDispatch: () => void): Promise<number> {
+  if (authority.source === 'grant') await assertActive(authority.grantId, AbortSignal.any([channel.signal, AbortSignal.timeout(10000)]))
   channel.signal.throwIfAborted()
   assertAuthorizedFile(call)
   assertProgramFiles([request.sandbox])
@@ -105,10 +107,11 @@ async function execute(request: MachineRequest, call: ProgramCall, grantId: stri
   if (channel.signal.aborted) stop()
   // The native supervisor owns the process group and kills surviving descendants when ape-shell exits.
   const watching = (async () => {
+    if (authority.source !== 'grant') return
     try {
       while (!monitor.signal.aborted) {
         await delay(1000, undefined, { signal: monitor.signal })
-        await assertActive(grantId, AbortSignal.any([monitor.signal, channel.signal, AbortSignal.timeout(10000)]))
+        await assertActive(authority.grantId, AbortSignal.any([monitor.signal, channel.signal, AbortSignal.timeout(10000)]))
       }
     }
     catch (error) { if (!monitor.signal.aborted) { failure = error; child.kill('SIGKILL') } }
@@ -133,21 +136,26 @@ async function execute(request: MachineRequest, call: ProgramCall, grantId: stri
 }
 
 /** Structured -c mode shares the ordinary program authorizer and never enters the shell-session fallback. */
-export async function runMachineRequest(): Promise<number> {
+export async function runMachineRequest(mode: 'program' | 'owner-script' = 'program'): Promise<number> {
   const channel = new MachineChannel()
   let operationId: string | null = null
   let dispatching = false
   try {
     if (process.platform !== 'darwin') throw new Error('Sandboxed machine execution requires macOS')
-    const request = await channel.request()
+    const request = await channel.request(mode)
     operationId = request.operationId
-    const auth = loadAuth()
-    if (!auth) throw new Error('Machine execution requires an assigned identity')
     const program = await locateProgram(request.executable.path)
     if (!program || program.sha256 !== request.executable.sha256) throw new Error('Assigned executable changed before authorization')
     const call: ProgramCall = { program, argv: request.argv, files: request.files }
     assertAuthorizedFile(call)
     assertProgramFiles([request.sandbox])
+    if ('mode' in request) {
+      await channel.emit(operationId, 'authorized', { authority: request.authority, write: false })
+      await channel.executeAcknowledgement(operationId)
+      return await execute(request, call, request.authority, channel, () => { dispatching = true })
+    }
+    const auth = loadAuth()
+    if (!auth) throw new Error('Machine execution requires an assigned identity')
     const authorization = await authorizeProgramCall(call, {
       idp: auth.idp,
       subject: auth.email,
@@ -161,12 +169,14 @@ export async function runMachineRequest(): Promise<number> {
       onPending: pending => channel.emit(operationId, 'pending', pending),
     })
     if (authorization.kind === 'pending') return 75
-    await channel.emit(operationId, 'authorized', { grantId: authorization.grantId, write: programWrites(authorization.claims) })
+    const authority: OpenApeExecutionAuthority = { source: 'grant', grantId: authorization.grantId }
+    await channel.emit(operationId, 'authorized', { authority, grantId: authorization.grantId, write: programWrites(authorization.claims) })
     await channel.executeAcknowledgement(operationId)
-    return await execute(request, call, authorization.grantId, channel, () => { dispatching = true })
+    return await execute(request, call, authority, channel, () => { dispatching = true })
   }
   catch (error) {
-    if (!channel.signal.aborted) await channel.emit(operationId, dispatching ? 'unknown' : 'not-started', { error: error instanceof Error ? error.message : 'Machine execution failed' })
+    const failure = dispatching ? undefined : executionFailure(error)
+    if (!channel.signal.aborted) await channel.emit(operationId, dispatching ? 'unknown' : 'not-started', { error: error instanceof Error ? error.message : 'Machine execution failed', ...(failure ? { failure } : {}) })
     return 1
   }
   finally { channel.close() }

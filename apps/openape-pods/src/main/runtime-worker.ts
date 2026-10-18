@@ -14,7 +14,7 @@ import { parseDefinitionCommand, parseDefinitionsView } from '../contracts/defin
 import type { DefinitionCommand, DefinitionsView } from '../contracts/definitions'
 import { resolveSshTarget, sshGrantArgv } from './ssh/configuration'
 import { invokeSsh } from './ssh/invoke'
-import { AuthorityError, InfrastructureError, NonRetryableError } from '../contracts/infrastructure'
+import { AuthorityError, InfrastructureError, NonRetryableError, PermissionUnavailableError } from '../contracts/infrastructure'
 import type { InfrastructureFailure } from '../contracts/infrastructure'
 import { releaseApprovalGrants } from './gates/handler'
 import { assignedJev, parseJevRequest, typesafeOrigin } from '../contracts/jev'
@@ -85,7 +85,7 @@ import { parseRunContext, parseServiceScope, serviceKinds } from '../contracts/s
 import type { CredentialCache } from './connections/cache'
 import type { RuntimeHost, RuntimeChild } from './runtime-host'
 import { RunGrantTokens } from './broker/authorization'
-import { grantSummary, parseScriptSummary, savedScriptSummary } from '../contracts/grant-summary'
+import { grantSummary, parseScriptSummary } from '../contracts/grant-summary'
 import { parsePodDetails } from '../contracts/details'
 import type { DetailsCommand, PodDetails } from '../contracts/details'
 import { parseScheduleView } from '../contracts/scheduling'
@@ -229,7 +229,7 @@ export class RuntimeWorker {
         const respond = async () => {
           let reply: { id: string, value?: unknown, error?: string, infrastructure?: InfrastructureFailure, authority?: boolean, nonRetryable?: boolean }
           try { reply = { id: request.id, value: await this.executeService(request) } }
-          catch (error) { reply = { id: request.id, error: error instanceof Error ? error.message : 'Mail broker failed', ...(error instanceof AuthorityError ? { authority: true } : {}), ...(error instanceof NonRetryableError ? { nonRetryable: true } : {}), ...(error instanceof InfrastructureError && ['http', 'shell', 'tool'].includes(request.kind ?? 'tool') ? { infrastructure: error.failure } : {}) } }
+          catch (error) { reply = { id: request.id, error: error instanceof Error ? error.message : 'Mail broker failed', ...(error instanceof PermissionUnavailableError ? { permissionUnavailable: true } : error instanceof AuthorityError ? { authority: true } : {}), ...(error instanceof NonRetryableError ? { nonRetryable: true } : {}), ...(error instanceof InfrastructureError && ['http', 'shell', 'tool'].includes(request.kind ?? 'tool') ? { infrastructure: error.failure } : {}) } }
           if (this.child === child) child.postMessage({ serviceReply: reply })
         }
         void respond().catch((error: unknown) => { console.error('Broker response failed', error); child.kill() })
@@ -1012,6 +1012,7 @@ export class RuntimeWorker {
       }
       const context = parseRunContext(await this.dispatch({ runContext: { scope } }))
       if (request.kind === 'scriptGrant') {
+        await check()
         const start = this.cliStarts.get(scope.podId)
         if (!start) return true
         this.cliStarts.delete(scope.podId)
@@ -1024,10 +1025,6 @@ export class RuntimeWorker {
           const executableHash = createHash('sha256').update(await readFile(process.execPath)).digest('hex')
           const entryHash = createHash('sha256').update(await readFile(entry)).digest('hex')
           if (call.program.name !== basename(process.execPath) || call.program.sha256 !== executableHash || call.files.length !== 2 || !call.files.some(file => file.path === entry && file.sha256 === entryHash)) throw new Error('Owner start runtime or entry code changed')
-          const grants = this.podGrants()
-          if (!grants) throw new Error('Pod grant authority is unavailable')
-          const { grantId, approval } = await grants.requestProgram(scope.podId, { ...call, grantType: 'once' }, controller.signal, savedScriptSummary(context))
-          if (approval) await grants.approve(start.owner, scope.podId, grantId, 'once', controller.signal)
           await check()
           return true
         }
@@ -1075,9 +1072,6 @@ export class RuntimeWorker {
             runtime: { executable: runtime.executable, cli: runtime.cli, environment: { APES_AUTH_FILE: identity.path, APES_IGNORE_USER_CONFIG: '1' } },
             targetHost: connection.targetHost,
             issuer: connection.decisionIssuer ?? connection.issuer,
-            ...(start ? { grantType: 'once' as const } : {}),
-            summary: savedScriptSummary(context),
-            waitMs: 7 * 24 * 60 * 60 * 1000,
           },
         }
       }
@@ -1163,7 +1157,7 @@ export class RuntimeWorker {
             targetHost: connection.targetHost,
             summary: title,
             runtime: { executable: process.execPath, cli: this.host.apesCli },
-            observer: { ...executionObserver, authorized: async (value) => { await executionObserver.authorized(value); await observe({ grantId: value.grantId, issuer, title: title.title, state: 'approved' }) } },
+            observer: { ...executionObserver, authorized: async (value) => { if (!value.grantId) throw new AuthorityError('An application call requires its own IdP grant'); await executionObserver.authorized(value); await observe({ grantId: value.grantId, issuer, title: title.title, state: 'approved' }) } },
           },
         }), async (record) => { await this.dispatch({ programExecution: { scope, operationId: request.id, record } }) }, async (grantId) => { await observe({ grantId, issuer, title: title.title, state: 'pending' }) })
         await check(); controller.signal.throwIfAborted(); return result
