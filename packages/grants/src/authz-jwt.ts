@@ -2,6 +2,7 @@ import type { OpenApeAuthZClaims, OpenApeCliAuthorizationDetail, OpenApeExecutio
 import type { JWTPayload, KeyLike, JSONWebKeySet } from 'jose'
 import { createLocalJWKSet } from 'jose'
 import { createRemoteJWKS, signJWT, verifyJWT } from '@openape/core'
+import { brokeredGrantAuthority } from './brokering.js'
 
 /**
  * Issue an AuthZ-JWT from an approved grant.
@@ -46,7 +47,7 @@ export async function issueAuthzJWT(
   }
 
   const claims: OpenApeAuthZClaims = {
-    ...(grant.brokered ? { brokered: grant.brokered } : {}),
+    ...(grant.brokered ? { brokered: brokeredGrantAuthority(grant.brokered) } : {}),
     iss: issuer,
     sub: grant.request.requester,
     aud: grant.request.audience,
@@ -107,7 +108,7 @@ export async function issueCommandJWT(
   if (exp <= now) throw new Error('Grant has already expired')
   const grantType = grant.request.grant_type ?? 'once'
   const claims: OpenApeAuthZClaims = {
-    ...(grant.brokered ? { brokered: grant.brokered } : {}),
+    ...(grant.brokered ? { brokered: brokeredGrantAuthority(grant.brokered) } : {}),
     iss: issuer,
     sub: grant.request.requester,
     aud: grant.request.audience,

@@ -4,7 +4,7 @@ import type { GrantWithCard } from '../utils/grant-card'
 
 const props = defineProps<{ grant: GrantWithCard, german: boolean }>()
 const requester = computed(() => props.grant.card?.requester)
-const name = computed(() => requester.value?.name || (props.german ? 'Nicht registrierter Antragsteller' : 'Unregistered requester'))
+const name = computed(() => requester.value?.name || (props.german ? 'Name nicht verfügbar' : 'Name unavailable'))
 </script>
 
 <template>

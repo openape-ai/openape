@@ -186,6 +186,14 @@ describe('issueCommandJWT', () => {
   const now = () => Math.floor(Date.now() / 1000)
   const grant = (overrides: Partial<OpenApeGrant> = {}): OpenApeGrant => ({ id: 'g-1', status: 'approved', created_at: now(), decided_by: 'owner@example.com', request: { requester: 'agent@example.com', target_host: 'macmini', audience: 'shapes', grant_type: 'always' }, ...overrides })
 
+  it('keeps a registered requester name out of command token claims', async () => {
+    const keys = await generateKeyPair()
+    const call = await resolveProgramCall(store, { program: { name: 'git', sha256: tested }, argv: ['status'] })
+    const authority = { connection_id: 'connection', broker_issuer: 'https://pods.example.test', agent_issuer: 'https://pods.example.test', owner: 'owner@example.test', key_id: 'key' }
+    const issued = await issueCommandJWT(grant({ brokered: { ...authority, requester_name: 'Morning briefing' } }), { argvHash: call.argvHash, programSha256: tested, detail: call.detail, executionContext: call.executionContext }, 'https://id.example.test', keys.privateKey)
+    expect((await verifyAuthzJWT(issued.token, { publicKey: keys.publicKey })).claims?.brokered).toEqual(authority)
+  })
+
   it('binds the token to the call, at most five minutes and never beyond the grant', async () => {
     const keys = await generateKeyPair()
     const call = await resolveProgramCall(store, { program: { name: 'git', sha256: tested }, argv: ['status'] })

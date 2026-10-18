@@ -18,6 +18,7 @@ export interface BrokerStore {
   revokeConnection: (id: string, owner: string) => Promise<void>
   acceptRequest: (request: BrokerRequest) => Promise<BrokerConnection>
   assertConnection: (provenance: BrokeredGrant) => Promise<void>
+  updateRequesterName: (subject: string, provenance: BrokeredGrant, name: string) => Promise<void>
   recordToken: (grant: OpenApeGrant) => Promise<void>
   consume: (grantId: string, claims: OpenApeAuthZClaims) => Promise<{ status: string, error?: string, grant?: OpenApeGrant }>
   getAgent: (subject: string) => Promise<BrokerAgentBinding | null>
