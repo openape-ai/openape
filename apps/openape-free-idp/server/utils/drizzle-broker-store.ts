@@ -1,5 +1,5 @@
 import type { BrokerConnection, BrokeredGrant } from '@openape/core'
-import { sameBrokeredGrant, spentByCommandToken } from '@openape/grants'
+import { parseBrokerRequesterName, sameBrokeredGrant, spentByCommandToken } from '@openape/grants'
 import { and, eq, gt, isNotNull, isNull, lt, sql } from 'drizzle-orm'
 import { createError } from 'h3'
 import { useDb } from '../database/drizzle'
@@ -91,6 +91,24 @@ export function createDrizzleBrokerStore(): BrokerStore {
       checkConnection(row, provenance)
       const owner = await db.select().from(users).where(eq(users.email, row.owner)).get()
       if (!owner?.isActive || owner.type === 'agent' || owner.owner) reject('Broker owner is inactive')
+    },
+    async updateRequesterName(subject, provenance, name) {
+      const requesterName = parseBrokerRequesterName(name)
+      await db.transaction(async (tx) => {
+        const connection = await tx.select().from(brokerConnections).where(eq(brokerConnections.id, provenance.connection_id)).get()
+        checkConnection(connection, provenance)
+        const owner = await tx.select().from(users).where(eq(users.email, connection.owner)).get()
+        if (!owner?.isActive || owner.type === 'agent' || owner.owner) reject('Broker owner is inactive')
+        await tx.update(grants).set({ brokered: sql`json_set(${grants.brokered}, '$.requester_name', ${requesterName})` }).where(and(
+          eq(grants.requester, subject),
+          sql`json_extract(${grants.brokered}, '$.connection_id') = ${provenance.connection_id}`,
+          sql`json_extract(${grants.brokered}, '$.owner') = ${provenance.owner}`,
+          sql`json_extract(${grants.brokered}, '$.broker_issuer') = ${provenance.broker_issuer}`,
+          sql`json_extract(${grants.brokered}, '$.agent_issuer') = ${provenance.agent_issuer}`,
+          sql`json_extract(${grants.brokered}, '$.key_id') = ${provenance.key_id}`,
+          sql`json_extract(${grants.brokered}, '$.requester_name') IS NOT ${requesterName}`,
+        ))
+      }, { behavior: 'immediate' })
     },
     async recordToken(grant) {
       await db.transaction(async (tx) => {

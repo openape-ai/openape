@@ -902,7 +902,7 @@ describe('grant approval pages', () => {
       expect((wrapper.find('[data-grant-technical]').element as HTMLDetailsElement).open).toBe(false)
       expect(wrapper.findAll('[data-requester-headline]')).toHaveLength(1)
       expect(wrapper.find('[data-requester-claims]').text()).toContain('Ticket 7: roll out the login fix.')
-      expect(wrapper.find('[data-requester-identity]').text()).toContain('Unregistered requester')
+      expect(wrapper.find('[data-requester-identity]').text()).toContain('Name unavailable')
       expect(wrapper.find('[data-requester-identity]').text()).toContain('agent@example.com')
     })
 

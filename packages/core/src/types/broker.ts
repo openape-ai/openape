@@ -6,6 +6,8 @@ export interface BrokeredGrant {
   agent_issuer: string
   owner: string
   key_id: string
+  /** Provider-verified display metadata, excluded from authorization claims and binding comparisons. */
+  requester_name?: string
 }
 
 export interface BrokerConnection {
@@ -39,9 +41,9 @@ interface BrokerRequestBase {
 }
 export type BrokerRequest = BrokerRequestBase & (
   | { operation: 'connection' }
-  | { operation: 'create', sub: string, key_id: string, request: OpenApeGrantRequest }
-  | { operation: 'authorize', sub: string, key_id: string, request: OpenApeProgramAuthorizeRequest }
-  | { operation: 'get' | 'token', sub: string, key_id: string, grant_id: string }
+  | { operation: 'create', sub: string, key_id: string, requester_name?: string, request: OpenApeGrantRequest }
+  | { operation: 'authorize', sub: string, key_id: string, requester_name?: string, request: OpenApeProgramAuthorizeRequest }
+  | { operation: 'get' | 'token', sub: string, key_id: string, requester_name?: string, grant_id: string }
 )
 
 /**
