@@ -4,6 +4,7 @@ import { jwtVerify, SignJWT } from 'jose'
 
 export const BROKER_REQUEST_TYPE = 'openape-broker-request+jwt'
 export const BROKER_RECEIPT_TYPE = 'openape-broker-connection+jwt'
+export const BROKER_REQUESTER_NAME_CAPABILITY = 'openape_broker_requester_name_supported'
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
 export function brokerObject(value: unknown): Record<string, unknown> {
@@ -29,6 +30,22 @@ export function brokerDomain(value: unknown): string {
   return domain
 }
 
+export function brokerRequesterName(value: unknown): string | undefined {
+  if (typeof value !== 'string' || !value.trim() || [...value].length > 120 || /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(value)) return undefined
+  return value.trim()
+}
+
+export function parseBrokerRequesterName(value: unknown): string {
+  const name = brokerRequesterName(value)
+  if (name === undefined) throw new Error('Invalid broker requester name')
+  return name
+}
+
+export function brokeredGrantAuthority(value: BrokeredGrant): BrokeredGrant {
+  const { connection_id, broker_issuer, agent_issuer, owner, key_id } = value
+  return { connection_id, broker_issuer, agent_issuer, owner, key_id }
+}
+
 function fields(value: Record<string, unknown>, allowed: string[]): void {
   if (Object.keys(value).some(key => !allowed.includes(key))) throw new Error('Unknown broker fields')
 }
@@ -52,18 +69,19 @@ export function parseBrokerRequest(input: unknown): BrokerRequest {
   }
   brokerString(value.sub)
   brokerString(value.key_id)
+  const name = value.requester_name === undefined ? undefined : parseBrokerRequesterName(value.requester_name)
   if (value.operation === 'create' || value.operation === 'authorize') {
-    fields(value, [...common, 'sub', 'key_id', 'request'])
+    fields(value, [...common, 'sub', 'key_id', 'requester_name', 'request'])
     brokerObject(value.request)
   }
   else if (value.operation === 'get' || value.operation === 'token') {
-    fields(value, [...common, 'sub', 'key_id', 'grant_id'])
+    fields(value, [...common, 'sub', 'key_id', 'requester_name', 'grant_id'])
     if (!UUID.test(brokerString(value.grant_id))) throw new Error('Invalid grant identifier')
   }
   else {
     throw new Error('Unsupported broker operation')
   }
-  return value as unknown as BrokerRequest
+  return { ...value, ...(name !== undefined ? { requester_name: name } : {}) } as unknown as BrokerRequest
 }
 
 export function parseBrokerReceipt(input: unknown): BrokerReceipt {

@@ -6,6 +6,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import type { OpenApeGrant } from '@openape/core'
+import type { User } from '@openape/auth'
 import { computeArgvHash } from '@openape/grants'
 import { describe, expect, it, vi } from 'vitest'
 import { bindsExactCommand, registryCard, withGrantCards } from '../src/runtime/server/utils/grant-card'
@@ -90,6 +91,13 @@ describe('registry card', () => {
 })
 
 describe('grant cards', () => {
+  it('uses only the verified provider name for a federated requester', async () => {
+    const { unknown } = await buildCardFixtures()
+    const binding = { connection_id: 'connection', broker_issuer: 'https://pods.example.test', agent_issuer: 'https://pods.example.test', owner: 'owner@example.test', key_id: 'key' }
+    const [named, missing] = await withGrantCards([{ ...unknown, brokered: { ...binding, requester_name: 'Morning briefing' } }, { ...unknown, brokered: binding }], { getShape, findUser: async () => ({ name: 'Unrelated local registration', owner: 'other@example.test' } as User) })
+    expect(named!.card.requester).toEqual({ name: 'Morning briefing', owner: 'owner@example.test' })
+    expect(missing!.card.requester).toBeNull()
+  })
   it('attach the requester registration from the IdP', async () => {
     const { podRun } = await buildCardFixtures()
     const [unknown] = await withGrantCards([{ ...podRun, request: { ...podRun.request, requester: 'stranger@example.com' } } as OpenApeGrant], { getShape, findUser })

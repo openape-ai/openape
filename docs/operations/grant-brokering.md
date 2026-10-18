@@ -28,6 +28,30 @@ The broker authenticates the local agent and signs the entire original grant req
 
 Pods retrieves the original owner-signed authorization token through the agent provider. Its assigned executor checks the pinned decision issuer, original signature, agent subject/key, owner, connection, target host and resolved command. It checks current agent/key status and consumes directly at the decision provider. Unassigned generic CLI execution rejects brokered tokens; it cannot derive a trusted decision authority from a token supplied by an agent.
 
+### Registered requester names
+
+Supporting decision providers advertise `openape_broker_requester_name_supported: true`.
+Only then does the agent provider add signed top-level `requester_name` metadata
+from the authenticated active agent's registration and matching key. Names are
+trimmed, at most 120 Unicode code points and contain no control, format or line
+separator characters. Invalid legacy registration names are omitted so display
+metadata does not block the existing operation; an invalid signed claim is rejected.
+Requester-written summary or origin text never supplies a registered name.
+
+The decision provider stores this display value in `brokered.requester_name` and
+uses it beside the stable requester identity. Normal signed create, authorize,
+get and token operations refresh names on grants with the same complete broker
+binding. A targeted JSON update changes no request, decision, validity or
+consumption state; unchanged names cause no row rewrite. Existing pending requests
+gain names when the agent next contacts the decision provider. Owner reads use
+the stored verified metadata, without a foreign directory lookup or local agent
+registration. Missing metadata remains an explicit unavailable-name fallback.
+
+The name is excluded from binding comparisons, authorization decisions and both
+AuthZ-JWT and command-token claims. Peers without the exact discovery capability
+receive the unchanged assertion format. Deploy both IdP instances to enable the
+display extension; no registry reseeding or database schema migration is needed.
+
 ## Verification and rollout
 
 Permanent tests cover typed signatures, owner-only decisions, direct-path compatibility, durable replay/single-use/revocation, credential isolation, provider consent and assigned-executor substitution. The packaged UI fixture uses synthetic accounts and does not contact a real provider or activate schedules.

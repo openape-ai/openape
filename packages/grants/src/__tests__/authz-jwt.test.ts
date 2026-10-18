@@ -24,6 +24,13 @@ function makeApprovedGrant(overrides?: Partial<OpenApeGrant>): OpenApeGrant {
 
 describe('authZ-JWT', () => {
   describe('issueAuthzJWT', () => {
+    it('omits registered display metadata from authorization provenance', async () => {
+      const keys = await generateKeyPair()
+      const authority = { connection_id: 'connection', broker_issuer: 'https://pods.example.test', agent_issuer: 'https://pods.example.test', owner: 'owner@example.test', key_id: 'key' }
+      const grant = makeApprovedGrant({ brokered: { ...authority, requester_name: 'Morning briefing' } })
+      const token = await issueAuthzJWT(grant, 'https://id.example.test', keys.privateKey)
+      expect((await verifyAuthzJWT(token, { publicKey: keys.publicKey })).claims?.brokered).toEqual(authority)
+    })
     it('issues a JWT for an approved once-grant', async () => {
       const { privateKey } = await generateKeyPair()
       const grant = makeApprovedGrant()

@@ -1,4 +1,4 @@
-import type { BrokerConnection, BrokerRequest, OpenApeAuthZClaims, OpenApeGrant } from '@openape/core'
+import type { BrokerConnection, BrokeredGrant, BrokerRequest, OpenApeAuthZClaims, OpenApeGrant } from '@openape/core'
 import { approveGrant } from '@openape/grants'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
@@ -228,6 +228,143 @@ describe('durable grant brokering', () => {
     await expect(store.bindAgent({ ...binding, owner: 'another@identity.test' }, 'Fixture', 'fixture-public-key')).rejects.toMatchObject({ statusCode: 403 })
     await database.update(schema.users).set({ isActive: false }).where(eq(schema.users.email, subject))
     await expect(store.bindAgent(binding, 'Fixture', 'fixture-public-key')).rejects.toMatchObject({ statusCode: 403 })
+  })
+})
+
+describe('durable broker requester names', () => {
+  it('writes the first name and a rename but skips identical normalized names', async () => {
+    const value = grant()
+    await grantStore.save(value)
+    await client.executeMultiple(`
+      CREATE TABLE requester_name_updates(name TEXT);
+      CREATE TRIGGER track_requester_name_updates AFTER UPDATE OF brokered ON grants
+      BEGIN
+        INSERT INTO requester_name_updates(name) VALUES(json_extract(NEW.brokered, '$.requester_name'));
+      END;
+    `)
+    const updates = async () => (await client.execute('SELECT name FROM requester_name_updates ORDER BY rowid')).rows
+
+    await store.updateRequesterName(subject, value.brokered!, '  Verified assistant  ')
+    expect(await updates()).toEqual([{ name: 'Verified assistant' }])
+    await store.updateRequesterName(subject, value.brokered!, 'Verified assistant')
+    await store.updateRequesterName(subject, value.brokered!, '  Verified assistant  ')
+    expect(await updates()).toEqual([{ name: 'Verified assistant' }])
+    await store.updateRequesterName(subject, value.brokered!, 'Renamed assistant')
+    expect(await updates()).toEqual([{ name: 'Verified assistant' }, { name: 'Renamed assistant' }])
+    expect((await grantStore.findById(value.id))?.brokered?.requester_name).toBe('Renamed assistant')
+  })
+
+  it('persists and renames existing pending and decided grants without creating a local agent', async () => {
+    const pending = { ...grant(), status: 'pending' as const }
+    const approved = grant('always')
+    await grantStore.save(pending)
+    await grantStore.save(approved)
+    const usersBefore = await database.select().from(schema.users)
+
+    await store.updateRequesterName(subject, pending.brokered!, '  Message assistant  ')
+    const reloaded = createDrizzleGrantStore()
+    for (const value of [pending, approved]) {
+      expect((await reloaded.findById(value.id))?.brokered).toEqual({ ...value.brokered, requester_name: 'Message assistant' })
+    }
+    await store.updateRequesterName(subject, pending.brokered!, 'Renamed assistant 🔧')
+    for (const value of [pending, approved]) {
+      expect((await reloaded.findById(value.id))?.brokered).toEqual({ ...value.brokered, requester_name: 'Renamed assistant 🔧' })
+    }
+    expect((await store.consume(approved.id, claims(approved))).status).toBe('valid')
+    expect(await database.select().from(schema.users)).toEqual(usersBefore)
+    expect(await database.select().from(schema.sshKeys)).toEqual([])
+    expect(await database.select().from(schema.brokerAgents)).toEqual([])
+  })
+
+  it.each(['requester', 'connection_id', 'owner', 'broker_issuer', 'agent_issuer', 'key_id', 'local'] as const)('leaves a grant with nonmatching %s unchanged', async (field) => {
+    const matching = grant()
+    const foreign = grant()
+    if (field === 'requester') foreign.request.requester = 'other@pods.provider.test'
+    else if (field === 'local') foreign.brokered = undefined
+    else foreign.brokered = { ...foreign.brokered!, [field]: `different-${field}` }
+    await database.insert(schema.grants).values([matching, foreign].map(grantToRow))
+    const before = await database.select().from(schema.grants).where(eq(schema.grants.id, foreign.id)).get()
+
+    await store.updateRequesterName(subject, matching.brokered!, 'Verified assistant')
+
+    expect((await grantStore.findById(matching.id))?.brokered?.requester_name).toBe('Verified assistant')
+    expect(await database.select().from(schema.grants).where(eq(schema.grants.id, foreign.id)).get()).toEqual(before)
+  })
+
+  it.each(['revoked', 'missing-connection', 'inactive-owner', 'missing-owner', 'agent-owner', 'owned-owner'] as const)('refuses even an unchanged name for an unauthorized %s', async (condition) => {
+    const value = grant()
+    await grantStore.save(value)
+    await store.updateRequesterName(subject, value.brokered!, 'Verified assistant')
+    const before = await database.select().from(schema.grants).where(eq(schema.grants.id, value.id)).get()
+    if (condition === 'revoked') await store.revokeConnection(connection.id, owner)
+    if (condition === 'missing-connection') await database.delete(schema.brokerConnections).where(eq(schema.brokerConnections.id, connection.id))
+    if (condition === 'inactive-owner') await database.update(schema.users).set({ isActive: false }).where(eq(schema.users.email, owner))
+    if (condition === 'missing-owner') await database.delete(schema.users).where(eq(schema.users.email, owner))
+    if (condition === 'agent-owner') await database.update(schema.users).set({ type: 'agent' }).where(eq(schema.users.email, owner))
+    if (condition === 'owned-owner') await database.update(schema.users).set({ owner: 'other@identity.test' }).where(eq(schema.users.email, owner))
+
+    await expect(store.updateRequesterName(subject, value.brokered!, 'Verified assistant')).rejects.toMatchObject({ statusCode: 403 })
+    expect(await database.select().from(schema.grants).where(eq(schema.grants.id, value.id)).get()).toEqual(before)
+  })
+
+  it.each(['owner', 'broker_issuer', 'agent_issuer'] as const)('refuses a substituted provenance %s', async (field) => {
+    const value = grant()
+    await grantStore.save(value)
+    const substituted: BrokeredGrant = { ...value.brokered!, [field]: `different-${field}` }
+
+    await expect(store.updateRequesterName(subject, substituted, 'Rejected assistant')).rejects.toMatchObject({ statusCode: 403 })
+    expect((await grantStore.findById(value.id))?.brokered).toEqual(value.brokered)
+  })
+
+  it.each(['   ', 'Spoof\u202Ename', 'line\nbreak', 'x'.repeat(121)])('refuses an invalid name passed directly to the store (%j)', async (name) => {
+    const value = grant()
+    await grantStore.save(value)
+
+    await expect(store.updateRequesterName(subject, value.brokered!, name)).rejects.toThrow()
+    expect((await grantStore.findById(value.id))?.brokered).toEqual(value.brokered)
+  })
+
+  it.each(['approved', 'denied', 'used'] as const)('preserves a previously %s grant when the name updater holds a stale pending snapshot', async (status) => {
+    const pending = { ...grant(), status: 'pending' as const }
+    await grantStore.save(pending)
+    const snapshot = (await grantStore.findById(pending.id))!
+    const now = Math.floor(Date.now() / 1000)
+    await grantStore.updateStatus(pending.id, status, { decided_at: now, decided_by: owner, expires_at: now + 300, used_at: status === 'used' ? now : undefined, request: { ...pending.request, summary: { title: 'Current decided request' } } })
+    const current = (await database.select().from(schema.grants).where(eq(schema.grants.id, pending.id)).get())!
+
+    await store.updateRequesterName(snapshot.request.requester, snapshot.brokered!, 'Latest verified name')
+
+    expect(await database.select().from(schema.grants).where(eq(schema.grants.id, pending.id)).get()).toEqual({ ...current, brokered: { ...snapshot.brokered, requester_name: 'Latest verified name' } })
+  })
+
+  it.each((['approved', 'denied', 'used'] as const).flatMap(status => (['decision-first', 'name-first'] as const).map(order => [status, order] as const)))('preserves the %s state across independent SQLite transactions (%s)', async (status, order) => {
+    const pending = { ...grant(), status: 'pending' as const }
+    await grantStore.save(pending)
+    const snapshot = (await grantStore.findById(pending.id))!
+    const otherClient = createClient({ url: `file:${join(directory, 'idp.sqlite')}` })
+    const original = database
+    database = drizzle(otherClient, { schema })
+    const otherStore = createDrizzleBrokerStore()
+    database = original
+    const now = Math.floor(Date.now() / 1000)
+    const extra = { decided_at: now, decided_by: owner, expires_at: now + 300, used_at: status === 'used' ? now : undefined, request: { ...pending.request, summary: { title: 'Current decided request' } } }
+    try {
+      // Immediate SQLite transactions serialize writers; exercise both commit orders.
+      if (order === 'decision-first') {
+        await grantStore.updateStatus(pending.id, status, extra)
+        await otherStore.updateRequesterName(snapshot.request.requester, snapshot.brokered!, 'Latest verified name')
+      }
+      else {
+        await otherStore.updateRequesterName(snapshot.request.requester, snapshot.brokered!, 'Latest verified name')
+        await grantStore.updateStatus(pending.id, status, extra)
+      }
+
+      expect(await database.select().from(schema.grants).where(eq(schema.grants.id, pending.id)).get()).toEqual({
+        ...grantToRow({ ...pending, ...extra, status, brokered: { ...pending.brokered!, requester_name: 'Latest verified name' } }),
+        consumedJti: null,
+      })
+    }
+    finally { otherClient.close() }
   })
 })
 
