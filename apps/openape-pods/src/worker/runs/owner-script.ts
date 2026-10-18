@@ -3,7 +3,7 @@ import type { RunInput } from '../../contracts/runs'
 import type { ExecutionObserver } from '../../main/programs/execution'
 import type { RunStore } from './store'
 
-export function ownerScriptAuthority(input: RunInput, activationId = `${input.podId}:${input.scriptHash}:${input.assignmentRevision}:${input.resourceEpoch}`): OpenApeOwnerScriptAuthority {
+export function ownerScriptAuthority(input: Pick<RunInput, 'podId' | 'scriptHash' | 'assignmentRevision' | 'resourceEpoch'>, activationId = `${input.podId}:${input.scriptHash}:${input.assignmentRevision}:${input.resourceEpoch}`): OpenApeOwnerScriptAuthority {
   return { source: 'owner-activation', activationId, podId: input.podId, scriptHash: input.scriptHash, assignmentRevision: input.assignmentRevision, resourceEpoch: input.resourceEpoch }
 }
 

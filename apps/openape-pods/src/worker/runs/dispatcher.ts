@@ -4,6 +4,7 @@ import { isProgramCall } from '../../contracts/program-execution'
 import type { ScriptRuntime, ScriptServices } from './runner'
 import type { ProgramCall } from '../../main/broker/authorization'
 import { executeOwnerScript, ownerScriptAuthority } from './owner-script'
+import { openOwnerScriptEffects } from '../recovery/owner-script'
 import { InboxOutbox, parseNotify } from '../inbox/outbox'
 import { RunCancellation, unresolvedOperation } from '../recovery/policy'
 import type { RecoveryFailure } from '../recovery/policy'
@@ -99,7 +100,7 @@ export class RunDispatcher {
       runs.unshift(selected)
     }
     const selectedId = id ?? runs[0]?.id
-    const effects = this.store.db.prepare('SELECT effect_key AS key,run_id AS runId FROM effect_ledger WHERE pod_id=? AND operation IN (\'http.request\',\'program.call\') AND state=\'unknown\' LIMIT 100').all(podId) as { key: string, runId: string }[]
+    const effects = [...openOwnerScriptEffects(this.store, podId), ...this.store.db.prepare('SELECT effect_key AS key,run_id AS runId FROM effect_ledger WHERE pod_id=? AND operation IN (\'http.request\',\'program.call\') AND state=\'unknown\' LIMIT 100').all(podId) as { key: string, runId: string }[]].slice(0, 100)
     return { ...(selectedId ? { timing: this.runs.timing(podId, selectedId) } : {}), approvals: this.runs.approvals(podId), effects, runs, events: selectedId ? (after !== undefined ? this.runs.events(podId, selectedId, after) : this.runs.recentEvents(podId, selectedId)) : [] }
   }
 
