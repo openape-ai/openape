@@ -35,6 +35,20 @@ function claims(value: OpenApeGrant): OpenApeAuthZClaims {
   const now = Math.floor(Date.now() / 1000)
   return { iss: issuer, sub: subject, aud: value.request.audience, target_host: value.request.target_host, grant_id: value.id, grant_type: value.request.grant_type, iat: now, exp: now + 300, jti: randomUUID(), decided_by: owner, brokered: value.brokered }
 }
+function agentBinding() {
+  return { subject, key_id: 'key-one', owner, decision_issuer: issuer, connection_id: connection.id }
+}
+async function enrollmentSnapshot() {
+  const [users, keys, agents, storedGrants, connections, audit] = await Promise.all([
+    database.select().from(schema.users),
+    database.select().from(schema.sshKeys),
+    database.select().from(schema.brokerAgents),
+    database.select().from(schema.grants),
+    database.select().from(schema.brokerConnections),
+    database.select().from(schema.brokerAudit),
+  ])
+  return { users, keys, agents, grants: storedGrants, connections, audit }
+}
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'broker-store-'))
   client = createClient({ url: `file:${join(directory, 'idp.sqlite')}` })
@@ -220,14 +234,59 @@ describe('durable grant brokering', () => {
     await expect(store.consume(value.id, claims(value))).rejects.toMatchObject({ statusCode: 403 })
   })
 
-  it('keeps external ownership separate from local user permissions and makes enrollment immutable', async () => {
-    const binding = { subject, key_id: 'key-one', owner, decision_issuer: issuer, connection_id: connection.id }
+  it('refreshes only the agent name for an identical enrollment and skips unchanged names', async () => {
+    const binding = agentBinding()
+    expect(await store.bindAgent(binding, 'Fixture', 'fixture-public-key')).toBe('Fixture')
+    expect(await database.select().from(schema.users).where(eq(schema.users.email, subject)).get()).toMatchObject({ name: 'Fixture', type: 'agent', owner: null, approver: null })
+    await grantStore.save({ ...grant(), status: 'pending' })
+    await grantStore.save(grant('always'))
+    const before = await enrollmentSnapshot()
+    await client.executeMultiple(`
+      CREATE TABLE enrollment_user_updates(email TEXT, name TEXT);
+      CREATE TRIGGER track_enrollment_user_updates AFTER UPDATE ON users
+      BEGIN
+        INSERT INTO enrollment_user_updates(email, name) VALUES(NEW.email, NEW.name);
+      END;
+    `)
+
+    expect(await store.bindAgent(binding, 'Renamed fixture', 'fixture-public-key')).toBe('Renamed fixture')
+    expect(await enrollmentSnapshot()).toEqual({ ...before, users: before.users.map(user => user.email === subject ? { ...user, name: 'Renamed fixture' } : user) })
+    expect(await store.bindAgent(binding, 'Renamed fixture', 'fixture-public-key')).toBe('Renamed fixture')
+    expect(await store.bindAgent(binding, 'Renamed fixture', 'fixture-public-key')).toBe('Renamed fixture')
+    expect((await client.execute('SELECT email, name FROM enrollment_user_updates ORDER BY rowid')).rows).toEqual([{ email: subject, name: 'Renamed fixture' }])
+    expect(await enrollmentSnapshot()).toEqual({ ...before, users: before.users.map(user => user.email === subject ? { ...user, name: 'Renamed fixture' } : user) })
+  })
+
+  it.each(['subject', 'key_id', 'owner', 'decision_issuer', 'connection_id'] as const)('refuses enrollment name refresh with a substituted %s', async (field) => {
+    const binding = agentBinding()
     await store.bindAgent(binding, 'Fixture', 'fixture-public-key')
-    expect(await database.select().from(schema.users).where(eq(schema.users.email, subject)).get()).toMatchObject({ type: 'agent', owner: null, approver: null })
+    await grantStore.save(grant('always'))
+    const before = await enrollmentSnapshot()
+
+    await expect(store.bindAgent({ ...binding, [field]: `different-${field}` }, 'Rejected rename', 'fixture-public-key')).rejects.toMatchObject({ statusCode: 403 })
+
+    expect(await enrollmentSnapshot()).toEqual(before)
+  })
+
+  it.each(['inactive-user', 'missing-user', 'human-user', 'owned-user', 'assigned-approver', 'empty-owner', 'empty-approver', 'missing-key', 'foreign-key', 'changed-public-key', 'extra-key'] as const)('refuses enrollment name refresh for %s', async (condition) => {
+    const binding = agentBinding()
     await store.bindAgent(binding, 'Fixture', 'fixture-public-key')
-    await expect(store.bindAgent({ ...binding, owner: 'another@identity.test' }, 'Fixture', 'fixture-public-key')).rejects.toMatchObject({ statusCode: 403 })
-    await database.update(schema.users).set({ isActive: false }).where(eq(schema.users.email, subject))
-    await expect(store.bindAgent(binding, 'Fixture', 'fixture-public-key')).rejects.toMatchObject({ statusCode: 403 })
+    await grantStore.save(grant('always'))
+    if (condition === 'inactive-user') await database.update(schema.users).set({ isActive: false }).where(eq(schema.users.email, subject))
+    if (condition === 'missing-user') await database.delete(schema.users).where(eq(schema.users.email, subject))
+    if (condition === 'human-user') await database.update(schema.users).set({ type: 'human' }).where(eq(schema.users.email, subject))
+    if (condition === 'owned-user') await database.update(schema.users).set({ owner }).where(eq(schema.users.email, subject))
+    if (condition === 'assigned-approver') await database.update(schema.users).set({ approver: owner }).where(eq(schema.users.email, subject))
+    if (condition === 'empty-owner') await database.update(schema.users).set({ owner: '' }).where(eq(schema.users.email, subject))
+    if (condition === 'empty-approver') await database.update(schema.users).set({ approver: '' }).where(eq(schema.users.email, subject))
+    if (condition === 'missing-key') await database.delete(schema.sshKeys).where(eq(schema.sshKeys.keyId, binding.key_id))
+    if (condition === 'foreign-key') await database.update(schema.sshKeys).set({ userEmail: 'foreign@identity.test' }).where(eq(schema.sshKeys.keyId, binding.key_id))
+    if (condition === 'extra-key') await database.insert(schema.sshKeys).values({ keyId: 'extra-key', userEmail: subject, publicKey: 'extra-public-key', name: 'Extra key', createdAt: 2 })
+    const before = await enrollmentSnapshot()
+
+    await expect(store.bindAgent(binding, 'Rejected rename', condition === 'changed-public-key' ? 'substituted-public-key' : 'fixture-public-key')).rejects.toMatchObject({ statusCode: 403 })
+
+    expect(await enrollmentSnapshot()).toEqual(before)
   })
 })
 

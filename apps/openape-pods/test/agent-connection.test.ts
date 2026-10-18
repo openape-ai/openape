@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { CredentialCache } from '../src/main/connections/cache'
-import { PodIdentityManager } from '../src/main/connections/agent'
+import { PodIdentityBindingError, PodIdentityManager } from '../src/main/connections/agent'
 
 let server: Server | undefined
 let root = ''
@@ -16,17 +16,18 @@ async function setup() {
   root = await mkdtemp(join(tmpdir(), 'pods-agent-'))
   const cache = new CredentialCache(root)
   const identity = new PodIdentityManager(cache)
-  const state = { key: '', podId: '', challenges: 0, authenticated: 0, denied: false }
+  const state = { key: '', podId: '', challenges: 0, authenticated: 0, denied: false, enrolled: 0, reply: {} as Record<string, unknown> }
   server = createServer(async (request, response) => {
     let data = ''; for await (const chunk of request) data += String(chunk)
     const body = JSON.parse(data) as Record<string, string>
     response.setHeader('Content-Type', 'application/json')
     if (request.url === '/api/pods/agents') {
+      state.enrolled++
       expect(request.headers.authorization).toBe('Bearer SYNTHETIC_OWNER')
       expect(Object.keys(body).sort()).toEqual(['name', 'podId', 'publicKey'])
       state.key = body.publicKey!; state.podId = body.podId!
       const keyId = createHash('sha256').update(Buffer.from(state.key.split(' ')[1]!, 'base64')).digest('hex')
-      response.end(JSON.stringify({ email: 'pod@example.test', owner: 'owner@example.test', keyId, permissions: 'none' })); return
+      response.end(JSON.stringify({ email: 'pod@example.test', owner: 'owner@example.test', keyId, permissions: 'none', ...state.reply })); return
     }
     if (state.denied) { response.statusCode = 403; response.end('{}'); return }
     if (request.url === '/api/auth/challenge') { expect(body.id).toBe('pod@example.test'); state.challenges++; response.end(JSON.stringify({ challenge: 'synthetic-challenge' })); return }
@@ -47,12 +48,52 @@ async function setup() {
   return { identity, cache, state, connectionId, podId, issuer }
 }
 describe('pod identity credential isolation', () => {
+  it('accepts legacy enrollment replies and confirms a name only when the provider acknowledges it exactly', async () => {
+    const fixture = await setup()
+    const initial = await fixture.identity.provision(fixture.connectionId, 'Fixture', 'SYNTHETIC_OWNER')
+    expect(initial.registeredName).toBeUndefined()
+    const path = join(root, `${fixture.connectionId}.identity.json`); const before = await readFile(path)
+    fixture.state.reply.name = 'A different name'
+    const unconfirmed = await fixture.identity.provision(fixture.connectionId, 'Renamed', 'SYNTHETIC_OWNER', undefined, initial.identity)
+    expect(unconfirmed).toEqual({ identity: initial.identity })
+    fixture.state.reply.name = 'Renamed'
+    const confirmed = await fixture.identity.provision(fixture.connectionId, 'Renamed', 'SYNTHETIC_OWNER', undefined, initial.identity)
+    expect(confirmed).toEqual({ identity: initial.identity, registeredName: 'Renamed' })
+    expect(await readFile(path)).toEqual(before)
+  })
+  it.each(['connectionId', 'podId', 'issuer', 'owner', 'subject', 'keyId', 'decisionIssuer', 'brokerConnectionId'] as const)('refuses a changed cached identity reference before enrollment (%s)', async (field) => {
+    const fixture = await setup()
+    const { identity } = await fixture.identity.provision(fixture.connectionId, 'Fixture', 'SYNTHETIC_OWNER')
+    const path = join(root, `${fixture.connectionId}.identity.json`); const before = await readFile(path)
+    const substituted = { ...identity, [field]: 'substituted-value' }
+    await expect(fixture.identity.provision(fixture.connectionId, 'Renamed', 'SYNTHETIC_OWNER', undefined, substituted)).rejects.toBeInstanceOf(PodIdentityBindingError)
+    expect(fixture.state.enrolled).toBe(1)
+    expect(await readFile(path)).toEqual(before)
+  })
+  it('does not repair or replace a substituted cache while refreshing a display name', async () => {
+    const fixture = await setup()
+    const { identity } = await fixture.identity.provision(fixture.connectionId, 'Fixture', 'SYNTHETIC_OWNER')
+    const path = join(root, `${fixture.connectionId}.identity.json`)
+    const changed = { ...JSON.parse(await readFile(path, 'utf8')), subject: 'another@example.test' }
+    await writeFile(path, JSON.stringify(changed)); const before = await readFile(path)
+    await expect(fixture.identity.provision(fixture.connectionId, 'Renamed', 'SYNTHETIC_OWNER', undefined, identity)).rejects.toBeInstanceOf(PodIdentityBindingError)
+    expect(fixture.state.enrolled).toBe(1)
+    expect(await readFile(path)).toEqual(before)
+  })
+  it.each([{ email: 'another@example.test' }, { keyId: 'another-key' }, { owner: 'another-owner@example.test' }, { permissions: 'all' }])('refuses a substituted enrollment reply without writing the cache (%j)', async (reply) => {
+    const fixture = await setup()
+    const { identity } = await fixture.identity.provision(fixture.connectionId, 'Fixture', 'SYNTHETIC_OWNER')
+    const path = join(root, `${fixture.connectionId}.identity.json`); const before = await readFile(path)
+    fixture.state.reply = { name: 'Renamed', ...reply }
+    await expect(fixture.identity.provision(fixture.connectionId, 'Renamed', 'SYNTHETIC_OWNER', undefined, identity)).rejects.toBeInstanceOf(PodIdentityBindingError)
+    expect(await readFile(path)).toEqual(before)
+  })
   it('persists a unique key before provisioning and refreshes only that agent through signed challenges', async () => {
     const fixture = await setup()
     await expect(fixture.identity.prepare(fixture.connectionId, fixture.podId, fixture.issuer, 'owner@example.test')).rejects.toThrow('already exists')
     await fixture.identity.ensurePrepared(fixture.connectionId, fixture.podId, fixture.issuer, 'owner@example.test')
     await expect(fixture.identity.ensurePrepared(fixture.connectionId, randomUUID(), fixture.issuer, 'owner@example.test')).rejects.toThrow('different setup')
-    const reference = await fixture.identity.provision(fixture.connectionId, 'Fixture', 'SYNTHETIC_OWNER')
+    const { identity: reference } = await fixture.identity.provision(fixture.connectionId, 'Fixture', 'SYNTHETIC_OWNER')
     const connection = fixture.identity.connection(reference, 'fixture-mac')
     expect(await connection.accessToken()).toBe('SYNTHETIC_POD_TOKEN_1')
     expect(await connection.accessToken()).toBe('SYNTHETIC_POD_TOKEN_1')
@@ -69,7 +110,7 @@ describe('pod identity credential isolation', () => {
     const fixture = await setup()
     await fixture.identity.ensurePrepared(fixture.connectionId, fixture.podId, fixture.issuer, 'owner@example.test')
     await expect(fixture.identity.ensurePrepared(fixture.connectionId, randomUUID(), fixture.issuer, 'owner@example.test')).rejects.toThrow('different setup')
-    const reference = await fixture.identity.provision(fixture.connectionId, 'Fixture', 'SYNTHETIC_OWNER')
+    const { identity: reference } = await fixture.identity.provision(fixture.connectionId, 'Fixture', 'SYNTHETIC_OWNER')
     await expect(fixture.identity.connection({ ...reference, podId: randomUUID() }, 'fixture-mac').accessToken()).rejects.toThrow('binding mismatch')
     fixture.state.denied = true
     await expect(fixture.identity.connection(reference, 'fixture-mac').accessToken()).rejects.toThrow('(403)')
@@ -87,6 +128,7 @@ it('enrolls through a receipt without sending owner credentials and pins the sep
   const issuer = 'https://pods.example.test'; const decisionIssuer = 'https://id.owner.test'; const owner = 'owner@owner.test'
   await manager.prepare(connectionId, podId, issuer, owner, { decisionIssuer, brokerConnectionId })
   const calls: Array<{ url: string, body: string, authorization: string | null }> = []
+  let replyOverrides: Record<string, unknown> = {}
   const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
     const url = String(input); const body = String(init?.body ?? '')
     calls.push({ url, body, authorization: new Headers(init?.headers).get('Authorization') })
@@ -94,23 +136,32 @@ it('enrolls through a receipt without sending owner credentials and pins the sep
     const enrollment = JSON.parse(body)
     expect(enrollment.connection_receipt).toBe('SYNTHETIC_RECEIPT')
     const keyId = createHash('sha256').update(Buffer.from(enrollment.publicKey.split(' ')[1], 'base64')).digest('hex')
-    return Response.json({ email: 'agent@pods.example.test', owner, keyId, permissions: 'none', decisionIssuer, brokerConnectionId })
+    return Response.json({ email: 'agent@pods.example.test', owner, keyId, permissions: 'none', decisionIssuer, brokerConnectionId, ...replyOverrides })
   })
   try {
-    const reference = await manager.provision(connectionId, 'Fixture', 'SYNTHETIC_OWNER_TOKEN', 'SYNTHETIC_RECEIPT')
+    const { identity: reference } = await manager.provision(connectionId, 'Fixture', 'SYNTHETIC_OWNER_TOKEN', 'SYNTHETIC_RECEIPT')
     expect(reference).toMatchObject({ issuer, decisionIssuer, brokerConnectionId, owner })
     expect(calls.every(call => call.authorization === null && !call.body.includes('SYNTHETIC_OWNER_TOKEN'))).toBe(true)
     const authority = manager.connection(reference, 'fixture')
     expect(authority.brokered).toMatchObject({ connection_id: brokerConnectionId, owner, agent_issuer: issuer })
     await expect(manager.connection({ ...reference, decisionIssuer: 'https://different.test' }, 'fixture').accessToken()).rejects.toThrow('binding mismatch')
     expect(JSON.stringify(reference)).not.toContain('RECEIPT')
+    const before = await cache.withCache(connectionId, file => readFile(file))
+    for (const substitution of [{ decisionIssuer: 'https://different.test' }, { brokerConnectionId: randomUUID() }]) {
+      replyOverrides = { name: 'Renamed', ...substitution }
+      await expect(manager.provision(connectionId, 'Renamed', 'SYNTHETIC_OWNER_TOKEN', 'SYNTHETIC_RECEIPT', reference)).rejects.toBeInstanceOf(PodIdentityBindingError)
+      expect(await cache.withCache(connectionId, file => readFile(file))).toEqual(before)
+    }
+    replyOverrides = { name: 'Renamed' }
+    expect(await manager.provision(connectionId, 'Renamed', 'SYNTHETIC_OWNER_TOKEN', 'SYNTHETIC_RECEIPT', reference)).toEqual({ identity: reference, registeredName: 'Renamed' })
+    expect(await cache.withCache(connectionId, file => readFile(file))).toEqual(before)
   }
   finally { fetch.mockRestore() }
 })
 
 it('fails with a missing established identity instead of generating a key or using owner credentials', async () => {
   const fixture = await setup()
-  const reference = await fixture.identity.provision(fixture.connectionId, 'Fixture', 'SYNTHETIC_OWNER')
+  const { identity: reference } = await fixture.identity.provision(fixture.connectionId, 'Fixture', 'SYNTHETIC_OWNER')
   await fixture.cache.erasePodKey(fixture.connectionId, fixture.podId)
   await expect(fixture.identity.connection(reference, 'fixture-mac').accessToken()).rejects.toMatchObject({ code: 'ENOENT' })
   expect(fixture.state.authenticated).toBe(0)

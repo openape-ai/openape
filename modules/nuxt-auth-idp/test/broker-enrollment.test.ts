@@ -3,6 +3,7 @@ import { createHash, generateKeyPairSync, randomUUID } from 'node:crypto'
 import { generateKeyPair } from '@openape/core'
 import { BROKER_RECEIPT_TYPE, signBrokerToken } from '@openape/grants'
 import { beforeEach, expect, it, vi } from 'vitest'
+import { createError } from 'h3'
 
 const ownerIssuer = 'https://id.owner.test'
 const brokerIssuer = 'https://pods.provider.test'
@@ -39,12 +40,44 @@ it('enrolls distinct agent identities with a verified external owner and no owne
   expect(bindAgent).toHaveBeenCalledWith(expect.objectContaining({ owner: first.owner, decision_issuer: ownerIssuer, connection_id: connectionId, key_id: keyId }), 'Synthetic pod', body.publicKey)
   expect(forward).toHaveBeenCalledWith(expect.objectContaining({ owner: first.owner }), 'connection')
 })
+it('repeats the same verified binding with the current display name and unchanged identity', async () => {
+  const first = await handler({} as never)
+  const originalBinding = bindAgent.mock.calls[0]![0]
+  const publicKey = body.publicKey
+  body.name = '  Morning briefing  '
+  body.connection_receipt = await receipt()
+  bindAgent.mockResolvedValue('Morning briefing')
+
+  expect(await handler({} as never)).toEqual({ ...first, name: 'Morning briefing' })
+  expect(bindAgent).toHaveBeenLastCalledWith(originalBinding, 'Morning briefing', publicKey)
+  expect(forward).toHaveBeenLastCalledWith(originalBinding, 'connection')
+})
+
+it('does not claim a stored name when a legacy store gives no confirmation', async () => {
+  bindAgent.mockResolvedValue(undefined)
+  expect(await handler({} as never)).not.toHaveProperty('name')
+})
+
+it('refuses a forged receipt or inactive owner before refreshing an existing name', async () => {
+  await handler({} as never)
+  bindAgent.mockClear()
+  const other = await generateKeyPair()
+  const now = Math.floor(Date.now() / 1000)
+  body.connection_receipt = await signBrokerToken({ iss: ownerIssuer, sub: 'owner@owner.test', aud: brokerIssuer, iat: now, exp: now + 300, jti: randomUUID(), connection_id: connectionId, agent_domain: 'pods.provider.test' }, other.privateKey, 'wrong-key', BROKER_RECEIPT_TYPE)
+  await expect(handler({} as never)).rejects.toMatchObject({ statusCode: 401 })
+  body.connection_receipt = await receipt()
+  forward.mockRejectedValue(createError({ statusCode: 403, statusMessage: 'Broker owner is inactive' }))
+  await expect(handler({} as never)).rejects.toMatchObject({ statusCode: 403 })
+  expect(bindAgent).not.toHaveBeenCalled()
+})
 it('refuses substituted recipients, agent domains and revoked owner consent before persisting an identity', async () => {
   body.connection_receipt = await receipt({ aud: 'https://another.provider.test' })
   await expect(handler({} as never)).rejects.toMatchObject({ statusCode: 401 })
   body.connection_receipt = await receipt({ agent_domain: 'another.provider.test' })
   await expect(handler({} as never)).rejects.toMatchObject({ statusCode: 403 })
   body.connection_receipt = await receipt()
+  forward.mockResolvedValue({ id: randomUUID(), status: 'active' })
+  await expect(handler({} as never)).rejects.toMatchObject({ statusCode: 403 })
   forward.mockResolvedValue({ id: connectionId, status: 'revoked' })
   await expect(handler({} as never)).rejects.toMatchObject({ statusCode: 403 })
   expect(bindAgent).not.toHaveBeenCalled()

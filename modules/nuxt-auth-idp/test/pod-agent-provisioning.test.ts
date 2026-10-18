@@ -71,7 +71,7 @@ describe('owner-scoped pod identity over HTTP', () => {
     const repeated = await request(body); expect(repeated.status).toBe(200); expect(await repeated.json()).toEqual(identity)
     const { useIdpStores } = await import('../src/runtime/server/utils/stores')
     const { useGrantStores } = await import('../src/runtime/server/utils/grant-stores')
-    expect(await useIdpStores().userStore.findByEmail(identity.email)).toMatchObject({ owner, approver: owner, type: 'agent', isActive: true })
+    expect(await useIdpStores().userStore.findByEmail(identity.email)).toMatchObject({ name: body.name, owner, approver: owner, type: 'agent', isActive: true })
     expect(await useGrantStores().grantStore.findByRequester(identity.email)).toEqual([])
     expect(await useIdpStores().sshKeyStore.findByUser(identity.email)).toHaveLength(1)
   })

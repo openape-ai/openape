@@ -155,19 +155,22 @@ export function createDrizzleBrokerStore(): BrokerStore {
       return row ? { subject: row.subject, key_id: row.keyId, owner: row.owner, decision_issuer: row.decisionIssuer, connection_id: row.connectionId } : null
     },
     async bindAgent(binding, name, publicKey) {
-      await db.transaction(async (tx) => {
+      return await db.transaction(async (tx) => {
         const existing = await tx.select().from(brokerAgents).where(eq(brokerAgents.subject, binding.subject)).get()
         const user = await tx.select().from(users).where(eq(users.email, binding.subject)).get()
         const duplicate = await tx.select().from(sshKeys).where(eq(sshKeys.keyId, binding.key_id)).get()
         if (existing) {
-          if (!user?.isActive || existing.owner !== binding.owner || existing.decisionIssuer !== binding.decision_issuer || existing.connectionId !== binding.connection_id || existing.keyId !== binding.key_id || duplicate?.userEmail !== binding.subject) reject('Existing agent binding cannot be changed')
-          return
+          const keys = await tx.select().from(sshKeys).where(eq(sshKeys.userEmail, binding.subject))
+          if (!user?.isActive || user.type !== 'agent' || user.owner !== null || user.approver !== null || existing.owner !== binding.owner || existing.decisionIssuer !== binding.decision_issuer || existing.connectionId !== binding.connection_id || existing.keyId !== binding.key_id || duplicate?.userEmail !== binding.subject || duplicate.publicKey !== publicKey || keys.length !== 1) reject('Existing agent binding cannot be changed')
+          if (user.name !== name) await tx.update(users).set({ name }).where(eq(users.email, binding.subject))
+          return name
         }
         if (user || duplicate) reject('Agent identity or key is already assigned')
         const now = Math.floor(Date.now() / 1000)
         await tx.insert(users).values({ email: binding.subject, name, type: 'agent', owner: null, approver: null, isActive: true, createdAt: now })
         await tx.insert(sshKeys).values({ keyId: binding.key_id, userEmail: binding.subject, publicKey, name, createdAt: now })
         await tx.insert(brokerAgents).values({ subject: binding.subject, keyId: binding.key_id, owner: binding.owner, decisionIssuer: binding.decision_issuer, connectionId: binding.connection_id })
+        return name
       }, { behavior: 'immediate' })
     },
   }
