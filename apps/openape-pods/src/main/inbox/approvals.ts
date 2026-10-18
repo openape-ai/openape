@@ -4,6 +4,7 @@ import { readJSON } from '../connections/http'
 
 // One IdP read per minute at most; the inbox publishes every ten seconds.
 const cacheMs = 60000
+const maximumListingBytes = 1024 * 1024
 
 /**
  * Counts what `apes grants inbox` lists: pending grants that others requested from the owner.
@@ -41,7 +42,7 @@ export function pendingApprovals(login: () => ApesLogin, account: () => Promise<
       if (token) {
         // ponytail: one page of 100 grants; a longer backlog shows as 100 until it shrinks.
         const reply = await fetch(`${token.issuer}/api/grants?status=pending&limit=100`, { redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(10000)]), headers: { Authorization: `Bearer ${token.accessToken}` } })
-        pending = countPendingGrants(await readJSON(reply), owner.email)
+        pending = countPendingGrants(await readJSON(reply, maximumListingBytes), owner.email)
       }
     }
     catch (error) { console.error('Could not count pending IdP approvals', error) }
