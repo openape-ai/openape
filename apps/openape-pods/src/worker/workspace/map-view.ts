@@ -5,6 +5,7 @@ import { parseManifest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
 import type { PodResource } from '../../contracts/resources'
 import { privatePods } from '../central/projection-policy'
+import { openOwnerScriptEffects } from '../recovery/owner-script'
 import { ItemTagStore } from './item-tags'
 
 type Row = Record<string, unknown>
@@ -138,7 +139,7 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
       lastRun: local ? lastRuns.get(pod.id) ?? null : null,
       runs: local ? runTotals[pod.id] ?? 0 : 0,
       queue: local ? { blocked: Number(queue?.count ?? 0), error: (queue?.error as string | null) ?? null } : { blocked: 0, error: null },
-      unknown: unknownEffects.filter(row => local && row.pod_id === pod.id).map(row => ({ key: String(row.effect_key), runId: String(row.run_id) })),
+      unknown: local ? [...openOwnerScriptEffects(store, pod.id), ...unknownEffects.filter(row => row.pod_id === pod.id).map(row => ({ key: String(row.effect_key), runId: String(row.run_id) }))] : [],
       approvals: runApprovals,
       grants: waitingGrants,
       failures: local ? failures[pod.id] ?? 0 : 0,
@@ -153,7 +154,7 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
     ...questions.map(row => ({ podId: String(row.pod_id), kind: 'question' as const, title: name(row.pod_id), count: Number(row.count) })),
     ...waitingApprovals.map(row => ({ podId: String(row.pod_id), kind: 'approval' as const, title: name(row.pod_id), count: Number(row.count) })),
   ]
-  const unknownDeliveries = unknownEffects.length + Number(db.prepare('SELECT count(*) AS count FROM effect_attempts WHERE state=\'unknown\'').get()!.count)
+  const unknownDeliveries = unknownEffects.length + pods.reduce((count, pod) => count + pod.unknown.filter(effect => effect.authority).length, 0) + Number(db.prepare('SELECT count(*) AS count FROM effect_attempts WHERE state=\'unknown\'').get()!.count)
   return {
     at,
     window: { from, to: at },
