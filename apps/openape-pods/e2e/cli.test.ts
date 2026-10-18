@@ -19,6 +19,7 @@ import { DomainData } from '../src/worker/data/domain'
 import { GrantLedger } from '../src/worker/resources/grants'
 import { ItemTagStore } from '../src/worker/workspace/item-tags'
 import { installExample } from '../src/worker/runs/examples'
+import { unresolvedOperation } from '../src/worker/recovery/policy'
 import { ResourceRegistry } from '../src/worker/resources/registry'
 import { fixtureShellIdentity } from './fixtures/shell-identity'
 
@@ -128,14 +129,17 @@ export async function run(context) {
     expect(new ItemTagStore(store).own(id)).toEqual(['native', 'verified'])
     const records = store.db.prepare('SELECT state,error FROM runs WHERE pod_id=?').all(id)
     expect(records).toEqual([{ state: 'completed', error: null }])
+    const rootEvents = store.db.prepare('SELECT data FROM run_events WHERE type=\'root-script\' ORDER BY sequence').all().map(row => JSON.parse(String(row.data)))
+    const authority = { source: 'owner-activation', activationId: expect.any(String), podId: id, scriptHash: store.getPod(id).activeScript, assignmentRevision: store.getPod(id).bindingRevision, resourceEpoch: new ResourceRegistry(store, () => {}).epoch(id) }
+    expect(rootEvents).toEqual([{ state: 'authorized', authority }, { state: 'completed', authority, exitCode: 0 }])
+    for (const receipt of rootEvents) expect(receipt).not.toHaveProperty('grantId')
+    expect(unresolvedOperation(store, id)).toBe(false)
+    expect(store.db.prepare('SELECT count(*) AS n FROM effect_ledger').get()!.n).toBe(0)
   }
   finally { store.close() }
   expect(await readFile(protectedFile, 'utf8')).toBe(identity.ownerLogin)
-  expect(identity.ownerDecisions()).toHaveLength(1)
-  const startCalls = identity.authorizations().filter(item => item.call.grant_type === 'once')
-  expect(startCalls).toHaveLength(2)
-  expect(startCalls[0]!.grantId).toBe(startCalls[1]!.grantId)
-  for (const field of ['program', 'argv', 'files', 'grant_type', 'target_host']) expect(startCalls[0]!.call[field]).toEqual(startCalls[1]!.call[field])
+  expect(identity.ownerDecisions()).toEqual([])
+  expect(identity.authorizations()).toEqual([])
   if (level === 'owner') {
     await writeFile(script, `export async function run(context) {
       if (!context.input.validation) { context.log('Started waiting'); await new Promise(resolve => setTimeout(resolve, 30000)); }
@@ -156,10 +160,18 @@ export async function run(context) {
       await client.close(); client = undefined
       const cancelled = new PodDatabase(profile)
       try {
-        expect(cancelled.db.prepare('SELECT count(*) AS n FROM effect_ledger WHERE state=\'intent\'').get()!.n).toBe(0)
-        expect(cancelled.db.prepare('SELECT count(*) AS n FROM effect_ledger WHERE state=\'unknown\'').get()!.n).toBe(1)
+        expect(cancelled.db.prepare('SELECT count(*) AS n FROM effect_ledger').get()!.n).toBe(0)
+        expect(unresolvedOperation(cancelled, id)).toBe(true)
+        const run = outputs.at(-1) as { id: string }
+        const boundary = cancelled.db.prepare('SELECT data FROM run_events WHERE run_id=? AND type=\'recovery-boundary\'').get(run.id)!
+        expect(JSON.parse(String(boundary.data))).toMatchObject({ id: `owner-script:${run.id}`, kind: 'untracked', operation: 'owner-script', authority: { source: 'owner-activation', podId: id } })
+        expect(cancelled.db.prepare('SELECT count(*) AS n FROM run_events WHERE run_id=? AND type=\'recovery-boundary-result\'').get(run.id)!.n).toBe(0)
+        const recovery = cancelled.db.prepare('SELECT data FROM run_events WHERE run_id=? AND type=\'recovery\'').get(run.id)!
+        expect(JSON.parse(String(recovery.data))).toMatchObject({ disposition: 'hold', cause: 'owner-cancelled' })
       }
       finally { cancelled.close() }
+      expect(identity.ownerDecisions()).toEqual([])
+      expect(identity.authorizations()).toEqual([])
     }
     finally { clearTimeout(deadline) }
   }
@@ -207,6 +219,8 @@ it('executes an assigned owner program without opening its encrypted application
   expect(await executeCli(cliArguments(['run', podId]), client, io()), JSON.stringify(outputs.at(-1))).toBe(0)
   expect(outputs.at(-1)).toMatchObject({ state: 'completed', summary: 'Assigned owner program executed without a credential cipher' })
   expect(await readFile(encryptedPath)).toEqual(encryptedBefore)
+  expect(identity.ownerDecisions()).toEqual([])
+  expect(identity.authorizations()).toEqual([expect.objectContaining({ call: expect.objectContaining({ program: expect.objectContaining({ name: 'printenv' }), argv: ['HOME'] }) })])
 })
 
 it('refuses missing Pod keys despite a valid owner CLI login without falling back to that owner identity', async () => {
