@@ -66,6 +66,8 @@ it('migrates retired keychain values once, keeps the legacy file aside and reope
     await expect(desktop.connect(id, JSON.stringify({ value: 'not-an-identity' }))).rejects.toThrow('Cannot replace')
     await cli.erasePodKey(id, identity.podId)
     expect(await readdir(root)).not.toContain(`${id}.identity.json`)
+    // Erasing also removes the retired keychain copy kept aside for rollback.
+    expect(await readdir(join(root, 'legacy'))).not.toContain(`${id}.encrypted`)
     await cli.create(id, JSON.stringify(identity))
     expect(await cli.readConnection(id)).toEqual(identity)
     expect(unavailable.decrypt).not.toHaveBeenCalled()

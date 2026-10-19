@@ -7,24 +7,25 @@ import { requireCleanBuild, requireReleaseReview, sha256, writeDistribution } fr
 
 if (process.platform !== 'darwin' || process.arch !== 'arm64') throw new Error('The verified Pods package currently requires macOS arm64')
 const local = process.argv.includes('--signed-local')
-// Owner installs on the build Mac: Developer ID signed, not notarized (no quarantine flag), app directory only.
-const owner = process.argv.includes('--signed-owner')
-const distribution = process.argv.includes('--distribution'); const candidate = process.argv.includes('--signed-candidate'); const signed = process.argv.includes('--signed') || candidate || local || owner
+// Owner installs on the build Mac (issue 1519): ad-hoc signed app directory of a clean build. Pods keeps no secret in
+// the keychain, so it needs no Developer ID, signing key or notarization; a local copy carries no quarantine flag.
+const owner = process.argv.includes('--owner')
+const distribution = process.argv.includes('--distribution'); const candidate = process.argv.includes('--signed-candidate'); const signed = process.argv.includes('--signed') || candidate || local
 if (distribution) rmSync('release/distribution/release.json', { force: true })
-if (process.argv.slice(2).some(value => !['--distribution', '--signed', '--signed-candidate', '--signed-local', '--signed-owner'].includes(value)) || (signed && !distribution) || ([candidate, local, owner, process.argv.includes('--signed')].filter(Boolean).length > 1)) throw new Error('Unsupported package option')
+if (process.argv.slice(2).some(value => !['--distribution', '--signed', '--signed-candidate', '--signed-local', '--owner'].includes(value)) || ((signed || owner) && !distribution) || ([candidate, local, owner, process.argv.includes('--signed')].filter(Boolean).length > 1)) throw new Error('Unsupported package option')
 const identity = process.env.OPENAPE_PODS_SIGNING_IDENTITY
 let review = null
-let source = null
+const source = owner ? requireCleanBuild() : null
 if (signed) {
-  if (local || owner) source = requireCleanBuild()
+  if (local) requireCleanBuild()
   else review = requireReleaseReview(candidate)
-  if (!identity?.startsWith('Developer ID Application: ') || (!owner && !process.env.OPENAPE_PODS_NOTARY_PROFILE)) throw new Error('Explicit Developer ID and notary keychain profile are required')
+  if (!identity?.startsWith('Developer ID Application: ') || !process.env.OPENAPE_PODS_NOTARY_PROFILE) throw new Error('Explicit Developer ID and notary keychain profile are required')
   for (const path of ['dist/native/pods-helper', 'dist/vendor/codex']) execFileSync('/usr/bin/codesign', ['--force', '--timestamp', '--options', 'runtime', '--sign', identity, ...(path.endsWith('/codex') ? ['--entitlements', 'runtime-sources/entitlements.mac.plist'] : []), path], { stdio: 'inherit' })
   for (const [manifest, binary] of [['manifest.json', 'codex']]) {
     const path = join('dist/vendor', manifest); const value = JSON.parse(readFileSync(path, 'utf8')); value.binaryHash = sha256(join('dist/vendor', binary)); writeFileSync(path, JSON.stringify(value, null, 2))
   }
 }
-if (distribution) writeDistribution(signed && !candidate && !local && !owner, review, owner ? source : review)
+if (distribution) writeDistribution(signed && !candidate && !local, review, source ?? review)
 const output = distribution ? 'release/distribution' : 'release'
 const productName = distribution ? 'OpenApe Pods' : 'OpenApe Pods Fixture'
 const artifacts = await build({
@@ -43,9 +44,9 @@ const artifacts = await build({
     npmRebuild: false,
     // node-pty rewrites app.asar paths even when already unpacked; keep its helper outside that tree.
     extraResources: [{ from: 'dist/vendor/apes', to: 'apes' }, ...['node-pty', `node-pty-${process.platform}-${process.arch}`].map(name => ({ from: `dist/vendor/apes/node_modules/@lydell/${name}`, to: `apes/node_modules/@lydell/${name}` })), ...(distribution ? [{ from: 'dist/distribution', to: '.' }] : [])],
-    ...(distribution ? { artifactName: `OpenApe-Pods-\${version}-\${arch}-${local ? 'signed-local' : candidate ? 'signed-candidate' : signed ? 'signed' : 'unsigned'}.\${ext}` } : {}),
-    mac: { icon: 'build/openape-pods.icns', category: 'public.app-category.productivity', identity: signed ? identity.replace('Developer ID Application: ', '') : null, hardenedRuntime: signed, notarize: false, minimumSystemVersion: '14.0', ...(signed ? { entitlements: 'runtime-sources/entitlements.mac.plist', entitlementsInherit: 'runtime-sources/entitlements.mac.plist', signIgnore: ['dist/(native|vendor)/'] } : {}) },
-    ...(signed && !owner
+    ...(distribution ? { artifactName: `OpenApe-Pods-\${version}-\${arch}-${local ? 'signed-local' : candidate ? 'signed-candidate' : signed ? 'signed' : owner ? 'owner' : 'unsigned'}.\${ext}` } : {}),
+    mac: { icon: 'build/openape-pods.icns', category: 'public.app-category.productivity', identity: signed ? identity.replace('Developer ID Application: ', '') : owner ? '-' : null, hardenedRuntime: signed, notarize: false, minimumSystemVersion: '14.0', ...(signed ? { entitlements: 'runtime-sources/entitlements.mac.plist', entitlementsInherit: 'runtime-sources/entitlements.mac.plist' } : {}), ...(signed || owner ? { signIgnore: ['dist/(native|vendor)/'] } : {}) },
+    ...(signed
       ? {
           afterSign: async (context) => {
             const bundle = join(context.appOutDir, `${productName}.app`); const archive = join(context.appOutDir, 'notarization.zip')

@@ -24,7 +24,7 @@
     "package:distribution": "node scripts/package.mjs --distribution",
     "package:signed": "node scripts/package.mjs --distribution --signed",
     "package:signed-candidate": "node scripts/package.mjs --distribution --signed-candidate",
-    "package:owner": "node scripts/package.mjs --distribution --signed-owner",
+    "package:owner": "node scripts/package.mjs --distribution --owner",
     "install:owner": "node scripts/install-owner.mjs",
     "test:distribution": "node scripts/verify-distribution.mjs",
     "handbook": "node scripts/handbook.mjs",
