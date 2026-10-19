@@ -51,7 +51,7 @@ if (current.sourceRevision === next.sourceRevision) { console.log(`install:owner
 if (next.schema.minimum > current.schema.current || next.schema.current < current.schema.current) fail(`the candidate cannot open database version ${current.schema.current}`)
 
 // 2. The profile: no retired keychain file, no running work.
-if (existsSync(join(options.profile, 'remote/registration.enc')) || readdirSync(join(options.profile, 'credentials')).some(name => name.endsWith('.encrypted'))) fail('the profile still holds keychain files; install a Developer ID signed build once to migrate them')
+if (existsSync(join(options.profile, 'remote/registration.enc')) || (existsSync(join(options.profile, 'credentials')) && readdirSync(join(options.profile, 'credentials')).some(name => name.endsWith('.encrypted')))) fail('the profile still holds keychain files; install a Developer ID signed build once to migrate them')
 if (query('SELECT count(*) FROM run_leases') > 0) fail('a run is active; retry when it has finished')
 if (query('SELECT count(*) FROM work_items WHERE state=\'claimed\'') > 0) fail('network work is claimed; retry when it has finished')
 

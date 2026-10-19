@@ -5,7 +5,7 @@ import { mailTLSFixture } from './fixtures/mail-tls'
 import { execFile } from 'node:child_process'
 import { setTimeout as delay } from 'node:timers/promises'
 import { promisify } from 'node:util'
-import { mkdtemp, mkdir, realpath, rm, writeFile, readFile, symlink } from 'node:fs/promises'
+import { mkdtemp, mkdir, realpath, rm, stat, writeFile, readFile, symlink } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
@@ -111,7 +111,7 @@ it('terminal: the external o365 protocol fixture refreshes and reads through its
       ids.push(...reply.items.map(item => item.id)); cursor = reply.nextCursor ?? ''
     }
     expect(ids).toEqual(['first', 'second']); expect(fixture.state).toMatchObject({ deviceCodes: 1, deviceTokens: 1, refreshes: 1, reads: 2 })
-    expect((await readFile(join(cacheRoot, `${id}.encrypted`))).includes('SYNTHETIC_TLS_REFRESH')).toBe(false)
+    expect((await stat(join(cacheRoot, `${id}.connection.json`))).mode & 0o777).toBe(0o600)
     await state.use(id, binding, async path => expect(await readFile(join(path, 'token.json'), 'utf8')).toContain('SYNTHETIC_TLS_REFRESH'))
     await expect(state.use(id, { ...binding, podId: randomUUID() }, async () => {})).rejects.toThrow('another application or pod')
   }
