@@ -32,7 +32,7 @@ async function setup(packaged = false, slow = false, unicode = false) {
   await writeFile(toolFile, `import fs from 'node:fs'; import {spawnSync} from 'node:child_process';
 const cache=JSON.parse(fs.readFileSync(process.env.POD_TOOL_AUTH_FILE,'utf8'));
 const result={assigned:!!cache.access_token, childDenied:!!spawnSync('/bin/echo',['UNASSIGNED']).error};
-try { fs.readFileSync(${JSON.stringify(join(credentialRoot, `${siblingId}.encrypted`))}); result.siblingDenied=false } catch { result.siblingDenied=true }
+try { fs.readFileSync(${JSON.stringify(join(credentialRoot, `${siblingId}.connection.json`))}); result.siblingDenied=false } catch { result.siblingDenied=true }
 cache.access_token='SYNTHETIC_ROTATED_TOKEN';fs.writeFileSync(process.env.POD_TOOL_AUTH_FILE,JSON.stringify(cache));
 console.log(JSON.stringify(result));console.error(cache.access_token);
 ${unicode ? `for (const byte of Buffer.from('Grüße 日本語')) { process.stdout.write(Buffer.from([byte])); await new Promise(resolve=>setTimeout(resolve,5)); }` : ''}
