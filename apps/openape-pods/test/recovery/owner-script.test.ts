@@ -33,6 +33,24 @@ function fixture() {
   return { store, resources, pod, dispatcher, tool }
 }
 
+it('forwards a validated tool summary separately from the unchanged program arguments', async () => {
+  const f = fixture()
+  f.tool.mockResolvedValue({ exitCode: 0, stdout: '{}', stderr: '' } as never)
+  const call = { application: 'fixture', argv: ['read', '--message', 'immutable-1'], approvalWaitMs: 0 }
+  const summary = { title: 'Review this selected object', description: 'Synthetic review context', link: 'https://example.test/review/1' }
+  vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
+    await hooks.execution!.authorized({ authority: await hooks.authorizeStart!(), write: false })
+    await hooks.request('tools.invoke', { ...call, summary }, signal)
+    await hooks.execution!.completed!({ exitCode: 0 })
+    return { status: 'completed', summary: 'Synthetic tool call completed', completedInputIds: input.eventIds, gapIds: [] }
+  })
+  const id = f.dispatcher.start(f.pod.id)
+  await expect.poll(() => f.dispatcher.runs.get(id).state).toBe('completed')
+  expect(f.tool).toHaveBeenCalledWith(call, expect.any(AbortSignal), expect.any(Object), summary)
+  expect(f.tool).toHaveBeenCalledOnce()
+  expect(unresolvedOperation(f.store, f.pod.id)).toBe(false)
+})
+
 it('does not turn a verified failed root process into an external effect or prevent the next trigger', async () => {
   const f = fixture()
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, _input, _signal, hooks) => {

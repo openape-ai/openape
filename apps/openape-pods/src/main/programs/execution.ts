@@ -1,5 +1,6 @@
 import type { OpenApeOwnerScriptAuthority } from '@openape/core'
 import { AuthorityError, InfrastructureError, NonRetryableError, PermissionUnavailableError, infrastructureFailure } from '../../contracts/infrastructure'
+import type { PermissionRefusal } from '../../contracts/infrastructure'
 import type { ProcessDomain } from '../../worker/runtime/sandbox'
 
 export type ExecutionAuthorization = { grantId: string, write: boolean, authority?: { source: 'grant', grantId: string } } | { authority: OpenApeOwnerScriptAuthority, write: false, grantId?: never }
@@ -110,7 +111,7 @@ function notStartedFailure(frame: Record<string, unknown>): Error {
   const text = typeof frame.error === 'string' ? frame.error : 'ape-shell refused execution'
   const failure = frame.failure as Record<string, unknown> | undefined
   if (failure && typeof failure === 'object' && !Array.isArray(failure)) {
-    if (failure.kind === 'permission' && Object.keys(failure).every(key => ['kind', 'state', 'grantId'].includes(key)) && ['missing', 'pending', 'denied', 'revoked', 'expired'].includes(String(failure.state)) && (failure.grantId === undefined || (typeof failure.grantId === 'string' && failure.grantId))) return new PermissionUnavailableError(text)
+    if (failure.kind === 'permission' && Object.keys(failure).every(key => ['kind', 'state', 'grantId'].includes(key)) && ['missing', 'pending', 'denied', 'revoked', 'expired'].includes(String(failure.state)) && (failure.grantId === undefined || (typeof failure.grantId === 'string' && failure.grantId))) return new PermissionUnavailableError(text, { state: failure.state as PermissionRefusal['state'], ...(failure.grantId === undefined ? {} : { grantId: failure.grantId as string }) })
     if (failure.kind === 'infrastructure' && Object.keys(failure).every(key => ['kind', 'phase', 'retryAfterMs', 'status', 'detail'].includes(key)) && failure.phase === 'authorization' && (failure.status === undefined || (Number.isInteger(failure.status) && Number(failure.status) >= 400 && Number(failure.status) <= 599))) {
       try { return new InfrastructureError(infrastructureFailure(failure)) }
       catch { return new AuthorityError(text) }

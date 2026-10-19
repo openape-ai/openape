@@ -1,5 +1,12 @@
 # Active work
 
+## Structured tool permission refusals — issue 1514
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1514. Branch `bugfix/issue-1514-tool-invocation`, checkout `openape-monorepo.worktrees/tool-invocation-1514`, canonical base `264218e4b2acc9a5b38be8301d54d75a16c81f60`.
+- Preserve validated private-channel permission state and grant ID in nonblocking assigned-program refusals. Keep exact command authority, final owner decisions and unknown-effect holds unchanged. Existing per-call summaries already use the shared parser and a separate presentation channel; retain that contract and its Pod-origin boundary.
+- Verification: focused refusal, spoofing, infrastructure, unknown-process and existing summary transport cases; required affected gate, app/CLI builds and signed local rollout follow before delivery. Package the regular desktop before building the standalone runtime so the CLI-only profile-lock helper remains outside the desktop signing allowlist.
+- Next: independent review, native PR with explicit issue relation, canonical merge and coordinated app/CLI installation after the owner profile has no active run.
+
 ## Manual recovery for cancelled owner scripts — issue 1513
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1513. Branch `bugfix/issue-1513-owner-script-recovery`, checkout `openape-monorepo.worktrees/owner-script-recovery-1513`, canonical base `f30d5ce7cb1a1ef937674f6440ca19da3ef98292`.

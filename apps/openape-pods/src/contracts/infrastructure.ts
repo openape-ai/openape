@@ -1,7 +1,13 @@
 import { setTimeout as delay } from 'node:timers/promises'
 
 export class AuthorityError extends Error {}
-export class PermissionUnavailableError extends AuthorityError {}
+export interface PermissionRefusal {
+  state: 'missing' | 'pending' | 'denied' | 'revoked' | 'expired'
+  grantId?: string
+}
+export class PermissionUnavailableError extends AuthorityError {
+  constructor(message: string, readonly permission?: PermissionRefusal) { super(message) }
+}
 /** A failure that would repeat with the same input, so retrying the run cannot help. */
 export class NonRetryableError extends Error {}
 
