@@ -24,7 +24,7 @@ A profile with retired keychain files is migrated once by a Developer ID signed
 build (`--signed-local` below), which `install:owner` also installs: it opens the
 keychain item silently, writes the private files and moves the old files to
 `credentials/legacy/` and `remote/legacy/`. Signing and notarizing need the login
-keychain, so the owner runs that build himself at the Mac; agents never start it.
+keychain, so the owner runs that build at the Mac; agents never start it.
 
 ## Developer ID signed builds
 
