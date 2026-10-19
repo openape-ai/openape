@@ -18,7 +18,7 @@ export class Scheduler {
     const count = (state: string) => this.store.db.prepare('SELECT count(*) AS count FROM accepted_events WHERE pod_id=? AND state=?').get(podId, state)!.count as number
     const retryRun = this.store.db.prepare('SELECT run_id FROM accepted_events WHERE pod_id=? AND state=\'pending\' AND run_id IS NOT NULL ORDER BY sequence LIMIT 1').get(podId)
     const retry = infrastructureRetry(this.store, retryRun ? String(retryRun.run_id) : null)
-    return { failed: count('failed'), ...(retry ? { retry: { at: retry.at, attempt: retry.attempt, error: retry.error } } : {}), spec: row ? parseSchedule(JSON.parse(row.spec as string)) : null, enabled: row?.enabled === 1, revision: row?.revision as number ?? 0, nextAt: row?.next_at as number | null ?? null, error: row?.error as string | null ?? this.store.db.prepare('SELECT o.error FROM reference_observations o JOIN resources r ON r.id=o.resource_id AND r.pod_id=o.pod_id WHERE o.pod_id=? AND o.error IS NOT NULL AND r.state=\'ready\' LIMIT 1').get(podId)?.error as string | null ?? this.store.db.prepare('SELECT error FROM accepted_events WHERE pod_id=? AND state=\'blocked\' ORDER BY sequence LIMIT 1').get(podId)?.error as string | null ?? null, pending: count('pending'), blocked: count('blocked'), blockedSince: this.store.db.prepare('SELECT min(coalesce(r.finished_at,e.accepted_at)) AS since FROM accepted_events e LEFT JOIN runs r ON r.id=e.run_id WHERE e.pod_id=? AND e.state=\'blocked\'').get(podId)!.since as number | null, concurrency: this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number }
+    return { failed: count('failed'), ...(retry ? { retry: { at: retry.at, attempt: retry.attempt, error: retry.error } } : {}), spec: row ? parseSchedule(JSON.parse(row.spec as string)) : null, enabled: row?.enabled === 1, revision: row?.revision as number ?? 0, nextAt: row?.next_at as number | null ?? null, error: row?.error as string | null ?? this.store.db.prepare('SELECT o.error FROM reference_observations o JOIN resources r ON r.id=o.resource_id AND r.pod_id=o.pod_id WHERE o.pod_id=? AND o.error IS NOT NULL AND r.state=\'ready\' LIMIT 1').get(podId)?.error as string | null ?? null, pending: count('pending'), blocked: 0, blockedSince: null, concurrency: this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number }
   }
 
   save(podId: string, revision: number, spec: ScheduleSpec, enabled: boolean): void {
@@ -47,13 +47,19 @@ export class Scheduler {
     if (!/^[a-z][a-z0-9.-]{0,80}$/.test(source) || !key || key.length > 200 || /[\0\r\n]/.test(key)) throw new Error('Invalid event identity')
     const encoded = JSON.stringify(payload)
     if (!encoded || Buffer.byteLength(encoded) > 32768) throw new Error('Event payload exceeds its limit')
-    const existing = this.store.db.prepare('SELECT id,payload FROM accepted_events WHERE pod_id=? AND source=? AND dedupe_key=?').get(podId, source, key)
+    const existing = this.store.db.prepare('SELECT id,payload,state FROM accepted_events WHERE pod_id=? AND source=? AND dedupe_key=?').get(podId, source, key)
     if (existing) {
       if (existing.payload !== encoded) throw new Error('Event identity conflicts with an accepted payload')
+      if (existing.state !== 'failed') return existing.id as string
+    }
+    // A failed input is final (nothing retries it since issue 1518), so only open inputs fill the queue.
+    const count = this.store.db.prepare('SELECT count(*) AS total,sum(pod_id=?) AS pod FROM accepted_events WHERE state NOT IN (\'processed\',\'failed\')').get(podId)!
+    if ((count.total as number) >= 10000 || (count.pod as number) >= 1000) throw new Error('Event queue is full; retry after processing')
+    // A failed input is final for its run; delivering it again queues it once more as a fresh input.
+    if (existing) {
+      this.store.db.prepare('UPDATE accepted_events SET state=\'pending\',error=NULL,run_id=NULL WHERE id=? AND state=\'failed\'').run(existing.id)
       return existing.id as string
     }
-    const count = this.store.db.prepare('SELECT count(*) AS total,sum(pod_id=?) AS pod FROM accepted_events WHERE state!=\'processed\' AND NOT (state=\'failed\' AND source IN (\'schedule\',\'manual\'))').get(podId)!
-    if ((count.total as number) >= 10000 || (count.pod as number) >= 1000) throw new Error('Event queue is full; retry after processing or recovery')
     const id = randomUUID()
     this.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at) VALUES(?,?,?,?,?,?)').run(id, podId, source, key, encoded, this.now())
     return id
@@ -63,7 +69,7 @@ export class Scheduler {
     if (expectedScript) {
       if (this.store.getPod(podId).activeScript !== expectedScript) throw new Error('Script changed; review before running')
       if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(podId)) throw new Error('No execution slot available; try again after the active run')
-      if (this.store.db.prepare('SELECT 1 FROM accepted_events WHERE pod_id=? AND state IN (\'blocked\',\'claimed\',\'pending\')').get(podId)) throw new Error('Review pending inputs before running this script')
+      if (this.store.db.prepare('SELECT 1 FROM accepted_events WHERE pod_id=? AND state IN (\'claimed\',\'pending\')').get(podId)) throw new Error('Review pending inputs before running this script')
       this.drain()
       const active = occupiedRunSlots(this.store)
       const maximum = this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number
@@ -91,7 +97,7 @@ export class Scheduler {
   drain(scheduled = false): void {
     if (!scheduled && !this.immediateDispatch) return
     const available = () => occupiedRunSlots(this.store) < (this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number)
-    const ready = this.store.db.prepare('SELECT e.pod_id,min(e.sequence) AS first FROM accepted_events e JOIN pods p ON p.id=e.pod_id WHERE e.state=\'pending\' AND p.lifecycle!=\'archived\' AND (p.lifecycle=\'active\' OR e.source=\'manual\') AND NOT EXISTS(SELECT 1 FROM run_leases l WHERE l.pod_id=e.pod_id) AND NOT EXISTS(SELECT 1 FROM accepted_events b WHERE b.pod_id=e.pod_id AND b.state IN (\'blocked\',\'claimed\')) GROUP BY e.pod_id ORDER BY first').all()
+    const ready = this.store.db.prepare('SELECT e.pod_id,min(e.sequence) AS first FROM accepted_events e JOIN pods p ON p.id=e.pod_id WHERE e.state=\'pending\' AND p.lifecycle!=\'archived\' AND (p.lifecycle=\'active\' OR e.source=\'manual\') AND NOT EXISTS(SELECT 1 FROM run_leases l WHERE l.pod_id=e.pod_id) AND NOT EXISTS(SELECT 1 FROM accepted_events b WHERE b.pod_id=e.pod_id AND b.state=\'claimed\') GROUP BY e.pod_id ORDER BY first').all()
     for (const row of ready) {
       if (!available()) break
       const podId = row.pod_id as string
@@ -104,7 +110,7 @@ export class Scheduler {
       }
       catch (error) {
         const message = error instanceof Error ? error.message : 'Queued run could not start'
-        this.store.transaction(() => { for (const event of events) this.store.db.prepare('UPDATE accepted_events SET state=CASE WHEN run_id IS NULL THEN \'failed\' ELSE \'blocked\' END,error=? WHERE id=? AND state=\'pending\'').run(message, event.id as string) })
+        this.store.transaction(() => { for (const event of events) this.store.db.prepare('UPDATE accepted_events SET state=\'failed\',error=? WHERE id=? AND state=\'pending\'').run(message, event.id as string) })
       }
     }
   }

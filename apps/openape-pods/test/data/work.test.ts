@@ -5,6 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { createBackup, restoreBackup } from '../../src/worker/data/backup'
 import { schemaVersion } from '../../src/worker/storage/database'
+import { releaseHeldWork } from '../../src/worker/recovery/release'
 import { classification, cleanup, invoiceReview, workFixture } from './work-fixture'
 
 afterEach(cleanup)
@@ -185,7 +186,7 @@ describe('self-discovered work on shared domain data', () => {
     expect(f.work.pending(f.classifier)).toBe(true)
   })
 
-  it('waits for a missing prerequisite without new attempts and blocks repeated failures', () => {
+  it('waits for a missing prerequisite without new attempts, blocks repeated failures and lets the owner retry them', () => {
     const f = mail()
     f.write('m1', { contentRevision: 'c1' })
     let run = f.run(f.classifier)
@@ -201,10 +202,15 @@ describe('self-discovered work on shared domain data', () => {
       f.work.fail(run, { claimToken: f.work.claim(run, { key: item!.key }).claimToken, reason: 'Model unavailable', retryable: true })
       f.finish(run)
     }
-    expect(f.work.items('acme/mail-classification', ['blocked'])).toHaveLength(1)
+    const [blocked] = f.work.items('acme/mail-classification', ['blocked'])
+    expect(blocked).toBeDefined()
+    // Retrying failed work needs no owner observation (issue 1518).
+    f.work.release(blocked!.key)
+    expect(f.work.items('acme/mail-classification', ['retry_wait'])).toMatchObject([{ key: blocked!.key, reason: 'Retried by the owner' }])
+    expect(() => f.work.release(blocked!.key)).toThrow('Only blocked or unknown work can be released')
   })
 
-  it('holds the claims of a run that left an unknown external effect', () => {
+  it('retries the claims of a run that left an unknown external effect', () => {
     const f = mail()
     f.write('m1', { contentRevision: 'c1' })
     const run = f.run(f.classifier)
@@ -212,9 +218,27 @@ describe('self-discovered work on shared domain data', () => {
     f.work.claim(run, { key: item!.key })
     f.store.db.prepare('INSERT INTO effect_attempts VALUES(?,1,?,?,\'mail.archive\',?,\'unknown\',\'{}\',?)').run('e'.repeat(64), f.classifier, run.runId, 'f'.repeat(64), Date.now())
     f.finish(run, 'failed')
-    expect(f.work.items('acme/mail-classification', ['unknown'])).toHaveLength(1)
+    expect(f.work.items('acme/mail-classification', ['retry_wait'])).toHaveLength(1)
     f.store.db.prepare('UPDATE work_items SET ready_at=0').run()
-    expect(f.classify(() => ({ isInvoice: true }))).toBe(0)
+    expect(f.classify(() => ({ isInvoice: true }))).toBe(1)
+  })
+
+  it('releases work an earlier version held for owner review, once, and keeps exhausted and restore-fenced work held', () => {
+    const f = mail()
+    for (const id of ['m1', 'm2', 'm3', 'm4']) f.write(id, { contentRevision: id })
+    const run = f.run(f.classifier)
+    const items = f.work.find(run, { operation: 'acme/mail-classification' })
+    f.finish(run)
+    const [unknown, written, exhausted, restored] = items.map(item => item.key)
+    f.store.db.prepare('UPDATE work_items SET state=\'unknown\',reason=\'Restored backup: check whether this work was finished after the backup before releasing it\' WHERE key=?').run(restored)
+    f.store.db.prepare('UPDATE work_items SET state=\'unknown\',reason=\'The run left an external action with an unknown outcome; reconcile it before this work continues\' WHERE key=?').run(unknown)
+    f.store.db.prepare('UPDATE work_items SET state=\'blocked\',reason=\'The run changed an application before it ended; review what happened before this work continues\' WHERE key=?').run(written)
+    f.store.db.prepare('UPDATE work_items SET state=\'blocked\',attempt=5,reason=\'Bad input\' WHERE key=?').run(exhausted)
+    releaseHeldWork(f.store); releaseHeldWork(f.store)
+    expect(f.work.items('acme/mail-classification', ['retry_wait']).map(item => item.key).sort()).toEqual([unknown, written].sort())
+    expect(f.work.items('acme/mail-classification', ['blocked']).map(item => item.key)).toEqual([exhausted])
+    expect(f.work.items('acme/mail-classification', ['unknown']).map(item => item.key)).toEqual([restored])
+    expect(f.classify(() => ({ isInvoice: false }))).toBe(2)
   })
 
   it('keeps completion markers and results through backup and restore', async () => {

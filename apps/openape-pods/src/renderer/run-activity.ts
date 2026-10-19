@@ -35,10 +35,9 @@ export function runFailure(error: string | null): { title: string, help: string,
   if (/Permission (?:denied|revoked)|grant is no longer approved|no longer active/i.test(error)) return { title: 'Permission was not granted', help: 'Review the Pod permissions before starting another run.', action: 'permissions' }
   if (/approval expired/.test(error)) return { title: 'The approval wait expired', help: 'Start another run when you are ready to review the approval.' }
   if (/OpenApe rejected this Pod identity/.test(error)) return { title: 'The Pod identity needs attention', help: 'Check this pod’s identity and assigned DDISA account in its Settings tab.', action: 'identity' }
-  if (/fetch failed|network|ECONN|ENOTFOUND/i.test(error)) return { title: 'The service could not be reached', help: 'Check the network connection. Inspect any uncertain delivery before retrying.' }
+  if (/fetch failed|network|ECONN|ENOTFOUND/i.test(error)) return { title: 'The service could not be reached', help: 'Check the network connection. The next run repeats the work; the script must not send twice.' }
   if (/OpenApe authentication expired/.test(error)) return { title: 'OpenApe sign-in needs attention', help: 'Reconnect the Pod owner in App settings.', action: 'settings' }
-  if (/HTTP delivery|external effect|External effect|outcome.*unknown/.test(error)) return { title: 'Delivery needs review', help: 'Check the destination before retrying to avoid sending the same notification twice.' }
-  return { title: 'This run could not finish', help: 'For a stopped run, prepare a retry in History to check saved progress and possible deliveries.' }
+  return { title: 'This run could not finish', help: 'The next scheduled or manual run repeats the work. The script decides what is already done.' }
 }
 
 export function runHeadline(run: RunRecord): string {

@@ -57,8 +57,9 @@ Two independent questions decide every call, and a call needs both:
   and the Pod's own execution needs a grant that the Pod identity requests at the
   owner's identity provider.
 
-Writes are recorded in the effect ledger with idempotency keys; an unknown outcome waits for
-owner reconciliation. Details: the sandbox section of [Claude Code](claude-code.md#sign-in-per-session).
+Writes are recorded in the effect ledger with idempotency keys. A run can be interrupted at any
+point and repeat, so an unknown outcome is reconciled by the script, not by the owner; a Pod is
+only active or paused. Details: the sandbox section of [Claude Code](claude-code.md#sign-in-per-session).
 
 ## Decisions
 
@@ -67,11 +68,10 @@ chooses. Owner decisions come from:
 
 - owner questions of Pods (pick an option on the Decisions tab or in the phone
   inbox) and object approvals (decided at the identity provider);
-- held work and uncertain external actions that need the owner's observation;
+- failed work that used up its automatic attempts, which the owner can retry;
 - grant requests of Pods, decided at the identity provider or in the owner's MCP
   session;
-- secret requests through OpenApe Secrets;
-- unknown deliveries that need the owner's observation at the destination.
+- secret requests through OpenApe Secrets.
 
 The Decisions tab and the phone inbox list them all. Details: [handbook](handbook.md),
 [relay and phone inbox](../../../docs/operations/pods-mobile.md).

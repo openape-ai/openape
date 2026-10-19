@@ -99,7 +99,7 @@ export default defineComponent({
       </button>
     </form>
     <p v-if="view" class="muted">
-      {{ t("{p0} pending inputs · {p1} inputs awaiting recovery", { p0: view.pending, p1: view.blocked }) }}
+      {{ t("{p0} pending inputs", { p0: view.pending }) }}
     </p>
     <p v-if="error || view?.error" class="error-message" role="alert">
       {{ diagnostic(error || view?.error) }}

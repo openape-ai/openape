@@ -147,14 +147,6 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
         if (!run || run.state !== 'running') throw new Error('Run is not active')
         run.state = 'cancelled'; run.finishedAt = Date.now(); changed()
       }
-      else if (command.type === 'recover') {
-        const run = pod.runs.runs.find(run => run.id === command.runId)
-        if (!run) throw new Error('Run not found')
-        if (command.action === 'retry') {
-          start(pod)
-        }
-        else { run.recovery = { state: 'ready', error: null }; changed() }
-      }
       else if (command.type !== 'list') {
         return unavailable(command.type)
       }
@@ -190,11 +182,6 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
         if (!state.domain.questions[index]!.options.some(option => option.key === command.option)) throw new Error('Unknown answer')
         if (failChoice) { failChoice = false; throw new Error('Demo: Saving failed. Try the same decision again.') }
         state.domain.questions.splice(index, 1); changed()
-      }
-      else if (command.type === 'resolveEffect') {
-        const index = state.domain.unknownEffects.findIndex(effect => effect.actionKey === command.actionKey && effect.attempt === command.attempt)
-        if (index < 0) throw new Error('Only an uncertain effect can be reconciled')
-        state.domain.unknownEffects.splice(index, 1); changed()
       }
       else if (command.type === 'openApproval') { notify(t('Demo: This approval would be decided at the IdP. No permission was granted.')); return null }
       else if (command.type !== 'list') {

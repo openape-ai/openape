@@ -142,9 +142,7 @@ it('cancels a credential read in progress after rotation and never returns its s
   expect(JSON.stringify(f.dispatcher.view(f.pod.id, id))).not.toContain('SYNTHETIC_STALE_SECRET')
 })
 
-it('HTTP boundary: sandboxed Node sends a granted request, retains a receipt and requires owner reconciliation for uncertainty', async () => {
-  const { Recovery } = await import('../src/worker/recovery/reconcile')
-  const { Scheduler } = await import('../src/worker/scheduling/scheduler')
+it('HTTP boundary: sandboxed Node sends a granted request, retains a receipt and resends an uncertain key on the next run', async () => {
   let sends = 0; let uncertain = false
   const f = await setup({ http: async (request) => { sends++; expect(request.method).toBe('POST'); if (uncertain) throw new Error('Synthetic uncertain delivery'); return { status: 200, headers: {}, body: '{"ok":true}' } } })
   f.resources.assignHttp(f.pod.id, { origin: 'https://api.example.com', methods: ['POST'] }, 0)
@@ -160,13 +158,10 @@ it('HTTP boundary: sandboxed Node sends a granted request, retains a receipt and
   expect(sends).toBe(1)
   variables.save(f.pod.id, 'effect_key', 'uncertain', 1); uncertain = true
   const id = f.dispatcher.start(f.pod.id); await expect.poll(() => f.dispatcher.runs.get(id).state).toBe('failed')
-  expect(f.dispatcher.view(f.pod.id).effects).toEqual([{ key: 'uncertain', runId: id }])
-  expect(() => f.dispatcher.start(f.pod.id)).toThrow('review')
-  const recovery = new Recovery(f.store, f.resources, new Scheduler(f.store, f.dispatcher), resolve('dist/native/pods-helper'))
-  await expect(recovery.resolveHttp(randomUUID(), id, 'uncertain', true, 'Synthetic observation')).rejects.toThrow('not awaiting')
-  await recovery.resolveHttp(f.pod.id, id, 'uncertain', true, 'Synthetic receiver confirmed delivery')
-  const resumed = f.dispatcher.start(f.pod.id); await expect.poll(() => f.dispatcher.runs.get(resumed).state).toBe('completed')
   expect(sends).toBe(2)
+  uncertain = false
+  for (let repeat = 0; repeat < 2; repeat++) { const resumed = f.dispatcher.start(f.pod.id); await expect.poll(() => f.dispatcher.runs.get(resumed).state).toBe('completed') }
+  expect(sends).toBe(3)
 })
 
 it('finishes a native run across a rename while still rejecting revoked resources', async () => {

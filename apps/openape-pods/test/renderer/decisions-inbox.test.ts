@@ -12,7 +12,7 @@ import { choiceEvents, choicePayload } from './choice-events'
 import fixture from './map-view.json'
 
 // The Entscheidungen surface from the 17 recorded mails the classification Pod asks the owner about, plus approvals,
-// held work, uncertain actions and the fixture's rights and deliveries.
+// failed work and the fixture's rights.
 const view = parseMapView(fixture) as MapView
 const classification = view.pods.find(pod => pod.name === 'Mail-Klassifizierung')!
 const newsletters = view.pods.find(pod => pod.name === 'Newsletter-Prüfung')!
@@ -29,7 +29,6 @@ export const domain: DomainOverview = {
     { id: '00000000-0000-4000-8000-0000000000a2', podId: newsletters.id, action: 'mail.archive', object: 'phofmann@delta-mind.at:n2', title: 'Your SaaS digest', description: 'Weekly product digest', link: 'https://saas.example/digest', state: 'unknown', reason: 'Restored backup: the owner decision after the backup is unknown; request the approval again', batchId: null, batchUrl: null, updatedAt: view.at },
   ],
   held: [{ key: 'c'.repeat(64), operation: 'delta-mind/mail-classification', object: 'm3', state: 'blocked', attempt: 5, readyAt: view.at, reason: 'Model refused five times', inputRevision: 1 }],
-  unknownEffects: [{ actionKey: 'd'.repeat(64), attempt: 1, podId: newsletters.id, runId: null, operation: 'mail.archive', createdAt: view.at, intent: { mailbox: 'phofmann@delta-mind.at', messageId: 'm4' } }],
 }
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; applyLanguage('en') })
@@ -46,7 +45,7 @@ describe('Entscheidungen', () => {
     await mountInbox()
     const kpis = wrapper!.findAll('.kpi').map(item => [item.find('b').text(), item.find('span').text()])
     // The counters are the read model's, the same computation as the KPI and the tab badge.
-    expect(kpis).toEqual([['17', 'Rückfragen'], ['4', 'Freigaben'], ['2', 'Rechte'], ['1', 'Abzugleichen'], ['0', 'Geheimnisse']])
+    expect(kpis).toEqual([['17', 'Rückfragen'], ['4', 'Freigaben'], ['2', 'Rechte'], ['1', 'Fehlgeschlagene Arbeit'], ['0', 'Geheimnisse']])
     expect((wrapper!.vm as unknown as { total: number }).total).toBe(decisionCounts(view).count)
     const cards = wrapper!.findAll('[data-testid="questions"] .item')
     expect(cards).toHaveLength(17)
@@ -96,10 +95,9 @@ describe('Entscheidungen', () => {
     expect(wrapper!.find('[data-testid="questions"] .item:not(.done) .raw').text()).toContain('"namespace": "delta-mind/mail/owner-answers"')
   })
 
-  it('lists approvals, rights, held work, uncertain actions and deliveries with the exact owner commands', async () => {
+  it('lists approvals, rights and failed work with the exact owner commands', async () => {
     const monitor = view.pods.find(pod => pod.name === 'IURIO PR monitor')!
     const taskMonitor = view.pods.find(pod => pod.name === 'IURIO Task monitor')!
-    const bot = view.pods.find(pod => pod.unknown.length)!
     await mountInbox()
     const approvals = wrapper!.find('[data-testid="approvals"]')
     expect(approvals.text()).toContain('Archive mail from deals@shop.example')
@@ -136,19 +134,15 @@ describe('Entscheidungen', () => {
     expect(grant.text()).not.toContain('grant-task-push')
     await grant.find('button.idp').trigger('click')
     expect(wrapper!.emitted('command')!.at(-1)).toEqual([{ channel: 'runs', body: { type: 'openGrant', podId: taskMonitor.id, grantId: 'grant-task-push' } }])
-    const reconcile = wrapper!.find('[data-testid="reconcile"]')
-    const [held, effect, delivery] = reconcile.findAll('.item')
-    expect(held!.text()).toContain('Angehaltene Arbeit · delta-mind/mail-classification')
-    await held!.find('label input').setValue('Modell wieder erreichbar')
-    await held!.find('button').trigger('click')
-    expect(wrapper!.emitted('domain')!.at(-1)).toEqual([{ type: 'release', key: 'c'.repeat(64), evidence: 'Modell wieder erreichbar' }])
-    expect(effect!.text()).toContain('messageId: m4')
-    expect(effect!.findAll('button')).toHaveLength(0)
-    expect(effect!.text()).toContain('Historischer Eintrag')
-    expect(delivery!.text()).toContain(bot.name)
-    await delivery!.find('label input').setValue('Bericht ist veröffentlicht')
-    await delivery!.findAll('button')[0]!.trigger('click')
-    expect(wrapper!.emitted('command')!.at(-1)).toEqual([{ channel: 'runs', body: { type: 'resolveHttp', podId: bot.id, runId: bot.unknown[0]!.runId, key: bot.unknown[0]!.key, applied: true, evidence: 'Bericht ist veröffentlicht' } }])
+    // Failed work is retried as is; nothing waits for the owner to reconcile an outcome (issue 1518).
+    const failed = wrapper!.findAll('[data-testid="failed-work"] .item')
+    expect(failed).toHaveLength(1)
+    expect(failed[0]!.text()).toContain('Fehlgeschlagene Arbeit · delta-mind/mail-classification')
+    expect(failed[0]!.find('input').exists()).toBe(false)
+    await failed[0]!.find('button').trigger('click')
+    expect(wrapper!.emitted('domain')!.at(-1)).toEqual([{ type: 'release', key: 'c'.repeat(64) }])
+    expect(wrapper!.find('[data-testid="reconcile"]').exists()).toBe(false)
+    expect(wrapper!.emitted('command')).toHaveLength(2)
   })
 
   it.each([true, false])('opens a requested approval on the correct host (desktop: %s)', async (desktop) => {
@@ -163,34 +157,11 @@ describe('Entscheidungen', () => {
     expect(action.element.tagName).toBe('BUTTON')
   })
 
-  it('records honest owner-root observations without retrying or changing inner-effect decisions', async () => {
-    const rootView = structuredClone(view)
-    const pod = rootView.pods.find(item => item.unknown.length)!
-    const runId = '00000000-0000-4000-8000-000000000002'; const key = `owner-script:${runId}`
-    pod.unknown = [{ key, runId, authority: { source: 'owner-activation', activationId: 'synthetic-activation', podId: pod.id, scriptHash: 'a'.repeat(64), assignmentRevision: 1, resourceEpoch: 0 } }]
-    await mountInbox({ view: rootView })
-    const root = wrapper!.findAll('[data-testid="reconcile"] .item').find(item => item.text().includes(key))!
-    expect(root.text()).toContain('Ungewisse Skriptwirkungen')
-    expect(root.text()).toContain('Das Erfassen einer Beobachtung wiederholt den Lauf nicht.')
-    const [partial, none] = root.findAll('button')
-    expect(partial!.text()).toBe('Teilweise Verarbeitung beobachtet')
-    expect(none!.text()).toBe('Keine Wirkungen beobachtet')
-    expect(partial!.attributes('disabled')).toBeDefined()
-    await root.get('input').setValue('Synthetic effect evidence')
-    await partial!.trigger('click')
-    await none!.trigger('click')
-    expect(wrapper!.emitted('command')).toEqual([
-      [{ channel: 'runs', body: { type: 'resolveHttp', podId: pod.id, runId, key, applied: true, programOutcome: 'partial', evidence: 'Synthetic effect evidence' } }],
-      [{ channel: 'runs', body: { type: 'resolveHttp', podId: pod.id, runId, key, applied: false, evidence: 'Synthetic effect evidence' } }],
-    ])
-    expect(wrapper!.emitted('domain')).toBeUndefined()
-  })
-
   it('links a requested Pod grant to its IdP page in the browser', async () => {
     await mountInbox({ domain: null, desktop: false, inboxUrl: '/inbox/' })
     const link = wrapper!.find('[data-testid="rights"] [data-right="grant"] a.idp')
     expect(link.attributes()).toMatchObject({ href: 'https://id.openape.ai/grant-approval?grant_id=grant-task-push', target: '_blank', rel: 'noopener' })
-    // Without shared-data access the approvals and held work live in the Pods inbox; the counters still show them.
+    // Without shared-data access the approvals and failed work live in the Pods inbox; the counters still show them.
     expect(wrapper!.find('[data-testid="approvals"]').text()).toContain('Rückfragen und Freigaben deiner Pods beantwortest du in der Pods-Inbox.')
     expect(wrapper!.findAll('.kpi')[1]!.find('b').text()).toBe('4')
   })

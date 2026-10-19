@@ -58,7 +58,6 @@ import { authorizeRunService, authorizeCredentialService, readRunContext } from 
 import { ServiceBridge } from './runtime/service-bridge'
 import { parseDetailsCommand } from '../contracts/details'
 import { WorkspaceDetails } from './workspace/details'
-import { Recovery } from './recovery/reconcile'
 import { parseScheduleCommand } from '../contracts/scheduling'
 import { Scheduler } from './scheduling/scheduler'
 import { ReferenceWatcher } from './scheduling/references'
@@ -136,7 +135,6 @@ const scheduler = new Scheduler(store, dispatcher, Date.now, false, podId => !di
 const fixturePort = process.env.PODS_FIXTURE_MODEL_PORT
 const fixtureServices = fixturePort ? { provider: async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${fixturePort}/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }), model: endpointModel(`http://127.0.0.1:${fixturePort}/model`) } : undefined
 runServices.provider = fixtureServices?.provider; runServices.model = fixtureServices?.model
-const recovery = new Recovery(store, registry, scheduler, join(dist, 'native/pods-helper'))
 const masterControl = new MasterControl(store, registry, dispatcher, scheduler, runtime, startControlledRun)
 const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
@@ -400,7 +398,7 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'programExecution' in request.command) {
       const check = request.command.programExecution as ProgramExecutionCheck
       authorizeRunService(store, registry, dispatcher.runs, check)
-      recordProgramExecution(store, dispatcher.runs, check)
+      recordProgramExecution(store, check)
       port.postMessage({ id: request.id, state: true }); return
     }
     if (request.command && typeof request.command === 'object' && 'serviceCheck' in request.command) {
@@ -452,11 +450,10 @@ port.on('message', async (event) => {
     if (request.command && typeof request.command === 'object' && 'run' in request.command) {
       const command = parseRunCommand(request.command.run)
       if (command.type === 'installExample') await dispatcher.install(command.podId, command.variant)
-      if (command.type === 'resolveHttp') await recovery.resolveHttp(command.podId, command.runId, command.key, command.applied, command.evidence, command.programOutcome)
-      if (command.type === 'recover') { if (command.action === 'inspect') await recovery.inspect(command.podId, command.runId); else await recovery.retry(command.podId, command.runId) }
-      if (command.type === 'retryQueue') recovery.retryQueue(command.podId)
-      if (command.type === 'start') scheduler.requestManual(command.podId, command.expectedScript)
-      if (['start', 'recover', 'retryQueue'].includes(command.type) && startupReady && !suspended && Date.now() < centralUntil) schedule()
+      if (command.type === 'start') {
+        scheduler.requestManual(command.podId, command.expectedScript)
+        if (startupReady && !suspended && Date.now() < centralUntil) schedule()
+      }
       const id = 'runId' in command ? command.runId : undefined
       if (command.type === 'cancel') dispatcher.cancel(command.podId, command.runId)
       port.postMessage({ id: request.id, state: dispatcher.view(command.podId, id, command.type === 'list' ? command.after : undefined) })

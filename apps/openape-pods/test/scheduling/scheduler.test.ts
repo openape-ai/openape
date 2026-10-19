@@ -1,7 +1,9 @@
 // @vitest-environment node
-import { recoverStoppedRuns } from '../../src/worker/recovery/automatic'
+import { recoverStoppedRuns, stoppedRunRecheckMs } from '../../src/worker/recovery/automatic'
+import { releaseHeldWork } from '../../src/worker/recovery/release'
+import { EffectLedger } from '../../src/worker/recovery/effects'
 import { boundedStep } from '../../src/worker/scheduling/tick-step'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -46,6 +48,24 @@ describe('persistent scheduling and intake', () => {
     f.runs.finish(f.started[0]!.id, 'completed', 'Processed', null, ids)
     f.scheduler.tick(); expect(f.started).toHaveLength(1)
     expect(f.store.db.prepare('SELECT count(*) AS count FROM accepted_events WHERE state=\'processed\'').get()!.count).toBe(3)
+  })
+  it('limits open inputs per Pod while failed inputs, which nothing retries, never fill the queue', () => {
+    const f = fixture(); const pod = f.pod()
+    const insert = f.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state) VALUES(?,?,\'fixture\',?,\'{}\',1,?)')
+    // Transactions keep the 2000 synthetic rows fast under a loaded gate.
+    f.store.transaction(() => { for (let index = 0; index < 1000; index++) insert.run(`failed-${index}`, pod, `failed-${index}`, 'failed') })
+    expect(f.scheduler.acceptEvent(pod, 'fixture', 'after-failures', {})).toMatch(/^[a-f0-9-]{36}$/)
+    f.store.transaction(() => { for (let index = 0; index < 999; index++) insert.run(`open-${index}`, pod, `open-${index}`, 'pending') })
+    expect(() => f.scheduler.acceptEvent(pod, 'fixture', 'over-limit', {})).toThrow('Event queue is full')
+  })
+  it('queues a failed input again when its source delivers it once more', () => {
+    const f = fixture(); const pod = f.pod()
+    const id = f.scheduler.acceptEvent(pod, 'fixture', 'redelivered', { value: 1 })
+    f.store.db.prepare('UPDATE accepted_events SET state=\'failed\',error=\'Synthetic failure\',run_id=? WHERE id=?').run(id, id)
+    expect(f.scheduler.acceptEvent(pod, 'fixture', 'redelivered', { value: 1 })).toBe(id)
+    expect(f.store.db.prepare('SELECT state,error,run_id FROM accepted_events WHERE id=?').get(id)).toEqual({ state: 'pending', error: null, run_id: null })
+    expect(() => f.scheduler.acceptEvent(pod, 'fixture', 'redelivered', { value: 2 })).toThrow('conflicts')
+    f.scheduler.tick(); expect(f.started[0]!.trigger.eventIds).toEqual([id])
   })
   it('admits ready pods in FIFO order and never exceeds global or per-pod leases', () => {
     const f = fixture(); const ids = [f.pod(), f.pod(), f.pod()]
@@ -171,7 +191,7 @@ it('persists delayed pre-script retries, releases capacity and resumes the origi
   expect(restored.db.prepare('SELECT state FROM accepted_events WHERE id=?').get(input)?.state).toBe('processed')
 })
 
-it('keeps delayed retries paused and blocks them when their resource binding changes', () => {
+it('keeps delayed retries paused and isolates them when their resource binding changes', () => {
   const f = fixture(); const pod = f.pod()
   f.scheduler.acceptEvent(pod, 'fixture', 'retry', {}); f.scheduler.tick()
   f.runs.finish(f.started[0]!.id, 'failed', 'Run failed', 'Permission service temporarily unavailable', [], 0)
@@ -181,18 +201,18 @@ it('keeps delayed retries paused and blocks them when their resource binding cha
   f.store.db.prepare('INSERT INTO resource_epochs VALUES(?,1)').run(pod)
   f.scheduler.tick()
   expect(f.started).toHaveLength(1)
-  expect(f.scheduler.view(pod)).toMatchObject({ blocked: 1, pending: 0, error: expect.stringContaining('permissions changed') })
+  expect(f.scheduler.view(pod)).toMatchObject({ blocked: 0, pending: 0, failed: 1 })
 })
 
-it('holds a failed run that already wrote externally instead of replaying it', () => {
+it('retries a failed run that already wrote externally; the script owns idempotency', () => {
   const f = fixture(); const pod = f.pod()
-  f.scheduler.acceptEvent(pod, 'fixture', 'unsafe', {}); f.scheduler.tick()
+  f.scheduler.acceptEvent(pod, 'fixture', 'written', {}); f.scheduler.tick()
   const id = f.started[0]!.id
   f.store.db.prepare('INSERT INTO effect_ledger VALUES(?,\'sent\',\'http.request\',\'hash\',?,\'completed\',\'{}\')').run(pod, id)
   f.runs.finish(id, 'failed', 'Run failed', 'Permission service temporarily unavailable', [], 0)
-  expect(f.scheduler.view(pod)).toMatchObject({ blocked: 1, pending: 0, error: expect.stringContaining('already wrote externally') })
-  f.scheduler.tick()
-  expect(f.started).toHaveLength(1)
+  expect(f.scheduler.view(pod)).toMatchObject({ blocked: 0, pending: 1, retry: { attempt: 1 } })
+  f.time(f.scheduler.view(pod).retry!.at); f.scheduler.tick()
+  expect(f.started).toHaveLength(2)
 })
 
 it.each(['pending', 'denied', 'revoked'])('keeps later triggers eligible after a pre-effect %s permission result', (state) => {
@@ -211,24 +231,24 @@ it.each(['pending', 'denied', 'revoked'])('keeps later triggers eligible after a
   f.runs.finish(f.started[1]!.id, 'completed', 'Permission checked again', null, [next])
 })
 
-it.each(['completed', 'unknown'])('preserves the %s external-effect hold when a later permission is unavailable', (state) => {
+it.each(['completed', 'unknown'])('runs the next trigger after a %s external effect and an unavailable permission', (state) => {
   const f = fixture(); const pod = f.pod()
   f.scheduler.acceptEvent(pod, 'schedule', 'effect-before-permission', {}); f.scheduler.tick()
   const id = f.started[0]!.id
   f.store.db.prepare('INSERT INTO effect_ledger VALUES(?,\'write\',\'http.request\',\'hash\',?,?,?)').run(pod, id, state, state === 'completed' ? '{}' : null)
   f.runs.finish(id, 'failed', 'Permission unavailable', 'Permission denied', [], 0, { cause: 'permission' })
   f.scheduler.acceptEvent(pod, 'schedule', 'next-permission-check', {}); f.scheduler.tick()
-  expect(f.started).toHaveLength(1)
-  expect(f.scheduler.view(pod).blocked).toBe(1)
+  expect(f.started).toHaveLength(2)
+  expect(f.scheduler.view(pod)).toMatchObject({ blocked: 0, failed: 1 })
 })
 
-it('keeps invalid authority held across later triggers', () => {
+it('isolates invalid authority and runs later triggers', () => {
   const f = fixture(); const pod = f.pod()
   f.scheduler.acceptEvent(pod, 'schedule', 'invalid-authority', {}); f.scheduler.tick()
   f.runs.finish(f.started[0]!.id, 'failed', 'Invalid authority', 'Token binding mismatch', [], 0, { cause: 'authority' })
+  expect(f.runs.get(f.started[0]!.id).automaticRecovery).toMatchObject({ disposition: 'isolated' })
   f.scheduler.acceptEvent(pod, 'schedule', 'next-permission-check', {}); f.scheduler.tick()
-  expect(f.started).toHaveLength(1)
-  expect(f.scheduler.view(pod).blocked).toBe(1)
+  expect(f.started).toHaveLength(2)
 })
 
 it.each(['process', 'checkpoint'])('recovers from %s work after verified settlement without losing committed progress', (kind) => {
@@ -264,15 +284,33 @@ it('isolates a poison batch after five attempts and admits the next scheduled ob
   expect(f.started.at(-1)!.trigger.eventIds).not.toContain(input)
 })
 
-it('holds an unknown delivery across newer inputs and changed effect keys', () => {
+it('does not let an unknown delivery prevent the next run, which may send the same key again', () => {
   const f = fixture(); const pod = f.pod()
   f.scheduler.acceptEvent(pod, 'fixture', 'send', {}); f.scheduler.tick()
   const id = f.started[0]!.id
-  f.store.db.prepare('INSERT INTO effect_ledger VALUES(?,\'original\',\'http.request\',\'hash\',?,\'unknown\',NULL)').run(pod, id)
+  const ledger = new EffectLedger(f.store)
+  expect(ledger.begin(pod, id, 'original', 'http.request', { body: 'one' }).execute).toBe(true)
+  ledger.markUnknown(pod, id, 'original')
   f.runs.finish(id, 'failed', 'Delivery failed', 'No receipt')
   f.scheduler.acceptEvent(pod, 'fixture', 'new-key', {}); f.time(Date.now() + 600000); f.scheduler.tick()
-  expect(f.started).toHaveLength(1)
-  expect(f.scheduler.view(pod)).toMatchObject({ blocked: 1, pending: 1, error: expect.stringContaining('External outcome') })
+  expect(f.started).toHaveLength(2)
+  const next = f.started[1]!.id
+  expect(ledger.begin(pod, next, 'original', 'http.request', { body: 'one' }).execute).toBe(true)
+  expect(() => ledger.begin(pod, next, 'original', 'http.request', { body: 'one' })).toThrow('already being sent')
+  ledger.complete(pod, next, 'original', { status: 200 })
+  expect(ledger.begin(pod, next, 'original', 'http.request', { body: 'one' })).toEqual({ execute: false, result: { status: 200 } })
+})
+
+it('starts the Pod again on the next schedule tick after app shutdown cancelled a run that wrote externally', () => {
+  const f = fixture(); const pod = f.pod()
+  f.scheduler.save(pod, 0, { kind: 'interval', seconds: 60 }, true)
+  f.time(61000); f.scheduler.tick()
+  const id = f.started[0]!.id
+  f.store.db.prepare('INSERT INTO effect_ledger VALUES(?,\'label\',\'program.call\',\'hash\',?,\'completed\',\'{}\')').run(pod, id)
+  f.runs.finish(id, 'cancelled', 'Run cancelled', 'Application is quitting', [], 0, { cause: 'shutdown' })
+  f.time(Date.now() + 61000); f.scheduler.tick()
+  expect(f.started).toHaveLength(2)
+  expect(f.scheduler.view(pod)).toMatchObject({ blocked: 0 })
 })
 
 it('keeps owner cancellation separate from shutdown and preserves future schedules', () => {
@@ -299,14 +337,63 @@ it('reconciles a legacy shutdown exactly once and preserves the original input',
   expect(f.runs.get(id).state).toBe('cancelled')
 })
 
-it('keeps legacy processes without termination evidence fenced', async () => {
+it('keeps the lease of a run whose process stop is unconfirmed and checks again later instead of holding it', async () => {
+  vi.useFakeTimers({ toFake: ['Date'] })
+  try {
+    const f = fixture(); const pod = f.pod()
+    f.scheduler.acceptEvent(pod, 'fixture', 'historic', {}); f.scheduler.tick()
+    const id = f.started[0]!.id
+    f.store.db.prepare('UPDATE runs SET state=\'interrupted\' WHERE id=?').run(id)
+    f.store.db.prepare('INSERT INTO execution_domains VALUES(?,?,?)').run(join(f.store.root, 'runs', id, `domain-${'0'.repeat(8)}-0000-0000-0000-${'0'.repeat(12)}.record`), id, 4242)
+    await recoverStoppedRuns(f.store, join(f.store.root, 'missing-helper'))
+    expect(f.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(pod)?.run_id).toBe(id)
+    expect(f.store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND type=\'recovery\'').get(id)).toBeUndefined()
+    f.scheduler.acceptEvent(pod, 'fixture', 'parallel', {}); f.scheduler.tick()
+    expect(f.started).toHaveLength(1)
+    const helper = join(f.store.root, 'quiescent-helper')
+    writeFileSync(helper, '#!/bin/sh\necho \'{"quiescent":true}\'\n', { mode: 0o700 })
+    await recoverStoppedRuns(f.store, helper)
+    expect(f.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(pod)).toBeDefined()
+    vi.setSystemTime(Date.now() + stoppedRunRecheckMs)
+    await recoverStoppedRuns(f.store, helper)
+    expect(f.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(pod)).toBeUndefined()
+    f.time(Date.now() + 60000); f.scheduler.tick()
+    expect(f.started).toHaveLength(2)
+  }
+  finally { vi.useRealTimers() }
+})
+
+it('keeps the lease of a recorded process without an execution domain until its pid is gone', async () => {
   const f = fixture(); const pod = f.pod()
-  f.scheduler.acceptEvent(pod, 'schedule', 'historic', {}); f.scheduler.tick()
+  f.scheduler.acceptEvent(pod, 'fixture', 'historic', {}); f.scheduler.tick()
   const id = f.started[0]!.id
   f.store.db.prepare('UPDATE runs SET state=\'interrupted\' WHERE id=?').run(id)
+  f.runs.append(id, 'process', { pid: process.pid })
   await recoverStoppedRuns(f.store, '/unused')
   expect(f.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(pod)?.run_id).toBe(id)
-  expect(f.scheduler.view(pod)).toMatchObject({ blocked: 1, error: expect.stringContaining('termination evidence') })
+  expect(f.store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND type=\'recovery\'').get(id)).toBeUndefined()
+})
+
+it('runs Pods of a profile whose inputs and lease an earlier version held for owner review', async () => {
+  const f = fixture(); const finished = f.pod(); const leased = f.pod()
+  for (const pod of [finished, leased]) f.scheduler.acceptEvent(pod, 'fixture', 'held', {})
+  f.scheduler.tick()
+  const hold = { disposition: 'hold', reason: 'This run already wrote externally; review its effects before retrying', cause: 'failure', nextAt: null, attempt: 1 }
+  const [first, second] = f.started.map(run => run.id)
+  f.runs.finish(first!, 'completed', 'Done', null, [])
+  f.store.db.prepare('UPDATE accepted_events SET state=\'blocked\',error=? WHERE run_id=?').run(hold.reason, first)
+  f.runs.append(first!, 'recovery', hold)
+  f.store.db.prepare('UPDATE runs SET state=\'interrupted\' WHERE id=?').run(second)
+  f.store.db.prepare('UPDATE run_leases SET boot_id=\'fenced:old\' WHERE run_id=?').run(second)
+  f.store.db.prepare('UPDATE accepted_events SET state=\'blocked\',error=? WHERE run_id=?').run(hold.reason, second)
+  f.runs.append(second!, 'recovery', hold)
+  const queued = f.scheduler.acceptEvent(finished, 'fixture', 'never-started', {})
+  f.store.db.prepare('UPDATE accepted_events SET state=\'blocked\' WHERE id=?').run(queued)
+  for (let repeat = 0; repeat < 2; repeat++) { releaseHeldWork(f.store); await recoverStoppedRuns(f.store, '/unused') }
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM accepted_events WHERE state=\'blocked\'').get()!.count).toBe(0)
+  expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0)
+  f.time(Date.now() + 600000); f.scheduler.tick()
+  expect(f.started.slice(2).map(run => run.podId).sort()).toEqual([finished, leased].sort())
 })
 
 it('frees the execution slot of a run while it waits for an IdP decision and takes it back afterwards', () => {

@@ -15,13 +15,13 @@ export async function executeHttpEffect(ledger: EffectLedger, podId: string, run
   if (!intent.execute) return intent.result as HttpReply
   try {
     const reply = await send()
-    if (reply.status >= 400) throw new Error('HTTP request returned an error response; review delivery before retrying')
-    ledger.complete(podId, key, request.receipt === 'digest' || Buffer.byteLength(JSON.stringify(reply)) > maxFullReceiptBytes ? digestReceipt(reply) : reply)
+    if (reply.status >= 400) throw new Error('HTTP request returned an error response')
+    ledger.complete(podId, runId, key, request.receipt === 'digest' || Buffer.byteLength(JSON.stringify(reply)) > maxFullReceiptBytes ? digestReceipt(reply) : reply)
     return reply
   }
   catch (error) {
     if (error instanceof PermissionUnavailableError || (error instanceof InfrastructureError && error.failure.phase === 'authorization')) ledger.notStarted(podId, runId, key)
-    else ledger.markUnknown(podId, key)
+    else ledger.markUnknown(podId, runId, key)
     throw error
   }
 }

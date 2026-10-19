@@ -6,7 +6,6 @@ import { randomUUID } from 'node:crypto'
 import { connect } from 'node:net'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { CodexRequest } from '../../src/contracts/codex'
-import { parseRunCommand } from '../../src/contracts/runs'
 import { CodexControlServer } from '../../src/main/codex/server'
 import type { McpSessionGate } from '../../src/main/codex/server'
 import { McpOwnerSessions } from '../../src/main/codex/session'
@@ -112,21 +111,10 @@ it('records owner evidence of every MCP call as an assistant request without ref
   for (const action of [
     { action: 'networks', command: { type: 'gateReview', id: networkId, revision: 1, taskId: networkId, generation: 1, evidence: 'Failed before the IdP was contacted' } },
     { action: 'workspace', query: { type: 'reconcile', id: reconcile, applied: true, evidence: near } },
-    { action: 'recovery', revision: 1, command: { type: 'resolveHttp', podId: networkId, runId: networkId, key: 'send', applied: false, evidence: '' } },
+    { action: 'domain', requestId: randomUUID(), command: { type: 'release', key: 'c'.repeat(64), evidence: '' } },
   ]) await exchange(endpoint, `${JSON.stringify({ id: randomUUID(), action })}\n`)
   const sent = vi.mocked(execute).mock.calls.map(([request]) => (request.action.command ?? request.action.query) as { evidence: string })
   expect(sent.map(item => item.evidence)).toEqual(['Assistant request: Failed before the IdP was contacted', `Assistant request: ${near}`.slice(0, 2000), ''])
-})
-
-it('keeps maximum-sized owner-root MCP evidence within the existing provenance limit', async () => {
-  const { endpoint, execute } = await start()
-  const id = randomUUID(); const runId = randomUUID()
-  await exchange(endpoint, `${JSON.stringify({ id, action: { action: 'recovery', revision: 1, command: { type: 'resolveHttp', podId: id, runId, key: `owner-script:${runId}`, applied: true, programOutcome: 'partial', evidence: 'x'.repeat(4000) } } })}\n`)
-  const command = vi.mocked(execute).mock.calls[0]![0].action.command as Record<string, unknown>
-  expect(String(command.evidence)).toHaveLength(4000)
-  expect(command.evidence).toBe(`Assistant request: ${'x'.repeat(4000)}`.slice(0, 4000))
-  expect(parseRunCommand(command)).toMatchObject({ applied: true, programOutcome: 'partial', key: `owner-script:${runId}` })
-  expect(() => parseRunCommand({ ...command, evidence: ' ' })).toThrow('observation')
 })
 
 it('rejects review decisions, extra fields, malformed secrets and oversized input before the worker', async () => {

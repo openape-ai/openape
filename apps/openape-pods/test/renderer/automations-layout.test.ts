@@ -83,6 +83,6 @@ it('derives KPI subtitles from the data only', () => {
     // Only the current state counts; zaz Service-Agent failed earlier but recovered.
     errors: [{ podId: byName('IURIO PR monitor').id, name: 'IURIO PR monitor', reason: 'completedWithGaps' }],
     // The run waiting for an IdP approval and the grant requested at the IdP are rights, as in Entscheidungen.
-    decisions: { count: 24, questions: 17, approvals: 4, rights: 2, reconcile: 1, secrets: 0 },
+    decisions: { count: 24, questions: 17, approvals: 4, rights: 2, work: 1, secrets: 0 },
   })
 })

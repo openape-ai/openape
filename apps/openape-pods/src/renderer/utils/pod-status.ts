@@ -44,8 +44,6 @@ export function failureCount(pod: MapPod): string {
 export function waitsFor(pod: MapPod, view: MapView): string {
   if (pod.approvals.length || pod.grants?.length) return t('your approval at the IdP')
   if (view.kpis.decisions.some(item => item.podId === pod.id && item.kind === 'question')) return t('your answer')
-  if (pod.work.held) return t('{count} held items for you', { count: pod.work.held })
-  if (pod.unknown.length) return t('your check of an uncertain delivery')
-  if (pod.queue.blocked) return pod.queue.error ? `${t('blocked')}: ${diagnostic(pod.queue.error)}` : t('blocked')
+  if (pod.work.held) return t('{count} failed work items', { count: pod.work.held })
   return ''
 }

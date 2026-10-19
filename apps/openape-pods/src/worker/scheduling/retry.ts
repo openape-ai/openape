@@ -11,7 +11,7 @@ export function retryReady(store: PodDatabase, podId: string, runId: string | nu
   if (!retry) return true
   const pod = store.getPod(podId)
   const epoch = store.db.prepare('SELECT epoch FROM resource_epochs WHERE pod_id=?').get(podId)?.epoch ?? 0
-  if (pod.activeScript !== retry.script || pod.bindingRevision !== retry.assignment || epoch !== retry.epoch) throw new Error('Script or permissions changed during infrastructure retry; review before running')
+  if (pod.activeScript !== retry.script || pod.bindingRevision !== retry.assignment || epoch !== retry.epoch) throw new Error('Script or permissions changed during infrastructure retry; future schedules use the current ones')
   if (requireActive && retry.reason === 'schedule' && store.db.prepare('SELECT enabled FROM schedules WHERE pod_id=?').get(podId)?.enabled !== 1) return false
   return (!requireActive || pod.lifecycle === 'active') && retry.at <= now
 }

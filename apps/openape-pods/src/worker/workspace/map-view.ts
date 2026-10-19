@@ -5,7 +5,6 @@ import { parseManifest } from '../storage/database'
 import type { PodDatabase } from '../storage/database'
 import type { PodResource } from '../../contracts/resources'
 import { privatePods } from '../central/projection-policy'
-import { openOwnerScriptEffects } from '../recovery/owner-script'
 import { ItemTagStore } from './item-tags'
 
 type Row = Record<string, unknown>
@@ -37,8 +36,6 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
   const lastRuns = new Map(db.prepare('SELECT pod_id,state,started_at,finished_at,summary,error FROM runs ORDER BY started_at,rowid').all().map(row => [row.pod_id as string, run(row)]))
   // A Pod that is running again is still degraded while its last settled run failed or left gaps.
   const settled = new Map(db.prepare('SELECT pod_id,state FROM runs WHERE finished_at IS NOT NULL ORDER BY started_at,rowid').all().map(row => [row.pod_id as string, String(row.state)]))
-  const unknownEffects = db.prepare('SELECT pod_id,effect_key,run_id FROM effect_ledger WHERE operation IN (\'http.request\',\'program.call\') AND state=\'unknown\'').all()
-  const blocked = db.prepare('SELECT pod_id,count(*) AS count,min(error) AS error FROM accepted_events WHERE state=\'blocked\' GROUP BY pod_id').all()
   const approvals = db.prepare('SELECT r.pod_id,e.run_id,e.data FROM run_events e JOIN runs r ON r.id=e.run_id WHERE r.state=\'running\' AND e.type=\'approval\' AND e.sequence=(SELECT max(newer.sequence) FROM run_events newer WHERE newer.run_id=e.run_id AND newer.type=\'approval\' AND json_extract(newer.data,\'$.grantId\')=json_extract(e.data,\'$.grantId\')) AND json_extract(e.data,\'$.state\')=\'pending\' ORDER BY e.at').all()
   // Grants a Pod requested at the IdP (for example through MCP) wait there for the owner even when no run waits for them.
   const pendingGrants = db.prepare('SELECT id,pod_id,issuer,display FROM pod_grants WHERE state=\'pending\' ORDER BY created_at,rowid').all()
@@ -115,7 +112,6 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
     const writesData = namespaces.filter(row => row.writer === pod.id).map(row => String(row.path))
     const readsData = readers.filter(row => row.pod_id === pod.id).map(row => String(row.path))
     const kind = writesData.length && !manifests.get(pod.id)?.work?.length ? 'source' : ai ? 'decision' : effect ? 'effect' : 'code'
-    const queue = blocked.find(row => row.pod_id === pod.id)
     const runApprovals = approvals.filter(row => local && row.pod_id === pod.id).map((row) => {
       const approval = parseRunApproval(JSON.parse(row.data as string))
       return { grantId: approval.grantId, title: approval.title, runId: String(row.run_id) }
@@ -138,8 +134,9 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
       schedule: schedules.get(pod.id) ?? null,
       lastRun: local ? lastRuns.get(pod.id) ?? null : null,
       runs: local ? runTotals[pod.id] ?? 0 : 0,
-      queue: local ? { blocked: Number(queue?.count ?? 0), error: (queue?.error as string | null) ?? null } : { blocked: 0, error: null },
-      unknown: local ? [...openOwnerScriptEffects(store, pod.id), ...unknownEffects.filter(row => row.pod_id === pod.id).map(row => ({ key: String(row.effect_key), runId: String(row.run_id) }))] : [],
+      // Neutral values for relays and renderers before issue 1518, which require these fields.
+      queue: { blocked: 0, error: null },
+      unknown: [],
       approvals: runApprovals,
       grants: waitingGrants,
       failures: local ? failures[pod.id] ?? 0 : 0,
@@ -148,17 +145,17 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
   }
 
   const active = pods.filter(pod => pod.lifecycle === 'active' && pod.schedule?.enabled).length
-  const degraded = pods.filter(pod => pod.lifecycle !== 'archived' && !hidden.has(pod.id) && (pod.queue.blocked > 0 || ['failed', 'completedWithGaps'].includes(settled.get(pod.id) ?? ''))).map(pod => ({ podId: pod.id, reason: pod.queue.blocked > 0 ? pod.queue.error ?? 'blocked' : settled.get(pod.id)! }))
+  const degraded = pods.filter(pod => pod.lifecycle !== 'archived' && !hidden.has(pod.id) && ['failed', 'completedWithGaps'].includes(settled.get(pod.id) ?? '')).map(pod => ({ podId: pod.id, reason: settled.get(pod.id)! }))
   const name = (podId: unknown) => pods.find(pod => pod.id === podId)?.name ?? String(podId)
   const decisions: MapView['kpis']['decisions'] = [
     ...questions.map(row => ({ podId: String(row.pod_id), kind: 'question' as const, title: name(row.pod_id), count: Number(row.count) })),
     ...waitingApprovals.map(row => ({ podId: String(row.pod_id), kind: 'approval' as const, title: name(row.pod_id), count: Number(row.count) })),
   ]
-  const unknownDeliveries = unknownEffects.length + pods.reduce((count, pod) => count + pod.unknown.filter(effect => effect.authority).length, 0) + Number(db.prepare('SELECT count(*) AS count FROM effect_attempts WHERE state=\'unknown\'').get()!.count)
   return {
     at,
     window: { from, to: at },
-    kpis: { active, paused: pods.length - active, degraded, decisions, unknownDeliveries },
+    // unknownDeliveries stays 0 for relays and renderers before issue 1518, which require it.
+    kpis: { active, paused: pods.length - active, degraded, decisions, unknownDeliveries: 0 },
     systems: Array.from(systems.values(), ({ methods, ...item }) => ({ ...item, how: methods ? [...methods].sort().join(', ') : item.how })),
     pods,
     edges,

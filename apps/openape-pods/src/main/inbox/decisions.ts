@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { InboxDecide, InboxDecision, InboxDecisionOption, InboxDecisionType } from '../../contracts/inbox'
+import type { InboxDecide, InboxDecision, InboxDecisionType } from '../../contracts/inbox'
 import { inboxDecisionLimits, inboxSourceId, parseInboxDecision } from '../../contracts/inbox'
 import type { MapView } from '../../contracts/map-view'
 import type { DomainCommand, DomainOverview } from '../../contracts/domain-admin'
@@ -58,7 +58,7 @@ export class InboxDecisions {
 
   private async entries(): Promise<DecisionEntry[]> {
     const sources = await this.worker.inboxSources()
-    const entries = [...this.questions(sources), ...this.approvals(sources), ...this.held(sources), ...this.uncertain(sources), ...this.effects(sources), ...this.secrets(sources)]
+    const entries = [...this.questions(sources), ...this.approvals(sources), ...this.failedWork(sources), ...this.secrets(sources)]
     // One malformed source (for example a non-HTTPS issuer) must not block every other decision.
     const valid = entries.filter((entry) => {
       try { parseInboxDecision(entry.decision); return true }
@@ -107,47 +107,20 @@ export class InboxDecisions {
     }, async () => { throw new Error('Historical decisions are read-only; reconcile the external tool journal') }))
   }
 
-  /** Work a Pod could not finish safely; it runs again only after the owner states what was observed. */
-  private held(sources: DecisionSources): DecisionEntry[] {
+  /** Work that failed and no longer retries on its own; the owner can retry it once the cause is fixed. */
+  private failedWork(sources: DecisionSources): DecisionEntry[] {
     const writer = (operation: string) => sources.domain.namespaces.find(namespace => namespace.path === sources.domain.operations.find(item => item.operation === operation)?.output)?.writer
     return sources.domain.held.map((item) => {
       const podId = writer(item.operation)
       return this.entry('work', [item.key], {
         ...(podId && podId !== 'owner' ? this.pod(sources, podId) : { podId: null, podName: null }),
-        title: `${this.t('Held work')} · ${item.operation}`,
+        title: `${this.t('Failed work')} · ${item.operation}`,
         body: [item.object, ...(item.reason ? [item.reason] : [])].join('\n'),
         authority: 'pods',
-        options: [{ key: 'release', title: this.t('Release after review'), input: 'evidence' }],
+        options: [{ key: 'release', title: this.t('Retry'), input: null }],
         link: null,
-      }, async (_option, evidence) => this.worker.domain({ type: 'release', key: item.key, evidence }))
+      }, async () => this.worker.domain({ type: 'release', key: item.key }))
     })
-  }
-
-  /** External effects whose outcome is unknown; the owner records what happened and nothing is executed again. */
-  private uncertain(sources: DecisionSources): DecisionEntry[] {
-    return sources.domain.unknownEffects.map(effect => this.entry('effect', [effect.actionKey, String(effect.attempt)], {
-      ...this.pod(sources, effect.podId),
-      title: `${this.t('Uncertain action')} · ${effect.operation}`,
-      body: Object.entries(effect.intent && typeof effect.intent === 'object' ? effect.intent : {}).map(([key, value]) => `${key}: ${show(value)}`).join('\n'),
-      authority: 'pods',
-      options: [],
-      link: null,
-    }, async () => { throw new Error('Historical effects are read-only; reconcile the external tool journal') }))
-  }
-
-  // Replaces the desktop confirmation dialog: the owner states what was observed outside, never an automatic resend.
-  private effects(sources: DecisionSources): DecisionEntry[] {
-    return (sources.map?.pods ?? []).flatMap(pod => pod.unknown.map((item) => {
-      const options: InboxDecisionOption[] = [{ key: 'delivered', title: this.t('Delivered'), input: 'evidence' }, { key: 'resend', title: this.t('Not delivered, send again'), input: 'evidence' }]
-      return this.entry('effect', [pod.id, item.runId, item.key], {
-        ...this.pod(sources, pod.id),
-        title: `${this.t('unknown deliveries')} · ${item.key}`,
-        body: item.runId,
-        authority: 'pods',
-        options,
-        link: null,
-      }, async (option, evidence) => this.worker.runs({ type: 'resolveHttp', podId: pod.id, runId: item.runId, key: item.key, applied: option === 'delivered', evidence }))
-    }))
   }
 
   private secrets(sources: DecisionSources): DecisionEntry[] {
