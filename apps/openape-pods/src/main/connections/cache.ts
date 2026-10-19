@@ -228,7 +228,7 @@ export class CredentialCache {
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid connection reference')
     await this.acquire(id)
     try {
-      await rm(this.identityPath(id), { force: true }); await rm(this.portablePath(id), { force: true }); await rm(this.connectionPath(id), { force: true }); await rm(this.path(id), { force: true })
+      await rm(this.identityPath(id), { force: true }); await rm(this.portablePath(id), { force: true }); await rm(this.connectionPath(id), { force: true }); await rm(this.path(id), { force: true }); await rm(join(this.root, 'legacy', `${id}.encrypted`), { force: true })
       try {
         const directory = await open(this.root, 'r')
         try { await directory.sync() }
@@ -247,7 +247,7 @@ export class CredentialCache {
       catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error }
       const value = parseCredentialJSON(text)
       if (value.podId !== podId || (typeof value.privateKey !== 'string' && !['script-credential', 'program-state'].includes(String(value.kind)))) throw new Error('Refusing to erase a shared or foreign connection')
-      await rm(this.identityPath(id), { force: true }); await rm(this.portablePath(id), { force: true }); await rm(this.connectionPath(id), { force: true }); await rm(this.path(id), { force: true }); await rm(join(this.root, `.script-${id}.json`), { force: true }); const directory = await open(this.root, 'r')
+      await rm(this.identityPath(id), { force: true }); await rm(this.portablePath(id), { force: true }); await rm(this.connectionPath(id), { force: true }); await rm(this.path(id), { force: true }); await rm(join(this.root, 'legacy', `${id}.encrypted`), { force: true }); await rm(join(this.root, `.script-${id}.json`), { force: true }); const directory = await open(this.root, 'r')
       try { await directory.sync() }
       finally { await directory.close() }
     }
