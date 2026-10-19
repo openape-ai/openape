@@ -48,6 +48,7 @@ it('preserves an absent grant ID without inventing one', async () => {
 
 it.each([
   { kind: 'permission', state: 'made-up', grantId: 'untrusted' },
+  { kind: 'permission', state: ['denied'], grantId: 'untrusted' },
   { kind: 'permission', state: 'denied', grantId: '' },
   { kind: 'permission', state: 'denied', grantId: 'untrusted', extra: true },
 ])('does not present malformed lifecycle metadata as an owner decision %#', async (failure) => {
