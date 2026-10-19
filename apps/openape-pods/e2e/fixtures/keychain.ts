@@ -14,7 +14,7 @@ export function failOnKeychainDialog(app: ElectronApplication): void {
       stopped = true
       console.error(error
         ? `Keychain dialog guard failed: ${error.message}`
-        : 'A macOS keychain or authorization dialog is open; the Pods app was stopped instead of waiting for a person. Synthetic fixtures use the mock keychain; OPENAPE_PODS_TEST_REAL_KEYCHAIN=1 needs a human or an unlocked dedicated keychain. The dialog stays open until someone answers it.')
+        : 'A macOS keychain or authorization dialog is open; the Pods app was stopped instead of waiting for a person. Pods keeps no secret in the keychain and fixtures always use the mock keychain. The dialog stays open until someone answers it.')
       app.process().kill('SIGKILL')
     })
   }, 500)

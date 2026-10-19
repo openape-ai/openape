@@ -41,7 +41,7 @@ it('lets connected Codex configure and run a Pod and administer shared data (pac
   const identity = await fixtureShellIdentity(root, ['fixture.read']); cleanups.push(() => identity.close())
   const app: ElectronApplication = await electron.launch({ executablePath: join(bundle, 'MacOS/OpenApe Pods Fixture'), cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, OPENAPE_PODS_FIXTURE_CODEX_HOME: home, OPENAPE_PODS_FIXTURE_MCP_OWNER: 'synthetic', NODE_ENV: 'test' }, timeout: 20000 })
   cleanups.push(() => app.close())
-  await identity.encrypt(app, true)
+  await identity.persistCredentials()
   const page = await app.firstWindow()
   await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 20000 }).toBe('ready')
   await page.evaluate(() => window.pods.onboarding({ type: 'finish' }))

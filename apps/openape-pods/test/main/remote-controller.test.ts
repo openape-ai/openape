@@ -1,6 +1,6 @@
 // @vitest-environment node
 import { randomUUID } from 'node:crypto'
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises'
+import { access, mkdtemp, mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -20,7 +20,7 @@ import { DesktopRegistration } from '../../src/worker/remote/registration'
 import type { RemoteInternal } from '../../src/worker/remote/registration'
 
 const browser = vi.hoisted(() => vi.fn())
-vi.mock('electron', () => ({ safeStorage: { isEncryptionAvailable: () => true, encryptString: (text: string) => Buffer.from(text), decryptString: (bytes: Buffer) => bytes.toString() }, shell: { openExternal: browser } }))
+vi.mock('electron', () => ({ shell: { openExternal: browser } }))
 const cleanups: (() => Promise<void>)[] = []
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); vi.unstubAllGlobals(); vi.unstubAllEnvs(); browser.mockReset() })
 
@@ -37,7 +37,7 @@ async function fixture() {
   const rotated = relay.refresh(first.refreshToken, proof)
   expect(() => relay.refresh(first.refreshToken, proof)).toThrow('refresh_replay')
   const saved = { id: registration.id, signing, agreement, enabled: true, tokens: { ...first, expiresAt: new Date(0).toISOString() } }
-  await mkdir(join(root, 'remote'), { recursive: true }); await writeFile(join(root, 'remote/registration.enc'), JSON.stringify(saved))
+  await mkdir(join(root, 'remote'), { recursive: true }); await writeFile(join(root, 'remote/registration.json'), JSON.stringify(saved))
   await mkdir(join(root, 'central')); await writeFile(join(root, 'central/state.json'), '{"revision":17,"hash":"retained"}')
   await writeFile(join(root, 'central/publication.json'), '{"pending":"retained"}')
   remote.execute({ type: 'configure', registration })
@@ -88,7 +88,7 @@ async function fixture() {
   vi.stubGlobal('fetch', fetcher)
   const controller = new RemoteController(root, worker as unknown as FixtureWorker, 'https://pods.example.test')
   cleanups.push(async () => { controller.stop(); relay.close(); inbox.close(); store.close(); await rm(root, { recursive: true, force: true }) })
-  const readSaved = async () => JSON.parse(await readFile(join(root, 'remote/registration.enc'), 'utf8')) as typeof saved
+  const readSaved = async () => JSON.parse(await readFile(join(root, 'remote/registration.json'), 'utf8')) as typeof saved
   const revoke = () => { relay.db.prepare('UPDATE registrations SET revoked=1 WHERE id=?').run(registration.id) }
   return { switchOwner: (next: typeof owner) => { ownerOf = next }, root, relay, store, remote, outbox, inbox, owner, registration, saved, rotated, worker, controller, requests, fetcher, readSaved, revoke, enable: () => controller.enable({ owner, email: owner.subject }) }
 }
@@ -109,6 +109,16 @@ it('reauthenticates a replay-revoked session with the same runtime, keys and gen
   await f.enable()
   expect(browser).toHaveBeenCalledTimes(1)
   expect(f.relay.db.prepare('SELECT count(*) AS count FROM registrations').get()?.count).toBe(1)
+})
+
+it('never replaces a registration still in the retired keychain format with a fresh identity (issue 1519)', async () => {
+  const f = await fixture()
+  const json = join(f.root, 'remote/registration.json'); const legacy = join(f.root, 'remote/registration.enc')
+  await rename(json, legacy)
+  await expect(f.enable()).rejects.toThrow('still in the macOS keychain')
+  expect(await readFile(legacy, 'utf8')).toBe(JSON.stringify(f.saved))
+  await expect(access(json)).rejects.toThrow()
+  expect(f.requests).toEqual([])
 })
 
 it('refuses revoked devices without replacing their identity or opening enrollment', async () => {

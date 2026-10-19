@@ -19,7 +19,8 @@ function podIdentity(value: Record<string, unknown>): boolean {
     && ['issuer', 'owner', 'privateKey', 'publicKey', 'keyId'].every(key => typeof value[key] === 'string' && value[key])
 }
 
-export interface CredentialCipher { available: () => boolean, encrypt: (value: string) => Buffer, decrypt: (value: Buffer) => string }
+/** Opens values of the retired macOS keychain format; only the one-time migration passes one. */
+export interface CredentialCipher { available: () => boolean, decrypt: (value: Buffer) => string }
 export class CredentialCache {
   private queues = new Map<string, (() => void)[]>()
   constructor(private readonly root: string, private readonly cipher?: CredentialCipher) {}
@@ -39,6 +40,17 @@ export class CredentialCache {
   }
 
   private portablePath(id: string): string { this.path(id); return join(this.root, `${id}.credential.json`) }
+
+  // Every other value is a private file; `<id>.encrypted` is the retired macOS keychain format, read only to migrate it.
+  private connectionPath(id: string): string { this.path(id); return join(this.root, `${id}.connection.json`) }
+
+  /** Moves a retired keychain file aside instead of deleting it, so a rollback of the app can still read it. */
+  private async retireLegacy(id: string): Promise<void> {
+    try { await lstat(this.path(id)) }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error }
+    const legacy = join(this.root, 'legacy'); await mkdir(legacy, { recursive: true, mode: 0o700 })
+    await rename(this.path(id), join(legacy, `${id}.encrypted`))
+  }
 
   private async readPrivate(path: string): Promise<string> {
     const directory = await lstat(this.root)
@@ -74,10 +86,12 @@ export class CredentialCache {
     catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
     const portable = await this.portable(id)
     if (portable) return JSON.stringify(portable.value)
+    try { return await this.readPrivate(this.connectionPath(id)) }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
     const bytes = await readFile(this.path(id))
-    if (!this.cipher?.available()) throw new Error('Credential store is locked or unavailable; unmigrated credentials require the desktop credential store; open the updated desktop once to migrate eligible credentials')
+    if (!this.cipher?.available()) throw new Error('This credential is still in the macOS keychain; start a Developer ID signed OpenApe Pods once to migrate it')
     const text = this.cipher.decrypt(bytes)
-    if (podIdentity(parseCredentialJSON(text))) await this.persist(id, text)
+    await this.persist(id, text)
     return text
   }
 
@@ -107,10 +121,8 @@ export class CredentialCache {
     const binding = selected ?? portable?.binding
     if (binding && identity) throw new Error('Cannot replace a portable credential with a Pod identity')
     if (binding) validatePortableValue(value, binding)
-    let bytes: string | Buffer = cache
+    let bytes = cache
     if (!identity && !binding) {
-      if (!this.cipher?.available()) throw new Error('Application credential store is locked or unavailable; use the desktop credential store')
-      bytes = this.cipher.encrypt(cache)
       try { await lstat(this.identityPath(id)); throw new Error('Cannot replace a Pod identity with another credential type') }
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
     }
@@ -119,7 +131,7 @@ export class CredentialCache {
       catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
       bytes = JSON.stringify({ version: 1, id, binding, value })
     }
-    const target = identity ? this.identityPath(id) : binding ? this.portablePath(id) : this.path(id)
+    const target = identity ? this.identityPath(id) : binding ? this.portablePath(id) : this.connectionPath(id)
     await this.privateDirectory()
     const staging = join(this.root, `.stage-${randomUUID()}`)
     try {
@@ -130,11 +142,37 @@ export class CredentialCache {
       const directory = await open(this.root, 'r')
       try {
         await directory.sync()
-        if (identity || binding) { await rm(this.path(id), { force: true }); await directory.sync() }
+        if (identity || binding) { await rm(this.connectionPath(id), { force: true }); await directory.sync() }
       }
       finally { await directory.close() }
+      await this.retireLegacy(id)
     }
     finally { await rm(staging, { force: true }) }
+  }
+
+  /**
+   * Moves every value still encrypted with the macOS keychain into its private file, once, while the cipher can open
+   * it. Unreadable values are retired too, so the keychain is never needed again; returns the ids that failed.
+   */
+  async migrateLegacy(): Promise<string[]> {
+    if (!this.cipher?.available()) throw new Error('The macOS keychain is unavailable; legacy credentials were left in place')
+    let names: string[]
+    try { names = await readdir(this.root) }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []; throw error }
+    const failed: string[] = []
+    for (const id of names.map(name => /^([a-f0-9-]{36})\.encrypted$/.exec(name)?.[1]).filter(id => id !== undefined)) {
+      await this.acquire(id)
+      try {
+        const text = await this.read(id)
+        if (await this.read(id) !== text) throw new Error('Migrated credential differs')
+      }
+      catch { failed.push(id) }
+      finally {
+        try { await this.retireLegacy(id) }
+        finally { this.release(id) }
+      }
+    }
+    return failed
   }
 
   private async migrate(id: string, binding: PortableBinding, signal?: AbortSignal): Promise<void> {
@@ -171,7 +209,7 @@ export class CredentialCache {
   async create(id: string, cache: string): Promise<void> {
     this.path(id); await this.acquire(id)
     try {
-      for (const path of [this.identityPath(id), this.portablePath(id), this.path(id)]) {
+      for (const path of [this.identityPath(id), this.portablePath(id), this.connectionPath(id), this.path(id)]) {
         try { await lstat(path); throw new Error('Connection already exists') }
         catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
       }
@@ -190,7 +228,7 @@ export class CredentialCache {
     if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid connection reference')
     await this.acquire(id)
     try {
-      await rm(this.identityPath(id), { force: true }); await rm(this.portablePath(id), { force: true }); await rm(this.path(id), { force: true })
+      await rm(this.identityPath(id), { force: true }); await rm(this.portablePath(id), { force: true }); await rm(this.connectionPath(id), { force: true }); await rm(this.path(id), { force: true })
       try {
         const directory = await open(this.root, 'r')
         try { await directory.sync() }
@@ -209,7 +247,7 @@ export class CredentialCache {
       catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return; throw error }
       const value = parseCredentialJSON(text)
       if (value.podId !== podId || (typeof value.privateKey !== 'string' && !['script-credential', 'program-state'].includes(String(value.kind)))) throw new Error('Refusing to erase a shared or foreign connection')
-      await rm(this.identityPath(id), { force: true }); await rm(this.portablePath(id), { force: true }); await rm(this.path(id), { force: true }); await rm(join(this.root, `.script-${id}.json`), { force: true }); const directory = await open(this.root, 'r')
+      await rm(this.identityPath(id), { force: true }); await rm(this.portablePath(id), { force: true }); await rm(this.connectionPath(id), { force: true }); await rm(this.path(id), { force: true }); await rm(join(this.root, `.script-${id}.json`), { force: true }); const directory = await open(this.root, 'r')
       try { await directory.sync() }
       finally { await directory.close() }
     }

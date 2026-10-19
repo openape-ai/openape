@@ -1,14 +1,12 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { computeArgvHash } from '@openape/grants'
 import { computeCmdHash } from '@openape/core'
-import { createHash, generateKeyPairSync, randomBytes, randomUUID, sign } from 'node:crypto'
+import { createHash, generateKeyPairSync, randomUUID, sign } from 'node:crypto'
 import { createServer } from 'node:http'
 import { join } from 'node:path'
-import type { ElectronApplication } from 'playwright'
 import { PodDatabase } from '../../src/worker/storage/database'
 
 export async function fixtureShellIdentity(root: string, ownerPermissions: string[] = [], networkGates = false, provisioning = false, ownerCli = false) {
-  const fixtureKey = randomBytes(32).toString('hex')
   let origin = ''
   const records: { path: string, value: string }[] = []
   const subjects = new Map<string, string>()
@@ -151,13 +149,13 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
       const identity = { connectionId: id, podId: pod.id, issuer: origin, owner, subject, keyId: 'fixture-key' }
       subjects.set(subject, pod.id)
       pods[pod.id] = { connectionId: id, prepared: true, identity }
-      records.push({ path: join(root, 'credentials', `${id}.encrypted`), value: JSON.stringify({ ...identity, privateKey: 'SYNTHETIC_NOT_A_REAL_KEY', publicKey: 'SYNTHETIC_PUBLIC_KEY', accessToken: 'LOCAL_SYNTHETIC_TOKEN', expiresAt: Date.now() / 1000 + 3600 }) })
+      records.push({ path: join(root, 'credentials', `${id}.identity.json`), value: JSON.stringify({ ...identity, privateKey: 'SYNTHETIC_NOT_A_REAL_KEY', publicKey: 'SYNTHETIC_PUBLIC_KEY', accessToken: 'LOCAL_SYNTHETIC_TOKEN', expiresAt: Date.now() / 1000 + 3600 }) })
     }
   }
   const store = new PodDatabase(root)
   try {
     registerPods(store)
-    if (ownerPermissions.length || provisioning) records.push({ path: join(root, 'credentials', `${ownerId}.encrypted`), value: JSON.stringify({ issuer: origin, account: 'fixture-owner@example.test', subject: 'fixture-owner', accessToken: 'SYNTHETIC_OWNER_TOKEN', refreshToken: 'SYNTHETIC_REFRESH_TOKEN', expiresAt: Date.now() / 1000 + 3600 }) })
+    if (ownerPermissions.length || provisioning) records.push({ path: join(root, 'credentials', `${ownerId}.connection.json`), value: JSON.stringify({ issuer: origin, account: 'fixture-owner@example.test', subject: 'fixture-owner', accessToken: 'SYNTHETIC_OWNER_TOKEN', refreshToken: 'SYNTHETIC_REFRESH_TOKEN', expiresAt: Date.now() / 1000 + 3600 }) })
     store.db.prepare('INSERT INTO connections VALUES(?,?,?,?,?,?)').run(ownerId, 'openape', 'fixture-owner@example.test', 'ready', null, JSON.stringify({ issuer: origin, subject: 'fixture-owner@example.test', pods, ...(provisioning ? { broker: { issuer: origin, domain: 'example.test', connectionId: brokerId } } : {}) }))
   }
   finally { store.close() }
@@ -194,21 +192,10 @@ export async function fixtureShellIdentity(root: string, ownerPermissions: strin
       if (!networkGates || !grant || grant.command?.[0] !== 'pods-graph-gate' || grant.status !== 'pending') throw new Error('Synthetic owner can decide only a pending network gate')
       grant.status = decision
     },
-    persistCredentials: async (encrypt: (value: string) => Buffer) => {
-      for (const record of records) { await mkdir(join(root, 'credentials'), { recursive: true, mode: 0o700 }); await writeFile(record.path, encrypt(record.value), { mode: 0o600 }) }
+    // Private files, as Pods stores credentials since issue 1519; no fixture touches safeStorage or the keychain.
+    persistCredentials: async () => {
+      for (const record of records) { await mkdir(join(root, 'credentials'), { recursive: true, mode: 0o700 }); await writeFile(record.path, record.value, { mode: 0o600 }) }
     },
-    encrypt: async (app: ElectronApplication, synthetic = false) => app.evaluate(({ safeStorage }, { records, synthetic, key }) => {
-      if (synthetic) {
-        const { createCipheriv, createDecipheriv, randomBytes } = process.getBuiltinModule('node:crypto') as typeof import('node:crypto')
-        safeStorage.isEncryptionAvailable = () => true
-        safeStorage.encryptString = (value) => { const iv = randomBytes(12); const cipher = createCipheriv('aes-256-gcm', Buffer.from(key, 'hex'), iv); return Buffer.concat([iv, cipher.update(value), cipher.final(), cipher.getAuthTag()]) }
-        safeStorage.decryptString = (bytes) => { const cipher = createDecipheriv('aes-256-gcm', Buffer.from(key, 'hex'), bytes.subarray(0, 12)); cipher.setAuthTag(bytes.subarray(-16)); return Buffer.concat([cipher.update(bytes.subarray(12, -16)), cipher.final()]).toString() }
-      }
-      const fs = process.getBuiltinModule('node:fs') as typeof import('node:fs')
-      const path = process.getBuiltinModule('node:path') as typeof import('node:path')
-      if (!safeStorage.isEncryptionAvailable()) throw new Error('Fixture shell credential cipher is unavailable')
-      for (const record of records) { fs.mkdirSync(path.dirname(record.path), { recursive: true, mode: 0o700 }); fs.writeFileSync(record.path, safeStorage.encryptString(record.value), { mode: 0o600 }) }
-    }, { records, synthetic, key: fixtureKey }),
     close: async () => { for (const held of heldConsumes.values()) held.release(); heldConsumes.clear(); server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())) },
   }
 }

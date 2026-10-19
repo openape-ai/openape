@@ -38,13 +38,12 @@ it('selects only private restored profiles and rejects pointer traversal and lin
   await writeFile(join(base, 'selected-profile.json'), JSON.stringify({ profile: '../outside' })); expect(() => selectedProfile(base)).toThrow('path')
   const link = join(base, 'profiles', randomUUID()); await symlink(profile, link); await writeFile(join(base, 'selected-profile.json'), JSON.stringify({ profile: `profiles/${link.split('/').at(-1)}` })); expect(() => selectedProfile(base)).toThrow('links')
 })
-it('erases only the matching pod key and retries safely after a locked credential store', async () => {
-  const base = await root(); let available = true
-  const cache = new CredentialCache(base, { available: () => available, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
+it('erases only the matching pod key, repeatedly', async () => {
+  const base = await root()
+  const cache = new CredentialCache(base)
   const pod = randomUUID(); const key = randomUUID(); const shared = randomUUID()
   await cache.create(key, JSON.stringify({ podId: pod, privateKey: 'SYNTHETIC' })); await cache.create(shared, JSON.stringify({ refreshToken: 'SYNTHETIC' }))
   await expect(cache.erasePodKey(shared, pod)).rejects.toThrow('shared'); await expect(cache.erasePodKey(key, randomUUID())).rejects.toThrow('foreign')
-  available = false; await expect(cache.erasePodKey(key, pod)).rejects.toThrow('locked'); available = true
   await cache.erasePodKey(key, pod); await cache.erasePodKey(key, pod)
   await cache.withCache(shared, async () => {})
 })

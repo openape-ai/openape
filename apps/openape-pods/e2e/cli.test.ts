@@ -26,7 +26,6 @@ const exec = promisify(execFile)
 let root = ''; let client: CliClient | undefined
 let identity: Awaited<ReturnType<typeof fixtureShellIdentity>> | undefined
 afterEach(async () => { await client?.close(); client = undefined; await identity?.close(); identity = undefined; vi.unstubAllEnvs(); if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
-const cipher = () => ({ available: () => true, encrypt: (value: string) => Buffer.from(value).reverse(), decrypt: (value: Buffer) => Buffer.from(value).reverse().toString() })
 const outputs: unknown[] = []
 const events: unknown[] = []
 const io = () => ({ signal: new AbortController().signal, output: (value: unknown) => outputs.push(value), progress: (value: unknown) => events.push(value) })
@@ -77,13 +76,13 @@ it.each(['owner', 'isolated'] as const)('executes with the real Pod identity, %s
   finally { store.close() }
   identity = await fixtureShellIdentity(profile, [], false, false, true)
   await writeFile(protectedFile, identity.ownerLogin, { mode: 0o600 })
-  await identity.persistCredentials(value => cipher().encrypt(value))
+  await identity.persistCredentials()
   const credentialRoot = join(profile, 'credentials')
-  const desktop = new CredentialCache(credentialRoot, cipher())
+  const desktop = new CredentialCache(credentialRoot)
   const files = await readdir(credentialRoot)
   for (const file of files.filter(file => file.endsWith('.encrypted'))) await desktop.readConnection(file.slice(0, -'.encrypted'.length))
   const protectedIdentity = join(credentialRoot, (await readdir(credentialRoot)).find(file => file.endsWith('.identity.json'))!)
-  const modelId = randomUUID(); const portableCache = new CredentialCache(credentialRoot, cipher())
+  const modelId = randomUUID(); const portableCache = new CredentialCache(credentialRoot)
   await portableCache.create(modelId, JSON.stringify({ tokens: { account_id: 'synthetic-account', access_token: 'synthetic-access', refresh_token: 'synthetic-refresh' } }))
   await portableCache.migrateChatgpt(modelId, 'synthetic-account')
   const protectedCredential = join(credentialRoot, `${modelId}.credential.json`)
@@ -182,7 +181,7 @@ it('executes an assigned owner program without opening its encrypted application
   const profile = join(root, 'profile'); await mkdir(profile, { mode: 0o700 })
   const store = new PodDatabase(profile)
   const applicationId = randomUUID(); const capability = `tool.app_${applicationId.replaceAll('-', '')}.invoke`
-  const desktop = new CredentialCache(join(profile, 'credentials'), cipher())
+  const desktop = new CredentialCache(join(profile, 'credentials'))
   let podId = ''; let stateId = ''
   try {
     podId = store.createPod({ name: 'Owner program proof' }).id
@@ -197,7 +196,7 @@ it('executes an assigned owner program without opening its encrypted application
   const encryptedBefore = await readFile(encryptedPath)
   identity = await fixtureShellIdentity(profile, [], false, false, true)
   await writeFile(join(ownerHome, '.config/apes/auth.json'), identity.ownerLogin, { mode: 0o600 })
-  await identity.persistCredentials(value => cipher().encrypt(value))
+  await identity.persistCredentials()
   for (const file of await readdir(join(profile, 'credentials'))) {
     if (file.endsWith('.encrypted') && file !== `${stateId}.encrypted`) await desktop.readConnection(file.slice(0, -'.encrypted'.length))
   }
