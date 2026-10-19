@@ -3303,5 +3303,6 @@
   "Uncertain script effects": "Ungewisse Skriptwirkungen",
   "Resolve uncertain script effects": "Ungewisse Skriptwirkungen abgleichen",
   "Record the observed partial processing?": "Die beobachtete Teilverarbeitung festhalten?",
-  "Record that no effects were observed?": "Festhalten, dass keine Wirkungen beobachtet wurden?"
+  "Record that no effects were observed?": "Festhalten, dass keine Wirkungen beobachtet wurden?",
+  "Approval batches require an assigned application call": "Sammelfreigaben erfordern einen Aufruf einer zugewiesenen Anwendung"
 }

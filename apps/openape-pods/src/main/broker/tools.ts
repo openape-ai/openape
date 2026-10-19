@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import type { OpenApeGrantSummary } from '@openape/core'
+import type { OpenApeGrantBatch, OpenApeGrantSummary } from '@openape/core'
 import { launchApeShell } from '../../worker/runtime/ape-shell'
 import type { ApeShellRuntime } from '../../worker/runtime/ape-shell'
 import { observeExecution } from '../programs/execution'
@@ -23,6 +23,7 @@ export interface ToolExecution {
   operationId: string
   targetHost: string
   summary?: OpenApeGrantSummary
+  batch?: OpenApeGrantBatch
   observer: ExecutionObserver
 }
 export interface ToolAssignment {
@@ -160,6 +161,8 @@ export class PodToolBroker {
       executableHash: assignment.executableHash,
       files: [...assignment.entryFiles.map(file => ({ path: file.path, sha256: file.hash })), ...assignment.inputFiles ?? []],
       summary: execution.summary,
+      batch: execution.batch,
+      grantType: execution.batch ? 'once' : undefined,
       waitMs: assignment.approvalWaitMs,
     }, lease.registerDomain)
     let stdout = ''; let stderr = ''; let failure: Error | undefined

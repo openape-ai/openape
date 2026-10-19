@@ -1,5 +1,13 @@
 # Active work
 
+## Batch approvals for application calls — issue 1516
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1516. Branch `feature/issue-1516-pod-batch-approvals`, checkout `openape-monorepo.worktrees/archive-batch-approvals`, canonical base `62a6c0fdb0ae2ab876d58020b585d1c0d9df1b32`.
+- Forward validated optional batch metadata through the existing application execution path. Keep command arguments, effect identity and per-member once-grant authority separate from presentation metadata; reject unsupported destinations before dispatch.
+- Personal archive recipes remain outside Git. New requests from each run persist one shared batch before dispatch and preserve it on retries; existing unbatched requests retain their exact frozen identity.
+- Verification: 36 existing focused metadata/dispatcher/refusal/i18n checks and five personal repeat/legacy/partial-approval checks pass. Independent runtime review has no open findings. Live acceptance must show grouped pending once-grants without approving or archiving them.
+- Next: required repository gates, native PR, canonical merge and coordinated desktop/CLI installation, followed by actual CLI evidence.
+
 ## Selective shape registry seeding — issue 1515
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1515. Branch `bugfix/issue-1515-selective-shape-seed`, checkout `openape-monorepo.worktrees/selective-shape-seed-1515`.

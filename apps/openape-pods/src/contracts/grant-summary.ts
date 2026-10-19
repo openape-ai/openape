@@ -1,5 +1,5 @@
-import type { OpenApeGrantSummary } from '@openape/core'
-import { parseGrantSummary } from '@openape/grants'
+import type { OpenApeGrantBatch, OpenApeGrantSummary } from '@openape/core'
+import { parseGrantBatch, parseGrantSummary } from '@openape/grants'
 import type { RunContext } from './services'
 
 /**
@@ -71,11 +71,10 @@ export function savedScriptSummary(context: RunContext): GrantSummary {
 }
 
 /**
- * Splits the optional `summary` of a script call from the call itself, so the call (and the identity of its effect)
- * stays the same whatever the script claims about it. The summary is used only when a new grant has to be requested.
+ * Splits approval presentation from the call, keeping the call and its effect identity unchanged.
  */
-export function splitScriptSummary(payload: unknown): { payload: unknown, summary?: ScriptSummary } {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !Object.hasOwn(payload, 'summary')) return { payload }
-  const { summary, ...call } = payload as Record<string, unknown>
-  return { payload: call, summary: parseScriptSummary(summary) }
+export function splitScriptSummary(payload: unknown): { payload: unknown, summary?: ScriptSummary, batch?: OpenApeGrantBatch } {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !['summary', 'batch'].some(key => Object.hasOwn(payload, key))) return { payload }
+  const { summary, batch, ...call } = payload as Record<string, unknown>
+  return { payload: call, ...(Object.hasOwn(payload, 'summary') ? { summary: parseScriptSummary(summary) } : {}), ...(batch === undefined ? {} : { batch: parseGrantBatch(batch) }) }
 }
