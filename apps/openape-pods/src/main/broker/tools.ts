@@ -4,7 +4,8 @@ import { launchApeShell } from '../../worker/runtime/ape-shell'
 import type { ApeShellRuntime } from '../../worker/runtime/ape-shell'
 import { observeExecution } from '../programs/execution'
 import type { ExecutionObserver } from '../programs/execution'
-import { AuthorityError, NonRetryableError } from '../../contracts/infrastructure'
+import { AuthorityError, NonRetryableError, PermissionUnavailableError } from '../../contracts/infrastructure'
+import type { PermissionRefusal } from '../../contracts/infrastructure'
 import { ProgramState } from '../programs/state'
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, relative, isAbsolute, sep } from 'node:path'
@@ -61,7 +62,7 @@ export interface BrokerLease {
   assertCurrent: () => void
   signal: AbortSignal
 }
-export interface ToolReply { refusal?: { reason: string }, pending?: { grantId: string, approvalUrl: string }, exitCode: number, stdout: string, stderr: string, stdoutArtifact?: { path: string, sha256: string, bytes: number } }
+export interface ToolReply { refusal?: { reason: string } & Partial<PermissionRefusal>, pending?: { grantId: string, approvalUrl: string }, exitCode: number, stdout: string, stderr: string, stdoutArtifact?: { path: string, sha256: string, bytes: number } }
 function secretStrings(value: unknown, key = ''): string[] {
   const credentialKeys = ['secret', 'token', 'accesstoken', 'refreshtoken', 'idtoken', 'refresh', 'privatekey', 'clientsecret', 'password', 'authorization']
   if (typeof value === 'string') return value && credentialKeys.includes(key.toLowerCase().replaceAll('_', '')) ? [value, JSON.stringify(value).slice(1, -1)] : []
@@ -197,7 +198,7 @@ export class PodToolBroker {
     }
     catch (error) {
       // Only a verified private-channel not-started receipt may become a structured refusal.
-      if (assignment.approvalWaitMs === 0 && error instanceof AuthorityError) return { exitCode: 126, stdout: '', stderr: '', refusal: { reason: error.message } }
+      if (assignment.approvalWaitMs === 0 && error instanceof AuthorityError) return { exitCode: 126, stdout: '', stderr: '', refusal: { reason: error.message, ...(error instanceof PermissionUnavailableError ? error.permission : {}) } }
       throw error
     }
     finally {
