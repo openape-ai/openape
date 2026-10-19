@@ -7,6 +7,9 @@
  *   TURSO_URL=... TURSO_AUTH_TOKEN=... \
  *   pnpm seed:shapes
  *
+ * Optionally set SHAPES_CLI_IDS=o365 (comma-separated unique adapter ids) to
+ * update only selected adapters after validating the complete registry.
+ *
  * Defaults to `../shapes-registry` (sibling of openape-monorepo) when no
  * env var is provided.
  *
@@ -22,7 +25,7 @@ import { drizzle } from 'drizzle-orm/libsql'
 import { createClient } from '@libsql/client'
 import { shapes } from '../apps/openape-free-idp/server/database/schema'
 import type { ServerShape } from '@openape/grants'
-import { markDesktopOwnShapes } from './desktop-own-shapes.mjs'
+import { markDesktopOwnShapes, selectShapesForSeed } from './desktop-own-shapes.mjs'
 
 interface AdapterMeta {
   description: string
@@ -79,8 +82,6 @@ async function main() {
     process.exit(1)
   }
 
-  const db = drizzle(createClient({ url: tursoUrl, authToken: tursoToken }))
-
   const entries = readdirSync(adaptersDir).filter((name) => {
     const full = join(adaptersDir, name)
     return statSync(full).isDirectory() && existsSync(join(full, 'adapter.toml'))
@@ -89,9 +90,11 @@ async function main() {
   // Parse every adapter before writing, so one invalid adapter leaves the table untouched.
   // Desktop-own operations (desktop-own-shapes.json) are marked virtual: never read as a program call (issue 1473).
   const loaded: ServerShape[] = markDesktopOwnShapes(entries.map(entry => loadShape(join(adaptersDir, entry), entry)).filter(shape => shape !== null))
-  console.log(`Seeding ${loaded.length} shape(s) from ${registryPath}...`)
+  const selected = selectShapesForSeed(loaded, process.env.SHAPES_CLI_IDS)
+  const db = drizzle(createClient({ url: tursoUrl, authToken: tursoToken }))
+  console.log(`Seeding ${selected.length} of ${loaded.length} shape(s) from ${registryPath}...`)
 
-  for (const shape of loaded) {
+  for (const shape of selected) {
     await db.insert(shapes).values({
       cliId: shape.cli_id,
       executable: shape.executable,
@@ -121,7 +124,7 @@ async function main() {
     console.log(`  ✓ ${shape.cli_id} (${shape.operations.length} operations${shape.versions ? `, tested ${shape.versions.tested_versions.join(', ')}` : ''})`)
   }
 
-  console.log(`Done: ${loaded.length} seeded.`)
+  console.log(`Done: ${selected.length} seeded.`)
 }
 
 main().catch((err) => {

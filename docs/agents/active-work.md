@@ -1,5 +1,13 @@
 # Active work
 
+## Selective shape registry seeding — issue 1515
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1515. Branch `bugfix/issue-1515-selective-shape-seed`, checkout `openape-monorepo.worktrees/selective-shape-seed-1515`.
+- Add optional `SHAPES_CLI_IDS` to the supported seeder. Validate the complete registry and desktop-own virtual invariants before selecting writes; reject empty, duplicate and unknown names. Omission preserves full-registry refresh behavior.
+- This bounded transport-rollout change prevents an O365 adapter update from overwriting an unrelated deployed adapter. No mailbox action, grant, adapter policy or default check chain changes.
+- Scoped lint and five selection/refusal tests pass. The actual TypeScript seeder against a disposable SQLite database writes only the selected adapter, preserves an unrelated row, and rejects malformed selections or a broken full-registry invariant without writes.
+- Next: mandatory affected gate and reviewed native PR; targeted live seeding and before/after unrelated-record equality follow only after merge.
+
 ## Structured tool permission refusals — issue 1514
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1514. Branch `bugfix/issue-1514-tool-invocation`, checkout `openape-monorepo.worktrees/tool-invocation-1514`, canonical base `264218e4b2acc9a5b38be8301d54d75a16c81f60`.

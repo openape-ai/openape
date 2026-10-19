@@ -23,3 +23,15 @@ export function markDesktopOwnShapes(shapes, ids = desktopOwnShapeIds()) {
   if (missing.length) throw new Error(`Desktop-own shapes missing from the registry: ${missing.join(', ')}`)
   return shapes.map(shape => ids.has(shape.cli_id) ? { ...shape, virtual: true } : shape)
 }
+
+export function selectShapesForSeed(shapes, configuredIds) {
+  if (configuredIds === undefined) return shapes
+  const ids = configuredIds.split(',')
+  if (ids.some(id => !/^[a-z][a-z0-9-]*$/.test(id)) || new Set(ids).size !== ids.length)
+    throw new Error('SHAPES_CLI_IDS must list unique non-empty adapter ids without whitespace')
+  const available = new Set(shapes.map(shape => shape.cli_id))
+  const unknown = ids.filter(id => !available.has(id))
+  if (unknown.length) throw new Error(`Unknown SHAPES_CLI_IDS: ${unknown.join(', ')}`)
+  const selected = new Set(ids)
+  return shapes.filter(shape => selected.has(shape.cli_id))
+}
