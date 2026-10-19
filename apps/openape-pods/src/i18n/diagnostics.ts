@@ -85,7 +85,7 @@ export const diagnosticPatterns = [
   'The identity provider refused the delegation ({p0}): {p1}',
   'A delegation lasts 1 to {p0} days',
   'Service sign-in at {p0} failed ({p1})',
-  'Run {p0} of this Pod is still active. Wait until it ends, or cancel or recover it (recovery list, then recover or cancel), before changing its definition.',
+  'Run {p0} of this Pod is still active. Wait until it ends, or cancel it, before changing its definition.',
   'Desktop registration failed ({p0})',
   'Broker revocation failed ({p0}); review the connection at your identity provider',
   'The permission service rejected the request ({p0}); inspect the grant before retrying',

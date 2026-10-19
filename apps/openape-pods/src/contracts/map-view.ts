@@ -1,6 +1,4 @@
 import type { ScheduleSpec } from './scheduling'
-import type { RunEffect } from './runs'
-import { parseOwnerScriptAuthority } from './runs'
 import { normalizeTags } from './tags'
 
 /**
@@ -35,20 +33,22 @@ export interface MapPod {
   ai: boolean
   /** Shared data namespaces this Pod writes and reads. */
   data: { writes: string[], reads: string[] }
-  /** Declared work waiting for this Pod and work held for the owner (blocked or unknown). */
+  /** Declared work waiting for this Pod and failed work that no longer retries on its own; the owner can retry it. */
   work: { pending: number, held: number }
   resources: MapResource[]
   secrets: string[]
   schedule: MapSchedule | null
   lastRun: MapRun | null
   runs: number
-  queue: { blocked: number, error: string | null }
+  /** Always 0 blocked since issue 1518; desktops before it report held inputs, and renderers before it require the field. */
+  queue?: { blocked: number, error: string | null }
   approvals: MapApproval[]
   /** Pending IdP grants of this Pod that no waiting run already shows; older publishers omit it. */
   grants?: MapGrant[]
   /** Failed, interrupted and blocked runs started in the window; older publishers omit it. */
   failures?: number
-  unknown: RunEffect[]
+  /** Always empty since issue 1518; desktops before it list deliveries held for owner review, and renderers before it require it. */
+  unknown?: { key: string, runId: string }[]
   tags?: MapTags
 }
 /** `data` runs from the writer Pod of a namespace to each reader Pod; channel names the namespace. */
@@ -58,7 +58,8 @@ export interface MapKpis {
   paused: number
   degraded: { podId: string, reason: string }[]
   decisions: { podId: string, kind: 'question' | 'approval', title: string, count: number }[]
-  unknownDeliveries: number
+  /** Always 0 since issue 1518; relays and renderers before it require the number. */
+  unknownDeliveries?: number
 }
 export interface MapView { at: number, window: { from: number, to: number }, kpis: MapKpis, systems: MapSystem[], pods: MapPod[], edges: MapEdge[] }
 
@@ -100,7 +101,8 @@ export function parseMapView(value: unknown): MapView {
   const view = object(value)
   if (Object.keys(view).some(key => !['at', 'window', 'kpis', 'systems', 'pods', 'edges'].includes(key))) throw new Error('Invalid map view fields')
   integer(view.at); const window = object(view.window); integer(window.from); integer(window.to)
-  const kpis = object(view.kpis); integer(kpis.active); integer(kpis.paused); integer(kpis.unknownDeliveries)
+  const kpis = object(view.kpis); integer(kpis.active); integer(kpis.paused)
+  if (kpis.unknownDeliveries !== undefined) integer(kpis.unknownDeliveries)
   for (const item of list(kpis.degraded, mapLimits.pods)) { const row = object(item); text(row.podId, 36); text(row.reason) }
   for (const item of list(kpis.decisions, 512)) {
     const row = object(item); text(row.podId, 36); text(row.title, 300); integer(row.count)
@@ -124,13 +126,6 @@ export function parseMapView(value: unknown): MapView {
     tags(pod.tags)
     if (pod.failures !== undefined) integer(pod.failures)
     if (pod.grants !== undefined) grants(pod.grants)
-    for (const item of Array.isArray(pod.unknown) ? pod.unknown : []) {
-      const effect = object(item)
-      if (effect.authority !== undefined) {
-        const authority = parseOwnerScriptAuthority(effect.authority)
-        if (authority.podId !== id || typeof effect.runId !== 'string' || !/^[a-f0-9-]{36}$/.test(effect.runId) || effect.key !== `owner-script:${effect.runId}`) throw new Error('Owner-script review does not match its run')
-      }
-    }
     const data = object(pod.data)
     for (const path of [...list(data.writes, mapLimits.namespaces), ...list(data.reads, mapLimits.namespaces)]) text(path, 200)
     const work = object(pod.work); integer(work.pending); integer(work.held)

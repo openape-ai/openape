@@ -19,7 +19,6 @@ import { DomainData } from '../src/worker/data/domain'
 import { GrantLedger } from '../src/worker/resources/grants'
 import { ItemTagStore } from '../src/worker/workspace/item-tags'
 import { installExample } from '../src/worker/runs/examples'
-import { unresolvedOperation } from '../src/worker/recovery/policy'
 import { ResourceRegistry } from '../src/worker/resources/registry'
 import { fixtureShellIdentity } from './fixtures/shell-identity'
 
@@ -133,7 +132,6 @@ export async function run(context) {
     const authority = { source: 'owner-activation', activationId: expect.any(String), podId: id, scriptHash: store.getPod(id).activeScript, assignmentRevision: store.getPod(id).bindingRevision, resourceEpoch: new ResourceRegistry(store, () => {}).epoch(id) }
     expect(rootEvents).toEqual([{ state: 'authorized', authority }, { state: 'completed', authority, exitCode: 0 }])
     for (const receipt of rootEvents) expect(receipt).not.toHaveProperty('grantId')
-    expect(unresolvedOperation(store, id)).toBe(false)
     expect(store.db.prepare('SELECT count(*) AS n FROM effect_ledger').get()!.n).toBe(0)
   }
   finally { store.close() }
@@ -161,13 +159,12 @@ export async function run(context) {
       const cancelled = new PodDatabase(profile)
       try {
         expect(cancelled.db.prepare('SELECT count(*) AS n FROM effect_ledger').get()!.n).toBe(0)
-        expect(unresolvedOperation(cancelled, id)).toBe(true)
         const run = outputs.at(-1) as { id: string }
-        const boundary = cancelled.db.prepare('SELECT data FROM run_events WHERE run_id=? AND type=\'recovery-boundary\'').get(run.id)!
-        expect(JSON.parse(String(boundary.data))).toMatchObject({ id: `owner-script:${run.id}`, kind: 'untracked', operation: 'owner-script', authority: { source: 'owner-activation', podId: id } })
-        expect(cancelled.db.prepare('SELECT count(*) AS n FROM run_events WHERE run_id=? AND type=\'recovery-boundary-result\'').get(run.id)!.n).toBe(0)
+        const root = cancelled.db.prepare('SELECT data FROM run_events WHERE run_id=? AND type=\'root-script\'').get(run.id)!
+        expect(JSON.parse(String(root.data))).toMatchObject({ state: 'authorized', authority: { source: 'owner-activation', podId: id } })
+        expect(cancelled.db.prepare('SELECT count(*) AS n FROM run_events WHERE run_id=? AND type=\'recovery-boundary\'').get(run.id)!.n).toBe(0)
         const recovery = cancelled.db.prepare('SELECT data FROM run_events WHERE run_id=? AND type=\'recovery\'').get(run.id)!
-        expect(JSON.parse(String(recovery.data))).toMatchObject({ disposition: 'hold', cause: 'owner-cancelled' })
+        expect(JSON.parse(String(recovery.data))).toMatchObject({ disposition: 'isolated', cause: 'owner-cancelled' })
       }
       finally { cancelled.close() }
       expect(identity.ownerDecisions()).toEqual([])

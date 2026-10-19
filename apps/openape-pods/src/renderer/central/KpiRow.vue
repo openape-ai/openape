@@ -10,12 +10,12 @@ const emit = defineEmits<{ open: [id: string] }>()
 const facts = computed(() => kpiFacts(props.view, props.requests ?? []))
 const shownErrors = computed(() => facts.value.errors.slice(0, 2))
 const decisionDetail = computed(() => {
-  const { questions, approvals, rights, reconcile, secrets } = facts.value.decisions
+  const { questions, approvals, rights, work, secrets } = facts.value.decisions
   const parts = [
     ...(questions ? [t('{count} questions', { count: questions })] : []),
     ...(approvals ? [t('{count} approvals', { count: approvals })] : []),
     ...(rights ? [t('{count} rights', { count: rights })] : []),
-    ...(reconcile ? [t('{count} to reconcile', { count: reconcile })] : []),
+    ...(work ? [t('{count} failed work items', { count: work })] : []),
     ...(secrets ? [t('{count} secret requests', { count: secrets })] : []),
   ]
   return parts.length ? parts.join(', ') : t('nothing waiting')

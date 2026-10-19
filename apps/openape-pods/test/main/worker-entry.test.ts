@@ -155,7 +155,7 @@ it('lists the workspace and refuses retired network and description commands in 
 
 it('administers shared data through the real worker and refuses malformed commands', async () => {
   await send({ id: 'domain-list', command: { domain: { type: 'list' } } })
-  expect(replies).toHaveBeenCalledWith({ id: 'domain-list', state: expect.objectContaining({ namespaces: [], questions: [], unknownEffects: [] }) })
+  expect(replies).toHaveBeenCalledWith({ id: 'domain-list', state: expect.objectContaining({ namespaces: [], questions: [], held: [] }) })
   await send({ id: 'domain-forged', command: { domain: { type: 'list', owner: 'forged' } } })
   expect(replies).toHaveBeenCalledWith({ id: 'domain-forged', error: 'Unsupported data fields' })
 })

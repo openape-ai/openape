@@ -49,7 +49,7 @@ export function buildModel(view: MapView, previous?: MapModel): MapModel {
   for (const pod of view.pods) {
     if (pod.lifecycle === 'archived') continue
     shown.add(pod.id)
-    nodes.push(node(pod.id, 'pod', pod.name, { paused: pod.lifecycle === 'paused', ai: pod.ai, degraded: degraded.has(pod.id), blocked: pod.queue.blocked > 0 || pod.work.held > 0, running: pod.lastRun?.state === 'running', secrets: pod.secrets.length > 0 }))
+    nodes.push(node(pod.id, 'pod', pod.name, { paused: pod.lifecycle === 'paused', ai: pod.ai, degraded: degraded.has(pod.id), blocked: pod.work.held > 0, running: pod.lastRun?.state === 'running', secrets: pod.secrets.length > 0 }))
     for (const approval of pod.approvals) links.push({ from: pod.id, to: IDP, type: 'auth', label: approval.title, flow: 1 })
   }
   for (const decision of view.kpis.decisions.filter(item => shown.has(item.podId))) links.push({ from: decision.podId, to: decision.kind === 'question' ? YOU : IDP, type: 'auth', label: decision.kind, flow: decision.count })

@@ -211,25 +211,17 @@ export class WorkLedger {
     })
   }
 
-  /**
-   * Settles the claims a finished or interrupted run still holds: an unresolved external effect of the run holds them
-   * as unknown, an application write the run completed holds them for the owner (a new run would write again under a
-   * new identity), otherwise they retry with backoff. No path replays anything by itself.
-   */
+  /** Settles the claims a finished or interrupted run still holds: they retry with backoff and block after five attempts. */
   settleRun(runId: string): void {
-    const unknown = !!this.store.db.prepare(`SELECT 1 FROM effect_ledger WHERE run_id=? AND state IN ('intent','unknown') UNION ALL SELECT 1 FROM effect_attempts WHERE run_id=? AND state IN ('intent','unknown') LIMIT 1`).get(runId, runId)
-    const wrote = !!this.store.db.prepare(`SELECT 1 FROM effect_ledger WHERE run_id=? AND operation='program.call' AND state='completed' LIMIT 1`).get(runId)
     const now = Date.now()
     for (const row of this.store.db.prepare('SELECT * FROM work_items WHERE run_id=? AND state=\'claimed\'').all(runId) as unknown as ItemRow[]) {
-      if (unknown) this.store.db.prepare(`UPDATE work_items SET state='unknown',claim_token=NULL,reason='The run left an external action with an unknown outcome; reconcile it before this work continues',updated_at=? WHERE key=?`).run(now, row.key)
-      else if (wrote) this.store.db.prepare(`UPDATE work_items SET state='blocked',claim_token=NULL,reason='The run changed an application before it ended; review what happened before this work continues',updated_at=? WHERE key=?`).run(now, row.key)
-      else this.store.db.prepare(`UPDATE work_items SET state=?,claim_token=NULL,ready_at=?,reason='The run ended before this work was completed',updated_at=? WHERE key=?`).run(row.attempt >= workLimits.attempts ? 'blocked' : 'retry_wait', now + backoff[Math.min(row.attempt - 1, backoff.length - 1)]!, now, row.key)
+      this.store.db.prepare(`UPDATE work_items SET state=?,claim_token=NULL,ready_at=?,reason='The run ended before this work was completed',updated_at=? WHERE key=?`).run(row.attempt >= workLimits.attempts ? 'blocked' : 'retry_wait', now + backoff[Math.min(row.attempt - 1, backoff.length - 1)]!, now, row.key)
     }
   }
 
   /**
-   * Claims of runs that ended without settling them (a crash, an owner recovery). An interrupted run keeps its claims
-   * until recovery proved its processes stopped, so a still running process cannot race a new claimant.
+   * Claims of runs that ended without settling them (a crash). An interrupted run keeps its claims until automatic
+   * recovery proved its processes stopped, so a still running process cannot race a new claimant.
    */
   settleOrphans(): void {
     for (const row of this.store.db.prepare(`SELECT DISTINCT w.run_id FROM work_items w LEFT JOIN runs r ON r.id=w.run_id WHERE w.state='claimed'
@@ -275,10 +267,10 @@ export class WorkLedger {
     this.store.db.prepare('UPDATE work_operations SET generation=generation+1,cursor=0,updated_at=? WHERE operation=?').run(Date.now(), this.operation(name).operation)
   }
 
-  /** Owner command: releases blocked or unknown work after the owner reconciled what happened. */
-  release(key: string, evidence: string): void {
-    if (!String(evidence ?? '').trim()) throw new Error('Releasing held work needs the owner\'s observation')
-    const changed = this.store.db.prepare(`UPDATE work_items SET state='retry_wait',ready_at=?,reason=?,updated_at=? WHERE key=? AND state IN ('blocked','unknown')`).run(Date.now(), `Released by the owner: ${String(evidence).slice(0, 1800)}`, Date.now(), key)
+  /** Owner command: retries failed work, for example after its automatic attempts were exhausted. */
+  release(key: string, note?: string): void {
+    const reason = note?.trim() ? `Retried by the owner: ${note.trim().slice(0, 1800)}` : 'Retried by the owner'
+    const changed = this.store.db.prepare(`UPDATE work_items SET state='retry_wait',ready_at=?,reason=?,updated_at=? WHERE key=? AND state IN ('blocked','unknown')`).run(Date.now(), reason, Date.now(), key)
     if (changed.changes !== 1) throw new Error('Only blocked or unknown work can be released')
   }
 

@@ -12,8 +12,6 @@ import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { RunStore } from '../../src/worker/runs/store'
 import { RunDispatcher } from '../../src/worker/runs/dispatcher'
 import { installExample } from '../../src/worker/runs/examples'
-import { Recovery } from '../../src/worker/recovery/reconcile'
-import { Scheduler } from '../../src/worker/scheduling/scheduler'
 import { EffectLedger } from '../../src/worker/recovery/effects'
 
 const stores: PodDatabase[] = []; const roots: string[] = []
@@ -25,7 +23,7 @@ function fixture() {
   const runs = new RunStore(store); const run = runs.reserve(pod.id, store.getPod(pod.id).activeScript!, 0).run
   return { store, resources, pod, run, runs, ledger: new EffectLedger(store) }
 }
-describe('fencing and effect reconciliation', () => {
+describe('fencing and effect receipts', () => {
   it('fences previous run authority immediately on worker startup', () => {
     const f = fixture()
     f.store.commitProgress({ podId: f.pod.id, expectedRevision: 0, checkpoint: { committed: true }, sources: [], claims: [] })
@@ -37,29 +35,33 @@ describe('fencing and effect reconciliation', () => {
   it('returns a completed idempotent result and rejects conflicting input', () => {
     const f = fixture(); let externalEffects = 0
     const first = f.ledger.begin(f.pod.id, f.run.id, 'effect-1', 'fixture.write', { value: 1 })
-    if (first.execute) { externalEffects++; f.ledger.complete(f.pod.id, 'effect-1', { receipt: 'synthetic-receipt' }) }
+    if (first.execute) { externalEffects++; f.ledger.complete(f.pod.id, f.run.id, 'effect-1', { receipt: 'synthetic-receipt' }) }
     expect(f.ledger.begin(f.pod.id, f.run.id, 'effect-1', 'fixture.write', { value: 1 })).toEqual({ execute: false, result: { receipt: 'synthetic-receipt' } })
     expect(externalEffects).toBe(1)
     expect(() => f.ledger.begin(f.pod.id, f.run.id, 'effect-1', 'fixture.write', { value: 2 })).toThrow('conflicting')
   })
-  it('blocks explicit retry while an external outcome is unknown', async () => {
+  it('keeps an unknown result as a log until a later run sends its key again', () => {
     const f = fixture(); f.ledger.begin(f.pod.id, f.run.id, 'effect-1', 'fixture.write', {})
-    f.runs.finish(f.run.id, 'failed', 'Synthetic interruption', 'No receipt')
-    const starts: string[] = []
-    const scheduler = new Scheduler(f.store, { start: (id) => { starts.push(id); return 'unused' } })
-    const recovery = new Recovery(f.store, f.resources, scheduler, '/unused')
-    await expect(recovery.retry(f.pod.id, f.run.id)).rejects.toThrow('unknown outcome')
-    expect(f.runs.get(f.run.id).recovery?.state).toBe('needsReview')
-    expect(starts).toEqual([])
-  })
-  it('keeps an unknown result blocked until a trusted reconciliation establishes the outcome', () => {
-    const f = fixture(); f.ledger.begin(f.pod.id, f.run.id, 'effect-1', 'fixture.write', {})
-    const externalReceipt = { applied: true as const, result: { id: 'synthetic-once' } }
     new RunDispatcher(f.store, f.resources, { helper: '/unused', executable: '/unused', entry: '/unused', runtimeDirectories: [], environment: {}, binary: '/unused', catalog: '/unused', manifest: '/unused', sdkHost: '/unused' })
     expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()!.state).toBe('unknown')
-    expect(() => f.ledger.complete(f.pod.id, 'effect-1', externalReceipt.result)).toThrow('not awaiting')
-    f.ledger.reconcile(f.pod.id, 'effect-1', externalReceipt)
-    expect(f.store.db.prepare('SELECT state,result FROM effect_ledger').get()).toMatchObject({ state: 'completed', result: JSON.stringify(externalReceipt.result) })
+    expect(() => f.ledger.complete(f.pod.id, f.run.id, 'effect-1', { id: 'synthetic-once' })).toThrow('not awaiting')
+    f.store.db.prepare('DELETE FROM run_leases').run()
+    const next = f.runs.reserve(f.pod.id, f.store.getPod(f.pod.id).activeScript!, 0).run
+    expect(f.ledger.begin(f.pod.id, next.id, 'effect-1', 'fixture.write', {})).toEqual({ execute: true })
+    f.ledger.complete(f.pod.id, next.id, 'effect-1', { id: 'synthetic-once' })
+    expect(f.store.db.prepare('SELECT state,run_id,result FROM effect_ledger').get()).toMatchObject({ state: 'completed', run_id: next.id, result: JSON.stringify({ id: 'synthetic-once' }) })
+  })
+  it('refuses a key an earlier run is still sending and lets only the owning run settle it', () => {
+    const f = fixture()
+    expect(f.ledger.begin(f.pod.id, f.run.id, 'effect-1', 'fixture.write', {})).toEqual({ execute: true })
+    // The earlier run ended within this worker while its request is still in flight.
+    f.runs.finish(f.run.id, 'failed', 'Stopped', null); f.store.db.prepare('DELETE FROM run_leases').run()
+    const next = f.runs.reserve(f.pod.id, f.store.getPod(f.pod.id).activeScript!, 0).run
+    expect(() => f.ledger.begin(f.pod.id, next.id, 'effect-1', 'fixture.write', {})).toThrow('still being sent by an earlier run')
+    expect(() => f.ledger.complete(f.pod.id, next.id, 'effect-1', { id: 'other' })).toThrow('not awaiting')
+    expect(() => f.ledger.markUnknown(f.pod.id, next.id, 'effect-1')).toThrow('not awaiting')
+    f.ledger.markUnknown(f.pod.id, f.run.id, 'effect-1')
+    expect(f.ledger.begin(f.pod.id, next.id, 'effect-1', 'fixture.write', {})).toEqual({ execute: true })
   })
 })
 
@@ -98,7 +100,7 @@ it('returns the original HTTP receipt after its run and folder have been pruned'
   const input = { url: 'https://delivery.example.test', body: 'once' }
   let deliveries = 0
   if (f.ledger.begin(f.pod.id, f.run.id, 'delivery', 'http.request', input).execute) {
-    deliveries++; f.ledger.complete(f.pod.id, 'delivery', { status: 200, body: 'confirmed' })
+    deliveries++; f.ledger.complete(f.pod.id, f.run.id, 'delivery', { status: 200, body: 'confirmed' })
   }
   f.runs.finish(f.run.id, 'completed', 'Sent', null)
   f.store.db.prepare('UPDATE runs SET started_at=0 WHERE id=?').run(f.run.id)
@@ -118,23 +120,23 @@ it('returns the original HTTP receipt after its run and folder have been pruned'
   expect(() => f.store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE effect_key=\'delivery\'').run()).toThrow('CHECK')
 })
 
-it('keeps an unreceipted broker action fenced across fresh runs and manual recovery', async () => {
-  const f = fixture()
-  f.runs.append(f.run.id, 'recovery-boundary', { id: 'archive-action', kind: 'untracked', operation: 'mail.archive' })
-  f.runs.finish(f.run.id, 'failed', 'Interrupted action', 'Provider outcome unavailable')
-  const dispatcher = new RunDispatcher(f.store, f.resources, { helper: '/unused', executable: '/unused', entry: '/unused', runtimeDirectories: [], environment: {}, binary: '/unused', catalog: '/unused', manifest: '/unused', sdkHost: '/unused' })
-  expect(() => dispatcher.start(f.pod.id)).toThrow('without replay evidence')
-  const recovery = new Recovery(f.store, f.resources, new Scheduler(f.store, dispatcher), '/unused')
-  await expect(recovery.inspect(f.pod.id, f.run.id)).rejects.toThrow('without replay evidence')
-  f.runs.append(f.run.id, 'recovery-boundary-result', { id: 'archive-action', state: 'confirmed' })
-  await expect(recovery.inspect(f.pod.id, f.run.id)).resolves.toBeUndefined()
+it('prunes an old run whose external input failed, since nothing retries a failed input', async () => {
+  const f = fixture(); const retention = new RunRetention(f.store)
+  f.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state,run_id) VALUES(\'failed-input\',?,\'webhook\',\'k\',\'{}\',1,\'failed\',?)').run(f.pod.id, f.run.id)
+  f.store.db.prepare('UPDATE run_inputs SET event_ids=\'["failed-input"]\' WHERE run_id=?').run(f.run.id)
+  f.runs.finish(f.run.id, 'failed', 'Failed', 'Synthetic failure')
+  f.store.db.prepare('UPDATE runs SET started_at=0 WHERE id=?').run(f.run.id)
+  for (let index = 0; index < 50; index++) f.runs.finish(f.runs.reserve(f.pod.id, f.store.getPod(f.pod.id).activeScript!, 0).run.id, 'completed', 'Later', null)
+  await retention.prune()
+  expect(() => f.runs.get(f.run.id)).toThrow('Run not found')
+  expect(f.store.db.prepare('SELECT state,run_id FROM accepted_events WHERE id=\'failed-input\'').get()).toEqual({ state: 'failed', run_id: null })
 })
 
-it('persists ape-shell write intent before acknowledgement and never replays uncertain results', async () => {
+it('persists ape-shell write intent before acknowledgement and resends an uncertain result under its identity', async () => {
   const f = fixture()
   const operationId = randomUUID()
   const scope = { podId: f.pod.id, runId: f.run.id, epoch: 0, assignmentRevision: 1, capabilities: [] }
-  const record = async (record: Parameters<typeof recordProgramExecution>[2]['record']) => { recordProgramExecution(f.store, f.runs, { scope, operationId, record }) }
+  const record = async (record: Parameters<typeof recordProgramExecution>[1]['record']) => { recordProgramExecution(f.store, { scope, operationId, record }) }
   let starts = 0
   await expect(executeRecordedProgram({ command: 'synthetic-secret' }, async (observer) => {
     await observer.authorized({ grantId: 'verified', write: true })
@@ -144,17 +146,22 @@ it('persists ape-shell write intent before acknowledgement and never replays unc
   }, record)).rejects.toThrow('Lost execution receipt')
   expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()?.state).toBe('unknown')
   expect(JSON.stringify(f.store.db.prepare('SELECT * FROM effect_ledger').all())).not.toContain('synthetic-secret')
+  await executeRecordedProgram({ command: 'synthetic-secret' }, async (observer) => {
+    await observer.authorized({ grantId: 'verified', write: true }); starts++; return { exitCode: 0 }
+  }, record)
+  expect(starts).toBe(2)
+  expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()?.state).toBe('completed')
   await expect(executeRecordedProgram({ command: 'synthetic-secret' }, async (observer) => {
     await observer.authorized({ grantId: 'verified', write: true }); starts++; return { exitCode: 0 }
-  }, record)).rejects.toThrow('unknown')
-  expect(starts).toBe(1)
+  }, record)).rejects.toThrow('already completed')
+  expect(starts).toBe(2)
 })
 
 it('drops only a private-channel not-started intent and keeps failed or completed writes non-replayable', async () => {
   for (const scenario of ['not-started', 'failed', 'completed']) {
     const f = fixture(); const operationId = randomUUID()
     const scope = { podId: f.pod.id, runId: f.run.id, epoch: 0, assignmentRevision: 1, capabilities: [] }
-    const record = async (record: Parameters<typeof recordProgramExecution>[2]['record']) => { recordProgramExecution(f.store, f.runs, { scope, operationId, record }) }
+    const record = async (record: Parameters<typeof recordProgramExecution>[1]['record']) => { recordProgramExecution(f.store, { scope, operationId, record }) }
     const result = executeRecordedProgram({}, async (observer) => {
       await observer.authorized({ grantId: 'verified', write: true })
       if (scenario === 'not-started') { await observer.notStarted!(); throw new Error('File changed before dispatch') }
@@ -163,34 +170,4 @@ it('drops only a private-channel not-started intent and keeps failed or complete
     if (scenario === 'not-started') { await expect(result).rejects.toThrow('before dispatch'); expect(f.store.db.prepare('SELECT * FROM effect_ledger').all()).toEqual([]) }
     else { await result; expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()?.state).toBe(scenario === 'completed' ? 'completed' : 'unknown') }
   }
-})
-
-it('records owner-confirmed partial program effects without inventing success or allowing replay', async () => {
-  const f = fixture()
-  const key = `program:${f.run.id}:${f.run.id}`
-  const input = { synthetic: 'partial work committed before failure' }
-  f.ledger.begin(f.pod.id, f.run.id, key, 'program.call', input)
-  f.ledger.markUnknown(f.pod.id, key)
-  f.runs.finish(f.run.id, 'failed', 'Partially completed', 'Synthetic program error')
-  const recovery = new Recovery(f.store, f.resources, {} as never, '/unused')
-  await expect(recovery.resolveHttp(randomUUID(), f.run.id, key, true, 'Wrong Pod', 'partial')).rejects.toThrow('not awaiting')
-  await recovery.resolveHttp(f.pod.id, f.run.id, key, true, 'First synthetic work result verified; second result absent; domains stopped', 'partial')
-  const next = f.runs.reserve(f.pod.id, f.store.getPod(f.pod.id).activeScript!, 0).run
-  expect(f.ledger.begin(f.pod.id, next.id, key, 'program.call', input)).toEqual({ execute: false, result: { outcome: 'partial', reconciled: 'owner' } })
-  expect(f.runs.get(f.run.id).state).toBe('failed')
-  expect(f.runs.events(f.pod.id, f.run.id).at(-1)?.data).toMatchObject({ programOutcome: 'partial', applied: true })
-  await expect(recovery.resolveHttp(f.pod.id, f.run.id, key, true, 'Repeated observation', 'partial')).rejects.toThrow('not awaiting')
-})
-
-it('refuses partial observations for HTTP, active runs and non-applied effects', async () => {
-  const f = fixture()
-  const recovery = new Recovery(f.store, f.resources, {} as never, '/unused')
-  const key = 'synthetic-http'
-  f.ledger.begin(f.pod.id, f.run.id, key, 'http.request', {})
-  f.ledger.markUnknown(f.pod.id, key)
-  await expect(recovery.resolveHttp(f.pod.id, f.run.id, key, true, 'Observation', 'partial')).rejects.toThrow('not awaiting')
-  f.runs.finish(f.run.id, 'failed', 'Failed', 'Synthetic error')
-  await expect(recovery.resolveHttp(f.pod.id, f.run.id, key, true, 'Observation', 'partial')).rejects.toThrow('only to observed program')
-  await expect(recovery.resolveHttp(f.pod.id, f.run.id, key, false, 'Observation', 'partial')).rejects.toThrow('only to observed program')
-  expect(f.store.db.prepare('SELECT state FROM effect_ledger WHERE effect_key=?').get(key)?.state).toBe('unknown')
 })

@@ -18,7 +18,7 @@ Verwende zuerst einen kleinen Ordner mit unkritischen Beispieldateien und nur Le
 
 ## Automatisierungen: Karte, Liste und Detail
 
-Automatisierungen ist der Starttab. Die fünf Kennzahlen oben sind Systemzähler: aktiv, pausiert, gestört, Entscheidungen warten auf dich und unklare Zustellungen. Ihre Untertitel kommen aus deinen Daten, etwa der Name eines gestörten Pods und sein Grund.
+Automatisierungen ist der Starttab. Die Kennzahlen oben sind Systemzähler: aktiv, aktuelle Fehler und Entscheidungen warten auf dich. Ihre Untertitel kommen aus deinen Daten, etwa der Name eines gestörten Pods und sein Grund.
 
 Die Karte zeigt deine Pods in der Mitte, links die Services, Applikationen und Verzeichnisse, die sie lesen, rechts reine Ziele und oben die Autoritäten: deine Entscheidungen, den Identity Provider und die KI. Gepunktete Linien tragen die aufgezeichneten Lese- und Schreibzugriffe der letzten 24 Stunden; Pods, die Daten teilen, stehen vom Schreiber zum Leser angeordnet, und jede Linie gemeinsamer Daten nennt ihren Namensraum. Liste zeigt dieselben Pods als Tabelle. Mit Tags startet die Karte leer: Aktiviere einen oder mehrere Tags, um ihre Pods zu zeigen; jeder Tag zeigt, wie viele Pods ihn tragen, und Ohne Tag, Alle und Keine sind immer verfügbar. Die Auswahl bleibt auf diesem Gerät gespeichert. Ebenen öffnet die Chips Gemeinsame Daten, Lesen, Schreiben, Freigaben und Pausierte; Legende erklärt die Knotenformen.
 
@@ -35,15 +35,15 @@ Stand HH:MM kennzeichnet im Browser einen veröffentlichten Schnappschuss; Live 
 
 ## Entscheidungen: alles, was auf dich wartet
 
-Der Tab Entscheidungen listet, was auf dich wartet: Rückfragen deiner Pods, Freigaben einzelner Aktionen an einzelnen Objekten beim Identity Provider, Rechte, die einem Pod fehlen, angehaltene Arbeit und unklare Aktionen unter Abzugleichen, unklare Zustellungen und Geheimnisse, die über OpenApe Secrets angefragt sind. Die Zahl im Tab ist die Anzahl offener Einträge.
+Der Tab Entscheidungen listet, was auf dich wartet: Rückfragen deiner Pods, Freigaben einzelner Aktionen an einzelnen Objekten beim Identity Provider, Rechte, die einem Pod fehlen, Fehlgeschlagene Arbeit, die nicht mehr von selbst wiederholt wird, und Geheimnisse, die über OpenApe Secrets angefragt sind. Die Zahl im Tab ist die Anzahl offener Einträge.
 
-Eine Rückfrage zeigt die aufgezeichneten Felder ihres Falls und die Optionen mit ihren genauen Titeln; Bündeln nach fasst Fälle nach einem Feld zusammen, sodass eine Wahl die ganze Gruppe beantwortet. Deine Antwort wird als gemeinsame Daten gespeichert, die der fragende Pod liest; sie führt selbst nichts aus. Eine Freigabe bindet eine Aktion an ein Objekt, etwa das Archivieren einer Nachricht, und wird beim Identity Provider entschieden; eine abgelaufene oder abgelehnte Freigabe kannst du erneut anfragen oder zurückziehen. Angehaltene Arbeit wartet, bis du sie nach Prüfung freigibst. Eine unklare Aktion braucht deine Beobachtung am Ziel, bevor du Ist passiert oder Ist nicht passiert wählst; eine unklare Zustellung braucht sie vor Zugestellt oder Nicht zugestellt, erneut senden.
+Eine Rückfrage zeigt die aufgezeichneten Felder ihres Falls und die Optionen mit ihren genauen Titeln; Bündeln nach fasst Fälle nach einem Feld zusammen, sodass eine Wahl die ganze Gruppe beantwortet. Deine Antwort wird als gemeinsame Daten gespeichert, die der fragende Pod liest; sie führt selbst nichts aus. Eine Freigabe bindet eine Aktion an ein Objekt, etwa das Archivieren einer Nachricht, und wird beim Identity Provider entschieden; eine abgelaufene oder abgelehnte Freigabe kannst du erneut anfragen oder zurückziehen. Fehlgeschlagene Arbeit hat ihre automatischen Versuche aufgebraucht; behebe die Ursache und wähle Erneut versuchen. Sonst hält Pods nichts zur Prüfung an: Ein Lauf kann jederzeit unterbrochen und wiederholt werden, und das Skript ist dafür verantwortlich, eine externe Aktion nicht zu wiederholen.
 
 Pods entscheidet nie für dich: kein Modell und kein Zeitplan wählt, genehmigt, schließt aus oder pausiert. Deine angemeldete Codex-Sitzung handelt eine Stunde lang mit deiner Identität, wie ein angemeldetes CLI, das du mit Codex nutzt: Sie kann Rechte, die deine Pods anfragen, genehmigen, ablehnen und widerrufen, und die Aktivität eines Laufs kennzeichnet solche Freigaben als in der Codex-Sitzung freigegeben. Außerhalb dieser Sitzung werden Rechte ausschließlich beim Identity Provider entschieden; die App zeigt Status und Links.
 
 1. Öffne Entscheidungen; der Tab zeigt, wie viele Einträge warten.
 2. Lies den Fall und wähle eine Option; Bündeln nach entscheidet viele Fälle mit demselben Feld auf einmal. Öffne eine Freigabe beim Identity Provider und entscheide sie dort.
-3. Prüfe bei unklaren Aktionen und Zustellungen zuerst das Ziel und halte dann fest, was du gesehen hast.
+3. Behebe bei fehlgeschlagener Arbeit zuerst die Ursache und wähle dann Erneut versuchen.
 4. Geheimnisse listet offene Anfragen mit dem Link zum Ausfüllen auf secrets.openape.ai.
 
 ![Entscheidungen: alles, was auf dich wartet](images/handbook-decisions-de.png)
@@ -91,7 +91,7 @@ Verbinde Codex einmal unter Desktop-Einstellungen → Work from Codex und starte
 
 Der verbundene Codex kann Zugriffe konfigurieren, Skripte speichern und validieren, sie aktivieren und auf Wunsch Zeitpläne einschalten. Rückfragen richten sich nach Codex. Eine Fertigmeldung beweist noch keinen erfolgreichen Lauf.
 
-Jedes Recht fragt der Pod selbst an. Die Sandbox legt fest, was ein Pod erreichen kann (Applikationen, HTTPS-Ziele, Ordner, Geheimnisse und ob seine Programme abgeschottet oder mit deiner Reichweite als Owner laufen, was die Pod-Identität nie ändert); seine Grants legen fest, was er darf, und ein Aufruf braucht beides. In deiner Codex-Sitzung richtet Codex beides ein und genehmigt die Grants sofort, auch den Laufzeit-Grant, sodass der erste Lauf ohne Rückfrage startet. Ohne Sitzung fragt der erste Lauf deinen Identity Provider nach seinem Laufzeit-Grant: Wähle dort einmal Pod-Ausführung erlauben, dann laufen spätere Läufe dieses Pods ohne Rückfrage; Einmal gilt nur für den aktuellen Lauf. Beim Zuweisen von Programmen, HTTP-Zielen, SSH-Zielen oder Jev außerhalb einer Sitzung fragt Pods deren Grants an und öffnet die Freigabeseite. Abgelehnte oder widerrufene Grants halten Läufe gesperrt. Ein Lauf, der in eine Applikation geschrieben oder einen schreibenden HTTP-Aufruf gesendet hat, wird nicht automatisch wiederholt. Die Zeile MCP-Sitzung zeigt, bis wann Codex angemeldet ist; Sitzung beenden entzieht den Zugriff sofort. „Bestehende Grants am IdP verwalten“ öffnet deinen Identity Provider zum Widerruf bestehender Grants. Die zentrale Weboberfläche kann diese Einstellungen nicht ändern.
+Jedes Recht fragt der Pod selbst an. Die Sandbox legt fest, was ein Pod erreichen kann (Applikationen, HTTPS-Ziele, Ordner, Geheimnisse und ob seine Programme abgeschottet oder mit deiner Reichweite als Owner laufen, was die Pod-Identität nie ändert); seine Grants legen fest, was er darf, und ein Aufruf braucht beides. In deiner Codex-Sitzung richtet Codex beides ein und genehmigt die Grants sofort, auch den Laufzeit-Grant, sodass der erste Lauf ohne Rückfrage startet. Ohne Sitzung fragt der erste Lauf deinen Identity Provider nach seinem Laufzeit-Grant: Wähle dort einmal Pod-Ausführung erlauben, dann laufen spätere Läufe dieses Pods ohne Rückfrage; Einmal gilt nur für den aktuellen Lauf. Beim Zuweisen von Programmen, HTTP-Zielen, SSH-Zielen oder Jev außerhalb einer Sitzung fragt Pods deren Grants an und öffnet die Freigabeseite. Abgelehnte oder widerrufene Grants halten Läufe gesperrt. Ein Lauf, der in eine Applikation geschrieben oder einen schreibenden HTTP-Aufruf gesendet hat, wird wie jeder andere Lauf wiederholt; das Skript darf einen bereits ausgeführten Schreibvorgang nicht wiederholen. Die Zeile MCP-Sitzung zeigt, bis wann Codex angemeldet ist; Sitzung beenden entzieht den Zugriff sofort. „Bestehende Grants am IdP verwalten“ öffnet deinen Identity Provider zum Widerruf bestehender Grants. Die zentrale Weboberfläche kann diese Einstellungen nicht ändern.
 
 1. Übergib den Auftrag an Codex; es legt den Pod und sein Skript an und richtet die nötigen Zugriffe ein.
 2. Nenne normale Einstellungen in Codex; übertrage Geheimnisse über OpenApe Secrets oder trage sie auf der Detailseite unter Geheimnisse ein.
@@ -154,7 +154,7 @@ Ausführen unter Skript speichert und validiert geänderten Quelltext vor dem St
 2. Prüfe bei einer Berechtigungsanfrage Pod, Aktion und Konto im Browser. Einmal erlaubt die aktuelle Anfrage; Pod-Ausführung erlauben erstellt eine widerrufbare dauerhafte Erlaubnis. Nutze Freigabe öffnen in der Wartekarte, falls der Browser nicht aufgeht.
 3. Öffne Historie und wähle den Lauf. Lies Ergebnis, nächste Aktion und Was passiert ist. Bei einem Ergebnis mit Lücken musst du fehlende Belege prüfen; ein wartender, gestoppter oder fehlgeschlagener Lauf ist kein Erfolg.
 4. Kontrolliere die tatsächliche Ausgabe und bei externen Aktionen auch das Ziel. Übersicht zeigt das letzte Ergebnis; Ergebnisse und Quellen zeigt gespeicherte Feststellungen, wenn das Skript solche erzeugt.
-5. Öffne bei einem Fehler Technische Details, behebe das genannte Konto-, Ressourcen- oder Skriptproblem und nutze die nachstehenden Wiederherstellungsschritte. Aktiviere keinen Zeitplan bei ungeklärtem manuellem Ergebnis.
+5. Öffne bei einem Fehler Technische Details, behebe das genannte Konto-, Ressourcen- oder Skriptproblem und starte den Lauf erneut. Aktiviere keinen Zeitplan bei ungeklärtem manuellem Ergebnis.
 
 ![Manuell starten und das Ergebnis prüfen](images/handbook-history-de.png)
 
@@ -164,7 +164,7 @@ Automatische Ausführungen laufen auf diesem Mac, nicht in der Cloud. Das Schlie
 
 Wenn die App wieder läuft oder der Mac aufwacht, wird für einen überfälligen aktivierten Zeitplan ein Nachholstart eingereiht, sofern noch kein Zeitplanstart wartet. Der nächste Termin wird in die Zukunft verschoben, statt jedes verpasste Intervall einzeln nachzuholen. Gespeicherter Fortschritt und Skript bestimmen, welche Daten dieser Lauf verarbeitet; damit ist nicht garantiert, dass jede verpasste E-Mail oder Datei nachgeholt wird.
 
-Unterbrochene Läufe sowie blockierte oder bereits beanspruchte Eingaben benötigen eine Wiederherstellungsentscheidung, bevor weitere Arbeit startet. Pro Pod läuft höchstens eine Ausführung gleichzeitig. Pausieren verhindert neue automatische Starts und lässt einen aktiven Lauf enden; Lauf abbrechen in der Historie stoppt ihn. Der verbundene Codex kann Zeitpläne auf deinen Auftrag hin aktivieren.
+Ein unterbrochener oder fehlgeschlagener Lauf wird automatisch wiederholt, sobald seine vorherigen Prozesse beendet sind; ein Pod ist nur aktiv oder pausiert. Pro Pod läuft höchstens eine Ausführung gleichzeitig. Pausieren verhindert neue automatische Starts und lässt einen aktiven Lauf enden; Lauf abbrechen in der Historie stoppt ihn. Der verbundene Codex kann Zeitpläne auf deinen Auftrag hin aktivieren.
 
 1. Öffne nach einem erfolgreichen manuellen Lauf Einstellungen → Zeitplan und Limits. Wähle In einem Intervall mit Minuten oder Täglich mit Ortszeit und ausdrücklicher Zeitzone, beispielsweise Europe/Vienna.
 2. Aktiviere Diesen Zeitplan aktivieren und wähle Zeitplan speichern. Ist der Pod pausiert, wähle nach Prüfung der Bereitschaft zusätzlich Automatische Ausführung fortsetzen.
@@ -183,11 +183,11 @@ Warten auf Freigabe: Wähle Freigabe öffnen in der Wartekarte oder Am IdP entsc
 
 Berechtigungs- oder Validierungsfehler: Öffne Technische Details in der Historie. Prüfe den konkreten Ordner, das Programm, den HTTPS-Hostnamen, die HTTP-Methode oder den Geheimnis-Alias des genannten Pods. Weise fehlende Ressourcen erneut zu, speichere das korrigierte Skript und validiere neu. Ein Fehler des Berechtigungsdienstes bedeutet nicht automatisch, dass du dein Mailkonto neu anmelden musst.
 
-Kein automatischer Lauf: Prüfe aktivierten Zeitplan, Nächster geplanter Zeitpunkt, Pausenstatus und aktives Skript. Beende offene Einrichtungsterminals regulär. Lass Mac und App laufen. Kläre gestoppte Läufe, blockierte Eingaben und Ressourcenfehler in der Historie vor dem Fortsetzen.
+Kein automatischer Lauf: Prüfe aktivierten Zeitplan, Nächster geplanter Zeitpunkt, Pausenstatus und aktives Skript. Beende offene Einrichtungsterminals regulär. Lass Mac und App laufen. Prüfe gestoppte Läufe und Ressourcenfehler in der Historie.
 
-Unterbrochener oder fehlgeschlagener Lauf: Wähle ihn in der Historie und dann Erneuten Versuch vorbereiten. Das prüft gespeicherten Fortschritt, ohne das Skript zu starten. Kläre unsichere Zustellungen und wähle danach Unerledigte Arbeit erneut ausführen, wenn angeboten. Für blockierte Starts nutze Noch nicht gestartete Aufträge erneut vormerken. Wiederholte Klicks auf Ausführen können zusätzliche Anfragen erzeugen.
+Unterbrochener oder fehlgeschlagener Lauf: Pods wiederholt ihn automatisch in wachsenden Abständen, sobald seine vorherigen Prozesse beendet sind; die Historie zeigt den nächsten Versuch. Nach den automatischen Versuchen startet der nächste geplante oder manuelle Lauf neu. Wiederholte Klicks auf Ausführen können zusätzliche Anfragen erzeugen.
 
-Unbekannte Zustellung: Prüfe zuerst das externe Ziel. Halte deine Beobachtung in der Historie fest und wähle Bereits zugestellt oder Nicht zugestellt · Wiederholung erlauben. Rate nicht und sende nicht blind erneut; eine verlorene Antwort beweist nicht, dass nichts passiert ist.
+Unklarer Zustellausgang: Ein Lauf kann nach dem Senden unterbrochen und wiederholt werden. Das Skript muss eine bereits erfolgte Zustellung erkennen, etwa an einem stabilen Anfrageschlüssel oder einer Empfangsbestätigung, die es zuerst prüft; Pods fragt dich nicht nach einer Bestätigung. Eine verlorene Antwort beweist nicht, dass nichts passiert ist.
 
 Worker nicht verfügbar oder nicht unterstützter Mac: Lies die Diagnose, behebe die genannte Ursache und öffne die App erneut. Ein nicht unterstütztes Betriebssystem oder eine CPU lässt sich nicht durch Skriptänderungen beheben. Bei einem Speicherlimit prüfe Daten & Sicherungen, exportiere eine Sicherung, bereinige ungenutzte Dateien oder passe das Limit an. Prüfe danach unterbrochene Arbeit.
 
@@ -215,7 +215,7 @@ Sicherung wiederherstellen und neu starten prüft Prüfsummen, erstellt ein neue
 
 Update prüfen und sichern prüft einen freigegebenen signierten Update-Kandidaten und erstellt eine Sicherung; die Installation erfolgt nach dem Beenden manuell. Ein intern signierter und notarisierter Build mit releaseReady: false ist kein freigegebener öffentlicher Update-Kandidat. Bewahre die vorherige App und eine kompatible Sicherung für ein Rollback auf; öffne niemals eine neu migrierte Datenbank mit einer älteren App.
 
-1. Beende die Assistentenantwort und stoppe oder kläre laufende Ausführungen vor der Wartung.
+1. Beende die Assistentenantwort und stoppe laufende Ausführungen vor der Wartung.
 2. Wähle Sicherung exportieren und einen sicheren Speicherort. Prüfe den erfolgreichen Abschluss und bewahre die exportierte Datei auf.
 3. Wähle zur Wiederherstellung Sicherung wiederherstellen und neu starten, wähle den Export und prüfe die Bestätigung.
 4. Verbinde nach dem Neustart benötigte Dienste, ergänze Geheimnisse separat und führe die beschriebenen manuellen Prüfungen aus. Wähle bei Bedarf die Oberflächensprache erneut.
@@ -364,9 +364,9 @@ Weitere Optionen kann einen Pod archivieren oder einen archivierten Pod nach nat
 
 Die Historie zeigt das Ergebnis, den nächsten Schritt und Was passiert ist. Wiederholte Programmaufrufe und KI-Anfragen werden mit der Anzahl erfolgreicher und nicht abgeschlossener Aufrufe gruppiert. Routinemäßige Berechtigungsprüfungen bleiben zusammen mit der festgelegten Skriptversion und gespeicherten Ereignissen in den aufklappbaren Technischen Details.
 
-Lauf abbrechen stoppt einen aktiven Lauf. Unterbrochene Arbeit bleibt nach Absturz oder Neustart sichtbar. Erneuten Versuch vorbereiten prüft gespeicherten Fortschritt und mögliche Zustellungen, ohne das Skript zu starten. Nach erfolgreicher Prüfung wird Unerledigte Arbeit erneut ausführen verfügbar. Kläre zuerst ungewisse Zustellungen. Nach einem gestoppten Lauf führt auch die Übersicht zu dieser Prüfung.
+Lauf abbrechen stoppt einen aktiven Lauf. Unterbrochene Arbeit bleibt nach Absturz oder Neustart sichtbar und wird automatisch wiederholt, sobald ihre vorherigen Prozesse beendet sind; die Historie zeigt den nächsten Versuch. Gespeicherter Fortschritt bleibt erhalten, und das Skript entscheidet, was bereits erledigt ist.
 
-Pro Pod läuft höchstens eine Ausführung. Weitere wartende Startaufträge zählt vorgemerkte Startanfragen, keine E-Mails oder Dateien. Mehrfaches Starten kann mehrere Anfragen erzeugen. Nicht gestartete Anfragen erneut versuchen gilt für eine blockierte Warteschlange. Fortschrittsstände dokumentieren erfolgreiche Arbeit; allein das Fortsetzen eines Codex-Gesprächs ist keine Wiederherstellungsentscheidung.
+Pro Pod läuft höchstens eine Ausführung. Weitere wartende Startaufträge zählt vorgemerkte Startanfragen, keine E-Mails oder Dateien. Mehrfaches Starten kann mehrere Anfragen erzeugen. Fortschrittsstände dokumentieren erfolgreiche Arbeit.
 
 Skriptänderungen gelten nur für kommende Läufe und machen frühere Ergebnisse oder Wirkungen nicht rückgängig. Interne Skript-Hashes bleiben zur Nachvollziehbarkeit in den Ausführungsdetails sichtbar.
 
@@ -413,11 +413,11 @@ export async function run(context) {
 
 ## Vertiefung: Ausführungsfreigaben und Laufansicht
 
-Ein manueller Lauf öffnet benötigte OpenApe-Freigaben im Browser. Gleichzeitig erscheint im Pod eine Karte mit Freigabe öffnen, und Entscheidungen zeigt sie mit Am IdP entscheiden. Damit bleibt die erforderliche Aktion auch sichtbar, wenn sich der Browser nicht öffnen lässt. Hintergrundläufe zeigen die Karte ohne automatischen Browserwechsel. Ein Lauf wartet ohne eigenes Zeitlimit auf deine Entscheidung und pausiert währenddessen das aktive Skript-Zeitlimit. Lauf abbrechen beendet das Warten. Nach einem App-Neustart ist eine ausdrückliche Wiederherstellung nötig; eine alte Freigabe startet keinen gestoppten Lauf neu.
+Ein manueller Lauf öffnet benötigte OpenApe-Freigaben im Browser. Gleichzeitig erscheint im Pod eine Karte mit Freigabe öffnen, und Entscheidungen zeigt sie mit Am IdP entscheiden. Damit bleibt die erforderliche Aktion auch sichtbar, wenn sich der Browser nicht öffnen lässt. Hintergrundläufe zeigen die Karte ohne automatischen Browserwechsel. Ein Lauf wartet ohne eigenes Zeitlimit auf deine Entscheidung und pausiert währenddessen das aktive Skript-Zeitlimit. Lauf abbrechen beendet das Warten. Nach einem App-Neustart wird ein gestoppter Lauf automatisch wiederholt und fragt erneut an, wenn er noch eine Freigabe braucht; eine alte Freigabe startet ihn nicht neu.
 
 Die Ausführungserlaubnis gehört zu diesem Pod und seinem OpenApe-Agenten. Pod-Ausführung erlauben erstellt eine widerrufbare dauerhafte Regel; Einmal erlaubt nur die aktuelle Anfrage. Skriptänderungen erweitern keine Verzeichnis-, Anwendungs-, HTTP- oder Geheimnis-Zuweisungen. Der Desktop-Dienst prüft die strukturierte Freigabe mit der ape-shell-Autorisierungsbibliothek und startet das festgehaltene Skript in der bestehenden nativen Sandbox. Das externe Terminal verwendet weiterhin das ape-shell-CLI.
 
-Die Historie zeigt tatsächliche Arbeitsschritte, aktive Laufzeit, Freigabe-Wartezeit und Ergebnis. Anwendungs-, KI- und HTTP-Schritte erscheinen erst bei einem Aufruf. Technische Details enthält Originalfehler und Ereignisdaten. Bei Autorisierungsfehlern prüfe Berechtigungen und Grant-Status; ein Fehler des Freigabedienstes verlangt nicht automatisch einen neuen Microsoft-Login. Prüfe unklare Zustellungen am Ziel und halte das Ergebnis vor einem erneuten Versuch fest. Unter Umgebung im Skript-Tab stehen die verwalteten Prozessvariablen ohne gespeicherte Geheimniswerte.
+Die Historie zeigt tatsächliche Arbeitsschritte, aktive Laufzeit, Freigabe-Wartezeit und Ergebnis. Anwendungs-, KI- und HTTP-Schritte erscheinen erst bei einem Aufruf. Technische Details enthält Originalfehler und Ereignisdaten. Bei Autorisierungsfehlern prüfe Berechtigungen und Grant-Status; ein Fehler des Freigabedienstes verlangt nicht automatisch einen neuen Microsoft-Login. Unter Umgebung im Skript-Tab stehen die verwalteten Prozessvariablen ohne gespeicherte Geheimniswerte.
 
 ## Vertiefung: Verbindungen und Mail-Benachrichtigungen
 
@@ -429,7 +429,7 @@ Speichere telegram_chat_id als Variable und telegram_bot_token als Geheimnis. Da
 
 Bewahre dein persönliches Mail-Benachrichtigungsskript lokal auf und aktiviere es über die Pod-Skriptverwaltung. Der erste erfolgreiche Lauf speichert still eine Ausgangsbasis der letzten 24 Stunden. Spätere Läufe melden neue Nachrichtenkennungen mit fünf Minuten Überlappung. Das Rezept begrenzt ein Zeitfenster auf 20 Seiten und 1000 Nachrichten und bricht bei unvollständiger Abfrage sichtbar ab. Beim ersten Einsatz werden keine historischen Nachrichten gemeldet; gesendet werden nur Anzahl und Kontoname.
 
-Prüfe das Skript und führe es manuell aus, bevor du in Einstellungen ein 15-Minuten-Intervall aktivierst. Bestätige den Geheimniszugriff für den exakten Quelltext. Das Rezept speichert eine ausstehende Meldung vor dem Versand und die Empfangsbestätigung vor dem Fortschritt. Bei unklarem Versand prüfst du das Ziel und klärst das Ergebnis in Historie, bevor du erneut startest.
+Prüfe das Skript und führe es manuell aus, bevor du in Einstellungen ein 15-Minuten-Intervall aktivierst. Bestätige den Geheimniszugriff für den exakten Quelltext. Das Rezept speichert eine ausstehende Meldung vor dem Versand und die Empfangsbestätigung vor dem Fortschritt. Wird ein Lauf zwischen Versand und Speichern der Bestätigung unterbrochen, kann der wiederholte Lauf die Meldung erneut senden, sofern das Ziel sie nicht dedupliziert.
 
 ## Gemeinsame Daten zwischen Pods
 
@@ -451,7 +451,7 @@ Frühere Versionen verbanden Pods über Netze. Netze wurden abgelöst; ihre Hist
 
 ## Mit deinem Codex arbeiten
 
-Der verbundene Codex auf diesem Mac verwaltet Pods direkt: Variablen und Ressourcen, Skriptvalidierung und Aktivierung, Zeitpläne, Start und Wiederherstellung von Läufen sowie Namensräume gemeinsamer Daten mit ihrem Schreiber und ihren Lesern. Eine globale Node-Installation ist nicht nötig; Pods liefert seine Laufzeit mit.
+Der verbundene Codex auf diesem Mac verwaltet Pods direkt: Variablen und Ressourcen, Skriptvalidierung und Aktivierung, Zeitpläne, Start, Abbruch und Einsicht von Läufen sowie Namensräume gemeinsamer Daten mit ihrem Schreiber und ihren Lesern. Eine globale Node-Installation ist nicht nötig; Pods liefert seine Laufzeit mit.
 
 Neue Automatisierung mit Codex im Tab Automatisierungen schreibt einen Auftrag mit den Tags des angehefteten Pods oder Knotens und den Pods, die es schon kennt; der Desktop öffnet Codex, der Browser kopiert den Auftrag zum Einfügen.
 

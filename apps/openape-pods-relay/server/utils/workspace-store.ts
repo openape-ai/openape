@@ -248,8 +248,7 @@ export class WorkspaceStore {
           pods: workspace.pods.map((pod) => {
             const view = read(`pod/${pod.id}`) as PodView
             if (!online || !view.ready) return { id: pod.id, name: pod.name, online: false, revision: 1, lifecycle: pod.lifecycle === 'archived' ? 'archived' as const : 'paused' as const, activeScript: null }
-            const { blocked, blockedSince = null, error } = view.scheduling
-            return { ...pod, online: true, queue: { blocked, since: blockedSince, error: blocked ? error : null } }
+            return { ...pod, online: true }
           }),
         },
       }

@@ -1,6 +1,6 @@
 import { occupiedRunSlots } from './slots'
-import { recoveryDecision, recoveryHold } from '../recovery/policy'
-import type { RecoveryFailure } from '../recovery/policy'
+import { recoveryDecision } from '../recovery/policy'
+import type { RecoveryDecision, RecoveryFailure } from '../recovery/policy'
 import { parseRunApproval } from '../../contracts/activity'
 import { basename, join, sep, resolve } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -9,18 +9,20 @@ import type { PodDatabase } from '../storage/database'
 
 function fromRow(row: Record<string, unknown>): RunRecord {
   const automaticRecovery = row.automatic_recovery ? JSON.parse(String(row.automatic_recovery)) as AutomaticRecovery : undefined
+  // Versions before issue 1518 recorded an owner hold; that attempt stopped and later runs continue as usual.
+  if ((automaticRecovery?.disposition as string) === 'hold') automaticRecovery!.disposition = 'isolated'
   if (automaticRecovery?.disposition === 'retry' && !row.retry_pending) { automaticRecovery.disposition = 'continued'; automaticRecovery.nextAt = null; automaticRecovery.reason = 'Work continued in a later attempt' }
-  return { ...(automaticRecovery ? { automaticRecovery } : {}), id: row.id as string, podId: row.pod_id as string, scriptHash: row.script_hash as string, state: row.state as RunState, startedAt: row.started_at as number, finishedAt: row.finished_at as number | null, summary: row.summary as string, error: row.error as string | null, checkpointRevision: row.checkpoint_revision as number, recovery: row.recovery_state ? { state: row.recovery_state as 'ready' | 'needsReview' | 'retryQueued', error: row.recovery_error as string | null } : null }
+  return { ...(automaticRecovery ? { automaticRecovery } : {}), id: row.id as string, podId: row.pod_id as string, scriptHash: row.script_hash as string, state: row.state as RunState, startedAt: row.started_at as number, finishedAt: row.finished_at as number | null, summary: row.summary as string, error: row.error as string | null, checkpointRevision: row.checkpoint_revision as number, recovery: null }
 }
 export interface RunTrigger { reason: 'manual' | 'schedule' | 'event', eventIds: string[], operationId?: string }
 export class RunStore {
   readonly bootId = randomUUID()
   constructor(readonly store: PodDatabase) {}
 
-  list(podId: string): RunRecord[] { this.store.getPod(podId); return this.store.db.prepare('SELECT r.*,(SELECT data FROM run_events e WHERE e.run_id=r.id AND e.type=\'recovery\' ORDER BY sequence DESC LIMIT 1) AS automatic_recovery,EXISTS(SELECT 1 FROM accepted_events e WHERE e.run_id=r.id AND e.state=\'pending\') AS retry_pending,v.state AS recovery_state,v.error AS recovery_error FROM runs r LEFT JOIN recovery_reviews v ON v.run_id=r.id WHERE r.pod_id=? ORDER BY r.started_at DESC,r.rowid DESC LIMIT 100').all(podId).map(fromRow) }
+  list(podId: string): RunRecord[] { this.store.getPod(podId); return this.store.db.prepare('SELECT r.*,(SELECT data FROM run_events e WHERE e.run_id=r.id AND e.type=\'recovery\' ORDER BY sequence DESC LIMIT 1) AS automatic_recovery,EXISTS(SELECT 1 FROM accepted_events e WHERE e.run_id=r.id AND e.state=\'pending\') AS retry_pending FROM runs r WHERE r.pod_id=? ORDER BY r.started_at DESC,r.rowid DESC LIMIT 100').all(podId).map(fromRow) }
 
   get(id: string): RunRecord {
-    const row = this.store.db.prepare('SELECT r.*,(SELECT data FROM run_events e WHERE e.run_id=r.id AND e.type=\'recovery\' ORDER BY sequence DESC LIMIT 1) AS automatic_recovery,EXISTS(SELECT 1 FROM accepted_events e WHERE e.run_id=r.id AND e.state=\'pending\') AS retry_pending,v.state AS recovery_state,v.error AS recovery_error FROM runs r LEFT JOIN recovery_reviews v ON v.run_id=r.id WHERE r.id=?').get(id)
+    const row = this.store.db.prepare('SELECT r.*,(SELECT data FROM run_events e WHERE e.run_id=r.id AND e.type=\'recovery\' ORDER BY sequence DESC LIMIT 1) AS automatic_recovery,EXISTS(SELECT 1 FROM accepted_events e WHERE e.run_id=r.id AND e.state=\'pending\') AS retry_pending FROM runs r WHERE r.id=?').get(id)
     if (!row) throw new Error('Run not found')
     return fromRow(row)
   }
@@ -108,28 +110,30 @@ export class RunStore {
   interrupt(id: string, error: string): void {
     this.store.transaction(() => {
       this.assertLease(id)
-      this.store.db.prepare('UPDATE runs SET state=\'interrupted\',error=?,summary=\'Execution cleanup needs review\' WHERE id=?').run(error, id)
+      this.store.db.prepare('UPDATE runs SET state=\'interrupted\',error=?,summary=\'Waiting for its processes to stop\' WHERE id=?').run(error, id)
       this.store.db.prepare('UPDATE run_leases SET boot_id=? WHERE run_id=?').run(`fenced:${this.bootId}`, id)
       this.append(id, 'interrupted', { error })
     })
   }
 
-  recover(id: string, epoch: number, failure: RecoveryFailure): void {
+  /** A changed script or permission set isolates the attempt; otherwise the failure decides between retry and isolation. */
+  recover(id: string, epoch: number | undefined, failure: RecoveryFailure): void {
     const run = this.get(id)
     const pod = this.store.getPod(run.podId)
     const inputs = this.store.db.prepare('SELECT * FROM run_inputs WHERE run_id=?').get(id)!
     const initial = this.store.db.prepare('SELECT assignment_revision FROM runs WHERE id=?').get(id)!
-    const changed = pod.activeScript !== run.scriptHash || pod.bindingRevision !== initial.assignment_revision || (this.store.db.prepare('SELECT epoch FROM resource_epochs WHERE pod_id=?').get(pod.id)?.epoch ?? 0) !== epoch
-    const hold = changed ? 'Script or permissions changed; review before retrying' : recoveryHold(this.store, pod.id, id, failure.cause === 'permission')
-    const decision = recoveryDecision(failure, Number(inputs.retry_attempt), hold, Date.now())
+    const changed = epoch === undefined || pod.activeScript !== run.scriptHash || pod.bindingRevision !== initial.assignment_revision || (this.store.db.prepare('SELECT epoch FROM resource_epochs WHERE pod_id=?').get(pod.id)?.epoch ?? 0) !== epoch
+    const decision: RecoveryDecision = changed
+      ? { disposition: 'isolated', reason: 'Script or permissions changed; future schedules use the current ones', nextAt: null, attempt: Number(inputs.retry_attempt) + 1 }
+      : recoveryDecision(failure, Number(inputs.retry_attempt), Date.now())
     const ids = JSON.parse(inputs.event_ids as string) as string[]
     if (!ids.length && decision.disposition === 'retry') {
       const eventId = randomUUID()
-      this.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state,run_id) VALUES(?,?,\'manual\',?,\'{}\',?,\'blocked\',?)').run(eventId, pod.id, `recovery:${id}`, Date.now(), id)
+      this.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state,run_id) VALUES(?,?,\'manual\',?,\'{}\',?,\'claimed\',?)').run(eventId, pod.id, `recovery:${id}`, Date.now(), id)
       this.store.db.prepare('UPDATE run_inputs SET event_ids=? WHERE run_id=?').run(JSON.stringify([eventId]), id)
     }
-    this.store.db.prepare('UPDATE accepted_events SET state=?,error=? WHERE run_id=? AND state IN (\'blocked\',\'claimed\')').run(decision.disposition === 'retry' ? 'pending' : decision.disposition === 'isolated' ? 'failed' : 'blocked', decision.disposition === 'hold' ? decision.reason : run.error, id)
-    this.store.db.prepare('UPDATE run_inputs SET retry_at=?,retry_attempt=?,retry_epoch=? WHERE run_id=?').run(decision.nextAt, decision.attempt, epoch, id)
+    this.store.db.prepare('UPDATE accepted_events SET state=?,error=? WHERE run_id=? AND state IN (\'blocked\',\'claimed\')').run(decision.disposition === 'retry' ? 'pending' : 'failed', run.error, id)
+    this.store.db.prepare('UPDATE run_inputs SET retry_at=?,retry_attempt=?,retry_epoch=? WHERE run_id=?').run(decision.nextAt, decision.attempt, epoch ?? null, id)
     this.append(id, 'recovery', { ...decision, cause: failure.cause, retainedInputs: !!this.store.db.prepare('SELECT 1 FROM accepted_events WHERE run_id=? AND state=\'failed\' AND source NOT IN (\'schedule\',\'manual\')').get(id) })
   }
 
@@ -145,8 +149,7 @@ export class RunStore {
         const result = this.store.db.prepare('UPDATE accepted_events SET state=\'processed\' WHERE id=? AND run_id=? AND state=\'claimed\'').run(eventId, id)
         if (result.changes !== 1) throw new Error('Completed input is not assigned to this run')
       }
-      this.store.db.prepare('UPDATE accepted_events SET state=\'blocked\',error=? WHERE run_id=? AND state=\'claimed\'').run(error ?? 'Input was not completed; explicit retry is required', id)
-      if ((state !== 'completed' || this.store.db.prepare('SELECT 1 FROM accepted_events WHERE run_id=? AND state=\'blocked\'').get(id))) this.recover(id, retryEpoch ?? Number(this.store.db.prepare('SELECT epoch FROM resource_epochs WHERE pod_id=?').get(run.podId)?.epoch ?? 0), failure ?? { cause: state === 'cancelled' ? 'owner-cancelled' : retryEpoch !== undefined ? 'infrastructure' : 'failure' })
+      if (state !== 'completed' || this.store.db.prepare('SELECT 1 FROM accepted_events WHERE run_id=? AND state=\'claimed\'').get(id)) this.recover(id, retryEpoch ?? Number(this.store.db.prepare('SELECT epoch FROM resource_epochs WHERE pod_id=?').get(run.podId)?.epoch ?? 0), failure ?? { cause: state === 'cancelled' ? 'owner-cancelled' : retryEpoch !== undefined ? 'infrastructure' : 'failure' })
       this.append(id, 'finished', { state, summary, error, checkpointRevision: revision })
       this.store.db.prepare('DELETE FROM run_leases WHERE run_id=? AND boot_id=?').run(id, this.bootId)
     })

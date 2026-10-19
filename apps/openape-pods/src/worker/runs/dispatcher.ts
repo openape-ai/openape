@@ -5,9 +5,8 @@ import { isProgramCall } from '../../contracts/program-execution'
 import type { ScriptRuntime, ScriptServices } from './runner'
 import type { ProgramCall } from '../../main/broker/authorization'
 import { executeOwnerScript, ownerScriptAuthority } from './owner-script'
-import { openOwnerScriptEffects } from '../recovery/owner-script'
 import { InboxOutbox, parseNotify } from '../inbox/outbox'
-import { RunCancellation, unresolvedOperation } from '../recovery/policy'
+import { RunCancellation } from '../recovery/policy'
 import type { RecoveryFailure } from '../recovery/policy'
 import { AuthorityError, InfrastructureError, NonRetryableError, PermissionUnavailableError, retryInfrastructure } from '../../contracts/infrastructure'
 import { assignedJev, parseJevRequest, parseJevResult } from '../../contracts/jev'
@@ -46,6 +45,7 @@ import { DomainData } from '../data/domain'
 import { WorkLedger } from '../data/work'
 import { OwnerQuestions } from '../data/questions'
 import { dataOperations, handleDataOperation } from '../data/ports'
+import { releaseHeldWork } from '../recovery/release'
 
 export interface RunServiceScope {
   podId: string
@@ -86,9 +86,10 @@ export class RunDispatcher {
     this.questions = new OwnerQuestions(store, this.data)
     this.approvals = new ApprovalHistory(store)
     store.transaction(() => {
-      store.db.prepare('UPDATE runs SET state=\'interrupted\',error=\'Previous worker stopped; explicit recovery is required\',checkpoint_revision=(SELECT revision FROM checkpoints WHERE pod_id=runs.pod_id) WHERE state=\'running\' AND id IN (SELECT run_id FROM run_leases)').run()
+      store.db.prepare('UPDATE runs SET state=\'interrupted\',error=\'Previous worker stopped\',checkpoint_revision=(SELECT revision FROM checkpoints WHERE pod_id=runs.pod_id) WHERE state=\'running\' AND id IN (SELECT run_id FROM run_leases)').run()
       store.db.prepare('UPDATE run_leases SET boot_id=?').run(`fenced:${this.runs.bootId}`)
       store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE state=\'intent\'').run()
+      releaseHeldWork(store)
     })
   }
 
@@ -101,8 +102,7 @@ export class RunDispatcher {
       runs.unshift(selected)
     }
     const selectedId = id ?? runs[0]?.id
-    const effects = [...openOwnerScriptEffects(this.store, podId), ...this.store.db.prepare('SELECT effect_key AS key,run_id AS runId FROM effect_ledger WHERE pod_id=? AND operation IN (\'http.request\',\'program.call\') AND state=\'unknown\' LIMIT 100').all(podId) as { key: string, runId: string }[]].slice(0, 100)
-    return { ...(selectedId ? { timing: this.runs.timing(podId, selectedId) } : {}), approvals: this.runs.approvals(podId), effects, runs, events: selectedId ? (after !== undefined ? this.runs.events(podId, selectedId, after) : this.runs.recentEvents(podId, selectedId)) : [] }
+    return { ...(selectedId ? { timing: this.runs.timing(podId, selectedId) } : {}), approvals: this.runs.approvals(podId), runs, events: selectedId ? (after !== undefined ? this.runs.events(podId, selectedId, after) : this.runs.recentEvents(podId, selectedId)) : [] }
   }
 
   async install(podId: string, variant: 'deterministic' | 'agent'): Promise<void> {
@@ -112,8 +112,6 @@ export class RunDispatcher {
 
   start(podId: string, trigger: RunTrigger = { reason: 'manual', eventIds: [] }, accepted?: (runId: string) => void): string {
     this.store.assertStorage()
-    if (unresolvedOperation(this.store, podId)) throw new Error('An operation without replay evidence requires review')
-    if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE pod_id=? AND state IN (\'intent\',\'unknown\')').get(podId)) throw new Error('An HTTP delivery needs review before this pod can run again')
     const pod = this.store.getPod(podId)
     if (!pod.activeScript) throw new Error('Choose and validate a script before running this pod')
     const epoch = this.resources.epoch(podId)
@@ -215,7 +213,6 @@ export class RunDispatcher {
         const artifactOutput = isProgramCall(body) && (body as { output?: unknown }).output === 'artifact'
         if (artifactOutput) this.store.assertStorage(32 * 1024 * 1024)
         const call = async () => retryService('tool authorization', async () => { assertCurrent(); return this.services!.tool!(body, toolSignal, scope, summary, batch) }, toolSignal)
-        if (!isProgramCall(body)) appendEvent('recovery-boundary', { kind: 'read', operation: 'tools.invoke' })
         // The private ape-shell lifecycle records program intent before acknowledging dispatch.
         const operation = call()
         pendingAgents.add(operation)
@@ -327,7 +324,6 @@ export class RunDispatcher {
       const execute = async (execution?: ScriptServices['execution']) => executeScript(runtime, directory, artifact, input, signal, { ...scriptServices, execution })
       const result = await executeOwnerScript(this.runs, id, ownerScriptAuthority(input), execute)
       assertCurrent()
-      if (this.store.db.prepare('SELECT 1 FROM effect_ledger WHERE run_id=? AND state IN (\'intent\',\'unknown\')').get(id)) throw new Error('An HTTP delivery needs review before this pod can run again')
       for (const gap of result.gapIds) {
         if (!this.store.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(pod.id, gap)) throw new Error('Result references an uncommitted gap')
       }

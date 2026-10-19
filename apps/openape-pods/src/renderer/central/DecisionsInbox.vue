@@ -10,8 +10,8 @@ import { decisionCounts, openSecretRequests, rightsRows } from '../utils/kpis'
 
 /**
  * Everything that waits for the owner: questions of Pods, object approvals decided at the identity
- * provider, runtime rights, held work, uncertain actions and deliveries, and secret requests. Every
- * decision leaves as an existing owner command; nothing here approves on its own.
+ * provider, runtime rights, failed work and secret requests. Every decision leaves as an existing
+ * owner command; nothing here approves on its own.
  */
 /** Without `domain` (a browser), questions and approvals are answered in the Pods inbox at `inboxUrl`. */
 const props = defineProps<{ view: MapView, domain: DomainOverview | null, desktop: boolean, requests?: SecretRequestRow[], secretsOrigin?: string, inboxUrl?: string }>()
@@ -21,7 +21,6 @@ const raw = ref(false)
 /** An answer is shown as saving until its question leaves the waiting list; a refused save returns it with its error. */
 const saving = ref<Record<string, string>>({})
 const failures = ref<Record<string, string>>({})
-const evidence = ref<Record<string, string>>({})
 
 const podName = (id: string) => props.view.pods.find(pod => pod.id === id)?.name ?? id
 const questions = computed(() => props.domain?.questions ?? [])
@@ -78,13 +77,10 @@ function summaryLink(value: string | null): { href: string, host: string } | nul
   const url = value ? URL.parse(value) : null
   return url && ['http:', 'https:'].includes(url.protocol) ? { href: url.href, host: url.host } : null
 }
-const held = computed(() => props.domain?.held ?? [])
-const effects = computed(() => props.domain?.unknownEffects ?? [])
+const failedWork = computed(() => props.domain?.held ?? [])
 const rights = computed(() => rightsRows(props.view))
-const unknown = computed(() => props.view.pods.flatMap(pod => pod.unknown.map(item => ({ pod, ...item }))))
 const requests = computed(() => openSecretRequests(props.requests ?? []))
 const requestState = (status: SecretRequestRow['status']) => status === 'failed' ? t('failed') : status === 'filled' ? t('filled') : t('requested')
-const intent = (value: unknown) => Object.entries(value && typeof value === 'object' ? value : {}).map(([key, item]) => `${key}: ${format(item)}`).join(' · ')
 // The section counters are the KPI's own computation, so Automatisierungen and Entscheidungen show the same numbers.
 const counts = computed(() => decisionCounts(props.view, props.requests ?? []))
 const total = computed(() => counts.value.count)
@@ -105,7 +101,7 @@ defineExpose({ total })
         <b>{{ counts.rights }}</b><span>{{ t('Rights') }}</span><small>{{ counts.rights ? t('{count} runtime requests', { count: counts.rights }) : t('no open runtime request') }}</small>
       </div>
       <div class="kpi" role="listitem">
-        <b>{{ counts.reconcile }}</b><span>{{ t('To reconcile') }}</span><small>{{ counts.reconcile ? t('held work and uncertain actions') : t('nothing to reconcile') }}</small>
+        <b>{{ counts.work }}</b><span>{{ t('Failed work') }}</span><small>{{ counts.work ? t('{count} items to retry', { count: counts.work }) : t('no failed work') }}</small>
       </div>
       <div class="kpi" role="listitem">
         <b>{{ counts.secrets }}</b><span>{{ t('Secrets') }}</span><small>{{ counts.secrets ? t('{count} secret requests', { count: counts.secrets }) : t('no secret requests') }}</small>
@@ -221,16 +217,16 @@ defineExpose({ total })
           <span class="pill off">{{ t('none open') }}</span>
         </div>
       </div>
-      <div v-for="row in rights" :key="row.pod.id + (row.kind === 'approval' ? row.approval.grantId : row.kind === 'grant' ? row.grant.grantId : 'queue')" class="item" :data-right="row.kind">
+      <div v-for="row in rights" :key="row.pod.id + (row.kind === 'approval' ? row.approval.grantId : row.grant.grantId)" class="item" :data-right="row.kind">
         <div class="row">
-          <span class="pill" :class="row.kind === 'blocked' ? 'warn' : 'idp'">{{ row.kind === 'blocked' ? t('blocked') : t('Open approval') }}</span><span class="subj">{{ row.pod.name }}</span><span class="meta">{{ row.kind === 'approval' ? row.approval.title : row.kind === 'grant' ? t('Requested grant: {title}', { title: row.grant.title }) : diagnostic(row.error) }}</span>
+          <span class="pill idp">{{ t('Open approval') }}</span><span class="subj">{{ row.pod.name }}</span><span class="meta">{{ row.kind === 'approval' ? row.approval.title : t('Requested grant: {title}', { title: row.grant.title }) }}</span>
         </div>
         <div v-if="row.kind === 'approval'" class="opts">
           <button class="secondary idp" type="button" @click="emit('command', { channel: 'runs', body: { type: 'openApproval', podId: row.pod.id, runId: row.approval.runId, grantId: row.approval.grantId } })">
             {{ t('Decide at the IdP') }}
           </button>
         </div>
-        <div v-else-if="row.kind === 'grant'" class="opts">
+        <div v-else class="opts">
           <button v-if="desktop" class="secondary idp" type="button" @click="emit('command', { channel: 'runs', body: { type: 'openGrant', podId: row.pod.id, grantId: row.grant.grantId } })">
             {{ t('Decide at the IdP') }}
           </button>
@@ -239,55 +235,26 @@ defineExpose({ total })
       </div>
     </div>
 
-    <h2>{{ t('To reconcile') }} <span class="meta">· {{ t('you confirm what happened outside') }}</span></h2>
-    <div class="inbox" data-testid="reconcile">
-      <p v-if="!domain && inboxUrl && counts.reconcile > unknown.length" class="muted">
-        {{ t('Held work and uncertain actions are settled in the Pods inbox.') }} <a :href="inboxUrl">{{ t('Open the Pods inbox') }}</a>
+    <h2>{{ t('Failed work') }} <span class="meta">· {{ t('no longer retried on its own') }}</span></h2>
+    <div class="inbox" data-testid="failed-work">
+      <p v-if="!domain && inboxUrl && counts.work" class="muted">
+        {{ t('Failed work appears in the Pods inbox.') }} <a :href="inboxUrl">{{ t('Open the Pods inbox') }}</a>
       </p>
-      <div v-else-if="!held.length && !effects.length && !unknown.length" class="item">
+      <div v-else-if="!failedWork.length" class="item">
         <div class="row">
-          <span class="pill off">{{ t('none') }}</span><span class="meta">{{ t('Appears when a Pod could not finish safely or did not get an answer; nothing runs again until you state what happened.') }}</span>
+          <span class="pill off">{{ t('none') }}</span><span class="meta">{{ t('Appears when work still fails after its automatic attempts.') }}</span>
         </div>
       </div>
-      <div v-for="item in held" :key="item.key" class="item">
+      <div v-for="item in failedWork" :key="item.key" class="item">
         <div class="row">
-          <span class="pill warn">{{ label(item.state) }}</span><span class="subj">{{ t('Held work') }} · {{ item.operation }}</span><span class="meta mono">{{ item.object }}</span>
+          <span class="pill warn">{{ label(item.state) }}</span><span class="subj">{{ t('Failed work') }} · {{ item.operation }}</span><span class="meta mono">{{ item.object }}</span>
         </div>
         <p v-if="item.reason" class="meta">
           {{ diagnostic(item.reason) }}
         </p>
-        <label class="meta">{{ t('Observation') }} <input v-model="evidence[item.key]" maxlength="2000"></label>
         <div class="opts">
-          <button class="secondary" type="button" :disabled="!evidence[item.key]?.trim()" @click="emit('domain', { type: 'release', key: item.key, evidence: evidence[item.key] ?? '' })">
-            {{ t('Release after review') }}
-          </button>
-        </div>
-      </div>
-      <div v-for="effect in effects" :key="effect.actionKey + effect.attempt" class="item">
-        <div class="row">
-          <span class="pill warn">{{ t('Uncertain action') }}</span><span class="subj">{{ podName(effect.podId) }} · {{ effect.operation }}</span><span class="meta">{{ stamp(effect.createdAt, language) }}</span>
-        </div>
-        <p class="meta mono">
-          {{ intent(effect.intent) }}
-        </p>
-        <p class="meta">
-          {{ t('Historical record; reconcile in the external tool journal before releasing held work.') }}
-        </p>
-      </div>
-      <div v-for="item in unknown" :key="item.runId + item.key" class="item">
-        <div class="row">
-          <span class="pill warn">{{ item.authority ? t('Uncertain script effects') : t('unknown deliveries') }}</span><span class="subj">{{ item.pod.name }}</span><span class="meta mono">{{ item.key }} · {{ item.runId.slice(0, 8) }}</span>
-        </div>
-        <p v-if="item.authority" class="meta">
-          {{ t("Inspect the script's files and destinations. Recording an observation does not retry the run.") }}
-        </p>
-        <label class="meta">{{ t('Observation') }} <input v-model="evidence[item.runId + item.key]" maxlength="4000"></label>
-        <div class="opts">
-          <button class="secondary" type="button" :disabled="!evidence[item.runId + item.key]?.trim()" @click="emit('command', { channel: 'runs', body: { type: 'resolveHttp', podId: item.pod.id, runId: item.runId, key: item.key, applied: true, evidence: evidence[item.runId + item.key] ?? '', ...(item.authority ? { programOutcome: 'partial' as const } : {}) } })">
-            {{ item.authority ? t('Observed partial processing') : t('Delivered') }}
-          </button>
-          <button class="secondary" type="button" :disabled="!evidence[item.runId + item.key]?.trim()" @click="emit('command', { channel: 'runs', body: { type: 'resolveHttp', podId: item.pod.id, runId: item.runId, key: item.key, applied: false, evidence: evidence[item.runId + item.key] ?? '' } })">
-            {{ item.authority ? t('No effects observed') : t('Not delivered, send again') }}
+          <button class="secondary" type="button" @click="emit('domain', { type: 'release', key: item.key })">
+            {{ t('Retry') }}
           </button>
         </div>
       </div>

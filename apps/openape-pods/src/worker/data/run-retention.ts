@@ -38,19 +38,11 @@ export class RunRetention {
         SELECT r.id FROM ranked r
         WHERE position > ? AND finished_at IS NOT NULL AND state != 'running'
           AND NOT EXISTS (SELECT 1 FROM run_leases WHERE run_id=r.id)
-          AND NOT EXISTS (SELECT 1 FROM effect_ledger WHERE run_id=r.id AND state!='completed')
-          AND NOT EXISTS (SELECT 1 FROM run_events boundary WHERE boundary.run_id=r.id AND boundary.type='recovery-boundary'
-            AND json_extract(boundary.data,'$.kind')='untracked' AND NOT EXISTS(SELECT 1 FROM run_events receipt
-              WHERE receipt.run_id=r.id AND receipt.type='recovery-boundary-result' AND json_extract(receipt.data,'$.id')=json_extract(boundary.data,'$.id')))
-          AND NOT EXISTS (
-            SELECT 1 FROM recovery_reviews v WHERE v.run_id=r.id AND
-              (v.state!='retryQueued' OR NOT EXISTS (SELECT 1 FROM accepted_events a WHERE a.id=v.request_event_id AND a.state='processed'))
-          )
-          AND NOT EXISTS (SELECT 1 FROM accepted_events WHERE run_id=r.id AND state!='processed' AND NOT (state='failed' AND source IN ('schedule','manual')))
+          AND NOT EXISTS (SELECT 1 FROM accepted_events WHERE run_id=r.id AND state NOT IN ('processed','failed'))
           AND NOT EXISTS (
             SELECT 1 FROM run_inputs i, json_each(i.event_ids) input
             JOIN accepted_events a ON a.id=input.value
-            WHERE i.run_id=r.id AND a.state!='processed' AND NOT (a.state='failed' AND a.source IN ('schedule','manual'))
+            WHERE i.run_id=r.id AND a.state NOT IN ('processed','failed')
           )
           AND NOT EXISTS (
             SELECT 1 FROM run_events e WHERE e.run_id=r.id AND e.type='approval' AND json_extract(e.data,'$.state')='pending'
@@ -79,6 +71,7 @@ export class RunRetention {
         if (!/^[a-f0-9-]{36}$/.test(id)) throw new Error('Invalid run deletion identity')
         this.store.db.prepare('INSERT INTO run_deletion_jobs VALUES(?,NULL)').run(id)
         this.store.db.prepare('UPDATE effect_ledger SET run_id=NULL WHERE run_id=? AND state=\'completed\'').run(id)
+        this.store.db.prepare('DELETE FROM effect_ledger WHERE run_id=? AND state!=\'completed\'').run(id)
         this.store.db.prepare('UPDATE accepted_events SET run_id=NULL WHERE run_id=? AND state IN (\'processed\',\'failed\')').run(id)
         this.store.db.prepare('DELETE FROM control_runs WHERE kind=\'pod\' AND run_id=?').run(id)
         for (const table of ['run_events', 'run_inputs', 'execution_domains', 'recovery_reviews']) {

@@ -10,7 +10,7 @@ describe('pod workspace shell', () => {
   it('shows actual worker updates, contextual navigation and manual execution navigation', async () => {
     let listener = (_status: PodStatus) => {}
     const unsubscribe = vi.fn()
-    window.pods = { mcpSession: async () => ({ expiresAt: null, pending: false }), codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), definitions: async () => ({ definitions: [], instances: [], provisioning: [] }), domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }), packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace: async () => ({ pods: [] }), getStatus: async () => ready, onStatus: (callback) => { listener = callback; return unsubscribe } }
+    window.pods = { mcpSession: async () => ({ expiresAt: null, pending: false }), codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), definitions: async () => ({ definitions: [], instances: [], provisioning: [] }), domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [] }), packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace: async () => ({ pods: [] }), getStatus: async () => ready, onStatus: (callback) => { listener = callback; return unsubscribe } }
     const wrapper = mount(App, { props: { initialPodId: '00000000-0000-4000-8000-000000000001' } })
     await flushPromises()
     expect(wrapper.find('[role="alert"]').exists()).toBe(false)
@@ -23,7 +23,7 @@ describe('pod workspace shell', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('Reopen Pods')
     wrapper.unmount(); expect(unsubscribe).toHaveBeenCalledOnce()
   })
-  it('guides a stopped run from Overview to recovery without queueing a new start', async () => {
+  it('shows a stopped run in its run history on Overview without a manual recovery step', async () => {
     const podId = '00000000-0000-4000-8000-000000000001'
     const run = { id: '00000000-0000-4000-8000-000000000002', podId, scriptHash: 'a'.repeat(64), state: 'cancelled', startedAt: 1, finishedAt: 2, summary: '', error: 'Storage limit reached', checkpointRevision: 0 }
     const runs = vi.fn().mockResolvedValue({ runs: [run], events: [] })
@@ -31,7 +31,7 @@ describe('pod workspace shell', () => {
       mcpSession: async () => ({ expiresAt: null, pending: false }),
       codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }),
       definitions: async () => ({ definitions: [], instances: [], provisioning: [] }),
-      domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }),
+      domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [] }),
       runs,
       getStatus: async () => ready,
       onStatus: () => () => {},
@@ -44,8 +44,8 @@ describe('pod workspace shell', () => {
 
     } as unknown as typeof window.pods
     const wrapper = mount(App, { props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
-    await wrapper.findAll('button').find(button => button.text() === 'Prepare retry')!.trigger('click'); await flushPromises()
-    expect(wrapper.get('#section-runs').text()).toContain('Check whether this run can be retried safely')
+    expect(wrapper.findAll('button').some(button => button.text() === 'Prepare retry')).toBe(false)
+    expect(wrapper.get('#section-runs').text()).toContain('Storage limit reached')
     expect(runs.mock.calls.every(([command]) => command.type === 'list')).toBe(true)
     await wrapper.findAll('button').find(button => button.text() === 'Open App settings')!.trigger('click'); await flushPromises()
     expect(wrapper.text()).toContain('App settings')
@@ -60,7 +60,7 @@ describe('pod workspace shell', () => {
         mcpSession: async () => ({ expiresAt: null, pending: false }),
         codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }),
         definitions: async () => ({ definitions: [], instances: [], provisioning: [] }),
-        domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }),
+        domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [] }),
         runs: async () => ({ runs: [run], events: [] }),
         getStatus: async () => ready,
         onStatus: () => () => {},
@@ -80,7 +80,7 @@ describe('pod workspace shell', () => {
     expect((await overview('Run completed')).match(/Run completed/g)).toHaveLength(1)
   })
   it('surfaces IPC connection failure instead of claiming readiness', async () => {
-    window.pods = { mcpSession: async () => ({ expiresAt: null, pending: false }), codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), definitions: async () => ({ definitions: [], instances: [], provisioning: [] }), domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [], unknownEffects: [] }), packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace: async () => ({ pods: [] }), getStatus: async () => { throw new Error('Connection rejected') }, onStatus: () => () => {} }
+    window.pods = { mcpSession: async () => ({ expiresAt: null, pending: false }), codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }), definitions: async () => ({ definitions: [], instances: [], provisioning: [] }), domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [] }), packages: async () => { throw new Error('No package search fixture configured') }, programs: async () => { throw new Error('No program fixture configured') }, language: async () => 'en' as const, scripts: async () => { throw new Error('No script fixture configured') }, data: async () => ({ usedBytes: 0, freeBytes: 1024 ** 3, limitBytes: 10 * 1024 ** 3, pendingDeletion: 0, busy: false, error: null }), onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }), master: async () => ({ connected: false, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }), details: async () => ({ claims: [], total: 0, counts: { finding: 0, question: 0, gap: 0 }, checkpointRevision: 0, versions: [], source: null }), scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }), runs: async () => ({ runs: [], events: [] }), resources: async () => ({ resources: [], epoch: 0 }), workspace: async () => ({ pods: [] }), getStatus: async () => { throw new Error('Connection rejected') }, onStatus: () => () => {} }
     const wrapper = mount(App, { props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
     expect(wrapper.get('[role="status"]').text()).toBe('Unavailable')
     expect(wrapper.get('[role="alert"]').text()).toBe('Connection rejected')

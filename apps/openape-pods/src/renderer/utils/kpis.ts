@@ -10,13 +10,13 @@ export interface KpiFacts {
   active: { running: number, total: number }
   /**
    * Active Pods whose current state is an error; failures they already recovered from belong to their history.
-   * `reason` is the settled run state or `blocked`; raw queue errors stay in the Pod.
+   * `reason` is the settled run state.
    */
   errors: { podId: string, name: string, reason: string | null }[]
   decisions: DecisionCounts
 }
 
-const readableReasons = new Set(['failed', 'completedWithGaps', 'blocked'])
+const readableReasons = new Set(['failed', 'completedWithGaps'])
 
 /**
  * What waits for the owner, per section of Entscheidungen. The KPI, the tab badge and the section counters all read
@@ -27,28 +27,23 @@ export interface DecisionCounts {
   questions: number
   /** Object approvals requested at the IdP or uncertain after a restore. */
   approvals: number
-  /** Runs waiting for a grant, grants the Pods requested at the IdP and blocked event queues. */
+  /** Runs waiting for a grant and grants the Pods requested at the IdP. */
   rights: number
-  /** Held work and deliveries or actions whose outcome is unknown. */
-  reconcile: number
+  /** Failed work that no longer retries on its own. */
+  work: number
   secrets: number
 }
 
-/** One row of Entscheidungen → Rechte: a waiting run approval, a pending Pod grant or a blocked queue. */
+/** One row of Entscheidungen → Rechte: a waiting run approval or a pending Pod grant. */
 export type RightsRow
   = | { pod: MapPod, kind: 'approval', approval: MapApproval }
     | { pod: MapPod, kind: 'grant', grant: MapGrant }
-    | { pod: MapPod, kind: 'blocked', error: string | null }
 
 export function rightsRows(view: MapView): RightsRow[] {
-  return view.pods.flatMap((pod) => {
-    const grants = pod.grants ?? []
-    return [
-      ...pod.approvals.map(approval => ({ pod, kind: 'approval' as const, approval })),
-      ...grants.map(grant => ({ pod, kind: 'grant' as const, grant })),
-      ...(pod.queue.blocked && !pod.approvals.length && !grants.length ? [{ pod, kind: 'blocked' as const, error: pod.queue.error }] : []),
-    ]
-  })
+  return view.pods.flatMap(pod => [
+    ...pod.approvals.map(approval => ({ pod, kind: 'approval' as const, approval })),
+    ...(pod.grants ?? []).map(grant => ({ pod, kind: 'grant' as const, grant })),
+  ])
 }
 
 /** Secret requests the owner still has to fill or cancel. */
@@ -60,7 +55,7 @@ export function decisionCounts(view: MapView, requests: SecretRequestRow[] = [])
     questions: total('question'),
     approvals: total('approval'),
     rights: rightsRows(view).length,
-    reconcile: view.pods.reduce((sum, pod) => sum + pod.work.held, 0) + view.kpis.unknownDeliveries,
+    work: view.pods.reduce((sum, pod) => sum + pod.work.held, 0),
     secrets: openSecretRequests(requests).length,
   }
   return { count: Object.values(counts).reduce((sum, value) => sum + value, 0), ...counts }

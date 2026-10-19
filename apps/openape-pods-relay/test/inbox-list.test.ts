@@ -100,6 +100,14 @@ it('shows the Pod tags as chips on message and decision cards, and nothing witho
   expect(cards[2]!.find('.tags').exists()).toBe(false)
 })
 
+it('offers the plain retry of failed work from current desktops instead of a repair prompt', () => {
+  const item = decision({ type: 'work', options: [{ key: 'release', title: 'Retry', input: null }] }, { title: 'Failed work · technical-operation', pod: { id: crypto.randomUUID(), name: 'Intake' } })
+  const wrapper = list([item])
+  expect(wrapper.get('.title').text()).toBe('Failed work · technical-operation')
+  expect(wrapper.find('textarea').exists()).toBe(false)
+  expect(wrapper.findAll('button').map(button => button.text())).toContain('Retry')
+})
+
 it.each(['work', 'effect', 'approval'])('presents %s failures as a Pod needing help instead of recovery choices', (type) => {
   const item = decision({ type, options: [{ key: 'release', title: 'Release after review', input: 'evidence' }] }, { title: 'Held work · technical-operation', body: 'Opaque technical identifier', pod: { id: crypto.randomUUID(), name: 'Intake' } })
   const wrapper = list([item])

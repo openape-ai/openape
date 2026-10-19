@@ -31,7 +31,7 @@ function fixture() {
   return { store, pod, resources, master, codex, send, current, dispatcher }
 }
 
-it('administers shared data as the owner: namespaces, owner records, questions and uncertain effects', async () => {
+it('administers shared data as the owner: namespaces, owner records and questions, but no effect reconciliation', async () => {
   const { store, send, pod, codex } = fixture()
   const reader = store.createPod({ name: 'Reader' })
   const domain = (command: Record<string, unknown>) => send({ action: 'domain', command })
@@ -45,14 +45,13 @@ it('administers shared data as the owner: namespaces, owner records, questions a
   await expect(codex.execute({ ...write, action: { action: 'domain', command: { type: 'set', key: 'synthetic/records/sender-a', value: {}, revision: 1 } } }, new AbortController().signal)).rejects.toThrow('different command')
   await expect(domain({ type: 'set', key: 'synthetic/results/x', value: {}, revision: 0 })).rejects.toThrow()
   expect(await domain({ type: 'entries', path: 'synthetic/records' })).toMatchObject({ entries: [{ key: 'synthetic/records/sender-a', value: { rule: 'newsletter' } }] })
-  // Historical effects remain inspectable; reconciliation belongs to the external journal.
+  // An effect with an unknown outcome is the script's to reconcile (issue 1518); Pods neither lists nor settles it.
   store.db.prepare('INSERT INTO effect_attempts VALUES(?,1,?,NULL,\'mail.archive\',?,\'unknown\',\'{}\',1)').run('a'.repeat(64), pod.id, 'b'.repeat(64))
-  store.db.prepare('INSERT INTO effect_receipts VALUES(?,1,1,\'intent\',\'{"messageId":"m1"}\',1)').run('a'.repeat(64))
-  expect(await domain({ type: 'list' })).toMatchObject({ namespaces: [expect.objectContaining({ path: 'synthetic/records', readers: [reader.id], entries: 1 }), expect.objectContaining({ path: 'synthetic/results', writer: pod.id })], unknownEffects: [{ actionKey: 'a'.repeat(64), intent: { messageId: 'm1' } }] })
-  await expect(domain({ type: 'resolveEffect', actionKey: 'a'.repeat(64), attempt: 1, applied: true, evidence: '' })).rejects.toThrow('observation')
-  await expect(domain({ type: 'resolveEffect', actionKey: 'a'.repeat(64), attempt: 1, applied: true, evidence: 'The message is in the Archive folder' })).rejects.toThrow('read-only')
+  const overview = await domain({ type: 'list' })
+  expect(overview).toMatchObject({ namespaces: [expect.objectContaining({ path: 'synthetic/records', readers: [reader.id], entries: 1 }), expect.objectContaining({ path: 'synthetic/results', writer: pod.id })] })
+  expect(overview).not.toHaveProperty('unknownEffects')
+  await expect(domain({ type: 'resolveEffect', actionKey: 'a'.repeat(64), attempt: 1, applied: true, evidence: 'The message is in the Archive folder' })).rejects.toThrow('Invalid domain data command')
   expect(store.db.prepare('SELECT state FROM effect_attempts').get()).toEqual({ state: 'unknown' })
-  await expect(domain({ type: 'resolveEffect', actionKey: 'a'.repeat(64), attempt: 1, applied: false, evidence: 'again' })).rejects.toThrow('read-only')
   await expect(domain({ type: 'openApproval', id: randomUUID() })).rejects.toThrow('desktop window')
 })
 
