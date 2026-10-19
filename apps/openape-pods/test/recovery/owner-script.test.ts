@@ -9,7 +9,6 @@ import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { RunDispatcher } from '../../src/worker/runs/dispatcher'
 import { installExample } from '../../src/worker/runs/examples'
 import { executeScript } from '../../src/worker/runs/runner'
-import { recoveryHold, unresolvedOperation } from '../../src/worker/recovery/policy'
 import { AuthorityError, NonRetryableError, PermissionUnavailableError } from '../../src/contracts/infrastructure'
 import { executeOwnerScript } from '../../src/worker/runs/owner-script'
 import { EffectLedger } from '../../src/worker/recovery/effects'
@@ -48,7 +47,6 @@ it.each([undefined, { id: 'selected-objects', title: 'Review selected objects', 
   await expect.poll(() => f.dispatcher.runs.get(id).state).toBe('completed')
   expect(f.tool).toHaveBeenCalledWith(call, expect.any(AbortSignal), expect.any(Object), summary, batch)
   expect(f.tool).toHaveBeenCalledOnce()
-  expect(unresolvedOperation(f.store, f.pod.id)).toBe(false)
 })
 
 it.each(['http.request', 'tools.invoke'])('refuses batch metadata on unsupported %s targets before dispatch', async (operation) => {
@@ -77,13 +75,12 @@ it('does not turn a verified failed root process into an external effect or prev
   await expect.poll(() => f.dispatcher.runs.get(first).state).toBe('failed')
   expect(f.dispatcher.runs.get(first).automaticRecovery).toMatchObject({ disposition: 'isolated', cause: 'permission' })
   expect(f.store.db.prepare('SELECT count(*) AS n FROM effect_ledger').get()!.n).toBe(0)
-  expect(unresolvedOperation(f.store, f.pod.id)).toBe(false)
   const second = f.dispatcher.start(f.pod.id, { reason: 'schedule', eventIds: [] })
   expect(second).not.toBe(first)
   await expect.poll(() => f.dispatcher.runs.get(second).state).toBe('failed')
 })
 
-it('keeps an unknown root held after the owner start was acknowledged', async () => {
+it('repeats a run whose root outcome is unknown on the next trigger', async () => {
   const f = fixture()
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, _input, _signal, hooks) => {
     await hooks.execution!.authorized({ authority: await hooks.authorizeStart!(), write: false })
@@ -91,11 +88,13 @@ it('keeps an unknown root held after the owner start was acknowledged', async ()
   })
   const id = f.dispatcher.start(f.pod.id)
   await expect.poll(() => f.dispatcher.runs.get(id).state).toBe('failed')
-  expect(unresolvedOperation(f.store, f.pod.id)).toBe(true)
-  expect(() => f.dispatcher.start(f.pod.id)).toThrow('without replay evidence')
+  expect(f.dispatcher.runs.get(id).automaticRecovery?.disposition).toBe('retry')
+  const next = f.dispatcher.start(f.pod.id)
+  expect(next).not.toBe(id)
+  await expect.poll(() => f.dispatcher.runs.get(next).state).toBe('failed')
 })
 
-it('retains real inner effects after a verified root completion', async () => {
+it('retains real inner effects after a verified root completion without holding the Pod', async () => {
   const f = fixture()
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, _signal, hooks) => {
     await hooks.execution!.authorized({ authority: await hooks.authorizeStart!(), write: false })
@@ -105,9 +104,8 @@ it('retains real inner effects after a verified root completion', async () => {
   })
   const id = f.dispatcher.start(f.pod.id)
   await expect.poll(() => f.dispatcher.runs.get(id).state).toBe('failed')
-  expect(unresolvedOperation(f.store, f.pod.id)).toBe(false)
-  expect(recoveryHold(f.store, f.pod.id, id, true)).toContain('already wrote externally')
-  expect(f.dispatcher.runs.get(id).automaticRecovery?.disposition).toBe('hold')
+  expect(f.store.db.prepare('SELECT state FROM effect_ledger WHERE run_id=?').get(id)?.state).toBe('completed')
+  expect(f.dispatcher.runs.get(id).automaticRecovery?.disposition).toBe('isolated')
 })
 
 it('rechecks activation and refuses an invalidated script before acknowledging dispatch', async () => {
@@ -137,13 +135,12 @@ it.each(['blocked', 'completed'] as const)('uses a trusted pending inner reply o
   const id = f.dispatcher.start(f.pod.id)
   await expect.poll(() => f.dispatcher.runs.get(id).state).toBe(status)
   expect(f.tool).toHaveBeenCalledOnce()
-  expect(unresolvedOperation(f.store, f.pod.id)).toBe(false)
   if (status === 'blocked') expect(f.dispatcher.runs.get(id).automaticRecovery).toMatchObject({ cause: 'permission', disposition: 'isolated' })
   else expect(f.dispatcher.runs.get(id).automaticRecovery).toBeUndefined()
 })
 
 it.each([
-  [AuthorityError, 'authority', 'hold'],
+  [AuthorityError, 'authority', 'isolated'],
   [NonRetryableError, 'non-retryable', 'isolated'],
 ] as const)('keeps a prior %s classification after later pending and unavailable permissions', async (ErrorClass, cause, disposition) => {
   const f = fixture()
@@ -165,7 +162,7 @@ it.each([
   expect(f.dispatcher.runs.get(id).automaticRecovery).toMatchObject({ cause, disposition })
 })
 
-it('does not let a fenced worker settle the root boundary', async () => {
+it('does not let a fenced worker record the root completion', async () => {
   const f = fixture()
   const run = f.dispatcher.runs.reserve(f.pod.id, f.store.getPod(f.pod.id).activeScript!, f.resources.epoch(f.pod.id)).run
   const authority = { source: 'owner-activation' as const, activationId: 'fence-fixture', podId: f.pod.id, scriptHash: run.scriptHash, assignmentRevision: f.pod.bindingRevision, resourceEpoch: f.resources.epoch(f.pod.id) }
@@ -174,6 +171,5 @@ it('does not let a fenced worker settle the root boundary', async () => {
     f.store.db.prepare('UPDATE run_leases SET boot_id=? WHERE run_id=?').run('fenced-worker', run.id)
     await expect(observer.completed!({ exitCode: 0 })).rejects.toThrow('no longer owned')
   })
-  expect(unresolvedOperation(f.store, f.pod.id)).toBe(true)
-  expect(f.store.db.prepare('SELECT count(*) AS n FROM run_events WHERE run_id=? AND type=\'recovery-boundary-result\'').get(run.id)!.n).toBe(0)
+  expect(f.store.db.prepare('SELECT count(*) AS n FROM run_events WHERE run_id=? AND type=\'root-script\' AND json_extract(data,\'$.state\')=\'completed\'').get(run.id)!.n).toBe(0)
 })

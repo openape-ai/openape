@@ -32,19 +32,6 @@ it('keeps fixture test launches off the login keychain unless a real-keychain ch
 })
 
 describe('main process owner dialogs', () => {
-  it.each([false, true])('confirms an owner-root observation honestly without implying process success or retry (applied=%s)', async (applied) => {
-    main = await startMain()
-    const runId = randomUUID()
-    const command = { type: 'resolveHttp', podId, runId, key: `owner-script:${runId}`, applied, evidence: 'Synthetic stopped-domain and destination evidence', ...(applied ? { programOutcome: 'partial' } : {}) }
-    await main.invoke(channels.runs, command)
-    expect(main.dialog.showMessageBox.mock.calls.at(-1)![1]).toMatchObject({ title: 'Resolve uncertain script effects', message: applied ? 'Record the observed partial processing?' : 'Record that no effects were observed?', detail: command.evidence, defaultId: 0, cancelId: 0 })
-    expect(main.worker.runs).toHaveBeenCalledExactlyOnceWith({ type: 'list', podId, runId })
-    main.worker.runs.mockClear()
-    main.dialog.showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false })
-    await main.invoke(channels.runs, command)
-    expect(main.worker.runs).toHaveBeenCalledExactlyOnceWith(command)
-  })
-
   it('requests HTTP, SSH and program permissions without a local approval dialog; the owner decides at the IdP', async () => {
     main = await startMain()
     const permission = { origin: 'https://api.telegram.org', methods: ['POST'] }

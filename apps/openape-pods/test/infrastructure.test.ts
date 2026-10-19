@@ -74,11 +74,11 @@ it('carries a non-retryable tool failure through broker IPC and never schedules 
   const rejected = expect(work).rejects.toBeInstanceOf(NonRetryableError)
   bridge.accept({ id: send.mock.calls[0]![0].service.id, error: 'Tool output exceeded 200000 bytes; read smaller pages, for example with --limit', nonRetryable: true })
   await rejected
-  expect(recoveryDecision({ cause: 'non-retryable' }, 0, null, 1000)).toMatchObject({ disposition: 'isolated', nextAt: null })
-  expect(recoveryDecision({ cause: 'failure' }, 0, null, 1000)).toMatchObject({ disposition: 'retry' })
+  expect(recoveryDecision({ cause: 'non-retryable' }, 0, 1000)).toMatchObject({ disposition: 'isolated', nextAt: null })
+  expect(recoveryDecision({ cause: 'failure' }, 0, 1000)).toMatchObject({ disposition: 'retry' })
 })
 
-it('keeps permission waits distinct from invalid authority across broker IPC', async () => {
+it('isolates both permission waits and invalid authority across broker IPC', async () => {
   const send = vi.fn()
   const bridge = new ServiceBridge(send)
   const scope = { podId: 'pod', runId: 'run', epoch: 0, assignmentRevision: 1, capabilities: [] }
@@ -86,9 +86,8 @@ it('keeps permission waits distinct from invalid authority across broker IPC', a
   const rejected = expect(work).rejects.toBeInstanceOf(PermissionUnavailableError)
   bridge.accept({ id: send.mock.calls[0]![0].service.id, error: 'Permission denied', authority: true, permissionUnavailable: true })
   await rejected
-  expect(recoveryDecision({ cause: 'permission' }, 0, null, 1000)).toMatchObject({ disposition: 'isolated', nextAt: null })
-  expect(recoveryDecision({ cause: 'authority' }, 0, null, 1000)).toMatchObject({ disposition: 'hold', nextAt: null })
-  expect(recoveryDecision({ cause: 'permission' }, 0, 'External outcome requires review', 1000)).toMatchObject({ disposition: 'hold', nextAt: null })
+  expect(recoveryDecision({ cause: 'permission' }, 0, 1000)).toMatchObject({ disposition: 'isolated', nextAt: null })
+  expect(recoveryDecision({ cause: 'authority' }, 0, 1000)).toMatchObject({ disposition: 'isolated', nextAt: null })
 })
 
 it('parks broker calls that wait for an IdP decision outside the queue limit and the call timeout', async () => {

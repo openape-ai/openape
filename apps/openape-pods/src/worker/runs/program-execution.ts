@@ -1,10 +1,9 @@
 import type { ProgramExecutionCheck } from '../../contracts/program-execution'
 import { EffectLedger } from '../recovery/effects'
 import type { PodDatabase } from '../storage/database'
-import type { RunStore } from './store'
 
 /** Called only after the existing run lease, resource epoch and pinned capabilities were checked. */
-export function recordProgramExecution(store: PodDatabase, runs: RunStore, check: ProgramExecutionCheck): void {
+export function recordProgramExecution(store: PodDatabase, check: ProgramExecutionCheck): void {
   if (!/^[a-f0-9-]{36}$/.test(check.operationId)) throw new Error('Invalid program operation identity')
   const { podId, runId } = check.scope
   const key = `program:${runId}:${check.operationId}`
@@ -12,7 +11,7 @@ export function recordProgramExecution(store: PodDatabase, runs: RunStore, check
   const record = check.record
   if (record.phase === 'authorized') {
     if (typeof record.write !== 'boolean') throw new Error('Invalid program effect classification')
-    if (!record.write) { runs.append(runId, 'recovery-boundary', { kind: 'read', operation: 'tools.invoke' }); return }
+    if (!record.write) return
     if (!ledger.begin(podId, runId, key, 'program.call', record.input).execute) throw new Error('This program operation already completed; it cannot execute again')
     return
   }
@@ -24,7 +23,7 @@ export function recordProgramExecution(store: PodDatabase, runs: RunStore, check
     else ledger.markUnknown(podId, key)
     return
   }
-  if (record.phase !== 'not-started' && record.phase !== 'unknown') throw new Error('Invalid program receipt')
-  ledger.markUnknown(podId, key)
-  if (record.phase === 'not-started') ledger.reconcile(podId, key, { applied: false })
+  if (record.phase === 'not-started') ledger.notStarted(podId, runId, key)
+  else if (record.phase === 'unknown') ledger.markUnknown(podId, key)
+  else throw new Error('Invalid program receipt')
 }

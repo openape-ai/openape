@@ -15,7 +15,7 @@ export async function executeHttpEffect(ledger: EffectLedger, podId: string, run
   if (!intent.execute) return intent.result as HttpReply
   try {
     const reply = await send()
-    if (reply.status >= 400) throw new Error('HTTP request returned an error response; review delivery before retrying')
+    if (reply.status >= 400) throw new Error('HTTP request returned an error response')
     ledger.complete(podId, key, request.receipt === 'digest' || Buffer.byteLength(JSON.stringify(reply)) > maxFullReceiptBytes ? digestReceipt(reply) : reply)
     return reply
   }

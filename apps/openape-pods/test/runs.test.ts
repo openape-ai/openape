@@ -86,9 +86,6 @@ describe('script frames', () => {
   })
 })
 
-it('accepts explicit partial program observations but refuses invented or non-applied outcomes', () => {
-  const observation = { type: 'resolveHttp', podId, runId: podId, key: 'program:synthetic', applied: true, evidence: 'Verified first result and missing second result', programOutcome: 'partial' }
-  expect(parseRunCommand(observation)).toEqual(observation)
-  expect(() => parseRunCommand({ ...observation, applied: false })).toThrow('partial program outcome')
-  expect(() => parseRunCommand({ ...observation, programOutcome: 'success' })).toThrow('partial program outcome')
+it('no longer accepts owner reconciliation or manual recovery commands', () => {
+  for (const command of [{ type: 'resolveHttp', podId, runId: podId, key: 'program:synthetic', applied: true, evidence: 'Observed' }, { type: 'recover', podId, runId: podId, action: 'retry' }, { type: 'retryQueue', podId }]) expect(() => parseRunCommand(command)).toThrow('Unsupported run command')
 })

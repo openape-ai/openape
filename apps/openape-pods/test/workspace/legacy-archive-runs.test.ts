@@ -9,7 +9,6 @@ import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { RunDispatcher } from '../../src/worker/runs/dispatcher'
 import { installExample } from '../../src/worker/runs/examples'
 import { executeScript } from '../../src/worker/runs/runner'
-import { recoveryHold, unresolvedOperation } from '../../src/worker/recovery/policy'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
@@ -32,6 +31,5 @@ it('refuses the retired archive port before dispatch or effect intent', async ()
   await expect.poll(() => dispatcher.view(pod.id).runs[0]?.state).toBe('failed')
   expect(dispatcher.view(pod.id, runId).events.find(event => event.type === 'recovery-boundary')).toBeUndefined()
   expect(mailArchive).not.toHaveBeenCalled()
-  expect(recoveryHold(store, pod.id, runId)).toBeNull()
-  expect(unresolvedOperation(store, pod.id)).toBe(false)
+  expect(store.db.prepare('SELECT count(*) AS n FROM effect_ledger').get()!.n).toBe(0)
 })

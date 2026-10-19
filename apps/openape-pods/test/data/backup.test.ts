@@ -274,21 +274,12 @@ it('keeps the newest 50 rows and folders while preserving Pod data and processed
   expect(f.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
 })
 
-it.each(['lease', 'intent', 'unknown', 'needsReview', 'ready', 'retryQueued', 'pending', 'claimed', 'blocked', 'linkedInput', 'approval', 'unfinished', 'running'])('protects %s and prunes only after that protection is settled', async (protection) => {
+it.each(['lease', 'pending', 'claimed', 'blocked', 'linkedInput', 'approval', 'unfinished', 'running'])('protects %s and prunes only after that protection is settled', async (protection) => {
   const f = await retentionFixture(); const db = f.store.db; const event = randomUUID()
   let settle: () => void
   if (protection === 'lease') {
     db.prepare('INSERT INTO run_leases VALUES(?,?,?,1,NULL)').run(f.pod.id, f.runId, 'old-boot')
     settle = () => { db.prepare('DELETE FROM run_leases').run() }
-  }
-  else if (protection === 'intent' || protection === 'unknown') {
-    db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,?,?,NULL)').run(f.pod.id, 'delivery', 'http.request', digest('{}'), f.runId, protection)
-    settle = () => { db.prepare('UPDATE effect_ledger SET state=\'completed\',result=\'{}\'').run() }
-  }
-  else if (['needsReview', 'ready', 'retryQueued'].includes(protection)) {
-    db.prepare('INSERT INTO recovery_reviews VALUES(?,?,NULL,1,?)').run(f.runId, protection, event)
-    db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state) VALUES(?,?,\'manual\',?,\'{}\',1,\'pending\')').run(event, f.pod.id, event)
-    settle = () => { db.prepare('UPDATE recovery_reviews SET state=\'retryQueued\'').run(); db.prepare('UPDATE accepted_events SET state=\'processed\'').run() }
   }
   else if (['pending', 'claimed', 'blocked', 'linkedInput'].includes(protection)) {
     db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state,run_id) VALUES(?,?,\'manual\',?,\'{}\',1,?,?)').run(event, f.pod.id, event, protection === 'linkedInput' ? 'pending' : protection, protection === 'linkedInput' ? null : f.runId)
@@ -313,6 +304,17 @@ it.each(['lease', 'intent', 'unknown', 'needsReview', 'ready', 'retryQueued', 'p
   settle(); await f.retention.runs.prune()
   expect(db.prepare('SELECT id FROM runs WHERE id=?').get(f.runId)).toBeUndefined()
   await expect(lstat(join(f.root, 'runs', f.runId))).rejects.toMatchObject({ code: 'ENOENT' })
+  expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+})
+
+it.each(['intent', 'unknown'])('prunes a run with an %s effect and an old recovery review together with both', async (state) => {
+  const f = await retentionFixture(); const db = f.store.db
+  db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,?,?,NULL)').run(f.pod.id, 'delivery', 'http.request', digest('{}'), f.runId, state)
+  db.prepare('INSERT INTO recovery_reviews VALUES(?,\'needsReview\',NULL,1,NULL)').run(f.runId)
+  await f.retention.runs.prune()
+  expect(db.prepare('SELECT id FROM runs WHERE id=?').get(f.runId)).toBeUndefined()
+  expect(db.prepare('SELECT count(*) AS n FROM effect_ledger').get()!.n).toBe(0)
+  expect(db.prepare('SELECT count(*) AS n FROM recovery_reviews').get()!.n).toBe(0)
   expect(db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
 })
 

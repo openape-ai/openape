@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto'
-import type { InboxDecide, InboxDecision, InboxDecisionOption, InboxDecisionType } from '../../contracts/inbox'
+import type { InboxDecide, InboxDecision, InboxDecisionType } from '../../contracts/inbox'
 import { inboxDecisionLimits, inboxSourceId, parseInboxDecision } from '../../contracts/inbox'
 import type { MapView } from '../../contracts/map-view'
 import type { DomainCommand, DomainOverview } from '../../contracts/domain-admin'
@@ -58,7 +58,7 @@ export class InboxDecisions {
 
   private async entries(): Promise<DecisionEntry[]> {
     const sources = await this.worker.inboxSources()
-    const entries = [...this.questions(sources), ...this.approvals(sources), ...this.held(sources), ...this.uncertain(sources), ...this.effects(sources), ...this.secrets(sources)]
+    const entries = [...this.questions(sources), ...this.approvals(sources), ...this.held(sources), ...this.uncertain(sources), ...this.secrets(sources)]
     // One malformed source (for example a non-HTTPS issuer) must not block every other decision.
     const valid = entries.filter((entry) => {
       try { parseInboxDecision(entry.decision); return true }
@@ -133,21 +133,6 @@ export class InboxDecisions {
       options: [],
       link: null,
     }, async () => { throw new Error('Historical effects are read-only; reconcile the external tool journal') }))
-  }
-
-  // Replaces the desktop confirmation dialog: the owner states what was observed outside, never an automatic resend.
-  private effects(sources: DecisionSources): DecisionEntry[] {
-    return (sources.map?.pods ?? []).flatMap(pod => pod.unknown.map((item) => {
-      const options: InboxDecisionOption[] = [{ key: 'delivered', title: this.t('Delivered'), input: 'evidence' }, { key: 'resend', title: this.t('Not delivered, send again'), input: 'evidence' }]
-      return this.entry('effect', [pod.id, item.runId, item.key], {
-        ...this.pod(sources, pod.id),
-        title: `${this.t('unknown deliveries')} · ${item.key}`,
-        body: item.runId,
-        authority: 'pods',
-        options,
-        link: null,
-      }, async (option, evidence) => this.worker.runs({ type: 'resolveHttp', podId: pod.id, runId: item.runId, key: item.key, applied: option === 'delivered', evidence }))
-    }))
   }
 
   private secrets(sources: DecisionSources): DecisionEntry[] {

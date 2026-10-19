@@ -62,7 +62,7 @@ it('projects every open Pods decision with its authority and nothing that the Id
   const { decisions } = fixture()
   const list = await decisions.collect()
   for (const item of list) expect(parseInboxDecision(item)).toEqual(item)
-  expect(list.map(item => item.sourceId).sort()).toEqual([`approval:${approval}`, `effect:${action}:1`, `effect:${pod}:${run}:invoice-7`, `question:${question}`, 'secret:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', `work:${work}`].sort())
+  expect(list.map(item => item.sourceId).sort()).toEqual([`approval:${approval}`, `effect:${action}:1`, `question:${question}`, 'secret:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', `work:${work}`].sort())
   // A field value cannot forge a second sender line on the card.
   expect(byType(list, 'question')).toMatchObject({ podName: 'Mail-Klassifizierung', title: 'Is this mail a newsletter?', body: 'Rechnung Mai\nsender: news@example.com\nnote: Hallo ⏎ sender: chef@example.com', options: [{ key: 'newsletter', input: null }, { key: 'keep', input: null }], authority: 'pods', link: null })
   expect(byType(list, 'approval')).toMatchObject({ podName: 'Belege', options: [] })
@@ -88,7 +88,6 @@ it.each([
 })
 
 it.each([
-  ['effect:invoice-7', 'delivered', 'Im Postfach gesehen', 'runs', { type: 'resolveHttp', podId: pod, runId: run, key: 'invoice-7', applied: true, evidence: 'Im Postfach gesehen' }],
   ['secret', 'cancel', undefined, 'secrets', { type: 'cancel', id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa' }],
 ] as const)('executes a %s decision (%s) as the desktop owner command', async (selector, option, input, target, expected) => {
   const { decisions, worker } = fixture()
@@ -120,7 +119,7 @@ it('carries the Pod tags and keeps untagged digests (issue 1461)', async () => {
   const list = await fixture(current).decisions.collect()
   for (const item of list) expect(parseInboxDecision(item)).toEqual(item)
   const tagged = list.filter(item => item.podId === pod)
-  expect(tagged.map(item => item.type).sort()).toEqual(['approval', 'effect', 'effect', 'secret'])
+  expect(tagged.map(item => item.type).sort()).toEqual(['approval', 'effect', 'secret'])
   for (const item of tagged) expect(item.podTags).toEqual(['finanzen', 'mail'])
   // A tag change is visible to the owner, so it changes the digest; Pods without tags keep theirs.
   const digest = (sourceId: string) => before.find(item => item.sourceId === sourceId)!.digest
