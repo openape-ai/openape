@@ -1,3 +1,7 @@
+# Owner installer follow-up — issue 1519
+
+The first live installation exposed a post-quit SQLite read failure when WAL sidecars were absent. The installer now opens the existing database read/write for SELECT checks so SQLite can recreate its sidecars, and restarts the previous app if the post-quit check throws. No application records are written by the checks. Worktree: `owner-install-sqlite-1519`; branch: `bugfix/issue-1519-owner-install-sqlite`. Verification and live migration receipts belong to the native issue.
+
 # Active work
 
 ## Batch approvals for application calls — issue 1516
