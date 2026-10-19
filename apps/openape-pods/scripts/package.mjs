@@ -15,10 +15,9 @@ if (distribution) rmSync('release/distribution/release.json', { force: true })
 if (process.argv.slice(2).some(value => !['--distribution', '--signed', '--signed-candidate', '--signed-local', '--owner'].includes(value)) || ((signed || owner) && !distribution) || ([candidate, local, owner, process.argv.includes('--signed')].filter(Boolean).length > 1)) throw new Error('Unsupported package option')
 const identity = process.env.OPENAPE_PODS_SIGNING_IDENTITY
 let review = null
-const source = owner ? requireCleanBuild() : null
+const source = owner || local ? requireCleanBuild() : null
 if (signed) {
-  if (local) requireCleanBuild()
-  else review = requireReleaseReview(candidate)
+  if (!local) review = requireReleaseReview(candidate)
   if (!identity?.startsWith('Developer ID Application: ') || !process.env.OPENAPE_PODS_NOTARY_PROFILE) throw new Error('Explicit Developer ID and notary keychain profile are required')
   for (const path of ['dist/native/pods-helper', 'dist/vendor/codex']) execFileSync('/usr/bin/codesign', ['--force', '--timestamp', '--options', 'runtime', '--sign', identity, ...(path.endsWith('/codex') ? ['--entitlements', 'runtime-sources/entitlements.mac.plist'] : []), path], { stdio: 'inherit' })
   for (const [manifest, binary] of [['manifest.json', 'codex']]) {
@@ -59,12 +58,13 @@ const artifacts = await build({
       : {}),
   },
 })
-if (owner) {
+// install:owner takes both: the ad-hoc owner build and a Developer ID signed-local build, which migrates keychain files.
+if (source) {
   const bundle = resolve(output, 'mac-arm64', `${productName}.app`)
   execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle], { stdio: 'inherit' })
   writeFileSync(resolve(output, 'owner-build.json'), `${JSON.stringify({ bundle, ...source }, null, 2)}\n`)
 }
-else if (distribution) {
+if (distribution && !owner) {
   const files = artifacts.filter(path => path.endsWith('.dmg'))
   if (files.length !== 1) throw new Error('Expected one versioned DMG')
   if (signed) {
