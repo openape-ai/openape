@@ -17,12 +17,12 @@ import { SetupControl } from '../../src/worker/onboarding/control'
 const cleanups: (() => Promise<void>)[] = []
 vi.mock('../../src/main/connections/broker', async original => ({ ...await original<typeof import('../../src/main/connections/broker')>(), podBrokerReceipt: vi.fn(async () => 'synthetic-receipt') }))
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
-async function fixture(locked = false, architecture = process.arch, jevKey?: () => string | undefined, directAgents = false) {
+async function fixture(architecture = process.arch, jevKey?: () => string | undefined, directAgents = false) {
   const root = await mkdtemp(join(tmpdir(), 'pods-connect-')); const vendor = join(root, 'vendor'); await mkdir(vendor)
   await writeFile(join(vendor, 'codex'), 'synthetic-codex')
   await writeFile(join(vendor, 'manifest.json'), JSON.stringify({ sdk: '0.153.4', cli: `0.153.4-${process.platform}-${architecture}`, binaryHash: digest('synthetic-codex') }))
   const store = new PodDatabase(root); const registry = new ResourceRegistry(store, () => {}); const control = new SetupControl(store, registry)
-  const credentials = new CredentialCache(join(root, 'credentials'), { available: () => !locked, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
+  const credentials = new CredentialCache(join(root, 'credentials'))
   const runtime = { helper: 'unused-fixture-helper', executable: process.execPath, entry: 'unused-entry', runtimeDirectories: [], environment: {}, binary: join(vendor, 'codex'), manifest: join(vendor, 'manifest.json'), catalog: 'unused-catalog', sdkHost: 'unused-host' }
   const availability = vi.fn(async () => {})
   const manager = new ConnectionManager(root, runtime, credentials, async command => control.execute(command), availability, async podId => store.getPod(podId).name, directAgents, jevKey)
@@ -106,7 +106,7 @@ it('checks a changed owner binding even while a transport retry is throttled', a
 })
 
 it('uses the actual title for new direct identities without refreshing established direct registrations', async () => {
-  const { manager, control, store } = await fixture(false, process.arch, undefined, true)
+  const { manager, control, store } = await fixture(process.arch, undefined, true)
   const pod = store.createPod({ name: 'Direct invoice review' }); const owner = randomUUID()
   const issuer = 'https://id.example.invalid'; const account = 'owner@example.invalid'
   control.execute({ type: 'save', connection: { id: owner, provider: 'openape', account, state: 'ready', error: null }, metadata: { issuer, subject: account } })
@@ -168,11 +168,8 @@ it('rejects global Microsoft setup without touching its cache or starting login'
   await expect(manager.execute({ type: 'connect', provider: 'microsoft', account: 'mail@example.invalid' })).rejects.toThrow('Permissions')
   expect((await manager.view()).connections).toHaveLength(0)
 })
-it('fails visibly for a locked credential store and mismatched runtime architecture', async () => {
-  const locked = await fixture(true)
-  await expect(locked.manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })).rejects.toThrow('locked')
-  expect((await locked.manager.view()).connections).toHaveLength(0)
-  const wrong = await fixture(false, process.arch === 'x64' ? 'arm64' : 'x64')
+it('fails visibly for a mismatched runtime architecture', async () => {
+  const wrong = await fixture(process.arch === 'x64' ? 'arm64' : 'x64')
   expect((await wrong.manager.view()).runtime).toMatchObject({ ready: false, error: 'Bundled Codex architecture does not match this Mac' })
   await expect(wrong.manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })).rejects.toThrow('architecture')
 })
@@ -374,7 +371,7 @@ it('fails visibly when the account reports no default model', async () => {
 })
 
 it('uses an explicit CLI Jev key without decrypting or replacing desktop credentials', async () => {
-  const { manager, control, credentials } = await fixture(true, process.arch, () => 'synthetic-env-key')
+  const { manager, control, credentials } = await fixture(process.arch, () => 'synthetic-env-key')
   const id = randomUUID()
   control.execute({ type: 'save', connection: { id, provider: 'typesafe', account: 'TypeSafe / Jev', state: 'ready', error: null }, metadata: {} })
   const read = vi.spyOn(credentials, 'readConnection')
@@ -436,4 +433,20 @@ it('refreshes ChatGPT through the cipherless controller and preserves the newest
   const cli = new CodexConnection(new CredentialCache(join(root, 'credentials')), runtime, join(root, 'authentication'))
   expect(await cli.bearer(id, 'synthetic-account', new AbortController().signal)).toBe(refreshed)
   expect(await credentials.readConnection(id)).toMatchObject({ tokens: { access_token: refreshed, refresh_token: 'new-synthetic-refresh' } })
+})
+
+// Issue 1519: the owner token comes only from the owner's apes (DDISA) login in ~/.config/apes.
+it('uses only the matching apes login for the owner token', async () => {
+  const { manager, account, issuer, bearer } = await namedBrokerFixture()
+  const jwt = (sub: string) => `header.${Buffer.from(JSON.stringify({ sub })).toString('base64url')}.signature`
+  const login = (token: () => Promise<{ issuer: string, accessToken: string } | null>, signedIn = true) => ({ signedIn: vi.fn(() => signedIn), token: vi.fn(token) })
+  const signal = new AbortController().signal
+  const apes = login(async () => ({ issuer, accessToken: jwt(account) }))
+  expect(await manager.ownerBearer(signal, apes)).toBe(jwt(account))
+  expect(apes.signedIn).toHaveBeenCalledWith(issuer, account)
+  await expect(manager.ownerBearer(signal, login(async () => { throw new Error('The apes access token expired') }))).rejects.toThrow('expired')
+  for (const other of [login(async () => ({ issuer, accessToken: jwt('someone-else') })), login(async () => ({ issuer: 'https://other.example.invalid', accessToken: jwt(account) })), login(async () => null, false)]) {
+    await expect(manager.ownerBearer(signal, other)).rejects.toThrow('Log in with apes')
+  }
+  expect(bearer).not.toHaveBeenCalled()
 })

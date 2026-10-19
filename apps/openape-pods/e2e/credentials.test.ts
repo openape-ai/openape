@@ -3,30 +3,27 @@ import { failOnKeychainDialog } from './fixtures/keychain'
 import { _electron as electron } from 'playwright'
 import { openPod } from './fixtures/navigation'
 import { removeProfile } from './fixtures/startup'
-import { mkdtemp, realpath, readFile, readdir } from 'node:fs/promises'
-import { homedir, tmpdir } from 'node:os'
+import { mkdtemp, realpath, readFile, readdir, stat } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { expect, it } from 'vitest'
 import { fixtureDirectory } from '../src/main/fixture'
 import { PodDatabase } from '../src/worker/storage/database'
 
 // Geometry of the Values tab lives in test/layout/pod-tabs.test.ts. This file
-// keeps what needs the packaged app: safeStorage ciphertext, a restart that
-// decrypts it again, and key files erased on rotation and revocation. It uses
-// Chromium's mock keychain unless OPENAPE_PODS_TEST_REAL_KEYCHAIN=1 opts into
-// the login keychain, which needs a human or an unlocked dedicated keychain.
+// keeps what needs the packaged app: private credential files, a restart that
+// reads them again, and files erased on rotation and revocation. Since issue
+// 1519 Pods keeps no secret in the macOS keychain.
 it('credentials: packaged owner flow retains assigned secrets across runs and revokes access', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-credentials-ui-'))); fixtureDirectory(root)
   const store = new PodDatabase(root); const pod = store.createPod({ name: 'Customer review' }); store.close()
   const shellIdentity = await fixtureShellIdentity(root)
-  const realKeychain = process.env.OPENAPE_PODS_TEST_REAL_KEYCHAIN === '1'
   const launch = async () => {
-    const running = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: realKeychain ? homedir() : root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test', ...(realKeychain ? { OPENAPE_PODS_TEST_REAL_KEYCHAIN: '1' } : {}) } })
+    const running = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
     failOnKeychainDialog(running)
     expect(await running.evaluate(({ app }) => app.getPath('userData'))).toBe(root)
     expect(await running.evaluate(({ app }) => app.getPath('sessionData'))).toBe(join(root, 'chromium'))
-    await shellIdentity.encrypt(running)
-    console.info(`Credential flow: ${realKeychain ? 'real macOS login keychain' : 'Chromium mock keychain; macOS login keychain is NOT verified'}`)
+    await shellIdentity.persistCredentials()
     return running
   }
   let app = await launch()
@@ -34,7 +31,7 @@ it('credentials: packaged owner flow retains assigned secrets across runs and re
     let page = await app.firstWindow(); page.setDefaultTimeout(7000); await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     await openPod(page, 'Customer review')
     await page.getByRole('navigation', { name: 'Pod sections' }).getByRole('button', { name: 'Variables and secrets', exact: true }).click()
-    console.info('Credential flow: rendered resources, saving synthetic encrypted value')
+    console.info('Credential flow: rendered resources, saving synthetic private value')
     await page.getByLabel('Alias', { exact: true }).fill('crm')
     await page.getByLabel('Value', { exact: true }).fill('SYNTHETIC_SCRIPT_CREDENTIAL')
     expect(await page.getByLabel('Value', { exact: true }).getAttribute('type')).toBe('password')
@@ -44,12 +41,12 @@ it('credentials: packaged owner flow retains assigned secrets across runs and re
     const resources = await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)
     expect(JSON.stringify(resources)).not.toContain('SYNTHETIC_SCRIPT_CREDENTIAL')
     const id = resources.resources[0]!.configuration.credentialId as string
-    expect((await readFile(join(root, 'credentials', `${id}.encrypted`))).includes('SYNTHETIC_SCRIPT_CREDENTIAL')).toBe(false)
+    expect((await stat(join(root, 'credentials', `${id}.connection.json`))).mode & 0o777).toBe(0o600)
     const other = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Separate pod' }))).pods.find(item => item.name === 'Separate pod')!
     const otherResources = await page.evaluate(podId => window.pods.resources({ type: 'saveCredential', podId, alias: 'crm', value: 'OTHER_SYNTHETIC_VALUE', epoch: 0 }), other.id)
     const otherId = otherResources.resources[0]!.configuration.credentialId as string
     expect(otherId).not.toBe(id)
-    console.info('Credential flow: saved encrypted value, preparing script')
+    console.info('Credential flow: saved private value, preparing script')
     await page.getByRole('navigation', { name: 'Pod sections' }).getByRole('button', { name: 'Code', exact: true }).click()
     const panel = () => page.getByRole('article', { name: 'Script editor' })
     const code = `import { readFile, writeFile } from 'node:fs/promises'
@@ -89,16 +86,16 @@ export async function run(context) {
     const rotated = await page.evaluate(({ podId, epoch }) => window.pods.resources({ type: 'saveCredential', podId, alias: 'crm', value: 'ROTATED_SYNTHETIC_VALUE', epoch }), { podId: pod.id, epoch: resources.epoch })
     const current = rotated.resources.find(item => item.state === 'ready')!
     expect((await page.evaluate(podId => window.pods.scripts({ type: 'list', podId }), pod.id)).source!.credentialAccessApproved).toBe(true)
-    expect(await readdir(join(root, 'credentials'))).not.toContain(`${id}.encrypted`)
+    expect(await readdir(join(root, 'credentials'))).not.toContain(`${id}.connection.json`)
     await page.getByTestId('back-to-automations').click(); await openPod(page, 'Customer review'); await page.getByRole('navigation', { name: 'Pod sections' }).getByRole('button', { name: 'Variables and secrets', exact: true }).click()
     await page.locator('.resource-row').last().getByRole('button', { name: 'Revoke access' }).click()
     await expect.poll(async () => (await page.evaluate(podId => window.pods.resources({ type: 'list', podId }), pod.id)).resources.find(item => item.id === current.id)?.state).toBe('revoked')
-    expect(await readdir(join(root, 'credentials'))).not.toContain(`${id}.encrypted`)
+    expect(await readdir(join(root, 'credentials'))).not.toContain(`${id}.connection.json`)
     expect((await page.evaluate(podId => window.pods.scripts({ type: 'list', podId }), pod.id)).source!.validated).toBe(false)
     expect((await page.evaluate(podId => window.pods.runs({ type: 'start', podId }), pod.id)).runs).toHaveLength(2)
     expect(await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).toMatchObject({ blocked: 0, failed: 1 })
-    expect(await readdir(join(root, 'credentials'))).not.toContain(`${current.configuration.credentialId}.encrypted`)
-    expect(await readdir(join(root, 'credentials'))).toContain(`${otherId}.encrypted`)
+    expect(await readdir(join(root, 'credentials'))).not.toContain(`${current.configuration.credentialId}.connection.json`)
+    expect(await readdir(join(root, 'credentials'))).toContain(`${otherId}.connection.json`)
     expect((await page.evaluate(podId => window.pods.scheduling({ type: 'list', podId }), pod.id)).enabled).toBe(false)
   }
   finally {

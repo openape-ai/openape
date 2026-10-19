@@ -24,7 +24,7 @@ async function setup(packaged = false, slow = false, unicode = false) {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-tool-broker-')))
   const privateRoot = join(root, 'private'); await mkdir(privateRoot)
   const credentialRoot = join(root, 'credentials')
-  const cache = new CredentialCache(credentialRoot, { available: () => true, encrypt: value => Buffer.from(Buffer.from(value).map(byte => byte ^ 85)), decrypt: value => Buffer.from(value.map(byte => byte ^ 85)).toString() })
+  const cache = new CredentialCache(credentialRoot)
   const connectionId = randomUUID(); const siblingId = randomUUID()
   await cache.connect(connectionId, JSON.stringify({ access_token: 'SYNTHETIC_ASSIGNED_TOKEN' }))
   await cache.connect(siblingId, JSON.stringify({ access_token: 'SYNTHETIC_OTHER_TOKEN' }))
@@ -32,7 +32,7 @@ async function setup(packaged = false, slow = false, unicode = false) {
   await writeFile(toolFile, `import fs from 'node:fs'; import {spawnSync} from 'node:child_process';
 const cache=JSON.parse(fs.readFileSync(process.env.POD_TOOL_AUTH_FILE,'utf8'));
 const result={assigned:!!cache.access_token, childDenied:!!spawnSync('/bin/echo',['UNASSIGNED']).error};
-try { fs.readFileSync(${JSON.stringify(join(credentialRoot, `${siblingId}.encrypted`))}); result.siblingDenied=false } catch { result.siblingDenied=true }
+try { fs.readFileSync(${JSON.stringify(join(credentialRoot, `${siblingId}.connection.json`))}); result.siblingDenied=false } catch { result.siblingDenied=true }
 cache.access_token='SYNTHETIC_ROTATED_TOKEN';fs.writeFileSync(process.env.POD_TOOL_AUTH_FILE,JSON.stringify(cache));
 console.log(JSON.stringify(result));console.error(cache.access_token);
 ${unicode ? `for (const byte of Buffer.from('Grüße 日本語')) { process.stdout.write(Buffer.from([byte])); await new Promise(resolve=>setTimeout(resolve,5)); }` : ''}

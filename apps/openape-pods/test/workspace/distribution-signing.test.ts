@@ -57,4 +57,17 @@ describe('distribution signing gates', () => {
     expect(f.check('requireReleaseReview', false)).toContain('pending: licenses')
   })
 
+  it('accepts --owner only as the sole mode of a distribution package and never asks for a signing identity', () => {
+    const f = fixture()
+    const run = (...args: string[]) => {
+      try { execFileSync(process.execPath, [resolve('scripts/package.mjs'), ...args], { cwd: f.cwd, encoding: 'utf8', stdio: 'pipe', env: { ...process.env, OPENAPE_PODS_SIGNING_IDENTITY: '' } }); return 'accepted' }
+      catch (error) { return String((error as { stderr?: string }).stderr) }
+    }
+    expect(run('--owner')).toContain('Unsupported package option')
+    for (const other of ['--signed', '--signed-local', '--signed-candidate']) expect(run('--distribution', '--owner', other)).toContain('Unsupported package option')
+    // Valid options pass the clean-build check and go on to packaging; the owner build never asks for a Developer ID.
+    const owner = run('--distribution', '--owner')
+    expect(owner).not.toContain('Unsupported package option'); expect(owner).not.toContain('Developer ID')
+    expect(run('--distribution', '--signed-local')).toContain('Explicit Developer ID')
+  })
 })

@@ -21,7 +21,7 @@ it('refuses a redirected .openape folder in the pod HOME and cleans up a refused
     const reference = join(root, 'untouched'); await mkdir(reference); await writeFile(join(reference, 'marker'), 'unchanged')
     await symlink(reference, join(context.home, '.openape'))
     const resources: ResourceState = { epoch: 0, resources: [] }
-    const credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: bytes => bytes.toString() })
+    const credentials = new CredentialCache(join(root, 'credentials'))
     const connections = { podConnection: async () => ({ issuer: 'https://unused.example.test', subject: 'fixture@example.test', accessToken: async () => 'synthetic' }) } as unknown as ConnectionManager
     let released = false
     const session = new ExternalShell(podId, root, runtime, resources, credentials, connections, async () => {}, async () => { released = true }, 'isolated')
@@ -40,7 +40,7 @@ async function wrapper(level: SandboxLevel): Promise<{ text: string, podHome: st
   const root = await mkdtemp(join(tmpdir(), 'pods-shell-home-')); const podId = randomUUID(); const applicationId = randomUUID()
   try {
     const runtime = { executable: process.execPath, cli: '/fixture/cli', client: '/fixture/client' }
-    const credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: bytes => bytes.toString() })
+    const credentials = new CredentialCache(join(root, 'credentials'))
     const connections = { podConnection: async () => ({ issuer: 'https://unused.example.test', subject: 'fixture@example.test', accessToken: async () => 'synthetic' }) } as unknown as ConnectionManager
     const executable = join(root, 'az'); await writeFile(executable, '#!/bin/sh\nexit 0\n', { mode: 0o700 })
     const digest = async (path: string) => createHash('sha256').update(await readFile(path)).digest('hex')

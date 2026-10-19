@@ -8,7 +8,7 @@ import { ProgramState } from '../../src/main/programs/state'
 
 it('keeps application state scoped, preserves multiple files and retains the previous generation after a failed session', async () => {
   const root = await mkdtemp(join(tmpdir(), 'pods-program-state-'))
-  const cache = new CredentialCache(root, { available: () => true, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
+  const cache = new CredentialCache(root)
   const state = new ProgramState(cache); const binding = { podId: randomUUID(), applicationId: randomUUID() }
   try {
     const id = await state.create(binding)

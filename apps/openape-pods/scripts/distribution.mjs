@@ -37,7 +37,7 @@ export function inventory() {
   ]
   return { bom: { format: 'openape-pods-bom', version: 1, dependencyLockHash: sha256('../../pnpm-lock.yaml'), platform: process.platform, architecture: process.arch, electron: '40.9.3', nativeHelperSha256: sha256('dist/native/pods-helper'), packages: [...packages.values()], codex, scope: 'Conservative runtime npm dependency closure, Electron/Chromium notices, pinned native origins. Native transitive license review remains a release gate.', blockers }, notices: notices.join('\n') }
 }
-export function writeDistribution(releaseReady = false, review = null) {
+export function writeDistribution(releaseReady = false, review = null, source = review) {
   const { bom, notices } = inventory(); const version = JSON.parse(readFileSync('package.json', 'utf8')).version
   const schema = Number(/export const schemaVersion = (\d+)/.exec(readFileSync('src/worker/storage/schema.ts', 'utf8'))?.[1])
   const minimum = Number(/export const upgradableSchema = (\d+)/.exec(readFileSync('src/worker/storage/upgrade.ts', 'utf8'))?.[1])
@@ -45,7 +45,7 @@ export function writeDistribution(releaseReady = false, review = null) {
   mkdirSync('dist/distribution', { recursive: true })
   if (review) { bom.licenseReview = review.gates.licenses; bom.supplementalNoticesHash = review.supplementalNoticesSha256; bom.distributionReview = { gates: review.gates, authorizationEvidence: review.ownerAuthorization?.evidence ?? null } }
   writeFileSync('dist/distribution/bom.json', JSON.stringify(bom, null, 2)); writeFileSync('dist/distribution/THIRD-PARTY-NOTICES.txt', notices + (review ? `\n===== Reviewed native and supplemental notices =====\n${readFileSync('runtime-sources/licenses/REVIEWED-NOTICES.txt', 'utf8')}` : ''))
-  writeFileSync('dist/distribution/pods-distribution.json', JSON.stringify({ format: 'openape-pods-distribution', version, platform: 'darwin', architecture: process.arch, schema: { minimum, current: schema }, releaseReady, ...(review ? { sourceRevision: review.sourceRevision, dependencyLockHash: review.dependencyLockHash } : {}), bomHash: sha256('dist/distribution/bom.json') }, null, 2))
+  writeFileSync('dist/distribution/pods-distribution.json', JSON.stringify({ format: 'openape-pods-distribution', version, platform: 'darwin', architecture: process.arch, schema: { minimum, current: schema }, releaseReady, ...(source ? { sourceRevision: source.sourceRevision, dependencyLockHash: source.dependencyLockHash } : {}), bomHash: sha256('dist/distribution/bom.json') }, null, 2))
   return bom
 }
 export function requireCleanBuild() {

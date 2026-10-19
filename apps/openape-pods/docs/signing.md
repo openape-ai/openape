@@ -1,5 +1,33 @@
 # Internal macOS signing
 
+## Owner install on the build Mac
+
+Pods keeps no secret in the macOS keychain (issue 1519): credentials and the
+desktop registration are private 0600 files in the profile, and the OpenApe owner
+token comes from the apes login in `~/.config/apes`. An install on the owner's own
+Mac therefore needs no Developer ID, signing key or notarization:
+
+```sh
+pnpm --filter @openape/pods build
+pnpm --filter @openape/pods package:owner   # ad-hoc signed app directory, about 20 s
+pnpm --filter @openape/pods install:owner   # checks, APFS clone backup, install, start
+```
+
+`install:owner` refuses while a run is active, network work is claimed or the
+profile still holds retired keychain files (`credentials/*.encrypted`,
+`remote/registration.enc`); it never waits for a person. It keeps the quit
+profile as an APFS clone together with the previous app in
+`~/Library/Application Support/OpenApe Pods Rollback/<timestamp>-<label>/` and
+deletes older pairs only with `--keep N`. An unchanged repeat changes nothing.
+
+A profile with retired keychain files is migrated once by a Developer ID signed
+build (`--signed-local` below), which `install:owner` also installs: it opens the
+keychain item silently, writes the private files and moves the old files to
+`credentials/legacy/` and `remote/legacy/`. Signing and notarizing need the login
+keychain, so the owner runs that build at the Mac; agents never start it.
+
+## Developer ID signed builds
+
 A personal/internal installation can be Developer ID signed and notarized without
 representing a public distribution release. From clean canonical source, build
 Pods and run `node scripts/package.mjs --distribution --signed-local` in the app

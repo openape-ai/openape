@@ -37,7 +37,7 @@ function domain() {
 }
 beforeEach(async () => {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-owner-home-'))); launches = []
-  credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: bytes => bytes.toString() })
+  credentials = new CredentialCache(join(root, 'credentials'))
   const record = (policy: RuntimePolicy, environment: Record<string, string>) => { launches.push({ policy, environment, temporaryExisted: existsSync(environment.TMPDIR!) }); return domain() }
   vi.mocked(launchApeShell).mockImplementation(async (_helper, _directory, policy, _args, environment = {}) => record(policy, environment) as never)
   vi.mocked(launchApeShell).mockImplementation(async (_helper, _directory, policy, _args, environment) => record(policy, environment) as never)
@@ -48,7 +48,7 @@ async function executable(): Promise<{ path: string, hash: string }> {
   const path = join(root, 'az'); await writeFile(path, '#!/bin/sh\nexit 0\n', { mode: 0o700 })
   return { path, hash: createHash('sha256').update(await readFile(path)).digest('hex') }
 }
-/** The private application state folder: opened from the encrypted record below the credential store for one session. */
+/** The private application state folder: opened from the private record below the credential store for one session. */
 const applicationState = expect.stringMatching(/\/credentials\/temporary\/.+\/application$/)
 
 async function brokerCall(level: SandboxLevel, identityConnection: AgentConnection = connection(async () => 'synthetic-token')) {
@@ -56,10 +56,10 @@ async function brokerCall(level: SandboxLevel, identityConnection: AgentConnecti
   const argv = ['repos', 'pr', 'list']
   const assignment: ToolAssignment = { id: applicationId, identityConnection, program: { path: program.path, name: 'az', sha256: program.hash }, argv, reach: reach(level), programState: { id: stateId, podId, applicationId }, capability: 'tool.az.invoke', executable: program.path, executableHash: program.hash, entryFiles: [], prefix: [], runtimeDirectories: [], environment: {}, runtimeEnvironment: { HOME: '/descriptor/home' }, networkPorts: [] }
   const executionCredentials = level === 'owner' ? new CredentialCache(join(root, 'credentials')) : credentials
-  const before = await readFile(join(root, 'credentials', `${stateId}.encrypted`))
+  const before = await readFile(join(root, 'credentials', `${stateId}.connection.json`))
   const broker = new PodToolBroker('/fixture/helper', join(root, 'broker'), { runtime: { executable: process.execPath, cli: '/fixture/ape-shell.mjs' }, targetHost: identityConnection.targetHost, operationId: randomUUID(), observer: { authorized: async () => {} } }, executionCredentials)
   const reply = await broker.execute(assignment, { toolId: applicationId, argv }, { capabilities: ['tool.az.invoke'], assertCurrent: () => {}, signal: AbortSignal.timeout(5000) })
-  if (level === 'owner') expect(await readFile(join(root, 'credentials', `${stateId}.encrypted`))).toEqual(before)
+  if (level === 'owner') expect(await readFile(join(root, 'credentials', `${stateId}.connection.json`))).toEqual(before)
   return { reply, launch: launches.at(-1)! }
 }
 
@@ -91,11 +91,11 @@ async function terminal(level: SandboxLevel) {
   const workspace = join(root, 'workspace'); await mkdir(workspace)
   const sessionId = randomUUID()
   const executionCredentials = level === 'owner' ? new CredentialCache(join(root, 'credentials')) : credentials
-  const before = await readFile(join(root, 'credentials', `${stateId}.encrypted`))
+  const before = await readFile(join(root, 'credentials', `${stateId}.connection.json`))
   const session = new ProgramSession(sessionId, podId, applicationId, assignment, ['login'], '/fixture/helper', join(root, 'authentication'), executionCredentials, async () => {}, async () => {}, workspace, { readDirectories: [], writeDirectories: [] }, { connection: async () => connection(), runtime: { executable: '/fixture/node', cli: '/fixture/ape-shell.mjs', environment: {} }, ledger: {} as never, origin: async () => 'Pod', reach: async () => reach(level) })
   await session.completed
   expect(session.view().error).toBeNull()
-  if (level === 'owner') expect(await readFile(join(root, 'credentials', `${stateId}.encrypted`))).toEqual(before)
+  if (level === 'owner') expect(await readFile(join(root, 'credentials', `${stateId}.connection.json`))).toEqual(before)
   return { launch: launches.at(-1)!, sessionDirectory: join(root, 'authentication', sessionId) }
 }
 

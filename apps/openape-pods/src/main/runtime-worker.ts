@@ -285,7 +285,7 @@ export class RuntimeWorker {
     this.secretsGate = new SecretsGate({
       origin: secretsOrigin,
       fetch: (input, init) => fetch(input, init),
-      ownerToken: signal => this.connections!.ownerBearer(signal),
+      ownerToken: signal => this.connections!.ownerBearer(signal, this.ownerApesLogin()),
       consumer: {
         load: async () => {
           try { return await this.credentials!.readConnection(secretsConsumerRecord) as unknown as ConsumerRecord }

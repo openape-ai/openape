@@ -23,12 +23,12 @@ it('retains central authority on ordinary launches once adoption has started', a
   expect(await main.invoke(channels.central, { type: 'status' })).toMatchObject({ enabled: false })
 })
 
-it('keeps fixture test launches off the login keychain unless a real-keychain check opts in', async () => {
+it('keeps fixture test launches off the login keychain, also with retired keychain files', async () => {
   main = await startMain()
   expect(main.switches).toContain('use-mock-keychain')
   await main.close()
-  main = await startMain({ OPENAPE_PODS_TEST_REAL_KEYCHAIN: '1' })
-  expect(main.switches).not.toContain('use-mock-keychain')
+  main = await startMain({}, async (root) => { await mkdir(join(root, 'remote'), { recursive: true }); await writeFile(join(root, 'remote/registration.enc'), 'legacy') })
+  expect(main.switches).toContain('use-mock-keychain')
 })
 
 describe('main process owner dialogs', () => {
