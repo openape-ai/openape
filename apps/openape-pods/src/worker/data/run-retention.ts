@@ -38,11 +38,11 @@ export class RunRetention {
         SELECT r.id FROM ranked r
         WHERE position > ? AND finished_at IS NOT NULL AND state != 'running'
           AND NOT EXISTS (SELECT 1 FROM run_leases WHERE run_id=r.id)
-          AND NOT EXISTS (SELECT 1 FROM accepted_events WHERE run_id=r.id AND state!='processed' AND NOT (state='failed' AND source IN ('schedule','manual')))
+          AND NOT EXISTS (SELECT 1 FROM accepted_events WHERE run_id=r.id AND state NOT IN ('processed','failed'))
           AND NOT EXISTS (
             SELECT 1 FROM run_inputs i, json_each(i.event_ids) input
             JOIN accepted_events a ON a.id=input.value
-            WHERE i.run_id=r.id AND a.state!='processed' AND NOT (a.state='failed' AND a.source IN ('schedule','manual'))
+            WHERE i.run_id=r.id AND a.state NOT IN ('processed','failed')
           )
           AND NOT EXISTS (
             SELECT 1 FROM run_events e WHERE e.run_id=r.id AND e.type='approval' AND json_extract(e.data,'$.state')='pending'

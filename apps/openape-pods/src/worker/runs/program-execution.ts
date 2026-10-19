@@ -19,11 +19,11 @@ export function recordProgramExecution(store: PodDatabase, check: ProgramExecuti
   if (effect?.run_id !== runId || effect.state !== 'intent') throw new Error('Program effect is not awaiting a receipt from this run')
   if (record.phase === 'completed') {
     if (!Number.isInteger(record.exitCode) || record.exitCode < 0 || record.exitCode > 255) throw new Error('Invalid program exit code')
-    if (record.exitCode === 0) ledger.complete(podId, key, { exitCode: 0 })
-    else ledger.markUnknown(podId, key)
+    if (record.exitCode === 0) ledger.complete(podId, runId, key, { exitCode: 0 })
+    else ledger.markUnknown(podId, runId, key)
     return
   }
   if (record.phase === 'not-started') ledger.notStarted(podId, runId, key)
-  else if (record.phase === 'unknown') ledger.markUnknown(podId, key)
+  else if (record.phase === 'unknown') ledger.markUnknown(podId, runId, key)
   else throw new Error('Invalid program receipt')
 }

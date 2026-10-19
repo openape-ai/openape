@@ -52,10 +52,20 @@ describe('persistent scheduling and intake', () => {
   it('limits open inputs per Pod while failed inputs, which nothing retries, never fill the queue', () => {
     const f = fixture(); const pod = f.pod()
     const insert = f.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state) VALUES(?,?,\'fixture\',?,\'{}\',1,?)')
-    for (let index = 0; index < 1000; index++) insert.run(`failed-${index}`, pod, `failed-${index}`, 'failed')
+    // Transactions keep the 2000 synthetic rows fast under a loaded gate.
+    f.store.transaction(() => { for (let index = 0; index < 1000; index++) insert.run(`failed-${index}`, pod, `failed-${index}`, 'failed') })
     expect(f.scheduler.acceptEvent(pod, 'fixture', 'after-failures', {})).toMatch(/^[a-f0-9-]{36}$/)
-    for (let index = 0; index < 999; index++) insert.run(`open-${index}`, pod, `open-${index}`, 'pending')
+    f.store.transaction(() => { for (let index = 0; index < 999; index++) insert.run(`open-${index}`, pod, `open-${index}`, 'pending') })
     expect(() => f.scheduler.acceptEvent(pod, 'fixture', 'over-limit', {})).toThrow('Event queue is full')
+  })
+  it('queues a failed input again when its source delivers it once more', () => {
+    const f = fixture(); const pod = f.pod()
+    const id = f.scheduler.acceptEvent(pod, 'fixture', 'redelivered', { value: 1 })
+    f.store.db.prepare('UPDATE accepted_events SET state=\'failed\',error=\'Synthetic failure\',run_id=? WHERE id=?').run(id, id)
+    expect(f.scheduler.acceptEvent(pod, 'fixture', 'redelivered', { value: 1 })).toBe(id)
+    expect(f.store.db.prepare('SELECT state,error,run_id FROM accepted_events WHERE id=?').get(id)).toEqual({ state: 'pending', error: null, run_id: null })
+    expect(() => f.scheduler.acceptEvent(pod, 'fixture', 'redelivered', { value: 2 })).toThrow('conflicts')
+    f.scheduler.tick(); expect(f.started[0]!.trigger.eventIds).toEqual([id])
   })
   it('admits ready pods in FIFO order and never exceeds global or per-pod leases', () => {
     const f = fixture(); const ids = [f.pod(), f.pod(), f.pod()]
@@ -280,14 +290,14 @@ it('does not let an unknown delivery prevent the next run, which may send the sa
   const id = f.started[0]!.id
   const ledger = new EffectLedger(f.store)
   expect(ledger.begin(pod, id, 'original', 'http.request', { body: 'one' }).execute).toBe(true)
-  ledger.markUnknown(pod, 'original')
+  ledger.markUnknown(pod, id, 'original')
   f.runs.finish(id, 'failed', 'Delivery failed', 'No receipt')
   f.scheduler.acceptEvent(pod, 'fixture', 'new-key', {}); f.time(Date.now() + 600000); f.scheduler.tick()
   expect(f.started).toHaveLength(2)
   const next = f.started[1]!.id
   expect(ledger.begin(pod, next, 'original', 'http.request', { body: 'one' }).execute).toBe(true)
   expect(() => ledger.begin(pod, next, 'original', 'http.request', { body: 'one' })).toThrow('already being sent')
-  ledger.complete(pod, 'original', { status: 200 })
+  ledger.complete(pod, next, 'original', { status: 200 })
   expect(ledger.begin(pod, next, 'original', 'http.request', { body: 'one' })).toEqual({ execute: false, result: { status: 200 } })
 })
 

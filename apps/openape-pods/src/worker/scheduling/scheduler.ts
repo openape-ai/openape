@@ -47,14 +47,19 @@ export class Scheduler {
     if (!/^[a-z][a-z0-9.-]{0,80}$/.test(source) || !key || key.length > 200 || /[\0\r\n]/.test(key)) throw new Error('Invalid event identity')
     const encoded = JSON.stringify(payload)
     if (!encoded || Buffer.byteLength(encoded) > 32768) throw new Error('Event payload exceeds its limit')
-    const existing = this.store.db.prepare('SELECT id,payload FROM accepted_events WHERE pod_id=? AND source=? AND dedupe_key=?').get(podId, source, key)
+    const existing = this.store.db.prepare('SELECT id,payload,state FROM accepted_events WHERE pod_id=? AND source=? AND dedupe_key=?').get(podId, source, key)
     if (existing) {
       if (existing.payload !== encoded) throw new Error('Event identity conflicts with an accepted payload')
-      return existing.id as string
+      if (existing.state !== 'failed') return existing.id as string
     }
     // A failed input is final (nothing retries it since issue 1518), so only open inputs fill the queue.
     const count = this.store.db.prepare('SELECT count(*) AS total,sum(pod_id=?) AS pod FROM accepted_events WHERE state NOT IN (\'processed\',\'failed\')').get(podId)!
     if ((count.total as number) >= 10000 || (count.pod as number) >= 1000) throw new Error('Event queue is full; retry after processing')
+    // A failed input is final for its run; delivering it again queues it once more as a fresh input.
+    if (existing) {
+      this.store.db.prepare('UPDATE accepted_events SET state=\'pending\',error=NULL,run_id=NULL WHERE id=? AND state=\'failed\'').run(existing.id)
+      return existing.id as string
+    }
     const id = randomUUID()
     this.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at) VALUES(?,?,?,?,?,?)').run(id, podId, source, key, encoded, this.now())
     return id

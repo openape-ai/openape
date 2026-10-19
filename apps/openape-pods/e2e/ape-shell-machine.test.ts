@@ -333,7 +333,7 @@ describe('ape-shell machine native boundary', () => {
       run.domain.cancel()
       expect(await run.observed).toBeInstanceOf(Error)
       await run.completed()
-      ledger.markUnknown(pod.id, key)
+      ledger.markUnknown(pod.id, active.id, key)
       store.close(); store = new PodDatabase(journal)
       expect(() => new EffectLedger(store).begin(pod.id, active.id, key, 'program.call', input)).toThrow('unknown')
     }

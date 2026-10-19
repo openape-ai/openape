@@ -98,7 +98,7 @@ it('retains real inner effects after a verified root completion without holding 
   const f = fixture()
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, _signal, hooks) => {
     await hooks.execution!.authorized({ authority: await hooks.authorizeStart!(), write: false })
-    const ledger = new EffectLedger(f.store); ledger.begin(f.pod.id, input.runId, 'synthetic-write', 'program.call', {}); ledger.complete(f.pod.id, 'synthetic-write', { exitCode: 0 })
+    const ledger = new EffectLedger(f.store); ledger.begin(f.pod.id, input.runId, 'synthetic-write', 'program.call', {}); ledger.complete(f.pod.id, input.runId, 'synthetic-write', { exitCode: 0 })
     await hooks.execution!.completed!({ exitCode: 0 })
     throw new PermissionUnavailableError('A later permission is unavailable')
   })
