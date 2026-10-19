@@ -41,6 +41,7 @@ export class RemoteController {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
       // A fresh registration would orphan the remote Pods bound to the one still in the retired keychain format.
       if (existsSync(join(this.root, 'remote/registration.enc'))) throw new Error('This desktop registration is still in the macOS keychain; start a Developer ID signed OpenApe Pods once to migrate it')
+      if (existsSync(join(this.root, 'remote/legacy/failed/registration.enc'))) throw new Error('This desktop registration could not be migrated from the macOS keychain; restore it before registering this desktop again')
       this.saved = { id: randomUUID(), signing: generateKey(), agreement: generateKey(), enabled: false }
     }
   }

@@ -22,6 +22,12 @@ import { verifyExecutable } from '../../worker/runtime/sandbox'
 import type { AccountCleanup } from '../../worker/onboarding/reconcile'
 import { summaryLine } from '../../contracts/grant-summary'
 
+// The subject an OpenApe service will see; the service verifies the signature itself.
+function tokenSubject(token: string): unknown {
+  try { return (JSON.parse(Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8')) as { sub?: unknown }).sub }
+  catch { return undefined }
+}
+
 interface SetupState { connections: ConnectionView[], owner: string | null, complete: boolean }
 interface PodEntry { connectionId: string, prepared: boolean, broker?: PodBrokerConnection, identity?: PodIdentityReference, registeredName?: string }
 async function discoverIssuer(account: string): Promise<string> {
@@ -100,18 +106,13 @@ export class ConnectionManager {
     return owner ? { owner, metadata: await this.metadata(owner.id) } : null
   }
 
-  /**
-   * The owner's identity token for an OpenApe service that the desktop uses as the owner. The owner's apes login in
-   * ~/.config/apes is the standard credential; Pods' own stored sign-in is the fallback without a matching apes login.
-   */
-  async ownerBearer(signal: AbortSignal, login?: ApesLogin): Promise<string> {
+  /** The owner's identity token for an OpenApe service: the owner's apes (DDISA) login in ~/.config/apes, nothing else. */
+  async ownerBearer(signal: AbortSignal, login: ApesLogin): Promise<string> {
     const selected = await this.ownerAccount()
     if (!selected || selected.owner.state !== 'ready' || typeof selected.metadata.issuer !== 'string') throw new Error('Sign in before using OpenApe Secrets')
-    if (login?.signedIn(selected.metadata.issuer, selected.owner.account)) {
-      const proof = await login.token(signal)
-      if (proof?.issuer === selected.metadata.issuer) return proof.accessToken
-    }
-    return this.owner.bearer(selected.owner.id, selected.metadata.issuer, selected.owner.account, signal)
+    const proof = login.signedIn(selected.metadata.issuer, selected.owner.account) ? await login.token(signal) : null
+    if (!proof || proof.issuer !== selected.metadata.issuer || tokenSubject(proof.accessToken) !== selected.metadata.subject) throw new Error('Log in with apes as the registered owner on this Mac')
+    return proof.accessToken
   }
 
   private async podIdentity(state: SetupState, podId: string): Promise<PodIdentityView> {

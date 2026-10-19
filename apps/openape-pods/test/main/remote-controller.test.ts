@@ -118,6 +118,9 @@ it('never replaces a registration still in the retired keychain format with a fr
   await expect(f.enable()).rejects.toThrow('still in the macOS keychain')
   expect(await readFile(legacy, 'utf8')).toBe(JSON.stringify(f.saved))
   await expect(access(json)).rejects.toThrow()
+  await mkdir(join(f.root, 'remote/legacy/failed'), { recursive: true }); await rename(legacy, join(f.root, 'remote/legacy/failed/registration.enc'))
+  await expect(f.enable()).rejects.toThrow('could not be migrated')
+  await expect(access(json)).rejects.toThrow()
   expect(f.requests).toEqual([])
 })
 

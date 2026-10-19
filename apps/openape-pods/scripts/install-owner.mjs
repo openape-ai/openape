@@ -17,17 +17,22 @@ const run = (file, args, timeout = 30000) => execFileSync(file, args, { encoding
 const manifest = app => JSON.parse(readFileSync(join(app, 'Contents/Resources/pods-distribution.json'), 'utf8'))
 const bundleId = app => run('/usr/bin/plutil', ['-extract', 'CFBundleIdentifier', 'raw', join(app, 'Contents/Info.plist')])
 const gui = () => spawnSync('/usr/bin/pgrep', ['-f', `${options.app}/Contents/MacOS/OpenApe Pods$`]).status === 0
+// Only the default profile: a backup restored into profiles/<uuid> (selected-profile.json) is not installed over.
+if (existsSync(join(options.profile, 'selected-profile.json'))) fail('a restored profile is selected; install:owner supports only the default profile')
 const database = join(options.profile, 'control.sqlite')
 const databaseOpen = () => spawnSync('/usr/sbin/lsof', ['-t', database]).status === 0
 const query = sql => Number(run('/usr/bin/sqlite3', [`file:${database}?mode=ro`, sql]))
 // macOS shows keychain and authorization prompts as SecurityAgent windows (see e2e/fixtures/keychain.ts).
 const dialogs = () => Number(run('/usr/bin/osascript', ['-l', 'JavaScript', '-e', 'ObjC.import("CoreGraphics"); ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0))).filter(w => w.kCGWindowOwnerName === "SecurityAgent").length']))
-async function until(check, seconds, what) {
+async function until(check, seconds) {
   for (const end = Date.now() + seconds * 1000; Date.now() < end; await new Promise(next => setTimeout(next, 500))) {
-    if (check()) return
+    if (check()) return true
   }
-  fail(`${what} within ${seconds} s`)
+  return false
 }
+const busy = () => query('SELECT count(*) FROM run_leases') > 0 ? 'a run is active' : query('SELECT count(*) FROM work_items WHERE state=\'claimed\'') > 0 ? 'network work is claimed' : null
+function quit() { if (gui()) run('/usr/bin/osascript', ['-e', 'with timeout of 20 seconds', '-e', 'tell application id "ai.openape.pods" to quit', '-e', 'end timeout'], 25000) }
+const keychainFiles = directory => existsSync(join(directory, 'remote/registration.enc')) || (existsSync(join(directory, 'credentials')) && readdirSync(join(directory, 'credentials')).some(name => /^[a-f0-9-]{36}\.encrypted$/.test(name)))
 function files(root) {
   const list = []
   const visit = (directory) => {
@@ -52,13 +57,16 @@ if (next.schema.minimum > current.schema.current || next.schema.current < curren
 
 // 2. The profile: no running work, and retired keychain files only for a Developer ID build, which migrates them silently.
 const developerId = spawnSync('/usr/bin/codesign', ['-dv', build.bundle], { encoding: 'utf8' }).stderr.includes('TeamIdentifier=Q994DN23WB')
-if (!developerId && (existsSync(join(options.profile, 'remote/registration.enc')) || (existsSync(join(options.profile, 'credentials')) && readdirSync(join(options.profile, 'credentials')).some(name => name.endsWith('.encrypted'))))) fail('the profile still holds keychain files; install a Developer ID signed build (package:distribution --signed-local) once to migrate them')
-if (query('SELECT count(*) FROM run_leases') > 0) fail('a run is active; retry when it has finished')
-if (query('SELECT count(*) FROM work_items WHERE state=\'claimed\'') > 0) fail('network work is claimed; retry when it has finished')
+if (!developerId && keychainFiles(options.profile)) fail('the profile still holds keychain files; install a Developer ID signed build (package:distribution --signed-local) once to migrate them')
+if (busy()) fail(`${busy()}; retry when it has finished`)
 
-// 3. Quit the GUI only; codex-mcp helpers of agent sessions keep running from the moved bundle.
-if (gui()) run('/usr/bin/osascript', ['-e', 'with timeout of 20 seconds', '-e', 'tell application id "ai.openape.pods" to quit', '-e', 'end timeout'], 25000)
-await until(() => !gui() && !databaseOpen(), 30, 'OpenApe Pods did not quit and release its database')
+// 3. Quit the GUI only; codex-mcp helpers of agent sessions keep running from the moved bundle. Work that started
+// between the check and the quit is found again once the database is released, and the app is started again.
+const running = gui()
+quit()
+if (!await until(() => !gui() && !databaseOpen(), 30)) fail('OpenApe Pods did not quit and release its database within 30 s')
+const late = busy()
+if (late) { if (running) run('/usr/bin/open', ['-g', options.app]); fail(`${late}; the app was started again unchanged`) }
 
 // 4. Paired backup: an APFS clone of the quit profile, verified before the app is touched, plus the previous app.
 const pair = join(options.rollback, `${new Date().toLocaleString('sv-SE').replace(/[-:]/g, '').replace(' ', '-')}-${options.label.replace(/[^\w.-]/g, '-')}`)
@@ -76,8 +84,11 @@ catch (error) {
   rmSync(options.app, { recursive: true, force: true }); renameSync(join(pair, 'OpenApe Pods.app'), options.app)
   fail(`copying the candidate failed and the previous app was put back: ${error.message}`)
 }
-run('/usr/bin/open', ['-g', options.app])
-await until(() => { if (dialogs() > 0) fail(`a keychain or authorization dialog opened; roll back from ${pair}`); return gui() && databaseOpen() }, 60, `OpenApe Pods did not start; roll back from ${pair}`)
+// Start in the background; a start that fails or asks a person ends the run with the backup path, it never waits.
+try { run('/usr/bin/open', ['-g', options.app]) }
+catch (error) { fail(`the new app could not be opened (${error.message}); the previous app and profile are in ${pair}`) }
+let dialog = false
+if (!await until(() => (dialog = dialogs() > 0) || (gui() && databaseOpen()), 60) || dialog) fail(`${dialog ? 'a keychain or authorization dialog opened' : 'OpenApe Pods did not start within 60 s'}; the previous app and profile are in ${pair}`)
 
 // 6. Optional retention: only with --keep N, never the pair just made.
 if (options.keep !== undefined) {
