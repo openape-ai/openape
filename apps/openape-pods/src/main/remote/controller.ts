@@ -2,10 +2,11 @@ import type { InboxPublication } from '../../worker/inbox/outbox'
 import { parseInboxMessagePage } from '../../contracts/inbox'
 import type { InboxApprovals, InboxDecision, InboxMessagePage, InboxMessagesCommand } from '../../contracts/inbox'
 import { createHash, randomBytes, randomUUID } from 'node:crypto'
+import { existsSync } from 'node:fs'
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { setTimeout as delay } from 'node:timers/promises'
-import { safeStorage, shell } from 'electron'
+import { shell } from 'electron'
 import { object, parseOwner, sameOwner, text, uuid } from '@openape/pods-protocol'
 import type { DeviceKeys, Owner } from '@openape/pods-protocol'
 import { challenge, generateKey, proofBytes, publicKey, sha256, signBytes } from '@openape/pods-protocol/crypto'
@@ -35,18 +36,19 @@ export class RemoteController {
   private keys(): DeviceKeys { return { signing: publicKey(this.saved!.signing), agreement: publicKey(this.saved!.agreement) } }
   private async load(): Promise<void> {
     if (this.saved) return
-    if (!safeStorage.isEncryptionAvailable()) throw new Error('Unlock the macOS keychain before registering this desktop')
-    try { this.saved = JSON.parse(safeStorage.decryptString(await readFile(join(this.root, 'remote/registration.enc')))) as Saved }
+    try { this.saved = JSON.parse(await readFile(join(this.root, 'remote/registration.json'), 'utf8')) as Saved }
     catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error
+      // A fresh registration would orphan the remote Pods bound to the one still in the retired keychain format.
+      if (existsSync(join(this.root, 'remote/registration.enc'))) throw new Error('This desktop registration is still in the macOS keychain; start a Developer ID signed OpenApe Pods once to migrate it')
       this.saved = { id: randomUUID(), signing: generateKey(), agreement: generateKey(), enabled: false }
     }
   }
 
   private async save(): Promise<void> {
     const folder = join(this.root, 'remote'); await mkdir(folder, { recursive: true, mode: 0o700 })
-    await writeFile(join(folder, 'registration.pending'), safeStorage.encryptString(JSON.stringify(this.saved)), { mode: 0o600 })
-    await rename(join(folder, 'registration.pending'), join(folder, 'registration.enc'))
+    await writeFile(join(folder, 'registration.pending'), JSON.stringify(this.saved), { mode: 0o600 })
+    await rename(join(folder, 'registration.pending'), join(folder, 'registration.json'))
   }
 
   private async serviceError(response: Response): Promise<RemoteServiceError> {

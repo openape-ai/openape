@@ -15,7 +15,7 @@ import { PodDatabase } from '../../src/worker/storage/database'
 it('imports a selected application file without changing its source or exposing it as a reference or script secret', async () => {
   const root = await mkdtemp(join(tmpdir(), 'pods-program-import-')); const store = new PodDatabase(join(root, 'profile'))
   const resources = new ResourceRegistry(store, () => {}); const control = new ProgramControl(store, resources)
-  const credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
+  const credentials = new CredentialCache(join(root, 'credentials'))
   const pod = store.createPod({ name: 'Import fixture' })
   const manager = new ProgramManager(root, '/unused-helper', credentials, {} as ConnectionManager, async podId => ({ resources: resources.list(podId), epoch: resources.epoch(podId) }), async command => control.execute(command), () => ({}) as never)
   try {

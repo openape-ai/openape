@@ -84,7 +84,7 @@ int main(int argc, char **argv) {
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`
-  const credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: bytes => bytes.toString() })
+  const credentials = new CredentialCache(join(root, 'credentials'))
   const stateId = await new ProgramState(credentials).create({ podId, applicationId })
   const resources: ResourceState = { epoch: 1, resources: [{ id: applicationId, podId, name: definition.name, revision: 1, kind: 'tool', state: 'ready', configuration: { ...definition, type: 'program', stateId, grants: [] } }] }
   const connections = { podConnection: async () => ({ issuer: origin, subject: 'pod@example.test', owner: 'owner@example.test', keyId: 'fixture-key', targetHost: `pods:${podId}`, accessToken: async () => 'synthetic-token' }) } as unknown as ConnectionManager

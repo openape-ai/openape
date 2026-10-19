@@ -158,7 +158,7 @@ describe('ape-shell machine native boundary', () => {
     const podId = randomUUID(); const applicationId = randomUUID()
     const marker = join(setup.root, 'pods', podId, 'workspace', 'marker')
     await writeFile(setup.script, (await readFile(setup.script, 'utf8')).replace(setup.marker, marker))
-    const credentials = new CredentialCache(join(setup.root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
+    const credentials = new CredentialCache(join(setup.root, 'credentials'))
     const stateId = await new ProgramState(credentials).create({ podId, applicationId })
     const scriptHash = digest(await readFile(setup.script)); const executableHash = digest(await readFile(setup.executable))
     const configuration = { type: 'program', name: 'Fixture', cliId: 'fixture', executable: setup.script, executableHash: scriptHash, entryFiles: [{ path: setup.script, hash: scriptHash }], runtime: { executable: setup.executable, executableHash, arguments: [setup.script], readDirectories: [], environment: {}, descriptor: { path: setup.script, hash: scriptHash } }, networkHosts: [], environment: {}, stateId, capability: 'tool.fixture' }

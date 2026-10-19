@@ -1,4 +1,4 @@
-import { randomUUID, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto'
+import { randomUUID } from 'node:crypto'
 import { CredentialCache } from '../src/main/connections/cache'
 import { ProgramState } from '../src/main/programs/state'
 import { mailTLSFixture } from './fixtures/mail-tls'
@@ -86,13 +86,8 @@ int main(int argc, char **argv) {
 it('terminal: the external o365 protocol fixture refreshes and reads through its own persistent application state', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-terminal-o365-')))
   const fixture = await mailTLSFixture(root)
-  const key = randomBytes(32)
   const cacheRoot = join(root, 'protected')
-  const cache = new CredentialCache(cacheRoot, {
-    available: () => true,
-    encrypt: (value) => { const iv = randomBytes(12); const cipher = createCipheriv('aes-256-gcm', key, iv); return Buffer.concat([iv, cipher.update(value), cipher.final(), cipher.getAuthTag()]) },
-    decrypt: (value) => { const cipher = createDecipheriv('aes-256-gcm', key, value.subarray(0, 12)); cipher.setAuthTag(value.subarray(-16)); return Buffer.concat([cipher.update(value.subarray(12, -16)), cipher.final()]).toString() },
-  })
+  const cache = new CredentialCache(cacheRoot)
   const state = new ProgramState(cache); const binding = { podId: randomUUID(), applicationId: randomUUID() }
   try {
     const id = await state.create(binding)

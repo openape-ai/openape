@@ -122,7 +122,7 @@ describe('pod identity credential isolation', () => {
 it('enrolls through a receipt without sending owner credentials and pins the separate decision authority', async () => {
   const { vi } = await import('vitest')
   root = await mkdtemp(join(tmpdir(), 'pods-federated-agent-'))
-  const cache = new CredentialCache(root, { available: () => true, encrypt: value => Buffer.from(value).reverse(), decrypt: value => Buffer.from(value).reverse().toString() })
+  const cache = new CredentialCache(root)
   const manager = new PodIdentityManager(cache)
   const connectionId = randomUUID(); const podId = randomUUID(); const brokerConnectionId = randomUUID()
   const issuer = 'https://pods.example.test'; const decisionIssuer = 'https://id.owner.test'; const owner = 'owner@owner.test'

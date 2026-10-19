@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtemp, readFile, readdir, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -8,11 +8,10 @@ import { CredentialCache } from '../../src/main/connections/cache'
 
 const roots: string[] = []
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
-const cipher = { available: () => true, encrypt: (value: string) => Buffer.from(Array.from(Buffer.from(value), byte => byte ^ 0x5A)), decrypt: (value: Buffer) => Buffer.from(Array.from(value, byte => byte ^ 0x5A)).toString() }
 describe('tool-only credential cache', () => {
-  it('serializes refreshed cache transactions and removes plaintext after use', async () => {
+  it('serializes refreshed cache transactions and removes the working copy after use', async () => {
     const root = await mkdtemp(join(tmpdir(), 'pods-cache-')); roots.push(root)
-    const cache = new CredentialCache(root, cipher); const id = randomUUID()
+    const cache = new CredentialCache(root); const id = randomUUID()
     await cache.connect(id, '{"refresh":"SYNTHETIC_INITIAL"}')
     let firstStarted: () => void = () => {}; let finishFirst: () => void = () => {}
     const started = new Promise<void>((resolve) => { firstStarted = resolve }); const release = new Promise<void>((resolve) => { finishFirst = resolve })
@@ -23,13 +22,13 @@ describe('tool-only credential cache', () => {
     expect(secondEntered).toBe(false); finishFirst()
     expect(await Promise.all([first, second])).toEqual(['first', 'second'])
     expect(await readdir(join(root, 'temporary'))).toEqual([])
-    expect((await readFile(join(root, `${id}.encrypted`))).includes(Buffer.from('SYNTHETIC'))).toBe(false)
-    const reopened = new CredentialCache(root, cipher)
+    expect((await stat(join(root, `${id}.connection.json`))).mode & 0o777).toBe(0o600)
+    const reopened = new CredentialCache(root)
     await reopened.withCache(id, async file => expect(await readFile(file, 'utf8')).toContain('SYNTHETIC_REFRESHED'))
   })
   it('retains a valid rotated token when the subsequent read fails', async () => {
     const root = await mkdtemp(join(tmpdir(), 'pods-cache-')); roots.push(root)
-    const id = randomUUID(); const cache = new CredentialCache(root, cipher)
+    const id = randomUUID(); const cache = new CredentialCache(root)
     await cache.connect(id, '{"refresh":"OLD_FIXTURE"}')
     await expect(cache.withCache(id, async (file) => {
       await writeFile(file, '{"refresh":"ROTATED_FIXTURE"}')
@@ -37,22 +36,20 @@ describe('tool-only credential cache', () => {
     })).rejects.toThrow('Mail read failed')
     await cache.withCache(id, async file => expect(await readFile(file, 'utf8')).toContain('ROTATED_FIXTURE'))
   })
-  it('blocks a locked store and preserves last valid encrypted cache on corrupt tool output', async () => {
+  it('preserves the last valid cache on corrupt tool output', async () => {
     const root = await mkdtemp(join(tmpdir(), 'pods-cache-')); roots.push(root)
-    const id = randomUUID(); const cache = new CredentialCache(root, cipher)
+    const id = randomUUID(); const cache = new CredentialCache(root)
     await cache.connect(id, '{"refresh":"VALID_FIXTURE"}')
-    const before = await readFile(join(root, `${id}.encrypted`))
+    const before = await readFile(join(root, `${id}.connection.json`))
     await expect(cache.withCache(id, async (file) => { await writeFile(file, 'corrupt'); return null })).rejects.toThrow('JSON')
-    expect(await readFile(join(root, `${id}.encrypted`))).toEqual(before)
-    const locked = new CredentialCache(root, { ...cipher, available: () => false })
-    await expect(locked.withCache(id, async () => 'must not run')).rejects.toThrow('locked')
+    expect(await readFile(join(root, `${id}.connection.json`))).toEqual(before)
     expect(await readdir(join(root, 'temporary'))).toEqual([])
   })
 })
 
 it('does not expose credential fragments in corrupt JSON diagnostics', async () => {
   const root = await mkdtemp(join(tmpdir(), 'pods-cache-')); roots.push(root)
-  const cache = new CredentialCache(root, cipher)
+  const cache = new CredentialCache(root)
   let message = ''
   try { await cache.connect(randomUUID(), 'SYNTHETIC_SECRET_LEAK') }
   catch (error) { message = (error as Error).message }
@@ -62,7 +59,7 @@ it('does not expose credential fragments in corrupt JSON diagnostics', async () 
 
 it('cancels a queued connection read without entering the credential workspace', async () => {
   const root = await mkdtemp(join(tmpdir(), 'pods-cache-')); roots.push(root)
-  const cache = new CredentialCache(root, cipher); const id = randomUUID()
+  const cache = new CredentialCache(root); const id = randomUUID()
   await cache.connect(id, '{"refresh":"SYNTHETIC_INITIAL"}')
   let release: () => void = () => {}; let started: () => void = () => {}
   const held = new Promise<void>((resolve) => { release = resolve }); const entered = new Promise<void>((resolve) => { started = resolve })

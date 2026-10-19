@@ -100,10 +100,17 @@ export class ConnectionManager {
     return owner ? { owner, metadata: await this.metadata(owner.id) } : null
   }
 
-  /** The owner's identity token for an OpenApe service that the desktop uses as the owner. */
-  async ownerBearer(signal: AbortSignal): Promise<string> {
+  /**
+   * The owner's identity token for an OpenApe service that the desktop uses as the owner. The owner's apes login in
+   * ~/.config/apes is the standard credential; Pods' own stored sign-in is the fallback without a matching apes login.
+   */
+  async ownerBearer(signal: AbortSignal, login?: ApesLogin): Promise<string> {
     const selected = await this.ownerAccount()
     if (!selected || selected.owner.state !== 'ready' || typeof selected.metadata.issuer !== 'string') throw new Error('Sign in before using OpenApe Secrets')
+    if (login?.signedIn(selected.metadata.issuer, selected.owner.account)) {
+      const proof = await login.token(signal)
+      if (proof?.issuer === selected.metadata.issuer) return proof.accessToken
+    }
     return this.owner.bearer(selected.owner.id, selected.metadata.issuer, selected.owner.account, signal)
   }
 

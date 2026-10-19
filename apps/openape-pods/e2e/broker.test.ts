@@ -24,7 +24,7 @@ async function setup(packaged = false, slow = false, unicode = false) {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-tool-broker-')))
   const privateRoot = join(root, 'private'); await mkdir(privateRoot)
   const credentialRoot = join(root, 'credentials')
-  const cache = new CredentialCache(credentialRoot, { available: () => true, encrypt: value => Buffer.from(Buffer.from(value).map(byte => byte ^ 85)), decrypt: value => Buffer.from(value.map(byte => byte ^ 85)).toString() })
+  const cache = new CredentialCache(credentialRoot)
   const connectionId = randomUUID(); const siblingId = randomUUID()
   await cache.connect(connectionId, JSON.stringify({ access_token: 'SYNTHETIC_ASSIGNED_TOKEN' }))
   await cache.connect(siblingId, JSON.stringify({ access_token: 'SYNTHETIC_OTHER_TOKEN' }))
