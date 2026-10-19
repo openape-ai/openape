@@ -33,22 +33,35 @@ function fixture() {
   return { store, resources, pod, dispatcher, tool }
 }
 
-it('forwards a validated tool summary separately from the unchanged program arguments', async () => {
+it.each([undefined, { id: 'selected-objects', title: 'Review selected objects', size: 2 }])('forwards approval presentation separately from unchanged program arguments (%j)', async (batch) => {
   const f = fixture()
   f.tool.mockResolvedValue({ exitCode: 0, stdout: '{}', stderr: '' } as never)
   const call = { application: 'fixture', argv: ['read', '--message', 'immutable-1'], approvalWaitMs: 0 }
   const summary = { title: 'Review this selected object', description: 'Synthetic review context', link: 'https://example.test/review/1' }
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
     await hooks.execution!.authorized({ authority: await hooks.authorizeStart!(), write: false })
-    await hooks.request('tools.invoke', { ...call, summary }, signal)
+    await hooks.request('tools.invoke', { ...call, summary, ...(batch ? { batch } : {}) }, signal)
     await hooks.execution!.completed!({ exitCode: 0 })
     return { status: 'completed', summary: 'Synthetic tool call completed', completedInputIds: input.eventIds, gapIds: [] }
   })
   const id = f.dispatcher.start(f.pod.id)
   await expect.poll(() => f.dispatcher.runs.get(id).state).toBe('completed')
-  expect(f.tool).toHaveBeenCalledWith(call, expect.any(AbortSignal), expect.any(Object), summary)
+  expect(f.tool).toHaveBeenCalledWith(call, expect.any(AbortSignal), expect.any(Object), summary, batch)
   expect(f.tool).toHaveBeenCalledOnce()
   expect(unresolvedOperation(f.store, f.pod.id)).toBe(false)
+})
+
+it.each(['http.request', 'tools.invoke'])('refuses batch metadata on unsupported %s targets before dispatch', async (operation) => {
+  const f = fixture()
+  vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
+    await hooks.execution!.authorized({ authority: await hooks.authorizeStart!(), write: false })
+    await expect(hooks.request(operation, { ...(operation === 'http.request' ? { url: 'https://example.test/' } : { sshInventory: 'fixture' }), batch: { id: 'selected-objects' } }, signal)).rejects.toThrow('Approval batches require an assigned application call')
+    await hooks.execution!.completed!({ exitCode: 0 })
+    return { status: 'completed', summary: 'Unsupported batch refused', completedInputIds: input.eventIds, gapIds: [] }
+  })
+  const id = f.dispatcher.start(f.pod.id)
+  await expect.poll(() => f.dispatcher.runs.get(id).state).toBe('completed')
+  expect(f.tool).not.toHaveBeenCalled()
 })
 
 it('does not turn a verified failed root process into an external effect or prevent the next trigger', async () => {

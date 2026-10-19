@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { createHash } from 'node:crypto'
+import type { OpenApeGrantBatch } from '@openape/core'
 import { mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -15,7 +16,7 @@ vi.mock('../../src/worker/runtime/ape-shell', () => ({ launchApeShell: vi.fn() }
 const roots: string[] = []
 afterEach(async () => { vi.clearAllMocks(); for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
 
-async function invoke(frames: object[], options: { exitCode?: number, stdout?: string } = {}) {
+async function invoke(frames: object[], options: { exitCode?: number, stdout?: string, batch?: OpenApeGrantBatch } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-tool-refusal-'))); roots.push(root)
   const executable = await realpath(process.execPath)
   const hash = createHash('sha256').update(await readFile(executable)).digest('hex')
@@ -29,7 +30,7 @@ async function invoke(frames: object[], options: { exitCode?: number, stdout?: s
     return { stdout, stderr, authority: channel, processId: Promise.resolve(123), completed: Promise.resolve(options.exitCode ?? 1), cancel: vi.fn() } as never
   })
   const assignment: ToolAssignment = { id: 'application', identityConnection: { issuer: 'https://id.example.test', subject: 'pod@example.test', owner: 'owner@example.test', keyId: 'key', targetHost: 'pods:fixture', accessToken: async () => 'SYNTHETIC_POD_TOKEN' }, program: { path: executable, name: 'fixture', sha256: hash }, argv: ['read'], reach: { level: 'owner', protectedPaths: [] }, capability: 'tool.fixture.invoke', executable, executableHash: hash, entryFiles: [], prefix: [], runtimeDirectories: [], environment: {}, networkPorts: [], approvalWaitMs: 0 }
-  const broker = new PodToolBroker('/unused/helper', root, { runtime: { executable, cli: '/unused/ape-shell.mjs' }, operationId: 'operation', targetHost: 'pods:fixture', observer: { authorized, notStarted } }, new CredentialCache(root))
+  const broker = new PodToolBroker('/unused/helper', root, { runtime: { executable, cli: '/unused/ape-shell.mjs' }, operationId: 'operation', targetHost: 'pods:fixture', batch: options.batch, observer: { authorized, notStarted } }, new CredentialCache(root))
   const result = broker.execute(assignment, { toolId: assignment.id, argv: assignment.argv }, { capabilities: [assignment.capability], assertCurrent: () => {}, signal: AbortSignal.timeout(5000) })
   return { result, authorized, notStarted }
 }
@@ -57,10 +58,12 @@ it.each([
   expect(f.authorized).not.toHaveBeenCalled()
 })
 
-it('keeps a pending decision separate from a refusal', async () => {
-  const f = await invoke([{ state: 'pending', grantId: 'waiting-grant', approvalUrl: 'https://id.example.test/approval' }], { exitCode: 75 })
+it('passes batch presentation to ape-shell as single-use and keeps pending separate from refusal', async () => {
+  const batch = { id: 'selected-calls', title: 'Review selected calls', size: 2 }
+  const f = await invoke([{ state: 'pending', grantId: 'waiting-grant', approvalUrl: 'https://id.example.test/approval' }], { exitCode: 75, batch })
   expect(await f.result).toEqual({ exitCode: 75, stdout: '', stderr: '', pending: { grantId: 'waiting-grant', approvalUrl: 'https://id.example.test/approval' } })
   expect(f.authorized).not.toHaveBeenCalled(); expect(f.notStarted).not.toHaveBeenCalled()
+  expect(vi.mocked(launchApeShell).mock.calls[0]![5]).toMatchObject({ batch, grantType: 'once' })
 })
 
 it('keeps authorization infrastructure errors retryable instead of marking them denied', async () => {

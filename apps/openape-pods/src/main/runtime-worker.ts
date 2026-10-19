@@ -1,7 +1,9 @@
 import type { CliRequest } from '../contracts/cli'
+import { parseGrantBatch } from '@openape/grants'
 import type { ProgramCall, GrantPresentation  } from './broker/authorization'
 import { executeRecordedProgram } from './programs/effect-execution'
 import type { ProgramExecutionCheck } from '../contracts/program-execution'
+import { isProgramCall } from '../contracts/program-execution'
 import { podIdentityFile } from './connections/identity-file'
 import type { InboxOutboxCommand } from '../worker/inbox/outbox'
 import type { DecisionSources, InboxDecisions } from './inbox/decisions'
@@ -1001,6 +1003,8 @@ export class RuntimeWorker {
   private async executeService(request: ServiceRequest): Promise<unknown> {
     if (!request || typeof request.id !== 'string' || !/^[a-f0-9-]{36}$/.test(request.id) || this.services.has(request.id) || this.services.size - this.parked.size >= 16) throw new Error('Invalid or excessive broker request')
     if (request.kind !== undefined && !serviceKinds.includes(request.kind)) throw new Error('Unsupported broker service')
+    const batch = parseGrantBatch(request.batch)
+    if (batch && (request.kind !== undefined || !isProgramCall(request.body))) throw new Error('Approval batches require an assigned application call')
     if (this.host.oneShot && request.kind === 'credential') throw new Error('Assigned script secrets are not supported by ape-pods yet')
     const scope = parseServiceScope(request.scope)
     const controller = new AbortController(); this.services.set(request.id, controller)
@@ -1156,6 +1160,7 @@ export class RuntimeWorker {
             operationId: request.id,
             targetHost: connection.targetHost,
             summary: title,
+            batch,
             runtime: { executable: process.execPath, cli: this.host.apesCli },
             observer: { ...executionObserver, authorized: async (value) => { if (!value.grantId) throw new AuthorityError('An application call requires its own IdP grant'); await executionObserver.authorized(value); await observe({ grantId: value.grantId, issuer, title: title.title, state: 'approved' }) } },
           },
