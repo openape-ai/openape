@@ -13,13 +13,12 @@ export default defineComponent({
   emits: ['selected', 'navigate'],
   setup() { return { access: usePodAccess() } },
   data() {
-    return { now: Date.now(), pods: [] as StoredPod[], podId: '', runId: '', observations: {} as Record<string, string>, view: { runs: [], events: [] } as RunView, busy: false, error: '', scheduleError: '', pending: 0, blocked: 0, timer: null as ReturnType<typeof setTimeout> | null, closed: false, loaded: false }
+    return { now: Date.now(), pods: [] as StoredPod[], podId: '', runId: '', view: { runs: [], events: [] } as RunView, busy: false, error: '', scheduleError: '', pending: 0, blocked: 0, timer: null as ReturnType<typeof setTimeout> | null, closed: false, loaded: false }
   },
   computed: {
     selectedRun() { return this.view.runs.find(run => run.id === this.runId) ?? this.view.runs[0] },
     jevEvaluations() { return this.view.events.filter(event => event.type === 'jev').map(event => ({ sequence: event.sequence, ...event.data as { model: string, attempts: number, durationMs: number, usage: { input_tokens: number, output_tokens: number } } })) },
     steps() { return runSteps(this.view.events, this.selectedRun?.state) },
-    needsRecovery() { return !!this.selectedRun && ['interrupted', 'failed', 'cancelled', 'blocked'].includes(this.selectedRun.state) && this.selectedRun.recovery?.state !== 'retryQueued' && (!this.selectedRun.automaticRecovery || this.selectedRun.automaticRecovery.disposition === 'hold' || this.selectedRun.automaticRecovery.retainedInputs === true) },
     hasActiveRun() { return this.view.runs.some(run => run.state === 'running') },
     actionFailure() { return runFailure(this.error || (this.scheduleError !== this.selectedRun?.error ? this.scheduleError : '') || null) },
     timing() { return this.view.timing ? { active: duration(this.view.timing.activeMs), waiting: duration(this.view.timing.waitingMs) } : null },
@@ -70,7 +69,7 @@ export default defineComponent({
   <article class="card runs-panel">
     <div class="card-heading">
       <h2>{{ t('Run history') }}</h2>
-      <button v-if="pods.length && (!needsRecovery || hasActiveRun)" class="primary" :disabled="busy || hasActiveRun" @click="act({ type: 'start', podId })">
+      <button v-if="pods.length" class="primary" :disabled="busy || hasActiveRun" @click="act({ type: 'start', podId })">
         {{ t('Run now') }}
       </button>
     </div>
@@ -90,7 +89,7 @@ export default defineComponent({
         <p class="muted run-date">
           {{ dateTime(selectedRun.startedAt) }}<span v-if="timing"> · {{ t('Active: {p0} · Approval wait: {p1}', { p0: timing.active, p1: timing.waiting }) }}</span>
         </p>
-        <div :class="failure || needsRecovery ? 'run-problem' : 'run-outcome'" role="status">
+        <div :class="failure ? 'run-problem' : 'run-outcome'" role="status">
           <h3>{{ diagnostic(runHeadline(selectedRun)) }}</h3>
           <p v-if="failure && selectedRun.error" class="run-cause">
             <strong>{{ t('Cause') }}:</strong> {{ diagnostic(selectedRun.error) }}
@@ -109,27 +108,6 @@ export default defineComponent({
           </button>
           <p v-if="selectedRun.automaticRecovery" class="automatic-recovery">
             {{ selectedRun.automaticRecovery.disposition === 'retry' ? t('Automatic retry at {p0}', { p0: dateTime(selectedRun.automaticRecovery.nextAt!) }) : selectedRun.automaticRecovery.disposition === 'isolated' ? t('This attempt stopped. Future scheduled runs remain enabled.') : selectedRun.automaticRecovery.disposition === 'continued' ? t('Work continued in a later attempt.') : diagnostic(selectedRun.automaticRecovery.reason) }}
-          </p>
-          <div v-if="needsRecovery" class="next-action">
-            <strong>{{ t('Next step') }}</strong>
-            <p v-if="selectedRun.recovery?.state === 'ready'">
-              {{ t('The check is complete. You can retry the unfinished work.') }}
-            </p>
-            <p v-else>
-              {{ t('Check whether this run can be retried safely. This check does not start the script.') }}
-            </p>
-            <button v-if="selectedRun.recovery?.state === 'ready'" class="primary" :disabled="busy || hasActiveRun || !!view.effects?.length" @click="act({ type: 'recover', podId, runId: selectedRun.id, action: 'retry' })">
-              {{ t('Retry unfinished work') }}
-            </button>
-            <button v-else class="primary" :disabled="busy || hasActiveRun" @click="act({ type: 'recover', podId, runId: selectedRun.id, action: 'inspect' })">
-              {{ t('Prepare retry') }}
-            </button>
-            <p v-if="selectedRun.recovery?.error" class="muted">
-              {{ diagnostic(runFailure(selectedRun.recovery.error)?.help) }}
-            </p>
-          </div>
-          <p v-else-if="selectedRun.recovery?.state === 'retryQueued'">
-            {{ t('Retry queued. The new run will appear here.') }}
           </p>
           <button v-if="selectedRun.state === 'running'" class="secondary" :disabled="busy" @click="act({ type: 'cancel', podId, runId: selectedRun.id })">
             {{ t('Cancel run') }}
@@ -159,20 +137,6 @@ export default defineComponent({
           {{ evaluation.model }} · {{ t('{p0} attempts · {p1} ms · tokens in/out: {p2}/{p3}', { p0: evaluation.attempts, p1: evaluation.durationMs, p2: evaluation.usage.input_tokens, p3: evaluation.usage.output_tokens }) }}
         </p>
       </section>
-      <section v-if="view.effects?.length" class="http-review">
-        <h3>{{ t('Review uncertain effects') }}</h3>
-        <article v-for="effect in view.effects" :key="effect.key">
-          <p>{{ effect.authority ? t("Inspect the script's files and destinations. Recording an observation does not retry the run.") : t('Inspect the destination before retrying. Pods cannot tell whether a request without a receipt was delivered.') }}</p>
-          <label>{{ t('Your observation') }}<textarea v-model="observations[effect.key]" maxlength="4000" /></label>
-          <button :disabled="busy || !observations[effect.key]?.trim()" @click="act({ type: 'resolveHttp', podId, runId: effect.runId, key: effect.key, applied: true, evidence: observations[effect.key] ?? '', ...(effect.authority ? { programOutcome: 'partial' as const } : {}) })">
-            {{ effect.authority ? t('Observed partial processing') : t('Already delivered') }}
-          </button>
-          <button :disabled="busy || !observations[effect.key]?.trim()" @click="act({ type: 'resolveHttp', podId, runId: effect.runId, key: effect.key, applied: false, evidence: observations[effect.key] ?? '' })">
-            {{ effect.authority ? t('No effects observed') : t('Not delivered · allow retry') }}
-          </button>
-          <small>{{ effect.key }}</small>
-        </article>
-      </section>
       <div v-if="actionFailure" class="run-problem" role="alert">
         <strong>{{ diagnostic(actionFailure.title) }}</strong><p>{{ diagnostic(actionFailure.help) }}</p>
         <button v-if="actionFailure.action" class="secondary" @click="$emit('navigate', actionFailure.action)">
@@ -182,9 +146,6 @@ export default defineComponent({
       <details v-if="blocked || pending" class="queued-starts">
         <summary>{{ t('Other waiting starts: {p0}', { p0: blocked + pending }) }}</summary>
         <p>{{ t('These are queued start requests, not a count of emails or files. Repeated clicks may create several requests.') }}</p>
-        <button v-if="blocked" class="secondary" :disabled="busy || hasActiveRun" @click="act({ type: 'retryQueue', podId })">
-          {{ t('Retry unstarted requests') }}
-        </button>
       </details>
       <details class="run-details">
         <summary>{{ t('Technical details') }}</summary>
@@ -222,8 +183,6 @@ export default defineComponent({
 .run-problem, .run-outcome { padding: 20px; border-radius: 12px; background: light-dark(#edf3e9, #233829); }
 .run-problem { background: #fff5f0; color: #573e31; border: 1px solid #ebcfbf; }
 h3 { margin: 0 0 12px; } p { line-height: 1.5; }
-.next-action { border-top: 1px solid #81908344; padding-top: 16px; margin-top: 18px; }
-.next-action strong { display: block; } .next-action p { margin: 8px 0 14px; }
 .run-work { margin: 26px 0; }
 .run-steps { list-style: none; padding: 0; display: grid; gap: 14px; }
 .run-steps li { display: flex; align-items: start; gap: 12px; }
@@ -237,5 +196,4 @@ h3 { margin: 0 0 12px; } p { line-height: 1.5; }
 label { display: grid; gap: 8px; margin-top: 20px; }
 select { padding: 10px; border: 1px solid currentColor; border-radius: 8px; font: inherit; background: transparent; color: inherit; }
 pre, code, small { white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
-.http-review { margin: 20px 0; } .http-review small { display: block; margin: 8px 0; }
 </style>

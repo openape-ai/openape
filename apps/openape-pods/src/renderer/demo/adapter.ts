@@ -147,14 +147,6 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
         if (!run || run.state !== 'running') throw new Error('Run is not active')
         run.state = 'cancelled'; run.finishedAt = Date.now(); changed()
       }
-      else if (command.type === 'recover') {
-        const run = pod.runs.runs.find(run => run.id === command.runId)
-        if (!run) throw new Error('Run not found')
-        if (command.action === 'retry') {
-          start(pod)
-        }
-        else { run.recovery = { state: 'ready', error: null }; changed() }
-      }
       else if (command.type !== 'list') {
         return unavailable(command.type)
       }

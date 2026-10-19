@@ -17,7 +17,7 @@ import { WorkspaceDetails } from './details'
 function assertPodIdle(store: PodDatabase, podId: string): void {
   if (store.db.prepare('SELECT 1 FROM dependency_domains LIMIT 1').get()) throw new Error('Finish dependency preparation before changing application data')
   const run = store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(podId)
-  if (run) throw new Error(`Run ${String(run.run_id)} of this Pod is still active. Wait until it ends, or cancel or recover it (recovery list, then recover or cancel), before changing its definition.`)
+  if (run) throw new Error(`Run ${String(run.run_id)} of this Pod is still active. Wait until it ends, or cancel it, before changing its definition.`)
   if (store.db.prepare('SELECT 1 FROM program_leases WHERE pod_id=?').get(podId)) throw new Error('Close the application terminal of this Pod before changing its definition')
 }
 
@@ -173,7 +173,7 @@ export class DefinitionWorkspace {
       const validated = this.store.db.prepare('SELECT script_hash FROM script_drafts WHERE id=?').get(draftId)
       if (validated?.script_hash !== source.view.contentHash) throw new Error('Validate this instance against the selected definition before activation')
       if (this.store.db.prepare('SELECT 1 FROM run_leases WHERE pod_id=?').get(podId)) throw new Error('Wait for the active run to settle before updating its definition')
-      if (this.store.db.prepare('SELECT 1 FROM accepted_events WHERE pod_id=? AND state IN (\'pending\',\'claimed\',\'blocked\') UNION ALL SELECT 1 FROM effect_ledger WHERE pod_id=? AND state!=\'completed\' LIMIT 1').get(podId, podId)) throw new Error('Resolve pending instance inputs, decisions and uncertain effects before selecting a new definition version')
+      if (this.store.db.prepare('SELECT 1 FROM accepted_events WHERE pod_id=? AND state IN (\'pending\',\'claimed\') LIMIT 1').get(podId)) throw new Error('Resolve pending instance inputs before selecting a new definition version')
       const update = () => {
         const pod = this.store.getPod(podId)
         new WorkspaceDetails(this.store, this.resources).execute({ type: 'activate', podId, hash: source.view.contentHash, expectedActive: draft.expected_active as string | null, assignmentRevision: pod.bindingRevision }, true)

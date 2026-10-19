@@ -17,9 +17,10 @@ export class EffectLedger {
       if (existing) {
         if (existing.operation !== operation || existing.input_hash !== hash) throw new Error('Idempotency key has conflicting effect input')
         if (existing.state === 'completed') return { execute: false, result: JSON.parse(existing.result as string) }
-        throw new Error('Effect outcome is unknown; reconcile before retrying')
+        if (existing.state === 'intent' && existing.run_id === runId) throw new Error('Effect is already being sent by this run')
       }
-      this.store.db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,?,\'intent\',NULL)').run(podId, key, operation, hash, runId)
+      // An uncertain earlier outcome never refuses its key: the effect is sent again and the script owns idempotency.
+      this.store.db.prepare('INSERT INTO effect_ledger VALUES(?,?,?,?,?,\'intent\',NULL) ON CONFLICT(pod_id,effect_key) DO UPDATE SET run_id=excluded.run_id,state=\'intent\',result=NULL').run(podId, key, operation, hash, runId)
       return { execute: true }
     })
   }
@@ -40,14 +41,5 @@ export class EffectLedger {
   markUnknown(podId: string, key: string): void {
     const updated = this.store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE pod_id=? AND effect_key=? AND state=\'intent\'').run(podId, key)
     if (updated.changes !== 1) throw new Error('Effect is not awaiting completion')
-  }
-
-  reconcile(podId: string, key: string, outcome: { applied: true, result: unknown } | { applied: false }): void {
-    const record = this.store.db.prepare('SELECT state FROM effect_ledger WHERE pod_id=? AND effect_key=?').get(podId, key)
-    if (!record || record.state !== 'unknown') throw new Error('Effect is not awaiting reconciliation')
-    if (!outcome.applied) { this.store.db.prepare('DELETE FROM effect_ledger WHERE pod_id=? AND effect_key=? AND state=\'unknown\'').run(podId, key); return }
-    const body = JSON.stringify(outcome.result)
-    if (!body || Buffer.byteLength(body) > 32768) throw new Error('Invalid reconciliation evidence')
-    this.store.db.prepare('UPDATE effect_ledger SET state=\'completed\',result=? WHERE pod_id=? AND effect_key=? AND state=\'unknown\'').run(body, podId, key)
   }
 }

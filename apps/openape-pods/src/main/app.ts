@@ -389,12 +389,6 @@ async function start(): Promise<void> {
   ipcMain.handle(channels.runs, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     const command = parseRunCommand(value)
-    if (command.type === 'resolveHttp') {
-      if (!window) throw new Error('Owner window is unavailable')
-      const root = command.key === `owner-script:${command.runId}`
-      const answer = await dialog.showMessageBox(window, { type: 'warning', title: root ? t('Resolve uncertain script effects') : t('Resolve uncertain delivery'), message: root ? command.applied ? t('Record the observed partial processing?') : t('Record that no effects were observed?') : command.applied ? t('Record this request as already delivered?') : t('Allow this request to be sent again?'), detail: command.evidence, buttons: [t('Cancel'), t('Confirm observation')], defaultId: 0, cancelId: 0 })
-      if (answer.response !== 1) return worker.runs({ type: 'list', podId: command.podId, runId: command.runId })
-    }
     return worker.runs(command)
   })
   ipcMain.handle(channels.sharing, async (event, value: unknown, ...extra: unknown[]) => {

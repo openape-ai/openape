@@ -23,7 +23,7 @@ describe('pod workspace shell', () => {
     expect(wrapper.get('[role="alert"]').text()).toContain('Reopen Pods')
     wrapper.unmount(); expect(unsubscribe).toHaveBeenCalledOnce()
   })
-  it('guides a stopped run from Overview to recovery without queueing a new start', async () => {
+  it('guides a stopped run from Overview to its run history without queueing a new start', async () => {
     const podId = '00000000-0000-4000-8000-000000000001'
     const run = { id: '00000000-0000-4000-8000-000000000002', podId, scriptHash: 'a'.repeat(64), state: 'cancelled', startedAt: 1, finishedAt: 2, summary: '', error: 'Storage limit reached', checkpointRevision: 0 }
     const runs = vi.fn().mockResolvedValue({ runs: [run], events: [] })
@@ -45,7 +45,7 @@ describe('pod workspace shell', () => {
     } as unknown as typeof window.pods
     const wrapper = mount(App, { props: { initialPodId: '00000000-0000-4000-8000-000000000001' } }); await flushPromises()
     await wrapper.findAll('button').find(button => button.text() === 'Prepare retry')!.trigger('click'); await flushPromises()
-    expect(wrapper.get('#section-runs').text()).toContain('Check whether this run can be retried safely')
+    expect(wrapper.get('#section-runs').text()).toContain('Storage limit reached')
     expect(runs.mock.calls.every(([command]) => command.type === 'list')).toBe(true)
     await wrapper.findAll('button').find(button => button.text() === 'Open App settings')!.trigger('click'); await flushPromises()
     expect(wrapper.text()).toContain('App settings')

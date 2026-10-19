@@ -191,7 +191,7 @@ export function parseCentralCommand(value: unknown): CentralCommand {
     details: ['describe', 'activate'],
     scripts: ['save', 'validate', 'activate', 'prepareDependencies'],
     scheduling: ['save', 'lifecycle'],
-    runs: ['start', 'cancel', 'recover', 'retryQueue', 'resolveHttp'],
+    runs: ['start', 'cancel'],
     resources: ['saveVariable', 'removeVariable', 'revoke'],
     // Package files travel only through the desktop; a browser reviews and configures an import. Export stays on the desktop.
     sharing: ['list', 'show', 'configure', 'commit', 'complete', 'cancel', 'bind', 'prepareDependencies'],
