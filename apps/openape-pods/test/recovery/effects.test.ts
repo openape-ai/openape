@@ -35,7 +35,7 @@ describe('fencing and effect receipts', () => {
   it('returns a completed idempotent result and rejects conflicting input', () => {
     const f = fixture(); let externalEffects = 0
     const first = f.ledger.begin(f.pod.id, f.run.id, 'effect-1', 'fixture.write', { value: 1 })
-    if (first.execute) { externalEffects++; f.ledger.complete(f.pod.id, 'effect-1', { receipt: 'synthetic-receipt' }) }
+    if (first.execute) { externalEffects++; f.ledger.complete(f.pod.id, f.run.id, 'effect-1', { receipt: 'synthetic-receipt' }) }
     expect(f.ledger.begin(f.pod.id, f.run.id, 'effect-1', 'fixture.write', { value: 1 })).toEqual({ execute: false, result: { receipt: 'synthetic-receipt' } })
     expect(externalEffects).toBe(1)
     expect(() => f.ledger.begin(f.pod.id, f.run.id, 'effect-1', 'fixture.write', { value: 2 })).toThrow('conflicting')
@@ -44,12 +44,24 @@ describe('fencing and effect receipts', () => {
     const f = fixture(); f.ledger.begin(f.pod.id, f.run.id, 'effect-1', 'fixture.write', {})
     new RunDispatcher(f.store, f.resources, { helper: '/unused', executable: '/unused', entry: '/unused', runtimeDirectories: [], environment: {}, binary: '/unused', catalog: '/unused', manifest: '/unused', sdkHost: '/unused' })
     expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()!.state).toBe('unknown')
-    expect(() => f.ledger.complete(f.pod.id, 'effect-1', { id: 'synthetic-once' })).toThrow('not awaiting')
+    expect(() => f.ledger.complete(f.pod.id, f.run.id, 'effect-1', { id: 'synthetic-once' })).toThrow('not awaiting')
     f.store.db.prepare('DELETE FROM run_leases').run()
     const next = f.runs.reserve(f.pod.id, f.store.getPod(f.pod.id).activeScript!, 0).run
     expect(f.ledger.begin(f.pod.id, next.id, 'effect-1', 'fixture.write', {})).toEqual({ execute: true })
-    f.ledger.complete(f.pod.id, 'effect-1', { id: 'synthetic-once' })
+    f.ledger.complete(f.pod.id, next.id, 'effect-1', { id: 'synthetic-once' })
     expect(f.store.db.prepare('SELECT state,run_id,result FROM effect_ledger').get()).toMatchObject({ state: 'completed', run_id: next.id, result: JSON.stringify({ id: 'synthetic-once' }) })
+  })
+  it('refuses a key an earlier run is still sending and lets only the owning run settle it', () => {
+    const f = fixture()
+    expect(f.ledger.begin(f.pod.id, f.run.id, 'effect-1', 'fixture.write', {})).toEqual({ execute: true })
+    // The earlier run ended within this worker while its request is still in flight.
+    f.runs.finish(f.run.id, 'failed', 'Stopped', null); f.store.db.prepare('DELETE FROM run_leases').run()
+    const next = f.runs.reserve(f.pod.id, f.store.getPod(f.pod.id).activeScript!, 0).run
+    expect(() => f.ledger.begin(f.pod.id, next.id, 'effect-1', 'fixture.write', {})).toThrow('still being sent by an earlier run')
+    expect(() => f.ledger.complete(f.pod.id, next.id, 'effect-1', { id: 'other' })).toThrow('not awaiting')
+    expect(() => f.ledger.markUnknown(f.pod.id, next.id, 'effect-1')).toThrow('not awaiting')
+    f.ledger.markUnknown(f.pod.id, f.run.id, 'effect-1')
+    expect(f.ledger.begin(f.pod.id, next.id, 'effect-1', 'fixture.write', {})).toEqual({ execute: true })
   })
 })
 
@@ -88,7 +100,7 @@ it('returns the original HTTP receipt after its run and folder have been pruned'
   const input = { url: 'https://delivery.example.test', body: 'once' }
   let deliveries = 0
   if (f.ledger.begin(f.pod.id, f.run.id, 'delivery', 'http.request', input).execute) {
-    deliveries++; f.ledger.complete(f.pod.id, 'delivery', { status: 200, body: 'confirmed' })
+    deliveries++; f.ledger.complete(f.pod.id, f.run.id, 'delivery', { status: 200, body: 'confirmed' })
   }
   f.runs.finish(f.run.id, 'completed', 'Sent', null)
   f.store.db.prepare('UPDATE runs SET started_at=0 WHERE id=?').run(f.run.id)
@@ -106,6 +118,18 @@ it('returns the original HTTP receipt after its run and folder have been pruned'
   expect(deliveries).toBe(1)
   expect(() => f.ledger.begin(f.pod.id, current.id, 'delivery', 'http.request', { ...input, body: 'changed' })).toThrow('conflicting')
   expect(() => f.store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE effect_key=\'delivery\'').run()).toThrow('CHECK')
+})
+
+it('prunes an old run whose external input failed, since nothing retries a failed input', async () => {
+  const f = fixture(); const retention = new RunRetention(f.store)
+  f.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state,run_id) VALUES(\'failed-input\',?,\'webhook\',\'k\',\'{}\',1,\'failed\',?)').run(f.pod.id, f.run.id)
+  f.store.db.prepare('UPDATE run_inputs SET event_ids=\'["failed-input"]\' WHERE run_id=?').run(f.run.id)
+  f.runs.finish(f.run.id, 'failed', 'Failed', 'Synthetic failure')
+  f.store.db.prepare('UPDATE runs SET started_at=0 WHERE id=?').run(f.run.id)
+  for (let index = 0; index < 50; index++) f.runs.finish(f.runs.reserve(f.pod.id, f.store.getPod(f.pod.id).activeScript!, 0).run.id, 'completed', 'Later', null)
+  await retention.prune()
+  expect(() => f.runs.get(f.run.id)).toThrow('Run not found')
+  expect(f.store.db.prepare('SELECT state,run_id FROM accepted_events WHERE id=\'failed-input\'').get()).toEqual({ state: 'failed', run_id: null })
 })
 
 it('persists ape-shell write intent before acknowledgement and resends an uncertain result under its identity', async () => {

@@ -3254,5 +3254,6 @@
   "Event queue is full; retry after processing": "Ereigniswarteschlange ist voll; nach Verarbeitung erneut versuchen",
   "Check the network connection. The next run repeats the work; the script must not send twice.": "Prüfe die Netzwerkverbindung. Der nächste Lauf wiederholt die Arbeit; das Skript darf nichts doppelt senden.",
   "The next scheduled or manual run repeats the work. The script decides what is already done.": "Der nächste geplante oder manuelle Lauf wiederholt die Arbeit. Das Skript entscheidet, was bereits erledigt ist.",
-  "Previous process has no termination evidence": "Für den vorherigen Prozess fehlt ein Nachweis, dass er beendet ist"
+  "Previous process has no termination evidence": "Für den vorherigen Prozess fehlt ein Nachweis, dass er beendet ist",
+  "Effect is still being sent by an earlier run": "Die Aktion wird noch von einem früheren Lauf gesendet"
 }

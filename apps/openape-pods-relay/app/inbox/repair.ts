@@ -1,9 +1,12 @@
 import type { InboxItem, Receipt } from './client'
 import { t } from './i18n'
 
-// `effect` decisions come only from desktops before issue 1518; they still need the repair prompt there.
+// `effect` decisions and `work` decisions asking for an observation come only from desktops before issue 1518;
+// they still need the repair prompt. Current failed work offers its plain retry instead.
 export function needsRepair(item: InboxItem): boolean {
-  return item.state === 'open' && item.kind === 'decision' && item.decision?.authority === 'pods' && ['work', 'effect', 'approval'].includes(item.decision.type)
+  const decision = item.decision
+  if (item.state !== 'open' || item.kind !== 'decision' || decision?.authority !== 'pods') return false
+  return ['effect', 'approval'].includes(decision.type) || (decision.type === 'work' && decision.options.some(option => option.input === 'evidence'))
 }
 
 export function repairTitle(item: InboxItem): string {

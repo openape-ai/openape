@@ -223,19 +223,21 @@ describe('self-discovered work on shared domain data', () => {
     expect(f.classify(() => ({ isInvoice: true }))).toBe(1)
   })
 
-  it('releases work an earlier version held for owner review, once, and keeps exhausted work blocked', () => {
+  it('releases work an earlier version held for owner review, once, and keeps exhausted and restore-fenced work held', () => {
     const f = mail()
-    for (const id of ['m1', 'm2', 'm3']) f.write(id, { contentRevision: id })
+    for (const id of ['m1', 'm2', 'm3', 'm4']) f.write(id, { contentRevision: id })
     const run = f.run(f.classifier)
     const items = f.work.find(run, { operation: 'acme/mail-classification' })
     f.finish(run)
-    const [unknown, written, exhausted] = items.map(item => item.key)
+    const [unknown, written, exhausted, restored] = items.map(item => item.key)
+    f.store.db.prepare('UPDATE work_items SET state=\'unknown\',reason=\'Restored backup: check whether this work was finished after the backup before releasing it\' WHERE key=?').run(restored)
     f.store.db.prepare('UPDATE work_items SET state=\'unknown\',reason=\'The run left an external action with an unknown outcome; reconcile it before this work continues\' WHERE key=?').run(unknown)
     f.store.db.prepare('UPDATE work_items SET state=\'blocked\',reason=\'The run changed an application before it ended; review what happened before this work continues\' WHERE key=?').run(written)
     f.store.db.prepare('UPDATE work_items SET state=\'blocked\',attempt=5,reason=\'Bad input\' WHERE key=?').run(exhausted)
     releaseHeldWork(f.store); releaseHeldWork(f.store)
     expect(f.work.items('acme/mail-classification', ['retry_wait']).map(item => item.key).sort()).toEqual([unknown, written].sort())
     expect(f.work.items('acme/mail-classification', ['blocked']).map(item => item.key)).toEqual([exhausted])
+    expect(f.work.items('acme/mail-classification', ['unknown']).map(item => item.key)).toEqual([restored])
     expect(f.classify(() => ({ isInvoice: false }))).toBe(2)
   })
 
