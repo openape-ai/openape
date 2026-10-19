@@ -5,11 +5,15 @@ import { parseRunContext } from '../src/contracts/services'
 import { translateDiagnostic } from '../src/i18n'
 
 // Issue 1473: a script's summary of a call is passed through; it never becomes part of the call or its effect.
-it('splits a script summary off a tool or HTTP call and leaves the call itself unchanged', () => {
+it('splits approval presentation off a call and leaves the call itself unchanged', () => {
   const call = { url: 'https://api.example.test/items', method: 'POST', key: 'item-1', body: '{}' }
   expect(splitScriptSummary(call)).toEqual({ payload: call })
   expect(splitScriptSummary({ ...call, summary: { title: 'Create the item', description: 'Line one\nLine two' } })).toEqual({ payload: call, summary: { title: 'Create the item', description: 'Line one\nLine two' } })
-  for (const summary of [{ title: 'x'.repeat(121) }, { title: 'a‮b' }, { origin: 'Other Pod' }, { link: 'file:///etc/passwd' }, 'Create the item'])
+  const batch = { id: 'selected-items', title: 'Review selected items', size: 2 }
+  expect(splitScriptSummary({ ...call, batch })).toEqual({ payload: call, batch })
+  expect(splitScriptSummary({ ...call, summary: { title: 'Create the item' }, batch })).toEqual({ payload: call, summary: { title: 'Create the item' }, batch })
+  for (const invalid of [{ id: '' }, { ...batch, size: 101 }, { ...batch, description: 'Hidden\u202Etext' }, null]) expect(() => splitScriptSummary({ ...call, batch: invalid })).toThrow(/batch/i)
+  for (const summary of [{ title: 'x'.repeat(121) }, { title: 'a‮b' }, { origin: 'Other Pod' }, { link: 'file:///etc/passwd' }, 'Create the item', undefined])
     expect(() => splitScriptSummary({ ...call, summary })).toThrow(/summary/i)
 })
 
