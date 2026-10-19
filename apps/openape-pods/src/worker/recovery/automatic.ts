@@ -1,5 +1,5 @@
 import type { PodDatabase } from '../storage/database'
-import { confirmDomainsStopped } from './domains'
+import { confirmDomainsStopped, ownerGone } from './domains'
 import { RunStore } from '../runs/store'
 import { DomainData } from '../data/domain'
 import { WorkLedger } from '../data/work'
@@ -21,7 +21,14 @@ export async function recoverStoppedRuns(store: PodDatabase, helper: string, lim
   const work = new WorkLedger(store, new DomainData(store))
   for (const run of candidates) {
     const id = String(run.id); const podId = String(run.pod_id)
-    try { await confirmDomainsStopped(store, id, helper) }
+    try {
+      // A process recorded without an execution domain must be proven gone by its pid before the lease is released.
+      if (!store.db.prepare('SELECT 1 FROM execution_domains WHERE run_id=?').get(id)) {
+        const recorded = store.db.prepare('SELECT json_extract(data,\'$.pid\') pid FROM run_events WHERE run_id=? AND type=\'process\' UNION ALL SELECT process_id FROM run_leases WHERE run_id=? AND process_id IS NOT NULL').all(id, id)
+        if (recorded.some(row => !Number.isInteger(row.pid) || !ownerGone(Number(row.pid)))) throw new Error('Previous process has no termination evidence')
+      }
+      await confirmDomainsStopped(store, id, helper)
+    }
     catch (error) {
       // The lease stays, so no second process of this Pod can start meanwhile.
       due.set(id, Date.now() + stoppedRunRecheckMs)

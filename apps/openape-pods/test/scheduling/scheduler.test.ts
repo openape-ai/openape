@@ -345,6 +345,17 @@ it('keeps the lease of a run whose process stop is unconfirmed and checks again 
   finally { vi.useRealTimers() }
 })
 
+it('keeps the lease of a recorded process without an execution domain until its pid is gone', async () => {
+  const f = fixture(); const pod = f.pod()
+  f.scheduler.acceptEvent(pod, 'fixture', 'historic', {}); f.scheduler.tick()
+  const id = f.started[0]!.id
+  f.store.db.prepare('UPDATE runs SET state=\'interrupted\' WHERE id=?').run(id)
+  f.runs.append(id, 'process', { pid: process.pid })
+  await recoverStoppedRuns(f.store, '/unused')
+  expect(f.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(pod)?.run_id).toBe(id)
+  expect(f.store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND type=\'recovery\'').get(id)).toBeUndefined()
+})
+
 it('runs Pods of a profile whose inputs and lease an earlier version held for owner review', async () => {
   const f = fixture(); const finished = f.pod(); const leased = f.pod()
   for (const pod of [finished, leased]) f.scheduler.acceptEvent(pod, 'fixture', 'held', {})
