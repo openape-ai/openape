@@ -24,6 +24,8 @@
     "package:distribution": "node scripts/package.mjs --distribution",
     "package:signed": "node scripts/package.mjs --distribution --signed",
     "package:signed-candidate": "node scripts/package.mjs --distribution --signed-candidate",
+    "package:owner": "node scripts/package.mjs --distribution --signed-owner",
+    "install:owner": "node scripts/install-owner.mjs",
     "test:distribution": "node scripts/verify-distribution.mjs",
     "handbook": "node scripts/handbook.mjs",
     "handbook:capture": "PODS_HANDBOOK_CAPTURE=1 vitest run --config vitest.electron.config.ts",
