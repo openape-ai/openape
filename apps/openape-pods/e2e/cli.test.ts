@@ -26,7 +26,6 @@ const exec = promisify(execFile)
 let root = ''; let client: CliClient | undefined
 let identity: Awaited<ReturnType<typeof fixtureShellIdentity>> | undefined
 afterEach(async () => { await client?.close(); client = undefined; await identity?.close(); identity = undefined; vi.unstubAllEnvs(); if (root) await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 }) })
-const cipher = () => ({ available: () => true, encrypt: (value: string) => Buffer.from(value).reverse(), decrypt: (value: Buffer) => Buffer.from(value).reverse().toString() })
 const outputs: unknown[] = []
 const events: unknown[] = []
 const io = () => ({ signal: new AbortController().signal, output: (value: unknown) => outputs.push(value), progress: (value: unknown) => events.push(value) })
@@ -77,13 +76,10 @@ it.each(['owner', 'isolated'] as const)('executes with the real Pod identity, %s
   finally { store.close() }
   identity = await fixtureShellIdentity(profile, [], false, false, true)
   await writeFile(protectedFile, identity.ownerLogin, { mode: 0o600 })
-  await identity.persistCredentials(value => cipher().encrypt(value))
+  await identity.persistCredentials()
   const credentialRoot = join(profile, 'credentials')
-  const desktop = new CredentialCache(credentialRoot, cipher())
-  const files = await readdir(credentialRoot)
-  for (const file of files.filter(file => file.endsWith('.encrypted'))) await desktop.readConnection(file.slice(0, -'.encrypted'.length))
   const protectedIdentity = join(credentialRoot, (await readdir(credentialRoot)).find(file => file.endsWith('.identity.json'))!)
-  const modelId = randomUUID(); const portableCache = new CredentialCache(credentialRoot, cipher())
+  const modelId = randomUUID(); const portableCache = new CredentialCache(credentialRoot)
   await portableCache.create(modelId, JSON.stringify({ tokens: { account_id: 'synthetic-account', access_token: 'synthetic-access', refresh_token: 'synthetic-refresh' } }))
   await portableCache.migrateChatgpt(modelId, 'synthetic-account')
   const protectedCredential = join(credentialRoot, `${modelId}.credential.json`)
@@ -174,7 +170,7 @@ export async function run(context) {
   }
 })
 
-it('executes an assigned owner program without opening its encrypted application state', async () => {
+it('executes an assigned owner program without opening its saved application state', async () => {
   outputs.length = 0; events.length = 0
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-cli-owner-program-')))
   const ownerHome = join(root, 'owner'); await mkdir(join(ownerHome, '.config/apes'), { recursive: true, mode: 0o700 })
@@ -182,7 +178,7 @@ it('executes an assigned owner program without opening its encrypted application
   const profile = join(root, 'profile'); await mkdir(profile, { mode: 0o700 })
   const store = new PodDatabase(profile)
   const applicationId = randomUUID(); const capability = `tool.app_${applicationId.replaceAll('-', '')}.invoke`
-  const desktop = new CredentialCache(join(profile, 'credentials'), cipher())
+  const desktop = new CredentialCache(join(profile, 'credentials'))
   let podId = ''; let stateId = ''
   try {
     podId = store.createPod({ name: 'Owner program proof' }).id
@@ -193,29 +189,26 @@ it('executes an assigned owner program without opening its encrypted application
     registry.assignProgram(podId, applicationId, { type: 'program', name: 'printenv', cliId: 'printenv', executable, executableHash: createHash('sha256').update(await readFile(executable)).digest('hex'), stateId, capability, networkHosts: [], entryFiles: [], environment: {} }, registry.epoch(podId))
   }
   finally { store.close() }
-  const encryptedPath = join(profile, 'credentials', `${stateId}.encrypted`)
-  const encryptedBefore = await readFile(encryptedPath)
+  const statePath = join(profile, 'credentials', `${stateId}.connection.json`)
+  const stateBefore = await readFile(statePath)
   identity = await fixtureShellIdentity(profile, [], false, false, true)
   await writeFile(join(ownerHome, '.config/apes/auth.json'), identity.ownerLogin, { mode: 0o600 })
-  await identity.persistCredentials(value => cipher().encrypt(value))
-  for (const file of await readdir(join(profile, 'credentials'))) {
-    if (file.endsWith('.encrypted') && file !== `${stateId}.encrypted`) await desktop.readConnection(file.slice(0, -'.encrypted'.length))
-  }
+  await identity.persistCredentials()
   client = await open(profile)
   let view = parseScriptView(await client.request({ channel: 'scripts', command: { type: 'list', podId } }))
   const code = `export async function run(context) {
     if (context.input.validation) return {status:'completed',summary:'Contract check',completedInputIds:[],gapIds:[]};
     const result = await context.tools.invoke({application:'printenv',argv:['HOME']});
     if (result.exitCode !== 0 || result.stdout.trim() !== ${JSON.stringify(homedir())}) throw new Error('Owner program HOME mismatch');
-    return {status:'completed',summary:'Assigned owner program executed without a credential cipher',completedInputIds:[],gapIds:[]};
+    return {status:'completed',summary:'Assigned owner program executed without opening its state',completedInputIds:[],gapIds:[]};
   }`
   view = parseScriptView(await client.request({ channel: 'scripts', command: { type: 'save', podId, revision: view.pod.revision, draftId: null, draftRevision: 0, code, capabilities: [capability] } }))
   view = parseScriptView(await client.request({ channel: 'scripts', command: { type: 'validate', podId, revision: view.pod.revision, draftId: view.source!.id, draftRevision: view.source!.revision } }))
   expect(view.source!.validated, view.source!.evidence ?? '').toBe(true)
   await client.request({ channel: 'scripts', command: { type: 'activate', podId, revision: view.pod.revision, hash: view.source!.hash!, expectedActive: null } })
   expect(await executeCli(cliArguments(['run', podId]), client, io()), JSON.stringify(outputs.at(-1))).toBe(0)
-  expect(outputs.at(-1)).toMatchObject({ state: 'completed', summary: 'Assigned owner program executed without a credential cipher' })
-  expect(await readFile(encryptedPath)).toEqual(encryptedBefore)
+  expect(outputs.at(-1)).toMatchObject({ state: 'completed', summary: 'Assigned owner program executed without opening its state' })
+  expect(await readFile(statePath)).toEqual(stateBefore)
   expect(identity.ownerDecisions()).toEqual([])
   expect(identity.authorizations()).toEqual([expect.objectContaining({ call: expect.objectContaining({ program: expect.objectContaining({ name: 'printenv' }), argv: ['HOME'] }) })])
 })

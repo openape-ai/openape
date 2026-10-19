@@ -3255,5 +3255,13 @@
   "Check the network connection. The next run repeats the work; the script must not send twice.": "Prüfe die Netzwerkverbindung. Der nächste Lauf wiederholt die Arbeit; das Skript darf nichts doppelt senden.",
   "The next scheduled or manual run repeats the work. The script decides what is already done.": "Der nächste geplante oder manuelle Lauf wiederholt die Arbeit. Das Skript entscheidet, was bereits erledigt ist.",
   "Previous process has no termination evidence": "Für den vorherigen Prozess fehlt ein Nachweis, dass er beendet ist",
-  "Effect is still being sent by an earlier run": "Die Aktion wird noch von einem früheren Lauf gesendet"
+  "Effect is still being sent by an earlier run": "Die Aktion wird noch von einem früheren Lauf gesendet",
+  "This credential is still in the macOS keychain; start a Developer ID signed OpenApe Pods once to migrate it": "Diese Zugangsdaten liegen noch im macOS-Schlüsselbund; starte einmal ein mit Developer ID signiertes OpenApe Pods, um sie zu migrieren",
+  "The macOS keychain is unavailable; legacy credentials were left in place": "Der macOS-Schlüsselbund ist nicht verfügbar; alte Zugangsdaten bleiben unverändert",
+  "Migrated credential differs": "Migrierte Zugangsdaten weichen ab",
+  "This desktop registration is still in the macOS keychain; start a Developer ID signed OpenApe Pods once to migrate it": "Diese Desktop-Registrierung liegt noch im macOS-Schlüsselbund; starte einmal ein mit Developer ID signiertes OpenApe Pods, um sie zu migrieren",
+  "Log in with apes as the registered owner on this Mac": "Melde dich auf diesem Mac mit apes als registrierter Owner an",
+  "This credential could not be migrated from the macOS keychain; reconnect it": "Diese Zugangsdaten konnten nicht aus dem macOS-Schlüsselbund migriert werden; verbinde sie neu",
+  "Migrated registration differs": "Migrierte Registrierung weicht ab",
+  "This desktop registration could not be migrated from the macOS keychain; restore it before registering this desktop again": "Diese Desktop-Registrierung konnte nicht aus dem macOS-Schlüsselbund migriert werden; stelle sie wieder her, bevor du diesen Desktop neu registrierst"
 }

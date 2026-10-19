@@ -53,20 +53,23 @@ import { CodexRegistration } from './codex/registration'
 import { parseCodexCommand } from '../contracts/codex'
 import { homedir } from 'node:os'
 import { existsSync } from 'node:fs'
+import { hasKeychainLegacy, migrateKeychain } from './migrate-keychain'
 
 const fixture = !!process.env.OPENAPE_PODS_FIXTURE_DIR
 // Fixture runs keep their windows hidden so test suites do not interrupt the
 // developer; set OPENAPE_PODS_FIXTURE_SHOW=1 to watch a fixture run.
 const hiddenFixture = fixture && process.env.OPENAPE_PODS_FIXTURE_SHOW !== '1'
 app.setName(fixture ? 'OpenApe Pods Fixture' : 'OpenApe Pods')
-// Chromium's mock keychain keeps safeStorage working with a fixed key and never
-// touches the login keychain, whose access prompts would wait for a person.
-if (fixture && process.env.NODE_ENV === 'test' && process.env.OPENAPE_PODS_TEST_REAL_KEYCHAIN !== '1') app.commandLine.appendSwitch('use-mock-keychain')
 app.enableSandbox()
 const profileBase = fixture ? fixtureDirectory(process.env.OPENAPE_PODS_FIXTURE_DIR) : localDirectory(join(app.getPath('appData'), 'OpenApe Pods'))
 const root = selectedProfile(profileBase)
 if (existsSync(join(root, 'central'))) process.env.OPENAPE_PODS_CENTRAL_ENABLED = '1'
 app.setPath('userData', root)
+// Pods keeps no secret in the macOS keychain (issue 1519). Chromium's mock keychain keeps cookie encryption off the
+// login keychain, whose access prompts would wait for a person. Only a profile with retired keychain files starts once
+// without it, so a Developer ID signed build can migrate them silently; synthetic test launches never do.
+const keychainLegacy = hasKeychainLegacy(root) && !(fixture && process.env.NODE_ENV === 'test')
+if (!keychainLegacy) app.commandLine.appendSwitch('use-mock-keychain')
 app.setPath('sessionData', join(root, 'chromium'))
 protocol.registerSchemesAsPrivileged([{ scheme: 'pods', privileges: { standard: true, secure: true, supportFetchAPI: true } }])
 let window: BrowserWindow | null = null
@@ -142,6 +145,11 @@ function updateMenus(): void {
 }
 async function start(): Promise<void> {
   await app.whenReady()
+  // A failed migration must not stop the app: unmigrated values report themselves when they are used.
+  if (keychainLegacy) {
+    try { for (const failure of await migrateKeychain(root)) console.error(`Keychain migration failed: ${failure}`) }
+    catch (error) { console.error('Keychain migration failed', error) }
+  }
   automaticUpdate = new AutomaticUpdate(app.getVersion(), null)
   preference = new LanguagePreference(root, fixture ? 'en' : app.getPreferredSystemLanguages()[0] ?? app.getLocale())
   ipcMain.handle(channels.updates, async (event, value: unknown, ...extra: unknown[]) => {

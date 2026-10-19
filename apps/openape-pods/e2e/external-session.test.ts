@@ -43,7 +43,7 @@ it('external shell: opens the real client and persists harmless application setu
   })
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`
-  const credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: bytes => bytes.toString() })
+  const credentials = new CredentialCache(join(root, 'credentials'))
   const stateId = await new ProgramState(credentials).create({ podId, applicationId })
   const executable = join(root, 'fixture'); const adapterPath = join(root, 'fixture.toml')
   await writeFile(executable, '#!/bin/sh\nif [ "$1" = setup ]; then printf synthetic-configuration > "$HOME/state.txt"; else cat "$HOME/state.txt"; fi\n', { mode: 0o700 })

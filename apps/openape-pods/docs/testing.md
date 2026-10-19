@@ -63,11 +63,11 @@ isolated Vite server and adapter handoff.
   tests only; `pnpm --filter @openape/pods test:e2e` builds, packages and runs
   native acceptance. Only the latter requires an unlocked Mac. Both are reachable
   through their explicitly selected shared suites; neither runs implicitly on push.
-- No check waits for a person (issue 1450). Fixture launches with
-  `NODE_ENV=test` use Chromium's mock keychain, so safeStorage never touches the
-  login keychain. Only `OPENAPE_PODS_TEST_REAL_KEYCHAIN=1` opts into the real
-  keychain; such a run needs a human or an unlocked dedicated keychain.
-  `e2e/fixtures/keychain.ts` stops the app as soon as macOS shows a keychain or
+- No check waits for a person (issue 1450). Pods keeps no secret in the macOS
+  keychain (issue 1519): credentials are private 0600 files and Chromium always
+  runs with its mock keychain. Only a profile with retired keychain files starts
+  once without it so a Developer ID signed build can migrate them; fixture
+  launches with `NODE_ENV=test` never do. `e2e/fixtures/keychain.ts` stops the app as soon as macOS shows a keychain or
   authorization dialog (`credentials`, `programs`, `test:distribution`).
 
 - Vue behaviour goes to a component test. Assert visible text and the exact bridge command, not CSS classes.
@@ -90,7 +90,7 @@ These are the questions no lower level can answer. `handbook.test.ts` also stays
 | `agent.test.ts`, `master.test.ts`, `onboarding.test.ts`, `mail-knowledge.test.ts` | Pinned Codex binary and app-server confined by the sandbox; native draft validation as the provider actually receives it |
 | `external-shell.test.ts`, `external-session.test.ts`, `installed-applications.test.ts` | `ape-shell` from the package reaches real child processes; grant denial blocks the side effect |
 | `o365.test.ts`, `broker.test.ts` | TLS against a real socket with the packaged helper; credential isolation between sandboxes |
-| `credentials.test.ts` | `safeStorage` with the mock keychain (login keychain only with `OPENAPE_PODS_TEST_REAL_KEYCHAIN=1`): ciphertext never contains the value, decrypts after a restart, key files erased on rotation and revocation, other Pods' keys kept |
+| `credentials.test.ts` | Private 0600 credential files: read again after a restart, erased on rotation and revocation, other Pods' files kept |
 | `programs.test.ts` (packaged case) | safeStorage-backed program state, the folder dialog path and a saved script reaching the application through worker, main broker and `ape-shell`; a read-only folder refuses writes |
 | `dependencies.test.ts` | A bare import resolves from the prepared, read-only library inside the sandbox (Node, no Electron) |
 | `codex-mcp.test.ts`, `codex-registration.test.ts`, `codex-acceptance.test.ts` | Issue 1375: the launcher starts the packaged shim without global Node; the bundled Codex CLI reads the appended entry and the owner's `config.toml` is restored byte for byte; a real `codex app-server` is refused with `login_required` until the owner session exists, then administers the running app directly with no review queue. The refusals themselves are measured one level lower in `test/codex/control.test.ts` and `test/main/codex-*.test.ts` |

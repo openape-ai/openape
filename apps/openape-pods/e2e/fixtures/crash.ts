@@ -36,7 +36,7 @@ export async function launch(root: string, packaged: boolean, suppliedIdentity?:
   if (!identity) { identity = await fixtureShellIdentity(root); shellIdentities.set(root, identity) }
   const app = await electron.launch({ executablePath: packaged ? resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture') : require('electron'), args: packaged ? [] : ['.'], cwd: resolve('.'), env: { HOME: homedir(), TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
   applications.push({ app, child: app.process() })
-  await identity.encrypt(app, true)
+  await identity.persistCredentials()
   const page = await app.firstWindow()
   await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state, { timeout: 20000 }).toBe('ready')
   return { app, page }

@@ -109,7 +109,7 @@ int main(int argc, char **argv) {
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('Fixture bind failed')
   origin = `http://127.0.0.1:${address.port}`
-  const cache = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
+  const cache = new CredentialCache(join(root, 'credentials'))
   const identity = { connectionId, podId, issuer: origin, owner: 'owner@example.test', subject: 'pod@example.test', keyId: 'pod-key' }
   await cache.connect(connectionId, JSON.stringify({ ...identity, accessToken: 'SYNTHETIC_AGENT', expiresAt: Date.now() / 1000 + 3600 }))
   const stateId = await new ProgramState(cache).create({ podId, applicationId })
@@ -195,14 +195,8 @@ it('packaged program UI: exposes the external terminal and reuses application se
   failOnKeychainDialog(app)
   console.info('Program UI: fixture launched')
   try {
-    const records = await Promise.all([f.assignment.stateId, f.identity.connectionId].map(async id => ({ path: join(f.root, 'credentials', `${id}.encrypted`), value: await readFile(join(f.root, 'credentials', `${id}.encrypted`), 'utf8') })))
-    await app.evaluate(({ safeStorage }, records) => {
-      const { writeFileSync } = process.getBuiltinModule('node:fs') as typeof import('node:fs')
-      if (!safeStorage.isEncryptionAvailable()) throw new Error('Credential storage unavailable for program UI fixture')
-      for (const record of records) writeFileSync(record.path, safeStorage.encryptString(record.value), { mode: 0o600 })
-    }, records)
-    await shellIdentity.encrypt(app)
-    console.info('Program UI: synthetic records encrypted using safeStorage with the mock keychain')
+    await shellIdentity.persistCredentials()
+    console.info('Program UI: synthetic records written as private files')
     const page = await app.firstWindow(); page.setDefaultTimeout(7000)
     await expect.poll(async () => (await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
     console.info('Program UI: worker ready')

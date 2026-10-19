@@ -77,9 +77,9 @@ describe('foundation', () => {
     expect(after.epoch).toBe(before.epoch + 1)
   })
   it('manual runs: executes the pinned script in the packaged app and displays durable events', async () => {
-    const { app, page, root } = await launch(true)
+    const { page, root } = await launch(true)
     const pod = (await page.evaluate(() => window.pods.workspace({ type: 'create', name: 'Local example' }))).pods[0]!
-    const identity = await fixtureShellIdentity(root); identities.push(identity); await identity.encrypt(app, true)
+    const identity = await fixtureShellIdentity(root); identities.push(identity); await identity.persistCredentials()
     await openPod(page, 'Local example')
     await page.getByRole('navigation', { name: 'Pod sections' }).getByRole('button', { name: 'Runs', exact: true }).click()
     await page.evaluate(podId => window.pods.runs({ type: 'installExample', podId, variant: 'deterministic' }), pod.id)

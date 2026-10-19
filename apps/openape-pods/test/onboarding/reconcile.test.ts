@@ -22,7 +22,8 @@ async function legacyProfile() {
   await writeFile(join(vendor, 'codex'), 'synthetic-codex')
   await writeFile(join(vendor, 'manifest.json'), JSON.stringify({ cli: `0.153.4-${process.platform}-${process.arch}`, binaryHash: digest('synthetic-codex') }))
   const store = new PodDatabase(root); const resources = new ResourceRegistry(store, () => {}); const control = new SetupControl(store, resources)
-  const credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, encrypt: value => Buffer.from(value), decrypt: value => value.toString() })
+  // The September 22 profile still holds identities in the retired keychain format, opened here by the migration cipher.
+  const credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, decrypt: value => value.toString() })
   const issuer = 'https://id.example.invalid'
   const pods = [store.createPod({ name: 'Delta mail' }), store.createPod({ name: 'Invoices' }), store.createPod({ name: 'Reports' })]
   const rows = { deltaReady: randomUUID(), deltaFailed: randomUUID(), owner: randomUUID(), ownerDuplicate: randomUUID(), codexFailed: randomUUID(), codex: randomUUID() }
@@ -59,7 +60,7 @@ it('reduces a September 22 profile to one Codex and one DDISA owner without re-p
   expect((await manager.podConnection(pods[2].id)).identity).toEqual(bindings.duplicate.identity)
   expect(resources.list(pods[2].id)[0]).toMatchObject({ state: 'ready', configuration: { ownerConnection: rows.owner } })
   expect(resources.list(pods[0].id)[0].state).toBe('revoked')
-  const file = (id: string) => exists(join(root, 'credentials', `${id}.encrypted`))
+  const file = async (id: string) => await exists(join(root, 'credentials', `${id}.encrypted`)) || exists(join(root, 'credentials', `${id}.connection.json`))
   expect(await Promise.all([bindings.owner, bindings.duplicate].map(item => exists(join(root, 'credentials', `${item.connectionId}.identity.json`))))).toEqual([true, true])
   expect(await Promise.all([bindings.owner, bindings.duplicate].map(item => file(item.connectionId)))).toEqual([false, false])
   expect(await file(bindings.delta.connectionId)).toBe(false)
