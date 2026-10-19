@@ -45,7 +45,6 @@ export default defineComponent({
     workerLabel(): string { if (this.connectionError) return t('Unavailable'); return label({ starting: 'Starting', ready: 'Ready', recovery: 'Needs attention', error: 'Needs attention', stopped: 'Stopped' }[this.status?.worker.state ?? 'starting']) },
     attention(): boolean { return !!this.connectionError || this.status?.worker.state === 'error' },
     currentRun(): RunRecord | undefined { return this.runs.find(run => run.state === 'running') },
-    needsRecovery(): boolean { const run = this.runs[0]; return !this.schedule?.retry && !!run && ['interrupted', 'failed', 'cancelled', 'blocked'].includes(run.state) && run.recovery?.state !== 'retryQueued' },
     nextRun(): string { if (!this.pod || this.pod.lifecycle !== 'active' || !this.schedule?.enabled) return t('Manual only'); return this.schedule.nextAt ? t('Next run: {time}', { time: dateTime(this.schedule.nextAt) }) : t('No scheduled time') },
   },
   watch: { refreshToken() { void this.refresh() } },
@@ -164,10 +163,7 @@ export default defineComponent({
               <TagEditor :id="pod.id" :key="`${pod.id}:${podTags.revision}`" :tags="podTags" :suggestions="tagSuggestions" @command="saveTags" />
             </article>
             <div class="overview-actions">
-              <button v-if="needsRecovery && !currentRun" class="primary" @click="goTo('runs')">
-                {{ t('Prepare retry') }}
-              </button>
-              <button v-else class="primary" :disabled="!pod.activeScript || !!currentRun || !!schedule?.retry || pod.lifecycle === 'archived' || attention" @click="runOnce">
+              <button class="primary" :disabled="!pod.activeScript || !!currentRun || !!schedule?.retry || pod.lifecycle === 'archived' || attention" @click="runOnce">
                 {{ t('Run now') }}
               </button>
               <button v-if="pod.lifecycle !== 'archived'" class="secondary" @click="pause">

@@ -140,6 +140,7 @@ export interface CentralStatus {
 }
 /** A central command whose outcome the service marked unknown; it blocks this desktop until reconciled. */
 export interface UncertainOperation { id: string, channel: string, type: string | null, podId: string | null, error: string | null, startedLocally: boolean }
+/** Blocked inputs that relays before issue 1518 report; current relays omit it, as Pods no longer hold inputs. */
 export interface CentralQueue { blocked: number, since: number | null, error: string | null }
 export interface CentralRuntime { id: string, revision: number, online: boolean, lastSeenAt?: number | null, workspace: Omit<WorkspaceState, 'pods'> & { pods: (WorkspaceState['pods'][number] & { online: boolean, queue?: CentralQueue })[] } }
 export interface CentralSummary { revision: number, total: number, pod: CentralPod }

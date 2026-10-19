@@ -251,11 +251,13 @@ it('empties full snapshots an older server stored and keeps serving the publishe
   expect(reopened.read(actor.owner, actor.id, state.pods[0]!.id).pod).toEqual(state.pods[0])
 })
 
-it('shows when a runtime was last seen, keeps archived Pods archived offline and exposes a blocked queue', () => {
+it('shows when a runtime was last seen, keeps archived Pods archived offline and derives no blocked queue', () => {
   const { store, actor, lease, state, advance } = setup()
+  // A desktop before issue 1518 still reports held inputs; Pods no longer holds them, so the inventory names none.
   state.pods[0]!.scheduling = { ...state.pods[0]!.scheduling, blocked: 1, blockedSince: 5000, error: 'Pod execution permission is no longer active' }
   publish(store, actor, lease, randomUUID(), 1, state)
-  expect(store.inventory(actor.owner)[0]).toMatchObject({ lastSeenAt: 100000, workspace: { pods: [{ online: true, queue: { blocked: 1, since: 5000, error: 'Pod execution permission is no longer active' } }] } })
+  expect(store.inventory(actor.owner)[0]).toMatchObject({ lastSeenAt: 100000, workspace: { pods: [{ online: true }] } })
+  expect(store.inventory(actor.owner)[0]!.workspace.pods[0]).not.toHaveProperty('queue')
   state.workspace.pods[0]!.lifecycle = 'archived'; state.pods[0]!.scripts.pod.lifecycle = 'archived'
   publish(store, actor, lease, randomUUID(), 2, state)
   advance(30001)
@@ -336,6 +338,16 @@ it('serves the published map read model through view=map without naming a Pod', 
   expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toEqual({ revision: 2, map })
   expect(() => store.view(other, actor.id, null, { view: 'map' })).toThrow()
   expect(() => store.view(actor.owner, actor.id, null, { view: 'summary' })).toThrow('invalid_workspace_request')
+  // Desktops before issue 1518 publish held deliveries and their count; the relay still accepts and serves them.
+  const [pod] = map.pods
+  const legacy = { ...map, kpis: { ...map.kpis, unknownDeliveries: 2 }, pods: [{ ...pod!, work: { pending: 0, held: 1 }, queue: { blocked: 1, error: 'Held for owner review' }, unknown: [{ key: `owner-script:${pod!.id}`, runId: pod!.id, authority: { source: 'owner-activation', activationId: 'synthetic', podId: pod!.id, scriptHash: 'a'.repeat(64), assignmentRevision: 1, resourceEpoch: 0 } }] }] }
+  publishV2(store, actor, lease, {}, { ...state, workspace: { ...state.workspace, map: legacy } }, 2)
+  expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toEqual({ revision: 3, map: legacy })
+  // Later desktops may omit these fields.
+  const { queue: _queue, unknown: _unknown, ...current } = pod!
+  const { unknownDeliveries: _deliveries, ...kpis } = map.kpis
+  publishV2(store, actor, lease, {}, { ...state, workspace: { ...state.workspace, map: { ...map, kpis, pods: [current] } } }, 3)
+  expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toMatchObject({ revision: 4, map: { kpis, pods: [current] } })
 })
 
 it('creates inbox decision operations only through the inbox path, at the latest revision and idempotently', () => {

@@ -13,7 +13,7 @@ export default defineComponent({
   emits: ['selected', 'navigate'],
   setup() { return { access: usePodAccess() } },
   data() {
-    return { now: Date.now(), pods: [] as StoredPod[], podId: '', runId: '', view: { runs: [], events: [] } as RunView, busy: false, error: '', scheduleError: '', pending: 0, blocked: 0, timer: null as ReturnType<typeof setTimeout> | null, closed: false, loaded: false }
+    return { now: Date.now(), pods: [] as StoredPod[], podId: '', runId: '', view: { runs: [], events: [] } as RunView, busy: false, error: '', scheduleError: '', pending: 0, timer: null as ReturnType<typeof setTimeout> | null, closed: false, loaded: false }
   },
   computed: {
     selectedRun() { return this.view.runs.find(run => run.id === this.runId) ?? this.view.runs[0] },
@@ -52,7 +52,7 @@ export default defineComponent({
       this.busy = true; if (command.type === 'start') this.runId = ''; if (!preserveError) this.error = ''
       try {
         const [view, schedule] = await Promise.all([this.access.api.runs(command), this.access.api.scheduling({ type: 'list', podId: this.podId })])
-        this.view = view; this.pending = schedule.pending; this.blocked = schedule.blocked
+        this.view = view; this.pending = schedule.pending
         this.scheduleError = schedule.error ?? ''
         if (this.runId && !this.view.runs.some(run => run.id === this.runId)) this.runId = ''
       }
@@ -94,7 +94,7 @@ export default defineComponent({
           <p v-if="failure && selectedRun.error" class="run-cause">
             <strong>{{ t('Cause') }}:</strong> {{ diagnostic(selectedRun.error) }}
           </p>
-          <p v-if="failure && (!selectedRun.automaticRecovery || selectedRun.automaticRecovery.disposition === 'hold')">
+          <p v-if="failure && !selectedRun.automaticRecovery">
             {{ diagnostic(failure.help) }}
           </p>
           <p v-else-if="selectedRun.state === 'running'">
@@ -143,8 +143,8 @@ export default defineComponent({
           {{ actionFailure.action === 'permissions' ? t('Review permissions') : actionFailure.action === 'identity' ? t('Open pod identity') : t('Open App settings') }}
         </button>
       </div>
-      <details v-if="blocked || pending" class="queued-starts">
-        <summary>{{ t('Other waiting starts: {p0}', { p0: blocked + pending }) }}</summary>
+      <details v-if="pending" class="queued-starts">
+        <summary>{{ t('Other waiting starts: {p0}', { p0: pending }) }}</summary>
         <p>{{ t('These are queued start requests, not a count of emails or files. Repeated clicks may create several requests.') }}</p>
       </details>
       <details class="run-details">
@@ -154,9 +154,6 @@ export default defineComponent({
         </p>
         <p v-if="selectedRun?.error">
           {{ selectedRun.error }}
-        </p>
-        <p v-if="selectedRun?.recovery?.error">
-          {{ selectedRun.recovery.error }}
         </p>
         <p v-if="selectedRun">
           {{ t('Pinned script') }} <code>{{ selectedRun.scriptHash }}</code>

@@ -49,6 +49,14 @@ describe('persistent scheduling and intake', () => {
     f.scheduler.tick(); expect(f.started).toHaveLength(1)
     expect(f.store.db.prepare('SELECT count(*) AS count FROM accepted_events WHERE state=\'processed\'').get()!.count).toBe(3)
   })
+  it('limits open inputs per Pod while failed inputs, which nothing retries, never fill the queue', () => {
+    const f = fixture(); const pod = f.pod()
+    const insert = f.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state) VALUES(?,?,\'fixture\',?,\'{}\',1,?)')
+    for (let index = 0; index < 1000; index++) insert.run(`failed-${index}`, pod, `failed-${index}`, 'failed')
+    expect(f.scheduler.acceptEvent(pod, 'fixture', 'after-failures', {})).toMatch(/^[a-f0-9-]{36}$/)
+    for (let index = 0; index < 999; index++) insert.run(`open-${index}`, pod, `open-${index}`, 'pending')
+    expect(() => f.scheduler.acceptEvent(pod, 'fixture', 'over-limit', {})).toThrow('Event queue is full')
+  })
   it('admits ready pods in FIFO order and never exceeds global or per-pod leases', () => {
     const f = fixture(); const ids = [f.pod(), f.pod(), f.pod()]
     for (const [index, id] of ids.entries()) f.scheduler.acceptEvent(id, 'fixture', String(index), {})

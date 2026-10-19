@@ -656,7 +656,7 @@ export class RuntimeWorker {
       const view = await this.runs(action.command)
       // runs() opened the IdP page on this Mac; approvalLink only returns that verified address for the result.
       const opened = action.command.type === 'openApproval' ? await this.approvalLink(action.command.podId, action.command.runId, action.command.grantId) : null
-      return { runs: view.runs.map(({ id, state, scriptHash, startedAt, finishedAt, recovery }) => ({ id, state, scriptHash, startedAt, finishedAt, recovery: recovery?.state ?? null })), approvals: view.approvals?.map(({ runId, grantId, state }) => ({ runId, grantId, state })) ?? [], ...(opened ? { opened } : {}) }
+      return { runs: view.runs.map(({ id, state, scriptHash, startedAt, finishedAt }) => ({ id, state, scriptHash, startedAt, finishedAt })), approvals: view.approvals?.map(({ runId, grantId, state }) => ({ runId, grantId, state })) ?? [], ...(opened ? { opened } : {}) }
     }
     let approval: string | null = null
     if (action.kind === 'program') {

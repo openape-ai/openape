@@ -27,7 +27,7 @@
         "count": 4
       }
     ],
-    "unknownDeliveries": 1
+    "unknownDeliveries": 0
   },
   "systems": [
     {
@@ -216,7 +216,7 @@
       },
       "work": {
         "pending": 0,
-        "held": 0
+        "held": 1
       },
       "resources": [
         {
@@ -641,12 +641,7 @@
         "blocked": 0,
         "error": null
       },
-      "unknown": [
-        {
-          "key": "ecbef6ac-52ce-41be-aa0d-a75555a75000:0",
-          "runId": "ecbef6ac-52ce-41be-aa0d-a75555a75000"
-        }
-      ],
+      "unknown": [],
       "approvals": []
     },
     {

@@ -18,7 +18,7 @@ For a first task, use a small folder of non-sensitive sample files and read-only
 
 ## Automations: map, list and detail
 
-Automations is the landing tab. The five counters at the top are system counts: active, paused, degraded, decisions waiting for you and unknown deliveries. Their subtitles come from your data, for example the name of a degraded Pod and its reason.
+Automations is the landing tab. The counters at the top are system counts: active, current errors and decisions waiting for you. Their subtitles come from your data, for example the name of a degraded Pod and its reason.
 
 The map shows your Pods in the middle, the services, applications and folders they read on the left, pure destinations on the right and the authorities above: your decisions, the identity provider and the AI. Dotted lines carry the recorded reads and writes of the last 24 hours; Pods that share data are laid out writer before reader, and each shared-data line names its namespace. List shows the same Pods as a table. With tags, the map starts empty: activate one or more tags to show their Pods; each tag shows how many Pods carry it, and Without tag, All and None are always available. The choice is remembered on this device. Layers opens the chips Shared data, Read, Write, Approvals and Paused; Legend explains the node shapes.
 
@@ -35,15 +35,15 @@ Stand HH:MM marks a published snapshot in the browser; Live · HH:MM means the d
 
 ## Decisions: everything that waits for you
 
-The Decisions tab lists what waits for you: Questions your Pods asked, Approvals of single actions on single objects at the identity provider, Rights a Pod is missing, held work and uncertain actions To reconcile, unknown deliveries and Secrets requested through OpenApe Secrets. The number in the tab is the count of open items.
+The Decisions tab lists what waits for you: Questions your Pods asked, Approvals of single actions on single objects at the identity provider, Rights a Pod is missing, Failed work that no longer retries on its own and Secrets requested through OpenApe Secrets. The number in the tab is the count of open items.
 
-A question shows the recorded fields of its case and the options with their exact titles; Group by bundles cases by one field so a single choice answers the whole group. Your answer is stored as shared data that the asking Pod reads; it does not run anything by itself. An approval binds one action to one object, for example archiving one message, and is decided at the identity provider; an expired or denied approval can be asked again or withdrawn. Held work waits until you release it after review. An uncertain action needs your observation at the destination before It happened or It did not happen; an unknown delivery needs it before Delivered or Not delivered, send again.
+A question shows the recorded fields of its case and the options with their exact titles; Group by bundles cases by one field so a single choice answers the whole group. Your answer is stored as shared data that the asking Pod reads; it does not run anything by itself. An approval binds one action to one object, for example archiving one message, and is decided at the identity provider; an expired or denied approval can be asked again or withdrawn. Failed work has used up its automatic attempts; fix the cause and choose Retry. Pods holds nothing else for your review: a run can be interrupted at any point and repeat, and the script is responsible for not repeating an external action.
 
 Pods never decides for you: no model and no schedule chooses, approves, excludes or pauses. Your signed-in Codex session acts with your identity for one hour, like a signed-in CLI you use with Codex: it can approve, deny and revoke the rights your Pods request, and the run activity marks such approvals as approved in Codex session. Outside that session rights are decided at the identity provider only; the app shows status and links.
 
 1. Open Decisions; the tab shows how many items wait.
 2. Read the case, then choose an option; Group by decides many cases with the same field at once. For an approval, open it at the identity provider and decide it there.
-3. For uncertain actions and unknown deliveries check the destination first, then record what you saw.
+3. For failed work, fix the cause first, then choose Retry.
 4. Secrets lists open secret requests with the link to fill them in at secrets.openape.ai.
 
 ![Decisions: everything that waits for you](images/handbook-decisions.png)
@@ -91,7 +91,7 @@ Connect Codex once under the desktop settings → Work from Codex and restart Co
 
 Connected Codex can configure access, save and validate a script, activate it and enable a schedule when requested. Its confirmation policy belongs to Codex. A response saying ready is not evidence of a completed run.
 
-Every right is requested by the Pod itself. The sandbox decides what a Pod can reach (applications, HTTPS destinations, folders, secrets and whether its programs run isolated or with your reach as owner, which never changes the Pod identity); its grants decide what it may do, and a call needs both. In your Codex session Codex sets up both and approves the grants right away, including the runtime grant, so the first run starts without a prompt. Without a session the first run asks your identity provider for its runtime grant: choose Allow Pod execution there once, and later runs of this Pod proceed without asking; Once covers only the current run. Assigning programs, HTTP destinations, SSH targets or Jev outside a session requests their grants and opens the approval page. Denied or revoked grants keep runs blocked. A run that wrote to an application or sent an HTTP write is not retried automatically. The MCP session row shows until when Codex is signed in; End session revokes its access immediately. Use “Manage existing grants at the IdP” to open the owner identity provider and revoke existing grants. The central web interface cannot change these settings.
+Every right is requested by the Pod itself. The sandbox decides what a Pod can reach (applications, HTTPS destinations, folders, secrets and whether its programs run isolated or with your reach as owner, which never changes the Pod identity); its grants decide what it may do, and a call needs both. In your Codex session Codex sets up both and approves the grants right away, including the runtime grant, so the first run starts without a prompt. Without a session the first run asks your identity provider for its runtime grant: choose Allow Pod execution there once, and later runs of this Pod proceed without asking; Once covers only the current run. Assigning programs, HTTP destinations, SSH targets or Jev outside a session requests their grants and opens the approval page. Denied or revoked grants keep runs blocked. A run that wrote to an application or sent an HTTP write is retried like any other run; the script must not repeat a write it already made. The MCP session row shows until when Codex is signed in; End session revokes its access immediately. Use “Manage existing grants at the IdP” to open the owner identity provider and revoke existing grants. The central web interface cannot change these settings.
 
 1. Hand the brief to Codex; it creates the Pod and its script and configures the access it needs.
 2. Provide ordinary settings in Codex; transfer secrets through OpenApe Secrets or enter them on the detail page under Secrets.
@@ -154,7 +154,7 @@ Run in Script saves and validates changed source before starting it. Validation 
 2. If a permission request opens, review the Pod, action and account in the browser. Once authorizes the current request; Allow Pod execution creates a revocable standing permission. Use Open approval in the waiting card if the browser did not open.
 3. Open History and select the run. Read the result, next action and What happened. Completed with gaps needs review of the missing evidence; a waiting, stopped or failed run is not success.
 4. Check the actual output and, for actions outside Pods, the destination. Overview shows the last result; Results and sources shows retained findings when the script creates them.
-5. If the run failed, open Technical details, fix the indicated account, resource or script issue and follow the recovery steps below. Do not enable a schedule while the manual result is unresolved.
+5. If the run failed, open Technical details, fix the indicated account, resource or script issue and run it again. Do not enable a schedule while the manual result is unresolved.
 
 ![Run manually and check the result](images/handbook-history.png)
 
@@ -164,7 +164,7 @@ Automatic execution runs on this Mac, not in the cloud. Closing the window keeps
 
 When the app is running again or the Mac wakes, an overdue enabled schedule queues one catch-up start if a schedule start is not already pending. It advances the next due time into the future instead of replaying every missed interval. Saved progress and the script determine which data that run processes; this does not guarantee that every missed email or file is recovered.
 
-Interrupted runs and blocked or claimed inputs need recovery before further work can start. One Pod can run only once at a time. Pausing blocks new automatic starts but lets an active run finish; use Cancel run in History to stop it. Connected Codex can enable schedules when you request it.
+An interrupted or failed run is retried automatically once its previous processes have stopped; a Pod is only active or paused. One Pod can run only once at a time. Pausing blocks new automatic starts but lets an active run finish; use Cancel run in History to stop it. Connected Codex can enable schedules when you request it.
 
 1. After a successful manual run, open Settings → Schedule and limits. Choose At an interval and enter minutes, or Daily with Local time and an explicit timezone such as Europe/Vienna.
 2. Check Enable this schedule and choose Save schedule. If the Pod is paused, separately choose Resume automatic execution after reviewing readiness.
@@ -183,11 +183,11 @@ Waiting for approval: use Open approval in the waiting card or Decide at the IdP
 
 Permission or validation error: open Technical details in History. Check the exact folder, application, HTTPS hostname, HTTP method or secret alias in the named Pod. Reassign a missing resource, save the corrected script and validate again. A permission-service failure does not by itself mean your mail account needs a new login.
 
-No automatic run: check the enabled schedule, Next scheduled time, paused state and active script. Close any setup terminal normally. Keep the Mac awake and the app running. Resolve stopped runs, blocked inputs and resource errors in History before resuming.
+No automatic run: check the enabled schedule, Next scheduled time, paused state and active script. Close any setup terminal normally. Keep the Mac awake and the app running. Check stopped runs and resource errors in History.
 
-Interrupted or failed run: select it in History and choose Prepare retry. This checks saved progress without starting the script. Resolve uncertain deliveries, then choose Retry unfinished work when offered. Use Retry unstarted requests for blocked starts. Repeated clicks on Run can create extra requests.
+Interrupted or failed run: Pods retries it automatically with growing intervals once its previous processes have stopped; History shows the next attempt. After the automatic attempts, the next scheduled or manual run starts again. Repeated clicks on Run can create extra requests.
 
-Unknown delivery: check the external destination first. Record what you observed in History, then choose Already delivered or Not delivered · allow retry. Do not guess or blindly resend; a lost response does not prove that nothing happened.
+Unknown delivery outcome: a run can be interrupted after sending and repeat. The script must recognize a delivery it already made, for example by a stable request key or a receipt it checks first; Pods does not ask you to confirm deliveries. A lost response does not prove that nothing happened.
 
 Worker unavailable or unsupported host: read the displayed diagnostic, resolve the stated cause and reopen the app. An unsupported OS or CPU cannot be fixed by changing the script. At a storage limit, use Data & backups to inspect space, export a backup, clean unused files or adjust the limit, then inspect interrupted work.
 
@@ -215,7 +215,7 @@ Restore backup and restart verifies checksums, creates a new profile and retains
 
 Verify update and back up checks an approved signed update candidate and prepares a backup; installation is manual after quitting. An internally signed/notarized build with releaseReady: false is not an approved public update candidate. Keep the previous app and a compatible backup for rollback; never open a newer migrated database in an older app.
 
-1. Finish the assistant response and stop or recover runs before maintenance.
+1. Finish the assistant response and stop active runs before maintenance.
 2. Choose Export backup and select a safe location. Check that the operation completed and retain the exported file.
 3. To restore, choose Restore backup and restart, select your export and review the confirmation.
 4. After restart, reconnect required services, restore secret values separately and perform the manual checks above. Choose the interface language again if needed.
@@ -364,9 +364,9 @@ More options can archive a Pod or delete an archived Pod after the native confir
 
 History shows the result, the next action and What happened. Repeated application calls and AI requests are grouped with successful and unfinished counts. Routine permission checks stay in collapsed Technical details, together with the pinned script and persisted events.
 
-Cancel run stops an active run. Interrupted work remains visible after a crash or restart. Choose Prepare retry to check saved progress and possible deliveries without starting the script. Retry unfinished work becomes available after a successful check. Resolve uncertain deliveries first. Overview also leads to this check after a stopped run.
+Cancel run stops an active run. Interrupted work remains visible after a crash or restart and is retried automatically once its previous processes have stopped; History shows the next attempt. Saved progress survives, and the script decides what is already done.
 
-At most one run executes per pod. Other waiting starts counts queued start requests, not emails or files. Repeated start clicks may create several requests. Retry unstarted requests applies to a blocked queue. Checkpoints record successful progress; resuming a Codex thread alone is not a recovery decision.
+At most one run executes per pod. Other waiting starts counts queued start requests, not emails or files. Repeated start clicks may create several requests. Checkpoints record successful progress.
 
 Changing the script only affects subsequent runs and does not undo earlier results or effects. Internal script hashes remain in execution details for auditability.
 
@@ -413,11 +413,11 @@ export async function run(context) {
 
 ## Further detail: Execution approvals and run activity
 
-Starting a manual run opens any required OpenApe approval in your browser. A waiting card also appears in the Pod workspace with Open approval, and Decisions lists it with Decide at the IdP, so a browser-opening failure does not hide the required action. Background runs show the card without opening the browser automatically. A run waits for your decision without a time limit of its own and pauses the script's active time limit meanwhile. Cancel run stops waiting. After an application restart, a stopped run requires explicit recovery; approving its old request does not restart it.
+Starting a manual run opens any required OpenApe approval in your browser. A waiting card also appears in the Pod workspace with Open approval, and Decisions lists it with Decide at the IdP, so a browser-opening failure does not hide the required action. Background runs show the card without opening the browser automatically. A run waits for your decision without a time limit of its own and pauses the script's active time limit meanwhile. Cancel run stops waiting. After an application restart, a stopped run is retried automatically and asks again when it still needs an approval; approving its old request does not restart it.
 
 The managed execution permission belongs to this Pod and its OpenApe agent. Allow Pod execution creates a revocable standing rule; Once authorizes only the current request. Script edits do not expand directory, application, HTTP or secret assignments. The desktop broker verifies the structured permission through the ape-shell authorization library, then launches the pinned script inside the existing native sandbox. External Terminal.app continues to use the ape-shell CLI.
 
-History shows actual operations, active elapsed time, approval wait time and the run outcome. Application, AI and HTTP steps appear only when called. Technical details contains the original error and event data. If authorization fails, review Permissions and the grant status; a permission-service error does not itself require signing into Microsoft again. For uncertain deliveries, inspect the destination and record the outcome before retrying. The Script tab's Environment disclosure shows the managed process environment without stored secret values.
+History shows actual operations, active elapsed time, approval wait time and the run outcome. Application, AI and HTTP steps appear only when called. Technical details contains the original error and event data. If authorization fails, review Permissions and the grant status; a permission-service error does not itself require signing into Microsoft again. The Script tab's Environment disclosure shows the managed process environment without stored secret values.
 
 ## Further detail: Connections and the mail notification recipe
 
@@ -429,7 +429,7 @@ Store telegram_chat_id as a variable and telegram_bot_token as a secret. The sel
 
 Keep your personal mail notification script locally and activate it through the Pod script manager. The first successful run establishes a quiet baseline over the previous 24 hours. Later runs report new message identities using a five-minute overlap. The recipe caps reads at 20 pages and 1000 messages per window and fails visibly if the window is incomplete. It never sends historical messages on first use and sends only a count and account name.
 
-Validate and run manually before enabling a 15-minute interval in Settings. Review the secrets assigned to this Pod. The recipe records a pending notification before sending it and stores the receipt before acknowledging progress. When delivery is uncertain, inspect the destination and resolve the outcome in History before retrying.
+Validate and run manually before enabling a 15-minute interval in Settings. Review the secrets assigned to this Pod. The recipe records a pending notification before sending it and stores the receipt before acknowledging progress. If a run is interrupted between sending and storing the receipt, the repeated run can send the notification again unless the destination deduplicates it.
 
 ## Shared data between Pods
 
@@ -451,7 +451,7 @@ Earlier versions connected Pods through networks. Networks were retired; their h
 
 ## Work from your Codex
 
-Connected Codex on this Mac administers Pods directly: it can manage variables and resources, validate and activate scripts, enable schedules, start or recover runs, and define shared-data namespaces with their writer and readers. No global Node installation is needed; Pods supplies its runtime.
+Connected Codex on this Mac administers Pods directly: it can manage variables and resources, validate and activate scripts, enable schedules, start, cancel and inspect runs, and define shared-data namespaces with their writer and readers. No global Node installation is needed; Pods supplies its runtime.
 
 New automation with Codex on the Automations tab writes a brief with the tags of the pinned Pod or node and the Pods it already knows; the desktop opens Codex, the browser copies the brief for you to paste.
 

@@ -267,10 +267,10 @@ export class WorkLedger {
     this.store.db.prepare('UPDATE work_operations SET generation=generation+1,cursor=0,updated_at=? WHERE operation=?').run(Date.now(), this.operation(name).operation)
   }
 
-  /** Owner command: retries blocked work, for example after its automatic attempts were exhausted. */
-  release(key: string, evidence: string): void {
-    if (!String(evidence ?? '').trim()) throw new Error('Releasing held work needs the owner\'s observation')
-    const changed = this.store.db.prepare(`UPDATE work_items SET state='retry_wait',ready_at=?,reason=?,updated_at=? WHERE key=? AND state IN ('blocked','unknown')`).run(Date.now(), `Released by the owner: ${String(evidence).slice(0, 1800)}`, Date.now(), key)
+  /** Owner command: retries failed work, for example after its automatic attempts were exhausted. */
+  release(key: string, note?: string): void {
+    const reason = note?.trim() ? `Retried by the owner: ${note.trim().slice(0, 1800)}` : 'Retried by the owner'
+    const changed = this.store.db.prepare(`UPDATE work_items SET state='retry_wait',ready_at=?,reason=?,updated_at=? WHERE key=? AND state IN ('blocked','unknown')`).run(Date.now(), reason, Date.now(), key)
     if (changed.changes !== 1) throw new Error('Only blocked or unknown work can be released')
   }
 

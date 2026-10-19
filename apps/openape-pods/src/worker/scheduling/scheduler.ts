@@ -52,8 +52,9 @@ export class Scheduler {
       if (existing.payload !== encoded) throw new Error('Event identity conflicts with an accepted payload')
       return existing.id as string
     }
-    const count = this.store.db.prepare('SELECT count(*) AS total,sum(pod_id=?) AS pod FROM accepted_events WHERE state!=\'processed\' AND NOT (state=\'failed\' AND source IN (\'schedule\',\'manual\'))').get(podId)!
-    if ((count.total as number) >= 10000 || (count.pod as number) >= 1000) throw new Error('Event queue is full; retry after processing or recovery')
+    // A failed input is final (nothing retries it since issue 1518), so only open inputs fill the queue.
+    const count = this.store.db.prepare('SELECT count(*) AS total,sum(pod_id=?) AS pod FROM accepted_events WHERE state NOT IN (\'processed\',\'failed\')').get(podId)!
+    if ((count.total as number) >= 10000 || (count.pod as number) >= 1000) throw new Error('Event queue is full; retry after processing')
     const id = randomUUID()
     this.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at) VALUES(?,?,?,?,?,?)').run(id, podId, source, key, encoded, this.now())
     return id

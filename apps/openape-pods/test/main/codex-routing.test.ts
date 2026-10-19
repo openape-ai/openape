@@ -10,6 +10,6 @@ it('routes inspection and context selection as reads and every mutation route th
 
 it('routes domain reads to the worker and every domain change through central', () => {
   for (const type of ['list', 'entries', 'work']) expect(readOnlyAction({ action: 'domain', command: { type } })).toBe(true)
-  for (const type of ['define', 'setReaders', 'assignWriter', 'set', 'delete', 'reprocess', 'release', 'answer', 'resolveApproval', 'resolveEffect']) expect(readOnlyAction({ action: 'domain', command: { type } })).toBe(false)
+  for (const type of ['define', 'setReaders', 'assignWriter', 'set', 'delete', 'reprocess', 'release', 'answer', 'resolveApproval']) expect(readOnlyAction({ action: 'domain', command: { type } })).toBe(false)
   expect(readOnlyAction({ action: 'networks', command: { type: 'list' } })).toBe(false)
 })

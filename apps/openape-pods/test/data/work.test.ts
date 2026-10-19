@@ -186,7 +186,7 @@ describe('self-discovered work on shared domain data', () => {
     expect(f.work.pending(f.classifier)).toBe(true)
   })
 
-  it('waits for a missing prerequisite without new attempts and blocks repeated failures', () => {
+  it('waits for a missing prerequisite without new attempts, blocks repeated failures and lets the owner retry them', () => {
     const f = mail()
     f.write('m1', { contentRevision: 'c1' })
     let run = f.run(f.classifier)
@@ -202,7 +202,12 @@ describe('self-discovered work on shared domain data', () => {
       f.work.fail(run, { claimToken: f.work.claim(run, { key: item!.key }).claimToken, reason: 'Model unavailable', retryable: true })
       f.finish(run)
     }
-    expect(f.work.items('acme/mail-classification', ['blocked'])).toHaveLength(1)
+    const [blocked] = f.work.items('acme/mail-classification', ['blocked'])
+    expect(blocked).toBeDefined()
+    // Retrying failed work needs no owner observation (issue 1518).
+    f.work.release(blocked!.key)
+    expect(f.work.items('acme/mail-classification', ['retry_wait'])).toMatchObject([{ key: blocked!.key, reason: 'Retried by the owner' }])
+    expect(() => f.work.release(blocked!.key)).toThrow('Only blocked or unknown work can be released')
   })
 
   it('retries the claims of a run that left an unknown external effect', () => {

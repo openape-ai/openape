@@ -30,7 +30,6 @@ export class DomainAdministration {
       case 'release': work.release(command.key, command.evidence); return this.overview()
       case 'answer': return questions.answer(command.questionId, command.option)
       case 'resolveApproval': throw new Error('Historical decisions cannot be renewed in Pods; reconcile the external tool journal')
-      case 'resolveEffect': throw new Error('Historical effects are read-only in Pods; reconcile the external tool journal')
       case 'openApproval': throw new Error('Opening an approval page needs the desktop window')
     }
   }
@@ -38,15 +37,12 @@ export class DomainAdministration {
   overview(): DomainOverview {
     const { data, work, questions, approvals } = this.services
     const operations = this.store.db.prepare('SELECT operation,input,output,rule_version,generation FROM work_operations ORDER BY operation').all()
-    const effects = this.store.db.prepare(`SELECT a.action_key,a.attempt,a.pod_id,a.run_id,a.operation,a.created_at,r.body FROM effect_attempts a
-      LEFT JOIN effect_receipts r ON r.action_key=a.action_key AND r.attempt=a.attempt AND r.outcome='intent' WHERE a.state IN ('intent','unknown') ORDER BY a.created_at`).all()
     return {
       namespaces: data.namespaces(),
       operations: operations.map(row => ({ operation: String(row.operation), input: String(row.input), output: String(row.output), ruleVersion: Number(row.rule_version), generation: Number(row.generation), counts: work.counts(String(row.operation))[String(row.operation)] ?? null })),
       questions: questions.pending(100).map(({ id, podId, namespace, key, title, body, options, data, createdAt }) => ({ id, podId, namespace, key, title, body, options, data, createdAt })),
       approvals: approvals.views(),
       held: operations.flatMap(row => work.items(String(row.operation), ['blocked', 'unknown'], 100)),
-      unknownEffects: effects.map(row => ({ actionKey: String(row.action_key), attempt: Number(row.attempt), podId: String(row.pod_id), runId: row.run_id === null ? null : String(row.run_id), operation: String(row.operation), createdAt: Number(row.created_at), intent: row.body ? JSON.parse(String(row.body)) as unknown : null })),
     }
   }
 

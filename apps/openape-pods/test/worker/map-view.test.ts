@@ -65,16 +65,17 @@ it('derives systems, pods, shared data, measured edges and KPIs from the stored 
     paused: 25,
     degraded: [{ podId: monitor.id, reason: 'completedWithGaps' }],
     decisions: [{ podId: f.pods['Mail-Klassifizierung'], kind: 'question', title: 'Mail-Klassifizierung', count: 17 }, { podId: f.pods['Newsletter-Prüfung'], kind: 'approval', title: 'Newsletter-Prüfung', count: 4 }],
-    unknownDeliveries: 1,
+    unknownDeliveries: 0,
   })
-  expect(bot.unknown).toHaveLength(1)
+  // Unknown outcomes and held inputs of earlier versions are no owner decision (issue 1518): the fields stay neutral for
+  // relays and renderers before it, and a held input no longer degrades its Pod.
   f.store.db.prepare('UPDATE effect_ledger SET state=\'unknown\' WHERE rowid=(SELECT max(rowid) FROM effect_ledger)').run()
   f.store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state,error) VALUES(?,?,\'schedule\',\'k\',\'{}\',?,\'blocked\',\'Execution permission requires owner review\')').run('event-blocked', monitor.id, NOW)
   f.store.db.prepare('INSERT INTO effect_attempts VALUES(?,1,?,NULL,\'mail.archive\',?,\'unknown\',\'{}\',1)').run('e'.repeat(64), f.pods['Newsletter-Prüfung'], 'f'.repeat(64))
   const later = mapView(f.store, NOW)
-  expect(later.kpis.unknownDeliveries).toBe(3)
-  expect(later.kpis.degraded).toEqual([{ podId: monitor.id, reason: 'Execution permission requires owner review' }])
-  expect(later.pods.find(pod => pod.id === monitor.id)!.queue).toEqual({ blocked: 1, error: 'Execution permission requires owner review' })
+  expect(later.kpis).toMatchObject({ unknownDeliveries: 0, degraded: [{ podId: monitor.id, reason: 'completedWithGaps' }] })
+  expect(later.pods.find(pod => pod.id === bot.id)).toMatchObject({ unknown: [], queue: { blocked: 0, error: null } })
+  expect(later.pods.find(pod => pod.id === monitor.id)!.queue).toEqual({ blocked: 0, error: null })
 })
 
 it('keeps the rights, runs and systems of local-only Pods out of the published variant but shows their shared data', () => {
@@ -129,5 +130,5 @@ it('reads the map through the workspace query without a Pod and keeps the other 
   expect(parseWorkspaceAction({ action: 'workspace', query: { type: 'read', runtimeId, view: 'map' } })).toEqual({ type: 'read', runtimeId, view: 'map' })
   expect(() => parseWorkspaceAction({ action: 'workspace', query: { type: 'read', runtimeId, view: 'map', podId: runtimeId } })).toThrow('Invalid workspace read view')
   expect(() => parseWorkspaceAction({ action: 'workspace', query: { type: 'read', runtimeId, view: 'summary' } })).toThrow('Invalid workspace identity')
-  expect(() => parseMapView({ at: 1, window: { from: 0, to: 1 }, kpis: { active: 0, paused: 0, degraded: [], decisions: [], unknownDeliveries: 0 }, systems: [], pods: [], edges: [{ from: 'x', to: 'y', type: 'read', channel: null, flow: 1 }] })).toThrow('Invalid map edge')
+  expect(() => parseMapView({ at: 1, window: { from: 0, to: 1 }, kpis: { active: 0, paused: 0, degraded: [], decisions: [] }, systems: [], pods: [], edges: [{ from: 'x', to: 'y', type: 'read', channel: null, flow: 1 }] })).toThrow('Invalid map edge')
 })

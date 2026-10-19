@@ -1,6 +1,7 @@
 import type { InboxItem, Receipt } from './client'
 import { t } from './i18n'
 
+// `effect` decisions come only from desktops before issue 1518; they still need the repair prompt there.
 export function needsRepair(item: InboxItem): boolean {
   return item.state === 'open' && item.kind === 'decision' && item.decision?.authority === 'pods' && ['work', 'effect', 'approval'].includes(item.decision.type)
 }

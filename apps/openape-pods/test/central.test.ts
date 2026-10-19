@@ -504,7 +504,7 @@ it('applies a phone decision once through the workspace operation and refuses th
   const key = 'a'.repeat(64)
   let waiting = true
   let podId = ''
-  const sources = async () => ({ map: { pods: [{ id: podId, name: 'Monitor', approvals: [], unknown: [] }] }, domain: { namespaces: [], operations: [], questions: [], approvals: [], held: waiting ? [{ key, operation: 'acme/invoices', object: 'invoice-7', state: 'blocked', attempt: 5, readyAt: 0, reason: 'Automatic attempts exhausted', inputRevision: 1 }] : [], unknownEffects: [] }, secrets: null })
+  const sources = async () => ({ map: { pods: [{ id: podId, name: 'Monitor', approvals: [] }] }, domain: { namespaces: [], operations: [], questions: [], approvals: [], held: waiting ? [{ key, operation: 'acme/invoices', object: 'invoice-7', state: 'blocked', attempt: 5, readyAt: 0, reason: 'Automatic attempts exhausted', inputRevision: 1 }] : [] }, secrets: null })
   const worker = { inboxSources: sources, domain: vi.fn(async () => { waiting = false; return {} }), secrets: vi.fn(), runs: vi.fn() } as unknown as DecisionWorker & { domain: ReturnType<typeof vi.fn> }
   const decisions = new InboxDecisions(worker, key => key)
   const { controller, server, actor, pod } = connected({ executor: { execute: async command => decisions.decide(parseInboxDecide(command.body)) } })
@@ -516,12 +516,13 @@ it('applies a phone decision once through the workspace operation and refuses th
   const [item] = inbox.list(actor.owner, { kind: 'decision' }).items
   const { digest } = inbox.openDecision(actor.owner, item!.id)
   // The command the relay route builds from the stored decision; the phone never sends a desktop command itself.
+  // An older phone app may still send an observation; retrying failed work needs none (issue 1518).
   const command = { channel: 'inbox' as const, body: { type: 'decide', sourceId: item!.decision!.sourceId, digest, option: 'release', input: 'Im Postfach gesehen' } }
   const first = randomUUID()
   server.submitDecision(actor.owner, actor.id, command, first)
   server.submitDecision(actor.owner, actor.id, command, first)
   await vi.waitFor(() => expect(server.operation(actor.owner, first)).toMatchObject({ state: 'applied', result: { status: 'applied' } }), { timeout: 5000 })
-  expect(worker.domain).toHaveBeenCalledExactlyOnceWith({ type: 'release', key, evidence: 'Im Postfach gesehen' })
+  expect(worker.domain).toHaveBeenCalledExactlyOnceWith({ type: 'release', key })
   // A second device acting on the same, already decided item fails clearly instead of applying twice.
   const second = randomUUID()
   server.submitDecision(actor.owner, actor.id, command, second)
