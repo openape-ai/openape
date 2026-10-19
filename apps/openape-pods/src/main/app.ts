@@ -145,8 +145,10 @@ function updateMenus(): void {
 }
 async function start(): Promise<void> {
   await app.whenReady()
+  // A failed migration must not stop the app: unmigrated values report themselves when they are used.
   if (keychainLegacy) {
-    for (const failure of await migrateKeychain(root)) console.error(`Keychain migration failed: ${failure}`)
+    try { for (const failure of await migrateKeychain(root)) console.error(`Keychain migration failed: ${failure}`) }
+    catch (error) { console.error('Keychain migration failed', error) }
   }
   automaticUpdate = new AutomaticUpdate(app.getVersion(), null)
   preference = new LanguagePreference(root, fixture ? 'en' : app.getPreferredSystemLanguages()[0] ?? app.getLocale())

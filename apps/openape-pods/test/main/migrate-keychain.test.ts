@@ -38,8 +38,10 @@ it('migrates every retired keychain file once into private files and needs the k
   expect(await cache.readConnection(ids.connection)).toEqual({ kind: 'typesafe', key: 'SYNTHETIC_JEV' })
   for (const file of [`credentials/${ids.identity}.identity.json`, `credentials/${ids.connection}.connection.json`, 'remote/registration.json']) expect((await stat(join(root, file))).mode & 0o777).toBe(0o600)
   expect(JSON.parse(await readFile(join(root, 'remote/registration.json'), 'utf8'))).toEqual(registration)
-  // Nothing is deleted: the retired files stay aside for a rollback to the previous app.
-  expect((await readdir(join(root, 'credentials/legacy'))).sort()).toEqual(Object.values(ids).map(id => `${id}.encrypted`).sort())
+  // Nothing is deleted: migrated files stay aside for a rollback, an unreadable one in legacy/failed, reported on use.
+  expect((await readdir(join(root, 'credentials/legacy'))).sort()).toEqual(['failed', `${ids.identity}.encrypted`, `${ids.connection}.encrypted`].sort())
+  expect(await readdir(join(root, 'credentials/legacy/failed'))).toEqual([`${ids.corrupt}.encrypted`])
+  await expect(cache.readConnection(ids.corrupt)).rejects.toThrow('could not be migrated from the macOS keychain')
   expect(await readdir(join(root, 'remote/legacy'))).toEqual(['registration.enc'])
   expect(await migrateKeychain(root)).toEqual([])
 })
@@ -53,10 +55,17 @@ it('leaves every retired file in place while the keychain is unavailable', async
   expect(await readdir(join(root, 'remote'))).toEqual(['registration.enc'])
 })
 
-it('keeps a registration it cannot open for the next start', async () => {
+it('sets a registration it cannot open aside for good, so the keychain is never asked again', async () => {
   const { root } = await profile()
   await writeFile(join(root, 'remote/registration.enc'), 'corrupt')
   expect(await migrateKeychain(root)).toContain('desktop registration')
-  expect(await readdir(join(root, 'remote'))).toEqual(['registration.enc'])
-  expect(hasKeychainLegacy(root)).toBe(true)
+  expect(await readdir(join(root, 'remote'))).toEqual(['legacy'])
+  expect(await readFile(join(root, 'remote/legacy/failed/registration.enc'), 'utf8')).toBe('corrupt')
+  expect(hasKeychainLegacy(root)).toBe(false)
+})
+
+it('ignores files that are not retired credentials', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'pods-keychain-migration-')); roots.push(root)
+  await mkdir(join(root, 'credentials')); await writeFile(join(root, 'credentials/notes.encrypted'), 'unrelated')
+  expect(hasKeychainLegacy(root)).toBe(false)
 })

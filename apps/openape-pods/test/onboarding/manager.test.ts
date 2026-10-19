@@ -434,3 +434,19 @@ it('refreshes ChatGPT through the cipherless controller and preserves the newest
   expect(await cli.bearer(id, 'synthetic-account', new AbortController().signal)).toBe(refreshed)
   expect(await credentials.readConnection(id)).toMatchObject({ tokens: { access_token: refreshed, refresh_token: 'new-synthetic-refresh' } })
 })
+
+// Issue 1519: the owner token comes only from the owner's apes (DDISA) login in ~/.config/apes.
+it('uses only the matching apes login for the owner token', async () => {
+  const { manager, account, issuer, bearer } = await namedBrokerFixture()
+  const jwt = (sub: string) => `header.${Buffer.from(JSON.stringify({ sub })).toString('base64url')}.signature`
+  const login = (token: () => Promise<{ issuer: string, accessToken: string } | null>, signedIn = true) => ({ signedIn: vi.fn(() => signedIn), token: vi.fn(token) })
+  const signal = new AbortController().signal
+  const apes = login(async () => ({ issuer, accessToken: jwt(account) }))
+  expect(await manager.ownerBearer(signal, apes)).toBe(jwt(account))
+  expect(apes.signedIn).toHaveBeenCalledWith(issuer, account)
+  await expect(manager.ownerBearer(signal, login(async () => { throw new Error('The apes access token expired') }))).rejects.toThrow('expired')
+  for (const other of [login(async () => ({ issuer, accessToken: jwt('someone-else') })), login(async () => ({ issuer: 'https://other.example.invalid', accessToken: jwt(account) })), login(async () => null, false)]) {
+    await expect(manager.ownerBearer(signal, other)).rejects.toThrow('Log in with apes')
+  }
+  expect(bearer).not.toHaveBeenCalled()
+})
