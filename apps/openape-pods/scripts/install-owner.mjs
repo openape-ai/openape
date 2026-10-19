@@ -21,7 +21,8 @@ const gui = () => spawnSync('/usr/bin/pgrep', ['-f', `${options.app}/Contents/Ma
 if (existsSync(join(options.profile, 'selected-profile.json'))) fail('a restored profile is selected; install:owner supports only the default profile')
 const database = join(options.profile, 'control.sqlite')
 const databaseOpen = () => spawnSync('/usr/sbin/lsof', ['-t', database]).status === 0
-const query = sql => Number(run('/usr/bin/sqlite3', [`file:${database}?mode=ro`, sql]))
+// A stopped WAL database may have no sidecars. SQLite needs write access to recreate them, even for SELECT.
+const query = sql => Number(run('/usr/bin/sqlite3', [`file:${database}?mode=rw`, sql]))
 // macOS shows keychain and authorization prompts as SecurityAgent windows (see e2e/fixtures/keychain.ts).
 const dialogs = () => Number(run('/usr/bin/osascript', ['-l', 'JavaScript', '-e', 'ObjC.import("CoreGraphics"); ObjC.deepUnwrap(ObjC.castRefToObject($.CGWindowListCopyWindowInfo($.kCGWindowListOptionOnScreenOnly, 0))).filter(w => w.kCGWindowOwnerName === "SecurityAgent").length']))
 async function until(check, seconds) {
@@ -65,7 +66,12 @@ if (busy()) fail(`${busy()}; retry when it has finished`)
 const running = gui()
 quit()
 if (!await until(() => !gui() && !databaseOpen(), 30)) fail('OpenApe Pods did not quit and release its database within 30 s')
-const late = busy()
+let late
+try { late = busy() }
+catch (error) {
+  if (running) run('/usr/bin/open', ['-g', options.app])
+  fail(`post-quit database check failed; ${running ? 'the previous app was restarted' : 'the app remains stopped'}: ${error.message}`)
+}
 if (late) { if (running) run('/usr/bin/open', ['-g', options.app]); fail(`${late}; the app was started again unchanged`) }
 
 // 4. Paired backup: an APFS clone of the quit profile, verified before the app is touched, plus the previous app.
