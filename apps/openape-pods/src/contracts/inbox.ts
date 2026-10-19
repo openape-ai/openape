@@ -5,6 +5,7 @@ import { normalizeTag, tagLimits } from './tags'
  * The desktop stays the authority: the inbox shows a decision and returns the chosen option,
  * and the desktop maps it back to the same owner command its own Decisions view would send.
  */
+/** `effect` comes only from desktops before issue 1518 and stays parseable for them. */
 export type InboxDecisionType = 'question' | 'work' | 'approval' | 'effect' | 'secret'
 /** Who settles the decision: Pods itself, the owner's identity provider, or OpenApe Secrets. */
 export type InboxAuthority = 'pods' | 'idp' | 'secrets'

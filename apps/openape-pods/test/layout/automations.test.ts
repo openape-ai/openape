@@ -217,7 +217,7 @@ describe('Automatisierungen layout', () => {
     await page.screenshot({ path: screenshotPath('summary-02-freigaben-mobil.png'), element: approvals })
   })
 
-  it.each([{ width: 1440, theme: 'light' }, { width: 390, theme: 'dark' }])('keeps migrated decisions and uncertain effects read-only at $width px ($theme)', async ({ width, theme }) => {
+  it.each([{ width: 1440, theme: 'light' }, { width: 390, theme: 'dark' }])('keeps migrated decisions read-only at $width px ($theme)', async ({ width, theme }) => {
     await page.viewport(width, 1000)
     document.documentElement.style.colorScheme = theme
     applyLanguage('de')
@@ -230,10 +230,6 @@ describe('Automatisierungen layout', () => {
     expect(approvals.textContent).toContain('Historischer Eintrag')
     expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
     await page.screenshot({ path: screenshotPath(`cutover-history-${width}-${theme}.png`), element: approvals })
-    const effect = Array.from(document.querySelectorAll<HTMLElement>('[data-testid="reconcile"] .item')).find(item => item.textContent?.includes('messageId: m4'))!
-    expect(effect.querySelectorAll('button')).toHaveLength(0)
-    expect(effect.textContent).toContain('Historischer Eintrag')
-    await page.screenshot({ path: screenshotPath(`cutover-effect-${width}-${theme}.png`), element: effect })
   })
 
   it('renders the dark scheme from tokens', async () => {

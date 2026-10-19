@@ -109,15 +109,16 @@ it('lists archived Pods in their own labelled section', async () => {
   await wrapper.find('.central-pod').trigger('click'); await flushPromises()
   expect(wrapper.text()).toContain('This Pod is offline')
 })
-it('shows a blocked schedule queue in the sidebar and the Pod overview', async () => {
+it('shows no blocked schedule that a desktop before issue 1518 still reports', async () => {
   const fixture = centralFixture()
   fixture.host.workspace.pods[0]!.queue = { blocked: 1, since: Date.UTC(2026, 8, 25, 9), error: 'Pod execution permission is no longer active' }
   fixture.view.scheduling = { ...fixture.view.scheduling, blocked: 1, blockedSince: Date.UTC(2026, 8, 25, 9), error: 'Pod execution permission is no longer active' }
   wrapper = mount(CentralWorkspace, { props: { client: fixture.client } })
   await flushPromises()
-  expect(wrapper.find('.central-pod .central-blocked').text()).toContain('Schedule blocked')
+  expect(wrapper.find('.central-pod').text()).not.toContain('blocked')
   await wrapper.find('.central-pod').trigger('click'); await flushPromises()
-  expect(wrapper.find('[role="alert"]').text()).toMatch(/Schedule blocked since .*Pod execution permission is no longer active/)
+  expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+  expect(wrapper.text()).not.toContain('Review the failed run in History')
 })
 it('tells the owner why this desktop is offline and that schedules are paused', async () => {
   const fixture = centralFixture()

@@ -84,15 +84,15 @@ A manual `run` also verifies the owner's current `apes` login. That explicit
 owner call authorizes one start of the selected script through an exact
 single-use IdP grant, including the runtime and script content. It does not
 approve downstream programs or scheduled runs. Their existing grants, sandbox
-constraints and recovery holds still apply. Pending downstream approvals are
+constraints still apply. Pending downstream approvals are
 printed on stderr; the CLI does not open browser windows automatically.
 
 ## Identity, context and storage
 
 `run` executes only the requested active validated script, waits for its durable
 result and prints progress. It starts no schedules or sibling Pods. Ctrl+C
-cancels that run and waits for runtime cleanup. Unknown external effects retain
-their recovery state; the CLI does not replay them automatically.
+cancels that run and waits for runtime cleanup. The CLI does not repeat a run;
+automatic recovery and the script's own idempotency handle an interrupted one.
 
 The DDISA principal is the Pod, with existing exact-command grants through
 ape-shell. The stored execution level selects the home context: `owner` uses

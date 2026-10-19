@@ -111,7 +111,7 @@ it('records owner evidence of every MCP call as an assistant request without ref
   for (const action of [
     { action: 'networks', command: { type: 'gateReview', id: networkId, revision: 1, taskId: networkId, generation: 1, evidence: 'Failed before the IdP was contacted' } },
     { action: 'workspace', query: { type: 'reconcile', id: reconcile, applied: true, evidence: near } },
-    { action: 'recovery', revision: 1, command: { type: 'resolveHttp', podId: networkId, runId: networkId, key: 'send', applied: false, evidence: '' } },
+    { action: 'domain', requestId: randomUUID(), command: { type: 'release', key: 'c'.repeat(64), evidence: '' } },
   ]) await exchange(endpoint, `${JSON.stringify({ id: randomUUID(), action })}\n`)
   const sent = vi.mocked(execute).mock.calls.map(([request]) => (request.action.command ?? request.action.query) as { evidence: string })
   expect(sent.map(item => item.evidence)).toEqual(['Assistant request: Failed before the IdP was contacted', `Assistant request: ${near}`.slice(0, 2000), ''])

@@ -135,5 +135,5 @@ export class CodexControl {
 function withoutRunContent(result: unknown): unknown {
   if (!result || typeof result !== 'object' || !('runs' in result) || !('checkpoint' in result)) return result
   const { runs, checkpoint, ...rest } = result as { runs: RunRecord[], checkpoint: { revision: number } }
-  return { ...rest, runs: runs.map(({ id, state, scriptHash, startedAt, finishedAt, recovery }) => ({ id, state, scriptHash, startedAt, finishedAt, recovery: recovery?.state ?? null })), checkpoint: { revision: checkpoint.revision } }
+  return { ...rest, runs: runs.map(({ id, state, scriptHash, startedAt, finishedAt }) => ({ id, state, scriptHash, startedAt, finishedAt })), checkpoint: { revision: checkpoint.revision } }
 }

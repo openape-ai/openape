@@ -27,9 +27,11 @@ describe('Pod row status', () => {
 
   it('reports what holds the Pod and derives its state', () => {
     applyLanguage('de')
-    const blocked = pod({ queue: { blocked: 1, error: 'Invalid program arguments' } })
-    expect(waitsFor(blocked, view)).toBe('blockiert: Ungültige Programmargumente')
-    expect(podState(blocked, view)).toBe('waiting')
+    const failed = pod({ work: { pending: 0, held: 2 } })
+    expect(waitsFor(failed, view)).toBe('2 fehlgeschlagene Arbeitseinträge')
+    expect(podState(failed, view)).toBe('waiting')
+    // A blocked queue or an uncertain delivery that a desktop before issue 1518 reports holds nothing.
+    expect(waitsFor(pod({ queue: { blocked: 1, error: 'Invalid program arguments' }, unknown: [{ key: 'send', runId: base.id }] }), view)).toBe('')
     expect(waitsFor(pod({}), view)).toBe('')
     const requested = pod({ grants: [{ grantId: 'grant-push', title: 'Send push messages', url: 'https://id.openape.ai/grant-approval?grant_id=grant-push' }] })
     expect(waitsFor(requested, view)).toBe('deine Freigabe am IdP')

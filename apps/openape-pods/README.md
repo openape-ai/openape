@@ -60,8 +60,9 @@ identity and their separate IdP authorization.
 A pre-effect permission wait or refusal ends the affected attempt while allowing
 a later normal trigger to check the current permission again. Existing requests
 are reused and denied or revoked permissions still refuse execution. Invalid
-identity/token/content bindings remain held. An uncertain effect, a previous
-external write or an untracked operation still requires evidence before replay.
+identity/token/content bindings are refused. A run can be interrupted at any
+point and repeat, including a write whose outcome is unknown; the script owns its
+idempotency and the reconciliation of its external effects.
 
 The interactive setup shell is a grant-mediated owner shell, not an OS sandbox.
 A granted command has the Mac user's filesystem/process privileges. Broad session
@@ -285,7 +286,7 @@ input, supplies read-only snapshots and uses a bounded, sequenced JSON protocol
 on a private descriptor. Exit zero is insufficient: a valid terminal result is
 required. Acknowledged knowledge/checkpoint commits and run events are durable.
 Missing providers, malformed frames, timeouts and cancellation remain visible.
-Restart fences unfinished work as interrupted; explicit reconciliation is M6.
+Restart fences unfinished work as interrupted; automatic recovery (M6) repeats it.
 
 Scripts and Codex run in separate deny-default native domains. Only the trusted
 SDK host may launch the fixed CLI. Each regular agent call creates a fresh Codex
@@ -321,11 +322,13 @@ most one additional pending schedule event while a pod is already running.
 
 Accepted events have source-specific idempotency keys and independent identities;
 identical payloads with different keys remain distinct. Intake caps payloads at
-32 KiB, pending/held inputs at 1,000 per pod and 10,000 globally, and batches at
+32 KiB, open inputs at 1,000 per pod and 10,000 globally (failed inputs do not
+count), and batches at
 50. A FIFO ready-pod dispatcher reserves events together with the run lease.
 Only completed input IDs transition to processed with the terminal run commit.
-Failed/incomplete inputs remain blocked for explicit recovery, preventing silent
-loss and repeated automatic failure loops. Run history and Settings show backlog.
+Inputs of an interrupted or failed run are retried automatically with backoff;
+after the automatic attempts they fail visibly instead of looping. Run history and
+Settings show backlog.
 
 The worker rescans assigned references every fifteen seconds while a pod is
 active, including the first tick after restart. Native descriptor-based capture
@@ -337,31 +340,32 @@ changes, not every transient filesystem mutation between scans.
 Verification uses a controlled clock with actual SQLite leases and real native
 script execution. It covers DST, clock jumps, catch-up coalescing, duplicate and
 conflicting event IDs, queue overflow, restart before acknowledgement, FIFO
-capacity, held failures, cross-pod event binding and reference changes across a
+capacity, exhausted retries, cross-pod event binding and reference changes across a
 database restart. Owner schedules remain unconfigured during implementation;
 only isolated synthetic test profiles exercise automatic dispatch.
 
-## M6: explicit recovery and lifecycle
+## M6: automatic recovery and lifecycle
 
 Startup fences every retained run lease before accepting commands. Old workers
 cannot register execution domains or commit progress. Native supervisors persist
 process birth identities before opening the execution gate and publish a closed
 record only after the owned process group is gone. Recovery inspects those
 records; it never signals a saved PID. Missing or ambiguous process evidence
-keeps the run blocked. A closed owning pipe prevents a late supervisor from
+keeps the run's lease, and recovery checks it again later. A closed owning pipe prevents a late supervisor from
 starting its executable after the worker has died.
 
 Cancellation waits for actual SDK cleanup before releasing the pod and global
-slot. Runs offers inspection and explicit retry using the latest validated
-script and resources. Committed checkpoints and cited facts survive; remaining
-inputs are requeued atomically with an idempotent recovery request. Each manual
-request handles up to fifty inputs, with additional backlog visible for another
-manual request. Paused pods stay paused.
+slot. An interrupted or failed run is retried automatically with the latest
+validated script and resources once its previous processes are confirmed stopped.
+Committed checkpoints and cited facts survive; its remaining inputs return to the
+queue. A Pod is only active or paused: no run outcome stops it for owner review,
+and paused Pods stay paused.
 
-The effect ledger records intent, completed receipts and unknown outcomes. An
-unknown outcome prevents recovery until a trusted adapter reconciles it; scripts
-cannot assert their own reconciliation. Effectful scripts remain disabled until
-such an adapter is registered. This is tested with synthetic effects only.
+The effect ledger records intent, completed receipts and unknown outcomes. A
+completed receipt returns its original result when the same effect key repeats.
+An unknown outcome does not stop recovery: a run can be interrupted at any point
+and repeat, so scripts are responsible for idempotency and for reconciling their
+own external effects. This is tested with synthetic effects only.
 
 Closing the window keeps a running fixture alive; quit cancels its process domain.
 Suspend signals pause automatic intake and resume signals request a rescan and
@@ -525,9 +529,8 @@ all referenced evidence and pending events are retained.
 
 Each Pod retains its newest 50 runs, ordered by start time (insertion order breaks
 ties). Older finished runs disappear from local and central run history and their
-execution folders are removed. Leased or unfinished runs, unresolved effects,
-pending approvals/inputs and open recovery reviews remain protected beyond this limit. A queued recovery review settles when
-its retry input is processed. Completed effect receipts survive independently of
+execution folders are removed. Leased or unfinished runs and runs with pending
+approvals or open inputs remain protected beyond this limit. Completed effect receipts survive independently of
 their old runs, so repeating an effect key returns the original result instead of
 delivering twice. Processed input identities also survive for deduplication.
 
@@ -758,4 +761,4 @@ Machine-specific Pod scripts, policies and their recipe tests are private machin
 
 Scripts can read `await context.timing()` as `{activeMs, waitingMs}` for their current leased run. Approval waits are excluded from active time and overlapping waits count once. The call accepts no run or Pod selector and does not reset or extend any hard execution or inference limit. Cancelled, fenced or changed assignments cannot use it. Use this read-only observation for soft processing deadlines and checkpoint resumable work through `context.progress.commit`.
 
-For a stopped program with verified partial effects, owner recovery can submit `{type:"resolveHttp",podId,runId,key,applied:true,programOutcome:"partial",evidence}`. Execution domains must be stopped and the effect must belong to that run and remain unknown. This records a partial owner observation without claiming exit code zero, changing the failed run to success or replaying the program. HTTP effects and non-applied observations reject this option. Completed work and its outputs remain intact; inspect and explicitly retry only the unsettled work.
+A stopped program is recovered like any other run: once its execution domains are stopped, the run repeats automatically. Completed work and its outputs remain intact; the script decides from its own records which work is already done and must not repeat an external effect it already applied.

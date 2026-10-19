@@ -5,6 +5,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { ServiceRequest } from '../../src/contracts/services'
+import type { RunView } from '../../src/contracts/runs'
 
 vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent' }, shell: { openExternal: vi.fn(async () => {}) } }))
 
@@ -177,11 +178,12 @@ it('sends desktop commands and approval page opening through the producers of th
   await expect(worker.codex({ id, action: { action: 'desktop', channel: 'runtimeApproval', command: { type: 'set', enabled: true } } })).rejects.toThrow('Unsupported desktop MCP channel')
 })
 
-it('returns bounded MCP recovery results without effects awaiting owner review', async () => {
+it('returns bounded MCP recovery results without effects or review state of earlier desktops', async () => {
   const { FixtureWorker } = await import('../../src/main/worker')
   const worker = new FixtureWorker(() => {})
   const podId = randomUUID(); const runId = randomUUID()
-  vi.spyOn(worker, 'runs').mockResolvedValue({ runs: [], events: [], effects: [{ key: 'legacy-delivery', runId }] })
+  const run = { id: runId, podId, scriptHash: 'a'.repeat(64), state: 'interrupted' as const, startedAt: 1, finishedAt: null, summary: 'Mail content', error: null, checkpointRevision: 0, recovery: { state: 'needsReview' as const, error: 'External effect is unknown' } }
+  vi.spyOn(worker, 'runs').mockResolvedValue({ runs: [run], events: [], effects: [{ key: 'legacy-delivery', runId }] } as RunView)
   Object.assign(worker, { dispatch: vi.fn(async () => ({ completed: false })) })
-  expect(await worker.codex({ id: randomUUID(), action: { action: 'recovery', revision: 1, command: { type: 'list', podId } } })).toEqual({ runs: [], approvals: [] })
+  expect(await worker.codex({ id: randomUUID(), action: { action: 'recovery', revision: 1, command: { type: 'list', podId } } })).toEqual({ runs: [{ id: runId, state: 'interrupted', scriptHash: 'a'.repeat(64), startedAt: 1, finishedAt: null }], approvals: [] })
 })

@@ -17,7 +17,7 @@ describe('checkpoint recovery in Electron', () => {
 it('serves shared-data administration through the actual Electron preload, main and worker route', async () => {
   const { root } = await seed()
   const { page } = await launch(root, false)
-  expect(await page.evaluate(() => window.pods.domain({ type: 'list' }))).toMatchObject({ namespaces: [], questions: [], unknownEffects: [] })
+  expect(await page.evaluate(() => window.pods.domain({ type: 'list' }))).toMatchObject({ namespaces: [], questions: [], held: [] })
   await expect(page.evaluate(() => window.pods.domain({ type: 'list', owner: 'forged' } as never))).rejects.toThrow('Unsupported data fields')
   expect((await page.evaluate(() => window.pods.getStatus())).worker.state).toBe('ready')
   await openPod(page, 'Checkpoint recovery')

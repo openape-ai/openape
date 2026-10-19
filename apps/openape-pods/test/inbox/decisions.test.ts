@@ -15,13 +15,12 @@ const run = '44444444-4444-4444-8444-444444444444'
 const question = '66666666-6666-4666-8666-666666666666'
 const approval = '77777777-7777-4777-8777-777777777777'
 const work = 'c'.repeat(64)
-const action = 'd'.repeat(64)
 
 function sources(): DecisionSources {
   const map = {
     pods: [
-      { id: pod, name: 'Belege', approvals: [{ grantId: 'grant-1', title: 'Mail lesen', runId: run }], unknown: [{ key: 'invoice-7', runId: run }] },
-      { id: classifier, name: 'Mail-Klassifizierung', approvals: [], unknown: [] },
+      { id: pod, name: 'Belege', approvals: [{ grantId: 'grant-1', title: 'Mail lesen', runId: run }] },
+      { id: classifier, name: 'Mail-Klassifizierung', approvals: [] },
     ],
   } as unknown as MapView
   const domain: DomainOverview = {
@@ -33,7 +32,6 @@ function sources(): DecisionSources {
       { id: '88888888-8888-4888-8888-888888888888', podId: pod, action: 'mail.archive', object: 'owner@example.com:m2', title: 'Archive mail from other@example.com', description: null, link: null, state: 'requested', reason: null, batchId: 'batch-8', batchUrl: 'https://id.example.test/grant-batch?id=8', updatedAt: 1 },
     ],
     held: [{ key: work, operation: 'delta-mind/mail-classification', object: 'm3', state: 'blocked', attempt: 5, readyAt: 1, reason: 'Model refused five times', inputRevision: 1 }],
-    unknownEffects: [{ actionKey: action, attempt: 1, podId: pod, runId: run, operation: 'mail.archive', createdAt: 1, intent: { mailbox: 'owner@example.com', messageId: 'm4' } }],
   }
   const secrets = {
     consumer: null,
@@ -62,14 +60,14 @@ it('projects every open Pods decision with its authority and nothing that the Id
   const { decisions } = fixture()
   const list = await decisions.collect()
   for (const item of list) expect(parseInboxDecision(item)).toEqual(item)
-  expect(list.map(item => item.sourceId).sort()).toEqual([`approval:${approval}`, `effect:${action}:1`, `question:${question}`, 'secret:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', `work:${work}`].sort())
+  expect(list.map(item => item.sourceId).sort()).toEqual([`approval:${approval}`, `question:${question}`, 'secret:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', `work:${work}`].sort())
   // A field value cannot forge a second sender line on the card.
   expect(byType(list, 'question')).toMatchObject({ podName: 'Mail-Klassifizierung', title: 'Is this mail a newsletter?', body: 'Rechnung Mai\nsender: news@example.com\nnote: Hallo ⏎ sender: chef@example.com', options: [{ key: 'newsletter', input: null }, { key: 'keep', input: null }], authority: 'pods', link: null })
   expect(byType(list, 'approval')).toMatchObject({ podName: 'Belege', options: [] })
   // The card carries the approval's own fields (issue 1473): title, description, Pod as origin and the HTTPS link.
   expect(byType(list, 'approval')).toMatchObject({ title: 'Weekly news', body: 'Uncertain approval\nNewsletter by its unsubscribe header\nowner@example.com:m1\nRestored backup', link: { title: 'news.example.com', url: 'https://news.example.com/issue/1' } })
-  expect(byType(list, 'work')).toMatchObject({ podName: 'Mail-Klassifizierung', body: 'm3\nModel refused five times', options: [{ key: 'release', input: 'evidence' }] })
-  expect(byType(list, 'effect', 'mail.archive')).toMatchObject({ body: 'mailbox: owner@example.com\nmessageId: m4', options: [] })
+  // Failed work is retried without an owner observation; Pods holds nothing for review (issue 1518).
+  expect(byType(list, 'work')).toMatchObject({ podName: 'Mail-Klassifizierung', title: 'Failed work · delta-mind/mail-classification', body: 'm3\nModel refused five times', options: [{ key: 'release', title: 'Retry', input: null }] })
   expect(byType(list, 'secret')).toMatchObject({ authority: 'secrets', title: 'Secret imap for Belege', link: { url: 'https://secrets.openape.ai/' } })
   // A requested approval and a run approval are decided at the IdP; the inbox only counts them.
   expect(list.some(item => item.sourceId.includes('88888888-8888-4888-8888-888888888888'))).toBe(false)
@@ -78,7 +76,7 @@ it('projects every open Pods decision with its authority and nothing that the Id
 
 it.each([
   ['question', 'newsletter', undefined, { type: 'answer', questionId: question, option: 'newsletter' }],
-  ['work', 'release', 'Modell wieder erreichbar', { type: 'release', key: work, evidence: 'Modell wieder erreichbar' }],
+  ['work', 'release', undefined, { type: 'release', key: work }],
 ] as const)('executes a %s decision (%s) as the owner domain command', async (selector, option, input, expected) => {
   const { decisions, worker } = fixture()
   const [type, title] = selector.split(':') as [string, string | undefined]
@@ -97,12 +95,11 @@ it.each([
   expect(worker[target]).toHaveBeenCalledExactlyOnceWith(expected)
 })
 
-it('fails clearly for a changed or vanished source and for missing evidence, without running a command', async () => {
+it('fails clearly for a changed or vanished source, without running a command', async () => {
   const { decisions, worker, current } = fixture()
   const list = await decisions.collect()
   const asked = byType(list, 'question')
   const held = byType(list, 'work')
-  await expect(decisions.decide({ type: 'decide', sourceId: held.sourceId, digest: held.digest, option: 'release', input: '  ' })).rejects.toThrow('requires your observation')
   current.domain.questions[0]!.body = 'Rechnung Juni'
   await expect(decisions.decide({ type: 'decide', sourceId: asked.sourceId, digest: asked.digest, option: 'keep' })).rejects.toThrow('This decision changed')
   current.domain.questions = []
@@ -119,7 +116,7 @@ it('carries the Pod tags and keeps untagged digests (issue 1461)', async () => {
   const list = await fixture(current).decisions.collect()
   for (const item of list) expect(parseInboxDecision(item)).toEqual(item)
   const tagged = list.filter(item => item.podId === pod)
-  expect(tagged.map(item => item.type).sort()).toEqual(['approval', 'effect', 'secret'])
+  expect(tagged.map(item => item.type).sort()).toEqual(['approval', 'secret'])
   for (const item of tagged) expect(item.podTags).toEqual(['finanzen', 'mail'])
   // A tag change is visible to the owner, so it changes the digest; Pods without tags keep theirs.
   const digest = (sourceId: string) => before.find(item => item.sourceId === sourceId)!.digest
@@ -130,9 +127,9 @@ it('carries the Pod tags and keeps untagged digests (issue 1461)', async () => {
   }
 })
 
-it.each(['approval', 'effect'])('keeps historical %s inspectable without renewal or reconciliation actions', async (type) => {
+it('keeps a historical approval inspectable without renewal or reconciliation actions', async () => {
   const { decisions, worker } = fixture()
-  const decision = byType(await decisions.collect(), type, type === 'effect' ? 'mail.archive' : undefined)
+  const decision = byType(await decisions.collect(), 'approval')
   expect(decision.options).toEqual([])
   await expect(decisions.decide({ type: 'decide', sourceId: decision.sourceId, digest: decision.digest, option: 'renew', input: 'reviewed' })).rejects.toThrow('not available')
   expect(worker.domain).not.toHaveBeenCalled()

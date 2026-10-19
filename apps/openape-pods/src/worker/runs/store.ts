@@ -9,6 +9,8 @@ import type { PodDatabase } from '../storage/database'
 
 function fromRow(row: Record<string, unknown>): RunRecord {
   const automaticRecovery = row.automatic_recovery ? JSON.parse(String(row.automatic_recovery)) as AutomaticRecovery : undefined
+  // Versions before issue 1518 recorded an owner hold; that attempt stopped and later runs continue as usual.
+  if ((automaticRecovery?.disposition as string) === 'hold') automaticRecovery!.disposition = 'isolated'
   if (automaticRecovery?.disposition === 'retry' && !row.retry_pending) { automaticRecovery.disposition = 'continued'; automaticRecovery.nextAt = null; automaticRecovery.reason = 'Work continued in a later attempt' }
   return { ...(automaticRecovery ? { automaticRecovery } : {}), id: row.id as string, podId: row.pod_id as string, scriptHash: row.script_hash as string, state: row.state as RunState, startedAt: row.started_at as number, finishedAt: row.finished_at as number | null, summary: row.summary as string, error: row.error as string | null, checkpointRevision: row.checkpoint_revision as number, recovery: null }
 }

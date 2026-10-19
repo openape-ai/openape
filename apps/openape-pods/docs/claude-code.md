@@ -84,7 +84,7 @@ login used for Pod setup is a different login and never decides a grant.
 
 Within a session MCP acts as the owner and may use every action the tool offers,
 including shared-data administration (`domain`: namespaces, writers, readers,
-owner records, held work, owner questions and uncertain effects), recovery and
+owner records, failed work, owner questions and object approvals), recovery and
 the desktop `definitions`, `scheduling` and `workspace` commands.
 
 The session is the owner's own DDISA login, like a signed-in CLI used together
@@ -215,9 +215,10 @@ declares the work it does on what it reads (`runtime.sharedData`):
 Every write needs a stable `requestId`; repeating it with the same command
 returns the recorded result, a different command is refused. `setReaders` and
 `assignWriter` change a namespace with its current revision, `set` and `delete`
-write owner records, `work` shows the work of one operation, `release` frees
-held work after review, `answer` answers an owner question and `resolveEffect`
-records the owner's observation of an uncertain external action.
+write owner records, `work` shows the work of one operation, `release` retries
+failed work that no longer retries on its own, and `answer` answers an owner
+question. Pods holds nothing for an owner observation: a run can be interrupted
+at any point and repeat, and the script owns its idempotency and reconciliation.
 
 Each Pod uses its own sandbox and grants exactly like any standalone Pod; shared
 data never widens them. Archiving mail needs an approval per message at the

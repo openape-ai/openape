@@ -33,7 +33,7 @@ describe('Automatisierungen', () => {
       // Only Pods failing now count; a Pod whose last run succeeded keeps its earlier failures in its history.
       ['1', 'aktuelle Fehler', 'IURIO PR monitor · mit Lücken abgeschlossen'],
       // The same sections as Entscheidungen: a run waiting for its grant and a grant requested at the IdP are rights.
-      ['24', 'Entscheidungen warten auf dich', '17 Rückfragen, 4 Freigaben, 2 Rechte, 1 abzugleichen'],
+      ['24', 'Entscheidungen warten auf dich', '17 Rückfragen, 4 Freigaben, 2 Rechte, 1 fehlgeschlagene Arbeitseinträge'],
     ])
     expect(wrapper!.find('.kpi.alert').text()).toContain('aktuelle Fehler')
     await wrapper!.find('.kpi-pod').trigger('click')
