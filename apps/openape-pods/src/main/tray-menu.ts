@@ -1,5 +1,5 @@
 import type { MenuItemConstructorOptions } from 'electron'
-import type { StoredPod } from '../contracts/control'
+import type { ItemTags, StoredPod } from '../contracts/control'
 import type { Language } from '../contracts/language'
 import type { RunRecord, RunState } from '../contracts/runs'
 import { translate } from '../i18n'
@@ -12,6 +12,25 @@ const indicators: Record<RunState, string> = {
   blocked: '🟠',
   cancelled: '🟠',
   interrupted: '🟠',
+}
+
+export function trayTags(pods: StoredPod[], tags: ItemTags[], language: Language): string[] {
+  const ids = new Set(pods.map(pod => pod.id))
+  return [...new Set(tags.filter(item => ids.has(item.id)).flatMap(item => item.tags))]
+    .sort(new Intl.Collator(language, { sensitivity: 'base', numeric: true }).compare)
+}
+
+export function trayTagItems(tags: string[], selected: string | null, language: Language, select: (tag: string | null) => void): MenuItemConstructorOptions[] {
+  return [
+    {
+      label: selected ? `${translate(language, 'Tags')}: ${selected}` : translate(language, 'Tags'),
+      submenu: [
+        { label: translate(language, 'All Pods'), type: 'radio', checked: selected === null, click: () => select(null) },
+        ...tags.map(tag => ({ label: tag, type: 'radio' as const, checked: selected === tag, click: () => select(tag) })),
+      ],
+    },
+    { type: 'separator' },
+  ]
 }
 
 export function trayPodItems(entries: { pod: StoredPod, runs: RunRecord[] }[], language: Language, open: () => void): MenuItemConstructorOptions[] {

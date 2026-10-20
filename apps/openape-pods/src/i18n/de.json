@@ -2749,6 +2749,8 @@
   "Invalid IdP grant listing": "Ungültige Freigabenliste vom IdP",
   "Approval expired unanswered; requested again automatically": "Freigabe unbeantwortet abgelaufen; automatisch neu angefragt",
   "Tags": "Tags",
+  "All Pods": "Alle Pods",
+  "Could not save tray filter": "Tag-Filter konnte nicht gespeichert werden",
   "Add tag": "Tag hinzufügen",
   "Save tags": "Tags speichern",
   "Remove tag {tag}": "Tag {tag} entfernen",
