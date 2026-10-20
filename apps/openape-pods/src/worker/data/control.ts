@@ -19,7 +19,7 @@ export class DataControl {
     if (command.type === 'jobs') return this.retention.jobs()
     if (command.type === 'finishDeletion') this.retention.finishDeletion(command.podId)
     if (command.type === 'limit') this.retention.limit(command.bytes)
-    if (command.type === 'deletePod') await this.retention.deletePod(command.podId, command.revision, command.name)
+    if (command.type === 'deletePod') await this.retention.deletePod(command.podId, command.revision, command.name, command.discardApprovals)
     if (command.type === 'cleanup') await this.retention.cleanup()
     if (command.type === 'reviewRestore') this.store.db.prepare('INSERT INTO storage_receipts VALUES(?,\'restore-reviewed\',?,?)').run(randomUUID(), JSON.stringify({ evidence: command.evidence }), Date.now())
     if (command.type === 'backup') this.result = { kind: 'backup', path: await createBackup(this.store, command.parent) }
