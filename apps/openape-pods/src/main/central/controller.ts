@@ -76,6 +76,11 @@ export class CentralController {
   private context = new AsyncLocalStorage<boolean>()
   private localActions = new Map<string, () => Promise<unknown>>()
   private publishing: Promise<void> | null = null
+  private publicationQueue: Promise<void> = Promise.resolve()
+  private background: Promise<void> | null = null
+  private backgroundError: unknown = null
+  private generation = 0
+  private wake: (() => void) | null = null
   private format: 2 | null = null
   private manifest: CentralManifest = {}
   private runtimeId: string | null = null
@@ -189,19 +194,40 @@ export class CentralController {
     this.online = true; this.error = null; this.lastOnlineAt = Date.now()
   }
 
+  private serialized<T>(action: () => Promise<T>): Promise<T> {
+    const result = this.publicationQueue.then(action)
+    this.publicationQueue = result.then(() => undefined, () => undefined)
+    return result
+  }
+
+  private async pause(): Promise<void> {
+    const controller = new AbortController()
+    this.wake = () => controller.abort()
+    try { await delay(1000, undefined, { signal: AbortSignal.any([controller.signal, this.abort.signal]) }) }
+    catch (error) { if (!controller.signal.aborted && !this.abort.signal.aborted) throw error }
+    finally { this.wake = null }
+  }
+
   private async synchronize(completion?: Completion): Promise<void> {
     if (!completion && Date.now() - this.publishedAt < this.timing.publishIntervalMs) return
+    const generation = this.generation
     this.phase = 'worker snapshot'
     const version = await this.executor.version?.()
     const reuse = !completion && version !== undefined && this.cached?.version === version
-    const base = reuse ? this.cached!.snapshot : parseCentralSnapshot(await this.executor.snapshot())
+    let base: CentralSnapshot
+    try { base = reuse ? this.cached!.snapshot : parseCentralSnapshot(await this.executor.snapshot()) }
+    catch (error) {
+      if (!completion && this.online && error instanceof Error && error.message === 'Workspace changed during central projection; retry the snapshot') return
+      throw error
+    }
+    if (!completion && generation !== this.generation) return
     const snapshot = { ...base, artifacts: [] }
-    if (reuse && this.cached!.hash === this.state.hash) return
+    if (reuse && this.cached!.hash === this.state.hash) { this.publishedAt = Date.now(); return }
     const parts = encodeParts(splitSnapshot(snapshot))
     const manifest = Object.fromEntries(Array.from(parts, ([key, part]) => [key, part.hash]))
     const hash = manifestDigest(manifest)
     if (version !== undefined) this.cached = { version, snapshot, hash }
-    if (hash === this.state.hash && !completion) return
+    if (hash === this.state.hash && !completion) { this.publishedAt = Date.now(); return }
     const changes: Record<string, string | null> = Object.fromEntries(Object.keys(this.manifest).filter(key => !(key in manifest)).map(key => [key, null]))
     const uploads: Record<string, unknown> = {}
     for (const [key, part] of parts) {
@@ -209,16 +235,27 @@ export class CentralController {
       changes[key] = part.hash; uploads[part.hash] = JSON.parse(part.text)
     }
     const pending: Pending = { id: randomUUID(), revision: this.state.revision, ...(completion ? { completion } : {}), format: 2, hash, changes, parts: uploads }
-    await this.save('publication.json', pending)
-    await this.publish(pending)
+    const batches = partBatches(pending.parts)
+    const at = Date.now()
+    for (const parts of batches) {
+      if (!completion && generation !== this.generation) return
+      await this.call({ type: 'parts', parts })
+    }
+    await this.serialized(async () => {
+      if (!completion && (generation !== this.generation || this.operating)) return
+      await this.save('publication.json', pending)
+      await this.publish(pending, { at, batches })
+    })
   }
 
-  private async publish(pending: Pending): Promise<void> {
+  private async publish(pending: Pending, staged?: { at: number, batches: Record<string, unknown>[] }): Promise<void> {
     this.publishing = (async () => {
-      const at = Date.now()
+      const at = staged?.at ?? Date.now()
       this.phase = 'part upload'
-      const batches = partBatches(pending.parts)
-      for (const parts of batches) await this.call({ type: 'parts', parts })
+      const batches = staged?.batches ?? partBatches(pending.parts)
+      if (!staged) {
+        for (const parts of batches) await this.call({ type: 'parts', parts })
+      }
       this.phase = 'publish'
       const { parts: _parts, format: _format, ...publication } = pending
       this.state = await this.call({ type: 'publish', format: 2, ...publication }) as State
@@ -282,11 +319,20 @@ export class CentralController {
         })()
         while (!this.abort.signal.aborted) {
           if (!this.online) throw new ConnectionLost()
+          if (this.backgroundError) { const error = this.backgroundError; this.backgroundError = null; throw error }
           this.phase = 'claim'
-          const operation = await this.call({ type: 'claim' }) as CentralOperation | null
-          if (operation) await this.operate(operation)
-          else await this.synchronize()
-          await delay(1000, undefined, { signal: this.abort.signal })
+          const operation = await this.serialized(async () => {
+            const claimed = await this.call({ type: 'claim' }) as CentralOperation | null
+            if (claimed) { this.operating = true; this.generation++; this.cached = null }
+            return claimed
+          })
+          if (operation) {
+            await this.operate(operation)
+          }
+          else if (!this.background) {
+            this.background = this.synchronize().catch((error: unknown) => { this.backgroundError = error }).finally(() => { this.background = null })
+          }
+          await this.pause()
         }
       }
       catch (error) {
@@ -296,6 +342,7 @@ export class CentralController {
       }
       finally {
         renewal.abort(); await renew
+        this.generation++; await this.background; this.backgroundError = null
         this.operating = false
       }
       if (this.abort.signal.aborted) break
@@ -326,6 +373,7 @@ export class CentralController {
       for (;;) {
         try {
           await this.call({ type: 'submit', id, revision: this.state.revision, command: { channel: 'local', body: { type: 'ownerAction' } } })
+          this.wake?.()
           break
         }
         catch (error) {

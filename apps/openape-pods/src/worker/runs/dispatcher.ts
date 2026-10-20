@@ -203,7 +203,7 @@ export class RunDispatcher {
       const input: RunInput = { home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: new PodVariables(this.store).values(pod.id), version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: scriptTimeLimitMs, frameBytes: scriptFrameBytes } }
       const aliases = this.resources.aliases(pod.id)
       if (aliases.length) input.aliases = runAliases(aliases, input.references)
-      appendEvent('snapshot', { id: snapshots.id, files: input.references })
+      if (snapshots.files.length) appendEvent('snapshot', { id: snapshots.id, files: input.references })
       const dependencies = new DependencyStore(this.store); const dependencyHash = dependencies.scriptSet(pod.id, run.scriptHash)
       const dependencyRoot = dependencyHash ? await dependencies.verify(pod.id, dependencyHash) : undefined
       const runtime = { ...this.runtime, dependencyRoot, registerDomain: (path: string, ownerPid: number) => this.runs.registerDomain(id, path, ownerPid) }

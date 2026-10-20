@@ -12,6 +12,7 @@ export async function createSnapshotSet(helper: string, destination: string, ass
   if (!isAbsolute(helper) || !isAbsolute(destination)) throw new Error('Snapshot paths must be absolute')
   if (assignments.length > 100) throw new Error('Too many reference files')
   const id = randomUUID()
+  if (!assignments.length) return { id, files: [] }
   const staging = join(destination, `.stage-${id}`)
   const published = join(destination, id)
   await mkdir(destination, { recursive: true, mode: 0o700 }); await mkdir(staging, { mode: 0o700 })
