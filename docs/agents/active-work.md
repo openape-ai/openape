@@ -1,3 +1,10 @@
+# Grant request dates — issue 1526
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1526. Branch `feature/issue-1526-grant-request-dates`, reused checkout `cross-run-grant-reference`, canonical base `110697ded886a9221349299edbf55e180d4abedd`.
+- Show localized request dates with a time zone on individual cards and oldest/newest pending member dates on batch cards. Preserve decision behavior and existing newest-first sorting.
+- Verification: 68 existing page/component tests and a focused real-CSS browser case pass, including unsorted cross-day members, single-member groups and individual cards. Mobile light and desktop dark screenshots were inspected. Next: required affected gate, native PR review and deployment gate, then IdP rollout.
+- Docpit grant assessment is read-only. No Pod scripts, decisions, batches or mail data are changed by this work.
+
 # Local-only archived Pod deletion — issue 1525
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1525. Branch `bugfix/issue-1525-local-pod-deletion`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `110697ded886a9221349299edbf55e180d4abedd`.

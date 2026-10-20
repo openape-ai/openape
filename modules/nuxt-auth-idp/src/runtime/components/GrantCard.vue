@@ -8,6 +8,7 @@ import GrantClaims from './GrantClaims.vue'
 import GrantIdentity from './GrantIdentity.vue'
 import GrantTechnicalDetails from './GrantTechnicalDetails.vue'
 import GrantRequestedMarker from './GrantRequestedMarker.vue'
+import GrantRequestDate from './GrantRequestDate.vue'
 
 const props = withDefaults(defineProps<{ grant: GrantWithCard, german: boolean, compact?: boolean, identity?: boolean, showValidity?: boolean, languageSwitch?: boolean, technical?: boolean }>(), { identity: true, showValidity: true, languageSwitch: true, technical: true })
 defineEmits<{ language: [german: boolean] }>()
@@ -39,6 +40,7 @@ const batchPath = computed(() => props.grant.request.batch ? grantBatchPath(prop
       </button>
     </div>
     <GrantIdentity v-if="identity" :grant="grant" :german="german" />
+    <GrantRequestDate :created-at="grant.created_at" :german="german" />
     <div class="space-y-1.5" data-bound-scope>
       <p class="text-xs text-muted">
         {{ german ? 'Angefragter Umfang' : 'Requested scope' }}

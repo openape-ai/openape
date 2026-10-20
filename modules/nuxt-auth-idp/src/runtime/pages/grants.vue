@@ -9,6 +9,7 @@ import { getCliAuthorizationDetails } from '../utils/cli-grants'
 import { grantBatchPath, groupPendingGrantBatches } from '../utils/grant-batch'
 import { standingRulePreview } from '../utils/rule-suggestions'
 import GrantCard from '../components/GrantCard.vue'
+import GrantRequestDate from '../components/GrantRequestDate.vue'
 import GrantDecisionForm from '../components/GrantDecisionForm.vue'
 import GrantIdentity from '../components/GrantIdentity.vue'
 
@@ -126,6 +127,7 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('visibili
                 {{ batch.description }}
               </p>
               <GrantIdentity :grant="batch.grant" :german="german" />
+              <GrantRequestDate :created-at="batch.oldestAt" :latest-at="batch.createdAt" :german="german" />
               <p class="text-xs text-muted">
                 {{ batch.size ? `${batch.count} / ${batch.size}` : batch.count }} {{ german ? 'Anfragen · Einmalig' : 'requests · Single use' }}
               </p>
@@ -173,7 +175,7 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('visibili
         <div class="space-y-4">
           <GrantCard v-for="grant in historyGrants" :key="grant.id" :grant="grant" :german="german" :language-switch="false">
             <p class="text-xs text-muted">
-              {{ grant.status }} · {{ new Date(grant.created_at * 1000).toLocaleString() }}<span v-if="grant.decided_by"> · {{ grant.decided_by }}</span>
+              {{ grant.status }}<span v-if="grant.decided_by"> · {{ grant.decided_by }}</span>
             </p>
           </GrantCard>
           <UButton v-if="historyHasMore" color="neutral" variant="outline" :loading="loadingHistory" @click="loadMoreHistory">
