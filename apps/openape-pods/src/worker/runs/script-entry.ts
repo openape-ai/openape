@@ -4,6 +4,7 @@ import { join } from 'node:path'
 import { Socket } from 'node:net'
 import { pathToFileURL } from 'node:url'
 import type { RunInput } from '../../contracts/runs'
+import type { SafeAgentError } from '../../contracts/agent-errors'
 import { freeze, scriptContext } from './script-context.ts'
 import type { ScriptModule } from './script-context.ts'
 
@@ -63,7 +64,7 @@ async function main(): Promise<void> {
       if (!buffer.includes('\n') && Buffer.byteLength(buffer) > config.input.limits.frameBytes) throw new Error('Oversized runner response')
       for (let newline = buffer.indexOf('\n'); newline >= 0; newline = buffer.indexOf('\n')) {
         if (Buffer.byteLength(buffer.slice(0, newline)) > config.input.limits.frameBytes) throw new Error('Oversized runner response')
-        const frame = JSON.parse(buffer.slice(0, newline)) as { version?: number, runId?: string, id?: string, ok?: boolean, value?: unknown, error?: string, outputPart?: unknown, text?: unknown, stream?: unknown, outputParts?: unknown }
+        const frame = JSON.parse(buffer.slice(0, newline)) as { version?: number, runId?: string, id?: string, ok?: boolean, value?: unknown, error?: string, errorDetails?: SafeAgentError, outputPart?: unknown, text?: unknown, stream?: unknown, outputParts?: unknown }
         buffer = buffer.slice(newline + 1)
         if (frame.version !== 1 || frame.runId !== config.input.runId || !frame.id || !pending.has(frame.id) || typeof frame.ok !== 'boolean') throw new Error('Invalid runner reply')
         const operation = pending.get(frame.id)!
@@ -74,7 +75,7 @@ async function main(): Promise<void> {
         const value = frame.ok ? operation.output.finish(frame.value, frame.outputParts) : undefined
         pending.delete(frame.id)
         if (frame.ok) operation.resolve(value)
-        else operation.reject(new Error(frame.error ?? 'Pod operation failed'))
+        else operation.reject(Object.assign(new Error(frame.error ?? 'Pod operation failed'), frame.errorDetails ? { code: frame.errorDetails.code, details: freeze(frame.errorDetails.details) } : {}))
       }
     }
     catch (error) { controller.abort(error); channel.destroy(error instanceof Error ? error : new Error('Protocol failed')) }

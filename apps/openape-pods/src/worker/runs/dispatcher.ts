@@ -14,6 +14,10 @@ import { AuthorityError, InfrastructureError, NonRetryableError, PermissionUnava
 import { assignedJev, parseJevRequest, parseJevResult } from '../../contracts/jev'
 import type { JevRequest, JevEvaluation } from '../../contracts/jev'
 import { maxAgentPauseMs, parseAgentRequest } from '../../contracts/agent'
+import type { AgentBackend } from '../../contracts/agent'
+import { AgentCallError } from '../../contracts/agent-errors'
+import type { AgentCallMetadata } from '../../contracts/agent-metadata'
+import type { ProxyAgentCall } from '../agent/proxy-client'
 import { DependencyStore } from '../dependencies/store'
 import { assignedDirectories } from '../../runtime/directories'
 import { podDirectories } from '../../runtime/environment'
@@ -64,6 +68,7 @@ export interface RunServices {
   credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
   provider?: AgentGatewayServices['provider']
   model?: AgentGatewayServices['model']
+  proxy?: ProxyAgentCall
   /** `summary` is the script's own account of the call; the IdP shows it only if the call needs a new grant. */
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary, batch?: OpenApeGrantBatch, reference?: string) => Promise<unknown>
 }
@@ -74,6 +79,7 @@ export class RunDispatcher {
   readonly runs: RunStore
   readonly approvals: ApprovalHistory
   private active = new Map<string, { controller: AbortController, work: Promise<void> }>()
+  private agentCalls = new Map<AgentBackend, Set<AbortController>>()
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly runtime: AgentRuntime, private readonly services?: RunServices) {
     this.runs = new RunStore(store)
     this.approvals = new ApprovalHistory(store)
@@ -121,6 +127,10 @@ export class RunDispatcher {
 
   cancelPod(podId: string, message = 'Run cancelled by the owner', cause: RecoveryFailure['cause'] = 'owner-cancelled'): void { this.active.get(podId)?.controller.abort(new RunCancellation(cause, message)) }
 
+  cancelBackend(backend: AgentBackend): void {
+    for (const controller of this.agentCalls.get(backend) ?? []) controller.abort(new AgentCallError('cancelled', `${backend === 'native' ? 'Native' : 'Proxy'} agent connection was removed`, { phase: 'request' }))
+  }
+
   cancel(podId: string, id: string): void {
     if (this.runs.get(id).podId !== podId) throw new Error('Run belongs to a different pod')
     const lease = this.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(podId)
@@ -140,6 +150,8 @@ export class RunDispatcher {
     const appendEvent = (type: string, data: unknown) => { this.runs.append(id, type, data) }
     const directory = join(this.store.root, 'runs', id)
     const pendingAgents = new Set<Promise<unknown>>()
+    const agentLifecycle = new AbortController()
+    let unconfirmedProxyCleanup: AgentCallError | undefined
     // Agent calls carry their own bounded timeout, so they pause the script budget up to maxAgentPauseMs.
     let activeAgentCalls = 0; let agentPausedMs = 0; let agentSince = 0
     const agentBudgetPaused = () => activeAgentCalls > 0 && agentPausedMs + (Date.now() - agentSince) < maxAgentPauseMs
@@ -260,13 +272,35 @@ export class RunDispatcher {
             finally { pendingAgents.delete(pending) }
           }
           if (operation === 'agent.run') {
-            if (!this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
-            const request = parseAgentRequest(payload)
+            let request
+            try { request = parseAgentRequest(payload) }
+            catch (error) {
+              if (payload && typeof payload === 'object' && 'backend' in payload && payload.backend === 'proxy') recordFailure({ cause: 'non-retryable' })
+              throw error
+            }
+            const backend = request.backend ?? 'native'
+            if (backend === 'native' && !this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
+            if (request.backend === 'proxy' && !this.services?.proxy) { recordFailure({ cause: 'non-retryable' }); throw new AgentCallError('proxy_not_configured', 'Proxy agent backend is not configured', { phase: 'resolve' }) }
             if (agentCalls++ >= maxAgentCallsPerRun) throw new Error('A run can start at most 50 agent calls')
-            const operation = executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services.provider, model: this.services.model, tool: scriptTool }, operationSignal, (event) => { assertCurrent(); appendEvent('agent', event) }, request.tools, request.timeoutSeconds)
+            const controller = new AbortController()
+            const calls = this.agentCalls.get(backend) ?? new Set<AbortController>()
+            calls.add(controller); this.agentCalls.set(backend, calls)
+            const callSignal = AbortSignal.any([operationSignal, signal, agentLifecycle.signal, controller.signal])
+            const metadata = (value: AgentCallMetadata) => { this.runs.assertLease(id); appendEvent('agent-call', value) }
+            const operation = (request.backend === 'proxy'
+              ? this.services!.proxy!(request, callSignal, metadata)
+              : executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services!.provider!, model: this.services?.model, tool: scriptTool }, callSignal, (event) => { assertCurrent(); appendEvent('agent', event) }, request.tools, request.timeoutSeconds, metadata)).catch((error: unknown) => {
+              if (request.backend === 'proxy') recordFailure({ cause: 'non-retryable' })
+              if (error instanceof AgentCallError && error.details.cause === 'proxy_cleanup_unconfirmed' && !unconfirmedProxyCleanup) {
+                unconfirmedProxyCleanup = error
+                // Script-level catch/return cannot prove that its host request has stopped.
+                appendEvent('agent-cleanup', { state: 'unconfirmed', backend: 'proxy', hostPid: process.ppid })
+              }
+              throw error
+            })
             pendingAgents.add(operation); if (activeAgentCalls++ === 0) agentSince = Date.now()
-            try { const reply = await operation; assertCurrent(); operationSignal.throwIfAborted(); return reply }
-            finally { pendingAgents.delete(operation); if (--activeAgentCalls === 0) agentPausedMs += Date.now() - agentSince }
+            try { const reply = await operation; assertCurrent(); callSignal.throwIfAborted(); return reply }
+            finally { calls.delete(controller); pendingAgents.delete(operation); if (--activeAgentCalls === 0) agentPausedMs += Date.now() - agentSince }
           }
           if (operation === 'notify') {
             if (notifications++ >= 20) throw new Error('A run can queue at most 20 notifications')
@@ -304,6 +338,9 @@ export class RunDispatcher {
       }
       const execute = async (execution?: ScriptServices['execution']) => executeScript(runtime, directory, artifact, input, signal, { ...scriptServices, execution })
       const result = await executeOwnerScript(this.runs, id, ownerScriptAuthority(input), execute)
+      agentLifecycle.abort(new Error('Script execution ended'))
+      await Promise.allSettled(pendingAgents)
+      if (unconfirmedProxyCleanup) { this.runs.interrupt(id, 'Proxy request cleanup is unconfirmed; restart the idle runtime after its previous host has stopped'); return }
       assertCurrent()
       for (const gap of result.gapIds) {
         if (!this.store.db.prepare('SELECT 1 FROM claims WHERE pod_id=? AND id=? AND kind=\'gap\'').get(pod.id, gap)) throw new Error('Result references an uncommitted gap')
@@ -314,7 +351,9 @@ export class RunDispatcher {
     catch (error) {
       recordError(error)
       const message = (error instanceof Error ? error.message : 'Run failed').slice(0, 10000)
+      agentLifecycle.abort(new Error('Script execution ended'))
       await Promise.allSettled(pendingAgents)
+      if (unconfirmedProxyCleanup) { this.runs.interrupt(id, 'Proxy request cleanup is unconfirmed; restart the idle runtime after its previous host has stopped'); return }
       await this.finish(id, signal.aborted ? 'cancelled' : 'failed', signal.aborted ? 'Run cancelled' : 'Run failed', message, [], epoch, signal.aborted ? { cause: signal.reason instanceof RunCancellation ? signal.reason.cause : 'owner-cancelled' } : infrastructureFailure ?? { cause: error instanceof PermissionUnavailableError ? 'permission' : error instanceof AuthorityError ? 'authority' : error instanceof InfrastructureError ? 'infrastructure' : 'failure', ...(error instanceof InfrastructureError ? { retryAfterMs: error.failure.retryAfterMs } : {}) })
     }
     finally {

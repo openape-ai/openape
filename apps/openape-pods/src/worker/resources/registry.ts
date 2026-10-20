@@ -9,6 +9,7 @@ import { parseCredentialAlias } from '../../contracts/credentials'
 import type { DirectoryAccess, PodResource } from '../../contracts/resources'
 import { randomUUID } from 'node:crypto'
 import { inspectDirectory } from '../../runtime/directories'
+import { assertNotSecretPath } from '../../runtime/secret-paths'
 import { basename, join } from 'node:path'
 import type { PodDatabase } from '../storage/database'
 import { createSnapshotSet } from './snapshots'
@@ -34,6 +35,7 @@ export class ResourceRegistry {
   assignReference(podId: string, name: string, path: string): PodResource {
     this.store.getPod(podId)
     if (!name.trim() || name.length > 255 || !path.startsWith('/') || /[\0\r\n]/.test(path)) throw new Error('Invalid reference assignment')
+    assertNotSecretPath(path)
     const id = randomUUID()
     this.store.transaction(() => {
       this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(id, podId, 'reference', 'ready', name, JSON.stringify({ path }))

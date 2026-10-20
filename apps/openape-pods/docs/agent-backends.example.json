@@ -1,0 +1,304 @@
+{
+  "schemaVersion": 1,
+  "revision": "1",
+  "proxy": {
+    "enabled": false,
+    "baseUrl": "http://127.0.0.1:8317/v1",
+    "keyFile": "/absolute/private/proxy-keys.json",
+    "keyField": "api_key",
+    "models": {
+      "claude": {
+        "small": {
+          "enabled": false,
+          "modelId": "claude-haiku-4-5-20251001",
+          "protocol": "messages",
+          "defaultThinking": "medium",
+          "thinking": {
+            "low": {
+              "enabled": true,
+              "translation": {
+                "type": "enabled",
+                "budget_tokens": 1024
+              }
+            },
+            "medium": {
+              "enabled": true,
+              "translation": {
+                "type": "enabled",
+                "budget_tokens": 8192
+              }
+            },
+            "high": {
+              "enabled": true,
+              "translation": {
+                "type": "enabled",
+                "budget_tokens": 24576
+              }
+            },
+            "xhigh": {
+              "enabled": true,
+              "translation": {
+                "type": "enabled",
+                "budget_tokens": 32768
+              }
+            }
+          },
+          "outputLimit": 40960,
+          "capabilityEvidenceVersion": "cliproxyapi-8.0.0-2026-10-20-proposal-1"
+        },
+        "medium": {
+          "enabled": false,
+          "modelId": "claude-sonnet-5-5",
+          "protocol": "messages",
+          "defaultThinking": "medium",
+          "thinking": {
+            "low": {
+              "enabled": true,
+              "translation": {
+                "type": "adaptive",
+                "effort": "low"
+              }
+            },
+            "medium": {
+              "enabled": true,
+              "translation": {
+                "type": "adaptive",
+                "effort": "medium"
+              }
+            },
+            "high": {
+              "enabled": true,
+              "translation": {
+                "type": "adaptive",
+                "effort": "high"
+              }
+            },
+            "xhigh": {
+              "enabled": true,
+              "translation": {
+                "type": "adaptive",
+                "effort": "xhigh"
+              }
+            }
+          },
+          "outputLimit": 16384,
+          "capabilityEvidenceVersion": "cliproxyapi-8.0.0-2026-10-20-proposal-1"
+        },
+        "large": {
+          "enabled": false,
+          "modelId": "claude-opus-5-5",
+          "protocol": "messages",
+          "defaultThinking": "medium",
+          "thinking": {
+            "low": {
+              "enabled": true,
+              "translation": {
+                "type": "adaptive",
+                "effort": "low"
+              }
+            },
+            "medium": {
+              "enabled": true,
+              "translation": {
+                "type": "adaptive",
+                "effort": "medium"
+              }
+            },
+            "high": {
+              "enabled": true,
+              "translation": {
+                "type": "adaptive",
+                "effort": "high"
+              }
+            },
+            "xhigh": {
+              "enabled": true,
+              "translation": {
+                "type": "adaptive",
+                "effort": "xhigh"
+              }
+            }
+          },
+          "outputLimit": 16384,
+          "capabilityEvidenceVersion": "cliproxyapi-8.0.0-2026-10-20-proposal-1"
+        },
+        "xlarge": {
+          "enabled": false,
+          "modelId": "claude-fable-5-1",
+          "protocol": "messages",
+          "defaultThinking": "medium",
+          "thinking": {
+            "low": {
+              "enabled": true,
+              "translation": {
+                "type": "adaptive",
+                "effort": "low"
+              }
+            },
+            "medium": {
+              "enabled": true,
+              "translation": {
+                "type": "adaptive",
+                "effort": "medium"
+              }
+            },
+            "high": {
+              "enabled": true,
+              "translation": {
+                "type": "adaptive",
+                "effort": "high"
+              }
+            },
+            "xhigh": {
+              "enabled": true,
+              "translation": {
+                "type": "adaptive",
+                "effort": "xhigh"
+              }
+            }
+          },
+          "outputLimit": 16384,
+          "capabilityEvidenceVersion": "cliproxyapi-8.0.0-2026-10-20-proposal-1"
+        }
+      },
+      "codex": {
+        "small": {
+          "enabled": true,
+          "modelId": "gpt-6-luna",
+          "protocol": "chat-completions",
+          "defaultThinking": "medium",
+          "thinking": {
+            "low": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "low"
+              }
+            },
+            "medium": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "medium"
+              }
+            },
+            "high": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "high"
+              }
+            },
+            "xhigh": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "xhigh"
+              }
+            }
+          },
+          "outputLimit": 16384,
+          "capabilityEvidenceVersion": "cliproxyapi-8.0.0-2026-10-20-proposal-1"
+        },
+        "medium": {
+          "enabled": true,
+          "modelId": "gpt-5.6-terra",
+          "protocol": "chat-completions",
+          "defaultThinking": "medium",
+          "thinking": {
+            "low": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "low"
+              }
+            },
+            "medium": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "medium"
+              }
+            },
+            "high": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "high"
+              }
+            },
+            "xhigh": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "xhigh"
+              }
+            }
+          },
+          "outputLimit": 16384,
+          "capabilityEvidenceVersion": "cliproxyapi-8.0.0-2026-10-20-proposal-1"
+        },
+        "large": {
+          "enabled": true,
+          "modelId": "gpt-6.1-sol",
+          "protocol": "chat-completions",
+          "defaultThinking": "medium",
+          "thinking": {
+            "low": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "low"
+              }
+            },
+            "medium": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "medium"
+              }
+            },
+            "high": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "high"
+              }
+            },
+            "xhigh": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "xhigh"
+              }
+            }
+          },
+          "outputLimit": 16384,
+          "capabilityEvidenceVersion": "cliproxyapi-8.0.0-2026-10-20-proposal-1"
+        },
+        "xlarge": {
+          "enabled": true,
+          "modelId": "gpt-6-astra",
+          "protocol": "chat-completions",
+          "defaultThinking": "medium",
+          "thinking": {
+            "low": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "low"
+              }
+            },
+            "medium": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "medium"
+              }
+            },
+            "high": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "high"
+              }
+            },
+            "xhigh": {
+              "enabled": true,
+              "translation": {
+                "reasoning_effort": "xhigh"
+              }
+            }
+          },
+          "outputLimit": 16384,
+          "capabilityEvidenceVersion": "cliproxyapi-8.0.0-2026-10-20-proposal-1"
+        }
+      }
+    }
+  }
+}

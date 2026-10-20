@@ -7,6 +7,7 @@ import { homedir } from 'node:os'
 import { readFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import type { Duplex, Readable, Writable } from 'node:stream'
+import { mandatorySecretPaths } from '../../runtime/secret-paths'
 
 export interface RuntimePolicy {
   /** `owner` keeps supervision but gives the program the owner's file and network reach except its protected paths; the Pod identity is unchanged. */
@@ -47,7 +48,7 @@ export function sandboxPolicy(policy: RuntimePolicy): string {
     if (!Number.isInteger(port) || port < 1024 || port > 65535) throw new Error('Invalid broker port')
     return `(remote tcp "localhost:${port}")`
   }).join(' ')
-  const deny = policy.reach?.deny ?? []
+  const deny = [...new Set([...(policy.reach?.deny ?? []), ...mandatorySecretPaths()])]
   return `(version 1)
 (deny default)
 (allow process-exec (literal ${executable}))
@@ -78,7 +79,7 @@ ${deny.length ? `${ancestorRule(deny)}\n(deny file-read* file-write* ${subpaths(
  */
 function ownerPolicy(policy: RuntimePolicy, executable: string): string {
   const protectedPaths = policy.reach?.protectedPaths ?? []
-  const deny = policy.reach?.deny ?? []
+  const deny = [...new Set([...(policy.reach?.deny ?? []), ...mandatorySecretPaths()])]
   if (!protectedPaths.length) throw new Error('The owner sandbox level needs its protected paths')
   const closed = [...protectedPaths, ...deny]
   const writes = subpaths([policy.workspace, ...(policy.writeDirectories ?? [])])

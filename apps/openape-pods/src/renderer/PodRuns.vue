@@ -3,12 +3,13 @@ import { usePodAccess } from './pod-access'
 import { t, diagnostic, label, dateTime } from './i18n'
 import { runSteps, runHeadline, runFailure, runResult, duration } from './run-activity'
 import RunApproval from './RunApproval.vue'
+import AgentCallHistory from './AgentCallHistory.vue'
 import { defineComponent } from 'vue'
 import type { StoredPod } from '../contracts/control'
 import type { RunCommand, RunView } from '../contracts/runs'
 
 export default defineComponent({
-  components: { RunApproval },
+  components: { RunApproval, AgentCallHistory },
   props: { selectedPodId: { type: String, default: '' }, selectedRunId: { type: String, default: '' } },
   emits: ['selected', 'navigate'],
   setup() { return { access: usePodAccess() } },
@@ -130,6 +131,7 @@ export default defineComponent({
           </ul>
         </section>
       </article>
+      <AgentCallHistory :events="view.events" />
       <section v-if="jevEvaluations.length" class="jev-usage">
         <h3>{{ t('Jev decisions') }}</h3>
         <p>{{ t('Usage for successful evaluations shown in this history. Retries may incur additional charges.') }}</p>

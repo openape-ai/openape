@@ -1,3 +1,12 @@
+# CLIProxyAPI agent backend — issue 1530
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1530. Approved proposal revision 1: https://report.openape.ai/d/01M5DAMFMDW26PAF781Z9T2A26?v=1.
+- Branch `feature/issue-1530-pods-cliproxyapi`, dedicated worktree `openape-monorepo.worktrees/pods-cliproxyapi-1530`, canonical base `1ca4dac10c71e2112cc99a83a724f8eeff6f8c28`. The older shared checkout and other sessions remain untouched.
+- Adds an explicit text-only proxy backend through the shared desktop/CLI host, private configuration and credential path guards, exact model/thinking mappings, safe call metadata, independent backend cancellation and cleanup confirmation. Existing agent calls retain native Codex defaults and tools.
+- Real acceptance used exactly eight calls: four Codex mappings passed exact markers; all four Claude mappings returned HTTP 400 `invalid_request_error` because `fallbacks: []` fails upstream minimum-list validation. The isolated mixed Pod stopped on its first Claude call; its remaining Codex mapping passed once separately. No automatic retry or replacement was used.
+- Merge, relay release and owner installation are blocked by that acceptance failure. The temporary acceptance configuration and failed Claude mappings are disabled. Installed app/profile, personal Pods and CLIProxyAPI configuration remain unchanged. Preserve the original approval; any proxy reconfiguration or new compatibility strategy needs a concrete approved plan revision.
+- Focused core, lifecycle, security and UI fixtures pass; actual Reports, mandatory pre-push results and exact PR source/target review are recorded on the issue/PR. This is implementation progress, not completed feature acceptance or delivery.
+
 # Shared datastore retirement — issue 1529
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1529. Approved Plan revision 1: https://report.openape.ai/d/01M5D589V56Y9CSP5R41J5448F.

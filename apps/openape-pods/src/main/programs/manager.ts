@@ -19,6 +19,7 @@ import type { ProgramAccess } from './session'
 import type { ProgramCall } from '../broker/authorization'
 import { ProgramState } from './state'
 import { prepareConsole, podWorkspace } from './console'
+import { assertNotSecretPath } from '../../runtime/secret-paths'
 
 export class ProgramManager {
   private launches = new Map<string, ApplicationLaunch>()
@@ -64,6 +65,7 @@ export class ProgramManager {
   }
 
   async importFile(podId: string, applicationId: string, epoch: number, source: string): Promise<void> {
+    assertNotSecretPath(source)
     const sessionId = randomUUID()
     const resource = await this.dispatch({ type: 'reserve', podId, applicationId, epoch, sessionId }) as PodResource
     const assignment = resource.configuration as unknown as ProgramAssignment
@@ -72,6 +74,7 @@ export class ProgramManager {
       let bytes: Buffer
       try { const stat = await file.stat(); if (!stat.isFile() || stat.size > 4 * 1024 * 1024) throw new Error('Choose an application state file up to 4 MB'); bytes = await file.readFile(); if (bytes.length !== stat.size) throw new Error('Application state source changed during import') }
       finally { await file.close() }
+      assertNotSecretPath(source)
       await new ProgramState(this.credentials).use(assignment.stateId, { podId, applicationId }, async (directory) => { await writeFile(join(directory, basename(source)), bytes, { mode: 0o600 }); await this.dispatch({ type: 'check', podId, sessionId }) })
     }
     finally { await this.dispatch({ type: 'release', podId, sessionId }) }

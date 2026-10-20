@@ -11,6 +11,7 @@ import { ProgramState } from '../../src/main/programs/state'
 import { ProgramControl } from '../../src/worker/resources/programs'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { PodDatabase } from '../../src/worker/storage/database'
+import { setMandatorySecretPaths } from '../../src/runtime/secret-paths'
 
 it('imports a selected application file without changing its source or exposing it as a reference or script secret', async () => {
   const root = await mkdtemp(join(tmpdir(), 'pods-program-import-')); const store = new PodDatabase(join(root, 'profile'))
@@ -23,6 +24,11 @@ it('imports a selected application file without changing its source or exposing 
     const resource = resources.list(pod.id)[0]!
     await mkdir(join(root, 'source')); const source = join(root, 'source/token.json'); const value = '{"token":"SYNTHETIC_IMPORT"}'
     await writeFile(source, value)
+    setMandatorySecretPaths([source])
+    await expect(manager.importFile(pod.id, resource.id, 1, source)).rejects.toThrow('cannot be assigned to a Pod')
+    expect(store.db.prepare('SELECT count(*) AS count FROM program_leases').get()?.count).toBe(0)
+    await new ProgramState(credentials).use(resource.configuration.stateId as string, { podId: pod.id, applicationId: resource.id }, async directory => expect(await readdir(directory)).toEqual([]))
+    setMandatorySecretPaths([])
     await manager.importFile(pod.id, resource.id, 1, source)
     expect(await readFile(source, 'utf8')).toBe(value)
     const stateId = resource.configuration.stateId as string
@@ -58,5 +64,5 @@ it('imports a selected application file without changing its source or exposing 
     await expect(manager.network(randomUUID(), resource.id, 0, [])).rejects.toThrow()
 
   }
-  finally { store.close(); await rm(root, { recursive: true, force: true }) }
+  finally { setMandatorySecretPaths([]); store.close(); await rm(root, { recursive: true, force: true }) }
 })
