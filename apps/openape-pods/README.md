@@ -558,9 +558,14 @@ Read current revisions first and poll the same operation ID until applied; delet
 receipts remain readable after the Pod disappears, and identical retries do not repeat
 cleanup. Archive through `channel: workspace`, `type: update`, `lifecycle: archived`.
 
-Deletion requires an idle runtime and rejects Pods referenced by network or data state.
-It journals filesystem/key cleanup and removes the current central copies
-through the coordinated publication. Shared accounts, original files, backups and
+Deletion requires the target Pod to have no active work; unrelated Pods may keep
+running. Open approvals, uncertain effects and published definition sources still
+block deletion. Shared namespaces return to owner custody without changing records,
+results, provenance or other readers. Result namespaces remain read-only until
+assigned to another Pod. Deletion journals only the target's filesystem/key cleanup
+and removes its current central copies through the coordinated publication.
+Whole-profile garbage collection remains a separate idle-only operation.
+Shared accounts, original files, backups and
 shared chat history remain. Remote OpenApe identities/grants are not revoked. The legacy
 local workspace retains its native confirmation; uncoordinated central deletion and
 restore remain disabled. Pending filesystem/key cleanup resumes on restart.
