@@ -13,7 +13,7 @@ import fixture from './map-view.json'
 const view = parseMapView(fixture) as MapView
 let wrapper: VueWrapper | undefined
 afterEach(() => { wrapper?.unmount(); wrapper = undefined; vi.unstubAllGlobals(); applyLanguage('en') })
-const order = 'Zeig mir zuerst Bauform (welche Pods welche gemeinsamen Daten lesen und schreiben), Karte, benötigte Zugriffe und die Beispiele, die du als Prüfung verwendest. Lege erst danach an, aktiviere nur als Vorschau, und fordere Rechte ausschließlich über Permissions und den IdP an.'
+const order = 'Zeige mir zuerst die Aufgaben, ihre Dateien oder externen Dienste, die Karte, die benötigten Zugriffe und die Beispiele für deine Prüfungen. Erstelle sie erst danach, aktiviere sie nur als Vorschau und fordere Rechte ausschließlich über Berechtigungen und den Identitätsanbieter an.'
 
 describe('Codex handoff', () => {
   it('builds the brief from the tags and the pinned node', () => {
@@ -24,7 +24,7 @@ describe('Codex handoff', () => {
     expect(codexBrief(view, 'svc:https://api.telegram.org', [])).toContain('Ausgangspunkt: api.telegram.org (lesen).')
     expect(codexBrief(view, view.pods.find(pod => pod.name === 'zaz Service-Agent')!.id, [])).toBe(`Lege eine neue Automatisierung an. Wie zaz Service-Agent, aber mit anderer Quelle. ${order}`)
     applyLanguage('en')
-    expect(codexBrief(view, null, ['linde'])).toMatch(/^Create a new automation with the tags #linde\. Show me first the shape/)
+    expect(codexBrief(view, null, ['linde'])).toMatch(/^Create a new automation with the tags #linde\. Show me first the tasks/)
   })
 
   it('copies the brief to the clipboard and shows the Codex connection where the host knows it', async () => {
