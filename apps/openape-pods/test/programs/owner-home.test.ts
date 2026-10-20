@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import { podIdentityFile } from '../../src/main/connections/identity-file'
 import type { AgentConnection } from '../../src/main/broker/authorization'
@@ -51,10 +51,10 @@ async function executable(): Promise<{ path: string, hash: string }> {
 /** The private application state folder: opened from the private record below the credential store for one session. */
 const applicationState = expect.stringMatching(/\/credentials\/temporary\/.+\/application$/)
 
-async function brokerCall(level: SandboxLevel, identityConnection: AgentConnection = connection(async () => 'synthetic-token')) {
+async function brokerCall(level: SandboxLevel, identityConnection: AgentConnection = connection(async () => 'synthetic-token'), overrides: Partial<ToolAssignment> = {}) {
   const program = await executable(); const stateId = await new ProgramState(credentials).create({ podId, applicationId })
   const argv = ['repos', 'pr', 'list']
-  const assignment: ToolAssignment = { id: applicationId, identityConnection, program: { path: program.path, name: 'az', sha256: program.hash }, argv, reach: reach(level), programState: { id: stateId, podId, applicationId }, capability: 'tool.az.invoke', executable: program.path, executableHash: program.hash, entryFiles: [], prefix: [], runtimeDirectories: [], environment: {}, runtimeEnvironment: { HOME: '/descriptor/home' }, networkPorts: [] }
+  const assignment: ToolAssignment = { id: applicationId, identityConnection, program: { path: program.path, name: 'az', sha256: program.hash }, argv, reach: reach(level), programState: { id: stateId, podId, applicationId }, capability: 'tool.az.invoke', executable: program.path, executableHash: program.hash, entryFiles: [], prefix: [], runtimeDirectories: [], environment: {}, runtimeEnvironment: { HOME: '/descriptor/home' }, networkPorts: [], ...overrides }
   const executionCredentials = level === 'owner' ? new CredentialCache(join(root, 'credentials')) : credentials
   const before = await readFile(join(root, 'credentials', `${stateId}.connection.json`))
   const broker = new PodToolBroker('/fixture/helper', join(root, 'broker'), { runtime: { executable: process.execPath, cli: '/fixture/ape-shell.mjs' }, targetHost: identityConnection.targetHost, operationId: randomUUID(), observer: { authorized: async () => {} } }, executionCredentials)
@@ -203,4 +203,16 @@ it('scopes Git credentials to the canonical HTTPS host and respects an explicit 
   await writeFile(file, JSON.stringify({ access_token: 'INVALID\nTOKEN' }))
   expect(execute().status).not.toBe(0)
   expect(execute().stdout).toBe('')
+})
+
+it('returns large program stdout in memory and creates no output files', async () => {
+  const stdout = 'x'.repeat(1024 * 1024)
+  vi.mocked(launchApeShell).mockImplementation(async () => {
+    const process = domain()
+    process.completed = new Promise(resolve => setImmediate(() => { process.stdout.write(stdout); resolve(0) }))
+    return process as never
+  })
+  const { reply } = await brokerCall('owner', connection(), { maxOutputBytes: 32 * 1024 * 1024 })
+  expect(reply).toEqual({ stdout, stderr: '', exitCode: 0 })
+  expect((await readdir(root, { recursive: true })).filter(name => name.startsWith('.program-output-') || name.includes('/.program-output-'))).toEqual([])
 })

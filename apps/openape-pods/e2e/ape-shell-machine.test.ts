@@ -244,17 +244,15 @@ describe('ape-shell machine native boundary', () => {
     expect(setup.state.calls).toHaveLength(1)
   })
 
-  it('returns bounded large output as a hashed workspace artifact instead of an oversized service frame', async () => {
+  it('returns bounded large output directly in memory', async () => {
     const setup = await fixture('process.stdout.write(JSON.stringify({body:"x".repeat(300000)}))')
     const executableHash = digest(await readFile(setup.executable))
     const broker = new PodToolBroker(setup.helper, setup.privateRoot, { runtime: { executable: setup.executable, cli: resolve('dist/vendor/apes/ape-shell.mjs') }, operationId: randomUUID(), targetHost: 'fixture-mac', observer: { authorized: async () => {} } }, undefined as never)
-    const assignment = { id: 'fixture-app', capability: 'tool.fixture', program: { path: setup.executable, name: 'node', sha256: executableHash }, executable: setup.executable, executableHash, argv: [], prefix: [setup.script], entryFiles: [{ path: setup.script, hash: digest(await readFile(setup.script)) }], runtimeDirectories: [], environment: {}, networkPorts: [], stdoutArtifact: true, maxOutputBytes: 32 * 1024 * 1024, identityConnection: { issuer: setup.origin, subject: 'pod@example.test', owner: 'owner@example.test', keyId: 'pod-key', targetHost: 'fixture-mac', accessToken: async () => 'SYNTHETIC_ONLY' } }
+    const assignment = { id: 'fixture-app', capability: 'tool.fixture', program: { path: setup.executable, name: 'node', sha256: executableHash }, executable: setup.executable, executableHash, argv: [], prefix: [setup.script], entryFiles: [{ path: setup.script, hash: digest(await readFile(setup.script)) }], runtimeDirectories: [], environment: {}, networkPorts: [], maxOutputBytes: 32 * 1024 * 1024, identityConnection: { issuer: setup.origin, subject: 'pod@example.test', owner: 'owner@example.test', keyId: 'pod-key', targetHost: 'fixture-mac', accessToken: async () => 'SYNTHETIC_ONLY' } }
     const reply = await broker.execute(assignment, { toolId: 'fixture-app', argv: [] }, { workspace: setup.workspace, capabilities: ['tool.fixture'], assertCurrent: () => {}, signal: AbortSignal.timeout(10000) })
-    expect(reply.exitCode).toBe(0); expect(reply.stdout).toBe(''); expect(JSON.stringify(reply).length).toBeLessThan(2048)
-    const artifact = reply.stdoutArtifact!
-    const bytes = await readFile(artifact.path)
-    expect(bytes.length).toBe(artifact.bytes); expect(digest(bytes)).toBe(artifact.sha256)
-    expect(JSON.parse(bytes.toString()).body).toHaveLength(300000)
+    expect(reply.exitCode).toBe(0)
+    expect(JSON.parse(reply.stdout).body).toHaveLength(300000)
+    expect(reply).not.toHaveProperty('stdoutArtifact')
   })
 
   it('runs assigned application arguments through ape-shell and refuses before the effect journal on denial', async () => {
