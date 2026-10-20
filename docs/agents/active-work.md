@@ -4,6 +4,13 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 # Active work
 
+## Independent archived Pod deletion — issue 1524
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1524. Branch `bugfix/issue-1524-independent-pod-deletion`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `a02d5a7b69a275cb7091dac83779757594a53d40`.
+- Scope deletion checks to the target Pod's work, preserve shared namespaces and their records/results under owner custody, and clean only the deleted Pod's private files. Keep uncertain-effect, open-approval, published-definition and current-review checks. Whole-profile backup, restore and garbage collection still require an idle profile.
+- Verification: 60 focused retention/work tests pass, including unrelated active work and unpublished-blob preservation, unchanged shared-data history, reader access and replacement-writer reuse of completed results. The native PR records the final source SHA, affected gate, app build and published evidence.
+- Next: required local gate, native review/merge and owner build installation; the installed app remains unchanged until that rollout.
+
 ## Tray tag filter and menu bar icon — issue 1522
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1522. Branch `feature/issue-1522-tray-tags`, checkout `openape-monorepo.worktrees/pods-tray-status`, canonical base `f4dffcb1cd968baca837c8458df2430ed1a9b1f3`.
