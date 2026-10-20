@@ -1,3 +1,4 @@
+import { trayPodItems } from './tray-menu'
 import { AutomaticUpdate } from './automatic-update'
 import { parseUpdateCommand } from '../contracts/updates'
 import { randomUUID } from 'node:crypto'
@@ -140,8 +141,26 @@ function createWindow(): BrowserWindow {
 }
 function updateMenus(): void {
   tray?.setToolTip(fixture ? t('OpenApe Pods · Fixture mode') : 'OpenApe Pods')
-  tray?.setContextMenu(Menu.buildFromTemplate([{ label: t('Open Pods'), click: showWindow }, { label: t('Pause automatic runs'), click: () => { void worker.request({ type: 'pauseAll' }).catch((error: unknown) => dialog.showErrorBox(t('Could not pause Pods'), translateDiagnostic(preference.language, error instanceof Error ? error.message : 'Worker unavailable'))) } }, { label: t('Quit Pods'), click: () => app.quit() }]))
   Menu.setApplicationMenu(Menu.buildFromTemplate([{ label: 'OpenApe Pods', submenu: [{ label: t('Open Pods'), click: showWindow }, { label: t('Quit Pods'), role: 'quit' }] }, { label: t('Edit'), submenu: [{ label: t('Undo'), role: 'undo' }, { label: t('Redo'), role: 'redo' }, { type: 'separator' }, { label: t('Cut'), role: 'cut' }, { label: t('Copy'), role: 'copy' }, { label: t('Paste'), role: 'paste' }, { label: t('Paste and match style'), role: 'pasteAndMatchStyle' }, { label: t('Delete'), role: 'delete' }, { label: t('Select all'), role: 'selectAll' }] }, { label: t('Window'), submenu: [{ label: t('Minimize'), role: 'minimize' }, { label: t('Close window'), role: 'close' }] }, ...(process.env.OPENAPE_PODS_ISSUE_REPORTING_ENABLED === '1' ? [{ label: t('Help'), submenu: [{ id: 'report-problem', label: t('Report a problem'), click: () => { void shell.openExternal('https://repos.openape.ai/report?product=pods').catch((error: unknown) => dialog.showErrorBox(t('Could not open issue reporting'), translateDiagnostic(preference.language, error instanceof Error ? error.message : 'Browser unavailable'))) } }] }] : [])]))
+}
+let openingTray = false
+async function openTrayMenu(): Promise<void> {
+  if (openingTray || quitting || !tray) return
+  openingTray = true
+  try {
+    if (status.worker.state !== 'ready') {
+      tray.popUpContextMenu(Menu.buildFromTemplate([{ label: status.worker.state === 'starting' ? t('Loading') : t('Pods unavailable'), click: showWindow }]))
+      return
+    }
+    const { pods } = await worker.request({ type: 'list' })
+    const entries = await Promise.all(pods.map(async pod => ({ pod, runs: (await worker.runs({ type: 'list', podId: pod.id })).runs })))
+    if (!quitting) tray.popUpContextMenu(Menu.buildFromTemplate(trayPodItems(entries, preference.language, showWindow)))
+  }
+  catch (error) {
+    console.error('Could not load Pods tray', error)
+    if (!quitting) tray.popUpContextMenu(Menu.buildFromTemplate([{ label: t('Could not load Pods'), click: showWindow }]))
+  }
+  finally { openingTray = false }
 }
 async function start(): Promise<void> {
   await app.whenReady()
@@ -471,6 +490,8 @@ async function start(): Promise<void> {
   })
   window = createWindow()
   tray = new Tray(nativeImage.createEmpty()); tray.setTitle('Pods'); tray.setToolTip('OpenApe Pods')
+  tray.on('click', () => { void openTrayMenu() })
+  tray.on('right-click', () => { void openTrayMenu() })
   updateMenus()
   powerMonitor.on('suspend', () => worker.lifecycle('suspend'))
   powerMonitor.on('resume', () => worker.lifecycle('resume'))
