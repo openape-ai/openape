@@ -14,15 +14,16 @@ import type { RunServices } from '../../src/worker/runs/dispatcher'
 import type { ProgramAuthority } from '../../src/main/programs/grants'
 import { ServiceBridge } from '../../src/worker/runtime/service-bridge'
 import { createPortablePackage } from '../../src/worker/sharing/package'
+import { DataRetention } from '../../src/worker/data/retention'
 
-const captured = vi.hoisted(() => ({ services: undefined as RunServices | undefined, startControlled: undefined as ((podId: string, operationId: string) => string) | undefined }))
+const captured = vi.hoisted(() => ({ services: undefined as RunServices | undefined, runs: undefined as RunDispatcher['runs'] | undefined, startControlled: undefined as ((podId: string, operationId: string) => string) | undefined }))
 vi.mock('../../src/worker/runs/dispatcher', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../src/worker/runs/dispatcher')>()
   return {
     ...original,
     RunDispatcher: class extends original.RunDispatcher {
       constructor(...args: ConstructorParameters<typeof original.RunDispatcher>) {
-        super(...args); captured.services = args[3]
+        super(...args); captured.services = args[3]; captured.runs = this.runs
       }
     },
   }
@@ -106,6 +107,45 @@ it('holds the update fence across backup, blocks commands and resumes without ed
   const after = new PodDatabase(root)
   try { expect(after.db.prepare('SELECT * FROM schedules ORDER BY pod_id').all()).toEqual(before) }
   finally { after.close() }
+})
+
+it('keeps authenticated run services available while deleting an unrelated archived Pod', async () => {
+  await send('suspend')
+  const store = new PodDatabase(root)
+  const live = store.createPod({ name: 'Continuing automation' })
+  const registry = new ResourceRegistry(store, () => {})
+  installExample(store, registry, live.id, 'deterministic', 'a'.repeat(64))
+  store.db.prepare('UPDATE pods SET lifecycle=\'active\' WHERE id=?').run(live.id)
+  const runs = captured.runs!
+  const run = runs.reserve(live.id, store.getPod(live.id).activeScript!, registry.epoch(live.id)).run
+  const obsolete = store.createPod({ name: 'Obsolete automation' })
+  store.updatePod(obsolete.id, 1, { name: obsolete.name, lifecycle: 'archived' })
+  let release!: () => void
+  let entered!: () => void
+  const hold = new Promise<void>((resolve) => { release = resolve })
+  const started = new Promise<void>((resolve) => { entered = resolve })
+  const original = DataRetention.prototype.cleanDeletedFiles
+  const clean = vi.spyOn(DataRetention.prototype, 'cleanDeletedFiles').mockImplementation(async function (this: DataRetention, podId) {
+    entered(); await hold
+    return original.call(this, podId)
+  })
+  const deleting = send({ id: 'delete-obsolete', command: { data: { type: 'deletePod', podId: obsolete.id, revision: 2, name: obsolete.name } } })
+  try {
+    await started
+    const scope = { podId: live.id, runId: run.id, epoch: registry.epoch(live.id), assignmentRevision: live.bindingRevision, capabilities: [] }
+    await send({ id: 'continuing-context', command: { runContext: { scope } } })
+    expect(replies).toHaveBeenCalledWith({ id: 'continuing-context', state: expect.objectContaining({ name: live.name }) })
+    await send({ id: 'continuing-authority', command: { serviceCheck: { scope } } })
+    expect(replies).toHaveBeenCalledWith({ id: 'continuing-authority', state: expect.objectContaining({ epoch: scope.epoch }) })
+    await send({ id: 'forged-authority', command: { serviceCheck: { scope: { ...scope, podId: obsolete.id } } } })
+    expect(replies).toHaveBeenCalledWith({ id: 'forged-authority', error: expect.stringContaining('binding changed') })
+  }
+  finally {
+    release(); await deleting; clean.mockRestore()
+    runs.finish(run.id, 'completed', 'Finished during deletion', null)
+    store.close()
+  }
+  expect(replies).toHaveBeenCalledWith({ id: 'delete-obsolete', state: expect.objectContaining({ pendingDeletion: 1 }) })
 })
 
 it('pauses scheduled intake while suspended and catches missed slots up once on resume', async () => {

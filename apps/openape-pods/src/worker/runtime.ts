@@ -156,6 +156,7 @@ let storageAt = 0
 let backupCheckAt = 0
 let updateFrozen = false
 let maintenance = false
+let deletingPod = false
 // Owner commands wait for the short automatic backup instead of failing; nobody asked for it, so nobody should see it.
 let automaticBackup: Promise<void> | null = null
 let sharing: SharingService | null = null
@@ -278,11 +279,14 @@ port.on('message', async (event) => {
       if (maintenance && command.type !== 'status') throw new Error('Another data operation is in progress')
       if (command.type === 'status') { const view = await data.execute(command) as import('../contracts/data').DataView; port.postMessage({ id: request.id, state: { ...view, busy: view.busy || maintenance } }); return }
       maintenance = true
+      deletingPod = command.type === 'deletePod'
       try { await ticking; port.postMessage({ id: request.id, state: await data.execute(command) }) }
-      finally { maintenance = false }
+      finally { maintenance = false; deletingPod = false }
       return
     }
-    if (maintenance) throw new Error('Application data is being maintained; retry when it finishes')
+    const incoming = request.command
+    const ongoingService = incoming && typeof incoming === 'object' && ['credentialCheck', 'runContext', 'programExecution', 'serviceCheck'].some(key => key in incoming)
+    if (maintenance && !(deletingPod && ongoingService)) throw new Error('Application data is being maintained; retry when it finishes')
     if (request.command && typeof request.command === 'object' && 'provider' in request.command) {
       const endpoint = request.command.provider as { port: number, capability: string } | null
       if (endpoint && (!Number.isInteger(endpoint.port) || endpoint.port < 1024 || endpoint.port > 65535 || !/^[a-f0-9]{64}$/.test(endpoint.capability))) throw new Error('Invalid trusted provider endpoint')

@@ -612,6 +612,8 @@
   "Codex reported a failed turn": "Codex meldete eine fehlgeschlagene Anfrage",
   "Codex exited without a completed turn": "Codex wurde ohne abgeschlossene Anfrage beendet",
   "Finish or recover active work before changing application data": "Beende oder kläre aktive Arbeit, bevor du Anwendungsdaten änderst",
+  "Finish or recover active work for this Pod before deleting it": "Beende oder kläre die aktive Arbeit dieses Pods, bevor du ihn löschst",
+  "Finish active work for this Pod before deleting it": "Beende die aktive Arbeit dieses Pods, bevor du ihn löschst",
   "Backup exceeds supported limits": "Sicherung überschreitet die unterstützten Limits",
   "Backup database integrity or schema check failed": "Integritäts- oder Schemaprüfung der Sicherungsdatenbank fehlgeschlagen",
   "Backup contains unsupported database programs": "Sicherung enthält nicht unterstützte Datenbankprogramme",
