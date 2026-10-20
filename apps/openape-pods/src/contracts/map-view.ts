@@ -3,7 +3,7 @@ import { normalizeTags } from './tags'
 
 /**
  * The read model behind the Automatisierungen surface: every Pod of the owner with the systems it reads and writes,
- * the shared data it writes and reads (issue 1465), measured flows of the last 24 hours and the five system KPIs.
+ * its external connections, measured flows of the last 24 hours and system KPIs.
  * Derived in the worker from existing tables, never stored; desktop, browser and MCP read the same JSON. Secrets
  * appear as aliases only.
  */
@@ -31,9 +31,9 @@ export interface MapPod {
   draft: boolean
   kind: MapPodKind
   ai: boolean
-  /** Shared data namespaces this Pod writes and reads. */
+  /** Empty compatibility fields for relays and desktops before shared-storage retirement. */
   data: { writes: string[], reads: string[] }
-  /** Declared work waiting for this Pod and failed work that no longer retries on its own; the owner can retry it. */
+  /** Neutral compatibility counters; current renderers never present shared work. */
   work: { pending: number, held: number }
   resources: MapResource[]
   secrets: string[]
@@ -51,7 +51,7 @@ export interface MapPod {
   unknown?: { key: string, runId: string }[]
   tags?: MapTags
 }
-/** `data` runs from the writer Pod of a namespace to each reader Pod; channel names the namespace. */
+/** Legacy `data` edges are accepted at the wire boundary and removed during parsing. */
 export interface MapEdge { from: string, to: string, type: 'read' | 'write' | 'data', channel: string | null, flow: number }
 export interface MapKpis {
   active: number
@@ -135,5 +135,9 @@ export function parseMapView(value: unknown): MapView {
     const edge = object(item); integer(edge.flow)
     if (!['read', 'write', 'data'].includes(String(edge.type)) || !nodes.has(text(edge.from, 4200)) || !nodes.has(text(edge.to, 4200))) throw new Error('Invalid map edge')
   }
-  return structuredClone(view) as unknown as MapView
+  const result = structuredClone(view) as unknown as MapView
+  for (const pod of result.pods) { pod.data = { reads: [], writes: [] }; pod.work = { pending: 0, held: 0 } }
+  result.edges = result.edges.filter(edge => edge.type !== 'data')
+  result.kpis.decisions = result.kpis.decisions.filter(item => item.kind !== 'question')
+  return result
 }

@@ -2960,7 +2960,6 @@
   "local_pod_requires_desktop": "Dieser Pod behält seine Daten auf dem Desktop; ändere ihn dort.",
   "Version selected. This instance remains paused until explicitly resumed.": "Version gewählt. Diese Instanz bleibt pausiert, bis sie ausdrücklich fortgesetzt wird.",
   "Review all changes before validating this instance. Open decisions and uncertain effects must be resolved before an update.": "Prüfe alle Änderungen, bevor du diese Instanz validierst. Offene Entscheidungen und unklare Effekte müssen vor einem Update geklärt sein.",
-  "Show me first the shape (which Pods, which shared data they read and write), the map, the access it needs and the examples you use as checks. Create only afterwards, activate only as a preview, and request rights exclusively through Permissions and the identity provider.": "Zeig mir zuerst Bauform (welche Pods welche gemeinsamen Daten lesen und schreiben), Karte, benötigte Zugriffe und die Beispiele, die du als Prüfung verwendest. Lege erst danach an, aktiviere nur als Vorschau, und fordere Rechte ausschließlich über Permissions und den IdP an.",
   "Pod writes shared data; assign another writer to its namespaces before deletion": "Der Pod schreibt gemeinsame Daten; weise seinen Namensräumen vor dem Löschen einen anderen Schreiber zu.",
   "Pod has open approvals or uncertain actions; settle them before deletion": "Der Pod hat offene Freigaben oder unklare Aktionen; kläre sie vor dem Löschen.",
   "Moving or archiving mail runs only through the approved archive service": "E-Mails verschieben oder archivieren läuft nur über den freigegebenen Archivdienst",
@@ -3278,5 +3277,13 @@
   "Runner channel closed during a pending response": "Ausführungskanal wurde während einer ausstehenden Antwort geschlossen",
   "Tool stderr exceeded {p0} bytes": "Werkzeug-Fehlerausgabe hat {p0} Bytes überschritten",
   "Workspace changed during central projection; retry the snapshot": "Der Arbeitsbereich wurde während des Zustandsabzugs geändert. Erstelle den Abzug erneut",
-  "Invalid empty snapshot identity": "Ungültige Kennung einer leeren Quellenkopie"
+  "Invalid empty snapshot identity": "Ungültige Kennung einer leeren Quellenkopie",
+  "Invalid approval history command": "Ungültiger Befehl für historische Freigaben",
+  "Invalid approval ID": "Ungültige Freigabe-ID",
+  "Shared datastore work declarations are retired": "Arbeitsdeklarationen für den gemeinsamen Datenspeicher wurden entfernt",
+  "Shared datastore APIs and work declarations are retired; migrate this script to files or an external service before importing or activating it": "Gemeinsame Datenspeicher und Arbeitsdeklarationen wurden entfernt. Stelle dieses Skript vor dem Importieren oder Aktivieren auf Dateien oder einen externen Dienst um.",
+  "Shared datastore and work declarations are retired; use files or an external service": "Gemeinsame Datenspeicher und Arbeitsdeklarationen wurden entfernt. Verwende Dateien oder einen externen Dienst.",
+  "Opening approvals requires the desktop": "Zum Öffnen von Freigaben ist die Desktop-App erforderlich",
+  "Historical record; reconcile outcomes in the external tool journal.": "Historischer Eintrag; Ergebnisse im Journal des externen Werkzeugs abgleichen.",
+  "Show me first the tasks, the files or external services they use, the map, the access they need and the examples you use as checks. Create only afterwards, activate only as a preview, and request rights exclusively through Permissions and the identity provider.": "Zeige mir zuerst die Aufgaben, ihre Dateien oder externen Dienste, die Karte, die benötigten Zugriffe und die Beispiele für deine Prüfungen. Erstelle sie erst danach, aktiviere sie nur als Vorschau und fordere Rechte ausschließlich über Berechtigungen und den Identitätsanbieter an."
 }

@@ -39,7 +39,7 @@ runtime source; editing a Pod script does not require another runtime build.
 
 The default base is `~/Library/Application Support/OpenApe Pods`. The CLI honors
 its `selected-profile.json`, so desktop and CLI refer to the same Pod IDs,
-metadata, script history, checkpoints and shared data. `--profile /absolute/path`
+metadata, script history, checkpoints and private workspace files. `--profile /absolute/path`
 selects another profile explicitly; no database copy or temporary substitute is
 made by the CLI.
 

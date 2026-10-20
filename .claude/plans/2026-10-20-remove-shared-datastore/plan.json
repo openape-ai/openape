@@ -1,0 +1,474 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "project": "OpenApe Pods",
+  "owner": "Patrick Hofmann",
+  "date": "2026-10-20",
+  "status": "active",
+  "revision": 1,
+  "title": "Remove the Pods shared datastore and its retired data",
+  "goal": "Remove shared namespace storage, its work graph and dependent interfaces while preserving independently running Pods.",
+  "summary": "Delete the 20 unused namespaces and their 2,262 records, revisions and work history through a tested migration. Remove the feature from runtime, APIs, CLI/MCP and UI; retain private Pod files, checkpoints and external authorization.",
+  "problem": {
+    "statement": "No current non-archived Pod uses the shared datastore, but the product still exposes and maintains it.",
+    "impact": "Retired mail content remains stored and unused work-graph infrastructure complicates execution, deletion and the UI.",
+    "approach": "Perform one coordinated retirement across storage, execution, administration and presentation, with an upgrade rehearsal before live cleanup.",
+    "outcome": "Current Pods continue with their existing files and external services; the shared-data feature and its live records are gone."
+  },
+  "context": "Live inspection at 19:12 Europe/Vienna found 21 active Pods, one paused Pod and the archived Mail-Prüfung. All 20 namespaces have no readers; three result writers point only to that archived Pod. The five briefing Pods now use daily files. Canonical origin/main is 6b0f06ba9a4be13733d5226bf1baebef29224b60; the shared main checkout is older and contains unrelated untracked work.",
+  "scope": [
+    "Purge live namespace definitions, readers, records, revisions, declared work, work items and namespace-bound owner questions.",
+    "Remove context.data, context.work, namespace-bound context.decisions, work exports and domain administration across desktop, CLI/MCP and browser contracts.",
+    "Remove obsolete graph edges, counters, queue logic, documentation and fixtures; update relay snapshots and protocol compatibility where affected.",
+    "Deliver through a canonical native PR, required local checks and a coordinated release/install with verified live cleanup."
+  ],
+  "nonGoals": [
+    "Do not replace the shared store with another data service or rewrite personal Pod recipes.",
+    "Retain private workspaces, checkpoints, assigned directories, credentials, identities, IdP grants and effect receipts.",
+    "Do not discard the ten unrelated historical IURIO approvals, external mail journals, private briefing files or owner-created exports. Existing backups remain recovery artifacts, not active storage.",
+    "Do not delete archived Pod identities or rewrite immutable historical migrations and run logs solely to remove old API text."
+  ],
+  "milestones": [
+    {
+      "id": "baseline",
+      "status": "active",
+      "title": "Freeze the retirement boundary",
+      "goal": "Bind the implementation to current source and a fresh dependency inventory.",
+      "steps": [
+        "After approval, create a native implementation issue linked to the relevant storage part of issue 1517 and use a feature/issue-<number>-remove-shared-datastore branch from current canonical main. Preserve other checkouts.",
+        "Reinspect active scripts, running commands and registered runtimes before destructive migration. Use existing backup facilities to capture a consistent private recovery baseline; record unrelated state for comparison."
+      ],
+      "acceptance": [
+        "No non-archived script requires the retired APIs and no shared work is claimed or has an unknown external outcome; otherwise stop before deleting."
+      ],
+      "rollback": "No product or live data has changed in this milestone."
+    },
+    {
+      "id": "remove",
+      "status": "active",
+      "title": "Remove the feature across its consumers",
+      "goal": "Keep the ordinary Pod execution and authorization path independent of shared data.",
+      "steps": [
+        "Remove domain storage/work/question services and dispatch ports, work-aware scheduling, script manifest fields and MCP/CLI commands. Update IPC, preload, native/browser adapters and the runtime reference together.",
+        "Remove shared-data presentation and update relay snapshot validation/cleanup. Keep existing grant decisions and historical approval visibility through an independent retained path.",
+        "Reject imports or activation of obsolete scripts with a clear removed-feature error before effects; do not silently ignore old work declarations. Update current guides and the local openape-pods skill guidance."
+      ],
+      "acceptance": [
+        "No supported surface advertises, creates, reads or writes shared namespaces; current file/CLI/HTTP Pods keep their execution path."
+      ],
+      "rollback": "Before migration, revert the feature branch or install the previous build against its matching unmodified profile."
+    },
+    {
+      "id": "migration",
+      "status": "active",
+      "title": "Purge retired data through a versioned upgrade",
+      "goal": "Remove the complete live data graph without touching unrelated state.",
+      "steps": [
+        "Add an ordered transactional migration to remove shared tables and dependent triggers/indexes, plus affected central snapshot copies. Preserve action approvals, effect receipts, run history, credentials and private progress.",
+        "Rehearse an old populated database upgrade, a clean profile, repeated startup, interruption rollback and refusal with a dependent active script. Verify exact unrelated-state parity.",
+        "Retire or reject pending old-domain commands and older writers so reconnect or restore cannot silently recreate removed state. Existing backups are not advertised as erased."
+      ],
+      "acceptance": [
+        "The 20 live namespaces, 2,262 current entries and their revisions/work/question state are absent after upgrade; a repeat changes nothing.",
+        "Unrelated Pod settings, private state, approvals and effect receipts match the baseline; stale clients cannot resurrect the feature."
+      ],
+      "rollback": "A destructive schema upgrade requires the matching pre-upgrade application and consistent backup. Do not overwrite newer runs or rotated credentials with an old profile; reconcile intervening effects before restoration."
+    },
+    {
+      "id": "delivery",
+      "status": "active",
+      "title": "Verify and install the retired feature state",
+      "goal": "Make the installed product and live storage match the approved result.",
+      "steps": [
+        "Run focused storage, worker, scheduling, CLI/MCP and relay tests; browser/component tests cover changed presentation. Build affected apps and run the mandatory affected unit gate; pnpm check:ci precedes deployment.",
+        "Merge with explicit native issue/PR relation and reviewed SHAs. Roll out relay compatibility first if needed, drain native runs, install through the established owner build workflow and apply the upgrade once.",
+        "Check live table/snapshot absence, current Pod configuration and ordinary execution without duplicate effects. Publish actual evidence under Test Runs, update this same Plan and close only the completed issue scope."
+      ],
+      "acceptance": [
+        "Installed runtime, CLI/MCP and UI no longer offer shared storage; representative independent Pods still run and cleanup is verified locally and centrally."
+      ],
+      "rollback": "Use the tested migration recovery procedure and retained previous binaries; do not replay effects or restore obsolete credentials blindly."
+    }
+  ],
+  "decisions": [
+    {
+      "title": "Retire rather than extend shared-data administration",
+      "description": "The owner approved proposal revision 1. Implement cleanup as part of complete retirement without adding permanent namespace administration.",
+      "status": "accepted",
+      "by": "Patrick Hofmann",
+      "date": "2026-10-20",
+      "reference": "Passt. Dann kannst du den altbestand nun wegräumen. Entferne auch das Feature der gemeinsamen Datenspeicher. Wir brauchen es ja nicht mehr"
+    }
+  ],
+  "risks": [
+    {
+      "title": "Coupled approvals and shared-data services",
+      "mitigation": "The existing domain overview also exposes ten historical IURIO approvals. Separate and preserve them, together with IdP grants and effect receipts, before deleting datastore services."
+    },
+    {
+      "title": "Concurrent activity and older runtime profiles",
+      "mitigation": "Recheck actual dependencies at the migration boundary; perform no direct SQL edits against the running desktop and no silent data drop for a still-dependent profile."
+    }
+  ],
+  "verification": [
+    "Activate . ./scripts/activate-node.sh in each repository shell, then pnpm run doctor. Follow apps/openape-pods/docs/testing.md for the narrowest existing test suites.",
+    "Use real SQLite upgrade fixtures for atomicity, idempotence and unrelated-data preservation; use anonymous synthetic scripts for API and scheduling regression checks.",
+    "Source search excludes immutable historical migrations and archived evidence. New profiles must not create shared-data tables; old profiles must lose them through upgrade.",
+    "Implementation and focused acceptance are complete: 11 storage migration tests, 16 browser tests and one real Electron schema-53 startup passed. Lint, typecheck and application build passed. The required pre-push gate and production cleanup remain pending."
+  ],
+  "sections": [
+    {
+      "id": "code-map",
+      "placement": "before-details",
+      "title": "Implementation map",
+      "body": "Primary paths: `apps/openape-pods/src/worker/data/{domain,work,questions,admin,ports}.ts`, `worker/storage/schema.ts`, `worker/runs/{dispatcher,script-context}.ts`, `worker/scheduling/scheduler.ts`, `worker/workspace/map-view.ts`, `contracts/domain-*`, IPC/preload and `renderer/central/*`. Trace the CLI/MCP actions and `worker/master/reference.ts`; inspect `apps/openape-pods-relay/server/utils/workspace-store.ts` and shared snapshot contracts for retained copies. Use a fresh implementation worktree; the current shared main checkout must not be switched or cleaned."
+    }
+  ],
+  "links": [
+    {
+      "title": "Existing storage-cleanup issue 1517",
+      "url": "https://repos.openape.ai/patrick/monorepo/issues/1517"
+    },
+    {
+      "title": "Implementation issue 1529",
+      "url": "https://repos.openape.ai/patrick/monorepo/issues/1529"
+    }
+  ],
+  "evidence": [
+    {
+      "id": "baseline",
+      "kind": "text",
+      "role": "evidence",
+      "title": "Read-only live baseline, October 20, 2026",
+      "text": "Runtime a2521095-eaee-4c92-9214-d3988ef3430d online. 23 Pods: 21 active, 1 paused, 1 archived. No non-archived script calls context.data/context.work/context.decisions or exports work; no namespace readers. 16 delta-mind/mail namespaces: 2225 entries; 4 patrick/briefing namespaces: 37 entries. 11 retained work operations; no claimed or unknown work. 0 pending namespace owner questions. 10 unrelated historical IURIO approvals retained. Runtime domain contract only supports deleting individual owner records; no complete namespace purge. Canonical origin/main inspected: 6b0f06ba9a4be13733d5226bf1baebef29224b60. Toolchain doctor passed with unrelated untracked files preserved."
+    }
+  ],
+  "completion": {
+    "result": "not-assessed",
+    "summary": "Implementation has started; feature removal and live cleanup are not yet complete."
+  },
+  "handoff": "Run the mandatory affected unit gate, review and merge the native PR, then deploy relay compatibility and install the owner build with a paired profile backup. Verify live cleanup and publish acceptance evidence.",
+  "changelog": [
+    {
+      "date": "2026-10-20",
+      "text": "Prepared revision 1 from live inventory and canonical source; identified the missing complete purge operation and the need to retain unrelated approvals."
+    },
+    {
+      "date": "2026-10-20",
+      "text": "Patrick approved proposal revision 1 with “Freigegeben”; implementation started."
+    }
+  ],
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "Remove the Pods shared datastore and its retired data",
+        "text": "Gemeinsamen Pod-Datenspeicher samt Altbestand entfernen"
+      },
+      {
+        "path": "goal",
+        "source": "Remove shared namespace storage, its work graph and dependent interfaces while preserving independently running Pods.",
+        "text": "Gemeinsame Namensräume, den zugehörigen Workgraph und ihre Schnittstellen entfernen; unabhängig laufende Pods erhalten."
+      },
+      {
+        "path": "summary",
+        "source": "Delete the 20 unused namespaces and their 2,262 records, revisions and work history through a tested migration. Remove the feature from runtime, APIs, CLI/MCP and UI; retain private Pod files, checkpoints and external authorization.",
+        "text": "Die 20 ungenutzten Namensräume mit 2.262 Einträgen, Revisionen und Arbeitshistorie über eine getestete Migration löschen. Das Feature aus Laufzeit, APIs, CLI/MCP und Oberfläche entfernen; private Pod-Dateien, Checkpoints und externe Freigaben erhalten."
+      },
+      {
+        "path": "problem.statement",
+        "source": "No current non-archived Pod uses the shared datastore, but the product still exposes and maintains it.",
+        "text": "Kein aktueller nicht archivierter Pod nutzt den gemeinsamen Speicher; das Produkt bietet und verwaltet ihn dennoch."
+      },
+      {
+        "path": "problem.impact",
+        "source": "Retired mail content remains stored and unused work-graph infrastructure complicates execution, deletion and the UI.",
+        "text": "Alte Mailinhalte bleiben gespeichert; ungenutzte Workgraph-Infrastruktur verkompliziert Ausführung, Löschung und Oberfläche."
+      },
+      {
+        "path": "problem.approach",
+        "source": "Perform one coordinated retirement across storage, execution, administration and presentation, with an upgrade rehearsal before live cleanup.",
+        "text": "Speicher, Ausführung, Verwaltung und Darstellung gemeinsam zurückbauen; die Migration vor der Live-Bereinigung proben."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "Current Pods continue with their existing files and external services; the shared-data feature and its live records are gone.",
+        "text": "Aktuelle Pods arbeiten mit ihren bestehenden Dateien und externen Diensten weiter; das gemeinsame Speicherfeature und seine Live-Daten sind entfernt."
+      },
+      {
+        "path": "context",
+        "source": "Live inspection at 19:12 Europe/Vienna found 21 active Pods, one paused Pod and the archived Mail-Prüfung. All 20 namespaces have no readers; three result writers point only to that archived Pod. The five briefing Pods now use daily files. Canonical origin/main is 6b0f06ba9a4be13733d5226bf1baebef29224b60; the shared main checkout is older and contains unrelated untracked work.",
+        "text": "Die Live-Prüfung um 19:12 Uhr Europe/Vienna ergab 21 aktive Pods, einen pausierten Pod und die archivierte Mail-Prüfung. Alle 20 Namensräume haben keine Leser; drei Ergebnisschreiber verweisen nur auf diesen archivierten Pod. Die fünf Briefing-Pods verwenden inzwischen Tagesdateien. Kanonisches origin/main ist 6b0f06ba9a4be13733d5226bf1baebef29224b60; der gemeinsam genutzte Hauptcheckout ist älter und enthält fremde unversionierte Arbeit."
+      },
+      {
+        "path": "scope.0",
+        "source": "Purge live namespace definitions, readers, records, revisions, declared work, work items and namespace-bound owner questions.",
+        "text": "Live-Namensräume, Leser, Einträge, Revisionen, deklarierte Arbeit, Arbeitsaufträge und namensraumgebundene Owner-Fragen entfernen."
+      },
+      {
+        "path": "scope.1",
+        "source": "Remove context.data, context.work, namespace-bound context.decisions, work exports and domain administration across desktop, CLI/MCP and browser contracts.",
+        "text": "context.data, context.work, namensraumgebundenes context.decisions, Work-Exporte und Domain-Verwaltung aus Desktop-, CLI/MCP- und Browser-Verträgen entfernen."
+      },
+      {
+        "path": "scope.2",
+        "source": "Remove obsolete graph edges, counters, queue logic, documentation and fixtures; update relay snapshots and protocol compatibility where affected.",
+        "text": "Überholte Graphkanten, Zähler, Warteschlangenlogik, Dokumentation und Fixtures entfernen; betroffene Relay-Snapshots und Protokollkompatibilität aktualisieren."
+      },
+      {
+        "path": "scope.3",
+        "source": "Deliver through a canonical native PR, required local checks and a coordinated release/install with verified live cleanup.",
+        "text": "Über einen kanonischen nativen PR, erforderliche lokale Prüfungen und einen abgestimmten Release samt Installation mit verifizierter Live-Bereinigung ausliefern."
+      },
+      {
+        "path": "nonGoals.0",
+        "source": "Do not replace the shared store with another data service or rewrite personal Pod recipes.",
+        "text": "Keinen neuen Datendienst als Ersatz einführen und keine persönlichen Pod-Rezepte umschreiben."
+      },
+      {
+        "path": "nonGoals.1",
+        "source": "Retain private workspaces, checkpoints, assigned directories, credentials, identities, IdP grants and effect receipts.",
+        "text": "Private Arbeitsverzeichnisse, Checkpoints, zugewiesene Ordner, Zugangsdaten, Identitäten, IdP-Freigaben und Ausführungsbelege erhalten."
+      },
+      {
+        "path": "nonGoals.2",
+        "source": "Do not discard the ten unrelated historical IURIO approvals, external mail journals, private briefing files or owner-created exports. Existing backups remain recovery artifacts, not active storage.",
+        "text": "Die zehn fremden historischen IURIO-Freigaben, externe Mailjournale, private Briefing-Dateien und vom Owner angelegte Exporte nicht löschen. Vorhandene Backups bleiben Wiederherstellungsartefakte, kein aktiver Speicher."
+      },
+      {
+        "path": "nonGoals.3",
+        "source": "Do not delete archived Pod identities or rewrite immutable historical migrations and run logs solely to remove old API text.",
+        "text": "Archivierte Pod-Identitäten nicht löschen; unveränderliche alte Migrationen und Laufprotokolle nicht allein wegen alter API-Texte umschreiben."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Freeze the retirement boundary",
+        "text": "Grenze der Entfernung festhalten"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Bind the implementation to current source and a fresh dependency inventory.",
+        "text": "Umsetzung an aktuellen Quellstand und eine frische Abhängigkeitsprüfung binden."
+      },
+      {
+        "path": "milestones.0.steps.0",
+        "source": "After approval, create a native implementation issue linked to the relevant storage part of issue 1517 and use a feature/issue-<number>-remove-shared-datastore branch from current canonical main. Preserve other checkouts.",
+        "text": "Nach Freigabe ein natives Umsetzungsissue mit Bezug zum Speicherteil von Issue 1517 anlegen und feature/issue-<number>-remove-shared-datastore von aktuellem kanonischem main verwenden. Andere Checkouts erhalten."
+      },
+      {
+        "path": "milestones.0.steps.1",
+        "source": "Reinspect active scripts, running commands and registered runtimes before destructive migration. Use existing backup facilities to capture a consistent private recovery baseline; record unrelated state for comparison.",
+        "text": "Aktive Skripte, laufende Befehle und registrierte Laufzeiten vor der destruktiven Migration erneut prüfen. Mit vorhandenen Backup-Werkzeugen einen konsistenten privaten Wiederherstellungsstand sichern; sonstigen Zustand zum Vergleich festhalten."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "No non-archived script requires the retired APIs and no shared work is claimed or has an unknown external outcome; otherwise stop before deleting.",
+        "text": "Kein nicht archiviertes Skript benötigt die alten APIs; keine gemeinsame Arbeit ist beansprucht oder hat einen unbekannten externen Ausgang. Andernfalls vor dem Löschen stoppen."
+      },
+      {
+        "path": "milestones.0.rollback",
+        "source": "No product or live data has changed in this milestone.",
+        "text": "In diesem Schritt wurden Produkt und Live-Daten noch nicht geändert."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "Remove the feature across its consumers",
+        "text": "Feature bei allen Verbrauchern entfernen"
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "Keep the ordinary Pod execution and authorization path independent of shared data.",
+        "text": "Normale Pod-Ausführung und Freigaben vom gemeinsamen Speicher entkoppeln."
+      },
+      {
+        "path": "milestones.1.steps.0",
+        "source": "Remove domain storage/work/question services and dispatch ports, work-aware scheduling, script manifest fields and MCP/CLI commands. Update IPC, preload, native/browser adapters and the runtime reference together.",
+        "text": "Domain-Speicher-, Work- und Fragedienste samt Dispatch-Ports, Work-abhängiges Scheduling, Skriptfelder und MCP/CLI-Befehle entfernen. IPC, Preload, native/Browser-Adapter und Laufzeitreferenz gemeinsam aktualisieren."
+      },
+      {
+        "path": "milestones.1.steps.1",
+        "source": "Remove shared-data presentation and update relay snapshot validation/cleanup. Keep existing grant decisions and historical approval visibility through an independent retained path.",
+        "text": "Shared-Data-Darstellung entfernen und Relay-Snapshotprüfung/Bereinigung anpassen. Bestehende Freigabeentscheidungen und historische Freigabesicht über einen unabhängigen erhaltenen Pfad weiterführen."
+      },
+      {
+        "path": "milestones.1.steps.2",
+        "source": "Reject imports or activation of obsolete scripts with a clear removed-feature error before effects; do not silently ignore old work declarations. Update current guides and the local openape-pods skill guidance.",
+        "text": "Import oder Aktivierung alter Skripte mit klarer Meldung zum entfernten Feature vor Effekten ablehnen; alte Work-Deklarationen nicht still ignorieren. Aktuelle Anleitungen und den lokalen openape-pods-Skill anpassen."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "No supported surface advertises, creates, reads or writes shared namespaces; current file/CLI/HTTP Pods keep their execution path.",
+        "text": "Keine unterstützte Oberfläche bewirbt, erzeugt, liest oder schreibt gemeinsame Namensräume; aktuelle Datei-/CLI-/HTTP-Pods behalten ihren Ausführungspfad."
+      },
+      {
+        "path": "milestones.1.rollback",
+        "source": "Before migration, revert the feature branch or install the previous build against its matching unmodified profile.",
+        "text": "Vor der Migration den Feature-Branch zurücknehmen oder den vorherigen Build mit seinem passenden unveränderten Profil installieren."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "Purge retired data through a versioned upgrade",
+        "text": "Altbestand über ein versioniertes Upgrade bereinigen"
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "Remove the complete live data graph without touching unrelated state.",
+        "text": "Den vollständigen Live-Datengraphen entfernen, ohne andere Zustände zu verändern."
+      },
+      {
+        "path": "milestones.2.steps.0",
+        "source": "Add an ordered transactional migration to remove shared tables and dependent triggers/indexes, plus affected central snapshot copies. Preserve action approvals, effect receipts, run history, credentials and private progress.",
+        "text": "Eine geordnete transaktionale Migration zum Entfernen gemeinsamer Tabellen samt abhängigen Triggern/Indizes sowie betroffener zentraler Snapshotkopien ergänzen. Aktionsfreigaben, Ausführungsbelege, Laufhistorie, Zugangsdaten und private Fortschritte erhalten."
+      },
+      {
+        "path": "milestones.2.steps.1",
+        "source": "Rehearse an old populated database upgrade, a clean profile, repeated startup, interruption rollback and refusal with a dependent active script. Verify exact unrelated-state parity.",
+        "text": "Upgrade einer alten gefüllten Datenbank, leeres Profil, wiederholten Start, Abbruch-Rollback und Ablehnung bei einem abhängigen aktiven Skript proben. Sonstige Zustände exakt auf Gleichheit prüfen."
+      },
+      {
+        "path": "milestones.2.steps.2",
+        "source": "Retire or reject pending old-domain commands and older writers so reconnect or restore cannot silently recreate removed state. Existing backups are not advertised as erased.",
+        "text": "Ausstehende alte Domain-Befehle und ältere Schreiber stilllegen oder ablehnen, damit Reconnect oder Restore entfernten Zustand nicht still wiederherstellt. Bestehende Backups nicht als gelöscht ausgeben."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "The 20 live namespaces, 2,262 current entries and their revisions/work/question state are absent after upgrade; a repeat changes nothing.",
+        "text": "Die 20 Live-Namensräume, 2.262 aktuellen Einträge und ihre Revisionen/Arbeits-/Fragezustände fehlen nach dem Upgrade; eine Wiederholung ändert nichts."
+      },
+      {
+        "path": "milestones.2.acceptance.1",
+        "source": "Unrelated Pod settings, private state, approvals and effect receipts match the baseline; stale clients cannot resurrect the feature.",
+        "text": "Sonstige Pod-Einstellungen, private Zustände, Freigaben und Ausführungsbelege entsprechen dem Ausgangsstand; alte Clients können das Feature nicht wiederherstellen."
+      },
+      {
+        "path": "milestones.2.rollback",
+        "source": "A destructive schema upgrade requires the matching pre-upgrade application and consistent backup. Do not overwrite newer runs or rotated credentials with an old profile; reconcile intervening effects before restoration.",
+        "text": "Ein destruktives Schema-Upgrade benötigt die passende vorherige App und ein konsistentes Backup. Neuere Läufe oder rotierte Zugangsdaten nicht mit einem alten Profil überschreiben; zwischenzeitliche Effekte vor Restore abgleichen."
+      },
+      {
+        "path": "milestones.3.title",
+        "source": "Verify and install the retired feature state",
+        "text": "Entfernten Funktionsstand prüfen und installieren"
+      },
+      {
+        "path": "milestones.3.goal",
+        "source": "Make the installed product and live storage match the approved result.",
+        "text": "Installiertes Produkt und Live-Speicher auf den freigegebenen Zielstand bringen."
+      },
+      {
+        "path": "milestones.3.steps.0",
+        "source": "Run focused storage, worker, scheduling, CLI/MCP and relay tests; browser/component tests cover changed presentation. Build affected apps and run the mandatory affected unit gate; pnpm check:ci precedes deployment.",
+        "text": "Gezielte Speicher-, Worker-, Scheduler-, CLI/MCP- und Relay-Tests ausführen; Browser-/Komponententests decken geänderte Darstellung ab. Betroffene Apps bauen und verpflichtendes betroffenes Unit-Gate ausführen; vor Deployment pnpm check:ci."
+      },
+      {
+        "path": "milestones.3.steps.1",
+        "source": "Merge with explicit native issue/PR relation and reviewed SHAs. Roll out relay compatibility first if needed, drain native runs, install through the established owner build workflow and apply the upgrade once.",
+        "text": "Mit expliziter nativer Issue/PR-Beziehung und geprüften SHAs mergen. Bei Bedarf zuerst Relay-Kompatibilität ausrollen, native Läufe auslaufen lassen, über den etablierten Owner-Build-Ablauf installieren und einmal upgraden."
+      },
+      {
+        "path": "milestones.3.steps.2",
+        "source": "Check live table/snapshot absence, current Pod configuration and ordinary execution without duplicate effects. Publish actual evidence under Test Runs, update this same Plan and close only the completed issue scope.",
+        "text": "Live-Tabellen/Snapshots auf Entfernung, aktuelle Pod-Konfiguration und normale Ausführung ohne doppelte Effekte prüfen. Tatsächliche Nachweise unter Test Runs veröffentlichen, diesen Plan aktualisieren und nur erledigten Issue-Umfang schließen."
+      },
+      {
+        "path": "milestones.3.acceptance.0",
+        "source": "Installed runtime, CLI/MCP and UI no longer offer shared storage; representative independent Pods still run and cleanup is verified locally and centrally.",
+        "text": "Installierte Laufzeit, CLI/MCP und Oberfläche bieten keinen gemeinsamen Speicher mehr; repräsentative unabhängige Pods laufen weiter und die Bereinigung ist lokal und zentral nachgewiesen."
+      },
+      {
+        "path": "milestones.3.rollback",
+        "source": "Use the tested migration recovery procedure and retained previous binaries; do not replay effects or restore obsolete credentials blindly.",
+        "text": "Die getestete Wiederherstellung der Migration und vorherige Programme verwenden; keine Effekte erneut ausführen oder alte Zugangsdaten blind wiederherstellen."
+      },
+      {
+        "path": "decisions.0.title",
+        "source": "Retire rather than extend shared-data administration",
+        "text": "Gemeinsame Datenverwaltung entfernen statt erweitern"
+      },
+      {
+        "path": "decisions.0.description",
+        "source": "The owner approved proposal revision 1. Implement cleanup as part of complete retirement without adding permanent namespace administration.",
+        "text": "Der Owner hat Vorschlagsrevision 1 freigegeben. Bereinigung als Teil des vollständigen Rückbaus umsetzen, ohne dauerhafte Namensraumverwaltung zu ergänzen."
+      },
+      {
+        "path": "risks.0.title",
+        "source": "Coupled approvals and shared-data services",
+        "text": "Kopplung von Freigaben und gemeinsamen Datendiensten"
+      },
+      {
+        "path": "risks.0.mitigation",
+        "source": "The existing domain overview also exposes ten historical IURIO approvals. Separate and preserve them, together with IdP grants and effect receipts, before deleting datastore services.",
+        "text": "Die bisherige Domain-Übersicht zeigt auch zehn historische IURIO-Freigaben. Diese zusammen mit IdP-Freigaben und Ausführungsbelegen vor Entfernung der Datendienste trennen und erhalten."
+      },
+      {
+        "path": "risks.1.title",
+        "source": "Concurrent activity and older runtime profiles",
+        "text": "Parallele Aktivität und ältere Laufzeitprofile"
+      },
+      {
+        "path": "risks.1.mitigation",
+        "source": "Recheck actual dependencies at the migration boundary; perform no direct SQL edits against the running desktop and no silent data drop for a still-dependent profile.",
+        "text": "Abhängigkeiten unmittelbar vor Migration prüfen; keine direkten SQL-Eingriffe gegen den laufenden Desktop und keine stille Datenlöschung bei noch abhängigem Profil."
+      },
+      {
+        "path": "verification.0",
+        "source": "Activate . ./scripts/activate-node.sh in each repository shell, then pnpm run doctor. Follow apps/openape-pods/docs/testing.md for the narrowest existing test suites.",
+        "text": "In jeder Repository-Shell . ./scripts/activate-node.sh aktivieren, danach pnpm run doctor. Für möglichst gezielte bestehende Tests apps/openape-pods/docs/testing.md folgen."
+      },
+      {
+        "path": "verification.1",
+        "source": "Use real SQLite upgrade fixtures for atomicity, idempotence and unrelated-data preservation; use anonymous synthetic scripts for API and scheduling regression checks.",
+        "text": "Reale SQLite-Upgrade-Fixtures für Atomarität, Idempotenz und Erhalt sonstiger Daten verwenden; anonyme synthetische Skripte für API- und Scheduling-Regressionen nutzen."
+      },
+      {
+        "path": "verification.2",
+        "source": "Source search excludes immutable historical migrations and archived evidence. New profiles must not create shared-data tables; old profiles must lose them through upgrade.",
+        "text": "Quelltextprüfung nimmt unveränderliche historische Migrationen und archivierte Nachweise aus. Neue Profile dürfen keine Shared-Data-Tabellen erzeugen; alte Profile verlieren sie über das Upgrade."
+      },
+      {
+        "path": "verification.3",
+        "source": "Implementation and focused acceptance are complete: 11 storage migration tests, 16 browser tests and one real Electron schema-53 startup passed. Lint, typecheck and application build passed. The required pre-push gate and production cleanup remain pending.",
+        "text": "Implementierung und gezielte Abnahme sind abgeschlossen: 11 Speichermigrationstests, 16 Browsertests und ein echter Electron-Start mit Schema 53 sind bestanden. Lint, Typprüfung und Anwendungsbuild sind bestanden. Der verpflichtende Pre-Push-Check und die produktive Bereinigung stehen noch aus."
+      },
+      {
+        "path": "sections.0.title",
+        "source": "Implementation map",
+        "text": "Umsetzungsbereiche"
+      },
+      {
+        "path": "sections.0.body",
+        "source": "Primary paths: `apps/openape-pods/src/worker/data/{domain,work,questions,admin,ports}.ts`, `worker/storage/schema.ts`, `worker/runs/{dispatcher,script-context}.ts`, `worker/scheduling/scheduler.ts`, `worker/workspace/map-view.ts`, `contracts/domain-*`, IPC/preload and `renderer/central/*`. Trace the CLI/MCP actions and `worker/master/reference.ts`; inspect `apps/openape-pods-relay/server/utils/workspace-store.ts` and shared snapshot contracts for retained copies. Use a fresh implementation worktree; the current shared main checkout must not be switched or cleaned.",
+        "text": "Hauptpfade: `apps/openape-pods/src/worker/data/{domain,work,questions,admin,ports}.ts`, `worker/storage/schema.ts`, `worker/runs/{dispatcher,script-context}.ts`, `worker/scheduling/scheduler.ts`, `worker/workspace/map-view.ts`, `contracts/domain-*`, IPC/Preload und `renderer/central/*`. CLI/MCP-Aktionen und `worker/master/reference.ts` nachverfolgen; `apps/openape-pods-relay/server/utils/workspace-store.ts` und gemeinsame Snapshot-Verträge auf gespeicherte Kopien prüfen. Einen frischen Umsetzungsworktree nutzen; den gemeinsamen Hauptcheckout weder umschalten noch bereinigen."
+      },
+      {
+        "path": "completion.summary",
+        "source": "Implementation has started; feature removal and live cleanup are not yet complete.",
+        "text": "Die Umsetzung hat begonnen; Feature-Entfernung und Live-Bereinigung sind noch nicht abgeschlossen."
+      },
+      {
+        "path": "handoff",
+        "source": "Run the mandatory affected unit gate, review and merge the native PR, then deploy relay compatibility and install the owner build with a paired profile backup. Verify live cleanup and publish acceptance evidence.",
+        "text": "Den verpflichtenden Check der betroffenen Pakete ausführen, den nativen PR prüfen und mergen. Anschließend Relay-Kompatibilität bereitstellen und den Owner-Build mit zusammengehöriger Profilsicherung installieren. Live-Bereinigung prüfen und Abnahmenachweise veröffentlichen."
+      },
+      {
+        "path": "changelog.0.text",
+        "source": "Prepared revision 1 from live inventory and canonical source; identified the missing complete purge operation and the need to retain unrelated approvals.",
+        "text": "Revision 1 aus Live-Bestand und kanonischem Quellstand erstellt; fehlende vollständige Löschoperation und notwendigen Erhalt fremder Freigaben festgestellt."
+      },
+      {
+        "path": "changelog.1.text",
+        "source": "Patrick approved proposal revision 1 with “Freigegeben”; implementation started.",
+        "text": "Patrick hat Vorschlagsrevision 1 mit „Freigegeben“ bestätigt; die Umsetzung hat begonnen."
+      }
+    ]
+  },
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-20",
+    "reference": "Freigegeben",
+    "target": {
+      "revision": 1
+    }
+  }
+}

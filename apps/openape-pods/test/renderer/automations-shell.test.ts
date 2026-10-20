@@ -33,13 +33,13 @@ describe('Automatisierungen', () => {
       // Only Pods failing now count; a Pod whose last run succeeded keeps its earlier failures in its history.
       ['1', 'aktuelle Fehler', 'IURIO PR monitor · mit Lücken abgeschlossen'],
       // The same sections as Entscheidungen: a run waiting for its grant and a grant requested at the IdP are rights.
-      ['24', 'Entscheidungen warten auf dich', '17 Rückfragen, 4 Freigaben, 2 Rechte, 1 fehlgeschlagene Arbeitseinträge'],
+      ['6', 'Entscheidungen warten auf dich', '4 Freigaben, 2 Rechte'],
     ])
     expect(wrapper!.find('.kpi.alert').text()).toContain('aktuelle Fehler')
     await wrapper!.find('.kpi-pod').trigger('click')
     expect(wrapper!.emitted('openPod')).toEqual([[view.pods.find(pod => pod.name === 'IURIO PR monitor')!.id]])
     expect(wrapper!.find('[role="tablist"]').text()).toContain('Automatisierungen')
-    expect(wrapper!.find('[role="tablist"]').text()).toContain('Entscheidungen 24')
+    expect(wrapper!.find('[role="tablist"]').text()).toContain('Entscheidungen 6')
     expect(wrapper!.find('.automations-stamp').text()).toBe(`Stand ${clock(view.at, 'de')}`)
     expect(wrapper!.find('.kinds').text()).toContain('Service, per HTTPS')
     wrapper!.unmount(); applyLanguage('en')
@@ -59,17 +59,17 @@ describe('Automatisierungen', () => {
     expect(wrapper!.find('[aria-label="Gruppe"]').exists()).toBe(false)
     // Without any tag in the workspace there is no tag bar and everything stays visible.
     expect(wrapper!.find('[aria-label="Tags"]').exists()).toBe(false)
-    expect(wrapper!.find('.layers-menu summary').text()).toBe('Ebenen 5/5')
-    expect(wrapper!.find('[aria-label="Ebenen"]').findAll('button').map(item => item.text())).toEqual(['Gemeinsame Daten', 'Lesen', 'Schreiben', 'Freigaben', 'Pausierte'])
+    expect(wrapper!.find('.layers-menu summary').text()).toBe('Ebenen 4/4')
+    expect(wrapper!.find('[aria-label="Ebenen"]').findAll('button').map(item => item.text())).toEqual(['Lesen', 'Schreiben', 'Freigaben', 'Pausierte'])
     expect(wrapper!.find('[data-testid="automations-map"] canvas').attributes('aria-label')).toBe('Animierte Netzkarte aller Pods mit Datenquellen, Speichern und Entscheidungsstellen')
     await button('Pausierte').trigger('click')
     expect(button('Pausierte').attributes('aria-pressed')).toBe('false')
-    expect(wrapper!.find('.layers-menu summary').text()).toBe('Ebenen 4/5')
+    expect(wrapper!.find('.layers-menu summary').text()).toBe('Ebenen 3/4')
     // The gear opens the one settings page of the host; the shell has no settings panel of its own.
     await button('⚙ Einstellungen').trigger('click'); await flushPromises()
     expect(wrapper!.emitted('settings')).toHaveLength(1)
     expect(wrapper!.find('[role="dialog"]').exists()).toBe(false)
-    await button('Entscheidungen 24').trigger('click')
+    await button('Entscheidungen 6').trigger('click')
     expect(wrapper!.emitted('update:tab')).toEqual([['decisions']])
     await button('Neue Automatisierung mit Codex').trigger('click')
     expect(wrapper!.emitted('codex')).toEqual([[null, []]])
@@ -89,7 +89,7 @@ describe('Automatisierungen', () => {
     const cells = (name: string) => rows.find(row => row.find('b').text() === name)!.findAll('td').slice(1).map(cell => cell.text().replace(/\s+/g, ' ').trim())
     // The fixture has no descriptions; a missing purpose is named, not left blank.
     expect(rows.every(row => row.find('.automations-list-purpose').text() === 'Zweck fehlt')).toBe(true)
-    expect(cells('Rechnungsprüfung')).toEqual(['OK', 'noch kein Lauf', 'bei neuen gemeinsamen Daten', '–'])
+    expect(cells('Rechnungsprüfung')).toEqual(['OK', 'noch kein Lauf', 'nur manuell', '–'])
     // Failed runs of the last 24 hours stay visible below a successful last result.
     expect(cells('zaz Service-Agent')).toEqual(['OK', 'vor 11 min · zaz queue empty; no model call 3 fehlgeschlagene Läufe in 24 h', 'alle 1 min', '–'])
     expect(rows.find(row => row.find('b').text() === 'zaz Service-Agent')!.find('.result-cell .failures').text()).toBe('3 fehlgeschlagene Läufe in 24 h')
@@ -112,9 +112,9 @@ describe('Automatisierungen', () => {
     const info = wrapper!.find('.automation-info').text().replace(/\s+/g, ' ')
     expect(info).toContain('Mail-Klassifizierung')
     expect(info).toContain('gepinnt')
-    expect(info).toContain('bei gemeinsamen Daten · 10 Läufe gesamt')
+    expect(info).toContain('– · 10 Läufe gesamt')
     expect(info).toContain(`zuletzt ${stamp(pod('Mail-Klassifizierung').lastRun!.at, 'de')} · abgeschlossen: Mail-Klassifizierung completed`)
-    expect(info).toContain('Gemeinsame Daten: → delta-mind/mail/classifications (15), ← delta-mind/mail/messages (20)')
+    expect(info).not.toContain('Gemeinsame Daten')
     expect(info).toContain('liest: TypeSafe / Jev (10), delta (10)')
     expect(info).toContain('schreibt: delta (10)')
     await button('Details öffnen').trigger('click')
@@ -133,8 +133,8 @@ describe('Automatisierungen', () => {
     wrapper = mount(AutomationsShell, { props: { view, live: true, now: NOW, tab: 'decisions' } })
     await flushPromises()
     expect(wrapper.find('.decisions-inbox').exists()).toBe(true)
-    expect(wrapper.findAll('.kpi')).toHaveLength(5)
-    expect(wrapper.find('[role="tablist"]').text()).toContain('Decisions 2')
+    expect(wrapper.findAll('.kpi')).toHaveLength(3)
+    expect(wrapper.find('[role="tablist"]').text()).toContain('Decisions 6')
   })
 })
 

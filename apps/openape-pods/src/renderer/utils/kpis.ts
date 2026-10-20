@@ -24,13 +24,11 @@ const readableReasons = new Set(['failed', 'completedWithGaps'])
  */
 export interface DecisionCounts {
   count: number
-  questions: number
   /** Object approvals requested at the IdP or uncertain after a restore. */
   approvals: number
   /** Runs waiting for a grant and grants the Pods requested at the IdP. */
   rights: number
   /** Failed work that no longer retries on its own. */
-  work: number
   secrets: number
 }
 
@@ -52,10 +50,8 @@ export const openSecretRequests = (requests: SecretRequestRow[]) => requests.fil
 export function decisionCounts(view: MapView, requests: SecretRequestRow[] = []): DecisionCounts {
   const total = (kind: 'question' | 'approval') => view.kpis.decisions.filter(item => item.kind === kind).reduce((sum, item) => sum + item.count, 0)
   const counts = {
-    questions: total('question'),
     approvals: total('approval'),
     rights: rightsRows(view).length,
-    work: view.pods.reduce((sum, pod) => sum + pod.work.held, 0),
     secrets: openSecretRequests(requests).length,
   }
   return { count: Object.values(counts).reduce((sum, value) => sum + value, 0), ...counts }

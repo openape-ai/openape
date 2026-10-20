@@ -7,7 +7,7 @@ import { parseDetailsCommand } from '../../contracts/details'
 import { parseResourceCommand } from '../../contracts/resources'
 import { parseScheduleCommand } from '../../contracts/scheduling'
 import { parseRunCommand } from '../../contracts/runs'
-import { parseDomainCommand } from '../../contracts/domain-admin'
+import { parseApprovalHistoryCommand } from '../../contracts/approval-history'
 import { inboxMessageLimits, parseInboxMessagePage } from '../../contracts/inbox'
 import { demoId, demoHash, demoState, demoMap } from './scenarios'
 import type { DemoScenario } from './scenarios'
@@ -19,7 +19,6 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
   const pendingReads = new Map<ReturnType<typeof setTimeout>, (error: Error) => void>()
   let disposed = false
   let failRead = scenario === 'loading-error'
-  let failChoice = scenario === 'attention'
   let runSequence = 1000
   let language: 'de' | 'en' = 'de'
 
@@ -92,9 +91,6 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
         checkRevision(pod.details.description?.revision ?? 0, command.revision)
         pod.details.description = { text: command.text, revision: command.revision + 1, state: 'ready', error: null, updatedAt: Date.now() }; changed()
       }
-      else if (command.type !== 'list') {
-        return unavailable(command.type)
-      }
       return structuredClone(pod.details)
     },
     async resources(input) {
@@ -147,9 +143,6 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
         if (!run || run.state !== 'running') throw new Error('Run is not active')
         run.state = 'cancelled'; run.finishedAt = Date.now(); changed()
       }
-      else if (command.type !== 'list') {
-        return unavailable(command.type)
-      }
       const result = structuredClone(pod.runs)
       if (command.type === 'list' && command.runId) result.events = structuredClone(pod.history[command.runId]?.events ?? pod.runs.events)
       return result
@@ -174,20 +167,10 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
       const page = view.slice(0, inboxMessageLimits.page)
       return parseInboxMessagePage(structuredClone({ messages: page, next: view.length > page.length ? page.at(-1)!.created : null }))
     },
-    async domain(input) {
-      const command = parseDomainCommand(input)
-      if (command.type === 'answer') {
-        const index = state.domain.questions.findIndex(question => question.id === command.questionId)
-        if (index < 0) throw new Error('Question was already answered')
-        if (!state.domain.questions[index]!.options.some(option => option.key === command.option)) throw new Error('Unknown answer')
-        if (failChoice) { failChoice = false; throw new Error('Demo: Saving failed. Try the same decision again.') }
-        state.domain.questions.splice(index, 1); changed()
-      }
-      else if (command.type === 'openApproval') { notify(t('Demo: This approval would be decided at the IdP. No permission was granted.')); return null }
-      else if (command.type !== 'list') {
-        return unavailable(command.type)
-      }
-      return structuredClone(state.domain)
+    async approvalHistory(input) {
+      const command = parseApprovalHistoryCommand(input)
+      if (command.type === 'openApproval') { notify(t('Demo: This approval would be decided at the IdP. No permission was granted.')); return null }
+      return structuredClone(state.approvalHistory)
     },
     async onboarding(command) {
       if (command.type !== 'list') return unavailable('Authentication or permissions')

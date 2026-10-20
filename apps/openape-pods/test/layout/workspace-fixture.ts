@@ -79,7 +79,7 @@ export function installWorkspace(overrides: Partial<PodsBridge> = {}): PodsBridg
     master: async () => ({ connected: true, state: 'idle', error: null, messages: [], drafts: [], proposals: [] }),
     mcpSession: async () => ({ expiresAt: null, pending: false }),
     codex: async () => ({ state: 'disconnected' as const, home: '', manual: '' }),
-    domain: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [] }),
+    approvalHistory: async () => ({ namespaces: [], operations: [], questions: [], approvals: [], held: [] }),
     definitions: async () => ({ definitions: [], instances: [], provisioning: [] }),
 
     onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null } }),

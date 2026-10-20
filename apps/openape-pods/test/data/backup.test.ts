@@ -14,7 +14,6 @@ import { MasterConversations } from '../../src/worker/master/conversations'
 import { Scheduler } from '../../src/worker/scheduling/scheduler'
 import { DatabaseSync } from 'node:sqlite'
 import { cleanupEncryptedBackupStaging, encryptedBackupStaging } from '../../src/worker/data/encrypted-backup'
-import { DomainData } from '../../src/worker/data/domain'
 import { DataRetention } from '../../src/worker/data/retention'
 import { DataControl } from '../../src/worker/data/control'
 
@@ -418,16 +417,12 @@ it('refuses Pod deletion during its own active work', async () => {
   expect(retention.jobs()).toEqual([])
 })
 
-it('round-trips shared data and fences claimed work, open effects and approvals until the owner reviews the restore', async () => {
+it('fences open effects and preserves historical approvals until the owner reviews the restore', async () => {
   const { store, exports, pod, runId } = await fixture()
-  const data = new DomainData(store)
-  data.define({ path: 'synthetic/records', writer: 'owner', mode: 'records', readers: [pod.id] })
-  data.set('owner', 'synthetic/records/one', { kept: true }, 0)
   store.db.prepare('INSERT INTO effect_attempts VALUES(?,1,?,?,\'mail.archive\',?,\'intent\',\'{}\',1)').run('a'.repeat(64), pod.id, runId, 'b'.repeat(64))
   store.db.prepare('INSERT INTO effect_receipts VALUES(?,1,1,\'intent\',\'{}\',1)').run('a'.repeat(64))
   const backup = await createBackup(store, exports)
   const restored = new PodDatabase(await restoreBackup(backup, exports, schemaVersion)); stores.push(restored)
-  expect(new DomainData(restored).get('owner', 'synthetic/records/one')).toMatchObject({ value: { kept: true }, revision: 1 })
   expect(restored.db.prepare('SELECT state FROM effect_attempts').get()).toEqual({ state: 'unknown' })
   expect(restored.db.prepare('SELECT outcome FROM effect_receipts ORDER BY sequence').all()).toEqual([{ outcome: 'intent' }, { outcome: 'unknown' }])
   expect(restored.db.prepare('SELECT kind FROM storage_receipts').all()).toEqual([{ kind: 'restore' }])
@@ -446,7 +441,7 @@ async function alterBackup(backup: string, sql: string) {
 
 it.each([
   ['DROP INDEX effect_execution_guard', 'altered storage'],
-  ['DROP TABLE data_readers', 'altered storage'],
+  ['DROP TABLE checkpoints', 'altered storage'],
   ['CREATE TRIGGER malicious AFTER UPDATE ON pods BEGIN SELECT 1; END', 'unsupported database programs'],
 ])('rejects a modified schema despite updated portable checksums: %s', async (sql, reason) => {
   const { store, exports } = await fixture()
@@ -488,10 +483,8 @@ it.each(['intent', 'unknown'])('protects a Pod with %s effects even when discard
   const { store, pod } = await fixture()
   store.db.prepare('UPDATE pods SET lifecycle=\'archived\' WHERE id=?').run(pod.id)
   const retention = new DataRetention(store, '/unused/helper')
-  new DomainData(store).define({ path: 'synthetic/results', writer: pod.id, mode: 'results' })
   store.db.prepare('INSERT INTO effect_attempts VALUES(?,1,?,NULL,\'mail.archive\',?,?,\'{}\',1)').run('a'.repeat(64), pod.id, 'b'.repeat(64), state)
   await expect(retention.deletePod(pod.id, 1, pod.name, true)).rejects.toThrow('uncertain actions')
-  expect(new DomainData(store).namespace('synthetic/results').writer).toBe(pod.id)
 })
 
 it('keeps abandoned plaintext stages local and removes them before the worker resumes', async () => {

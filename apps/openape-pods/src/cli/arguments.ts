@@ -23,7 +23,7 @@ Options: --profile PATH, --json, --help
 An empty --tags value clears tags. create/edit prompt only in a terminal.
 Uses the real selected desktop profile by default. Close the desktop first.
 run waits for completion; Ctrl+C cancels. No schedules or sibling Pods start.
-Existing identity, grants, home context and shared data apply.
+Existing identity, grants and private workspace files apply.
 Additional assigned script secrets are not supported in this version.
 `
 
