@@ -4,6 +4,7 @@ import { computeCmdHash } from '@openape/core'
 import { assertGrantBatchMember, createGrant, evaluateStandingGrants, InvalidGrantBatchError, InvalidProgramAuthorizeRequestError, issueCommandJWT, PROGRAM_AUTHORIZE_LIMITS, resolveProgramCall } from '@openape/grants'
 import type { H3Event } from 'h3'
 import { isError, setResponseHeader, setResponseStatus } from 'h3'
+import { requestReferencedGrant } from './grant-reference'
 import { runGrantPendingHooks } from './grant-pending-hooks'
 import type { ProgramCallScope } from './grant-reuse'
 import { findCoveringGrant, findLatestRequest } from './grant-reuse'
@@ -34,7 +35,7 @@ export function sendProgramAuthorizeResult(event: H3Event, result: ProgramAuthor
   setResponseHeader(event, 'Cache-Control', 'no-store')
   if (result.status !== 403) return result.body
   setResponseHeader(event, 'Content-Type', 'application/problem+json')
-  return { type: `https://openape.org/errors/grant_${result.body.state}`, title: `The owner ${result.body.state === 'denied' ? 'denied' : 'revoked'} this permission`, status: 403, ...result.body }
+  return { type: `https://openape.org/errors/grant_${result.body.state}`, title: `Permission is ${result.body.state}`, status: 403, ...result.body }
 }
 
 /** What an authorize failure log may name about a call: the program and the operation the IdP resolved, never its arguments. */
@@ -84,7 +85,7 @@ export function readForwardedAuthorize(value: unknown): ProgramAuthorizeResult {
     if (!text(answer.approval_url) || !answer.approval_url.startsWith('https://')) throw invalid()
     return { status: 202, body: { state: 'pending', grant_id: answer.grant_id, approval_url: answer.approval_url } }
   }
-  if (answer.state === 'denied' || answer.state === 'revoked') return { status: 403, body: { state: answer.state, grant_id: answer.grant_id } }
+  if (answer.state === 'denied' || answer.state === 'revoked' || answer.state === 'expired' || answer.state === 'used') return { status: 403, body: { state: answer.state, grant_id: answer.grant_id } }
   throw invalid()
 }
 
@@ -101,6 +102,7 @@ function grantRequestFor(requester: string, request: OpenApeProgramAuthorizeRequ
     execution_context: call.executionContext,
     ...(request.summary ? { summary: request.summary } : {}),
     ...(request.batch ? { batch: request.batch } : {}),
+    ...(request.reference !== undefined ? { reference: request.reference } : {}),
   }
 }
 
@@ -119,7 +121,8 @@ async function approvedAnswer(grant: OpenApeGrant, call: ResolvedProgramCall, on
 }
 
 function pendingAnswer(grant: OpenApeGrant): ProgramAuthorizeResult {
-  return { status: 202, body: { state: 'pending', grant_id: grant.id, approval_url: `${getIdpIssuer()}/grant-approval?grant_id=${encodeURIComponent(grant.id)}` } }
+  const query = new URLSearchParams(grant.request.batch ? { requester: grant.request.requester, batch: grant.request.batch.id } : { grant_id: grant.id })
+  return { status: 202, body: { state: 'pending', grant_id: grant.id, approval_url: `${getIdpIssuer()}/grant-approval?${query}` } }
 }
 
 /** Records an auto-approval the way `POST /api/grants` does and returns the approved grant. */
@@ -182,6 +185,12 @@ async function decideProgramCall(event: H3Event, input: ProgramAuthorizeInput, t
   const call = await resolveCall(request)
   trace.operation = call.detail.operation_id
   const grantRequest = grantRequestFor(requester, request, call, await computeCmdHash(call.executionArgv.join(' ')))
+  if (grantRequest.reference !== undefined) {
+    const { grant } = await requestReferencedGrant(grantRequest, brokered)
+    if (grant.status === 'pending') return pendingAnswer(grant)
+    if (grant.status === 'approved') return await approvedAnswer(grant, call, onToken)
+    return { status: 403, body: { state: grant.status, grant_id: grant.id } }
+  }
   try { await assertGrantBatchMember(grantRequest, grantStore) }
   catch (error) {
     if (!(error instanceof InvalidGrantBatchError)) throw error

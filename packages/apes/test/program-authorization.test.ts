@@ -51,7 +51,7 @@ interface FakeGrant {
 
 type SigningKey = Parameters<typeof signJWT>[1]
 
-const ALLOWED_FIELDS = new Set(['target_host', 'audience', 'program', 'argv', 'files', 'grant_type', 'summary', 'batch'])
+const ALLOWED_FIELDS = new Set(['target_host', 'audience', 'program', 'argv', 'files', 'grant_type', 'summary', 'batch', 'reference'])
 
 /** Exact-command semantics of the contract (a program without a registry shape). */
 class FakeIdp {
@@ -115,7 +115,7 @@ class FakeIdp {
     const url = new URL(request.url ?? '/', this.issuer)
     if (url.pathname === '/.well-known/jwks.json') return this.send(response, 200, { keys: [this.jwk] })
     if (url.pathname === '/.well-known/openid-configuration')
-      return this.send(response, 200, { issuer: this.issuer, jwks_uri: `${this.issuer}/.well-known/jwks.json`, openape_grants_endpoint: `${this.issuer}/api/grants`, openape_program_authorization_endpoint: `${this.issuer}/api/grants/authorize` })
+      return this.send(response, 200, { issuer: this.issuer, jwks_uri: `${this.issuer}/.well-known/jwks.json`, openape_grant_reference_supported: true, openape_grants_endpoint: `${this.issuer}/api/grants`, openape_program_authorization_endpoint: `${this.issuer}/api/grants/authorize` })
     const consumed = this.grants.find(candidate => url.pathname === `/api/grants/${candidate.id}/consume`)
     if (request.method === 'POST' && consumed) return this.consume(consumed, request, response)
     if (request.headers.authorization !== `Bearer ${ACCESS_TOKEN}`) return this.send(response, 401, { title: 'Unauthorized' })
@@ -242,11 +242,11 @@ afterAll(async () => {
   rmSync(home, { recursive: true, force: true })
 })
 
-async function apesRun(argv: string[], options: { wait?: boolean, approval?: string } = {}): Promise<void> {
+async function apesRun(argv: string[], options: { wait?: boolean, approval?: string, reference?: string } = {}): Promise<void> {
   const { runCommand } = await import('../src/commands/run.js')
   await runCommand.run!({
     rawArgs: ['run', ...(options.wait ? ['--wait'] : []), '--', ...argv],
-    args: { shell: false, wait: options.wait ?? false, approval: options.approval ?? 'once' },
+    args: { shell: false, wait: options.wait ?? false, approval: options.approval ?? 'once', reference: options.reference },
   } as never)
 }
 
@@ -263,6 +263,13 @@ function ran(): string[] | null {
 }
 
 describe('apes run with per-call IdP authorization', () => {
+  it('passes an opaque reference as metadata while retaining the exact command', async () => {
+    writeProgram()
+    await expect(apesRun(['fakegit', 'status'], { reference: 'document-42/export:v1' })).rejects.toMatchObject({ exitCode: 75 })
+    expect(idp.authorizeBodies[0]).toMatchObject({ reference: 'document-42/export:v1', argv: ['status'], grant_type: 'once' })
+    expect(existsSync(marker)).toBe(false)
+  })
+
   it('checks the broker owner and key from the managed identity, including cached calls', async () => {
     const brokered = { connection_id: 'connection-1', broker_issuer: 'https://provider.test', agent_issuer: 'https://provider.test', owner: 'owner@example.com', key_id: 'key-1' }
     const auth = { idp: idp.issuer, decision_issuer: idp.issuer, brokered, access_token: ACCESS_TOKEN, email: SUBJECT, expires_at: Math.floor(Date.now() / 1000) + 3600 }

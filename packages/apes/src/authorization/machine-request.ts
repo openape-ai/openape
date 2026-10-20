@@ -34,7 +34,7 @@ export function parseMachineRequest(value: unknown, mode: 'owner-script'): OpenA
 export function parseMachineRequest(value: unknown, mode: 'program' | 'owner-script'): OpenApeMachineExecutionRequest
 export function parseMachineRequest(value: unknown, mode: 'program' | 'owner-script' = 'program'): OpenApeMachineExecutionRequest {
   const commonFields = ['version', 'operationId', 'executable', 'argv', 'files', 'cwd', 'environment', 'targetHost', 'sandbox', 'forwardChannel']
-  const input = record(value, [...commonFields, ...mode === 'owner-script' ? ['mode', 'authority'] : ['grantType', 'summary', 'batch', 'waitMs']])
+  const input = record(value, [...commonFields, ...mode === 'owner-script' ? ['mode', 'authority'] : ['grantType', 'summary', 'batch', 'reference', 'waitMs']])
   if (input.version !== 1 || typeof input.operationId !== 'string' || !/^[\w:-]{1,160}$/.test(input.operationId)) throw new Error('Invalid machine request version or operation identity')
   const executable = file(input.executable)
   if (mode === 'owner-script' ? input.mode !== 'owner-script' : input.grantType !== 'once' && input.grantType !== 'always') throw new Error('Machine execution mode must be explicit')
@@ -47,6 +47,7 @@ export function parseMachineRequest(value: unknown, mode: 'program' | 'owner-scr
     grant_type: mode === 'owner-script' ? 'once' : input.grantType,
     ...(input.summary === undefined ? {} : { summary: input.summary }),
     ...(input.batch === undefined ? {} : { batch: input.batch }),
+    ...(input.reference === undefined ? {} : { reference: input.reference }),
   })
   if (!input.environment || typeof input.environment !== 'object' || Array.isArray(input.environment)) throw new Error('Invalid machine environment')
   const environment: Record<string, string> = Object.create(null)
@@ -82,6 +83,7 @@ export function parseMachineRequest(value: unknown, mode: 'program' | 'owner-scr
     grantType: authorization.grant_type ?? 'always',
     summary: authorization.summary,
     batch: authorization.batch,
+    reference: authorization.reference,
     waitMs: Number(input.waitMs),
   }
 }

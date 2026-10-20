@@ -1,3 +1,4 @@
+import { requestReferencedGrant } from '../../utils/grant-reference'
 import { maybeForwardBrokerGrant } from '../../utils/broker-forward'
 import type { BrokeredGrant, GrantType, OpenApeAuthorizationDetail, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
 import { computeCmdHash, GRANTS_REQUEST_SCOPE } from '@openape/core'
@@ -124,7 +125,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     body.batch = parseGrantBatch(body.batch)
-    await assertGrantBatchMember(body, grantStore)
+    if (body.reference === undefined) await assertGrantBatchMember(body, grantStore)
   }
   catch (error) {
     if (!(error instanceof InvalidGrantBatchError)) throw error
@@ -158,6 +159,12 @@ export default defineEventHandler(async (event) => {
   // Compute cmd_hash server-side from command array (never trust client-provided hash)
   if (body.command?.length) {
     body.cmd_hash = await computeCmdHash(body.command.join(' '))
+  }
+
+  if (body.reference !== undefined) {
+    const result = await requestReferencedGrant(body, delegated?.brokered)
+    setResponseStatus(event, result.created ? 201 : 200)
+    return result.grant
   }
 
   // A delegate's request is always left to the delegator's decision: no
