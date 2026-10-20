@@ -108,6 +108,7 @@ export interface PendingGrantBatch {
   count: number
   size: number | null
   createdAt: number
+  oldestAt: number
 }
 
 /** Splits pending grants into batch cards (by requester and batch id) and individual grants. */
@@ -122,9 +123,10 @@ export function groupPendingGrantBatches(pending: OpenApeGrant[]): { batches: Pe
     if (existing) {
       existing.count++
       existing.createdAt = Math.max(existing.createdAt, grant.created_at)
+      existing.oldestAt = Math.min(existing.oldestAt, grant.created_at)
       continue
     }
-    batches.set(key, { grant, requester: grant.request.requester, batchId: batch.id, title: batch.title ?? null, description: batch.description ?? null, count: 1, size: batch.size ?? null, createdAt: grant.created_at })
+    batches.set(key, { grant, requester: grant.request.requester, batchId: batch.id, title: batch.title ?? null, description: batch.description ?? null, count: 1, size: batch.size ?? null, createdAt: grant.created_at, oldestAt: grant.created_at })
   }
   return { batches: [...batches.values()].toSorted((a, b) => b.createdAt - a.createdAt), singles }
 }
