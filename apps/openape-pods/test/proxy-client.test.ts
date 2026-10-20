@@ -11,7 +11,12 @@ afterEach(async () => { for (const server of servers.splice(0)) { server.closeAl
 const capability = 'a'.repeat(64)
 async function endpoint(handler: (request: IncomingMessage, response: ServerResponse) => void, drain?: (request: IncomingMessage, response: ServerResponse) => void) {
   const server = createServer((request, response) => {
-    if (request.url === '/v1/proxy/cancel') { if (drain) drain(request, response); else { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ drained: true })) }; return }
+    if (request.url === '/v1/proxy/cancel') {
+      if (drain) {
+        drain(request, response)
+      }
+      else { response.setHeader('Content-Type', 'application/json'); response.end(JSON.stringify({ drained: true })) }; return
+    }
     handler(request, response)
   }); servers.push(server)
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -27,7 +32,7 @@ it('uses the private fixed route and returns only text plus the local correlatio
   let body = ''; let headers: IncomingMessage['headers'] = {}; let path = ''
   const target = await endpoint((incoming, response) => {
     headers = incoming.headers; path = incoming.url!
-    incoming.on('data', chunk => { body += String(chunk) })
+    incoming.on('data', (chunk) => { body += String(chunk) })
     incoming.on('end', () => response.end(line({ type: 'metadata', metadata: metadata('running') }) + line({ type: 'metadata', metadata: metadata('completed') }) + line({ type: 'complete', threadId: 'proxy-call:fixture-call', response: 'Exact fixture text' })))
   })
   const events: AgentCallMetadata[] = []
@@ -50,7 +55,7 @@ it.each(['cancelled', 'timeout'] as const)('closes an unfinished response and re
   })
   const controller = new AbortController()
   const events: AgentCallMetadata[] = []
-  const call = proxyAgentCall(target)({ ...request, timeoutSeconds: status === 'timeout' ? 0.1 : 30 }, controller.signal, value => { events.push(value); if (status === 'cancelled' && value.status === 'running') controller.abort(new Error('Fixture cancellation')) })
+  const call = proxyAgentCall(target)({ ...request, timeoutSeconds: status === 'timeout' ? 0.1 : 30 }, controller.signal, (value) => { events.push(value); if (status === 'cancelled' && value.status === 'running') controller.abort(new Error('Fixture cancellation')) })
   await expect(call).rejects.toMatchObject({ code: status, metadata: expect.objectContaining({ modelId: 'gpt-6.1-sol', configRevision: 'fixture-1', status }) })
   await expect.poll(() => closed).toBe(true)
   expect(events.map(event => event.status)).toEqual(['running', status])
@@ -70,7 +75,7 @@ it('never publishes a completed terminal when cancellation arrives with completi
   const controller = new AbortController()
   const target = await endpoint((_incoming, response) => response.end(line({ type: 'metadata', metadata: metadata('running') }) + line({ type: 'metadata', metadata: metadata('completed') }) + line({ type: 'complete', threadId: 'proxy-call:fixture-call', response: 'Must not succeed' })))
   const events: AgentCallMetadata[] = []
-  await expect(proxyAgentCall(target)(request, controller.signal, value => { events.push(value); if (value.status === 'running') controller.abort() })).rejects.toMatchObject({ code: 'cancelled' })
+  await expect(proxyAgentCall(target)(request, controller.signal, (value) => { events.push(value); if (value.status === 'running') controller.abort() })).rejects.toMatchObject({ code: 'cancelled' })
   expect(events.map(event => event.status)).toEqual(['running', 'cancelled'])
 })
 
@@ -98,7 +103,7 @@ it('waits for trusted host cleanup before rejecting cancellation', async () => {
     release = () => response.end(JSON.stringify({ drained: true }))
   })
   const controller = new AbortController()
-  const call = proxyAgentCall(target)(request, controller.signal, value => { if (value.status === 'running') controller.abort() })
+  const call = proxyAgentCall(target)(request, controller.signal, (value) => { if (value.status === 'running') controller.abort() })
   const rejected = expect(call).rejects.toMatchObject({ code: 'cancelled' })
   void call.catch(() => { settled = true })
   await expect.poll(() => draining).toBe(true)
@@ -111,6 +116,6 @@ it('reports unconfirmed host cleanup instead of treating socket closure as compl
   const target = await endpoint((_incoming, response) => response.write(line({ type: 'metadata', metadata: metadata('running') })), (_incoming, response) => response.end(JSON.stringify({ drained: false })))
   const controller = new AbortController()
   const events: AgentCallMetadata[] = []
-  await expect(proxyAgentCall(target)(request, controller.signal, value => { events.push(value); if (value.status === 'running') controller.abort() })).rejects.toMatchObject({ code: 'proxy_unreachable', details: { phase: 'read', cause: 'proxy_cleanup_unconfirmed' } })
+  await expect(proxyAgentCall(target)(request, controller.signal, (value) => { events.push(value); if (value.status === 'running') controller.abort() })).rejects.toMatchObject({ code: 'proxy_unreachable', details: { phase: 'read', cause: 'proxy_cleanup_unconfirmed' } })
   expect(events.map(event => event.status)).toEqual(['running', 'failed'])
 })

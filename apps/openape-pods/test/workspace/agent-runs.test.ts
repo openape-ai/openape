@@ -100,10 +100,13 @@ it.each(['native', 'proxy'] as const)('disconnecting %s cancels only its active 
     nativeSignal = signal
     return new Promise((resolve, reject) => { finishNative = () => resolve({ threadId: 'native', response: 'native text' }); signal.addEventListener('abort', () => reject(signal.reason), { once: true }) })
   })
-  const services: RunServices = { provider: async () => new Response('{}'), proxy: async (_request, signal) => {
-    proxySignal = signal
-    return new Promise((resolve, reject) => { finishProxy = () => resolve({ threadId: 'proxy', response: 'proxy text' }); signal.addEventListener('abort', () => reject(signal.reason), { once: true }) })
-  } }
+  const services: RunServices = {
+    provider: async () => new Response('{}'),
+    proxy: async (_request, signal) => {
+      proxySignal = signal
+      return new Promise((resolve, reject) => { finishProxy = () => resolve({ threadId: 'proxy', response: 'proxy text' }); signal.addEventListener('abort', () => reject(signal.reason), { once: true }) })
+    },
+  }
   const { dispatcher, pod } = fixture(services)
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
     const native = hooks.request('agent.run', { prompt: 'Native text' }, signal)
@@ -123,11 +126,13 @@ it.each(['native', 'proxy'] as const)('disconnecting %s cancels only its active 
 
 it('drains a cancelled proxy and persists exactly one terminal event under the run lease', async () => {
   let settled = false
-  const { dispatcher, pod } = fixture({ proxy: async (_request, signal, event) => {
-    event(metadata('running'))
-    await new Promise<void>((_resolve, reject) => signal.addEventListener('abort', () => { event(metadata('cancelled')); settled = true; reject(new AgentCallError('cancelled', 'Cancelled', { phase: 'read' })) }, { once: true }))
-    return { threadId: 'unused', response: 'unused' }
-  } })
+  const { dispatcher, pod } = fixture({
+    proxy: async (_request, signal, event) => {
+      event(metadata('running'))
+      await new Promise<void>((_resolve, reject) => signal.addEventListener('abort', () => { event(metadata('cancelled')); settled = true; reject(new AgentCallError('cancelled', 'Cancelled', { phase: 'read' })) }, { once: true }))
+      return { threadId: 'unused', response: 'unused' }
+    },
+  })
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, _input, signal, hooks) => {
     await hooks.request('agent.run', proxyRequest, signal)
     throw new Error('Unexpected success')
@@ -144,10 +149,12 @@ it('drains a cancelled proxy and persists exactly one terminal event under the r
 
 it('drains unawaited agent work before completing a script', async () => {
   let settled = false
-  const { dispatcher, pod } = fixture({ proxy: async (_request, signal) => {
-    await new Promise<void>((_resolve, reject) => signal.addEventListener('abort', () => { settled = true; reject(signal.reason) }, { once: true }))
-    return { threadId: 'unused', response: 'unused' }
-  } })
+  const { dispatcher, pod } = fixture({
+    proxy: async (_request, signal) => {
+      await new Promise<void>((_resolve, reject) => signal.addEventListener('abort', () => { settled = true; reject(signal.reason) }, { once: true }))
+      return { threadId: 'unused', response: 'unused' }
+    },
+  })
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
     void hooks.request('agent.run', proxyRequest, signal).catch(() => undefined)
     return { status: 'completed', summary: 'Synthetic script returned early', completedInputIds: input.eventIds, gapIds: [] }
@@ -158,10 +165,12 @@ it('drains unawaited agent work before completing a script', async () => {
 })
 
 it.each(['caught', 'unawaited'] as const)('fences unconfirmed proxy cleanup even when the request is %s', async (mode) => {
-  const { store, dispatcher, pod } = fixture({ proxy: async (_request, signal) => {
-    if (mode === 'unawaited') await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }))
-    throw new AgentCallError('proxy_unreachable', 'Proxy cleanup could not be confirmed', { phase: 'read', cause: 'proxy_cleanup_unconfirmed' })
-  } })
+  const { store, dispatcher, pod } = fixture({
+    proxy: async (_request, signal) => {
+      if (mode === 'unawaited') await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }))
+      throw new AgentCallError('proxy_unreachable', 'Proxy cleanup could not be confirmed', { phase: 'read', cause: 'proxy_cleanup_unconfirmed' })
+    },
+  })
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
     const request = hooks.request('agent.run', proxyRequest, signal).catch(() => undefined)
     if (mode === 'caught') await request

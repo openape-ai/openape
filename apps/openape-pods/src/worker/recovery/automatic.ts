@@ -40,7 +40,7 @@ export async function recoverStoppedRuns(store: PodDatabase, helper: string, lim
       store.db.prepare('DELETE FROM run_leases WHERE run_id=?').run(id)
       store.db.prepare('UPDATE runs SET finished_at=coalesce(finished_at,?) WHERE id=?').run(Date.now(), id)
       const ownerCancelled = run.state === 'cancelled' && run.error !== 'Application is quitting'
-      const failedProxy = !!store.db.prepare("SELECT 1 FROM run_events WHERE run_id=? AND ((type='agent-cleanup' AND json_extract(data,'$.backend')='proxy') OR (type='agent-call' AND json_extract(data,'$.backend')='proxy' AND json_extract(data,'$.status') IN ('failed','cancelled','timeout'))) LIMIT 1").get(id)
+      const failedProxy = !!store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND ((type=\'agent-cleanup\' AND json_extract(data,\'$.backend\')=\'proxy\') OR (type=\'agent-call\' AND json_extract(data,\'$.backend\')=\'proxy\' AND json_extract(data,\'$.status\') IN (\'failed\',\'cancelled\',\'timeout\'))) LIMIT 1').get(id)
       runs.recover(id, epoch, { cause: ownerCancelled ? 'owner-cancelled' : failedProxy ? 'non-retryable' : 'shutdown' })
       // The run's processes are proven stopped, so its work claims can no longer race a new claimant.
     })

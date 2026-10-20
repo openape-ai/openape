@@ -67,12 +67,16 @@ export function proxyAgentCall(endpoint: ProxyEndpoint): ProxyAgentCall {
             metadata = freezeAgentMetadata(frame.metadata)
             if (metadata.status === 'running') event(metadata)
           }
-          else if (frame.type === 'complete' && typeof frame.response === 'string' && typeof frame.threadId === 'string') complete = { response: frame.response, threadId: frame.threadId }
+          else if (frame.type === 'complete' && typeof frame.response === 'string' && typeof frame.threadId === 'string') {
+            complete = { response: frame.response, threadId: frame.threadId }
+          }
           else if (frame.type === 'error' && frame.error) {
             if (frame.metadata) metadata = freezeAgentMetadata(frame.metadata)
             throw new AgentCallError(frame.error.code, frame.error.message, frame.error.details)
           }
-          else throw new AgentCallError('invalid_response', 'Invalid private proxy response', { phase: 'validate' })
+          else {
+            throw new AgentCallError('invalid_response', 'Invalid private proxy response', { phase: 'validate' })
+          }
         }
       }
       active.throwIfAborted()
@@ -83,8 +87,11 @@ export function proxyAgentCall(endpoint: ProxyEndpoint): ProxyAgentCall {
     catch (failure) {
       let error = active.aborted
         ? (deadline.signal.aborted && !signal.aborted ? deadline.signal.reason as AgentCallError : new AgentCallError('cancelled', 'Proxy agent call cancelled', { phase: 'read' }))
-        : failure instanceof AgentCallError ? failure : failure instanceof SyntaxError || failure instanceof TypeError && !safeSystemCause(failure) ? new AgentCallError('invalid_response', 'Invalid private proxy response', { phase: 'validate' }) : new AgentCallError('proxy_unreachable', 'Private proxy connection failed', { phase: 'read', ...(safeSystemCause(failure) ? { cause: safeSystemCause(failure) } : {}) })
-      if (reader) { try { await reader.cancel() } catch { /* The drain acknowledgement below confirms cleanup after a broken response. */ } }
+        : failure instanceof AgentCallError ? failure : failure instanceof SyntaxError || (failure instanceof TypeError && !safeSystemCause(failure)) ? new AgentCallError('invalid_response', 'Invalid private proxy response', { phase: 'validate' }) : new AgentCallError('proxy_unreachable', 'Private proxy connection failed', { phase: 'read', ...(safeSystemCause(failure) ? { cause: safeSystemCause(failure) } : {}) })
+      if (reader) {
+        try { await reader.cancel() }
+        catch { /* The drain acknowledgement below confirms cleanup after a broken response. */ }
+      }
       try { await drainProxyCall(endpoint, callId) }
       catch (cleanup) { error = cleanup as AgentCallError }
       const terminal = freezeAgentMetadata({ ...metadata, status: error.code === 'timeout' ? 'timeout' : error.code === 'cancelled' ? 'cancelled' : 'failed', endedAt: new Date().toISOString(), durationMs: Date.now() - Date.parse(metadata.startedAt), error: serializeSafeError(error) })
