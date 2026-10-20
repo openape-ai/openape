@@ -37,6 +37,18 @@ function metadata(status: AgentCallMetadata['status']): AgentCallMetadata {
   return { callId: 'fixture-call', backend: 'proxy', provider: 'claude', modelSize: 'medium', modelId: 'claude-sonnet-5-5', reportedModelId: null, requestedThinking: 'high', effectiveThinking: 'high', wireThinking: { type: 'adaptive', effort: 'high' }, configRevision: '1', configHash: 'a'.repeat(64), startedAt: new Date().toISOString(), endedAt: status === 'running' ? null : new Date().toISOString(), durationMs: status === 'running' ? null : 1, status, threadId: 'proxy-call:fixture-call' }
 }
 
+function acceptedInput(store: PodDatabase, podId: string): string {
+  const id = randomUUID()
+  store.db.prepare('INSERT INTO accepted_events(id,pod_id,source,dedupe_key,payload,accepted_at,state) VALUES(?,?,\'webhook\',?,\'{}\',?,\'pending\')').run(id, podId, id, Date.now())
+  return id
+}
+
+function expectIsolated(store: PodDatabase, dispatcher: RunDispatcher, id: string): void {
+  expect(dispatcher.runs.get(id).automaticRecovery).toMatchObject({ disposition: 'isolated', cause: 'non-retryable', nextAt: null })
+  expect(store.db.prepare('SELECT retry_at FROM run_inputs WHERE run_id=?').get(id)?.retry_at).toBeNull()
+  expect(store.db.prepare('SELECT 1 FROM accepted_events WHERE run_id=? AND state=\'pending\'').get(id)).toBeUndefined()
+}
+
 it('bounds a standalone run to 50 agent calls, as for network members', async () => {
   const store = new PodDatabase(mkdtempSync(join(tmpdir(), 'pods-agent-run-'))); stores.push(store)
   const resources = new ResourceRegistry(store, () => {})
@@ -124,10 +136,13 @@ it.each(['native', 'proxy'] as const)('disconnecting %s cancels only its active 
   await expect.poll(() => dispatcher.view(pod.id).runs[0]?.state).toBe('completed')
 })
 
-it('drains a cancelled proxy and persists exactly one terminal event under the run lease', async () => {
+it.each(['owner', 'shutdown'] as const)('drains a proxy cancelled by %s without queuing automatic replay', async (cause) => {
   let settled = false
-  const { dispatcher, pod } = fixture({
+  const { store, dispatcher, pod } = fixture({
     proxy: async (_request, signal, event) => {
+      // The safe dispatch receipt must already be committed before any host metadata exists.
+      const intent = store.db.prepare('SELECT data FROM run_events WHERE type=\'agent-dispatch\'').get()
+      expect(JSON.parse(String(intent?.data))).toEqual({ backend: 'proxy' })
       event(metadata('running'))
       await new Promise<void>((_resolve, reject) => signal.addEventListener('abort', () => { event(metadata('cancelled')); settled = true; reject(new AgentCallError('cancelled', 'Cancelled', { phase: 'read' })) }, { once: true }))
       return { threadId: 'unused', response: 'unused' }
@@ -137,14 +152,56 @@ it('drains a cancelled proxy and persists exactly one terminal event under the r
     await hooks.request('agent.run', proxyRequest, signal)
     throw new Error('Unexpected success')
   })
-  dispatcher.start(pod.id)
+  const inputId = acceptedInput(store, pod.id)
+  const id = dispatcher.start(pod.id, { reason: 'event', eventIds: [inputId] })
   await expect.poll(() => dispatcher.view(pod.id).events.filter(event => event.type === 'agent-call').length).toBe(1)
-  dispatcher.cancelPod(pod.id)
+  if (cause === 'owner') dispatcher.cancelPod(pod.id)
+  else await dispatcher.stop()
   await expect.poll(() => dispatcher.view(pod.id).runs[0]?.state).toBe('cancelled')
   expect(settled).toBe(true)
   const calls = dispatcher.view(pod.id).events.filter(event => event.type === 'agent-call')
   expect(calls).toHaveLength(2)
   expect(calls.map(event => (event.data as AgentCallMetadata).status)).toEqual(['running', 'cancelled'])
+  expectIsolated(store, dispatcher, id)
+  expect(store.db.prepare('SELECT state FROM accepted_events WHERE id=?').get(inputId)?.state).toBe('failed')
+})
+
+it.each(['dispatch-only', 'running-receipt', 'completed-receipt'] as const)('isolates a crashed run with %s proxy evidence', async (evidence) => {
+  const proxy = vi.fn()
+  const { store, dispatcher, pod } = fixture({ proxy })
+  const inputId = acceptedInput(store, pod.id)
+  const { run } = dispatcher.runs.reserve(pod.id, store.getPod(pod.id).activeScript!, 0, { reason: 'event', eventIds: [inputId] })
+  if (evidence === 'dispatch-only') dispatcher.runs.append(run.id, 'agent-dispatch', { backend: 'proxy' })
+  else dispatcher.runs.append(run.id, 'agent-call', metadata(evidence === 'running-receipt' ? 'running' : 'completed'))
+  // A fresh worker fences the old run before automatic recovery, without executing its script.
+  const recovered = new RunDispatcher(store, new ResourceRegistry(store, () => {}), { helper: '/unused', environment: {} } as AgentRuntime, { proxy })
+  expect(recovered.runs.get(run.id).state).toBe('interrupted')
+  await recoverStoppedRuns(store, '/unused')
+  expectIsolated(store, recovered, run.id)
+  expect(store.db.prepare('SELECT state FROM accepted_events WHERE id=?').get(inputId)?.state).toBe('failed')
+  expect(store.db.prepare('SELECT 1 FROM run_leases WHERE run_id=?').get(run.id)).toBeUndefined()
+  expect(proxy).not.toHaveBeenCalled()
+  expect(executeScript).not.toHaveBeenCalled()
+})
+
+it('does not replay a successful proxy inference when a later script operation fails', async () => {
+  const proxy = vi.fn<NonNullable<RunServices['proxy']>>(async (_request, _signal, event) => {
+    event(metadata('completed'))
+    return { threadId: 'proxy-call:fixture-call', response: 'Successful synthetic response' }
+  })
+  const { store, dispatcher, pod } = fixture({ proxy })
+  vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, _input, signal, hooks) => {
+    await hooks.request('agent.run', proxyRequest, signal)
+    throw new Error('A later operation failed')
+  })
+  const inputId = acceptedInput(store, pod.id)
+  const id = dispatcher.start(pod.id, { reason: 'event', eventIds: [inputId] })
+  await expect.poll(() => dispatcher.runs.get(id).state).toBe('failed')
+  expectIsolated(store, dispatcher, id)
+  expect(dispatcher.runs.get(id).error).toBe('A later operation failed')
+  await recoverStoppedRuns(store, '/unused')
+  expect(proxy).toHaveBeenCalledOnce()
+  expect(store.db.prepare('SELECT state FROM accepted_events WHERE id=?').get(inputId)?.state).toBe('failed')
 })
 
 it('drains unawaited agent work before completing a script', async () => {
@@ -223,4 +280,20 @@ it('retains the existing native failure recovery policy', async () => {
   const id = dispatcher.start(pod.id)
   await expect.poll(() => dispatcher.runs.get(id).state).toBe('failed')
   expect(dispatcher.runs.get(id).automaticRecovery).toMatchObject({ disposition: 'retry', cause: 'failure' })
+})
+
+it('retains automatic native retry after normal application shutdown', async () => {
+  vi.mocked(executeAgent).mockImplementation(async (_runtime, _root, _prompt, _references, _services, signal) => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true })))
+  const { store, dispatcher, pod } = fixture({ provider: async () => new Response('{}') })
+  vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
+    await hooks.request('agent.run', { prompt: 'Native text' }, signal)
+    return { status: 'completed', summary: 'Unreachable', completedInputIds: input.eventIds, gapIds: [] }
+  })
+  const inputId = acceptedInput(store, pod.id)
+  const id = dispatcher.start(pod.id, { reason: 'event', eventIds: [inputId] })
+  await expect.poll(() => vi.mocked(executeAgent).mock.calls.length).toBe(1)
+  await dispatcher.stop()
+  expect(dispatcher.runs.get(id)).toMatchObject({ state: 'cancelled', automaticRecovery: { disposition: 'retry', cause: 'shutdown', nextAt: expect.any(Number) } })
+  expect(store.db.prepare('SELECT state FROM accepted_events WHERE id=?').get(inputId)?.state).toBe('pending')
+  expect(store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND type=\'agent-dispatch\'').get(id)).toBeUndefined()
 })
