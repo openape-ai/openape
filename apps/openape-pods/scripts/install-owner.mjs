@@ -31,7 +31,7 @@ async function until(check, seconds) {
   }
   return false
 }
-const busy = () => query('SELECT count(*) FROM run_leases') > 0 ? 'a run is active' : query("SELECT count(*) FROM sqlite_schema WHERE type='table' AND name='work_items'") > 0 && query('SELECT count(*) FROM work_items WHERE state=\'claimed\'') > 0 ? 'legacy shared work is claimed' : null
+const busy = () => query('SELECT count(*) FROM run_leases') > 0 ? 'a run is active' : query('SELECT count(*) FROM sqlite_schema WHERE type=\'table\' AND name=\'work_items\'') > 0 && query('SELECT count(*) FROM work_items WHERE state=\'claimed\'') > 0 ? 'legacy shared work is claimed' : null
 function quit() { if (gui()) run('/usr/bin/osascript', ['-e', 'with timeout of 20 seconds', '-e', 'tell application id "ai.openape.pods" to quit', '-e', 'end timeout'], 25000) }
 const keychainFiles = directory => existsSync(join(directory, 'remote/registration.enc')) || (existsSync(join(directory, 'credentials')) && readdirSync(join(directory, 'credentials')).some(name => /^[a-f0-9-]{36}\.encrypted$/.test(name)))
 function files(root) {
