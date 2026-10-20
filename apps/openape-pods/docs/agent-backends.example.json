@@ -9,7 +9,7 @@
     "models": {
       "claude": {
         "small": {
-          "enabled": false,
+          "enabled": true,
           "modelId": "claude-haiku-4-5-20251001",
           "protocol": "messages",
           "defaultThinking": "medium",
@@ -47,7 +47,7 @@
           "capabilityEvidenceVersion": "cliproxyapi-8.0.0-2026-10-20-proposal-1"
         },
         "medium": {
-          "enabled": false,
+          "enabled": true,
           "modelId": "claude-sonnet-5-5",
           "protocol": "messages",
           "defaultThinking": "medium",
@@ -85,7 +85,7 @@
           "capabilityEvidenceVersion": "cliproxyapi-8.0.0-2026-10-20-proposal-1"
         },
         "large": {
-          "enabled": false,
+          "enabled": true,
           "modelId": "claude-opus-5-5",
           "protocol": "messages",
           "defaultThinking": "medium",
@@ -123,7 +123,7 @@
           "capabilityEvidenceVersion": "cliproxyapi-8.0.0-2026-10-20-proposal-1"
         },
         "xlarge": {
-          "enabled": false,
+          "enabled": true,
           "modelId": "claude-fable-5-1",
           "protocol": "messages",
           "defaultThinking": "medium",

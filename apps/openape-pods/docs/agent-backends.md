@@ -5,15 +5,17 @@ calls keep the native Codex SDK and the connected account's current default
 model. Enabling the optional CLIProxyAPI backend does not change existing Pod
 scripts, their schedules or their model selection.
 
-## Current acceptance boundary
+## Verified proxy configuration
 
-The October 20, 2026 revision-1 acceptance passed the four Codex mappings. All
-four Claude mappings rejected the required empty `fallbacks` array with HTTP
-400 `invalid_request_error` (`fallbacks: List should have at least 1 item after
-validation, not 0`). The example keeps these Claude entries disabled. The mixed
-runtime failed on its first Claude call. Merge and owner rollout remain blocked
-pending an approved compatibility change and real revalidation; merely removing
-that field would allow the inspected proxy to inject fallback models.
+The eight example model mappings have real acceptance evidence for the selected
+thinking levels. Revision 2 also verified Sonnet/high followed by Sol/xhigh in
+one disposable Pod with explicit response handoff. The complete mapping/thinking
+matrix uses fixtures; successful catalog listing alone is not inference evidence.
+
+CLIProxyAPI 8.0.0 needs the exact Claude payload filter below. Without it, the
+upstream rejects the explicit empty `fallbacks` list with HTTP 400. Omitting the
+field in Pods would instead allow the proxy to inject fallback models. Preserve
+the explicit field in Pods and remove it only through the reviewed proxy filter.
 
 ## Select a backend in the script
 
@@ -81,6 +83,36 @@ HTTPS for remote hosts. HTTP is accepted only for loopback. On the gateway host,
 the documented local URL is `http://127.0.0.1:8317/v1`. Do not expose that port as
 a general Pod network destination.
 
+For the existing CLIProxyAPI 8.0.0 service, append this rule to
+`requests.payload.filter` in its private configuration, preserving other rules:
+
+```yaml
+requests:
+  payload:
+    filter:
+      - models:
+          - name: "claude-haiku-4-5-20251001"
+            protocol: "claude"
+            from-protocol: "claude"
+          - name: "claude-sonnet-5-5"
+            protocol: "claude"
+            from-protocol: "claude"
+          - name: "claude-opus-5-5"
+            protocol: "claude"
+            from-protocol: "claude"
+          - name: "claude-fable-5-1"
+            protocol: "claude"
+            from-protocol: "claude"
+        params:
+          - "fallbacks"
+```
+
+This changes every matching native Claude Messages client on the shared proxy,
+including clients supplying non-empty fallbacks. It does not change Codex,
+thinking or model selection. The proxy records the field removal and suppresses
+later fallback reinjection. Back up the private configuration and use its
+documented idle reload procedure; verify the effective rule before inference.
+
 The configuration and the existing credential JSON must be regular files owned
 by the runtime user, without group/other access or additional hard links. Direct
 symlinks are refused. Use private permissions such as `0600`; the credential
@@ -144,8 +176,9 @@ mapping resolver and refusals, but returns a synthetic answer without inference;
 successful validation does not verify credentials, model availability or quality.
 
 Claude uses native Messages with explicit `fallbacks: []`, an explicit model,
-thinking translation and output limit. This preserves the configured fallback
-and thinking semantics through CLIProxyAPI 8.0.0. The sample Haiku mapping uses
+thinking translation and output limit. Together with the required proxy filter,
+this preserves the configured fallback and thinking semantics through
+CLIProxyAPI 8.0.0. The sample Haiku mapping uses
 token budgets; the other sample Claude models use adaptive effort. Codex uses
 Chat Completions with `reasoning_effort`, `tools: []` and `tool_choice: 'none'`.
 The runtime still rejects tool/function/image output because upstream translation
