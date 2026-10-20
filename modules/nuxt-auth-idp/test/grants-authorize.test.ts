@@ -80,6 +80,7 @@ vi.mock('../src/runtime/server/utils/agent-auth', () => ({
   },
 }))
 vi.mock('nitropack/runtime', () => ({ useRuntimeConfig: () => ({}), useEvent: () => undefined, useStorage: () => ({}) }))
+vi.mock('../src/runtime/server/utils/grant-card', () => ({ withGrantCards: async (grants: unknown[]) => grants }))
 vi.mock('../src/runtime/server/utils/grant-request-auth', () => ({ allowUnauthenticatedGrantRequests: () => false }))
 vi.mock('../src/runtime/server/utils/grant-stores', () => ({ useGrantStores: () => ({ grantStore }) }))
 vi.mock('../src/runtime/server/utils/shape-store', () => ({ useShapeStore: () => shapeStore }))
@@ -88,7 +89,7 @@ vi.mock('../src/runtime/server/utils/stores', () => ({
   getIdpIssuer: () => role.getStore() === 'broker' ? broker : issuer,
   useIdpStores: () => ({
     keyStore: { getSigningKey: async () => role.getStore() === 'broker' ? { ...brokerKeys, kid: 'broker-key' } : { ...keys, kid: 'owner-key' } },
-    userStore: { findByEmail: async (email: string) => activeAccounts.has(email) || email === inactive ? { email, type: 'agent', isActive: email !== inactive } : null },
+    userStore: { findByOwner: async () => [], findByApprover: async () => [], findByEmail: async (email: string) => activeAccounts.has(email) || email === inactive ? { email, type: 'agent', isActive: email !== inactive } : null },
     sshKeyStore: { findByUser: async (email: string) => email === podAgent ? [{ keyId: 'pod-key' }] : [] },
   }),
 }))
@@ -107,13 +108,13 @@ vi.mock('../src/runtime/server/utils/broker-store', () => ({
 }))
 // The HTTPS transport is covered in broker-network.test.ts; here it is a plain loopback fetch with the same refusal relay.
 vi.mock('../src/runtime/server/utils/broker-network', () => ({
-  discoverBroker: async (decisionIssuer: string) => ({ issuer: decisionIssuer === issuer ? issuer : broker }),
+  discoverBroker: async (decisionIssuer: string) => ({ issuer: decisionIssuer === issuer ? issuer : broker, openape_grant_reference_supported: true }),
   brokerEndpoint: () => `${base}/brokered`,
   brokerVerificationKey: async () => brokerKeys.publicKey,
   brokerFetch: async (url: string, init: { method: string, headers: Record<string, string>, body: string, relayRefusal?: boolean }) => {
     const response = await fetch(url, init)
     const body = await response.json() as Record<string, unknown>
-    if (response.ok || (response.status === 403 && init.relayRefusal && ['denied', 'revoked'].includes(String(body.state)))) return body
+    if (response.ok || (response.status === 403 && init.relayRefusal && ['denied', 'revoked', 'expired', 'used'].includes(String(body.state)))) return body
     throw createError({ statusCode: response.status, data: { retry_after: Number(response.headers.get('retry-after')) || undefined } })
   },
 }))
@@ -126,6 +127,7 @@ const consume = (await import('../src/runtime/server/api/grants/[id]/consume.pos
 const authorize = (await import('../src/runtime/server/api/grants/authorize.post')).default
 const brokered = (await import('../src/runtime/server/api/brokered-grants.post')).default
 const create = (await import('../src/runtime/server/api/grants/index.post')).default
+const list = (await import('../src/runtime/server/api/grants/index.get')).default
 
 interface CallInput { argv?: string[], sha256?: string, name?: string, grant_type?: string, [key: string]: unknown }
 function body({ argv = ['status'], sha256 = tested, name = 'git', ...rest }: CallInput = {}) {
@@ -150,7 +152,7 @@ beforeEach(async () => {
   delete process.env.OPENAPE_RATE_LIMIT_MAX_AUTHORIZE
   delete process.env.OPENAPE_RATE_LIMIT_MAX_AGENT
   connection = { id: randomUUID(), owner: { issuer, subject: owner }, broker_issuer: broker, agent_domain: 'pods.provider.test', status: 'active', created_at: 1 }
-  const router = createRouter().post('/grants/authorize', authorize).post('/grants', create).post('/brokered', brokered).post('/pods/grants/authorize', authorize).post('/grants/:id/consume', consume)
+  const router = createRouter().get('/grants', list).get('/pods/grants', list).post('/grants/authorize', authorize).post('/grants', create).post('/brokered', brokered).post('/pods/grants/authorize', authorize).post('/grants/:id/consume', consume)
   const listener = toNodeListener(createApp().use(router))
   server = createServer((req, res) => role.run(req.url?.startsWith('/pods/') ? 'broker' : 'decision', () => listener(req, res)))
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -569,5 +571,66 @@ describe('stored grants of older clients', () => {
     const answer = await call(direct)
     expect(answer.status).toBe(200)
     expect(answer.json.grant_id).toBe(covering)
+  })
+})
+
+describe('opaque operation references', () => {
+  it.each([false, true])('deduplicates concurrent submissions and refuses changed bindings (brokered: %s)', async (federated) => {
+    const submit = federated ? viaBroker : (input: unknown) => call(direct, input)
+    const request = body({ name: 'document-export', argv: ['render', 'report-42'], grant_type: 'once', reference: 'report-42:pdf:v1', batch: { id: 'reports' } })
+    const replies = await Promise.all(Array.from({ length: 5 }, () => submit(request)))
+    expect(replies.every(reply => reply.status === 202)).toBe(true)
+    expect(new Set(replies.map(reply => reply.json.grant_id)).size).toBe(1)
+    expect(notified).toHaveBeenCalledTimes(1)
+    const id = replies[0]!.json.grant_id
+    expect(new URL(replies[0]!.json.approval_url).searchParams.get('batch')).toBe('reports')
+    expect((await submit({ ...request, argv: ['render', 'report-43'] })).status).toBe(409)
+    expect((await submit({ ...request, program: { ...request.program, sha256: untested } })).status).toBe(409)
+    const retry = await submit({ ...request, summary: { title: 'Different presentation' }, batch: { id: 'next-run' } })
+    expect(retry.json.grant_id).toBe(id)
+    expect((await grantStore.findById(id))?.request.batch?.id).toBe('reports')
+    await approveGrant(id, owner, grantStore)
+    const lookupPath = federated ? '/pods/grants' : '/grants'
+    const requester = federated ? podAgent : direct
+    const lookup = await fetch(`${base}${lookupPath}?${new URLSearchParams({ requester, reference: request.reference as string })}`, { headers: { Authorization: `Bearer ${requester}` } })
+    expect(lookup.status).toBe(200)
+    expect(await lookup.json()).toMatchObject({ data: [{ id, status: 'approved' }] })
+    expect((await grantStore.findById(id))?.status).toBe('approved')
+    const execution = await submit(request)
+    expect(execution.status).toBe(200)
+    expect((await verified(execution.json.authz_jwt)).grant_id).toBe(id)
+    const repeated = await submit(request)
+    expect(repeated).toMatchObject({ status: 403, json: { state: 'used', grant_id: id } })
+    expect(await grantStore.findByRequester(federated ? podAgent : direct)).toHaveLength(1)
+  })
+
+  it.each(['denied', 'revoked', 'expired'] as const)('returns terminal %s without replacement', async (status) => {
+    const request = body({ grant_type: 'once', reference: 'stable-operation' })
+    const first = await call(direct, request)
+    await grantStore.updateStatus(first.json.grant_id, status)
+    expect(await call(direct, request)).toMatchObject({ status: 403, json: { state: status, grant_id: first.json.grant_id } })
+    expect(await grantStore.findByRequester(direct)).toHaveLength(1)
+  })
+
+  it('creates or reads through the direct grant endpoint without spending an approved decision', async () => {
+    const request = { requester: direct, target_host: 'fixture', audience: 'shapes', command: ['export', 'document-42'], grant_type: 'once', reference: 'document-42:v1' }
+    const first = await call(direct, request, '/grants')
+    expect(first.status).toBe(201)
+    await approveGrant(first.json.id, owner, grantStore)
+    const retry = await call(direct, request, '/grants')
+    expect(retry).toMatchObject({ status: 200, json: { id: first.json.id, status: 'approved' } })
+    expect((await grantStore.findById(first.json.id))?.status).toBe('approved')
+  })
+
+  it('does not replace an unrelated permission or share a reference across requesters', async () => {
+    const broad = await call(direct, body())
+    await approveGrant(broad.json.grant_id, owner, grantStore)
+    const request = body({ grant_type: 'once', reference: 'status:v1' })
+    const first = await call(direct, request)
+    expect(first.status).toBe(202)
+    expect(first.json.grant_id).not.toBe(broad.json.grant_id)
+    const second = await call(other, request)
+    expect(second.status).toBe(202)
+    expect(second.json.grant_id).not.toBe(first.json.grant_id)
   })
 })

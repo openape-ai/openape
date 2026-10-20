@@ -78,7 +78,7 @@ async function readBrokerJson(response: IncomingMessage): Promise<unknown> {
 function isOwnerRefusal(value: unknown): boolean {
   if (!value || typeof value !== 'object') return false
   const state = (value as Record<string, unknown>).state
-  return state === 'denied' || state === 'revoked'
+  return state === 'denied' || state === 'revoked' || state === 'expired' || state === 'used'
 }
 
 function readBrokerMetadata<T>(read: () => T): T {

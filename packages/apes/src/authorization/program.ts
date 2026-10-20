@@ -41,12 +41,13 @@ export interface AuthorizationRequest {
   grantType: GrantType
   summary?: OpenApeGrantSummary
   batch?: OpenApeGrantBatch
+  reference?: string
 }
 
 export type AuthorizeAnswer =
   | { state: 'approved', grantId: string, token: string, expiresAt: number }
   | { state: 'pending', grantId: string, approvalUrl: string }
-  | { state: 'denied' | 'revoked', grantId: string }
+  | { state: 'denied' | 'revoked' | 'expired' | 'used', grantId: string }
 
 export interface ProgramTokenClaims extends OpenApeAuthZClaims {
   argv_hash: string
@@ -90,8 +91,9 @@ function parseAnswer(body: Record<string, unknown>): AuthorizeAnswer {
   throw new Error(`Unrecognized authorization answer: ${String(body.state)}`)
 }
 
-async function authorizationEndpoint(issuer: string): Promise<string> {
+async function authorizationEndpoint(issuer: string, reference?: string): Promise<string> {
   const discovery = await discoverEndpoints(issuer)
+  if (reference !== undefined && discovery.openape_grant_reference_supported !== true) throw new Error('The IdP does not support grant references')
   return (discovery.openape_program_authorization_endpoint as string | undefined) ?? `${issuer}/api/grants/authorize`
 }
 
@@ -99,7 +101,7 @@ async function authorizationEndpoint(issuer: string): Promise<string> {
 export async function requestAuthorization(call: ProgramCall, request: AuthorizationRequest): Promise<AuthorizeAnswer> {
   const issuer = issuerOf(request.idp)
   try {
-    const body = await apiFetch<Record<string, unknown>>(await authorizationEndpoint(issuer), {
+    const body = await apiFetch<Record<string, unknown>>(await authorizationEndpoint(issuer, request.reference), {
       method: 'POST',
       idp: issuer,
       body: {
@@ -111,13 +113,14 @@ export async function requestAuthorization(call: ProgramCall, request: Authoriza
         grant_type: request.grantType,
         ...(request.summary ? { summary: request.summary } : {}),
         ...(request.batch ? { batch: request.batch } : {}),
+        ...(request.reference !== undefined ? { reference: request.reference } : {}),
       },
     })
     return parseAnswer(body)
   }
   catch (error) {
     const refusal = error instanceof ApiError && error.statusCode === 403 ? error.problemDetails : undefined
-    if (refusal && (refusal.state === 'denied' || refusal.state === 'revoked') && typeof refusal.grant_id === 'string')
+    if (refusal && (refusal.state === 'denied' || refusal.state === 'revoked' || refusal.state === 'expired' || refusal.state === 'used') && typeof refusal.grant_id === 'string')
       return { state: refusal.state, grantId: refusal.grant_id }
     throw error
   }
@@ -149,8 +152,8 @@ export async function verifyProgramToken(
   return claims
 }
 
-type Decision = 'approved' | 'denied' | 'revoked' | 'used'
-const DECISIONS = new Set<string>(['approved', 'denied', 'revoked', 'used'])
+type Decision = 'approved' | 'denied' | 'revoked' | 'used' | 'expired'
+const DECISIONS = new Set<string>(['approved', 'denied', 'revoked', 'used', 'expired'])
 
 /** Polls `GET /api/grants/{id}` until the grant is decided; running out of time throws. */
 export async function waitForDecision(idp: string, grantId: string, waitMs: number, intervalMs: number): Promise<Decision> {
@@ -186,7 +189,7 @@ const REUSE_MARGIN_SECONDS = 5
 const tokenCache = new Map<string, { grantId: string, token: string, claims: ProgramTokenClaims }>()
 
 async function cacheKey(call: ProgramCall, request: AuthorizationRequest, subject: string): Promise<string> {
-  return JSON.stringify([issuerOf(request.idp), subject, request.targetHost, call.program.sha256, await computeArgvHash(executionArgv(call)), call.files ?? []])
+  return JSON.stringify([issuerOf(request.idp), subject, request.targetHost, call.program.sha256, await computeArgvHash(executionArgv(call)), call.files ?? [], request.reference ?? null])
 }
 
 /** Forgets reusable command tokens; tests and long-lived processes that switch identity use it. */
@@ -223,7 +226,7 @@ export async function authorizeProgramCall(call: ProgramCall, options: Authorize
   if (brokered && !ownAuth?.decision_issuer) throw new Error('Brokered authorization requires its decision issuer')
   const key = JSON.stringify([await cacheKey(call, options, options.subject), decisionIssuer, brokered ?? null])
   const cached = tokenCache.get(key)
-  if (cached && cached.claims.exp - REUSE_MARGIN_SECONDS > Date.now() / 1000)
+  if (!options.reference && cached && cached.claims.exp - REUSE_MARGIN_SECONDS > Date.now() / 1000)
     return { kind: 'authorized', ...cached }
   tokenCache.delete(key)
 

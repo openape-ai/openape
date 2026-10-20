@@ -1,3 +1,11 @@
+# Cross-run grant references — issue 1523
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1523. Approved proposal revision 2: https://report.openape.ai/d/01M5CA08QYSZV34SMQ0Z129XWJ?v=2. Worktree `cross-run-grant-reference`, branch `feature/issue-1523-cross-run-grant-reference`, canonical base `a02d5a7b69a275cb7091dac83779757594a53d40`.
+- Add an opaque optional reference to existing exact single-use request paths, atomic scoped uniqueness, retained terminal decisions and authorized lookup. Complete pending batch pagination, explicit refresh, frozen decision retries and notification coalescing remain generic. Pods only passes metadata through existing execution paths.
+- Protocol contract: https://repos.openape.ai/patrick/protocol/issues/3. Personal archive draft stays outside Git; stable references and batch IDs preserve legacy records and CLI reconciliation. It remains 289 readable lines versus 290 before; a broad recipe/tooling rewrite is excluded.
+- Focused persistence, API, client and UI checks pass, including concurrent creates, lost replies, immutable bindings, terminal states, 150 equal-timestamp entries and partial decisions. IdP and Pods builds pass. Real browser screenshots confirm selection retention and unselected new arrivals at mobile/desktop sizes.
+- Next: required affected gate and native PR review, full deployment gate, coordinated IdP/desktop rollout, then exact owner-approved real archive requests and an unchanged repeat. Synthetic Pod checks are not live acceptance; existing live grants and Pod revision 2 remain unchanged.
+
 # Owner installer follow-up — issue 1519
 
 The first live installation exposed a post-quit SQLite read failure when WAL sidecars were absent. The installer now opens the existing database read/write for SELECT checks so SQLite can recreate its sidecars, and restarts the previous app if the post-quit check throws. No application records are written by the checks. Worktree: `owner-install-sqlite-1519`; branch: `bugfix/issue-1519-owner-install-sqlite`. Verification and live migration receipts belong to the native issue.

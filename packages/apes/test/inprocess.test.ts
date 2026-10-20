@@ -185,18 +185,24 @@ describe('apes CLI in-process tests', () => {
     expect(output).toContain('valid')
   })
 
-  // ---------- 3. Grants list (empty) ----------
-  it('grants list: returns empty list when no grants exist', async () => {
+  // ---------- 3. Grants list ----------
+  it('grants list: returns an empty pending list and retains owned bootstrap grants', async () => {
     const { listCommand } = await import('../src/commands/grants/list')
 
     const infoSpy = vi.spyOn(consola, 'info')
 
-    await listCommand.run!({ args: { all: false, json: false } } as any)
+    await listCommand.run!({ args: { all: false, json: false, status: 'pending' } } as any)
 
     // consola.info is called with "No grants found" message
     expect(infoSpy).toHaveBeenCalled()
     const infoMsg = infoSpy.mock.calls[0]![0] as string
     expect(infoMsg).toContain('No grants found')
+    // Enrollment installs approved safe-command grants, whose requester is nested.
+    logOutput = []
+    await listCommand.run!({ args: { all: false, json: true, status: 'approved' } } as any)
+    const listed = JSON.parse(logOutput.join('\n'))
+    expect(listed.data.length).toBeGreaterThan(0)
+    expect(listed.data.every((grant: { request: { requester: string } }) => grant.request.requester === AGENT_EMAIL)).toBe(true)
   })
 
   // ---------- 4. Grant lifecycle ----------

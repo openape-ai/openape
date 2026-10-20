@@ -213,6 +213,8 @@ export interface OpenApeGrantSubmitter {
 
 /** OpenApe grant request */
 export interface OpenApeGrantRequest {
+  /** Opaque client identity for one immutable single-use command request. */
+  reference?: string
   /** Who is requesting (agent/service identifier) */
   requester: string
   /** Host or domain where this grant is valid */

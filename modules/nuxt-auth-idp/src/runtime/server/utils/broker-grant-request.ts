@@ -1,10 +1,10 @@
 import type { OpenApeGrantRequest, OpenApeAuthorizationDetail } from '@openape/core'
 import { computeCmdHash } from '@openape/core'
-import { brokerObject, brokerString, canonicalizeCliPermission, computeArgvHash, parseGrantBatch, parseGrantSummary, validateCliAuthorizationDetail } from '@openape/grants'
+import { brokerObject, brokerString, canonicalizeCliPermission, computeArgvHash, parseGrantBatch, parseGrantReference, parseGrantSummary, validateCliAuthorizationDetail } from '@openape/grants'
 
 export async function parseBrokerGrantRequest(input: unknown, requester: string): Promise<OpenApeGrantRequest> {
   const value = brokerObject(input)
-  const allowed = ['requester', 'target_host', 'audience', 'grant_type', 'duration', 'command', 'permissions', 'authorization_details', 'execution_context', 'reason', 'summary', 'waits_until', 'batch', 'cmd_hash']
+  const allowed = ['requester', 'target_host', 'audience', 'grant_type', 'duration', 'command', 'permissions', 'authorization_details', 'execution_context', 'reason', 'summary', 'waits_until', 'batch', 'cmd_hash', 'reference']
   if (Object.keys(value).some(key => !allowed.includes(key)) || (value.requester !== undefined && value.requester !== requester)) throw new Error('Invalid brokered grant fields')
   brokerString(value.target_host)
   brokerString(value.audience)
@@ -13,6 +13,7 @@ export async function parseBrokerGrantRequest(input: unknown, requester: string)
   if (value.command !== undefined && (!Array.isArray(value.command) || value.command.length === 0 || value.command.length > 100 || value.command.some(arg => typeof arg !== 'string' || arg.length > 4096 || arg.includes('\0')))) throw new Error('Invalid grant command')
   if (value.permissions !== undefined && (!Array.isArray(value.permissions) || value.permissions.length > 100 || value.permissions.some(item => typeof item !== 'string' || item.length > 4096))) throw new Error('Invalid grant permissions')
   if (value.reason !== undefined && (typeof value.reason !== 'string' || value.reason.length > 4096)) throw new Error('Invalid grant reason')
+  if (value.reference !== undefined) value.reference = parseGrantReference(value.reference)
   if (value.summary !== undefined) value.summary = parseGrantSummary(value.summary)
   if (value.batch !== undefined) value.batch = parseGrantBatch(value.batch)
   if (value.waits_until !== undefined && (!Number.isInteger(value.waits_until) || Number(value.waits_until) <= Date.now() / 1000)) throw new Error('Invalid request deadline')

@@ -32,20 +32,24 @@ function fixture() {
   return { store, resources, pod, dispatcher, tool }
 }
 
-it.each([undefined, { id: 'selected-objects', title: 'Review selected objects', size: 2 }])('forwards approval presentation separately from unchanged program arguments (%j)', async (batch) => {
+it.each([
+  { batch: undefined, reference: undefined },
+  { batch: { id: 'selected-objects', title: 'Review selected objects', size: 2 }, reference: undefined },
+  { batch: { id: 'selected-objects', title: 'Review selected objects' }, reference: 'document-42:export:v1' },
+])('forwards approval metadata separately from unchanged program arguments (%j)', async ({ batch, reference }) => {
   const f = fixture()
   f.tool.mockResolvedValue({ exitCode: 0, stdout: '{}', stderr: '' } as never)
   const call = { application: 'fixture', argv: ['read', '--message', 'immutable-1'], approvalWaitMs: 0 }
   const summary = { title: 'Review this selected object', description: 'Synthetic review context', link: 'https://example.test/review/1' }
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
     await hooks.execution!.authorized({ authority: await hooks.authorizeStart!(), write: false })
-    await hooks.request('tools.invoke', { ...call, summary, ...(batch ? { batch } : {}) }, signal)
+    await hooks.request('tools.invoke', { ...call, summary, ...(batch ? { batch } : {}), ...(reference ? { reference } : {}) }, signal)
     await hooks.execution!.completed!({ exitCode: 0 })
     return { status: 'completed', summary: 'Synthetic tool call completed', completedInputIds: input.eventIds, gapIds: [] }
   })
   const id = f.dispatcher.start(f.pod.id)
   await expect.poll(() => f.dispatcher.runs.get(id).state).toBe('completed')
-  expect(f.tool).toHaveBeenCalledWith(call, expect.any(AbortSignal), expect.any(Object), summary, batch)
+  expect(f.tool).toHaveBeenCalledWith(call, expect.any(AbortSignal), expect.any(Object), summary, batch, reference)
   expect(f.tool).toHaveBeenCalledOnce()
 })
 

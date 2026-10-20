@@ -1,3 +1,5 @@
+export { grantCursor, parseGrantCursor } from './grant-cursor.js'
+export { assertGrantReferenceRequest, assertSameReferencedGrant, grantReferenceBinding, grantReferenceKey, GrantReferenceConflictError, InvalidGrantReferenceError, parseGrantReference } from './grant-reference.js'
 export { buildCliAuthDetail, matchArgvToOperation, type ShapeMatchOperation } from './shape-matcher.js'
 export {
   canonicalizeCliPermission,

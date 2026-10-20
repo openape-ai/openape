@@ -30,7 +30,7 @@ export default defineNitroPlugin((nitroApp) => {
 
   const queue = createGrantNotificationQueue(useDb(), delayMs)
   defineGrantPendingHook(async (grant) => {
-    if (await isFollowUpBatchMember(grant, grantStore())) return
+    // Queue every new member: the first may be decided before the quiet window ends.
     await queue.enqueue(grant)
   })
 
@@ -38,7 +38,11 @@ export default defineNitroPlugin((nitroApp) => {
   async function sweep(): Promise<void> {
     if (sweeping) return
     sweeping = true
-    try { await notify(await queue.sweep(id => grantStore().findById(id))) }
+    try {
+      const pending = await queue.sweep(id => grantStore().findById(id))
+      const followUps = await Promise.all(pending.map(grant => isFollowUpBatchMember(grant, grantStore())))
+      await notify(pending.filter((_grant, index) => !followUps[index]))
+    }
     finally { sweeping = false }
   }
   const timer = setInterval(() => {
