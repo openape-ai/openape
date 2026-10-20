@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { createBackup, restoreBackup } from '../../src/worker/data/backup'
 import { schemaVersion } from '../../src/worker/storage/database'
 import { releaseHeldWork } from '../../src/worker/recovery/release'
+import { DataRetention } from '../../src/worker/data/retention'
 import { classification, cleanup, invoiceReview, workFixture } from './work-fixture'
 
 afterEach(cleanup)
@@ -41,6 +42,40 @@ function mail() {
 }
 
 describe('self-discovered work on shared domain data', () => {
+  it('preserves shared data and completed work when deleting producers and assigning a replacement', async () => {
+    const f = mail()
+    f.write('m1', { contentRevision: 'c1' })
+    f.classify(() => ({ isInvoice: true }))
+    const message = f.data.get('owner', 'acme/mail/messages/m1')
+    const result = f.data.get('owner', 'acme/mail/classifications/m1')
+    const history = f.store.db.prepare('SELECT * FROM data_entry_revisions ORDER BY namespace,key,revision').all()
+    const retention = new DataRetention(f.store, 'unused-helper')
+    for (const id of [f.sync, f.classifier]) {
+      const pod = f.store.getPod(id)
+      f.store.updatePod(id, pod.revision, { name: pod.name, lifecycle: 'archived' })
+      await retention.deletePod(id, pod.revision + 1, pod.name)
+    }
+
+    expect(f.data.namespace('acme/mail/messages')).toMatchObject({ writer: 'owner', mode: 'records', readers: [f.invoices], writerEpoch: 2, revision: 2 })
+    expect(f.data.namespace('acme/mail/classifications')).toMatchObject({ writer: 'owner', mode: 'results', readers: [f.invoices], writerEpoch: 2, revision: 2 })
+    expect(f.data.get('owner', 'acme/mail/messages/m1')).toEqual(message)
+    expect(f.data.get('owner', 'acme/mail/classifications/m1')).toEqual(result)
+    expect(f.store.db.prepare('SELECT * FROM data_entry_revisions ORDER BY namespace,key,revision').all()).toEqual(history)
+    const reader = f.run(f.invoices)
+    expect(f.data.get(reader, 'acme/mail/classifications/m1')).toEqual(result)
+    expect(f.work.find(reader, { operation: 'acme/invoice-review' })).toHaveLength(1)
+    f.finish(reader)
+    expect(() => f.data.set('owner', 'acme/mail/classifications/m1', { replaced: true }, 1)).toThrow('holds results')
+
+    const replacement = f.pod('Replacement classifier', [classification()])
+    f.data.setReaders('acme/mail/messages', [f.invoices, replacement], 2)
+    f.data.assignWriter('acme/mail/classifications', replacement, 2)
+    expect(f.classify(() => { throw new Error('Completed work must survive producer deletion') }, replacement)).toBe(0)
+    f.data.set('owner', 'acme/mail/messages/m2', { contentRevision: 'c2' }, 0)
+    expect(f.classify(() => ({ isInvoice: false }), replacement)).toBe(1)
+    expect(f.store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+  })
+
   it('stores one negative result and repeats no analysis across ten scans and a restart', () => {
     const f = mail()
     f.write('m1', { contentRevision: 'c1', subject: 'Newsletter', categories: [] })

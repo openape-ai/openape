@@ -387,7 +387,28 @@ it('exports and restores detached receipts without resurrecting pruned runs', as
   expect(restored.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
 })
 
-it('refuses Pod deletion during active work', async () => {
+it('deletes an archived Pod while preserving unrelated active work and unpublished blobs', async () => {
+  const { store, pod, runId, workspace } = await fixture()
+  const obsolete = store.createPod({ name: 'Obsolete automation' })
+  store.updatePod(obsolete.id, 1, { name: obsolete.name, lifecycle: 'archived' })
+  const unpublished = store.putBlob('A different Pod has not committed its blob reference yet')
+  store.db.prepare('INSERT INTO run_leases VALUES(?,?,?,?,NULL)').run(pod.id, runId, 'synthetic-boot', Date.now())
+  store.db.prepare('INSERT INTO master_actions VALUES(?,?,?,\'running\',NULL,NULL)').run('other-validation', digest('validation'), JSON.stringify({ action: 'validate', podId: pod.id }))
+  const before = store.db.prepare('SELECT * FROM run_leases').all()
+  const retention = new DataRetention(store, 'unused-helper')
+
+  await retention.deletePod(obsolete.id, 2, obsolete.name)
+
+  expect(store.listPods().map(item => item.id)).toEqual([pod.id])
+  expect(store.db.prepare('SELECT * FROM run_leases').all()).toEqual(before)
+  expect(store.db.prepare('SELECT state FROM master_actions WHERE id=?').get('other-validation')).toEqual({ state: 'running' })
+  expect(await readFile(join(workspace, 'notes.txt'), 'utf8')).toBe('Durable workspace')
+  expect(store.readBlob(unpublished).toString()).toContain('has not committed')
+  expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+  await expect(retention.cleanup()).rejects.toThrow('active work')
+})
+
+it('refuses Pod deletion during its own active work', async () => {
   const { store, pod, runId } = await fixture()
   store.updatePod(pod.id, 1, { name: pod.name, lifecycle: 'archived' })
   const retention = new DataRetention(store, 'unused-helper')
@@ -435,15 +456,14 @@ it.each([
   expect(await readdir(exports)).toEqual(before)
 })
 
-it('protects the writer of shared data and a Pod with uncertain actions from deletion', async () => {
+it('protects a Pod with uncertain actions without changing its shared data assignment', async () => {
   const { store, pod } = await fixture()
   store.db.prepare('UPDATE pods SET lifecycle=\'archived\' WHERE id=?').run(pod.id)
   const retention = new DataRetention(store, '/unused/helper')
   new DomainData(store).define({ path: 'synthetic/results', writer: pod.id, mode: 'results' })
-  await expect(retention.deletePod(pod.id, 1, pod.name)).rejects.toThrow('writes shared data')
-  store.db.prepare('UPDATE data_namespaces SET writer=\'owner\',mode=\'records\'').run()
   store.db.prepare('INSERT INTO effect_attempts VALUES(?,1,?,NULL,\'mail.archive\',?,\'unknown\',\'{}\',1)').run('a'.repeat(64), pod.id, 'b'.repeat(64))
   await expect(retention.deletePod(pod.id, 1, pod.name)).rejects.toThrow('uncertain actions')
+  expect(new DomainData(store).namespace('synthetic/results').writer).toBe(pod.id)
 })
 
 it('keeps abandoned plaintext stages local and removes them before the worker resumes', async () => {
