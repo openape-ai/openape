@@ -145,8 +145,19 @@ it('routes assigned SSH observations through the real worker entry without requi
 })
 
 it('lists the workspace and refuses retired network and description commands in the real worker', async () => {
+  const store = new PodDatabase(root)
+  const archived = store.createPod({ name: 'Archived tagged Pod' })
+  store.db.prepare('UPDATE pods SET lifecycle=? WHERE id=?').run('archived', archived.id)
+  store.db.prepare('INSERT INTO item_tags(id,tags,revision,updated_at) VALUES(?,?,?,?)').run(archived.id, '["mail"]', 1, Date.now())
+  store.close()
   await send({ id: 'workspace-list', command: { type: 'list' } })
-  expect(replies).toHaveBeenCalledWith({ id: 'workspace-list', state: expect.objectContaining({ pods: expect.arrayContaining([expect.objectContaining({ name: 'Scheduled example' })]) }) })
+  expect(replies).toHaveBeenCalledWith({
+    id: 'workspace-list',
+    state: expect.objectContaining({
+      pods: expect.arrayContaining([expect.objectContaining({ name: 'Scheduled example' }), expect.objectContaining({ id: archived.id, lifecycle: 'archived' })]),
+      tags: expect.arrayContaining([{ id: archived.id, tags: ['mail'], revision: 1 }]),
+    }),
+  })
   await send({ id: 'describe-retired', command: { type: 'describeAutomation', id: randomUUID(), revision: 0, text: 'Nothing to describe' } })
   expect(replies).toHaveBeenCalledWith({ id: 'describe-retired', error: 'Unsupported workspace command' })
   await send({ id: 'networks-retired', command: { networks: { type: 'list' } } })

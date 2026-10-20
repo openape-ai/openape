@@ -1,4 +1,5 @@
-import { trayPodItems } from './tray-menu'
+import { trayPodItems, trayTagItems, trayTags } from './tray-menu'
+import { TrayPreference } from './tray-preference'
 import { AutomaticUpdate } from './automatic-update'
 import { parseUpdateCommand } from '../contracts/updates'
 import { randomUUID } from 'node:crypto'
@@ -80,6 +81,7 @@ let stopped = false
 let automaticUpdate: AutomaticUpdate
 let updateTimer: ReturnType<typeof setInterval> | undefined
 let preference: LanguagePreference
+let trayPreference: TrayPreference
 function t(key: MessageKey, parameters?: Parameters): string { return translate(preference.language, key, parameters) }
 const status: PodStatus = { version: 1, mode: fixture ? 'fixture' : 'local', executionEnabled: true, worker: { state: 'starting', pid: null, error: null }, runtime: { electron: process.versions.electron, node: process.versions.node } }
 let central: CentralController | null = null
@@ -152,9 +154,26 @@ async function openTrayMenu(): Promise<void> {
       tray.popUpContextMenu(Menu.buildFromTemplate([{ label: status.worker.state === 'starting' ? t('Loading') : t('Pods unavailable'), click: showWindow }]))
       return
     }
-    const { pods } = await worker.request({ type: 'list' })
-    const entries = await Promise.all(pods.map(async pod => ({ pod, runs: (await worker.runs({ type: 'list', podId: pod.id })).runs })))
-    if (!quitting) tray.popUpContextMenu(Menu.buildFromTemplate(trayPodItems(entries, preference.language, showWindow)))
+    const { pods, tags = [] } = await worker.request({ type: 'list' })
+    const available = trayTags(pods, tags, preference.language)
+    if (trayPreference.tag !== null && !available.includes(trayPreference.tag)) trayPreference.set(null)
+    const matching = trayPreference.tag === null ? pods : pods.filter(pod => tags.some(item => item.id === pod.id && item.tags.includes(trayPreference.tag!)))
+    const entries = await Promise.all(matching.map(async pod => ({ pod, runs: (await worker.runs({ type: 'list', podId: pod.id })).runs })))
+    const select = (tag: string | null) => {
+      try { trayPreference.set(tag) }
+      catch (error) {
+        console.error('Could not save Pods tray filter', error)
+        dialog.showErrorBox(t('Could not save tray filter'), translateDiagnostic(preference.language, error instanceof Error ? error.message : String(error)))
+      }
+      // Native menu callbacks run while the old popup is closing.
+      setImmediate(() => { void openTrayMenu() })
+    }
+    if (!quitting) {
+      tray.popUpContextMenu(Menu.buildFromTemplate([
+        ...trayTagItems(available, trayPreference.tag, preference.language, select),
+        ...trayPodItems(entries, preference.language, showWindow),
+      ]))
+    }
   }
   catch (error) {
     console.error('Could not load Pods tray', error)
@@ -171,6 +190,7 @@ async function start(): Promise<void> {
   }
   automaticUpdate = new AutomaticUpdate(app.getVersion(), null)
   preference = new LanguagePreference(root, fixture ? 'en' : app.getPreferredSystemLanguages()[0] ?? app.getLocale())
+  trayPreference = new TrayPreference(root)
   ipcMain.handle(channels.updates, async (event, value: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     const command = parseUpdateCommand(value)
@@ -489,7 +509,9 @@ async function start(): Promise<void> {
     return worker.resources({ type: 'assignReference', podId: pod.id, name: basename(path), path })
   })
   window = createWindow()
-  tray = new Tray(nativeImage.createEmpty()); tray.setTitle('Pods'); tray.setToolTip('OpenApe Pods')
+  const trayIcon = nativeImage.createFromPath(join(__dirname, 'assets/trayTemplate.png'))
+  trayIcon.setTemplateImage(true)
+  tray = new Tray(trayIcon); tray.setTitle('Pods'); tray.setToolTip('OpenApe Pods')
   tray.on('click', () => { void openTrayMenu() })
   tray.on('right-click', () => { void openTrayMenu() })
   updateMenus()
