@@ -157,10 +157,10 @@ it('preserves native cancellation messages while recording one safe terminal bef
   const controller = new AbortController()
   const metadata: AgentCallMetadata[] = []
   let requested!: () => void
-  const started = new Promise<void>(resolve => { requested = resolve })
+  const started = new Promise<void>((resolve) => { requested = resolve })
   const operation = executeAgent(runtime, root, 'Native fixture prompt', [], {
     provider: async () => new Response('{}'),
-    model: async signal => {
+    model: async (signal) => {
       requested()
       return new Promise<string>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))
     },
