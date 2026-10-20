@@ -556,11 +556,14 @@ scope. MCP uses `workspace` → `submit` with `channel: data` and
 `body: { type: 'deletePod', podId, revision, name }` after an explicit deletion request.
 Read current revisions first and poll the same operation ID until applied; deletion
 receipts remain readable after the Pod disappears, and identical retries do not repeat
-cleanup. Archive through `channel: workspace`, `type: update`, `lifecycle: archived`.
+cleanup. Native MCP can delete a local-only Pod after inspecting its full local state;
+the browser still refuses changes to its placeholder. Archive through `channel: workspace`, `type: update`, `lifecycle: archived`.
 
 Deletion requires the target Pod to have no active work; unrelated Pods may keep
-running. Open approvals, uncertain effects and published definition sources still
-block deletion. Shared namespaces return to owner custody without changing records,
+running. Open approvals block by default. With explicit owner authorization to
+discard historical approvals, include `discardApprovals: true`; this removes their
+local records without executing or approving any action. Unknown approval outcomes,
+uncertain effects and published definition sources always block deletion. Shared namespaces return to owner custody without changing records,
 results, provenance or other readers. Result namespaces remain read-only until
 assigned to another Pod. Deletion journals only the target's filesystem/key cleanup
 and removes its current central copies through the coordinated publication.
