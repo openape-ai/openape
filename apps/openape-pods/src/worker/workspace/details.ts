@@ -40,10 +40,14 @@ export class WorkspaceDetails {
       const original = this.store.db.prepare('SELECT s.id,s.version,s.hash,s.locator FROM source_derivations d JOIN sources s ON s.pod_id=d.pod_id AND s.id=d.original_id WHERE d.pod_id=? AND d.source_id=? ORDER BY s.rowid DESC LIMIT 1').get(pod.id, citation.id) as unknown as Citation | undefined
       source = { citation, content: content.slice(0, 200000), truncated: content.length > 200000, ...(original ? { original } : {}) }
     }
-    const active = this.store.getPod(pod.id).activeScript
-    const versions = this.store.db.prepare('SELECT hash,manifest FROM scripts WHERE pod_id=? ORDER BY rowid DESC LIMIT 100').all(pod.id).map(row => ({ hash: row.hash as string, assignmentRevision: parseManifest(JSON.parse(row.manifest as string)).assignmentRevision, validated: this.validated(pod.id, row.hash as string, pod.bindingRevision), active: row.hash === active }))
+    const versions = this.versions(pod.id)
     const description = this.store.db.prepare('SELECT body,revision,state,error,updated_at FROM pod_descriptions WHERE pod_id=?').get(pod.id)
     return { description: description ? { text: description.body as string, revision: description.revision as number, state: description.state as 'ready', error: description.error as string | null, updatedAt: description.updated_at as number | null } : null, claims, counts, total: this.store.db.prepare('SELECT count(*) AS count FROM claims WHERE pod_id=?').get(pod.id)!.count as number, checkpointRevision: this.store.checkpoint(pod.id).revision, versions, source }
+  }
+
+  versions(podId: string): PodDetails['versions'] {
+    const pod = this.store.getPod(podId)
+    return this.store.db.prepare('SELECT hash,manifest FROM scripts WHERE pod_id=? ORDER BY rowid DESC LIMIT 100').all(podId).map(row => ({ hash: row.hash as string, assignmentRevision: parseManifest(JSON.parse(row.manifest as string)).assignmentRevision, validated: this.validated(podId, row.hash as string, pod.bindingRevision), active: row.hash === pod.activeScript }))
   }
 
   private validated(podId: string, hash: string, revision: number): boolean { return !!this.store.db.prepare('SELECT 1 FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, hash, revision, this.resources.epoch(podId)) }

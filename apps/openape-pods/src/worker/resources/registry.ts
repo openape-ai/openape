@@ -179,6 +179,8 @@ export class ResourceRegistry {
     const assigned = this.list(podId).filter(resource => resource.kind === 'reference' && resource.state === 'ready')
     const files: FileAssignment[] = assigned.map(resource => ({ id: resource.id, revision: resource.revision, path: resource.configuration.path as string }))
     const set = await createSnapshotSet(helper, join(this.store.root, 'snapshots', podId), files)
+    this.assertCurrent(podId, epoch)
+    if (!set.files.length) return set
     this.store.transaction(() => {
       this.assertCurrent(podId, epoch)
       this.store.db.prepare('INSERT INTO snapshot_sets VALUES(?,?,?,?)').run(set.id, podId, epoch, JSON.stringify(set))

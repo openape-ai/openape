@@ -56,3 +56,39 @@ it('persists direct directory permissions, fences changes and rejects replaced o
   expect(() => parseResourceCommand({ type: 'assignDirectory', podId: pod.id, path, access: 'readWrite', epoch: 3 })).toThrow('Unsupported')
   expect(() => parseResourceCommand({ type: 'pickDirectory', podId: pod.id, path, epoch: 3 })).toThrow('Unsupported')
 })
+
+it('keeps repeated captures without references entirely in memory', async () => {
+  const root = mkdtempSync(join(tmpdir(), 'pods-empty-capture-')); roots.push(root)
+  const store = new PodDatabase(root); stores.push(store)
+  const pod = store.createPod({ name: 'No references' })
+  const registry = new ResourceRegistry(store, () => {})
+  for (let attempt = 0; attempt < 2; attempt++) expect((await registry.capture(pod.id, '/missing-helper')).files).toEqual([])
+  expect(store.db.prepare('SELECT count(*) AS count FROM snapshot_sets').get()!.count).toBe(0)
+  const { existsSync } = await import('node:fs')
+  expect(existsSync(join(root, 'snapshots'))).toBe(false)
+})
+
+it('removes only empty snapshot manifests, resumes missing files and preserves actual data', async () => {
+  const { cleanEmptySnapshots } = await import('../../src/worker/resources/empty-snapshots')
+  const { randomUUID } = await import('node:crypto')
+  const { existsSync, writeFileSync } = await import('node:fs')
+  const root = mkdtempSync(join(tmpdir(), 'pods-empty-cleanup-')); roots.push(root)
+  const store = new PodDatabase(root); stores.push(store)
+  const pod = store.createPod({ name: 'References' })
+  const entries = ['empty', 'missing', 'nonempty', 'unexpected', 'symlink'].map(kind => ({ kind, id: randomUUID() }))
+  for (const { kind, id } of entries) {
+    const path = join(root, 'snapshots', pod.id, id)
+    const manifest = { id, files: kind === 'nonempty' ? [{ content: 'retained' }] : [] }
+    store.db.prepare('INSERT INTO snapshot_sets VALUES(?,?,0,?)').run(id, pod.id, JSON.stringify(manifest))
+    if (kind === 'missing') continue
+    if (kind === 'symlink') { symlinkSync(join(root, 'snapshots', pod.id, entries[0]!.id), path); continue }
+    mkdirSync(path, { recursive: true }); writeFileSync(join(path, 'manifest.json'), JSON.stringify(manifest))
+    if (kind === 'unexpected') writeFileSync(join(path, 'keep.txt'), 'Preserve unknown contents')
+  }
+  expect(await cleanEmptySnapshots(store)).toBe(2)
+  expect(await cleanEmptySnapshots(store)).toBe(0)
+  expect(store.db.prepare('SELECT count(*) AS count FROM snapshot_sets').get()!.count).toBe(3)
+  for (const { kind, id } of entries.filter(entry => ['nonempty', 'unexpected'].includes(entry.kind))) {
+    expect(existsSync(join(root, 'snapshots', pod.id, id, kind === 'unexpected' ? 'keep.txt' : 'manifest.json'))).toBe(true)
+  }
+})

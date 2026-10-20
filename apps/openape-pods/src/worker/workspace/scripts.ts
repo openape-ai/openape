@@ -58,7 +58,7 @@ export class ScriptWorkspace {
     return row ? row.evidence as string : null
   }
 
-  private source(podId: string, selection: ScriptSelection): ScriptSource {
+  source(podId: string, selection: ScriptSelection): ScriptSource {
     if (selection.kind === 'version') {
       const row = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, selection.id)
       if (!row) throw new Error('Script version is not assigned to this pod')
@@ -76,7 +76,7 @@ export class ScriptWorkspace {
 
   view(podId: string, selection?: ScriptSelection): ScriptView {
     const pod = this.store.getPod(podId)
-    const versions = new WorkspaceDetails(this.store, this.resources).execute({ type: 'list', podId }).versions
+    const versions = new WorkspaceDetails(this.store, this.resources).versions(podId)
     const drafts = this.store.db.prepare('SELECT id,revision,assignment_revision,script_hash FROM script_drafts WHERE pod_id=? ORDER BY rowid DESC LIMIT 100').all(podId).map(row => ({ id: row.id as string, revision: row.revision as number, assignmentRevision: row.assignment_revision as number, validated: this.evidence(podId, row.script_hash as string | null) !== null }))
     const latest = drafts[0] ? this.source(podId, { kind: 'draft', id: drafts[0].id }) : null
     const selected = selection ?? (latest && latest.hash !== pod.activeScript ? { kind: 'draft' as const, id: latest.id } : pod.activeScript ? { kind: 'version' as const, id: pod.activeScript } : drafts[0] ? { kind: 'draft' as const, id: drafts[0].id } : undefined)
