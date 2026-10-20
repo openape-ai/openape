@@ -2,7 +2,8 @@ import { ProtocolError } from '@openape/pods-protocol'
 // @vitest-environment node
 import { DataControl } from '../src/worker/data/control'
 import { commandPodIds, parseCentralCommand } from '../src/contracts/central'
-import { randomUUID } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
+import { installExample } from '../src/worker/runs/examples'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -60,7 +61,7 @@ function fixture() {
   const actor = { id: randomUUID(), generation: randomUUID(), owner }
   const pod = store.createPod({ name: 'Test monitor' })
   store.db.prepare('INSERT INTO remote_pods VALUES(?,?,?,?,?,?,NULL)').run(pod.id, JSON.stringify(owner), actor.id, actor.generation, 'ready', '{}')
-  return { store, root, projection, actor, pod, details: new WorkspaceDetails(store, resources) }
+  return { store, root, projection, actor, pod, scripts, resources, details: new WorkspaceDetails(store, resources) }
 }
 type Completion = Parameters<WorkspaceStore['publishParts']>[6]
 function relay(server: WorkspaceStore, actor: WorkspaceActor, trustedRuntime = false) {
@@ -556,4 +557,75 @@ it('publishes state and completes commands without capturing files on first conn
     expect(requests.filter(body => body.type === 'artifact')).toEqual([])
     await controller.stop()
   }
+})
+
+it('finishes an owner action while an obsolete background upload is held and never publishes it afterwards', async () => {
+  let release!: () => void
+  const hold = new Promise<void>((resolve) => { release = resolve })
+  let holdNext = false; let held = false
+  const { controller, server, actor, details, pod, requests } = connected({
+    request: async (forward, body) => {
+      if (body.type === 'parts' && holdNext) { holdNext = false; held = true; await hold }
+      if (body.type === 'submit') return server.submit(actor.owner, actor.id, Number(body.revision), body.command as Parameters<WorkspaceStore['submit']>[3], String(body.id), true)
+      return forward(body)
+    },
+  })
+  cleanup.push(() => release())
+  controller.start()
+  await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+  holdNext = true
+  details.execute({ type: 'describe', podId: pod.id, revision: 0, text: 'Obsolete background state' })
+  await vi.waitFor(() => expect(held).toBe(true), { timeout: 5000 })
+  const action = controller.local(async () => {
+    details.execute({ type: 'describe', podId: pod.id, revision: 1, text: 'The owner action wins' })
+    return 'confirmed'
+  })
+  let result: string | undefined
+  const observed = action.then((value) => { result = value })
+  await vi.waitFor(() => expect(result).toBe('confirmed'), { timeout: 3000 })
+  await observed
+  expect(server.read(actor.owner, actor.id, pod.id).pod.details.description?.text).toBe('The owner action wins')
+  const publications = requests.filter(item => item.type === 'publish').length
+  release()
+  await vi.waitFor(() => expect(requests.filter(item => item.type === 'claim').length).toBeGreaterThan(3), { timeout: 5000 })
+  expect(requests.filter(item => item.type === 'publish')).toHaveLength(publications)
+  expect(controller.status()).toMatchObject({ state: 'online', uncertain: [], error: null })
+})
+
+it('yields projection to other requests and restarts instead of publishing mixed revisions', async () => {
+  const { projection, actor, pod, store } = fixture()
+  const pending = projection.snapshotCooperatively(actor.owner)
+  store.updatePod(pod.id, pod.revision, { name: 'Changed during projection', lifecycle: 'paused' })
+  expect((await pending).workspace.pods[0]?.name).toBe('Changed during projection')
+  expect(await projection.snapshotCooperatively(actor.owner)).toEqual(projection.snapshot(actor.owner))
+})
+
+it('answers local reads while central reconnection is still pending', async () => {
+  const { controller } = connected({ executor: { snapshot: async () => { throw new Error('Reconnect later') } } })
+  const { FixtureWorker } = await import('../src/main/worker')
+  const worker = new FixtureWorker(() => {}); worker.central = controller
+  const dispatch = vi.spyOn(worker as unknown as { dispatch: (command: unknown) => Promise<unknown> }, 'dispatch').mockResolvedValue({ pods: [], tags: [] })
+  await expect(worker.request({ type: 'list' })).resolves.toEqual({ pods: [], tags: [] })
+  expect(dispatch).toHaveBeenCalledOnce()
+  await expect(worker.request({ type: 'create', name: 'Blocked write' } as never)).rejects.toThrow('Central workspace offline')
+})
+
+it('projects version sources without repeating knowledge queries for every script version', () => {
+  const { store, projection, actor, pod, resources, scripts } = fixture()
+  installExample(store, resources, pod.id, 'deterministic', 'a'.repeat(64))
+  const active = store.getPod(pod.id).activeScript!
+  const manifest = JSON.parse(String(store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, active)!.manifest))
+  const code = store.readBlob(active).toString('utf8')
+  for (let index = 0; index < 20; index++) {
+    const source = `${code}\n// Synthetic version ${index}`
+    store.storeScript(pod.id, { ...manifest, contentHash: createHash('sha256').update(source).digest('hex') }, source)
+  }
+  const expected = Object.fromEntries(scripts.view(pod.id).versions.map(version => [version.hash, scripts.view(pod.id, { kind: 'version', id: version.hash })]))
+  const details = vi.spyOn(WorkspaceDetails.prototype, 'execute')
+  try {
+    const snapshot = projection.snapshot(actor.owner)
+    expect(snapshot.pods[0]!.versions).toEqual(expected)
+    expect(details).toHaveBeenCalledOnce()
+  }
+  finally { details.mockRestore() }
 })

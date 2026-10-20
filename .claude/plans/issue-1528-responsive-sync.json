@@ -1,0 +1,155 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "status": "active",
+  "revision": 1,
+  "milestones": [
+    {
+      "id": "snapshots",
+      "title": "Prevent and clean empty snapshots",
+      "goal": "Avoid filesystem and database writes for captures without references.",
+      "status": "active",
+      "acceptance": [
+        "Repeated empty captures create no files or rows; cleanup preserves nonempty sets and safely resumes."
+      ]
+    },
+    {
+      "id": "sync",
+      "title": "Remove synchronization stalls",
+      "goal": "Avoid repeated full detail queries and prevent background synchronization from monopolizing request processing.",
+      "status": "planned",
+      "acceptance": [
+        "Focused tests prove correct projections, indexed queries, responsive reads during sync and preserved operation ordering and receipts."
+      ]
+    },
+    {
+      "id": "acceptance",
+      "title": "Install and measure",
+      "goal": "Run required checks, merge the native PR and measure the installed application.",
+      "status": "planned",
+      "acceptance": [
+        "Record startup phases and concurrent read/mutation latency, zero new empty snapshots and zero renewed output uploads; investigate remaining stalls before completion."
+      ]
+    }
+  ],
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "Responsive Pods startup and synchronization",
+        "text": "Schneller Pods-Start und reaktionsfähiger Abgleich"
+      },
+      {
+        "path": "goal",
+        "source": "Remove empty snapshots and keep actions responsive during synchronization.",
+        "text": "Leere Snapshots entfernen und Aktionen während des Abgleichs reaktionsfähig halten."
+      },
+      {
+        "path": "summary",
+        "source": "Prevent empty reference snapshots, remove existing empty sets, eliminate repeated detail queries and unblock local reads. Verify the installed app with startup and concurrent action measurements.",
+        "text": "Leere Referenz-Snapshots verhindern und bestehende leere Einträge entfernen, wiederholte Detailabfragen beseitigen und lokale Lesezugriffe freigeben. Die installierte App mit Start- und parallelen Reaktionszeitmessungen prüfen."
+      },
+      {
+        "path": "problem.statement",
+        "source": "Startup scans over 34,000 empty manifests; synchronous projection blocks requests.",
+        "text": "Der Start durchsucht über 34.000 leere Manifeste; synchrone Zustandsabzüge blockieren Anfragen."
+      },
+      {
+        "path": "problem.impact",
+        "source": "Startup takes about twelve seconds and actions wait several seconds.",
+        "text": "Der Start dauert etwa zwölf Sekunden und Aktionen warten mehrere Sekunden."
+      },
+      {
+        "path": "problem.approach",
+        "source": "Skip and clean empty captures, index supersession lookups, reuse script metadata and keep synchronization work bounded and cooperative.",
+        "text": "Leere Aufnahmen überspringen und bereinigen, Nachfolgeabfragen indizieren, Skriptmetadaten wiederverwenden und den Abgleich in begrenzten, unterbrechbaren Arbeitsschritten ausführen."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "No new empty snapshots; preserved nonempty data; faster startup and responsive reads and mutations with durable command receipts.",
+        "text": "Keine neuen leeren Snapshots; erhaltene nichtleere Daten; schnellerer Start und reaktionsfähige Lese- und Änderungsaktionen mit dauerhaften Befehlsbestätigungen."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Prevent and clean empty snapshots",
+        "text": "Leere Snapshots verhindern und bereinigen"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Avoid filesystem and database writes for captures without references.",
+        "text": "Bei Aufnahmen ohne Referenzen keine Dateien oder Datenbankeinträge schreiben."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "Repeated empty captures create no files or rows; cleanup preserves nonempty sets and safely resumes.",
+        "text": "Wiederholte leere Aufnahmen erzeugen keine Dateien oder Einträge; Bereinigung erhält nichtleere Mengen und lässt sich sicher fortsetzen."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "Remove synchronization stalls",
+        "text": "Blockierungen durch Abgleich beseitigen"
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "Avoid repeated full detail queries and prevent background synchronization from monopolizing request processing.",
+        "text": "Wiederholte vollständige Detailabfragen vermeiden und die Anfrageverarbeitung während des Abgleichs freihalten."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "Focused tests prove correct projections, indexed queries, responsive reads during sync and preserved operation ordering and receipts.",
+        "text": "Gezielte Tests belegen korrekte Zustandsabzüge, indizierte Abfragen, reaktionsfähige Lesezugriffe während des Abgleichs sowie erhaltene Befehlsreihenfolge und Bestätigungen."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "Install and measure",
+        "text": "Installieren und messen"
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "Run required checks, merge the native PR and measure the installed application.",
+        "text": "Erforderliche Prüfungen ausführen, den nativen PR integrieren und die installierte Anwendung messen."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "Record startup phases and concurrent read/mutation latency, zero new empty snapshots and zero renewed output uploads; investigate remaining stalls before completion.",
+        "text": "Startphasen und parallele Lese-/Änderungslatenzen, keine neuen leeren Snapshots und keine erneuten Output-Uploads belegen; verbleibende Blockierungen vor Abschluss untersuchen."
+      },
+      {
+        "path": "sections.0.title",
+        "source": "Implementation and verification",
+        "text": "Umsetzung und Prüfung"
+      },
+      {
+        "path": "sections.0.body",
+        "source": "Issue 1528. Work in apps/openape-pods: resources/snapshots.ts and registry.ts; data/retention.ts; workspace/details.ts and scripts.ts; central/projection.ts; main/central/controller.ts and runtime-worker.ts. Preserve nonempty reference files, owner authentication and relay completion durability. Extend existing Vitest suites, run the affected unit gate and app build, then install through the owner installation workflow. Compare with the measured 11.29 s startup and 3.55 s blocked read. No changes to unrelated Pod scripts or data.",
+        "text": "Issue 1528. Arbeit in apps/openape-pods: resources/snapshots.ts und registry.ts; data/retention.ts; workspace/details.ts und scripts.ts; central/projection.ts; main/central/controller.ts und runtime-worker.ts. Nichtleere Referenzdateien, Eigentümeranmeldung und dauerhafte Relay-Bestätigungen erhalten. Bestehende Vitest-Suiten ergänzen, betroffene Unit-Prüfungen und App-Build ausführen, danach über den vorgesehenen Eigentümer-Installationsweg installieren. Mit dem gemessenen Start von 11,29 s und dem blockierten Lesezugriff von 3,55 s vergleichen. Keine Änderungen an anderen Pod-Skripten oder Daten."
+      }
+    ]
+  },
+  "title": "Responsive Pods startup and synchronization",
+  "goal": "Remove empty snapshots and keep actions responsive during synchronization.",
+  "summary": "Prevent empty reference snapshots, remove existing empty sets, eliminate repeated detail queries and unblock local reads. Verify the installed app with startup and concurrent action measurements.",
+  "problem": {
+    "statement": "Startup scans over 34,000 empty manifests; synchronous projection blocks requests.",
+    "impact": "Startup takes about twelve seconds and actions wait several seconds.",
+    "approach": "Skip and clean empty captures, index supersession lookups, reuse script metadata and keep synchronization work bounded and cooperative.",
+    "outcome": "No new empty snapshots; preserved nonempty data; faster startup and responsive reads and mutations with durable command receipts."
+  },
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-20",
+    "reference": "Behebe beide Ursachen, entferne die leeren Snapshots und verhindere, dass neue entstehen. Der Abgleich darf andere Aktionen nicht mehr blockieren. Miss danach den Start und die Reaktionszeiten erneut.",
+    "scope": "The explicit implementation request following the measured diagnosis; no unrelated data deletion.",
+    "target": {
+      "revision": 1
+    }
+  },
+  "sections": [
+    {
+      "id": "implementation",
+      "title": "Implementation and verification",
+      "body": "Issue 1528. Work in apps/openape-pods: resources/snapshots.ts and registry.ts; data/retention.ts; workspace/details.ts and scripts.ts; central/projection.ts; main/central/controller.ts and runtime-worker.ts. Preserve nonempty reference files, owner authentication and relay completion durability. Extend existing Vitest suites, run the affected unit gate and app build, then install through the owner installation workflow. Compare with the measured 11.29 s startup and 3.55 s blocked read. No changes to unrelated Pod scripts or data."
+    }
+  ]
+}

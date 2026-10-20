@@ -127,3 +127,12 @@ it('reports every transition of a Pod to active, whichever write makes it', () =
   lifecycle('active')
   expect(activated).toEqual([pod.id, pod.id])
 })
+
+it('indexes supersession lookups when opening both new and existing profiles', () => {
+  let store = fixture()
+  const query = () => store.db.prepare('EXPLAIN QUERY PLAN SELECT 1 FROM claims WHERE pod_id=? AND supersedes=?').all('pod', 'claim').map(row => String(row.detail)).join('\n')
+  expect(query()).toContain('claims_supersedes')
+  store.db.exec('DROP INDEX claims_supersedes')
+  store = reopen(store)
+  expect(query()).toContain('claims_supersedes')
+})

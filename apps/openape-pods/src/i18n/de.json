@@ -3276,5 +3276,7 @@
   "Incomplete program output response": "Unvollständige Programmausgabe",
   "Invalid request": "Ungültige Anfrage",
   "Runner channel closed during a pending response": "Ausführungskanal wurde während einer ausstehenden Antwort geschlossen",
-  "Tool stderr exceeded {p0} bytes": "Werkzeug-Fehlerausgabe hat {p0} Bytes überschritten"
+  "Tool stderr exceeded {p0} bytes": "Werkzeug-Fehlerausgabe hat {p0} Bytes überschritten",
+  "Workspace changed during central projection; retry the snapshot": "Der Arbeitsbereich wurde während des Zustandsabzugs geändert. Erstelle den Abzug erneut",
+  "Invalid empty snapshot identity": "Ungültige Kennung einer leeren Quellenkopie"
 }

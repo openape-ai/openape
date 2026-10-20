@@ -1,3 +1,4 @@
+import { cleanEmptySnapshots } from './resources/empty-snapshots'
 import { ScriptCredentials } from './resources/script-credentials'
 import { releaseProfileLease } from './profile-lease'
 import { runtimeParentPort } from './parent-port'
@@ -257,7 +258,7 @@ port.on('message', async (event) => {
       }
       if (command.type === 'version') { port.postMessage({ id: request.id, state: Number(store.db.prepare('SELECT total_changes() AS changes').get()!.changes) }); return }
       if (command.type !== 'snapshot') throw new Error('Unsupported central worker command')
-      port.postMessage({ id: request.id, state: new CentralProjection(store, registry, scripts, dispatcher, scheduler).snapshot(parseOwner(command.owner)) }); return
+      port.postMessage({ id: request.id, state: await new CentralProjection(store, registry, scripts, dispatcher, scheduler).snapshotCooperatively(parseOwner(command.owner)) }); return
     }
     await automaticBackup
     if (request.command && typeof request.command === 'object' && 'data' in request.command) {
@@ -320,7 +321,7 @@ port.on('message', async (event) => {
       await new DependencyStore(store).recover(runtime.helper)
       new ProgramControl(store, registry).execute({ type: 'recover' })
       await recoverPortableImports(store)
-      await data.retention.cleanDeletedFiles(); await data.retention.view()
+      await data.retention.cleanDeletedFiles(); await cleanEmptySnapshots(store); await data.retention.view()
       processesReady = true; startupReady = providerReady
       port.postMessage({ id: request.id, state: true }); return
     }
