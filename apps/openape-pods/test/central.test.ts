@@ -98,7 +98,7 @@ it('executes the same MCP/browser command once and exposes central results with 
   const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
   const execute = vi.fn(async () => details.execute({ type: 'describe', podId: pod.id, revision: 0, text: 'Shared with both clients' }))
   const request = relay(server, actor)
-  const controller = new CentralController(root, request, { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} }, '/unused-no-artifacts')
+  const controller = new CentralController(root, request, { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} })
   cleanup.push(() => controller.stop()); controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
   const { FixtureWorker } = await import('../src/main/worker')
@@ -144,7 +144,7 @@ it.each(['before publication', 'after commit'])('reconciles a lost response %s w
     },
     execute,
     gate: async () => {},
-  }, '/unused-no-artifacts')
+  })
   cleanup.push(() => controller.stop()); controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
   const id = randomUUID()
@@ -172,7 +172,7 @@ it.each([false, true])('settles a command lost after its claim (started locally:
     }
     return result
   }
-  const controller = new CentralController(root, request, { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} }, '/unused-no-artifacts')
+  const controller = new CentralController(root, request, { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} })
   cleanup.push(() => controller.stop()); controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
   const id = randomUUID()
@@ -203,7 +203,7 @@ function connected(options: { request?: (forward: (body: Record<string, unknown>
   const request = async (body: Record<string, unknown>) => { requests.push(body); return options.request ? options.request(forward, body) : forward(body) }
   const gates: number[] = []
   const executor: CentralExecutor = { snapshot: async () => projection.snapshot(actor.owner), execute: async () => null, gate: async (until) => { gates.push(until) }, ...options.executor }
-  const controller = new CentralController(root, request, executor, '/unused-no-artifacts', fast)
+  const controller = new CentralController(root, request, executor, fast)
   cleanup.push(() => controller.stop())
   return { controller, server, actor, pod, store, details, requests, gates, root }
 }
@@ -434,7 +434,7 @@ it.each([false, true])('deletes through native MCP (local-only: %s) with coordin
   const purgePodKeys = vi.fn(async () => {})
   Object.assign(worker, { connections: { busy: () => false, purgePodKeys }, dispatch: async (request: { central?: unknown, data: Parameters<DataControl['execute']>[0] }) => request.central ? true : data.execute(request.data) })
   const execute = vi.fn((command: import('../src/contracts/central').CentralCommand) => worker.centralExecute(command))
-  const controller = new CentralController(root, relay(server, actor, true), { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} }, '/unused-no-artifacts')
+  const controller = new CentralController(root, relay(server, actor, true), { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} })
   worker.central = controller
   cleanup.push(() => controller.stop()); controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
@@ -533,3 +533,27 @@ it('applies a phone decision once through the workspace operation and refuses th
   expect(worker.domain).toHaveBeenCalledOnce()
   expect(inbox.syncDecisions(actor.owner, actor.id, await decisions.collect())).toEqual({ created: 0, updated: 0, resolved: 1, skipped: 0 })
 }, 12000)
+
+it('publishes state and completes commands without capturing files on first connect or restart', async () => {
+  const { root, projection, actor, pod } = fixture()
+  const directory = join(root, 'pods', pod.id, 'workspace'); mkdirSync(directory, { recursive: true })
+  writeFileSync(join(directory, `.program-output-${randomUUID()}.json`), 'Private output must stay local')
+  writeFileSync(join(directory, 'keep.txt'), 'Owner workspace data')
+  const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
+  const forward = relay(server, actor, true)
+  const requests: Record<string, unknown>[] = []
+  const request = async (body: Record<string, unknown>) => { requests.push(body); return forward({ runtimeId: actor.id, ...body }) }
+  for (let restart = 0; restart < 2; restart++) {
+    const controller = new CentralController(root, request, {
+      snapshot: async () => ({ ...projection.snapshot(actor.owner), blobs: [{ podId: pod.id, hash: 'a'.repeat(64) }] }),
+      execute: async () => null,
+      gate: async () => {},
+    }, fast)
+    cleanup.push(() => controller.stop()); controller.start()
+    await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
+    expect(await controller.local(async () => 'Command completed')).toBe('Command completed')
+    expect(server.db.prepare('SELECT count(*) AS n FROM artifacts').get()!.n).toBe(0)
+    expect(requests.filter(body => body.type === 'artifact')).toEqual([])
+    await controller.stop()
+  }
+})

@@ -1,3 +1,4 @@
+import { programOutputBytes } from '../../worker/runs/response'
 import { programLaunch } from './runtime'
 import type { AgentConnection } from '../broker/authorization'
 import type { PodResource } from '../../contracts/resources'
@@ -30,14 +31,14 @@ export function programRequest(resources: PodResource[], podId: string, capabili
 export interface ProgramCallAccess { connection: AgentConnection, reach: SandboxReach, execution: ToolExecution }
 
 export async function invokeProgram(resources: PodResource[], podId: string, body: unknown, helper: string, root: string, credentials: CredentialCache, lease: BrokerLease, access: ProgramCallAccess) {
-  const { id, assignment, argv, output, approvalWaitMs, timeoutMs, isolation, inputFiles } = programRequest(resources, podId, lease.capabilities, body)
+  const { id, assignment, argv, approvalWaitMs, timeoutMs, isolation, inputFiles } = programRequest(resources, podId, lease.capabilities, body)
   await verifyProgram(assignment)
   // At the owner level the program has the owner's network reach; its network hosts and their proxy apply only when isolated.
   const proxy = assignment.networkHosts.length && access.reach.level === 'isolated' ? await startNetworkProxy(lease.signal, assignment.networkHosts) : undefined
   try {
     const broker = new PodToolBroker(helper, root, access.execution, credentials)
     const launch = programLaunch(assignment)
-    return await broker.execute({ id, identityConnection: access.connection, reach: access.reach, capability: assignment.capability, program: { path: assignment.executable, ...programIdentity(assignment) }, argv, executable: launch.executable, executableHash: launch.executableHash, entryFiles: assignment.entryFiles, prefix: launch.prefix, programState: { id: assignment.stateId, podId, applicationId: id }, cacheArgument: assignment.cacheArgument, runtimeDirectories: launch.runtimeDirectories, runtimeEnvironment: assignment.runtime?.environment, environment: { ...assignment.environment, ...proxy?.environment }, networkPorts: proxy ? [proxy.port] : [], maxOutputBytes: output ? 32 * 1024 * 1024 : 200000, stdoutArtifact: output === 'artifact', approvalWaitMs, timeoutMs, isolation, inputFiles }, { toolId: id, argv }, lease)
+    return await broker.execute({ id, identityConnection: access.connection, reach: access.reach, capability: assignment.capability, program: { path: assignment.executable, ...programIdentity(assignment) }, argv, executable: launch.executable, executableHash: launch.executableHash, entryFiles: assignment.entryFiles, prefix: launch.prefix, programState: { id: assignment.stateId, podId, applicationId: id }, cacheArgument: assignment.cacheArgument, runtimeDirectories: launch.runtimeDirectories, runtimeEnvironment: assignment.runtime?.environment, environment: { ...assignment.environment, ...proxy?.environment }, networkPorts: proxy ? [proxy.port] : [], maxOutputBytes: programOutputBytes, approvalWaitMs, timeoutMs, isolation, inputFiles }, { toolId: id, argv }, lease)
   }
   finally { await proxy?.close() }
 }

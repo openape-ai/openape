@@ -104,8 +104,7 @@ export interface CentralPod {
   history: Record<string, RunView>
 }
 /**
- * What the desktop publishes: the workspace and Pod views plus the managed files they reference. `blobs` names the
- * stored scripts and sources of published Pods; the desktop mirrors them as `artifacts` and never publishes the list.
+ * The desktop publishes workspace and Pod views. Legacy `blobs` and `artifacts` remain empty in new publications.
  * `schema` is the desktop's storage schema, published as the `schema` part that relays before issue 1455 (M8)
  * require; it keeps a relay rollback working until that window closes.
  */

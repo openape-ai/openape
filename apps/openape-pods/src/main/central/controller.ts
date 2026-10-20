@@ -9,8 +9,6 @@ import { centralHeartbeatMs, parseCentralSnapshot } from '../../contracts/centra
 import { encodeParts, manifestDigest, splitSnapshot } from '../../contracts/central-parts'
 import type { CentralManifest } from '../../contracts/central-parts'
 import { durableJSON, syncPath } from '../../worker/data/files'
-import type { ArtifactCache } from './artifacts'
-import { managedArtifacts } from './artifacts'
 
 interface State { revision: number, hash: string }
 interface Completion { id: string, result: unknown, error: string | null }
@@ -77,8 +75,6 @@ export class CentralController {
   private runner: Promise<void> | null = null
   private context = new AsyncLocalStorage<boolean>()
   private localActions = new Map<string, () => Promise<unknown>>()
-  private uploaded = new Set<string>()
-  private artifactCache: ArtifactCache = new Map()
   private publishing: Promise<void> | null = null
   private format: 2 | null = null
   private manifest: CentralManifest = {}
@@ -93,7 +89,7 @@ export class CentralController {
   private cached: { version: number, snapshot: CentralSnapshot, hash: string } | null = null
   private uncertain: UncertainOperation[] = []
   error: string | null = null
-  constructor(private readonly root: string, private readonly request: WorkspaceRequest, private readonly executor: CentralExecutor, private readonly helper: string, private readonly timing: { heartbeatMs: number, publishIntervalMs: number, submitRetryMs?: number } = { heartbeatMs: centralHeartbeatMs, publishIntervalMs: 5000 }) {}
+  constructor(private readonly root: string, private readonly request: WorkspaceRequest, private readonly executor: CentralExecutor, private readonly timing: { heartbeatMs: number, publishIntervalMs: number, submitRetryMs?: number } = { heartbeatMs: centralHeartbeatMs, publishIntervalMs: 5000 }) {}
 
   get executing(): boolean { return this.context.getStore() === true }
   get available(): boolean { return this.online }
@@ -199,25 +195,13 @@ export class CentralController {
     const version = await this.executor.version?.()
     const reuse = !completion && version !== undefined && this.cached?.version === version
     const base = reuse ? this.cached!.snapshot : parseCentralSnapshot(await this.executor.snapshot())
-    this.phase = 'artifacts'
-    const files = await managedArtifacts(this.root, base, this.helper, this.artifactCache)
-    const snapshot = { ...base, artifacts: files.map(({ content: _content, ...file }) => file) }
-    if (reuse && this.cached!.hash === this.state.hash && JSON.stringify(snapshot.artifacts) === JSON.stringify(base.artifacts)) return
+    const snapshot = { ...base, artifacts: [] }
+    if (reuse && this.cached!.hash === this.state.hash) return
     const parts = encodeParts(splitSnapshot(snapshot))
     const manifest = Object.fromEntries(Array.from(parts, ([key, part]) => [key, part.hash]))
     const hash = manifestDigest(manifest)
     if (version !== undefined) this.cached = { version, snapshot, hash }
     if (hash === this.state.hash && !completion) return
-    this.phase = 'artifact upload'
-    for (const file of files) {
-      const key = `${file.podId}:${file.hash}`
-      if (!this.uploaded.has(key)) {
-        if (file.content === undefined) throw new Error('Artifact upload data is missing')
-        await this.call({ type: 'artifact', podId: file.podId, hash: file.hash, content: file.content })
-        this.uploaded.add(key)
-        delete file.content
-      }
-    }
     const changes: Record<string, string | null> = Object.fromEntries(Object.keys(this.manifest).filter(key => !(key in manifest)).map(key => [key, null]))
     const uploads: Record<string, unknown> = {}
     for (const [key, part] of parts) {

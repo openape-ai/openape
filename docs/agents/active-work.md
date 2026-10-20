@@ -25,6 +25,13 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 # Active work
 
+## Program output in memory — issue 1527
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1527. Branch `bugfix/issue-1527-memory-output`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `a56ad6d7c5403fe2d2e1cd8448d1a7816363446b`.
+- Approved scope: bounded in-memory program replies, no intermediate output files, cleanup of old local/server outputs, and explanation of the 256 KiB runner frame bound. Maintained source: `.claude/plans/issue-1527-memory-output.json`; [Plan](https://report.openape.ai/d/01M5CWBJ3V368J81DAYS8VH0QV).
+- Implementation preserves request/log/result frame bounds, sends program stdout/stderr in bounded response chunks with backpressure, and keeps legacy file-mode requests compatible through stdout. New central publications carry only structured views; retired generated output copies are removed transactionally at the relay without deleting other artifact copies.
+- Verification and rollout are pending. Next: focused transport/broker/controller/relay checks, required gates and native PR, relay-first rollout, owner installation, exact generated-file cleanup and real run/restart acceptance. No personal Pod scripts are checked into Git.
+
 ## Independent archived Pod deletion — issue 1524
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1524. Branch `bugfix/issue-1524-independent-pod-deletion`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `a02d5a7b69a275cb7091dac83779757594a53d40`.
