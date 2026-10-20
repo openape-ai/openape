@@ -1,10 +1,11 @@
-import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { uniqueIndex, index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 export const grants = sqliteTable('grants', {
   id: text('id').primaryKey(),
   status: text('status').notNull(),
   type: text('type'),
   requester: text('requester').notNull(),
+  referenceKey: text('reference_key'),
   brokered: text('brokered', { mode: 'json' }),
   brokerOwner: text('broker_owner'),
   targetHost: text('target_host').notNull(),
@@ -26,6 +27,7 @@ export const grants = sqliteTable('grants', {
   // 'standing' = standing-grant match, 'yolo' = per-agent YOLO policy.
   autoApprovalKind: text('auto_approval_kind'),
 }, table => [
+  uniqueIndex('idx_grants_reference_key').on(table.referenceKey),
   index('idx_grants_status').on(table.status),
   index('idx_grants_requester').on(table.requester),
   index('idx_grants_created_at').on(table.createdAt),

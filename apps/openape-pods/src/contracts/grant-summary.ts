@@ -1,5 +1,5 @@
 import type { OpenApeGrantBatch, OpenApeGrantSummary } from '@openape/core'
-import { parseGrantBatch, parseGrantSummary } from '@openape/grants'
+import { parseGrantBatch, parseGrantReference, parseGrantSummary } from '@openape/grants'
 import type { RunContext } from './services'
 
 /**
@@ -73,8 +73,8 @@ export function savedScriptSummary(context: RunContext): GrantSummary {
 /**
  * Splits approval presentation from the call, keeping the call and its effect identity unchanged.
  */
-export function splitScriptSummary(payload: unknown): { payload: unknown, summary?: ScriptSummary, batch?: OpenApeGrantBatch } {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !['summary', 'batch'].some(key => Object.hasOwn(payload, key))) return { payload }
-  const { summary, batch, ...call } = payload as Record<string, unknown>
-  return { payload: call, ...(Object.hasOwn(payload, 'summary') ? { summary: parseScriptSummary(summary) } : {}), ...(batch === undefined ? {} : { batch: parseGrantBatch(batch) }) }
+export function splitScriptSummary(payload: unknown): { payload: unknown, summary?: ScriptSummary, batch?: OpenApeGrantBatch, reference?: string } {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !['summary', 'batch', 'reference'].some(key => Object.hasOwn(payload, key))) return { payload }
+  const { summary, batch, reference, ...call } = payload as Record<string, unknown>
+  return { payload: call, ...(Object.hasOwn(payload, 'summary') ? { summary: parseScriptSummary(summary) } : {}), ...(batch === undefined ? {} : { batch: parseGrantBatch(batch) }), ...(reference === undefined ? {} : { reference: parseGrantReference(reference) }) }
 }

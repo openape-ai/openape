@@ -282,3 +282,17 @@ it('uses the same content hierarchy in the pending list with the actual page sca
   expect((wrapper.get('[data-grant-technical]').element as HTMLDetailsElement).open).toBe(false)
   await capture('pending-list-de')
 })
+
+it('keeps new cross-run requests unselected after an explicit refresh', async () => {
+  const first = { ...cardFixtures.gitPush, id: 'cross-run-1', status: 'pending', request: { ...cardFixtures.gitPush.request, grant_type: 'once', batch: { id: 'cross-run', title: 'Gemeinsam prüfen' } } }
+  const batch = await mountPage({ requester: first.request.requester, batch: 'cross-run' }, { data: [first], pagination: { cursor: null, has_more: false } }, 'de-AT')
+  const second = { ...first, id: 'cross-run-2', request: { ...first.request, summary: { title: 'Neu eingegangene Anfrage', description: 'Diese Anfrage wurde nach dem ersten Laden eingereicht.' } } }
+  vi.stubGlobal('$fetch', vi.fn(async (_url: string, opts: { query?: { section?: string } }) => ({ data: opts.query?.section === 'history' ? [] : [first, second], pagination: { cursor: null, has_more: false } })))
+  await batch.find('[data-batch-refresh]').trigger('click')
+  await flushPromises()
+  expect((batch.find('[data-batch-row="cross-run-1"] input').element as HTMLInputElement).checked).toBe(true)
+  expect((batch.find('[data-batch-row="cross-run-2"] input').element as HTMLInputElement).checked).toBe(false)
+  expect(batch.text()).toContain('1 ausgewählte freigeben, 1 ablehnen')
+  await capture('cross-run-refresh-de')
+  await capture('cross-run-refresh-de-dark', true)
+})

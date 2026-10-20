@@ -71,14 +71,14 @@ it('relays a definite refusal of a too large request, but reports provider failu
   await expect(brokerFetch('https://provider.example.test/brokered', { method: 'POST', relayRefusal: true })).rejects.toMatchObject({ statusCode: 503 })
 })
 
-it('relays a 403 body only when it carries an owner refusal of a program call', async () => {
+it.each(['denied', 'revoked', 'expired', 'used'])('relays a 403 body only when it carries a definite %s state', async (state) => {
   dns.mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
-  let body = '{"state":"denied","grant_id":"g-1"}'
+  let body = JSON.stringify({ state, grant_id: 'g-1' })
   outgoing.mockImplementation((_url, _options, receive) => {
     const reply = Object.assign(new PassThrough(), { statusCode: 403 })
     return Object.assign(new EventEmitter(), { end: () => { receive(reply); reply.end(body) } })
   })
-  await expect(brokerFetch('https://provider.example.test/brokered', { method: 'POST', relayRefusal: true })).resolves.toEqual({ state: 'denied', grant_id: 'g-1' })
+  await expect(brokerFetch('https://provider.example.test/brokered', { method: 'POST', relayRefusal: true })).resolves.toEqual({ state, grant_id: 'g-1' })
   await expect(brokerFetch('https://provider.example.test/brokered', { method: 'POST' })).rejects.toMatchObject({ statusCode: 403 })
   body = '{"title":"Broker connection is missing or revoked"}'
   await expect(brokerFetch('https://provider.example.test/brokered', { method: 'POST', relayRefusal: true })).rejects.toMatchObject({ statusCode: 403 })

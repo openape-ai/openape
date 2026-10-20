@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest'
 
 let brokerEnabled = false
 let brokerAgentDomain = ''
+let referenceStore = false
 vi.mock('nitropack/runtime', () => ({ useRuntimeConfig: () => ({ openapeIdp: { brokerAgentDomain } }) }))
 vi.mock('../src/runtime/server/utils/broker-store', () => ({ hasBrokerStore: () => brokerEnabled }))
+vi.mock('../src/runtime/server/utils/grant-stores', () => ({ useGrantStores: () => ({ grantStore: { createReferenced: referenceStore ? vi.fn() : undefined } }) }))
 
 const RE_ISSUER_URL = /^https:\/\/id\.openape\.at\//
 
@@ -19,6 +21,13 @@ vi.mock('../src/runtime/server/utils/stores', () => ({
 }))
 
 describe('oIDC discovery', () => {
+  it('advertises references only when the configured store supports atomic creation', async () => {
+    const { default: handler } = await import('../src/runtime/server/routes/well-known/openid-configuration.get')
+    expect(handler({} as any).openape_grant_reference_supported).toBe(false)
+    referenceStore = true
+    try { expect(handler({} as any).openape_grant_reference_supported).toBe(true) }
+    finally { referenceStore = false }
+  })
   it('returns valid OIDC discovery document', async () => {
     const { default: handler } = await import('../src/runtime/server/routes/well-known/openid-configuration.get')
     const result = await handler({} as any)

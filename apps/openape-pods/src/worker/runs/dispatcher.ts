@@ -67,7 +67,7 @@ export interface RunServices {
   provider?: AgentGatewayServices['provider']
   model?: AgentGatewayServices['model']
   /** `summary` is the script's own account of the call; the IdP shows it only if the call needs a new grant. */
-  tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary, batch?: OpenApeGrantBatch) => Promise<unknown>
+  tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary, batch?: OpenApeGrantBatch, reference?: string) => Promise<unknown>
 }
 
 const maxAgentCallsPerRun = 50
@@ -207,12 +207,12 @@ export class RunDispatcher {
       const dependencyRoot = dependencyHash ? await dependencies.verify(pod.id, dependencyHash) : undefined
       const runtime = { ...this.runtime, dependencyRoot, registerDomain: (path: string, ownerPid: number) => this.runs.registerDomain(id, path, ownerPid) }
       const scope: RunServiceScope = { podId: pod.id, runId: id, epoch, assignmentRevision: pod.bindingRevision, capabilities: manifest.capabilities, root: directory, assertCurrent, registerDomain: runtime.registerDomain }
-      const invokeTool = async (body: unknown, toolSignal: AbortSignal, summary?: ScriptSummary, batch?: OpenApeGrantBatch) => {
+      const invokeTool = async (body: unknown, toolSignal: AbortSignal, summary?: ScriptSummary, batch?: OpenApeGrantBatch, reference?: string) => {
         assertCurrent()
         if (!manifest.capabilities.some(capability => capability.startsWith('tool.app_') || capability.startsWith('tool.ssh_')) || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
         const artifactOutput = isProgramCall(body) && (body as { output?: unknown }).output === 'artifact'
         if (artifactOutput) this.store.assertStorage(32 * 1024 * 1024)
-        const call = async () => retryService('tool authorization', async () => { assertCurrent(); return this.services!.tool!(body, toolSignal, scope, summary, batch) }, toolSignal)
+        const call = async () => retryService('tool authorization', async () => { assertCurrent(); return this.services!.tool!(body, toolSignal, scope, summary, batch, reference) }, toolSignal)
         // The private ape-shell lifecycle records program intent before acknowledging dispatch.
         const operation = call()
         pendingAgents.add(operation)
@@ -228,7 +228,7 @@ export class RunDispatcher {
         }
         finally { pendingAgents.delete(operation) }
       }
-      const scriptTool = async (payload: unknown, toolSignal: AbortSignal, summary?: ScriptSummary, batch?: OpenApeGrantBatch) => invokeTool(payload, toolSignal, summary, batch)
+      const scriptTool = async (payload: unknown, toolSignal: AbortSignal, summary?: ScriptSummary, batch?: OpenApeGrantBatch, reference?: string) => invokeTool(payload, toolSignal, summary, batch, reference)
       if (this.services?.shell) {
         const environment = await retryService('runtime authorization', () => this.services!.shell!(scope, signal), signal, 30000)
         Object.assign(runtime, { reach: environment.reach, home: environment.home, machine: environment.machine, environment: { ...environment.environment, ...runtime.environment } })
@@ -255,8 +255,8 @@ export class RunDispatcher {
             return timing
           }
           // Approval presentation is separate from the call and its effect identity.
-          const { payload, summary, batch } = operation === 'tools.invoke' || operation === 'http.request' ? splitScriptSummary(call) : { payload: call, summary: undefined, batch: undefined }
-          if (batch && (operation !== 'tools.invoke' || !isProgramCall(payload))) throw new Error('Approval batches require an assigned application call')
+          const { payload, summary, batch, reference } = operation === 'tools.invoke' || operation === 'http.request' ? splitScriptSummary(call) : { payload: call, summary: undefined, batch: undefined, reference: undefined }
+          if ((batch || reference) && (operation !== 'tools.invoke' || !isProgramCall(payload))) throw new Error('Approval batches require an assigned application call')
           if (operation === 'jev.evaluate') {
             const assignment = assignedJev(this.resources.list(pod.id), pod.id, scope.capabilities)
             if (!this.services?.jev) throw new Error('Jev service is unavailable')
@@ -317,7 +317,7 @@ export class RunDispatcher {
             try { const value = await request; assertCurrent(); operationSignal.throwIfAborted(); return value }
             finally { pendingAgents.delete(request) }
           }
-          if (operation === 'tools.invoke') return scriptTool(payload, operationSignal, summary, batch)
+          if (operation === 'tools.invoke') return scriptTool(payload, operationSignal, summary, batch, reference)
           throw new Error('Unsupported script operation')
         },
       }

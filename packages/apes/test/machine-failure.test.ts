@@ -9,7 +9,7 @@ describe('not-started failure classification', () => {
     expect(failure).toEqual({ kind: 'infrastructure', phase: 'authorization', status, retryAfterMs: 60000, detail: `HTTP ${status}` })
   })
 
-  it.each(['missing', 'pending', 'denied', 'revoked', 'expired'])('preserves permission state %s without turning refusal into infrastructure', (state) => {
+  it.each(['missing', 'pending', 'denied', 'revoked', 'expired', 'used'])('preserves permission state %s without turning refusal into infrastructure', (state) => {
     expect(executionFailure(new AuthorizationRefusedError(state, 'grant-fixture'))).toEqual({ kind: 'permission', state, grantId: 'grant-fixture' })
   })
 
@@ -20,6 +20,6 @@ describe('not-started failure classification', () => {
 
   it('classifies known transport failures but leaves generic HTTP text and untrusted objects conservative', () => {
     expect(executionFailure(new TypeError('fetch failed', { cause: { code: 'ECONNRESET' } }))).toEqual({ kind: 'infrastructure', phase: 'authorization', retryAfterMs: 0 })
-    for (const error of [new Error('Broker service returned HTTP 502'), new Error('Command token does not match this program file'), new ApiError(401, 'Expired'), new ApiError(403, 'Denied'), new ApiError(404, 'Unknown endpoint'), new ApiError(409, 'Conflict'), new AuthorizationRefusedError('used', 'grant-fixture'), { code: 'ECONNRESET' }]) expect(executionFailure(error)).toBeUndefined()
+    for (const error of [new Error('Broker service returned HTTP 502'), new Error('Command token does not match this program file'), new ApiError(401, 'Expired'), new ApiError(403, 'Denied'), new ApiError(404, 'Unknown endpoint'), new ApiError(409, 'Conflict'), { code: 'ECONNRESET' }]) expect(executionFailure(error)).toBeUndefined()
   })
 })

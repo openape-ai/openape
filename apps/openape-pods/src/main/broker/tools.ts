@@ -24,6 +24,7 @@ export interface ToolExecution {
   targetHost: string
   summary?: OpenApeGrantSummary
   batch?: OpenApeGrantBatch
+  reference?: string
   observer: ExecutionObserver
 }
 export interface ToolAssignment {
@@ -162,7 +163,8 @@ export class PodToolBroker {
       files: [...assignment.entryFiles.map(file => ({ path: file.path, sha256: file.hash })), ...assignment.inputFiles ?? []],
       summary: execution.summary,
       batch: execution.batch,
-      grantType: execution.batch ? 'once' : undefined,
+      reference: execution.reference,
+      grantType: execution.batch || execution.reference ? 'once' : undefined,
       waitMs: assignment.approvalWaitMs,
     }, lease.registerDomain)
     let stdout = ''; let stderr = ''; let failure: Error | undefined

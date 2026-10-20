@@ -114,15 +114,15 @@ const runServices: RunServices = {
     if (typeof value !== 'string') throw new Error('Invalid credential broker response')
     return value
   },
-  tool: async (body, signal, scope, summary, batch) => {
+  tool: async (body, signal, scope, summary, batch, reference) => {
     if (body && typeof body === 'object' && 'sshInventory' in body) {
-      if (batch) throw new Error('Approval batches require an assigned application call')
+      if (batch || reference) throw new Error('Approval batches require an assigned application call')
       assignedSsh(registry.list(scope.podId), scope.podId, scope.capabilities, body)
       return serviceBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, undefined, summary)
     }
     if (body && typeof body === 'object' && ('applicationId' in body || 'application' in body)) {
       programRequest(registry.list(scope.podId), scope.podId, scope.capabilities, body)
-      return serviceBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, undefined, summary, batch)
+      return serviceBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, body, signal, undefined, summary, batch, reference)
     }
     throw new Error('Unsupported tool request; use an assigned application through ape-shell')
   },

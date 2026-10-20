@@ -1,5 +1,6 @@
 import type { OpenApeGrant, PaginatedResponse } from '@openape/core'
 import type { GrantListParams, GrantStore } from '@openape/grants'
+import { grantCursor, parseGrantCursor, grantReferenceKey } from '@openape/grants'
 import { useGrantStorage } from './grant-storage'
 
 export interface ExtendedGrantStore extends GrantStore {
@@ -43,6 +44,7 @@ export function createGrantStore(): ExtendedGrantStore {
 
   return {
     async save(grant) {
+      if (grant.request.reference !== undefined) throw new Error('Grant references require an atomic store')
       await storage.setItem(`grants:${grant.id}`, grant)
     },
 
@@ -120,6 +122,9 @@ export function createGrantStore(): ExtendedGrantStore {
 
       const allGrants = await getAllGrants()
       let grants = allGrants.filter((grant) => {
+        if (params?.excludeStatus && grant.status === params.excludeStatus) return false
+        if (params?.reference && grant.request.reference !== params.reference) return false
+        if (params?.referenceKey && (grant.request.reference === undefined || grantReferenceKey(grant.request.requester, grant.request.reference, grant.brokered) !== params.referenceKey)) return false
         if (params?.status && grant.status !== params.status) return false
         if (params?.requester) {
           const requesters = Array.isArray(params.requester) ? params.requester : [params.requester]
@@ -130,12 +135,11 @@ export function createGrantStore(): ExtendedGrantStore {
         return true
       })
 
-      grants.sort((a, b) => b.created_at - a.created_at)
+      grants.sort((a, b) => b.created_at - a.created_at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
 
       if (cursor) {
-        const cursorTs = Number(cursor)
-        const idx = grants.findIndex(g => g.created_at < cursorTs)
-        grants = idx >= 0 ? grants.slice(idx) : []
+        const position = parseGrantCursor(cursor)
+        grants = grants.filter(g => g.created_at < position.createdAt || (position.id !== undefined && g.created_at === position.createdAt && g.id < position.id))
       }
 
       const page = grants.slice(0, limit)
@@ -144,7 +148,7 @@ export function createGrantStore(): ExtendedGrantStore {
       return {
         data: page,
         pagination: {
-          cursor: page.length > 0 ? String(page.at(-1)!.created_at) : null,
+          cursor: page.length > 0 ? grantCursor(page.at(-1)!) : null,
           has_more: hasMore,
         },
       }
