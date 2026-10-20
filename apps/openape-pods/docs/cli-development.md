@@ -165,11 +165,11 @@ trust in the Pod code; its direct path denials do not prevent indirect execution
 through owner startup files. The storage format has no OS-keychain dependency;
 this change does not add Windows or Linux runtime/sandbox support.
 
-Shared domain data and work use the existing runtime APIs with Pod-scoped
-reader/writer permissions, revisions and claims. Owner HOME does not grant owner
-administration rights over those records. The future move toward Pod-owned
-storage is separate from this CLI: each Pod should own a small responsibility
-and remain individually executable; no storage migration happens here.
+Each Pod owns a small responsibility and remains independently executable.
+Exchange data through assigned files or external services. Private checkpoints
+and workspace files remain available; shared namespace APIs and work declarations
+are retired. The CLI applies the same schema upgrade and obsolete-script checks
+as the desktop before execution.
 
 ## Output and exit codes
 
