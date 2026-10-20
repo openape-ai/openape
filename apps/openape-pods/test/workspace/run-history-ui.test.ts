@@ -146,12 +146,14 @@ it.each(['en', 'de'] as const)('shows the concrete native account default withou
   wrapper.unmount()
 })
 
-it('retains the full safe terminal error including status, provider code, cause and Retry-After', async () => {
+it.each(['en', 'de'] as const)('translates the safe terminal error while preserving status, provider code, cause and Retry-After (%s)', async (language) => {
+  applyLanguage(language)
   const id = insert('failed', 'Provider rate limit exceeded')
-  const error = { code: 'rate_limited' as const, message: 'The selected provider refused this request', details: { phase: 'request' as const, httpStatus: 429, providerCode: 'provider_quota_exhausted', cause: 'LIMIT_REACHED', retryAfter: '120' } }
+  const error = { code: 'rate_limited' as const, message: 'Proxy request failed (HTTP 429, rate_limit_exceeded)', details: { phase: 'request' as const, httpStatus: 429, providerCode: 'rate_limit_exceeded', cause: 'LIMIT_REACHED', retryAfter: '120' } }
   runs.append(id, 'agent-call', call({ status: 'failed', error }))
   const wrapper = await history(); const rendered = wrapper.get('.agent-call')
-  for (const value of ['rate_limited', 'request', '429', error.message, 'provider_quota_exhausted', 'LIMIT_REACHED', '120']) expect(rendered.text()).toContain(value)
-  expect(wrapper.get('.event-list').text()).toContain('provider_quota_exhausted')
+  for (const value of ['rate_limited', 'request', 'HTTP 429', 'rate_limit_exceeded', 'LIMIT_REACHED', '120']) expect(rendered.text()).toContain(value)
+  expect(rendered.text()).toContain(language === 'de' ? 'Die Proxy-Anfrage ist fehlgeschlagen (HTTP 429, rate_limit_exceeded)' : error.message)
+  expect(wrapper.get('.event-list').text()).toContain(error.message)
   wrapper.unmount()
 })

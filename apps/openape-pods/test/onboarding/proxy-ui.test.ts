@@ -34,15 +34,16 @@ it.each(['en', 'de'] as const)('shows safe mappings and sends explicit reload an
   wrapper.unmount()
 })
 
-it('disables actions during a reload and displays its actual failure without claiming a new configuration', async () => {
+it.each(['en', 'de'] as const)('disables actions during a reload and translates its actual failure without claiming a new configuration (%s)', async (language) => {
+  applyLanguage(language)
   let rejectReload: (error: Error) => void = () => {}
   const onboarding = vi.fn((command: OnboardingCommand) => command.type === 'reloadProxy' ? new Promise<OnboardingView>((_resolve, reject) => { rejectReload = reject }) : Promise.resolve(view(status())))
   window.pods = { onboarding } as unknown as typeof window.pods
   const wrapper = mount(ProxyConnection); await flushPromises()
   await wrapper.findAll('button')[0]!.trigger('click')
   for (const button of wrapper.findAll('button')) expect((button.element as HTMLButtonElement).disabled).toBe(true)
-  rejectReload(new Error('Configuration change requires an idle runtime restart')); await flushPromises()
-  expect(wrapper.get('[role="alert"]').text()).toBe('Configuration change requires an idle runtime restart')
+  rejectReload(new Error('Changing the proxy connection requires an idle runtime restart')); await flushPromises()
+  expect(wrapper.get('[role="alert"]').text()).toBe(language === 'de' ? 'Eine Änderung der Proxy-Verbindung benötigt einen Neustart der Runtime im Leerlauf' : 'Changing the proxy connection requires an idle runtime restart')
   expect(wrapper.text()).toContain('fixture-revision-1')
   for (const button of wrapper.findAll('button')) expect((button.element as HTMLButtonElement).disabled).toBe(false)
   wrapper.unmount()

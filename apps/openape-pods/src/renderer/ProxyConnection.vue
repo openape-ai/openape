@@ -4,7 +4,7 @@ import type { AgentBackendStatus } from '../contracts/agent-status'
 import type { ProxyCommand } from '../contracts/onboarding'
 import { agentModelSizeLabels } from '../contracts/agent'
 import { useHostBridge } from './host-bridge'
-import { t, label } from './i18n'
+import { t, label, diagnostic } from './i18n'
 
 export default defineComponent({
   setup() { return { hostBridge: useHostBridge() } },
@@ -13,6 +13,7 @@ export default defineComponent({
   methods: {
     t,
     label,
+    diagnostic,
     size(value: keyof typeof agentModelSizeLabels) { return label(agentModelSizeLabels[value]) },
     async execute(type: ProxyCommand['type']) {
       this.busy = true; this.error = ''
@@ -25,8 +26,8 @@ export default defineComponent({
 </script>
 
 <template>
-  <section class="proxy-connection" aria-label="CLIProxyAPI">
-    <h3>{{ 'CLIProxyAPI' }}</h3>
+  <section class="proxy-connection" :aria-label="t('CLIProxyAPI')">
+    <h3>{{ t('CLIProxyAPI') }}</h3>
     <p class="muted">
       {{ t('Text calls with Claude or Codex. Configure model mappings in the local agent-backends.json file.') }}
     </p>
@@ -37,7 +38,7 @@ export default defineComponent({
       {{ t('loading…') }}
     </p>
     <p v-if="error || status?.error" class="error-message" role="alert">
-      {{ error || status?.error?.message }}
+      {{ diagnostic(error || status?.error?.message) }}
     </p>
     <details v-if="status?.mappings.length">
       <summary>{{ t('Model mappings') }}</summary>
