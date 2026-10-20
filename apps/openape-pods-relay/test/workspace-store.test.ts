@@ -366,3 +366,27 @@ it('creates inbox decision operations only through the inbox path, at the latest
   expect(() => store.submitDecision(actor.owner, actor.id, command, randomUUID())).toThrow('workspace_busy')
   expect(() => store.submitDecision(actor.owner, actor.id, { channel: 'details', body: { type: 'describe' } } as never, randomUUID())).toThrow('Invalid inbox workspace command')
 })
+
+it('removes retired generated outputs atomically while preserving other artifact copies', () => {
+  const { store, actor, lease, state } = setup()
+  const podId = state.pods[0]!.id
+  const add = (path: string, text: string) => {
+    const content = Buffer.from(text); const hash = createHash('sha256').update(content).digest('hex')
+    store.putArtifact(actor, lease, podId, hash, content)
+    state.artifacts.push({ podId, path, hash, size: content.length })
+    return hash
+  }
+  const retired = add(`workspace/.program-output-${randomUUID()}.json`, 'Retired private output')
+  const kept = add('workspace/keep.json', 'Preserved owner data')
+  const shared = add(`workspace/.program-output-${randomUUID()}.json`, 'Shared bytes')
+  add('workspace/explicit-result.json', 'Shared bytes')
+  publish(store, actor, lease, randomUUID(), 1, state)
+  state.artifacts = []
+  const publication = randomUUID()
+  expect(() => publish(store, actor, lease, publication, 1, state)).toThrow('workspace_revision_conflict')
+  expect(store.db.prepare('SELECT hash FROM artifacts WHERE hash=?').get(retired)).toBeDefined()
+  publish(store, actor, lease, publication, 2, state)
+  expect(store.db.prepare('SELECT hash FROM artifacts ORDER BY hash').all().map(row => row.hash)).toEqual([kept, shared].sort())
+  publish(store, actor, lease, randomUUID(), 3, state)
+  expect(store.db.prepare('SELECT count(*) AS n FROM artifacts').get()!.n).toBe(2)
+})

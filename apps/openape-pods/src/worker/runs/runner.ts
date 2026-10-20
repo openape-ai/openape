@@ -1,3 +1,4 @@
+import { responseFrames, scriptFrameBytes } from './response'
 import { NonRetryableError } from '../../contracts/infrastructure'
 import type { OpenApeOwnerScriptAuthority } from '@openape/core'
 import type { PreparedMachine, PreparationPurpose } from '../runtime/execution-identity'
@@ -74,7 +75,7 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
   }, runtime.registerDomain)
   if (runtime.machine) {
     const frame = `${JSON.stringify(input)}\n`
-    if (Buffer.byteLength(frame) > 256 * 1024) { domain.cancel(); await domain.completed; throw new Error('Script input exceeds its size bound') }
+    if (Buffer.byteLength(frame) > scriptFrameBytes) { domain.cancel(); await domain.completed; throw new Error('Script input exceeds its size bound') }
     domain.channel.write(frame)
   }
   const local = new AbortController()
@@ -94,7 +95,7 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
   let terminal: ScriptResult | undefined; let terminalError = false; let failure: Error | undefined; let sequence = 0; let logBytes = 0
   const log = (bytes: Buffer) => {
     logBytes += bytes.length
-    if (logBytes > 256 * 1024) { failure = new Error('Script diagnostic output exceeded its limit'); stop(); return }
+    if (logBytes > scriptFrameBytes) { failure = new Error('Script diagnostic output exceeded its limit'); stop(); return }
     services.event('diagnostic', { text: bytes.toString() })
   }
   domain.stdout.on('data', log); domain.stderr.on('data', log)
@@ -121,9 +122,11 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
             services.event('operation', { id: frame.id, operation: frame.operation, state: 'started' })
             const value = await interruptible(() => services.request(frame.operation!, frame.payload, activeSignal), activeSignal)
             services.event('operation', { id: frame.id, operation: frame.operation, state: 'completed' })
-            const reply = JSON.stringify({ version: 1, runId: input.runId, id: frame.id, ok: true, value })
-            if (Buffer.byteLength(reply) > input.limits.frameBytes) throw new Error('Runner response exceeds its size limit')
-            domain.channel.write(`${reply}\n`)
+            for (const reply of responseFrames(input.runId, frame.id!, value, input.limits.frameBytes)) {
+              await interruptible(() => new Promise<void>((resolve, reject) => {
+                domain.channel.write(reply, error => error ? reject(error) : resolve())
+              }), activeSignal)
+            }
           }
           catch (error) { services.event('operation', { id: frame.id, operation: frame.operation, state: 'failed' }); activeSignal.throwIfAborted(); domain.channel.write(`${JSON.stringify({ version: 1, runId: input.runId, id: frame.id, ok: false, error: error instanceof Error ? error.message : 'Operation failed' })}\n`) }
           finally { requesting = false }

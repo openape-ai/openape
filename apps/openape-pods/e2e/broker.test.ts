@@ -129,12 +129,11 @@ it('composes signed ape-shell authorization, scoped cache, TLS refresh and the a
   const records: string[] = []
   try {
     const executable = join(vendor, 'o365-cli'); const rootsFile = join(vendor, 'mail-roots.pem')
-    const assignment: ToolAssignment = { id: 'o365', identityConnection: fixture.identityConnection, capability: 'fixture.read', program: { path: executable, name: 'o365-cli', sha256: sha(await readFile(executable)) }, executable, executableHash: sha(await readFile(executable)), argv: argv.slice(1), prefix: [], entryFiles: [{ path: rootsFile, hash: sha(await readFile(rootsFile)) }], connectionId: fixture.connectionId, cacheArgument: '--cache-dir', runtimeDirectories: [], environment: { ...proxy.environment, PODS_CA_FILE: rootsFile }, networkPorts: [proxy.port], maxOutputBytes: 32 * 1024 * 1024, stdoutArtifact: true }
+    const assignment: ToolAssignment = { id: 'o365', identityConnection: fixture.identityConnection, capability: 'fixture.read', program: { path: executable, name: 'o365-cli', sha256: sha(await readFile(executable)) }, executable, executableHash: sha(await readFile(executable)), argv: argv.slice(1), prefix: [], entryFiles: [{ path: rootsFile, hash: sha(await readFile(rootsFile)) }], connectionId: fixture.connectionId, cacheArgument: '--cache-dir', runtimeDirectories: [], environment: { ...proxy.environment, PODS_CA_FILE: rootsFile }, networkPorts: [proxy.port], maxOutputBytes: 32 * 1024 * 1024 }
     const reply = await fixture.broker.execute(assignment, { toolId: 'o365', argv: argv.slice(1) }, { ...fixture.lease, workspace: fixture.privateRoot, registerDomain: async (path) => { records.push(path) } })
     expect(reply.exitCode, reply.stderr).toBe(0)
-    const artifact = reply.stdoutArtifact!
-    const raw = await readFile(artifact.path, 'utf8'); expect(sha(raw)).toBe(artifact.sha256)
-    expect(JSON.parse(raw)).toMatchObject({ account: 'pod@example.invalid', complete: false })
+    expect((await readdir(fixture.privateRoot)).filter(name => name.startsWith('.program-output-'))).toEqual([])
+    expect(JSON.parse(reply.stdout)).toMatchObject({ account: 'pod@example.invalid', complete: false })
     expect(fixture.state.executions).toBe(1); expect(records).toHaveLength(1)
     expect(tls.state).toMatchObject({ refreshes: 1, reads: 1 })
     expect(await readdir(join(fixture.credentialRoot, 'temporary'))).toEqual([])

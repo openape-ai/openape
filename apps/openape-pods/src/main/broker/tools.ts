@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from 'node:crypto'
+import { programOutputBytes, programStderrBytes } from '../../worker/runs/response'
 import type { OpenApeGrantBatch, OpenApeGrantSummary } from '@openape/core'
 import { launchApeShell } from '../../worker/runtime/ape-shell'
 import type { ApeShellRuntime } from '../../worker/runtime/ape-shell'
@@ -7,7 +7,7 @@ import type { ExecutionObserver } from '../programs/execution'
 import { AuthorityError, NonRetryableError, PermissionUnavailableError } from '../../contracts/infrastructure'
 import type { PermissionRefusal } from '../../contracts/infrastructure'
 import { ProgramState } from '../programs/state'
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm } from 'node:fs/promises'
 import { dirname, join, relative, isAbsolute, sep } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { parseCredentialJSON } from '../connections/cache'
@@ -46,7 +46,6 @@ export interface ToolAssignment {
   cacheArgument?: '--cache-dir'
   isolation?: 'temporary'
   inputFiles?: { path: string, sha256: string }[]
-  stdoutArtifact?: boolean
   approvalWaitMs?: number
   timeoutMs?: number
   maxOutputBytes?: number
@@ -64,7 +63,7 @@ export interface BrokerLease {
   assertCurrent: () => void
   signal: AbortSignal
 }
-export interface ToolReply { refusal?: { reason: string } & Partial<PermissionRefusal>, pending?: { grantId: string, approvalUrl: string }, exitCode: number, stdout: string, stderr: string, stdoutArtifact?: { path: string, sha256: string, bytes: number } }
+export interface ToolReply { refusal?: { reason: string } & Partial<PermissionRefusal>, pending?: { grantId: string, approvalUrl: string }, exitCode: number, stdout: string, stderr: string }
 function secretStrings(value: unknown, key = ''): string[] {
   const credentialKeys = ['secret', 'token', 'accesstoken', 'refreshtoken', 'idtoken', 'refresh', 'privatekey', 'clientsecret', 'password', 'authorization']
   if (typeof value === 'string') return value && credentialKeys.includes(key.toLowerCase().replaceAll('_', '')) ? [value, JSON.stringify(value).slice(1, -1)] : []
@@ -135,11 +134,10 @@ export class PodToolBroker {
     // The process gets exactly the arguments the IdP authorized, after the owner-configured runtime prefix.
     const executed = [...assignment.argv, ...(cache && assignment.cacheArgument ? [assignment.cacheArgument, dirname(cache)] : [])]
     const args = [...assignment.prefix, ...executed]
-    if (assignment.stdoutArtifact && !lease.workspace) throw new Error('Output artifacts require an assigned persistent workspace')
     const timeoutMs = assignment.timeoutMs ?? 60000
     if (!Number.isSafeInteger(timeoutMs) || timeoutMs < 100 || timeoutMs > 60000) throw new Error('Invalid tool time bound')
     const limit = assignment.maxOutputBytes ?? 256 * 1024
-    if (!Number.isSafeInteger(limit) || limit < 1024 || limit > 32 * 1024 * 1024) throw new Error('Invalid tool output bound')
+    if (!Number.isSafeInteger(limit) || limit < 1024 || limit > programOutputBytes) throw new Error('Invalid tool output bound')
     lease.assertCurrent(); lease.signal.throwIfAborted()
     // The authorized file hash must still hold when the process starts.
     await this.verifyFiles(assignment)
@@ -175,7 +173,8 @@ export class PodToolBroker {
     if (lease.signal.aborted) stop()
     const append = (which: 'stdout' | 'stderr', bytes: Buffer) => {
       outputBytes += bytes.length
-      if (outputBytes > limit || (assignment.stdoutArtifact && which === 'stderr' && Buffer.byteLength(stderr) + bytes.length > 64000)) { failure ??= new NonRetryableError(`Tool output exceeded ${limit} bytes; read smaller pages, for example with --limit`); domain.cancel(); return }
+      if (outputBytes > limit) { failure ??= new NonRetryableError(`Tool output exceeded ${limit} bytes; read smaller pages, for example with --limit`); domain.cancel(); return }
+      if (which === 'stderr' && Buffer.byteLength(stderr) + bytes.length > programStderrBytes) { failure ??= new NonRetryableError(`Tool stderr exceeded ${programStderrBytes} bytes`); domain.cancel(); return }
       if (which === 'stdout') stdout += outDecoder.write(bytes)
       else stderr += errDecoder.write(bytes)
     }
@@ -193,12 +192,6 @@ export class PodToolBroker {
       if (cache) secrets.push(...secretStrings(parseCredentialJSON(await readFile(cache, 'utf8'))))
       if (identity) secrets.push(...identity.secrets)
       for (const secret of secrets) { stdout = stdout.replaceAll(secret, '[REDACTED]'); stderr = stderr.replaceAll(secret, '[REDACTED]') }
-      if (assignment.stdoutArtifact) {
-        const path = join(await realpath(lease.workspace!), `.program-output-${randomUUID()}.json`)
-        const bytes = Buffer.byteLength(stdout)
-        await writeFile(path, stdout, { flag: 'wx', mode: 0o400 })
-        return { exitCode, stdout: '', stderr, stdoutArtifact: { path, sha256: createHash('sha256').update(stdout).digest('hex'), bytes } }
-      }
       return { exitCode, stdout, stderr }
     }
     catch (error) {
