@@ -39,7 +39,8 @@ import { PodVariables } from './resources/variables'
 import { listedPods } from './workspace/pod-list'
 import { mapView } from './workspace/map-view'
 import { ItemTagStore } from './workspace/item-tags'
-import { DomainAdministration } from './data/admin'
+import { ApprovalHistory } from './data/approval-history'
+import { parseApprovalHistoryCommand } from '../contracts/approval-history'
 import { SecretRequests } from './secrets/store'
 import type { SecretRowCommand } from './secrets/store'
 import { ScriptWorkspace } from './workspace/scripts'
@@ -132,7 +133,7 @@ dispatcher = new RunDispatcher(store, registry, runtime, runServices)
 const data = new DataControl(store, runtime.helper)
 const setup = new SetupControl(store, registry)
 const details = new WorkspaceDetails(store, registry)
-const scheduler = new Scheduler(store, dispatcher, Date.now, false, podId => !dispatcher.work.pending(podId))
+const scheduler = new Scheduler(store, dispatcher, Date.now, false)
 const fixturePort = process.env.PODS_FIXTURE_MODEL_PORT
 const fixtureServices = fixturePort ? { provider: async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${fixturePort}/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }), model: endpointModel(`http://127.0.0.1:${fixturePort}/model`) } : undefined
 runServices.provider = fixtureServices?.provider; runServices.model = fixtureServices?.model
@@ -141,7 +142,7 @@ const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
 const master = new MasterService(store, runtime, masterControl, fixtureServices)
 const ownerOperations = new AsyncLocalStorage<boolean>()
-const codex = new CodexControl(store, masterControl, dispatcher)
+const codex = new CodexControl(store, masterControl)
 
 const remote = new DesktopRegistration(store)
 function registeredOwner() {
@@ -366,8 +367,10 @@ port.on('message', async (event) => {
       const result = new DefinitionWorkspace(store, registry, registeredOwner()).provisioned(receipt.requestId, receipt.error)
       port.postMessage({ id: request.id, state: result }); return
     }
-    if (request.command && typeof request.command === 'object' && 'domain' in request.command) {
-      port.postMessage({ id: request.id, state: new DomainAdministration(store, dispatcher).execute(request.command.domain) }); return
+    if (request.command && typeof request.command === 'object' && 'approvalHistory' in request.command) {
+      const command = parseApprovalHistoryCommand(request.command.approvalHistory)
+      if (command.type !== 'list') throw new Error('Opening approvals requires the desktop')
+      port.postMessage({ id: request.id, state: { approvals: new ApprovalHistory(store).views() } }); return
     }
     if (request.command && typeof request.command === 'object' && 'inboxOutbox' in request.command) {
       port.postMessage({ id: request.id, state: new InboxOutbox(store).execute(parseInboxOutboxCommand(request.command.inboxOutbox)) }); return

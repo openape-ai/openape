@@ -3,7 +3,7 @@ import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { digest, PodDatabase  } from '../src/worker/storage/database'
+import { PodDatabase  } from '../src/worker/storage/database'
 import { ResourceRegistry } from '../src/worker/resources/registry'
 import { RunDispatcher } from '../src/worker/runs/dispatcher'
 import { Scheduler } from '../src/worker/scheduling/scheduler'
@@ -58,40 +58,3 @@ describe('scheduled native execution', () => {
     expect(scheduler.view(pod.id).pending).toBe(3)
   })
 })
-
-it('lets two Pods share data through the native sandbox: the consumer finds its own work and never repeats an unchanged input', async () => {
-  const f = await setup()
-  async function scripted(name: string, code: string, work?: unknown): Promise<string> {
-    const pod = f.store.createPod({ name })
-    await f.dispatcher.install(pod.id, 'deterministic')
-    const previous = f.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, f.store.getPod(pod.id).activeScript!)!
-    const manifest = JSON.parse(previous.manifest as string)
-    const hash = digest(code)
-    f.store.storeScript(pod.id, { ...manifest, contentHash: hash, ...(work ? { work } : {}) }, code)
-    f.store.transaction(() => {
-      f.store.db.prepare('UPDATE pods SET active_script=?,lifecycle=\'active\' WHERE id=?').run(hash, pod.id)
-      f.store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(pod.id, hash, f.store.getPod(pod.id).bindingRevision, f.resources.epoch(pod.id), JSON.stringify({ synthetic: true, nativeAcceptance: true }))
-    })
-    return pod.id
-  }
-  const done = 'return {status:\'completed\',summary:\'Synthetic shared data\',completedInputIds:context.input.eventIds,gapIds:[]}'
-  const source = await scripted('Source', `export async function run(context) { const current = await context.data.get('native/records/one'); if (!current) await context.data.set('native/records/one', { subject: 'Synthetic native item' }, { expectedRevision: 0 }); ${done} }\n`)
-  const work = [{ operation: 'native/assessment', input: 'native/records', output: 'native/results', fields: ['subject'], filter: {}, ruleVersions: [1] }]
-  const consumer = await scripted('Consumer', `export const work = ${JSON.stringify(work)};\nexport async function run(context) { for (const item of await context.work.find({ operation: 'native/assessment' })) { const claim = await context.work.claim({ key: item.key }); await context.work.complete({ claimToken: claim.claimToken, result: { relevant: false, subject: claim.input.value.subject } }) } ${done} }\n`, work)
-  const { DomainData } = await import('../src/worker/data/domain')
-  const data = new DomainData(f.store)
-  data.define({ path: 'native/records', writer: source, mode: 'records', readers: [consumer] })
-  data.define({ path: 'native/results', writer: consumer, mode: 'results', readers: [] })
-  const run = async (podId: string) => {
-    const id = f.dispatcher.start(podId, { reason: 'manual', eventIds: [] })
-    await expect.poll(() => f.store.db.prepare('SELECT state FROM runs WHERE id=?').get(id)!.state, { timeout: 30000 }).not.toBe('running')
-    return f.dispatcher.runs.get(id)
-  }
-  expect(await run(source)).toMatchObject({ state: 'completed' })
-  expect(await run(consumer)).toMatchObject({ state: 'completed' })
-  expect(data.get('owner', 'native/results/one')).toMatchObject({ value: { relevant: false, subject: 'Synthetic native item' }, result: { operation: 'native/assessment' } })
-  // A negative result is a result: the unchanged input is not offered again, and a scheduled run is skipped.
-  expect(f.dispatcher.work.pending(consumer)).toBe(false)
-  expect(await run(consumer)).toMatchObject({ state: 'completed' })
-  expect(data.revision('native/results/one')).toBe(1)
-}, 60000)

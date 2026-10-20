@@ -204,10 +204,10 @@ it('lists the workspace and refuses retired network and description commands in 
   expect(replies).toHaveBeenCalledWith(expect.objectContaining({ id: 'networks-retired', error: expect.any(String) }))
 })
 
-it('administers shared data through the real worker and refuses malformed commands', async () => {
-  await send({ id: 'domain-list', command: { domain: { type: 'list' } } })
-  expect(replies).toHaveBeenCalledWith({ id: 'domain-list', state: expect.objectContaining({ namespaces: [], questions: [], held: [] }) })
-  await send({ id: 'domain-forged', command: { domain: { type: 'list', owner: 'forged' } } })
+it('reads historical approvals through the real worker and refuses malformed commands', async () => {
+  await send({ id: 'domain-list', command: { approvalHistory: { type: 'list' } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'domain-list', state: expect.objectContaining({ approvals: [] }) })
+  await send({ id: 'domain-forged', command: { approvalHistory: { type: 'list', owner: 'forged' } } })
   expect(replies).toHaveBeenCalledWith({ id: 'domain-forged', error: 'Unsupported data fields' })
 })
 

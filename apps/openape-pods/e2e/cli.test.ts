@@ -15,7 +15,6 @@ import { executeCli } from '../src/cli/commands'
 import { cliArguments } from '../src/cli/arguments'
 import { CredentialCache } from '../src/main/connections/cache'
 import { PodDatabase } from '../src/worker/storage/database'
-import { DomainData } from '../src/worker/data/domain'
 import { GrantLedger } from '../src/worker/resources/grants'
 import { ItemTagStore } from '../src/worker/workspace/item-tags'
 import { installExample } from '../src/worker/runs/examples'
@@ -67,10 +66,6 @@ it.each(['owner', 'isolated'] as const)('executes with the real Pod identity, %s
   await client.close(); client = undefined
   let store = new PodDatabase(profile)
   try {
-    const other = store.createPod({ name: 'Not running' })
-    const data = new DomainData(store)
-    data.define({ path: 'cli/state', writer: id, mode: 'records' })
-    data.define({ path: 'cli/private', writer: other.id, mode: 'records' })
     new GrantLedger(store).execute({ type: 'level', podId: id, level })
   }
   finally { store.close() }
@@ -89,8 +84,6 @@ export const contractVersion = 2;
 export async function run(context) {
   if (context.input.validation) return {status:'completed',summary:'Synthetic contract check',completedInputIds:[],gapIds:[]};
   if (process.env.JEV_API_KEY !== undefined) throw new Error('Jev API key leaked into Pod environment');
-  let denied = false; try { await context.data.get('cli/private/foreign'); } catch { denied = true; }
-  if (!denied) throw new Error('Foreign namespace was readable');
   let protectedDenied = false; try { await readFile(${JSON.stringify(protectedFile)}, 'utf8'); } catch { protectedDenied = true; }
   if (!protectedDenied) throw new Error('Owner authentication store was readable');
   for (const path of [${JSON.stringify(protectedCredential)},${JSON.stringify(protectedIdentity)},${JSON.stringify(protectedIdentity)} + '.new']) {
@@ -100,11 +93,10 @@ export async function run(context) {
   }
   const timing = await context.timing();
   if (!Number.isSafeInteger(timing.activeMs) || timing.activeMs < 0 || !Number.isSafeInteger(timing.waitingMs) || timing.waitingMs < 0) throw new Error('Invalid native timing receipt');
-  const value = {home:process.env.HOME,cwd:process.cwd(),podId:context.input.podId,denied,protectedDenied,timing};
-  await context.data.set('cli/state/context',value,{expectedRevision:0});
-  await context.progress.commit({expectedRevision:context.input.checkpointRevision,checkpoint:{checked:true},sources:[],claims:[]});
+  const value = {home:process.env.HOME,cwd:process.cwd(),podId:context.input.podId,protectedDenied,timing};
+  await context.progress.commit({expectedRevision:context.input.checkpointRevision,checkpoint:{checked:true,value},sources:[],claims:[]});
   context.log(JSON.stringify(value));
-  return {status:'completed',summary:'Identity, context and shared-data checks passed',completedInputIds:[],gapIds:[]};
+  return {status:'completed',summary:'Identity and private context checks passed',completedInputIds:[],gapIds:[]};
 }`)
   client = await open(profile)
   await executeCli(cliArguments(['edit', id, '--tags', 'native,verified', '--script', script]), client, io())
@@ -115,11 +107,11 @@ export async function run(context) {
   await client.close(); client = undefined
   store = new PodDatabase(profile)
   try {
-    const value = new DomainData(store).get({ podId: id, runId: 'inspection' }, 'cli/state/context')!.value
+    const value = store.checkpoint(id).body.value
     const { timing, ...identity } = value as Record<string, unknown>
     expect(timing).toEqual({ activeMs: expect.any(Number), waitingMs: expect.any(Number) })
-    expect(identity).toEqual({ home: level === 'owner' ? ownerHome : join(profile, 'pods', id, 'home'), cwd: join(profile, 'pods', id, 'workspace'), podId: id, denied: true, protectedDenied: true })
-    expect(store.checkpoint(id).body).toEqual({ checked: true })
+    expect(identity).toEqual({ home: level === 'owner' ? ownerHome : join(profile, 'pods', id, 'home'), cwd: join(profile, 'pods', id, 'workspace'), podId: id, protectedDenied: true })
+    expect(store.checkpoint(id).body.checked).toBe(true)
     expect(store.db.prepare('SELECT DISTINCT pod_id FROM runs').all()).toEqual([{ pod_id: id }])
     expect(new ItemTagStore(store).own(id)).toEqual(['native', 'verified'])
     const records = store.db.prepare('SELECT state,error FROM runs WHERE pod_id=?').all(id)

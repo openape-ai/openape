@@ -99,7 +99,6 @@ export class DataRetention {
       this.store.db.prepare('DELETE FROM definition_instance_requests WHERE pod_id=?').run(podId)
       this.store.db.prepare('UPDATE pod_definition_sources SET source_pod_id=NULL,dependency_hash=NULL WHERE source_pod_id=?').run(podId)
       this.store.db.prepare('INSERT INTO deletion_jobs VALUES(?,?,NULL)').run(podId, JSON.stringify({ podId, runIds, keyIds: [...new Set(keyIds)] }))
-      this.store.db.prepare('UPDATE data_namespaces SET writer=\'owner\',writer_epoch=writer_epoch+1,revision=revision+1,updated_at=? WHERE writer=?').run(Date.now(), podId)
       for (const table of ['run_events', 'run_inputs', 'execution_domains', 'recovery_reviews']) this.store.db.prepare(`DELETE FROM ${table} WHERE run_id IN (SELECT id FROM runs WHERE pod_id=?)`).run(podId)
       // Reviewed historical approvals go with the Pod without executing them; effect receipts remain.
       this.store.db.prepare('DELETE FROM action_approvals WHERE pod_id=?').run(podId)
@@ -121,7 +120,7 @@ export class DataRetention {
   }
 
   private assertPodIdle(podId: string): void {
-    if (this.store.db.prepare(`SELECT 1 FROM run_leases WHERE pod_id=? UNION ALL SELECT 1 FROM program_leases WHERE pod_id=? UNION ALL SELECT 1 FROM work_items WHERE pod_id=? AND state='claimed' LIMIT 1`).get(podId, podId, podId)) throw new Error('Finish or recover active work for this Pod before deleting it')
+    if (this.store.db.prepare(`SELECT 1 FROM run_leases WHERE pod_id=? UNION ALL SELECT 1 FROM program_leases WHERE pod_id=? LIMIT 1`).get(podId, podId)) throw new Error('Finish or recover active work for this Pod before deleting it')
     if (this.store.db.prepare(`SELECT 1 FROM pod_descriptions WHERE pod_id=? AND state='running' UNION ALL SELECT 1 FROM master_actions WHERE state='running' AND (json_extract(request,'$.podId')=? OR json_extract(request,'$.command.podId')=?) LIMIT 1`).get(podId, podId, podId)) throw new Error('Finish active work for this Pod before deleting it')
   }
 

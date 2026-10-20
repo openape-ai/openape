@@ -20,29 +20,22 @@ it('turns the read model into columns: systems, pods, sinks, authorities; questi
   expect(kind('dir:/Users/fixture/Briefing Evidence/mail')).toBe('system')
   expect(model.nodes.find(node => node.id === 'svc:https://zaz.delta-mind.at')).toMatchObject({ kind: 'system', both: true })
   expect(kind('ai:jev')).toBe('ai')
-  expect(kind(YOU)).toBe('auth'); expect(kind(IDP)).toBe('auth')
-  expect(model.nodes.find(node => node.id === YOU)!.badge).toBe(17)
+  expect(kind(YOU)).toBeUndefined(); expect(kind(IDP)).toBe('auth')
   expect(model.nodes.some(node => node.name === 'Archived research')).toBe(false)
   expect(model.nodes.find(node => node.name === 'zaz Service-Agent')!.kind).toBe('pod')
   const classification = byName('Mail-Klassifizierung').id
-  expect(model.links.find(link => link.from === classification && link.to === YOU)).toMatchObject({ type: 'auth', label: 'question', flow: 17 })
+  expect(model.links.find(link => link.from === classification && link.to === YOU)).toBeUndefined()
   expect(model.links.find(link => link.from === byName('Newsletter-Prüfung').id && link.to === IDP)).toMatchObject({ type: 'auth', label: 'approval', flow: 4 })
   expect(model.links.find(link => link.from === byName('IURIO PR monitor').id && link.to === IDP)).toMatchObject({ type: 'auth', label: 'Execution permission for IURIO PR monitor' })
   // Shared data runs from the writer to each reader, labelled with the namespace.
-  expect(model.links.find(link => link.from === byName('Mail-Synchronisierung').id && link.to === classification)).toEqual({ from: byName('Mail-Synchronisierung').id, to: classification, type: 'data', label: 'delta-mind/mail/messages', flow: 20 })
-  expect(model.links.filter(link => link.type === 'data' && link.from === classification).map(link => link.to).sort()).toEqual(['Antwortvorbereitung', 'Mail-Übersicht', 'Newsletter-Prüfung', 'Rechnungsprüfung', 'Wissensvorschläge'].map(name => byName(name).id).sort())
+  expect(model.links.some(link => link.label.startsWith('delta-mind/mail/'))).toBe(false)
 })
 
 it('lays Pods that share data out in layers, the others in a row, and lets the canvas height follow the content; a tag filter keeps only connected systems', () => {
   const full = relayout(buildModel(view), view, all)
-  const node = (name: string) => full.nodes.find(item => item.id === byName(name).id)!
-  // Writer before reader: synchronisation, classification, then its five readers.
-  expect(node('Mail-Synchronisierung').tx).toBeLessThan(node('Mail-Klassifizierung').tx)
-  expect(node('Mail-Klassifizierung').tx).toBeLessThan(node('Rechnungsprüfung').tx)
-  expect(node('Mail-Übersicht').tx).toBe(node('Rechnungsprüfung').tx)
-  expect(node('Morgenbriefing · Redaktion').tx).toBeGreaterThan(node('Morgenbriefing · Kalender und Issues').tx)
-  // A Pod without shared data sits in the row below the layers.
-  expect(node('zaz Service-Agent').ty).toBeGreaterThan(Math.max(node('Rechnungsprüfung').ty, node('Mail-Übersicht').ty))
+  const pods = full.nodes.filter(item => item.kind === 'pod')
+  expect(pods.every(item => item.tx >= 250 && item.tx <= 950)).toBe(true)
+  expect(new Set(pods.map(item => `${item.tx}:${item.ty}`)).size).toBe(pods.length)
   expect(full.height).toBeGreaterThan(geometry.single.h + geometry.firstRow)
   const systems = full.nodes.filter(item => item.kind === 'system' && visibleNodes(full, all).has(item.id))
   expect(systems.every(item => item.tx === geometry.systemX)).toBe(true)
@@ -68,8 +61,7 @@ it('eases nodes towards their targets, bends curves by link type and sizes parti
   expect(step(model)).toBe(false)
   expect(first.x).toBe(first.tx)
   const a = model.nodes.find(node => node.id === 'app:o365-cli:phofmann@delta-mind.at')!; const b = model.nodes.find(node => node.id === byName('Mail-Synchronisierung').id)!
-  const read = curve(a, b, 'read'); const data = curve(b, model.nodes.find(node => node.id === byName('Mail-Klassifizierung').id)!, 'data')
-  expect(data.c).toEqual({ x: (data.p0.x + data.p1.x) / 2, y: (data.p0.y + data.p1.y) / 2 })
+  const read = curve(a, b, 'read')
   expect(Math.hypot(read.c.x - (read.p0.x + read.p1.x) / 2, read.c.y - (read.p0.y + read.p1.y) / 2)).toBeCloseTo(Math.min(60, Math.hypot(read.p1.x - read.p0.x, read.p1.y - read.p0.y) * 0.15), 5)
   expect([0, 1, 3, 10, 150].map(particleCount)).toEqual([0, 2, 3, 4, 5])
   expect([0, 3, 15, 100].map(edgeWidth)).toEqual([1, 1.5, 3.5, 3.5])
@@ -83,6 +75,6 @@ it('derives KPI subtitles from the data only', () => {
     // Only the current state counts; zaz Service-Agent failed earlier but recovered.
     errors: [{ podId: byName('IURIO PR monitor').id, name: 'IURIO PR monitor', reason: 'completedWithGaps' }],
     // The run waiting for an IdP approval and the grant requested at the IdP are rights, as in Entscheidungen.
-    decisions: { count: 24, questions: 17, approvals: 4, rights: 2, work: 1, secrets: 0 },
+    decisions: { count: 6, approvals: 4, rights: 2, secrets: 0 },
   })
 })

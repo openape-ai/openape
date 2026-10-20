@@ -7,7 +7,7 @@ import AutomationInfo from './AutomationInfo.vue'
 import DecisionsInbox from './DecisionsInbox.vue'
 import MessagesInbox from './MessagesInbox.vue'
 import type { MessagesAccessCommand, MessagesView } from '../workspace-access'
-import type { DomainCommand, DomainOverview } from '../../contracts/domain-admin'
+import type { ApprovalHistoryCommand, ApprovalHistoryView } from '../../contracts/approval-history'
 import type { CentralCommand } from '../../contracts/central'
 import AutomationsList from './AutomationsList.vue'
 import AutomationsMap from './AutomationsMap.vue'
@@ -23,9 +23,9 @@ import { allTags, tagCounts, untagged, withTags } from '../utils/tags'
  * host reads the account inbox, Mitteilungen. The gear opens the one settings page of the host; creation hands a brief to Codex.
  */
 type Tab = 'automations' | 'decisions' | 'messages'
-const props = defineProps<{ view: MapView | null, live: boolean, now: number, tab?: Tab, messages?: MessagesView | null, desktop?: boolean, codex?: 'connected' | 'disconnected', domain?: DomainOverview | null, inboxUrl?: string, secrets?: SecretsView | null, sharing?: boolean }>()
-const emit = defineEmits<{ 'update:tab': [tab: Tab], 'messages': [command: MessagesAccessCommand], 'settings': [], 'codex': [pinned: string | null, tags: string[]], 'command': [command: CentralCommand], 'secrets': [command: SecretsCommand], 'openPod': [id: string], 'domain': [command: DomainCommand, settle?: (error: string | null) => void] }>()
-const layers = ref<Layers>({ data: true, read: true, write: true, auth: true, paused: true })
+const props = defineProps<{ view: MapView | null, live: boolean, now: number, tab?: Tab, messages?: MessagesView | null, desktop?: boolean, codex?: 'connected' | 'disconnected', approvalHistory?: ApprovalHistoryView | null, inboxUrl?: string, secrets?: SecretsView | null, sharing?: boolean }>()
+const emit = defineEmits<{ 'update:tab': [tab: Tab], 'messages': [command: MessagesAccessCommand], 'settings': [], 'codex': [pinned: string | null, tags: string[]], 'command': [command: CentralCommand], 'secrets': [command: SecretsCommand], 'openPod': [id: string], 'approvalHistory': [command: ApprovalHistoryCommand, settle?: (error: string | null) => void] }>()
+const layers = ref<Layers>({ read: true, write: true, auth: true, paused: true })
 const playing = ref(true)
 // Archived Pods are listed on request; they have no other place in the app.
 const archived = ref(false)
@@ -83,7 +83,7 @@ function closeLayers() { if (layersMenu.value) layersMenu.value.open = false }
 function closeLayersOutside(event: PointerEvent) { if (!layersMenu.value?.contains(event.target as Node)) closeLayers() }
 onMounted(() => document.addEventListener('pointerdown', closeLayersOutside))
 onBeforeUnmount(() => document.removeEventListener('pointerdown', closeLayersOutside))
-const chips: { key: keyof Layers, label: string, color: string }[] = [{ key: 'data', label: 'Shared data', color: 'var(--accent)' }, { key: 'read', label: 'Read', color: 'var(--read)' }, { key: 'write', label: 'Write', color: 'var(--warn)' }, { key: 'auth', label: 'Approvals', color: 'var(--idp)' }, { key: 'paused', label: 'Paused', color: 'var(--muted)' }]
+const chips: { key: keyof Layers, label: string, color: string }[] = [{ key: 'read', label: 'Read', color: 'var(--read)' }, { key: 'write', label: 'Write', color: 'var(--warn)' }, { key: 'auth', label: 'Approvals', color: 'var(--idp)' }, { key: 'paused', label: 'Paused', color: 'var(--muted)' }]
 /** Codex labels the new automation like the pinned Pod. */
 const pinnedTags = computed(() => props.view?.pods.find(pod => pod.id === pinned.value)?.tags?.own ?? [])
 function openCodex() { handoff.value = true; emit('codex', pinned.value, pinnedTags.value) }
@@ -132,7 +132,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
               <summary>{{ t('Layers') }} {{ shownLayers }}/{{ chips.length }}</summary>
               <div class="layers" role="group" :aria-label="t('Layers')">
                 <button v-for="chip in chips" :key="chip.key" class="lay" :aria-pressed="layers[chip.key]" @click="layers[chip.key] = !layers[chip.key]">
-                  <i :class="{ dash: chip.key === 'paused' }" :style="{ background: chip.color }" />{{ t(chip.label as 'Shared data') }}
+                  <i :class="{ dash: chip.key === 'paused' }" :style="{ background: chip.color }" />{{ t(chip.label as 'Read') }}
                 </button>
               </div>
             </details>
@@ -179,7 +179,7 @@ defineExpose({ pin: (id: string | null) => { pinned.value = id }, open: (id: str
       <p v-if="!view" class="muted" role="status">
         {{ t('Loading workspace…') }}
       </p>
-      <DecisionsInbox v-else :view="view" :domain="domain ?? null" :inbox-url="inboxUrl" :requests="secrets?.requests ?? []" :secrets-origin="secrets?.origin" :desktop="!!desktop" @secrets="emit('secrets', $event)" @domain="(command, settle) => emit('domain', command, settle)" @command="emit('command', $event)" />
+      <DecisionsInbox v-else :view="view" :approval-history="approvalHistory ?? null" :inbox-url="inboxUrl" :requests="secrets?.requests ?? []" :secrets-origin="secrets?.origin" :desktop="!!desktop" @secrets="emit('secrets', $event)" @approval-history="(command, settle) => emit('approvalHistory', command, settle)" @command="emit('command', $event)" />
     </section>
   </div>
 </template>

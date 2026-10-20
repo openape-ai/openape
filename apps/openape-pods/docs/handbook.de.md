@@ -20,9 +20,9 @@ Verwende zuerst einen kleinen Ordner mit unkritischen Beispieldateien und nur Le
 
 Automatisierungen ist der Starttab. Die Kennzahlen oben sind Systemzähler: aktiv, aktuelle Fehler und Entscheidungen warten auf dich. Ihre Untertitel kommen aus deinen Daten, etwa der Name eines gestörten Pods und sein Grund.
 
-Die Karte zeigt deine Pods in der Mitte, links die Services, Applikationen und Verzeichnisse, die sie lesen, rechts reine Ziele und oben die Autoritäten: deine Entscheidungen, den Identity Provider und die KI. Gepunktete Linien tragen die aufgezeichneten Lese- und Schreibzugriffe der letzten 24 Stunden; Pods, die Daten teilen, stehen vom Schreiber zum Leser angeordnet, und jede Linie gemeinsamer Daten nennt ihren Namensraum. Liste zeigt dieselben Pods als Tabelle. Mit Tags startet die Karte leer: Aktiviere einen oder mehrere Tags, um ihre Pods zu zeigen; jeder Tag zeigt, wie viele Pods ihn tragen, und Ohne Tag, Alle und Keine sind immer verfügbar. Die Auswahl bleibt auf diesem Gerät gespeichert. Ebenen öffnet die Chips Gemeinsame Daten, Lesen, Schreiben, Freigaben und Pausierte; Legende erklärt die Knotenformen.
+Karte zeigt jeden Pod mit den Systemen, die er liest und verändert, dem Identitätsanbieter und der KI. Gepunktete Linien zeigen beobachtete Zugriffe der letzten 24 Stunden. Pods stehen in Reihen zwischen ihren externen Systemen. Liste zeigt dieselben Pods als Tabelle. Mit Tags wählst du die sichtbaren Pods. Ebenen bietet Lesen, Schreiben, Freigaben und Pausierte; Legende erklärt die Knotenformen.
 
-Wähle einen Knoten, um seine Fakten im Infofeld zu lesen. Details öffnen führt zur Detailseite mit Zeitplan, den gemeinsamen Daten, die ein Pod schreibt und liest, seiner wartenden Arbeit, Zahlen, Zugriffen nach Art, Geheimnissen als Aliase, dem Entwicklerabschnitt und dem letzten Lauf. Pausieren, Fortsetzen und Jetzt ausführen sind die Owner-Befehle auf dieser Seite; nichts hier schreibt in deine Konten.
+Wähle einen Knoten für seine Details. Die Detailansicht zeigt Zeitplan, Ergebnisse, Zugriffe, Geheimnis-Aliase und den letzten Lauf. Hier kannst du pausieren, fortsetzen oder einen Lauf starten.
 
 Stand HH:MM kennzeichnet im Browser einen veröffentlichten Schnappschuss; Live · HH:MM bedeutet, der Desktop antwortet direkt. Der Browser zeigt denselben Tab aus dem Schnappschuss des gewählten Desktops. Native Bedienelemente wie das Öffnen des Script-Ordners oder die Wahl einer privaten Datei bleiben am Desktop und sind im Browser deaktiviert.
 
@@ -31,22 +31,15 @@ Stand HH:MM kennzeichnet im Browser einen veröffentlichten Schnappschuss; Live 
 3. Wähle einen Pod und wähle Details öffnen.
 4. Nutze Pausieren, Fortsetzen oder Jetzt ausführen auf der Detailseite. Details öffnen im Entwicklerabschnitt öffnet den Pod-Editor für Berechtigungen, Variablen und Geheimnisse, Historie und Identität.
 
-![Automatisierungen: Karte, Liste und Detail](images/handbook-automations-de.png)
-
 ## Entscheidungen: alles, was auf dich wartet
 
-Der Tab Entscheidungen listet, was auf dich wartet: Rückfragen deiner Pods, Freigaben einzelner Aktionen an einzelnen Objekten beim Identity Provider, Rechte, die einem Pod fehlen, Fehlgeschlagene Arbeit, die nicht mehr von selbst wiederholt wird, und Geheimnisse, die über OpenApe Secrets angefragt sind. Die Zahl im Tab ist die Anzahl offener Einträge.
-
-Eine Rückfrage zeigt die aufgezeichneten Felder ihres Falls und die Optionen mit ihren genauen Titeln; Bündeln nach fasst Fälle nach einem Feld zusammen, sodass eine Wahl die ganze Gruppe beantwortet. Deine Antwort wird als gemeinsame Daten gespeichert, die der fragende Pod liest; sie führt selbst nichts aus. Eine Freigabe bindet eine Aktion an ein Objekt, etwa das Archivieren einer Nachricht, und wird beim Identity Provider entschieden; eine abgelaufene oder abgelehnte Freigabe kannst du erneut anfragen oder zurückziehen. Fehlgeschlagene Arbeit hat ihre automatischen Versuche aufgebraucht; behebe die Ursache und wähle Erneut versuchen. Sonst hält Pods nichts zur Prüfung an: Ein Lauf kann jederzeit unterbrochen und wiederholt werden, und das Skript ist dafür verantwortlich, eine externe Aktion nicht zu wiederholen.
+Entscheidungen zeigt historische Freigaben, fehlende Rechte und Anfragen über OpenApe Secrets. Historische Freigaben sind nur lesbar; kläre ihre Ergebnisse im zuständigen externen Werkzeug. Der Zähler fasst die angezeigten offenen Einträge zusammen.
 
 Pods entscheidet nie für dich: kein Modell und kein Zeitplan wählt, genehmigt, schließt aus oder pausiert. Deine angemeldete Codex-Sitzung handelt eine Stunde lang mit deiner Identität, wie ein angemeldetes CLI, das du mit Codex nutzt: Sie kann Rechte, die deine Pods anfragen, genehmigen, ablehnen und widerrufen, und die Aktivität eines Laufs kennzeichnet solche Freigaben als in der Codex-Sitzung freigegeben. Außerhalb dieser Sitzung werden Rechte ausschließlich beim Identity Provider entschieden; die App zeigt Status und Links.
 
-1. Öffne Entscheidungen; der Tab zeigt, wie viele Einträge warten.
-2. Lies den Fall und wähle eine Option; Bündeln nach entscheidet viele Fälle mit demselben Feld auf einmal. Öffne eine Freigabe beim Identity Provider und entscheide sie dort.
-3. Behebe bei fehlgeschlagener Arbeit zuerst die Ursache und wähle dann Erneut versuchen.
-4. Geheimnisse listet offene Anfragen mit dem Link zum Ausfüllen auf secrets.openape.ai.
-
-![Entscheidungen: alles, was auf dich wartet](images/handbook-decisions-de.png)
+1. Öffne Entscheidungen.
+2. Prüfe angefragte Rechte und entscheide beim Identitätsanbieter. Historische Einträge erteilen keine Berechtigung.
+3. Fülle offene Geheimnis-Anfragen über den Link zu secrets.openape.ai aus.
 
 ## Persönliche Konten verbinden
 
@@ -431,27 +424,17 @@ Bewahre dein persönliches Mail-Benachrichtigungsskript lokal auf und aktiviere 
 
 Prüfe das Skript und führe es manuell aus, bevor du in Einstellungen ein 15-Minuten-Intervall aktivierst. Bestätige den Geheimniszugriff für den exakten Quelltext. Das Rezept speichert eine ausstehende Meldung vor dem Versand und die Empfangsbestätigung vor dem Fortschritt. Wird ein Lauf zwischen Versand und Speichern der Bestätigung unterbrochen, kann der wiederholte Lauf die Meldung erneut senden, sofern das Ziel sie nicht dedupliziert.
 
-## Gemeinsame Daten zwischen Pods
+## Datenaustausch zwischen Pods
 
-Pods rufen einander nie auf. Ein Pod schreibt seine Ergebnisse in gemeinsame Daten, und andere Pods finden dort ihre eigene Arbeit. Gemeinsame Daten liegen in Namensräumen wie delta-mind/mail/messages; jeder Namensraum hat genau einen Schreiber, einen Pod oder dich, und die Pods, die du als Leser einträgst. Von einem übergeordneten Namensraum wird nichts geerbt.
+Pods tauschen Daten über Dateien in zugewiesenen Ordnern oder externe Dienste aus. Jedes Skript wählt seine Eingaben und verhindert doppelte Wirkungen. Jeder Pod behält seine eigene Identität, Sandbox und Berechtigungen.
 
-Ein Pod, der Arbeit deklariert, nennt den Namensraum, den er liest, und den, in den er seine Ergebnisse schreibt. Jede neue oder geänderte Eingabe wird zu einer Arbeit; eine unveränderte Eingabe wird nie erneut bearbeitet, auch wenn ihr Ergebnis negativ war. Ein geplanter Lauf ohne bereite Arbeit wird übersprungen. Ein Pod behält seine eigenen Rechte: Jede Anwendung, jedes HTTP-Ziel, jedes Geheimnis und jeder Ordner braucht weiterhin seinen Grant, freigegeben beim Identity Provider oder in deiner Codex-Sitzung.
+Gemeinsame Datenspeicher, Namensräume, Arbeitsdeklarationen und gespeicherte Rückfragen wurden entfernt. Vor dem Löschen der alten Tabellen erstellt das Upgrade eine geprüfte private Datenbanksicherung. Private Fortschritte, Dateien, Laufhistorie, Ausführungsbelege und historische Freigaben bleiben erhalten. Eine Wiederherstellung aktiviert die entfernte Funktion nicht erneut.
 
-Gepunktete Linien auf der Karte zeigen die aufgezeichneten Schreib- und Lesezugriffe der letzten 24 Stunden. Ein Zähler bestätigt keine erfolgreiche externe Aktion: Prüfe die Historie des Pods und das tatsächliche Ergebnis. Rückfragen und Freigaben deiner Pods zählt der Tab Entscheidungen.
-
-Prompt-Engineering beschreibt eine begrenzte Aufgabe und ihre Ergebniskriterien innerhalb eines Pods. Loop-Engineering verwendet endliche Versuchs- und Zeitlimits im Script und ein sichtbares Fehler- oder Prüfergebnis beim Erreichen des Limits. Ein Modell vergibt keine Rechte und genehmigt keine Aktion.
-
-Mail-Bearbeitung läuft als eigene Pods für Synchronisierung, Klassifizierung und die Folgeprüfungen; jeder liest die gemeinsamen Maildaten, die er braucht. Ohne Freigabe für die jeweilige Nachricht beim Identity Provider wird nichts archiviert, und unsichere Mail wartet als Rückfrage im Tab Entscheidungen.
-
-Frühere Versionen verbanden Pods über Netze. Netze wurden abgelöst; ihre Historie bleibt lesbar, und Pods, die zu einem Netz gehörten, behalten ihre Daten auf dem Desktop.
-
-1. Übergib den Auftrag an Codex: welche Pods welche Daten schreiben, wer sie liest und welche Aktionen deine Freigabe brauchen.
-2. Prüfe Namensräume, Schreiber und Leser auf der Karte und den Detailseiten.
-3. Führe jeden Pod einmal aus, beantworte die offenen Rückfragen und aktiviere Zeitpläne erst nach geprüftem Ergebnis.
+Definiere eine begrenzte Aufgabe und klare Ergebniskriterien. Begrenze Versuche und Laufzeit und zeige Fehler bei Erreichen der Grenze. Ein Modell erteilt keine Rechte und genehmigt keine Aktion.
 
 ## Mit deinem Codex arbeiten
 
-Der verbundene Codex auf diesem Mac verwaltet Pods direkt: Variablen und Ressourcen, Skriptvalidierung und Aktivierung, Zeitpläne, Start, Abbruch und Einsicht von Läufen sowie Namensräume gemeinsamer Daten mit ihrem Schreiber und ihren Lesern. Eine globale Node-Installation ist nicht nötig; Pods liefert seine Laufzeit mit.
+Der verbundene Codex auf diesem Mac verwaltet Pods direkt: Variablen, Ressourcen, Skriptprüfung und Aktivierung, Zeitpläne und Läufe. Eine globale Node-Installation ist nicht erforderlich; Pods bringt seine Laufzeit mit.
 
 Neue Automatisierung mit Codex im Tab Automatisierungen schreibt einen Auftrag mit den Tags des angehefteten Pods oder Knotens und den Pods, die es schon kennt; der Desktop öffnet Codex, der Browser kopiert den Auftrag zum Einfügen.
 

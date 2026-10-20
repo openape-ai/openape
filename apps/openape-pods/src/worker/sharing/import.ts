@@ -1,3 +1,4 @@
+import { assertCurrentScript } from '../../contracts/retired-storage'
 import { randomUUID } from 'node:crypto'
 import { mkdir, open, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -170,14 +171,16 @@ export class PortableImporter {
   }
 
   async inspect(archive: Uint8Array): Promise<{ manifest: PortableManifest, transferSha256: string }> {
-    const { manifest, transferSha256 } = await readPortableArchive(archive, this.npmRoot, importFormatFeatures)
+    const { manifest, transferSha256, files } = await readPortableArchive(archive, this.npmRoot, importFormatFeatures)
+    for (const pod of manifest.pods) assertCurrentScript(decoder.decode(files.get(pod.script)!))
     return { manifest, transferSha256 }
   }
 
   async stage(id: string, archive: Uint8Array, observe: (point: CommitPoint) => void = () => {}): Promise<PortableImportView> {
     this.row(id)
     const bytes = Buffer.from(archive)
-    const { manifest, transferSha256 } = await readPortableArchive(bytes, this.npmRoot, importFormatFeatures)
+    const { manifest, transferSha256, files } = await readPortableArchive(bytes, this.npmRoot, importFormatFeatures)
+    for (const pod of manifest.pods) assertCurrentScript(decoder.decode(files.get(pod.script)!))
     return this.store.transaction(() => {
       const existing = this.row(id)
       if (existing) {
@@ -236,6 +239,7 @@ export class PortableImporter {
     committing.add(id)
     try {
       const { manifest, files } = await readPortableArchive(this.store.readBlob(row.archive_hash as string), this.npmRoot, importFormatFeatures)
+      for (const pod of manifest.pods) assertCurrentScript(decoder.decode(files.get(pod.script)!))
       this.store.assertStorage(manifest.pods.flatMap(pod => pod.assets).reduce((total, path) => total + files.get(path)!.byteLength, 0))
       for (const pod of manifest.pods) {
         const { workspace } = await podDirectories(this.store.root, ids.get(pod.key)!)
@@ -319,6 +323,7 @@ export class PortableImporter {
     if (row.state !== 'committed' || !podId) throw new Error('Dependencies are prepared for the paused copy of a declared package Pod')
     if (!row.archive_hash) throw new Error(String(row.error ?? 'Import the package again'))
     const { manifest, files } = await readPortableArchive(this.store.readBlob(row.archive_hash as string), this.npmRoot, importFormatFeatures)
+    for (const pod of manifest.pods) assertCurrentScript(decoder.decode(files.get(pod.script)!))
     const pod = manifest.pods.find(item => item.key === podKey)!
     if (!pod.packages) return this.view(id)
     const current = () => { signal.throwIfAborted(); if (this.required(id).state !== 'committed' || this.store.getPod(podId).lifecycle === 'archived') throw new Error('Import changed while preparing dependencies') }

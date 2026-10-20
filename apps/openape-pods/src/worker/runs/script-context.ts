@@ -7,24 +7,13 @@ function freeze<T>(value: T): T {
   if (value && typeof value === 'object') { for (const child of Object.values(value)) freeze(child); Object.freeze(value) }
   return value
 }
-const options = (value: unknown) => value && typeof value === 'object' && !Array.isArray(value) ? value : {}
-
 /**
- * The frozen `context` a Pod script receives; every service is a request to the dispatcher: shared data, work, owner
- * questions and generic program execution. Tests build the same context in-process.
+ * The frozen `context` a Pod script receives; every service is a request to the dispatcher: private progress, notifications and generic program execution. Tests build the same context in-process.
  */
 export async function scriptContext(script: ScriptModule, input: RunInput, request: Request, log: (message: string) => void, signal: AbortSignal): Promise<Record<string, unknown>> {
-  // A retired network contract is refused by the dispatcher, so such a script fails before it acts.
-  if (script.contract !== undefined) await request('graph.contract', script.contract)
-  if (script.work !== undefined) await request('work.contract', script.work)
-  if (script.polls !== undefined) await request('work.polls', script.polls)
-  const data = Object.freeze({ get: (key: unknown) => request('data.get', { key }), set: (key: unknown, value: unknown, settings?: unknown) => request('data.set', { ...options(settings), key, value }), delete: (key: unknown, settings?: unknown) => request('data.delete', { ...options(settings), key }), list: (prefix: unknown, settings?: unknown) => request('data.list', { ...options(settings), prefix }) })
-  const work = Object.freeze({ find: (query: unknown) => request('work.find', query ?? {}), claim: (query: unknown) => request('work.claim', query), complete: (query: unknown) => request('work.complete', query), defer: (query: unknown) => request('work.defer', query), fail: (query: unknown) => request('work.fail', query) })
+  if (script.contract !== undefined || script.work !== undefined || script.polls !== undefined) throw new Error('Shared datastore and work declarations are retired; use files or an external service')
   return Object.freeze({
     timing: () => request('run.timing', {}),
-    data,
-    work,
-    decisions: Object.freeze({ ask: (question: unknown) => request('decisions.ask', question), withdraw: (question: unknown) => request('decisions.withdraw', question) }),
     jev: Object.freeze({ evaluate: (payload: unknown) => request('jev.evaluate', payload) }),
     variables: Object.freeze(input.variables ?? {}),
     aliases: freeze(input.aliases ?? { applications: {}, http: {}, directories: {}, references: {} }),

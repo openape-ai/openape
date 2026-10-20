@@ -1,3 +1,10 @@
+# Shared datastore retirement — issue 1529
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1529. Approved Plan revision 1: https://report.openape.ai/d/01M5D589V56Y9CSP5R41J5448F.
+- Branch `feature/issue-1529-remove-shared-datastore`, worktree `openape-monorepo.worktrees/remove-shared-store-1529`, canonical base `6b0f06ba9a4be13733d5226bf1baebef29224b60`.
+- Removes shared namespaces, records, work, owner questions, script APIs, MCP domain administration and related UI. Schema 54 deletes their tables after a verified private backup. Independent scripts, private state, identities, receipts and historical approvals remain.
+- Verification: populated/empty upgrades, exact unrelated-row parity, unchanged repeat, transactional interruption, dependent-script refusal and inert archive retention; a real Electron schema-53 startup and 16 real-CSS browser cases pass. Required affected gate and deployment checks precede PR merge, relay rollout and owner installation. Final receipts belong on the PR and issue.
+
 # Grant request dates — issue 1526
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1526. Branch `feature/issue-1526-grant-request-dates`, reused checkout `cross-run-grant-reference`, canonical base `110697ded886a9221349299edbf55e180d4abedd`.

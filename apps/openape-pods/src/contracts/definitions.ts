@@ -1,7 +1,5 @@
 import { parsePackages } from './dependencies'
 import { dataFields, dataIdentity, dataKey, publicConfiguration } from './fields'
-import { parseWorkDeclarations } from './work'
-import type { WorkDeclaration } from './work'
 import type { PackageManifest } from './dependencies'
 
 export type DefinitionCommand =
@@ -13,7 +11,7 @@ export type DefinitionCommand =
   | { type: 'previewUpdate' | 'prepareUpdate', podId: string, definitionId: string, version: number, expectedBinding: number }
   | { type: 'activateUpdate', draftId: string, podId: string, expectedBinding: number }
 
-export interface DefinitionVersionView { version: number, state: 'legacy' | 'published', contentHash: string, lockHash: string, work: WorkDeclaration[] | null, capabilities: string[], packages: PackageManifest, defaults: Record<string, unknown> }
+export interface DefinitionVersionView { version: number, state: 'legacy' | 'published', contentHash: string, lockHash: string, work: null, capabilities: string[], packages: PackageManifest, defaults: Record<string, unknown> }
 export interface DefinitionView { id: string, name: string, versions: DefinitionVersionView[] }
 export interface DefinitionInstanceView { podId: string, definitionId: string, version: number, bindingRevision: number, diverged: boolean }
 export interface DefinitionUpdateView { podId: string, before: DefinitionVersionView, after: DefinitionVersionView, beforeCode: string, afterCode: string, changed: ('code' | 'work' | 'dependencies' | 'defaults' | 'rights')[], draftId?: string }
@@ -67,7 +65,7 @@ export function parseDefinitionsView(value: unknown): DefinitionsView {
     const item = dataFields(value, ['version', 'state', 'contentHash', 'lockHash', 'work', 'capabilities', 'packages', 'defaults'])
     revision(item.version); hash(item.contentHash); hash(item.lockHash)
     if (!['legacy', 'published'].includes(String(item.state)) || !Array.isArray(item.capabilities) || item.capabilities.some(capability => typeof capability !== 'string')) throw new Error('Invalid definition version')
-    if (item.work !== null) parseWorkDeclarations(item.work)
+    if (item.work !== null) throw new Error('Shared datastore work declarations are retired')
     parsePackages(item.packages); definitionDefaults(item.defaults)
   }
   for (const item of input.definitions) {

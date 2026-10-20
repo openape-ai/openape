@@ -12,13 +12,13 @@ it('forwards supported workspace commands through the actual Electron adapter wi
   const demo = createDemoAdapter('everyday')
   try {
     const scheduling = vi.spyOn(demo.bridge, 'scheduling')
-    const domain = vi.spyOn(demo.bridge, 'domain')
+    const approvalHistory = vi.spyOn(demo.bridge, 'approvalHistory')
     const access = localWorkspaceAccess(demo.bridge)
     const body = { type: 'lifecycle' as const, podId: '00000000-0000-4000-8000-000000000001', revision: 1, lifecycle: 'paused' as const }
     await access.command({ channel: 'scheduling', body })
     expect(scheduling).toHaveBeenCalledExactlyOnceWith(body)
-    await access.domain!({ type: 'answer', questionId: 'demo-question-1', option: 'keep' })
-    expect(domain).toHaveBeenCalledExactlyOnceWith({ type: 'answer', questionId: 'demo-question-1', option: 'keep' })
+    await access.approvalHistory!({ type: 'list' })
+    expect(approvalHistory).toHaveBeenCalledExactlyOnceWith({ type: 'list' })
     await expect(access.command({ channel: 'data', body: { type: 'cleanup' } })).rejects.toThrow('Unsupported workspace channel')
   }
   finally { demo.dispose() }
