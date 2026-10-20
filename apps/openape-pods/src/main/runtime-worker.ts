@@ -162,9 +162,9 @@ export class RuntimeWorker {
   private pending = new Map<string, { resolve: (state: unknown) => void, reject: (error: Error) => void, timer: ReturnType<typeof setTimeout> }>()
   private state: WorkerStatus = { state: 'starting', pid: null, error: null }
   private centralAction(type: string): CentralController | null {
-    if (!this.central || this.central.executing) return null
+    if (!this.central || this.central.executing || ['list', 'map', 'source', 'gateOpen'].includes(type)) return null
     if (!this.central.available) throw new Error(this.central.offlineMessage())
-    return ['list', 'gateOpen'].includes(type) ? null : this.central
+    return this.central
   }
 
   constructor(private readonly publish: (status: WorkerStatus) => void, private readonly host: RuntimeHost) {}

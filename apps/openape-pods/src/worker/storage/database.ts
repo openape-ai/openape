@@ -108,6 +108,7 @@ export class PodDatabase {
       this.db.exec('PRAGMA foreign_keys=ON; PRAGMA busy_timeout=5000;')
       this.migrate()
       assertIntegrity(this.db)
+      this.db.exec('CREATE INDEX IF NOT EXISTS claims_supersedes ON claims(pod_id,supersedes)')
       // Converted data starts only with its conversion receipt (issue 1465).
       if (this.db.prepare('SELECT 1 FROM legacy_records LIMIT 1').get() && !this.db.prepare('SELECT 1 FROM storage_receipts WHERE kind=\'conversion\'').get()) throw new StorageError('invalid-data', 'Converted data has no conversion receipt')
       this.db.exec('PRAGMA journal_mode=WAL; PRAGMA synchronous=FULL;')

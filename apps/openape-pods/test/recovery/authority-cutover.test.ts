@@ -27,7 +27,7 @@ it('upgrades schema 52 without reinterpreting decisions and requires fresh valid
   const id = randomUUID()
   store.db.prepare('INSERT INTO action_approvals(id,pod_id,action,object,payload,payload_hash,title,authority,state,created_at,updated_at) VALUES(?,?,\'program.run\',\'historical command\',\'{}\',?,\'Historical decision\',\'{}\',\'collecting\',1,1)').run(id, pod.id, 'a'.repeat(64))
   const before = store.db.prepare('SELECT * FROM action_approvals WHERE id=?').get(id)
-  store.db.exec('PRAGMA user_version=52'); store.close()
+  store.db.exec('DROP INDEX claims_supersedes; PRAGMA user_version=52'); store.close()
   store = new PodDatabase(root)
   try {
     expect(store.db.prepare('PRAGMA user_version').get()!.user_version).toBe(schemaVersion)
