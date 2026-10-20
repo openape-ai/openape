@@ -25,6 +25,8 @@ export interface MainHarness {
   paths: Map<string, string>
   switches: string[]
   menu: () => MenuItemConstructorOptions[]
+  tray: () => MenuItemConstructorOptions[]
+  openTray: (event?: 'click' | 'right-click') => void
   power: (event: 'suspend' | 'resume') => void
   close: () => Promise<void>
 }
@@ -36,6 +38,8 @@ export async function startMain(env: Record<string, string> = {}, prepare: (root
   const switches: string[] = []
   const handlers = new Map<string, Handler>()
   const powerListeners = new Map<string, () => void>()
+  const trayListeners = new Map<string, () => void>()
+  let trayMenu: MenuItemConstructorOptions[] = []
   let applicationMenu: MenuItemConstructorOptions[] = []
   const windows: { webContents: Record<string, unknown> }[] = []
   const dialog = { showMessageBox: vi.fn(async () => ({ response: 0, checkboxChecked: false })), showOpenDialog: vi.fn(async () => ({ canceled: true, filePaths: [] })), showErrorBox: vi.fn() }
@@ -90,7 +94,7 @@ export async function startMain(env: Record<string, string> = {}, prepare: (root
     protocol: { registerSchemesAsPrivileged: () => {}, handle: () => {} },
     session: { defaultSession: { setPermissionRequestHandler: () => {}, setPermissionCheckHandler: () => {}, on: () => {}, webRequest: { onBeforeRequest: () => {} } } },
     shell,
-    Tray: class { setTitle() {} setToolTip() {} setContextMenu() {} destroy() {} },
+    Tray: class { setTitle() {} setToolTip() {} popUpContextMenu(template: MenuItemConstructorOptions[]) { trayMenu = template } on(event: string, listener: () => void) { trayListeners.set(event, listener) } destroy() {} },
   }))
   vi.doMock('node:child_process', async original => ({ ...await original<typeof import('node:child_process')>(), execFile }))
   vi.doMock('../../src/main/worker', () => ({ FixtureWorker: class { constructor(callback: typeof publish) { publish = callback; return worker } } }))
@@ -115,6 +119,8 @@ export async function startMain(env: Record<string, string> = {}, prepare: (root
     paths,
     switches,
     menu: () => applicationMenu,
+    tray: () => trayMenu,
+    openTray: (event = 'click') => trayListeners.get(event)!(),
     power: event => powerListeners.get(event)!(),
     close: async () => { process.env = previous; vi.doUnmock('electron'); vi.doUnmock('node:child_process'); vi.doUnmock('../../src/main/worker'); vi.doUnmock('../../src/main/remote/controller'); await rm(root, { recursive: true, force: true }) },
   }

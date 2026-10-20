@@ -4,6 +4,13 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 # Active work
 
+## Desktop tray Pod list — issue 1520
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1520. Branch `feature/issue-1520-pods-tray`, checkout `openape-monorepo.worktrees/pods-tray-status`, canonical base `b947f30b430a6ef02ffb91636800b12c7ec1d909`.
+- Replace the three static tray actions with every local Pod sorted by name. Each entry shows the latest run start in the current language and a status indicator; opening the menu reloads worker data. Empty, unavailable and failed reads stay explicit. Clicking an entry opens the existing workspace.
+- Verification: 23 focused main-process tests pass, including ten permanent tray regression cases; the Pods app build passes. Native menu painting and installation are not covered by these checks. The native PR records the final source SHA, pre-push affected unit gate and published Test Run.
+- Next: native PR review and release integration; the installed desktop is unchanged.
+
 ## Batch approvals for application calls — issue 1516
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1516. Branch `feature/issue-1516-pod-batch-approvals`, checkout `openape-monorepo.worktrees/archive-batch-approvals`, canonical base `62a6c0fdb0ae2ab876d58020b585d1c0d9df1b32`.
