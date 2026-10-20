@@ -487,7 +487,7 @@ port.on('message', async (event) => {
     if (command.type === 'pauseAll') store.db.prepare('UPDATE pods SET lifecycle=\'paused\' WHERE lifecycle=\'active\'').run()
     if (command.type === 'create') store.createPod({ name: command.name })
     if (command.type === 'update') { store.updatePod(command.id, command.revision, { name: command.name, lifecycle: command.lifecycle }); if (command.lifecycle === 'archived') dispatcher.cancelPod(command.id, 'Pod archived') }
-    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: listedPods(store), tags: new ItemTagStore(store).view(oneShot), ...(command.type === 'map' ? { map: mapView(store) } : {}) } })
+    port.postMessage({ id: request.id, state: { jev: jevAvailability(store), pods: listedPods(store), tags: new ItemTagStore(store).view(command.type === 'list' || oneShot), ...(command.type === 'map' ? { map: mapView(store) } : {}) } })
   }
   catch (error) { port.postMessage({ id: request.id, error: error instanceof Error ? error.message : 'Workspace operation failed' }) }
 })

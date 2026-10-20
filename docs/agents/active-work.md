@@ -4,6 +4,13 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 # Active work
 
+## Tray tag filter and menu bar icon — issue 1522
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1522. Branch `feature/issue-1522-tray-tags`, checkout `openape-monorepo.worktrees/pods-tray-status`, canonical base `f4dffcb1cd968baca837c8458df2430ed1a9b1f3`.
+- Add a single-tag radio submenu with All Pods, refreshed from the workspace inventory. Store the local selection atomically in `tray-tag.json`; removed tags reset to All Pods, malformed files do not block startup, and failed writes retain the previous selection with a visible error. Include archived tags when listing the already-inclusive Pod inventory.
+- Keep alphabetical names and latest-run indicators, querying runs only for matching Pods. Add the existing cube mark as an 18-point macOS template icon with 1x/2x PNGs and editable SVG source.
+- Verification: 26 focused menu, real worker entry and language checks pass, including restart persistence, removed/archived tags and write failure. Next: affected gate, native image validation, canonical merge, deployment gate and owner installation with lifecycle restoration.
+
 ## Remove relay request rate limits — issue 1521
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1521. Branch `bugfix/issue-1521-remove-relay-rate-limit`, checkout `openape-monorepo.worktrees/pods-tray-status`, canonical base `dc7569088781cfa1e08d800032fccd09507ab6f8`.

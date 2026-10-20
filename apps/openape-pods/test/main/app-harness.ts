@@ -89,7 +89,7 @@ export async function startMain(env: Record<string, string> = {}, prepare: (root
     dialog,
     ipcMain: { handle: (channel: string, handler: Handler) => handlers.set(channel, handler), on: () => {} },
     Menu: { buildFromTemplate: (template: MenuItemConstructorOptions[]) => template, setApplicationMenu: (template: MenuItemConstructorOptions[]) => { applicationMenu = template } },
-    nativeImage: { createEmpty: () => ({}) },
+    nativeImage: { createFromPath: () => ({ setTemplateImage: () => {} }) },
     powerMonitor: { on: (event: string, listener: () => void) => powerListeners.set(event, listener) },
     protocol: { registerSchemesAsPrivileged: () => {}, handle: () => {} },
     session: { defaultSession: { setPermissionRequestHandler: () => {}, setPermissionCheckHandler: () => {}, on: () => {}, webRequest: { onBeforeRequest: () => {} } } },
