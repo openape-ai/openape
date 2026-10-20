@@ -1,4 +1,7 @@
 {
+  "Pods unavailable": "Pods nicht verfügbar",
+  "Could not load Pods": "Pods konnten nicht geladen werden",
+  "Never run": "Noch nie gelaufen",
   "A partial program outcome requires an applied observation": "Ein teilweises Programmergebnis erfordert die Bestätigung einer beobachteten Wirkung",
   "Run timing accepts no parameters": "Die Laufzeitabfrage akzeptiert keine Parameter",
   "Partial outcomes apply only to observed program effects": "Teilweise Ergebnisse gelten nur für beobachtete Programmwirkungen",
