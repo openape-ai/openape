@@ -8,18 +8,6 @@ import type { Registration } from './store'
 import { RelayAuth } from './auth'
 
 let instance: RelayStore | undefined
-const requests = new Map<string, { start: number, count: number }>()
-function limitRequests(event: H3Event): void {
-  const now = Date.now()
-  for (const [key, bucket] of requests) {
-    if (now - bucket.start >= 60000) requests.delete(key)
-  }
-  const login = getRequestURL(event).pathname.includes('/session/') || getRequestURL(event).pathname.startsWith('/mobile-auth/')
-  const key = sha256(`${event.node.req.socket.remoteAddress}:${login ? 'login' : 'api'}`)
-  const bucket = requests.get(key) ?? { start: now, count: 0 }
-  if ((!requests.has(key) && requests.size >= 10000) || bucket.count >= (login ? 60 : 600)) throw new ProtocolError('rate_limited', 429)
-  bucket.count++; requests.set(key, bucket)
-}
 export function relay() {
   const config = useRuntimeConfig()
   if (!config.relayEnabled) throw createError({ statusCode: 503, statusMessage: 'Remote access is disabled' })
@@ -66,11 +54,11 @@ export async function body(event: H3Event): Promise<unknown> {
 }
 export async function boundary<T>(event: H3Event, run: () => T | Promise<T>): Promise<T | { type: string, title: string, status: number, instance: string, code: string }> {
   setHeader(event, 'cache-control', 'no-store')
-  try { limitRequests(event); return await run() }
+  try { return await run() }
   catch (error) {
     if (error instanceof ProtocolError) {
       setResponseStatus(event, error.status)
-      if (error.status === 429 || error.status === 503) setHeader(event, 'retry-after', error.status === 429 ? 60 : 15)
+      if (error.status === 503) setHeader(event, 'retry-after', 15)
       setHeader(event, 'content-type', 'application/problem+json')
       return { type: `https://pods.openape.ai/problems/${error.code}`, title: error.code, status: error.status, instance: getRequestURL(event).pathname, code: error.code }
     }
