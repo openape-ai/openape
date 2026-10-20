@@ -16,8 +16,8 @@ it('covers every first-party static thrown diagnostic and parameterized error te
   for (const path of files('src').filter(path => path.endsWith('.ts') && !path.includes('/i18n/'))) {
     const source = ts.createSourceFile(path, readFileSync(path, 'utf8'), ts.ScriptTarget.Latest, true)
     function visit(node: TypeScript.Node): void {
-      if (ts.isNewExpression(node) && ['Error', 'TypeError'].includes(node.expression.getText(source))) {
-        const argument = node.arguments?.[0]
+      if (ts.isNewExpression(node) && ['Error', 'TypeError', 'AgentCallError'].includes(node.expression.getText(source))) {
+        const argument = node.arguments?.[node.expression.getText(source) === 'AgentCallError' ? 1 : 0]
         if (argument && ts.isStringLiteral(argument) && !Object.hasOwn(de, argument.text)) missing.push(`${path}: ${argument.text}`)
         if (argument && ts.isTemplateExpression(argument)) {
           const key = argument.head.text + argument.templateSpans.map((span, index) => `{p${index}}${span.literal.text}`).join('')
@@ -34,6 +34,9 @@ it('translates known diagnostic frames while preserving variable paths, provider
   expect(translateDiagnostic('de', 'Database schema 99 needs a newer application')).toBe('Datenbankschema 99 benötigt eine neuere Anwendung')
   expect(translateDiagnostic('de', 'Mail read failed (403): {message}\nRaw provider response')).toBe('Mail-Lesezugriff fehlgeschlagen (403): {message}\nRaw provider response')
   expect(translateDiagnostic('de', 'File changed during backup: /tmp/{path}/A.txt')).toBe('Datei wurde während der Sicherung geändert: /tmp/{path}/A.txt')
+  expect(translateDiagnostic('de', 'Proxy request failed (HTTP 429, rate_limit_exceeded)')).toBe('Die Proxy-Anfrage ist fehlgeschlagen (HTTP 429, rate_limit_exceeded)')
+  expect(translateDiagnostic('de', 'Invalid proxy configuration: thinking translation')).toBe('Ungültige Proxy-Konfiguration: thinking translation')
+  expect(translateDiagnostic('de', 'Proxy credential could not be read')).toBe('Die Proxy-Zugangsdaten-Datei konnte nicht gelesen werden')
 })
 it('keeps the German and English handbooks complete with the same chapters, steps and executable example', () => {
   const english = JSON.parse(readFileSync('docs/handbook.json', 'utf8')); const german = JSON.parse(readFileSync('docs/handbook.de.json', 'utf8'))

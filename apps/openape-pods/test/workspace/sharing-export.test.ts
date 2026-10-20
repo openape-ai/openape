@@ -20,6 +20,7 @@ import type { PortableDescription, PortablePayload } from '../../src/worker/shar
 import { scanPortableFiles } from '../../src/worker/sharing/scan'
 import { programDefinition } from '../../src/main/programs/definition'
 import { portableScriptSource } from '../../src/worker/sharing/pod'
+import { setMandatorySecretPaths } from '../../src/runtime/secret-paths'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
 
@@ -27,6 +28,7 @@ const bytes = (value: string) => new TextEncoder().encode(value)
 const stores: PodDatabase[] = []
 const assetRoots: string[] = []
 afterEach(() => {
+  setMandatorySecretPaths([])
   for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) }
   for (const root of assetRoots.splice(0)) rmSync(root, { recursive: true, force: true })
 })
@@ -167,6 +169,9 @@ it('copies only selected static references and refuses private storage and symli
   installExample(f.store, f.resources, f.pod.id, 'deterministic', 'a'.repeat(64))
   const captured = capturePortableSource(f.store, f.owner, f.selection); const source = captured.pods[0]!
   const selection = [{ resourceId: reference.id, path: 'assets/template.txt', mediaType: 'text/plain' }]
+  setMandatorySecretPaths([file])
+  await expect(readPortableAssets(f.store.root, source, selection)).rejects.toThrow('cannot be assigned to a Pod')
+  setMandatorySecretPaths([])
   const files = await readPortableAssets(f.store.root, source, selection)
   expect(files).toHaveLength(1); expect(Buffer.from(files[0]!.content).toString()).toBe('Explicit reusable asset')
   expect(JSON.stringify(files)).not.toContain('UNSELECTED_STATIC_ASSET_CANARY')

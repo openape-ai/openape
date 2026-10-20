@@ -102,15 +102,32 @@ export async function retainsCompleteUnit(target: Termination) {
   const { page: reopened } = await launch(root, packaged)
   const stopped = (await reopened.evaluate(podId => window.pods.runs({ type: 'list', podId }), podId)).runs[0]!
   expect(stopped.state).toBe(target === 'quit' ? 'cancelled' : target === 'script' ? 'failed' : 'interrupted')
+  if (target === 'script') {
+    expect(stopped.error).toContain('without a verified completion receipt')
+    expect(stopped.automaticRecovery).toMatchObject({ disposition: 'isolated', cause: 'non-retryable', nextAt: null })
+    const isolated = new PodDatabase(root)
+    try {
+      expect(isolated.db.prepare('SELECT count(*) AS count FROM accepted_events WHERE state=\'pending\'').get()!.count).toBe(0)
+      expect(isolated.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0)
+    }
+    finally { isolated.close() }
+    // Missing execution evidence forbids automatic replay; the fixture owner starts a separate run.
+    await reopened.evaluate(podId => window.pods.runs({ type: 'start', podId }), podId)
+  }
   await openPod(reopened, 'Checkpoint recovery')
   await reopened.getByRole('navigation', { name: 'Pod sections' }).getByRole('button', { name: 'Runs', exact: true }).click()
-  // Automatic recovery retries once the stopped processes are proven; no owner step is needed.
+  // Worker/app/quit recovery retries automatically; the isolated script case uses the explicit run above.
   await reopened.getByText('Recovered committed unit', { exact: true }).waitFor({ timeout: 60000 })
   const store = new PodDatabase(root)
   try {
     expect(store.checkpoint(podId)).toEqual({ revision: 1, body: { unitCommitted: true } })
     expect(store.db.prepare('SELECT count(*) AS count FROM claims').get()!.count).toBe(1)
-    expect(store.db.prepare('SELECT count(*) AS count FROM accepted_events WHERE state!=\'processed\'').get()!.count).toBe(0)
+    const retained = store.db.prepare('SELECT state,run_id FROM accepted_events WHERE state!=\'processed\'').all()
+    expect(retained).toEqual(target === 'script' ? [{ state: 'failed', run_id: id }] : [])
+    if (target === 'script') {
+      expect(store.db.prepare('SELECT count(*) AS count FROM runs').get()!.count).toBe(2)
+      expect(store.db.prepare('SELECT count(*) AS count FROM runs WHERE state=\'completed\'').get()!.count).toBe(1)
+    }
     expect(store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(0)
   }
   finally { store.close() }

@@ -3,6 +3,7 @@ import { randomUUID, createHash } from 'node:crypto'
 import { mkdir, open, readFile, rename, rm } from 'node:fs/promises'
 import { join, isAbsolute } from 'node:path'
 import { promisify } from 'node:util'
+import { assertNotSecretPath } from '../../runtime/secret-paths'
 
 const execute = promisify(execFile)
 export interface FileAssignment { id: string, revision: number, path: string }
@@ -11,6 +12,7 @@ export interface SnapshotSet { id: string, files: SnapshotFile[] }
 export async function createSnapshotSet(helper: string, destination: string, assignments: FileAssignment[]): Promise<SnapshotSet> {
   if (!isAbsolute(helper) || !isAbsolute(destination)) throw new Error('Snapshot paths must be absolute')
   if (assignments.length > 100) throw new Error('Too many reference files')
+  for (const assignment of assignments) assertNotSecretPath(assignment.path)
   const id = randomUUID()
   if (!assignments.length) return { id, files: [] }
   const staging = join(destination, `.stage-${id}`)
@@ -22,6 +24,7 @@ export async function createSnapshotSet(helper: string, destination: string, ass
       if (!/^[a-f0-9-]{36}$/.test(assignment.id) || !Number.isSafeInteger(assignment.revision) || assignment.revision < 1 || !isAbsolute(assignment.path)) throw new Error('Invalid file assignment')
       const content = join(staging, assignment.id)
       const { stdout } = await execute(helper, ['capture', assignment.path, content, String(20 * 1024 * 1024)], { env: { PATH: '/usr/bin:/bin' }, timeout: 10000, maxBuffer: 8192 })
+      assertNotSecretPath(assignment.path)
       const metadata = JSON.parse(stdout) as { size: number, device: string, inode: string, mtime: string }
       if (!Number.isSafeInteger(metadata.size) || metadata.size < 0 || metadata.size > 20 * 1024 * 1024 || ['device', 'inode', 'mtime'].some(key => typeof metadata[key as keyof typeof metadata] !== 'string')) throw new Error('Invalid capture response')
       const hash = createHash('sha256').update(await readFile(content)).digest('hex')

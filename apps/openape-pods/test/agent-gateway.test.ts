@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
@@ -11,6 +12,7 @@ import type { AgentRuntime } from '../src/worker/agent/executor'
 import { endpointModel } from '../src/worker/agent/model'
 import { superviseProcess } from '../src/worker/runtime/sandbox'
 import type { ProcessDomain } from '../src/worker/runtime/sandbox'
+import type { AgentCallMetadata } from '../src/contracts/agent-metadata'
 
 vi.mock('../src/worker/runtime/sandbox', async original => ({ ...await original<typeof import('../src/worker/runtime/sandbox')>(), verifyExecutable: vi.fn(async () => {}), superviseProcess: vi.fn() }))
 
@@ -122,10 +124,15 @@ it('runs each agent with the account default served by the desktop model gateway
   try {
     const model = endpointModel(`http://127.0.0.1:${desktop.port}/v1/model`, desktop.capability)
     const services = { provider: async () => new Response('{}'), model }
-    await executeAgent(runtime, root, 'Synthetic task', [], services, new AbortController().signal, () => {})
+    const metadata: AgentCallMetadata[] = []
+    await executeAgent(runtime, root, 'Synthetic task', [], services, new AbortController().signal, () => {}, [], 120, value => metadata.push(value))
     account = 'fixture-model-b'
-    await executeAgent(runtime, root, 'Synthetic task', [], services, new AbortController().signal, () => {})
+    await executeAgent(runtime, root, 'Synthetic task', [], services, new AbortController().signal, () => {}, [], 120, value => metadata.push(value))
     expect(threads.map(thread => thread.model)).toEqual(['fixture-model-a', 'fixture-model-b'])
+    expect(metadata.map(call => [call.status, call.modelId])).toEqual([['running', 'fixture-model-a'], ['completed', 'fixture-model-a'], ['running', 'fixture-model-b'], ['completed', 'fixture-model-b']])
+    expect(metadata[1]).toMatchObject({ modelSelection: 'account-default', effectiveThinking: null, configRevision: null, threadId: 'synthetic-thread' })
+    expect(metadata[0]?.modelId).toBe('fixture-model-a')
+    expect(metadata[1]).not.toHaveProperty('usage')
   }
   finally { await desktop.close(); await rm(root, { recursive: true, force: true }) }
 })
@@ -145,6 +152,32 @@ it('fails clearly instead of choosing another model when the account default is 
   finally { await rm(root, { recursive: true, force: true }) }
 })
 
+it('preserves native cancellation messages while recording one safe terminal before model resolution', async () => {
+  const { runtime, root } = await bundledRuntime()
+  const controller = new AbortController()
+  const metadata: AgentCallMetadata[] = []
+  let requested!: () => void
+  const started = new Promise<void>((resolve) => { requested = resolve })
+  const operation = executeAgent(runtime, root, 'Native fixture prompt', [], {
+    provider: async () => new Response('{}'),
+    model: async (signal) => {
+      requested()
+      return new Promise<string>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))
+    },
+  }, controller.signal, () => {}, [], 120, value => metadata.push(value))
+  const refused = expect(operation).rejects.toThrow('Owner cancelled fixture')
+  try {
+    await started
+    controller.abort(new Error('Owner cancelled fixture'))
+    await refused
+    expect(metadata).toHaveLength(1)
+    expect(metadata[0]).toMatchObject({ backend: 'native', provider: 'codex', modelId: null, status: 'cancelled', effectiveThinking: null, error: { code: 'cancelled', message: 'Native agent call cancelled' } })
+    expect(JSON.stringify(metadata)).not.toContain('Owner cancelled fixture')
+    expect(JSON.stringify(metadata)).not.toContain('Native fixture prompt')
+  }
+  finally { await rm(root, { recursive: true, force: true }) }
+})
+
 it('offers the model endpoint only on a gateway that has a model connection', async () => {
   const run = await startAgentGateway({ provider: async () => new Response('{}'), tool: async () => ({}) }, new AbortController().signal)
   try {
@@ -152,4 +185,79 @@ it('offers the model endpoint only on a gateway that has a model connection', as
     expect(response.status).toBe(405)
   }
   finally { await run.close() }
+})
+
+it('keeps proxy calls behind a private capability and refuses caller-controlled transport and tools', async () => {
+  const proxy = vi.fn(async () => ({ response: 'synthetic result', threadId: 'proxy-call:synthetic' }))
+  const validate = vi.fn()
+  const gateway = await startAgentGateway({ provider: async () => new Response('{}'), proxy, proxyValidate: validate }, new AbortController().signal)
+  const request = { backend: 'proxy', provider: 'claude', modelSize: 'medium', thinking: 'high', prompt: 'Synthetic task' }
+  const post = (path: string, value: unknown, capability = gateway.capability) => fetch(`http://127.0.0.1:${gateway.port}${path}`, { method: 'POST', headers: { authorization: `Bearer ${capability}`, 'content-type': 'application/json', 'X-Pod-Agent-Call': randomUUID() }, body: JSON.stringify(value) })
+  try {
+    expect((await post('/v1/proxy', request, 'wrong')).status).toBe(403)
+    expect((await post('/v1/messages', request)).status).toBe(405)
+    for (const extra of [{ tools: ['ape_shell'] }, { baseUrl: 'http://attacker.invalid' }, { model: 'replacement' }, { headers: { authorization: 'secret' } }]) {
+      const reply = await post('/v1/proxy', { ...request, ...extra })
+      expect(await reply.text()).toContain('"type":"error"')
+    }
+    expect(proxy).not.toHaveBeenCalled()
+    expect(await (await post('/v1/proxy/validate', request)).json()).toEqual({ valid: true })
+    expect(validate).toHaveBeenCalledOnce()
+    expect(proxy).not.toHaveBeenCalled()
+    const frames = (await (await post('/v1/proxy', request)).text()).trim().split('\n').map(line => JSON.parse(line))
+    expect(frames).toEqual([{ type: 'complete', response: 'synthetic result', threadId: 'proxy-call:synthetic' }])
+    expect(proxy).toHaveBeenCalledOnce()
+  }
+  finally { await gateway.close() }
+})
+
+it('drains active proxy work when its gateway closes', async () => {
+  let began: () => void = () => {}
+  const started = new Promise<void>((resolve) => { began = resolve })
+  let drained = false
+  const gateway = await startAgentGateway({
+    provider: async () => new Response('{}'),
+    proxy: async (_request, signal) => {
+      began()
+      await new Promise<void>((resolve) => { signal.addEventListener('abort', () => resolve(), { once: true }) })
+      drained = true
+      signal.throwIfAborted()
+      throw new Error('Unreachable')
+    },
+  }, new AbortController().signal)
+  const call = fetch(`http://127.0.0.1:${gateway.port}/v1/proxy`, { method: 'POST', headers: { authorization: `Bearer ${gateway.capability}`, 'content-type': 'application/json', 'X-Pod-Agent-Call': randomUUID() }, body: JSON.stringify({ backend: 'proxy', provider: 'codex', modelSize: 'small', prompt: 'Synthetic task' }) }).catch(() => null)
+  await started
+  await gateway.close()
+  expect(drained).toBe(true)
+  await call
+})
+
+it('acknowledges cancellation only after drain and prevents a delayed cancelled request from starting', async () => {
+  let began: () => void = () => {}
+  const started = new Promise<void>((resolve) => { began = resolve })
+  let drained = false
+  const proxy = vi.fn(async (_request, signal: AbortSignal) => {
+    began()
+    await new Promise<void>((resolve) => { signal.addEventListener('abort', () => resolve(), { once: true }) })
+    await new Promise(resolve => setTimeout(resolve, 20))
+    drained = true
+    signal.throwIfAborted()
+    throw new Error('Unreachable')
+  })
+  const gateway = await startAgentGateway({ provider: async () => new Response('{}'), proxy }, new AbortController().signal)
+  const post = (path: string, value: unknown, id = randomUUID()) => fetch(`http://127.0.0.1:${gateway.port}${path}`, { method: 'POST', headers: { authorization: `Bearer ${gateway.capability}`, 'content-type': 'application/json', 'X-Pod-Agent-Call': id }, body: JSON.stringify(value) })
+  const request = { backend: 'proxy', provider: 'codex', modelSize: 'small', prompt: 'Synthetic task' }
+  try {
+    const delayedId = randomUUID()
+    expect(await (await post('/v1/proxy/cancel', { id: delayedId })).json()).toEqual({ drained: true })
+    expect((await post('/v1/proxy', request, delayedId)).status).toBe(409)
+    expect(proxy).not.toHaveBeenCalled()
+    const activeId = randomUUID()
+    const active = post('/v1/proxy', request, activeId).catch(() => null)
+    await started
+    expect(await (await post('/v1/proxy/cancel', { id: activeId })).json()).toEqual({ drained: true })
+    expect(drained).toBe(true)
+    await active
+  }
+  finally { await gateway.close() }
 })

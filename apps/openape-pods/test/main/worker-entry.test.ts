@@ -15,6 +15,7 @@ import type { ProgramAuthority } from '../../src/main/programs/grants'
 import { ServiceBridge } from '../../src/worker/runtime/service-bridge'
 import { createPortablePackage } from '../../src/worker/sharing/package'
 import { DataRetention } from '../../src/worker/data/retention'
+import { mandatorySecretPaths } from '../../src/runtime/secret-paths'
 
 const captured = vi.hoisted(() => ({ services: undefined as RunServices | undefined, runs: undefined as RunDispatcher['runs'] | undefined, startControlled: undefined as ((podId: string, operationId: string) => string) | undefined }))
 vi.mock('../../src/worker/runs/dispatcher', async (importOriginal) => {
@@ -91,6 +92,38 @@ afterAll(async () => {
   vi.useRealTimers(); vi.unstubAllEnvs()
   Reflect.deleteProperty(process, 'parentPort')
   await rm(root, { recursive: true, force: true })
+})
+
+it('removes only dependent agent calls through trusted backend commands', async () => {
+  const cancelBackend = vi.spyOn(RunDispatcher.prototype, 'cancelBackend')
+  const cancelPod = vi.spyOn(RunDispatcher.prototype, 'cancelPod')
+  try {
+    await send({ id: 'native-add', command: { provider: { port: 18831, capability: 'a'.repeat(64) } } })
+    await send({ id: 'proxy-add', command: { proxy: { port: 18832, capability: 'b'.repeat(64), status: { configured: true, enabled: true, available: true } } } })
+    expect(captured.services?.provider).toEqual(expect.any(Function))
+    expect(captured.services?.proxy).toEqual(expect.any(Function))
+    await send({ id: 'native-remove', command: { provider: null } })
+    expect(cancelBackend).toHaveBeenCalledWith('native')
+    expect(captured.services?.proxy).toEqual(expect.any(Function))
+    await send({ id: 'proxy-remove', command: { proxy: null } })
+    expect(cancelBackend).toHaveBeenCalledWith('proxy')
+    expect(cancelPod).not.toHaveBeenCalled()
+    expect(captured.services?.proxy).toBeUndefined()
+  }
+  finally { cancelBackend.mockRestore(); cancelPod.mockRestore() }
+})
+
+it('installs trusted secret protection before resource and script execution', async () => {
+  const secret = join(root, 'private-agent-configuration.json')
+  try {
+    await send({ id: 'secret-policy', command: { secretPaths: [secret] } })
+    expect(replies).toHaveBeenCalledWith({ id: 'secret-policy', state: true })
+    expect(mandatorySecretPaths()).toContain(secret)
+    await send({ id: 'bad-secret-policy', command: { secretPaths: ['relative.json'] } })
+    expect(replies).toHaveBeenCalledWith({ id: 'bad-secret-policy', error: 'Invalid protected runtime paths' })
+    expect(mandatorySecretPaths()).toContain(secret)
+  }
+  finally { await send({ id: 'secret-policy-clear', command: { secretPaths: [] } }) }
 })
 
 it('holds the update fence across backup, blocks commands and resumes without editing saved schedules', async () => {

@@ -333,7 +333,13 @@ describe('ape-shell machine native boundary', () => {
       await run.completed()
       ledger.markUnknown(pod.id, active.id, key)
       store.close(); store = new PodDatabase(journal)
-      expect(() => new EffectLedger(store).begin(pod.id, active.id, key, 'program.call', input)).toThrow('unknown')
+      expect(store.db.prepare('SELECT state FROM effect_ledger WHERE effect_key=?').get(key)?.state).toBe('unknown')
+      const reopened = new EffectLedger(store)
+      expect(() => reopened.begin(pod.id, active.id, key, 'program.call', { argv: ['different-input'] })).toThrow('conflicting effect input')
+      // The current contract retries an uncertain effect under its original identity; the script owns idempotency.
+      expect(reopened.begin(pod.id, active.id, key, 'program.call', input)).toEqual({ execute: true })
+      expect(store.db.prepare('SELECT state,run_id FROM effect_ledger WHERE effect_key=?').get(key)).toEqual({ state: 'intent', run_id: active.id })
+      expect(store.db.prepare('SELECT count(*) AS count FROM effect_ledger WHERE effect_key=?').get(key)?.count).toBe(1)
     }
     finally { store.close() }
   })

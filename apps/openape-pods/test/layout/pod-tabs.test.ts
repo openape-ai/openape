@@ -4,11 +4,14 @@ import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it } from 'vitest'
 import { page } from 'vitest/browser'
 import App from '../../src/renderer/App.vue'
+import AppSettings from '../../src/renderer/AppSettings.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
 import type { PodsBridge } from '../../src/contracts/ipc'
 import type { ResourceState } from '../../src/contracts/resources'
 import type { RunView } from '../../src/contracts/runs'
 import type { ScriptView } from '../../src/contracts/scripts'
+import type { AgentCallMetadata } from '../../src/contracts/agent-metadata'
+import type { AgentBackendStatus } from '../../src/contracts/agent-status'
 import { installWorkspace, podId, pods } from './workspace-fixture'
 
 // Geometry formerly asserted by the packaged `values-tab`, `credentials`,
@@ -175,4 +178,40 @@ it.each(['en', 'de'] as const)('explains automatic recovery without a manual unl
   expect(pageFits()).toBe(true)
   expect(content()).toBeLessThanOrEqual(1)
   await page.screenshot({ path: artifact(`automatic-recovery-${language}.png`) })
+})
+
+it.each(['en', 'de'] as const)('keeps agent backend history and long safe errors readable with production CSS (%s)', async (language) => {
+  const longModel = `claude-sonnet-5-5-${'pinned-model-identity-'.repeat(5)}`
+  const call: AgentCallMetadata = { callId: 'proxy-call:layout-fixture', backend: 'proxy', provider: 'claude', modelSize: 'medium', modelId: longModel, reportedModelId: longModel, requestedThinking: null, effectiveThinking: 'medium', wireThinking: { type: 'adaptive', effort: 'medium' }, configRevision: '1', configHash: hash, startedAt: '2026-10-20T20:00:00.000Z', endedAt: '2026-10-20T20:00:01.250Z', durationMs: 1250, status: 'failed', threadId: 'proxy-call:layout-fixture', error: { code: 'rate_limited', message: `The provider rejected this exact configured model: ${'safe-provider-error-'.repeat(8)}`, details: { phase: 'request', httpStatus: 429, cause: 'LIMIT_REACHED', providerCode: 'provider_quota_exhausted', retryAfter: '120' } } }
+  const native: AgentCallMetadata = { ...call, callId: 'native-layout-fixture', backend: 'native', provider: 'codex', modelId: 'gpt-6.1-sol', reportedModelId: null, modelSize: null, requestedThinking: null, effectiveThinking: null, wireThinking: null, configRevision: null, configHash: null, modelSelection: 'account-default', status: 'completed', threadId: 'native-thread-fixture', error: undefined }
+  const view: RunView = { runs: [{ id: '00000000-0000-4000-8000-000000000043', podId, scriptHash: hash, state: 'failed', startedAt: 1_790_000_000_000, finishedAt: 1_790_000_065_000, summary: 'Synthetic text verification', error: 'Provider rate limit exceeded', checkpointRevision: 0, recovery: null }], events: [{ sequence: 1, type: 'agent-call', at: 1_790_000_000_000, data: call }, { sequence: 2, type: 'agent-call', at: 1_790_000_001_000, data: native }] }
+  applyLanguage(language)
+  await openTab(language === 'de' ? 'Historie' : 'History', { runs: async () => structuredClone(view) })
+  await show(language === 'de' ? 390 : 1060, 1000, language === 'de' ? 'dark' : 'light')
+  const history = document.querySelector<HTMLElement>('.agent-call-history')!
+  expect(history.textContent).toContain('provider_quota_exhausted')
+  expect(history.textContent).toContain(language === 'de' ? 'Unbekannt / Unbekannt' : 'Unknown / Unknown')
+  expect(pageFits()).toBe(true); expect(content()).toBeLessThanOrEqual(1)
+  for (const item of Array.from(history.querySelectorAll<HTMLElement>('.agent-call'))) expect(item.scrollWidth).toBeLessThanOrEqual(item.clientWidth + 1)
+  const model = history.querySelector<HTMLElement>('code')!
+  model.style.whiteSpace = 'nowrap'; model.style.overflowWrap = 'normal'
+  expect(history.scrollWidth).toBeGreaterThan(history.clientWidth)
+  model.style.removeProperty('white-space'); model.style.removeProperty('overflow-wrap'); await frame()
+  await page.screenshot({ path: artifact(`agent-backend-history-${language}.png`), element: history })
+})
+
+it.each(['en', 'de'] as const)('keeps agent backend settings and long configured mappings inside the desktop (%s)', async (language) => {
+  const proxy: AgentBackendStatus = { configured: true, enabled: true, available: false, revision: 'fixture-revision-1', mappings: [{ provider: 'claude', modelSize: 'xlarge', modelId: `claude-fable-5-1-${'explicit-model-identity-'.repeat(5)}`, enabled: true, defaultThinking: 'medium', thinking: ['low', 'medium', 'high', 'xhigh'], capabilityEvidenceVersion: 'fixture-only' }], error: { code: 'proxy_unreachable', message: `Proxy request could not connect: ${'safe-cause-'.repeat(14)}`, details: { phase: 'connect', cause: 'ECONNREFUSED' } } }
+  installWorkspace({ onboarding: async () => ({ connections: [], complete: true, owner: null, runtime: { ready: true, error: null }, proxy }) })
+  applyLanguage(language)
+  wrapper = mount(AppSettings, { attachTo: document.body }); await flushPromises()
+  await show(language === 'de' ? 390 : 1060, 1000, language === 'de' ? 'dark' : 'light')
+  const section = document.querySelector<HTMLElement>('.proxy-connection')!
+  section.querySelector<HTMLDetailsElement>('details')!.open = true; await frame()
+  expect(section.textContent).toContain(language === 'de' ? 'Extra groß' : 'Extra Large')
+  expect(section.textContent).toContain('safe-cause-')
+  expect(pageFits()).toBe(true)
+  expect(section.scrollWidth).toBeLessThanOrEqual(section.clientWidth + 1)
+  for (const button of Array.from(section.querySelectorAll('button'))) expect(button.getBoundingClientRect().right).toBeLessThanOrEqual(innerWidth)
+  await page.screenshot({ path: artifact(`agent-backend-settings-${language}.png`), element: section })
 })

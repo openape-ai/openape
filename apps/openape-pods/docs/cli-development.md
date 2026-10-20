@@ -49,7 +49,7 @@ without removing it. Standalone CLI workers also hold an OS profile lock until
 their child processes and database have closed. Do not start the desktop while
 a command is running: the installed desktop does not participate in that lock.
 
-## The four commands
+## Pod commands
 
 ```sh
 ape-pods list
@@ -61,6 +61,10 @@ ape-pods edit POD_ID --lifecycle paused
 ape-pods edit POD_ID --script /path/to/pod-script.mjs
 ape-pods run POD_ID
 ```
+
+The shared optional agent backend has separate `ape-pods agent-backends
+status|reload|disable` commands. See [agent backends](agent-backends.md) for the
+private configuration, mapping and restart requirements.
 
 Use the full ID or an unambiguous prefix of at least eight characters. `create`
 always creates a paused Pod. `create` without a name and `edit` without changes

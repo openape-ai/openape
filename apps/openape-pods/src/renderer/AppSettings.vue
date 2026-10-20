@@ -4,6 +4,7 @@ import { onMounted, ref } from 'vue'
 import { diagnostic, t } from './i18n'
 import Onboarding from './Onboarding.vue'
 import JevConnection from './JevConnection.vue'
+import ProxyConnection from './ProxyConnection.vue'
 import LanguageSwitcher from './LanguageSwitcher.vue'
 import McpSession from './McpSession.vue'
 import DataManagement from './DataManagement.vue'
@@ -61,6 +62,7 @@ onMounted(() => { if (secretsAvailable) void secretsCommand({ type: 'list' }) })
       </div>
       <Onboarding v-else compact>
         <JevConnection compact />
+        <ProxyConnection />
       </Onboarding>
     </section>
     <section v-if="browser" class="card" data-mcp>

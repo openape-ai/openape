@@ -1,5 +1,6 @@
 import { responseFrames, scriptFrameBytes } from './response'
 import { NonRetryableError } from '../../contracts/infrastructure'
+import { AgentCallError, serializeSafeError } from '../../contracts/agent-errors'
 import type { OpenApeOwnerScriptAuthority } from '@openape/core'
 import type { PreparedMachine, PreparationPurpose } from '../runtime/execution-identity'
 import { launchApeShell } from '../runtime/ape-shell'
@@ -128,7 +129,7 @@ export async function executeScript(runtime: ScriptRuntime, directory: string, a
               }), activeSignal)
             }
           }
-          catch (error) { services.event('operation', { id: frame.id, operation: frame.operation, state: 'failed' }); activeSignal.throwIfAborted(); domain.channel.write(`${JSON.stringify({ version: 1, runId: input.runId, id: frame.id, ok: false, error: error instanceof Error ? error.message : 'Operation failed' })}\n`) }
+          catch (error) { services.event('operation', { id: frame.id, operation: frame.operation, state: 'failed' }); activeSignal.throwIfAborted(); domain.channel.write(`${JSON.stringify({ version: 1, runId: input.runId, id: frame.id, ok: false, error: error instanceof Error ? error.message : 'Operation failed', ...(error instanceof AgentCallError ? { errorDetails: serializeSafeError(error) } : {}) })}\n`) }
           finally { requesting = false }
         }
       }

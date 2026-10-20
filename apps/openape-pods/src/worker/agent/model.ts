@@ -23,9 +23,11 @@ export function endpointModel(url: string, capability?: string): NonNullable<Age
  * Resolves the account default for one model run. The bundled Codex needs the model's catalog entry; a default
  * it does not know means this Pods build is older than the account's model, and another model must not be chosen.
  */
-export async function assignedModel(runtime: AgentRuntime, model: AgentGatewayServices['model'], signal: AbortSignal): Promise<string> {
+export async function assignedModel(runtime: AgentRuntime, model: AgentGatewayServices['model'], signal: AbortSignal, resolved?: (model: string) => void): Promise<string> {
   if (!model) throw new Error('Connect Codex before running the model')
   const slug = parseModelSlug(await model(signal))
+  signal.throwIfAborted()
+  resolved?.(slug)
   const catalog = JSON.parse(await readFile(runtime.catalog, 'utf8')) as { models?: { slug?: unknown }[] }
   if (!Array.isArray(catalog.models) || !catalog.models.some(entry => entry.slug === slug)) throw new Error(`The default model of the connected ChatGPT account (${slug}) is not in the bundled Codex model catalog. Update OpenApe Pods to a version whose bundled Codex supports this model.`)
   return slug
