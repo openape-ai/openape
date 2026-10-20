@@ -12,7 +12,6 @@ import { MasterControl } from '../src/worker/master/control'
 import { ScriptWorkspace } from '../src/worker/workspace/scripts'
 import { CentralProjection } from '../src/worker/central/projection'
 import { CentralController } from '../src/main/central/controller'
-import { managedArtifacts } from '../src/main/central/artifacts'
 import { WorkspaceStore } from '../../openape-pods-relay/server/utils/workspace-store'
 import { parseScriptCommand } from '../src/contracts/scripts'
 import type { ScriptView } from '../src/contracts/scripts'
@@ -60,7 +59,7 @@ async function fixture() {
         return { runId: runs.start(pod.id) }
       },
       gate: async () => {},
-    }, runtime.helper)
+    })
     cleanup.push(() => instance.stop()); return instance
   }
   return { root, store, resources, runtime, runs, scheduler, projection, owner, actor, pod, server, controller }
@@ -92,22 +91,21 @@ it('adopts a real script and schedule, runs from browser and desktop, and resume
   expect(current.scheduling.revision).toBe(initial.pods[0]!.scheduling.revision)
   // Views only: no table rows, so neither Pod identities nor the desktop registration reach the service.
   expect(JSON.stringify(f.server.db.prepare('SELECT key,value FROM parts').all())).not.toContain('synthetic-public-reference')
-  const script = initial.workspace.pods[0]!.activeScript!
-  expect(Buffer.from(f.server.artifact(f.owner, f.actor.id, f.pod.id, `blobs/${script}`))).toEqual(await readFile(join(f.root, 'blobs', script)))
+  expect(JSON.stringify(current)).toContain('exampleRuns')
+  expect(f.server.db.prepare('SELECT count(*) AS n FROM artifacts').get()!.n).toBe(0)
 })
-it('captures only managed files and refuses symbolic links and hard links', async () => {
+it('keeps workspace files and links local without blocking structured state publication', async () => {
   const f = await fixture()
   const workspace = join(f.root, 'pods', f.pod.id, 'workspace')
   await mkdir(workspace, { recursive: true }); await writeFile(join(workspace, '.settings'), 'managed content')
   await writeFile(join(f.root, 'private-credentials'), 'outside-managed-root')
-  const snapshot = f.projection.snapshot(f.owner)
-  const files = await managedArtifacts(f.root, snapshot, f.runtime.helper)
-  expect(files.map(item => item.path)).toEqual(['workspace/.settings'])
-  expect(files[0]?.content).toBe(Buffer.from('managed content').toString('base64'))
-  await symlink(join(f.root, 'private-credentials'), join(workspace, 'linked'))
-  await expect(managedArtifacts(f.root, snapshot, f.runtime.helper)).rejects.toThrow()
-  await rm(join(workspace, 'linked')); await link(join(f.root, 'private-credentials'), join(workspace, 'linked'))
-  await expect(managedArtifacts(f.root, snapshot, f.runtime.helper)).rejects.toThrow('without links')
+  await symlink(join(f.root, 'private-credentials'), join(workspace, 'symbolic'))
+  await link(join(f.root, 'private-credentials'), join(workspace, 'hard'))
+  const controller = f.controller(); controller.start()
+  await expect.poll(() => controller.available, { timeout: 10000 }).toBe(true)
+  expect(f.server.db.prepare('SELECT count(*) AS n FROM artifacts').get()!.n).toBe(0)
+  expect(JSON.stringify(f.server.db.prepare('SELECT key,value FROM parts').all())).not.toContain('outside-managed-root')
+  expect(await readFile(join(workspace, '.settings'), 'utf8')).toBe('managed content')
 })
 
 it('uses the centrally edited and validated script in the next actual run', async () => {

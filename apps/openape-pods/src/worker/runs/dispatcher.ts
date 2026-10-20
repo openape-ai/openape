@@ -1,3 +1,4 @@
+import { scriptFrameBytes } from './response'
 import type { OpenApeGrantBatch } from '@openape/core'
 import type { SandboxReach } from '../../contracts/sandbox'
 import { ApprovalHistory } from '../data/approval-history'
@@ -199,7 +200,7 @@ export class RunDispatcher {
       const folders = await podDirectories(this.store.root, pod.id)
       const directories = await assignedDirectories(this.store.root, pod.id, this.resources.list(pod.id))
       assertCurrent()
-      const input: RunInput = { home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: new PodVariables(this.store).values(pod.id), version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: scriptTimeLimitMs, frameBytes: 256 * 1024 } }
+      const input: RunInput = { home: folders.home, directories: directories.map(({ path, access }) => ({ path, access })), variables: new PodVariables(this.store).values(pod.id), version: 1, runId: id, podId: pod.id, scriptHash: run.scriptHash, assignmentRevision: pod.bindingRevision, reason: trigger.reason, eventIds: trigger.eventIds, checkpointRevision: checkpoint.revision, checkpoint: checkpoint.body, resourceEpoch: epoch, workspace: folders.workspace, references: snapshots.files.map(file => ({ id: file.id, hash: file.hash, path: file.content })), limits: { timeMs: scriptTimeLimitMs, frameBytes: scriptFrameBytes } }
       const aliases = this.resources.aliases(pod.id)
       if (aliases.length) input.aliases = runAliases(aliases, input.references)
       appendEvent('snapshot', { id: snapshots.id, files: input.references })
@@ -210,8 +211,6 @@ export class RunDispatcher {
       const invokeTool = async (body: unknown, toolSignal: AbortSignal, summary?: ScriptSummary, batch?: OpenApeGrantBatch, reference?: string) => {
         assertCurrent()
         if (!manifest.capabilities.some(capability => capability.startsWith('tool.app_') || capability.startsWith('tool.ssh_')) || !this.services?.tool) throw new Error('No tool capability is assigned to this pod')
-        const artifactOutput = isProgramCall(body) && (body as { output?: unknown }).output === 'artifact'
-        if (artifactOutput) this.store.assertStorage(32 * 1024 * 1024)
         const call = async () => retryService('tool authorization', async () => { assertCurrent(); return this.services!.tool!(body, toolSignal, scope, summary, batch, reference) }, toolSignal)
         // The private ape-shell lifecycle records program intent before acknowledging dispatch.
         const operation = call()
@@ -219,11 +218,6 @@ export class RunDispatcher {
         try {
           const reply = await operation; assertCurrent()
           if (isProgramCall(body) && reply && typeof reply === 'object' && 'exitCode' in reply && reply.exitCode === 75 && 'pending' in reply && reply.pending && typeof reply.pending === 'object' && 'grantId' in reply.pending && typeof reply.pending.grantId === 'string') recordFailure({ cause: 'permission' })
-          if (artifactOutput && !(reply as { pending?: unknown }).pending && !(reply as { refusal?: unknown }).refusal) {
-            const bytes = (reply as { stdoutArtifact?: { bytes?: number } }).stdoutArtifact?.bytes
-            if (!Number.isSafeInteger(bytes) || bytes! < 0 || bytes! > 32 * 1024 * 1024) throw new Error('Invalid output artifact receipt')
-            this.store.db.prepare('UPDATE data_settings SET used_bytes=used_bytes+? WHERE id=1').run(bytes!)
-          }
           return reply
         }
         finally { pendingAgents.delete(operation) }

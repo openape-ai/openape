@@ -210,6 +210,7 @@ export class WorkspaceStore {
       const prior = this.begunPublication(row, id, expected, requestHash, completion)
       if (prior) return { revision: prior.revision, hash }
       const current = this.manifest(row.id)
+      const priorArtifacts = current.artifacts ? this.reader(row.id)('artifacts') as CentralSnapshot['artifacts'] : []
       const staged = this.db.prepare('SELECT value FROM staged_parts WHERE runtime_id=? AND hash=?')
       const committed = this.db.prepare('SELECT value FROM parts WHERE runtime_id=? AND hash=? AND key NOT LIKE \'table/%\' LIMIT 1')
       const upsert = this.db.prepare('INSERT INTO parts VALUES(?,?,?,?) ON CONFLICT(runtime_id,key) DO UPDATE SET hash=excluded.hash,value=excluded.value')
@@ -225,7 +226,17 @@ export class WorkspaceStore {
       }
       if (manifestDigest(this.manifest(row.id)) !== hash) throw new ProtocolError('workspace_manifest_mismatch', 409)
       validateManifest(Object.keys(this.manifest(row.id)), this.reader(row.id))
-      return this.commitPublication(actor, row, id, hash, requestHash, completion)
+      const result = this.commitPublication(actor, row, id, hash, requestHash, completion)
+      const retained = new Set((this.reader(row.id)('artifacts') as CentralSnapshot['artifacts']).map(file => `${file.podId}:${file.hash}`))
+      const generated = /^workspace\/\.program-output-[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}\.json$/
+      for (const file of priorArtifacts) {
+        if (!generated.test(file.path)) retained.add(`${file.podId}:${file.hash}`)
+      }
+      const remove = this.db.prepare('DELETE FROM artifacts WHERE runtime_id=? AND pod_id=? AND hash=?')
+      for (const file of priorArtifacts) {
+        if (generated.test(file.path) && !retained.has(`${file.podId}:${file.hash}`)) remove.run(row.id, file.podId, file.hash)
+      }
+      return result
     })
   }
 
