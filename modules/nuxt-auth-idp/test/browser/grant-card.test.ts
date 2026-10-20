@@ -296,3 +296,27 @@ it('keeps new cross-run requests unselected after an explicit refresh', async ()
   await capture('cross-run-refresh-de')
   await capture('cross-run-refresh-de-dark', true)
 })
+
+it('shows request dates for cross-run groups, single-member groups and individual grants', async () => {
+  const oldest = Date.parse('2026-10-18T08:15:00Z') / 1000
+  const newest = Date.parse('2026-10-20T10:49:00Z') / 1000
+  const first = { ...gateMember('date-first', 0, {}, 'Earlier request'), created_at: oldest }
+  const last = { ...gateMember('date-last', 0, {}, 'Latest request'), created_at: newest }
+  const one = { ...gateMember('date-only', 0, {}, 'Only request'), created_at: oldest, request: { ...first.request, batch: { id: 'date-only', title: 'Single pending request' } } }
+  const single = { ...cardFixtures.gitPush, created_at: newest }
+  __setRouteQuery({})
+  vi.spyOn(navigator, 'language', 'get').mockReturnValue('de-AT')
+  vi.stubGlobal('$fetch', vi.fn(async (url: string) => url.includes('section=active') ? { data: [last, one, first, single] } : url.includes('section=history') ? { data: [] } : single))
+  const Root = defineComponent({ render: () => h('div', { class: 'bg-default text-default' }, h(GrantsPage)) })
+  wrapper = mount(Root, { attachTo: document.body, global: { plugins: [ui], components: { IdpPage } } })
+  await flushPromises(); await frame()
+  const batches = wrapper.findAll('[data-pending-batch]')
+  expect(batches[0]!.findAll('time').map(time => time.attributes('datetime'))).toEqual(['2026-10-18T08:15:00.000Z', '2026-10-20T10:49:00.000Z'])
+  expect(batches[0]!.text()).toContain('Älteste offene Anfrage')
+  expect(batches[0]!.text()).toContain('Neueste offene Anfrage')
+  expect(batches[1]!.findAll('time')).toHaveLength(1)
+  expect(batches[1]!.text()).toContain('Angefragt am')
+  expect(wrapper.get('[data-grant-card] time').attributes('datetime')).toBe('2026-10-20T10:49:00.000Z')
+  await capture('grant-request-dates-de')
+  await capture('grant-request-dates-de-dark', true)
+})

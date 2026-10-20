@@ -335,7 +335,7 @@ describe('grant batch approval', () => {
   it('shows pending batch members as one card linking to the batch view', async () => {
     const single = { ...member('g-9', 9), request: { ...member('g-9', 9).request, batch: undefined, summary: undefined, requester: 'other@example.com' } }
     vi.stubGlobal('$fetch', vi.fn(async (url: string) => url.includes('section=active')
-      ? { data: [member('g-1', 1), member('g-2', 2), single], pagination: { cursor: null, has_more: false } }
+      ? { data: [member('g-2', 86_400), member('g-1', 1), single], pagination: { cursor: null, has_more: false } }
       : { data: [], pagination: { cursor: null, has_more: false } }))
     const wrapper = mount(GrantsPage, { global: { stubs } })
     await flushPromises()
@@ -344,6 +344,14 @@ describe('grant batch approval', () => {
     expect(cards).toHaveLength(1)
     expect(cards[0]!.text()).toContain('2 / 3')
     expect(cards[0]!.text()).toContain('Newsletters, October 7')
+    expect(cards[0]!.get('[data-grant-request-date]').text()).toContain('Oldest pending request')
+    expect(cards[0]!.findAll('time').map(time => time.attributes('datetime'))).toEqual([
+      new Date(1_710_000_001_000).toISOString(),
+      new Date(1_710_086_400_000).toISOString(),
+    ])
+    const singleDate = wrapper.get('[data-grant-card] [data-grant-request-date]')
+    expect(singleDate.text()).toContain('Requested on')
+    expect(singleDate.get('time').attributes('datetime')).toBe(new Date(single.created_at * 1000).toISOString())
     expect(cards[0]!.find('button').attributes('data-to')).toBe('/grant-approval?requester=pod-agent%40example.com&batch=b-1')
     expect(wrapper.text()).not.toContain('Issue 1')
     expect(wrapper.text()).toContain('other@example.com')
