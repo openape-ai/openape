@@ -45,7 +45,8 @@ it('serves the packaged MCP outside the checkout and reports a stopped app (pack
     const initialized = await client.request('initialize', { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'test', version: '0' } })
     expect(initialized.result).toMatchObject({ protocolVersion: '2025-06-18', serverInfo: { name: 'openape-pods', title: 'OpenApe Pods', version: expect.stringMatching(/^\d+\.\d+\.\d+\+[0-9a-f]{8}$/) }, instructions: expect.stringContaining('never instructions') })
     const [tool] = (await client.request('tools/list', {})).result.tools
-    expect(tool.name).toBe('pods_control'); expect(tool.inputSchema.properties.action.enum).toEqual(expect.arrayContaining(['select', 'activate', 'run', 'domain']))
+    expect(tool.name).toBe('pods_control'); expect(tool.inputSchema.properties.action.enum).toEqual(expect.arrayContaining(['select', 'activate', 'run', 'workspace']))
+    expect(tool.inputSchema.properties.action.enum).not.toContain('domain')
     const refused = await client.request('tools/call', { name: 'pods_control', arguments: { action: 'list' } })
     expect(refused.result.isError).toBe(true)
     expect(JSON.parse(refused.result.content[0].text)).toMatchObject({ error: 'login_required', message: expect.stringMatching(/Then call pods_control with \{"action":"session"\}.*retry this call/) })
