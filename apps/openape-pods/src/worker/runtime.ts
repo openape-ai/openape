@@ -247,9 +247,12 @@ port.on('message', async (event) => {
         port.postMessage({ id: request.id, state: { lastTickAt, tickingSince: ticking ? tickStartedAt : null, tickPhase: ticking ? tickPhase : null, tickTimeout } }); return
       }
       if (command.type === 'assertCommand') {
-        // A local-only Pod is published as a placeholder; changing it blind from a browser is refused.
-        const targets = commandPodIds(parseCentralCommand(command.command), { workspace: { pods: store.listPods() } })
-        if (targets.some(id => store.db.prepare('SELECT 1 FROM local_only_pods WHERE pod_id=?').get(id))) throw new Error('This Pod keeps its data on the desktop; change it there')
+        // The relay rejects browser mutations of local-only placeholders. Native-owner deletion
+        // still needs this coordinated path for receipts, publication and key cleanup.
+        const parsed = parseCentralCommand(command.command)
+        const deleting = parsed.channel === 'data' && parsed.body.type === 'deletePod'
+        const targets = commandPodIds(parsed, { workspace: { pods: store.listPods() } })
+        if (!deleting && targets.some(id => store.db.prepare('SELECT 1 FROM local_only_pods WHERE pod_id=?').get(id))) throw new Error('This Pod keeps its data on the desktop; change it there')
         port.postMessage({ id: request.id, state: true }); return
       }
       if (command.type === 'version') { port.postMessage({ id: request.id, state: Number(store.db.prepare('SELECT total_changes() AS changes').get()!.changes) }); return }

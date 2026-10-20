@@ -5,6 +5,12 @@
 - Verification: 68 existing page/component tests and a focused real-CSS browser case pass, including unsorted cross-day members, single-member groups and individual cards. Mobile light and desktop dark screenshots were inspected. Next: required affected gate, native PR review and deployment gate, then IdP rollout.
 - Docpit grant assessment is read-only. No Pod scripts, decisions, batches or mail data are changed by this work.
 
+# Local-only archived Pod deletion — issue 1525
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1525. Branch `bugfix/issue-1525-local-pod-deletion`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `110697ded886a9221349299edbf55e180d4abedd`.
+- Owner authorized removing the remaining eleven archived local-only Pods and their obsolete open approvals. Allow native-owner coordinated deletion while the relay continues to refuse browser placeholder mutations. Optional `discardApprovals` requires explicit owner intent; uncertain effects and approval outcomes remain protected.
+- Verification covers local-only native receipts/replay/key cleanup, browser refusal, discarded historical approvals, preservation of other Pods and effect receipts, and uncertain-action refusal. Deploy the additive command parser to the relay and the canonical owner desktop build before live deletion. Record exact gates, source, operation receipts and unchanged shared data in the issue and Reports.
+
 # Cross-run grant references — issue 1523
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1523. Approved proposal revision 2: https://report.openape.ai/d/01M5CA08QYSZV34SMQ0Z129XWJ?v=2. Worktree `cross-run-grant-reference`, branch `feature/issue-1523-cross-run-grant-reference`, canonical base `a02d5a7b69a275cb7091dac83779757594a53d40`.
