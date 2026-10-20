@@ -263,13 +263,15 @@ it('starts only the requested local owner run while the central scheduler gate i
   }
 })
 
-it('refuses browser changes to a local-only Pod in the real worker and allows its labels', async () => {
+it('keeps local-only execution blocked while allowing coordinated deletion and labels', async () => {
   const store = new PodDatabase(root)
   const pod = store.createPod({ name: 'Local mail Pod' })
   store.db.prepare('INSERT INTO local_only_pods VALUES(?)').run(pod.id)
   store.close()
   await send({ id: 'local-start', command: { central: { type: 'assertCommand', command: { channel: 'runs', body: { type: 'start', podId: pod.id } } } } })
   expect(replies).toHaveBeenCalledWith({ id: 'local-start', error: expect.stringContaining('change it there') })
+  await send({ id: 'local-delete', command: { central: { type: 'assertCommand', command: { channel: 'data', body: { type: 'deletePod', podId: pod.id, revision: 1, name: pod.name, discardApprovals: true } } } } })
+  expect(replies).toHaveBeenCalledWith({ id: 'local-delete', state: true })
   await send({ id: 'local-tag', command: { central: { type: 'assertCommand', command: { channel: 'workspace', body: { type: 'tag', id: pod.id, revision: 0, tags: ['mail'] } } } } })
   expect(replies).toHaveBeenCalledWith({ id: 'local-tag', state: true })
 })

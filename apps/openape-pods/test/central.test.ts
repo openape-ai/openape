@@ -63,13 +63,13 @@ function fixture() {
   return { store, root, projection, actor, pod, details: new WorkspaceDetails(store, resources) }
 }
 type Completion = Parameters<WorkspaceStore['publishParts']>[6]
-function relay(server: WorkspaceStore, actor: WorkspaceActor) {
+function relay(server: WorkspaceStore, actor: WorkspaceActor, trustedRuntime = false) {
   return async (body: Record<string, unknown>): Promise<unknown> => {
     const lease = String(body.lease)
     if (body.type === 'inventory') return server.inventory(actor.owner)
     if (body.type === 'read') return body.view ? server.view(actor.owner, String(body.runtimeId), String(body.podId), body as never) : server.read(actor.owner, String(body.runtimeId), String(body.podId))
     if (body.type === 'operation') return server.visibleOperation(actor.owner, String(body.id))
-    if (body.type === 'submit') return server.submit(actor.owner, String(body.runtimeId), Number(body.revision), body.command as Parameters<WorkspaceStore['submit']>[3], String(body.id))
+    if (body.type === 'submit') return server.submit(actor.owner, String(body.runtimeId), Number(body.revision), body.command as Parameters<WorkspaceStore['submit']>[3], String(body.id), trustedRuntime)
     if (body.type === 'begin') return server.begin(actor)
     if (body.type === 'parts') return server.stage(actor, lease, body.parts as Record<string, unknown>)
     if (body.type === 'publish' && body.format === 2) return server.publishParts(actor, lease, String(body.id), Number(body.revision), body.changes as Record<string, string | null>, String(body.hash), body.completion as Completion)
@@ -421,8 +421,9 @@ it('publishes retention to central list and detail while preserving account Pods
   expect(f.server.db.prepare('SELECT snapshot FROM runtimes').get()?.snapshot).toBeNull()
 })
 
-it('deletes through MCP with coordinated cleanup and keeps an owner-scoped receipt after removal', async () => {
+it.each([false, true])('deletes through native MCP (local-only: %s) with coordinated cleanup and keeps an owner-scoped receipt after removal', async (localOnly) => {
   const { root, store, projection, actor, pod } = fixture()
+  if (localOnly) store.db.prepare('INSERT INTO local_only_pods VALUES(?)').run(pod.id)
   const data = new DataControl(store, 'unused-helper')
   const credentialId = randomUUID()
   new ResourceRegistry(store, () => {}).assignCredential(pod.id, 'service_key', credentialId, 0)
@@ -433,7 +434,7 @@ it('deletes through MCP with coordinated cleanup and keeps an owner-scoped recei
   const purgePodKeys = vi.fn(async () => {})
   Object.assign(worker, { connections: { busy: () => false, purgePodKeys }, dispatch: async (request: { central?: unknown, data: Parameters<DataControl['execute']>[0] }) => request.central ? true : data.execute(request.data) })
   const execute = vi.fn((command: import('../src/contracts/central').CentralCommand) => worker.centralExecute(command))
-  const controller = new CentralController(root, relay(server, actor), { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} }, '/unused-no-artifacts')
+  const controller = new CentralController(root, relay(server, actor, true), { snapshot: async () => projection.snapshot(actor.owner), execute, gate: async () => {} }, '/unused-no-artifacts')
   worker.central = controller
   cleanup.push(() => controller.stop()); controller.start()
   await vi.waitFor(() => expect(controller.available, controller.error ?? '').toBe(true))
@@ -466,7 +467,8 @@ it('accepts tags through the central workspace and refuses retired network comma
 it('allows only reviewed deletion through the central data channel', () => {
   const body = { type: 'deletePod', podId: randomUUID(), revision: 2, name: 'Reviewed Pod' }
   expect(parseCentralCommand({ channel: 'data', body }).body).toEqual(body)
-  for (const command of [{ type: 'restore' }, { type: 'cleanup' }, { type: 'jobs' }, { ...body, name: '' }, { ...body, revision: 0 }, { ...body, force: true }]) {
+  expect(parseCentralCommand({ channel: 'data', body: { ...body, discardApprovals: true } }).body).toEqual({ ...body, discardApprovals: true })
+  for (const command of [{ type: 'restore' }, { type: 'cleanup' }, { type: 'jobs' }, { ...body, name: '' }, { ...body, revision: 0 }, { ...body, force: true }, { ...body, discardApprovals: 'true' }]) {
     expect(() => parseCentralCommand({ channel: 'data', body: command })).toThrow()
   }
 })
@@ -496,6 +498,7 @@ it('publishes a local-only Pod as a placeholder with stable parts and leaves its
   server.heartbeat(f.actor, lease, published.hash)
   expect(server.inventory(f.actor.owner)[0]!.online).toBe(true)
   // A browser never changes the placeholder blind; the desktop's own Pod stays changeable.
+  expect(() => server.submit(f.actor.owner, f.actor.id, published.revision, { channel: 'data', body: { type: 'deletePod', podId: pod.id, revision: pod.revision, name: pod.name, discardApprovals: true } }, randomUUID())).toThrow('local_pod_requires_desktop')
   expect(() => server.submit(f.actor.owner, f.actor.id, published.revision, { channel: 'runs', body: { type: 'start', podId: pod.id } }, randomUUID())).toThrow('local_pod_requires_desktop')
   expect(() => server.submit(f.actor.owner, f.actor.id, published.revision, { channel: 'runs', body: { type: 'start', podId: f.pod.id } }, randomUUID())).not.toThrow()
 }, 15000)
