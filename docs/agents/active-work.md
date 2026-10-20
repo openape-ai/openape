@@ -27,7 +27,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Responsive startup and synchronization — issue 1528
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1528. Branch `bugfix/issue-1528-responsive-sync`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `2d24afe9`.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1528. Branch `bugfix/issue-1528-responsive-sync`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `bfd19417168f1e342b4e7be46050063105a7efff`.
 - Owner requested empty-snapshot cleanup/prevention, responsive synchronization and repeated installed startup/action measurements. Source: `.claude/plans/issue-1528-responsive-sync.json`; [Plan](https://report.openape.ai/d/01M5D1BTT2DDRDC7Y8Y4XAJTX4).
 - Empty captures stay in memory; bounded startup cleanup removes only verified empty manifests, preserving nonempty or unexpected contents. A supplemental claims index and shared script metadata eliminate repeated full detail queries. Cooperative projection restarts on data changes. Background staging no longer occupies the command loop; generation checks discard obsolete publications while the final commit and command claim remain serialized. Local reads work during reconnecting.
 - Verification: focused controller, resource, storage, script and backup suites passed (100 cases); extended projection regression and final gates pending. Next: finish checks, native PR/review/merge, install the owner build and repeat startup/concurrent action measurements with exact artifact evidence.
