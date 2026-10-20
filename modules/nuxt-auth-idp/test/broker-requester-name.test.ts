@@ -4,6 +4,8 @@ import { BROKER_REQUEST_TYPE, BROKER_REQUESTER_NAME_CAPABILITY, verifyBrokerToke
 import { beforeEach, expect, it, vi } from 'vitest'
 import { randomUUID } from 'node:crypto'
 
+vi.mock('../src/runtime/server/utils/grant-stores', () => ({ useGrantStores: () => ({ grantStore: {} }) }))
+
 const issuer = 'https://pods.provider.test'
 const decisionIssuer = 'https://id.owner.test'
 const keys = await generateKeyPair()
