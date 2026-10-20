@@ -3,5 +3,6 @@ import { cleanupAfterEach, retainsCompleteUnit } from './fixtures/crash'
 
 cleanupAfterEach()
 describe('checkpoint recovery in Electron', () => {
-  it.each(['quit', 'script'] as const)('retains a complete unit through %s termination and retries without duplication', target => retainsCompleteUnit(target), 120000)
+  it('retains a complete unit through quit termination and retries without duplication', () => retainsCompleteUnit('quit'), 120000)
+  it('isolates script termination without a receipt and resumes its checkpoint on an explicit run', () => retainsCompleteUnit('script'), 120000)
 })
