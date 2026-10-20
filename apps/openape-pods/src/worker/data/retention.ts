@@ -70,9 +70,9 @@ export class DataRetention {
     })
   }
 
-  async deletePod(podId: string, revision: number, name: string): Promise<void> {
+  async deletePod(podId: string, revision: number, name: string, discardApprovals = false): Promise<void> {
     this.assertPodIdle(podId)
-    if (this.store.db.prepare(`SELECT 1 FROM action_approvals WHERE pod_id=? AND state IN ('collecting','requested','approved','unknown') UNION ALL SELECT 1 FROM effect_attempts WHERE pod_id=? AND state IN ('intent','unknown') LIMIT 1`).get(podId, podId)) throw new Error('Pod has open approvals or uncertain actions; settle them before deletion')
+    this.assertApprovalsSettled(podId, discardApprovals)
     const pod = this.store.getPod(podId)
     if (pod.lifecycle !== 'archived' || pod.revision !== revision || pod.name !== name) throw new Error('Archive and review the current pod before deleting it')
     const runIds = this.store.db.prepare('SELECT id FROM runs WHERE pod_id=?').all(podId).map(row => row.id as string)
@@ -91,6 +91,7 @@ export class DataRetention {
     }
     this.store.transaction(() => {
       this.assertPodIdle(podId)
+      this.assertApprovalsSettled(podId, discardApprovals)
       const current = this.store.getPod(podId)
       if (current.revision !== revision || current.lifecycle !== 'archived' || current.name !== name) throw new Error('Pod changed during deletion review')
       if (this.store.db.prepare('SELECT 1 FROM pod_definition_sources WHERE source_pod_id=? AND state=\'published\'').get(podId)) throw new Error('Pod retains a published definition source; archive it to preserve reusable code and pinned dependencies')
@@ -100,7 +101,7 @@ export class DataRetention {
       this.store.db.prepare('INSERT INTO deletion_jobs VALUES(?,?,NULL)').run(podId, JSON.stringify({ podId, runIds, keyIds: [...new Set(keyIds)] }))
       this.store.db.prepare('UPDATE data_namespaces SET writer=\'owner\',writer_epoch=writer_epoch+1,revision=revision+1,updated_at=? WHERE writer=?').run(Date.now(), podId)
       for (const table of ['run_events', 'run_inputs', 'execution_domains', 'recovery_reviews']) this.store.db.prepare(`DELETE FROM ${table} WHERE run_id IN (SELECT id FROM runs WHERE pod_id=?)`).run(podId)
-      // Settled approvals go with the Pod; their effects keep their receipts in effect_attempts.
+      // Reviewed historical approvals go with the Pod without executing them; effect receipts remain.
       this.store.db.prepare('DELETE FROM action_approvals WHERE pod_id=?').run(podId)
       this.store.db.prepare('DELETE FROM approval_batches WHERE pod_id=?').run(podId)
       for (const table of ['remote_pods', 'script_dependencies', 'dependency_sets', 'program_leases', 'run_leases', 'effect_ledger', 'runs', 'validations', 'scripts', 'checkpoints', 'claims', 'sources', 'mail_inventory', 'mail_items', 'mail_receipts', 'mail_contexts', 'source_derivations', 'resources', 'resource_epochs', 'snapshot_sets', 'schedules', 'accepted_events', 'reference_observations', 'script_drafts']) this.store.db.prepare(`DELETE FROM ${table} WHERE pod_id=?`).run(podId)
@@ -113,6 +114,10 @@ export class DataRetention {
       this.store.db.prepare('DELETE FROM pods WHERE id=?').run(podId)
     })
     await this.cleanDeletedFiles(podId)
+  }
+
+  private assertApprovalsSettled(podId: string, discardApprovals: boolean): void {
+    if (this.store.db.prepare(`SELECT 1 FROM action_approvals WHERE pod_id=? AND (state='unknown' OR (?=0 AND state IN ('collecting','requested','approved'))) UNION ALL SELECT 1 FROM effect_attempts WHERE pod_id=? AND state IN ('intent','unknown') LIMIT 1`).get(podId, Number(discardApprovals), podId)) throw new Error('Pod has open approvals or uncertain actions; settle them before deletion')
   }
 
   private assertPodIdle(podId: string): void {
