@@ -1,8 +1,6 @@
 import type { PodDatabase } from '../storage/database'
 import { confirmDomainsStopped, ownerGone } from './domains'
 import { RunStore } from '../runs/store'
-import { DomainData } from '../data/domain'
-import { WorkLedger } from '../data/work'
 
 /** A run whose previous process may still be present is checked again after this delay, never held. */
 export const stoppedRunRecheckMs = 30000
@@ -18,7 +16,6 @@ export async function recoverStoppedRuns(store: PodDatabase, helper: string, lim
         OR EXISTS(SELECT 1 FROM run_leases l WHERE l.run_id=r.id))
     ORDER BY r.started_at DESC LIMIT 100`).all().filter(run => (due.get(String(run.id)) ?? 0) <= Date.now()).slice(0, limit)
   const runs = new RunStore(store)
-  const work = new WorkLedger(store, new DomainData(store))
   for (const run of candidates) {
     const id = String(run.id); const podId = String(run.pod_id)
     try {
@@ -45,7 +42,6 @@ export async function recoverStoppedRuns(store: PodDatabase, helper: string, lim
       const ownerCancelled = run.state === 'cancelled' && run.error !== 'Application is quitting'
       runs.recover(id, epoch, { cause: ownerCancelled ? 'owner-cancelled' : 'shutdown' })
       // The run's processes are proven stopped, so its work claims can no longer race a new claimant.
-      work.settleRun(id)
     })
   }
 }

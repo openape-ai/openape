@@ -16,8 +16,8 @@ const counter = (rows: Row[], key: string, value = 'count'): Record<string, numb
  * One query answers the map, the list, the KPIs and the detail page. Everything is derived from
  * stored rows of the last 24 hours; `at` is rounded to the minute so an unchanged workspace
  * publishes an unchanged part. The published variant keeps the rights, runs and systems of
- * local-only Pods local, as the central publication does for every other table: their shared-data
- * topology and flows stay, their resources, last runs and system edges are omitted.
+ * local-only Pods local, as the central publication does for every other table: their resources,
+ * last runs and system edges are omitted.
  */
 export function mapView(store: PodDatabase, now = Date.now(), published = false): MapView {
   const at = Math.floor(now / 60000) * 60000
@@ -45,16 +45,6 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
   const systems = new Map<string, MapSystem & { methods?: Set<string> }>()
   const edges: MapEdge[] = []
   const pods: MapPod[] = []
-  const namespaces = db.prepare('SELECT path,writer FROM data_namespaces ORDER BY path').all()
-  const readers = db.prepare('SELECT path,pod_id FROM data_readers ORDER BY path,pod_id').all()
-  const flows = counter(db.prepare('SELECT namespace,count(*) AS count FROM data_entries WHERE updated_at>=? GROUP BY namespace').all(from), 'namespace')
-  for (const namespace of namespaces) {
-    if (namespace.writer === 'owner') continue
-    for (const reader of readers.filter(row => row.path === namespace.path)) edges.push({ from: String(namespace.writer), to: String(reader.pod_id), type: 'data', channel: String(namespace.path), flow: flows[String(namespace.path)] ?? 0 })
-  }
-  const pending = counter(db.prepare(`SELECT n.writer AS pod_id,count(*) AS count FROM work_items i JOIN work_operations o ON o.operation=i.operation JOIN data_namespaces n ON n.path=o.output WHERE i.state IN ('ready','retry_wait') AND i.ready_at<=? GROUP BY n.writer`).all(now), 'pod_id')
-  const held = counter(db.prepare(`SELECT n.writer AS pod_id,count(*) AS count FROM work_items i JOIN work_operations o ON o.operation=i.operation JOIN data_namespaces n ON n.path=o.output WHERE i.state IN ('blocked','unknown') GROUP BY n.writer`).all(), 'pod_id')
-  const questions = db.prepare('SELECT pod_id,count(*) AS count FROM owner_questions WHERE state=\'pending\' GROUP BY pod_id').all()
   // Only requested and uncertain object approvals wait for the owner; collecting ones are not yet at the IdP.
   const waitingApprovals = db.prepare('SELECT pod_id,count(*) AS count FROM action_approvals WHERE state IN (\'requested\',\'unknown\') GROUP BY pod_id').all()
 
@@ -109,9 +99,6 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
       }
     }
     const ai = capabilities.includes('jev.evaluate')
-    const writesData = namespaces.filter(row => row.writer === pod.id).map(row => String(row.path))
-    const readsData = readers.filter(row => row.pod_id === pod.id).map(row => String(row.path))
-    const kind = writesData.length && !manifests.get(pod.id)?.work?.length ? 'source' : ai ? 'decision' : effect ? 'effect' : 'code'
     const runApprovals = approvals.filter(row => local && row.pod_id === pod.id).map((row) => {
       const approval = parseRunApproval(JSON.parse(row.data as string))
       return { grantId: approval.grantId, title: approval.title, runId: String(row.run_id) }
@@ -125,10 +112,10 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
       description: descriptions.get(pod.id) || null,
       lifecycle: pod.lifecycle,
       draft: pod.activeScript === null,
-      kind,
+      kind: ai ? 'decision' : effect ? 'effect' : 'code',
       ai,
-      data: { writes: writesData, reads: readsData },
-      work: { pending: pending[pod.id] ?? 0, held: held[pod.id] ?? 0 },
+      data: { writes: [], reads: [] },
+      work: { pending: 0, held: 0 },
       resources: mapped,
       secrets,
       schedule: schedules.get(pod.id) ?? null,
@@ -148,7 +135,6 @@ export function mapView(store: PodDatabase, now = Date.now(), published = false)
   const degraded = pods.filter(pod => pod.lifecycle !== 'archived' && !hidden.has(pod.id) && ['failed', 'completedWithGaps'].includes(settled.get(pod.id) ?? '')).map(pod => ({ podId: pod.id, reason: settled.get(pod.id)! }))
   const name = (podId: unknown) => pods.find(pod => pod.id === podId)?.name ?? String(podId)
   const decisions: MapView['kpis']['decisions'] = [
-    ...questions.map(row => ({ podId: String(row.pod_id), kind: 'question' as const, title: name(row.pod_id), count: Number(row.count) })),
     ...waitingApprovals.map(row => ({ podId: String(row.pod_id), kind: 'approval' as const, title: name(row.pod_id), count: Number(row.count) })),
   ]
   return {

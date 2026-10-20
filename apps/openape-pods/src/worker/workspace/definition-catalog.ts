@@ -45,7 +45,7 @@ export class DefinitionCatalog {
       state: row.state === 'published' ? 'published' : 'legacy',
       contentHash: row.content_hash as string,
       lockHash: row.lock_hash as string,
-      work: manifest?.work ?? null,
+      work: null,
       capabilities: manifest?.capabilities ?? [],
       packages: row.packages ? parsePackages(JSON.parse(row.packages as string)) : emptyPackages(),
       defaults: definitionDefaults(Object.fromEntries(this.store.db.prepare('SELECT name,value FROM definition_config WHERE definition_id=? AND definition_version=? AND kind=\'public\'').all(id, version).map(item => [item.name as string, JSON.parse(item.value as string)]))),

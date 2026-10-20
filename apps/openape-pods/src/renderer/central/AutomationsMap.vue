@@ -30,7 +30,7 @@ function rebuild(keepPositions = true) {
   model.value.links.forEach((link, index) => { const count = particleCount(link.flow); for (let k = 0; k < count; k++) particles.push({ link: index, t: (k / count + index * 0.07) % 1, s: 0.0001 + ((index * 7) % 5) * 0.00002 }) })
 }
 watch(() => props.view, () => rebuild())
-watch(() => [props.layers.data, props.layers.read, props.layers.write, props.layers.auth, props.layers.paused], () => rebuild())
+watch(() => [props.layers.read, props.layers.write, props.layers.auth, props.layers.paused], () => rebuild())
 
 let resolve: ((token: string) => string) | null = null
 let scheme = ''
@@ -63,7 +63,7 @@ function draw(now: number) {
     const paused = a.paused || b.paused
     const c = curve(a, b, link.type)
     ctx.strokeStyle = colors[link.type]; ctx.globalAlpha = paused ? 0.18 : link.flow > 0 ? (a.kind === 'ai' ? 0.35 : 0.6) : 0.2; ctx.lineWidth = edgeWidth(link.flow)
-    ctx.setLineDash(link.type === 'data' && link.flow > 0 ? [] : [5, 4])
+    ctx.setLineDash([5, 4])
     ctx.beginPath(); ctx.moveTo(c.p0.x, c.p0.y); ctx.quadraticCurveTo(c.c.x, c.c.y, c.p1.x, c.p1.y); ctx.stroke()
     const q = pointAt(c, 0.97); const q2 = pointAt(c, 1); const angle = Math.atan2(q2.y - q.y, q2.x - q.x)
     ctx.setLineDash([]); ctx.fillStyle = colors[link.type]; ctx.beginPath(); ctx.moveTo(q2.x, q2.y); ctx.lineTo(q2.x - 8 * Math.cos(angle - 0.4), q2.y - 8 * Math.sin(angle - 0.4)); ctx.lineTo(q2.x - 8 * Math.cos(angle + 0.4), q2.y - 8 * Math.sin(angle + 0.4)); ctx.fill()
@@ -74,7 +74,7 @@ function draw(now: number) {
     if (!a || !b || !props.layers[link.type] || !shown(a.id) || !shown(b.id) || a.paused || b.paused) continue
     particle.t = (particle.t + particle.s * dt) % 1
     const q = pointAt(curve(a, b, link.type), particle.t)
-    ctx.fillStyle = colors[link.type]; ctx.beginPath(); ctx.arc(q.x, q.y, link.type === 'data' ? 3.2 : 2.6, 0, 7); ctx.fill()
+    ctx.fillStyle = colors[link.type]; ctx.beginPath(); ctx.arc(q.x, q.y, 2.6, 0, 7); ctx.fill()
   }
   const pulse = 0.5 + 0.5 * Math.sin(now / 500)
   for (const item of model.value.nodes) {

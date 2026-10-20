@@ -28,7 +28,6 @@ const pending = computed(() => view.value.provisioning.filter(item => item.state
 const differences = computed(() => update.value
   ? [
       { label: t('Code'), before: update.value.beforeCode, after: update.value.afterCode },
-      { label: t('Declared work'), before: update.value.before.work, after: update.value.after.work },
       { label: t('Dependencies'), before: { lock: update.value.before.lockHash, packages: update.value.before.packages }, after: { lock: update.value.after.lockHash, packages: update.value.after.packages } },
       { label: t('Public defaults'), before: update.value.before.defaults, after: update.value.after.defaults },
       { label: t('Requested rights'), before: update.value.before.capabilities, after: update.value.after.capabilities },

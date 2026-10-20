@@ -98,7 +98,7 @@ export function parseResult(value: unknown, input: RunInput): ScriptResult {
   return result as unknown as ScriptResult
 }
 /** Every request a script may send; the frame check and the frame type share this one list. */
-export const scriptOperations = ['run.timing', 'data.get', 'data.delete', 'jev.evaluate', 'http.request', 'credentials.get', 'agent.run', 'tools.invoke', 'progress.commit', 'graph.contract', 'notify', 'data.set', 'data.list', 'work.contract', 'work.polls', 'work.find', 'work.claim', 'work.complete', 'work.defer', 'work.fail', 'decisions.ask', 'decisions.withdraw'] as const
+export const scriptOperations = ['run.timing', 'jev.evaluate', 'http.request', 'credentials.get', 'agent.run', 'tools.invoke', 'progress.commit', 'notify'] as const
 export function assertTimingRequest(value: unknown): void {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).length) throw new Error('Run timing accepts no parameters')
 }

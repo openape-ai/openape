@@ -6,7 +6,6 @@ import { randomUUID } from 'node:crypto'
 import { DatabaseSync } from 'node:sqlite'
 import { afterEach, expect, it } from 'vitest'
 import { createBackup, restoreBackup } from '../../src/worker/data/backup'
-import { DomainData } from '../../src/worker/data/domain'
 import { digest, PodDatabase, schemaVersion } from '../../src/worker/storage/database'
 import { StorageError } from '../../src/worker/storage/errors'
 import { programIdentity } from '../../src/contracts/programs'
@@ -269,10 +268,7 @@ it('converts the network runtime into standalone Pods, keeping history, effects,
   expect(store.db.prepare('SELECT pod_id FROM local_only_pods').all()).toEqual([{ pod_id: ids.member }])
   const receipt = JSON.parse(String(store.db.prepare('SELECT body FROM storage_receipts WHERE kind=\'conversion\' AND json_extract(body,\'$.from\')=47').get()!.body)) as { from: number, effects: number, archived: Record<string, { rows: number }> }
   expect(receipt).toMatchObject({ from: 47, effects: 1, archived: { networks: { rows: 1 } } })
-  // Shared data works right after the conversion.
-  const data = new DomainData(store)
-  data.define({ path: 'synthetic/records', writer: 'owner', mode: 'records' })
-  expect(data.set('owner', 'synthetic/records/one', { kept: true }, 0)).toEqual({ revision: 1 })
+  expect(store.db.prepare('SELECT name FROM sqlite_schema WHERE name=\'data_namespaces\'').get()).toBeUndefined()
 })
 
 it.each([

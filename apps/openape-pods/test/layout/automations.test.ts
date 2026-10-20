@@ -8,7 +8,7 @@ import AutomationsShell from '../../src/renderer/central/AutomationsShell.vue'
 import { applyLanguage } from '../../src/renderer/i18n'
 import { colorResolver, geometry } from '../../src/renderer/utils/automation-layout'
 import fixture from '../renderer/map-view.json'
-import { domain } from '../renderer/decisions-inbox.test'
+import { approvalHistory } from '../renderer/decisions-inbox.test'
 import { screenshotPath } from './evidence'
 
 // Geometry of the Automatisierungen surface with the production stylesheet: the canvas height
@@ -49,7 +49,7 @@ describe('Automatisierungen layout', () => {
   it('sizes the canvas from its content and places the info panel beside it', async () => {
     await mountShell(1440, 1000)
     const full = canvas().height
-    expect(full).toBeGreaterThan(geometry.firstRow + geometry.single.h + 2 * geometry.shared.layerHeight)
+    expect(full).toBeGreaterThan(geometry.firstRow + geometry.single.h * 3)
     expect(canvas().getBoundingClientRect().width).toBeGreaterThan(700)
     const info = document.querySelector('.automation-info')!.getBoundingClientRect()
     expect(info.width).toBe(300)
@@ -125,7 +125,7 @@ describe('Automatisierungen layout', () => {
         await page.screenshot({ path: screenshotPath(`redesign-16-zeile-${name}-${width}.png`), element })
       }
       wrapper!.unmount()
-      wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', domain } })
+      wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', approvalHistory } })
       await flushPromises(); await frames(2)
       expect(document.querySelector('[role="tablist"] .n')!.textContent).toBe(decisions)
       const rights = document.querySelector<HTMLElement>('[data-testid="rights"]')!
@@ -178,31 +178,11 @@ describe('Automatisierungen layout', () => {
     await shot('12-mobil-karte')
   })
 
-  it('lists the decisions full width with two-column facts, groups by sender and stacks at 390 px', async () => {
-    await mountShell(1440, 1000)
-    wrapper!.unmount()
-    applyLanguage('de')
-    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', domain } })
-    await flushPromises(); await frames(2)
-    const card = document.querySelector('[data-testid="questions"] .item')!.getBoundingClientRect()
-    expect(card.width).toBeGreaterThan(1200)
-    const facts = getComputedStyle(document.querySelector('[data-testid="questions"] .facts')!).gridTemplateColumns.split(' ')
-    expect(facts).toHaveLength(4)
-    await shot('10-entscheidungen')
-    await (wrapper.find('.ctrls select') as unknown as { setValue: (value: string) => Promise<void> }).setValue('sender'); await flushPromises(); await frames(2)
-    expect(document.querySelectorAll('.grp').length).toBeGreaterThan(5)
-    await shot('11-entscheidungen-buendeln')
-    await page.viewport(390, 844); await frames(2)
-    expect(getComputedStyle(document.querySelector('[data-testid="questions"] .facts')!).gridTemplateColumns.split(' ')).toHaveLength(2)
-    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(390)
-    await shot('13-mobil-entscheidungen')
-  })
-
   // Issue 1473: an approval shows the title, description and link its Pod's script gave, with the Pod as origin.
   it('shows the script\'s approval fields in the approval cards without overflow at 1440 and 390 px', async () => {
     await page.viewport(1440, 1000)
     applyLanguage('de')
-    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', domain } })
+    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', approvalHistory } })
     await flushPromises(); await frames(2)
     const approvals = document.querySelector<HTMLElement>('[data-testid="approvals"]')!
     approvals.scrollIntoView({ block: 'end' })
@@ -221,9 +201,9 @@ describe('Automatisierungen layout', () => {
     await page.viewport(width, 1000)
     document.documentElement.style.colorScheme = theme
     applyLanguage('de')
-    const history = structuredClone(domain)
+    const history = structuredClone(approvalHistory)
     for (const approval of history.approvals) { approval.batchUrl = null; approval.reason = 'Historical decision; migrate and reconcile in the external tool before any new execution' }
-    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', domain: history } })
+    wrapper = mount(AutomationsShell, { attachTo: document.body, props: { view, live: false, now: NOW, desktop: true, tab: 'decisions', approvalHistory: history } })
     await flushPromises(); await frames(2)
     const approvals = document.querySelector<HTMLElement>('[data-testid="approvals"]')!
     expect(approvals.querySelectorAll('button')).toHaveLength(0)

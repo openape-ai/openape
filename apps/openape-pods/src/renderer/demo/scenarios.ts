@@ -1,6 +1,6 @@
 import { normalizeTags } from '../../contracts/tags'
 import type { CentralPod } from '../../contracts/central'
-import type { DomainOverview } from '../../contracts/domain-admin'
+import type { ApprovalHistoryView } from '../../contracts/approval-history'
 import type { MapView } from '../../contracts/map-view'
 import type { StoredPod } from '../../contracts/control'
 import type { InboxMessage } from '../../contracts/inbox'
@@ -14,7 +14,7 @@ export interface DemoState {
   pods: StoredPod[]
   views: Record<string, CentralPod>
   tags: Record<string, string[]>
-  domain: DomainOverview
+  approvalHistory: ApprovalHistoryView
   messages: InboxMessage[]
 }
 
@@ -68,7 +68,7 @@ function podView(pod: StoredPod, description: string, topic: string, at: number,
 }
 
 export function demoState(scenario: DemoScenario, at: number): DemoState {
-  const state: DemoState = { pods: [], views: {}, tags: {}, domain: { namespaces: [], operations: [], questions: [], approvals: [], held: [] }, messages: [] }
+  const state: DemoState = { pods: [], views: {}, tags: {}, approvalHistory: { approvals: [] }, messages: [] }
   if (scenario === 'empty') return state
   examples.forEach(([name, description, company, topic], index) => {
     const pod: StoredPod = { id: demoId(index + 1), name, revision: 1, lifecycle: index === 4 ? 'paused' : 'active', activeScript: demoHash }
@@ -85,17 +85,6 @@ export function demoState(scenario: DemoScenario, at: number): DemoState {
       state.views[pod.id] = view
     })
   }
-  state.domain.questions = Array.from({ length: 4 }, (_, index) => ({
-    id: `demo-question-${index + 1}`,
-    podId: demoId(index < 2 ? 1 : 2),
-    namespace: 'demo/mail',
-    key: `message-${index + 1}`,
-    title: index < 2 ? 'Unbekannter Lieferant' : 'Newsletter einordnen',
-    body: ['Soll die Rechnung von Bergblick Büroservice zur Belegablage?', 'Soll die Rechnung von Stadtrad Logistik zur Belegablage?', 'Wie soll der Newsletter von Design Weekly behandelt werden?', 'Wie soll der Newsletter von Product Notes behandelt werden?'][index]!,
-    options: [{ key: 'keep', title: 'Behalten' }, { key: 'archive', title: 'Archivieren' }],
-    data: { sender: ['billing@bergblick.invalid', 'invoice@stadtrad.invalid', 'news@design.invalid', 'team@product.invalid'][index]!, organization: 'Northwind', amount: index < 2 ? `${(index + 1) * 149},00 EUR` : '–' },
-    createdAt: at - (index + 1) * 60000,
-  }))
   // Index of the sending Pod, minutes ago, read, archived, title, body, links.
   const notes: [number, number, boolean, boolean, string, string, string[]][] = [
     [3, 4, false, false, 'Morgenbriefing für heute', '3 Termine, davon 1 extern (10:30 Lieferantengespräch Bergblick).\n5 offene Aufgaben, 2 davon heute fällig.\nKeine Konflikte im Kalender.', ['Kalender öffnen']],
@@ -120,7 +109,7 @@ export function demoState(scenario: DemoScenario, at: number): DemoState {
     const run = state.views[demoId(3)]!.runs.runs[0]!
     run.state = 'failed'; run.summary = 'Versionsprüfung konnte nicht abgeschlossen werden.'; run.error = 'Demo service temporarily unavailable'
     state.views[demoId(3)]!.runs.events.push({ sequence: 2, type: 'log', data: { line: 'Demo: Der Dienst hat nach 30 Sekunden nicht geantwortet.' }, at: at - 3570000 })
-    state.domain.approvals = [{ id: demoId(900), podId: demoId(5), action: 'mail.archive', object: 'demo-invoice-42', title: 'Geprüfte Rechnung archivieren', description: 'Einmalige Freigabe für eine synthetische Rechnung.', link: null, state: 'requested', reason: null, batchId: demoId(901), batchUrl: 'https://id.example.invalid/demo', updatedAt: at }]
+    state.approvalHistory.approvals = [{ id: demoId(900), podId: demoId(5), action: 'mail.archive', object: 'demo-invoice-42', title: 'Geprüfte Rechnung archivieren', description: 'Einmalige Freigabe für eine synthetische Rechnung.', link: null, state: 'requested', reason: null, batchId: demoId(901), batchUrl: 'https://id.example.invalid/demo', updatedAt: at }]
   }
   return state
 }
@@ -136,7 +125,7 @@ export function demoMap(state: DemoState, at: number): MapView {
       draft: false,
       kind: 'code' as const,
       ai: pod.id === demoId(4),
-      data: { writes: [`demo/${pod.id.slice(-1)}/results`], reads: pod.id === demoId(5) ? ['demo/1/results'] : [] },
+      data: { writes: [], reads: [] },
       work: { pending: 0, held: 0 },
       resources: [{ kind: 'service' as const, name: 'Demo API', how: 'Read', system: 'demo-api' }],
       secrets: [],
@@ -157,7 +146,7 @@ export function demoMap(state: DemoState, at: number): MapView {
     window: { from: at - 86400000, to: at },
     pods,
     systems: [{ id: 'demo-api', kind: 'service', name: 'Demo API', how: 'Read' }],
-    edges: [...pods.map(pod => ({ from: 'demo-api', to: pod.id, type: 'read' as const, channel: null, flow: 12 })), ...(pods.length ? [{ from: demoId(1), to: demoId(5), type: 'data' as const, channel: 'demo/1/results', flow: 12 }] : [])],
-    kpis: { active, paused: pods.length - active, degraded: pods.filter(pod => pod.lifecycle !== 'archived' && ['failed', 'completedWithGaps'].includes(settled(pod))).map(pod => ({ podId: pod.id, reason: settled(pod) })), decisions: [...state.domain.questions.map(question => ({ podId: question.podId, kind: 'question' as const, title: question.title, count: 1 })), ...state.domain.approvals.map(approval => ({ podId: approval.podId, kind: 'approval' as const, title: approval.title, count: 1 }))] },
+    edges: [...pods.map(pod => ({ from: 'demo-api', to: pod.id, type: 'read' as const, channel: null, flow: 12 }))],
+    kpis: { active, paused: pods.length - active, degraded: pods.filter(pod => pod.lifecycle !== 'archived' && ['failed', 'completedWithGaps'].includes(settled(pod))).map(pod => ({ podId: pod.id, reason: settled(pod) })), decisions: [...state.approvalHistory.approvals.map(approval => ({ podId: approval.podId, kind: 'approval' as const, title: approval.title, count: 1 }))] },
   }
 }

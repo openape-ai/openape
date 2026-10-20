@@ -139,9 +139,9 @@ it('keeps bounded local reads outside central mutation serialization and attests
   }
   Object.assign(worker, { dispatch, central })
   await worker.codex({ id, action: { action: 'list' } })
-  await worker.codex({ id, action: { action: 'domain', command: { type: 'list' } } })
+  await worker.approvalHistory({ type: 'list' })
   expect(central.local).not.toHaveBeenCalled()
-  expect(dispatch).toHaveBeenLastCalledWith({ codex: { id, action: { action: 'domain', command: { type: 'list' } } }, ownerOperation: false })
+  expect(dispatch).toHaveBeenLastCalledWith({ approvalHistory: { type: 'list' } })
   const request = { id, action: { action: 'run', podId: id, revision: 1 } }
   await worker.codex(request)
   expect(central.local).toHaveBeenCalledTimes(1)

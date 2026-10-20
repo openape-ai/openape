@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed } from 'vue'
 import type { CentralCommand } from '../../contracts/central'
-import type { DomainCommand, DomainOverview, DomainQuestionView } from '../../contracts/domain-admin'
+import type { ApprovalHistoryCommand, ApprovalHistoryView } from '../../contracts/approval-history'
 import type { MapView } from '../../contracts/map-view'
 import type { SecretRequestRow, SecretsCommand } from '../../contracts/secrets'
 import { diagnostic, label, language, t } from '../i18n'
@@ -13,49 +13,11 @@ import { decisionCounts, openSecretRequests, rightsRows } from '../utils/kpis'
  * provider, runtime rights, failed work and secret requests. Every decision leaves as an existing
  * owner command; nothing here approves on its own.
  */
-/** Without `domain` (a browser), questions and approvals are answered in the Pods inbox at `inboxUrl`. */
-const props = defineProps<{ view: MapView, domain: DomainOverview | null, desktop: boolean, requests?: SecretRequestRow[], secretsOrigin?: string, inboxUrl?: string }>()
-const emit = defineEmits<{ domain: [command: DomainCommand, settle?: (error: string | null) => void], command: [command: CentralCommand], secrets: [command: SecretsCommand] }>()
-const groupBy = ref('')
-const raw = ref(false)
-/** An answer is shown as saving until its question leaves the waiting list; a refused save returns it with its error. */
-const saving = ref<Record<string, string>>({})
-const failures = ref<Record<string, string>>({})
-
+/** Without `approvalHistory` (a browser), questions and approvals are answered in the Pods inbox at `inboxUrl`. */
+const props = defineProps<{ view: MapView, approvalHistory: ApprovalHistoryView | null, desktop: boolean, requests?: SecretRequestRow[], secretsOrigin?: string, inboxUrl?: string }>()
+const emit = defineEmits<{ approvalHistory: [command: ApprovalHistoryCommand, settle?: (error: string | null) => void], command: [command: CentralCommand], secrets: [command: SecretsCommand] }>()
 const podName = (id: string) => props.view.pods.find(pod => pod.id === id)?.name ?? id
-const questions = computed(() => props.domain?.questions ?? [])
-const fields = computed(() => [...new Set(questions.value.flatMap(item => Object.keys(item.data)))])
-const open = (items: DomainQuestionView[]) => items.filter(item => !saving.value[item.id])
-function format(value: unknown): string {
-  if (typeof value === 'boolean') return t(value ? 'yes' : 'no')
-  if (typeof value === 'number') return value.toLocaleString(language.value === 'de' ? 'de-AT' : 'en-GB')
-  return typeof value === 'string' ? value : JSON.stringify(value)
-}
-/** Questions per asking Pod and title; with a field selected, per value of that field. */
-const sections = computed(() => {
-  const map = new Map<string, { key: string, title: string, podId: string, items: DomainQuestionView[] }>()
-  for (const item of questions.value) {
-    const value = groupBy.value ? format(item.data[groupBy.value]) : ''
-    const key = `${item.podId}:${item.title}:${value}`
-    const section = map.get(key) ?? map.set(key, { key, title: groupBy.value ? `${item.title} · ${groupBy.value} = ${value}` : item.title, podId: item.podId, items: [] }).get(key)!
-    section.items.push(item)
-  }
-  return [...map.values()]
-})
-function answer(item: DomainQuestionView, option: string) {
-  saving.value = { ...saving.value, [item.id]: item.options.find(entry => entry.key === option)?.title ?? option }
-  const { [item.id]: _previous, ...others } = failures.value
-  failures.value = others
-  emit('domain', { type: 'answer', questionId: item.id, option }, (error) => {
-    if (!error) return
-    const { [item.id]: _refused, ...rest } = saving.value
-    saving.value = rest
-    failures.value = { ...failures.value, [item.id]: error }
-  })
-}
-function answerAll(items: DomainQuestionView[], option: string) { for (const item of open(items)) answer(item, option) }
-
-const approvals = computed(() => props.domain?.approvals ?? [])
+const approvals = computed(() => props.approvalHistory?.approvals ?? [])
 type ApprovalItem = (typeof approvals.value)[number]
 /** One card per IdP batch request with one decision link; approvals still collecting group per Pod until sent. */
 const batches = computed(() => {
@@ -77,7 +39,6 @@ function summaryLink(value: string | null): { href: string, host: string } | nul
   const url = value ? URL.parse(value) : null
   return url && ['http:', 'https:'].includes(url.protocol) ? { href: url.href, host: url.host } : null
 }
-const failedWork = computed(() => props.domain?.held ?? [])
 const rights = computed(() => rightsRows(props.view))
 const requests = computed(() => openSecretRequests(props.requests ?? []))
 const requestState = (status: SecretRequestRow['status']) => status === 'failed' ? t('failed') : status === 'filled' ? t('filled') : t('requested')
@@ -92,71 +53,19 @@ defineExpose({ total })
     <h1>{{ t('Decisions') }}</h1>
     <div class="kpi-row" role="list">
       <div class="kpi" role="listitem">
-        <b>{{ counts.questions }}</b><span>{{ t('Questions') }}</span><small>{{ questions.length ? [...new Set(questions.map(item => podName(item.podId)))].join(', ') : t('no questions') }}</small>
-      </div>
-      <div class="kpi" role="listitem">
         <b>{{ counts.approvals }}</b><span>{{ t('Approvals waiting') }}</span><small>{{ counts.approvals ? t('decided at the IdP') : t('no waiting approvals') }}</small>
       </div>
       <div class="kpi" role="listitem">
         <b>{{ counts.rights }}</b><span>{{ t('Rights') }}</span><small>{{ counts.rights ? t('{count} runtime requests', { count: counts.rights }) : t('no open runtime request') }}</small>
       </div>
       <div class="kpi" role="listitem">
-        <b>{{ counts.work }}</b><span>{{ t('Failed work') }}</span><small>{{ counts.work ? t('{count} items to retry', { count: counts.work }) : t('no failed work') }}</small>
-      </div>
-      <div class="kpi" role="listitem">
         <b>{{ counts.secrets }}</b><span>{{ t('Secrets') }}</span><small>{{ counts.secrets ? t('{count} secret requests', { count: counts.secrets }) : t('no secret requests') }}</small>
-      </div>
-    </div>
-
-    <h2>{{ t('Questions') }} <span class="meta">· {{ t('your answer becomes a rule the Pod reads') }}</span></h2>
-    <div class="ctrls">
-      <label class="meta">{{ t('Group by') }} <select v-model="groupBy" class="secondary"><option value="">–</option><option v-for="field in fields" :key="field" :value="field">{{ field }}</option></select></label>
-      <label class="meta"><input v-model="raw" type="checkbox"> {{ t('show technical details') }}</label>
-    </div>
-    <div class="inbox" data-testid="questions">
-      <p v-if="!domain && inboxUrl" class="muted">
-        {{ t('Questions and approvals of your Pods are answered in the Pods inbox.') }} <a :href="inboxUrl">{{ t('Open the Pods inbox') }}</a>
-      </p>
-      <p v-else-if="!questions.length" class="muted">
-        {{ t('Nothing waits for your decision.') }}
-      </p>
-      <div v-for="section in sections" :key="section.key" class="grp">
-        <div class="row">
-          <b>{{ section.title }}</b><span class="meta">{{ podName(section.podId) }} · {{ t('{count} open', { count: open(section.items).length }) }}</span>
-          <span v-if="open(section.items).length > 1" class="opts"><button v-for="option in section.items[0]!.options" :key="option.key" class="secondary" type="button" @click="answerAll(section.items, option.key)">{{ t('all: {title}', { title: option.title }) }}</button></span>
-        </div>
-        <template v-for="item in section.items" :key="item.id">
-          <div v-if="saving[item.id]" class="item done" data-saving>
-            <div class="row">
-              <span class="pill warn">{{ t('Saving: {title}', { title: saving[item.id]! }) }}</span><span class="subj">{{ item.body || item.key }}</span>
-            </div>
-          </div>
-          <div v-else class="item" :data-question="item.id">
-            <p class="question-body">
-              {{ item.body || item.key }}
-            </p>
-            <dl class="facts">
-              <template v-for="(value, key) in item.data" :key="key">
-                <dt>{{ key }}</dt><dd>{{ format(value) }}</dd>
-              </template>
-            </dl>
-            <p v-if="failures[item.id]" class="error-message" role="alert">
-              {{ t('Not saved: {reason}', { reason: diagnostic(failures[item.id]!) }) }}
-            </p>
-            <div class="opts">
-              <button v-for="option in item.options" :key="option.key" class="secondary" type="button" @click="answer(item, option.key)">
-                {{ option.title }}
-              </button>
-            </div>
-            <pre v-if="raw" class="raw">{{ JSON.stringify({ id: item.id, namespace: item.namespace, key: item.key, data: item.data }, null, 1) }}</pre>
-          </div>
-        </template>
       </div>
     </div>
 
     <h2>{{ t('Approvals waiting') }} <span class="meta">· {{ t('each action on one object, decided at the IdP') }}</span></h2>
     <div class="inbox" data-testid="approvals">
-      <p v-if="!domain && inboxUrl && counts.approvals" class="muted">
+      <p v-if="!approvalHistory && inboxUrl && counts.approvals" class="muted">
         {{ t('Questions and approvals of your Pods are answered in the Pods inbox.') }} <a :href="inboxUrl">{{ t('Open the Pods inbox') }}</a>
       </p>
       <div v-else-if="!approvals.length" class="item">
@@ -172,13 +81,13 @@ defineExpose({ total })
           <span v-for="entry in batch.counts" :key="entry.state" class="pill" :class="entry.state === 'requested' ? 'idp' : entry.state === 'approved' ? 'ok' : 'off'">{{ entry.count }} {{ label(entry.state) }}</span>
         </div>
         <div v-if="batch.requested" class="opts">
-          <button v-if="desktop" class="secondary idp" type="button" @click="emit('domain', { type: 'openApproval', id: batch.requested.id })">
+          <button v-if="desktop" class="secondary idp" type="button" @click="emit('approvalHistory', { type: 'openApproval', id: batch.requested.id })">
             {{ t('Decide at the IdP') }}
           </button>
           <a v-else class="secondary idp" :href="batch.requested.batchUrl!" target="_blank" rel="noopener">{{ t('Decide at the IdP') }}</a>
         </div>
         <p v-if="!batch.requested" class="meta">
-          {{ t('Historical record; reconcile in the external tool journal before releasing held work.') }}
+          {{ t('Historical record; reconcile outcomes in the external tool journal.') }}
         </p>
         <details :open="batch.items.length <= 5">
           <summary class="meta">
@@ -205,7 +114,7 @@ defineExpose({ total })
           {{ diagnostic(approval.reason) }}
         </p>
         <p class="meta">
-          {{ t('Historical record; reconcile in the external tool journal before releasing held work.') }}
+          {{ t('Historical record; reconcile outcomes in the external tool journal.') }}
         </p>
       </div>
     </div>
@@ -235,30 +144,6 @@ defineExpose({ total })
       </div>
     </div>
 
-    <h2>{{ t('Failed work') }} <span class="meta">· {{ t('no longer retried on its own') }}</span></h2>
-    <div class="inbox" data-testid="failed-work">
-      <p v-if="!domain && inboxUrl && counts.work" class="muted">
-        {{ t('Failed work appears in the Pods inbox.') }} <a :href="inboxUrl">{{ t('Open the Pods inbox') }}</a>
-      </p>
-      <div v-else-if="!failedWork.length" class="item">
-        <div class="row">
-          <span class="pill off">{{ t('none') }}</span><span class="meta">{{ t('Appears when work still fails after its automatic attempts.') }}</span>
-        </div>
-      </div>
-      <div v-for="item in failedWork" :key="item.key" class="item">
-        <div class="row">
-          <span class="pill warn">{{ label(item.state) }}</span><span class="subj">{{ t('Failed work') }} · {{ item.operation }}</span><span class="meta mono">{{ item.object }}</span>
-        </div>
-        <p v-if="item.reason" class="meta">
-          {{ diagnostic(item.reason) }}
-        </p>
-        <div class="opts">
-          <button class="secondary" type="button" @click="emit('domain', { type: 'release', key: item.key })">
-            {{ t('Retry') }}
-          </button>
-        </div>
-      </div>
-    </div>
     <h2>{{ t('Secrets') }} <span class="meta">· {{ t('requests through OpenApe Secrets') }}</span></h2>
     <div class="inbox" data-testid="secrets">
       <div v-for="row in requests" :key="row.id" class="item" data-testid="secret-request">

@@ -1,5 +1,5 @@
 import type { CentralCommand, CentralRuntime } from '../contracts/central'
-import type { DomainCommand, DomainOverview } from '../contracts/domain-admin'
+import type { ApprovalHistoryCommand, ApprovalHistoryView } from '../contracts/approval-history'
 import type { PodsBridge } from '../contracts/ipc'
 import type { MapView } from '../contracts/map-view'
 import type { SecretsCommand, SecretsView } from '../contracts/secrets'
@@ -7,7 +7,7 @@ import type { InboxMessage, InboxMessagePage, InboxMessagesCommand } from '../co
 
 export interface WorkspaceSnapshot {
   map: MapView | null
-  domain: DomainOverview | null
+  approvalHistory: ApprovalHistoryView | null
   codex: 'connected' | 'disconnected' | undefined
   secrets: SecretsView | null
   /** Absent or null when the host cannot read the account inbox. */
@@ -68,7 +68,7 @@ export interface WorkspaceAccess {
   inboxUrl?: string
   read: () => Promise<WorkspaceSnapshot>
   command: (command: CentralCommand) => Promise<unknown>
-  domain?: (command: DomainCommand) => Promise<unknown>
+  approvalHistory?: (command: ApprovalHistoryCommand) => Promise<unknown>
   secrets?: (command: SecretsCommand) => Promise<unknown>
   messages?: (command: MessagesAccessCommand) => Promise<unknown>
 }
@@ -82,13 +82,13 @@ export function localWorkspaceAccess(bridge: PodsBridge): WorkspaceAccess {
     desktop: true,
     async read() {
       const tick = reads++ % 10 === 0
-      const [inventory, domain, messages] = await Promise.all([bridge.workspace({ type: 'map' }), bridge.domain({ type: 'list' }), inbox?.view(tick) ?? null])
+      const [inventory, approvalHistory, messages] = await Promise.all([bridge.workspace({ type: 'map' }), bridge.approvalHistory({ type: 'list' }), inbox?.view(tick) ?? null])
       if (tick) {
         const [connection, requests] = await Promise.all([bridge.codex({ type: 'status' }), bridge.secrets?.({ type: 'list' })])
         codex = connection.state === 'connected' ? 'connected' : 'disconnected'
         secrets = requests ?? null
       }
-      return { map: inventory.map ?? null, domain: domain as DomainOverview, codex, secrets, messages, live: true }
+      return { map: inventory.map ?? null, approvalHistory: approvalHistory as ApprovalHistoryView, codex, secrets, messages, live: true }
     },
     async command(command) {
       if (command.channel === 'workspace') return bridge.workspace(command.body as Parameters<PodsBridge['workspace']>[0])
@@ -96,7 +96,7 @@ export function localWorkspaceAccess(bridge: PodsBridge): WorkspaceAccess {
       if (command.channel === 'runs') return bridge.runs(command.body as Parameters<PodsBridge['runs']>[0])
       throw new Error(`Unsupported workspace channel: ${command.channel}`)
     },
-    domain: command => bridge.domain(command),
+    approvalHistory: command => bridge.approvalHistory(command),
     ...(inbox ? { messages: (command: MessagesAccessCommand) => inbox.command(command, change => bridge.messages!(change)) } : {}),
     ...(bridge.secrets ? { secrets: async (command: SecretsCommand) => { secrets = await bridge.secrets!(command); return secrets } } : {}),
   }
@@ -109,7 +109,7 @@ export function browserWorkspaceAccess(runtime: () => CentralRuntime | undefined
   return {
     desktop: false,
     inboxUrl: '/inbox/',
-    async read() { return { map: runtime()?.workspace.map ?? null, domain: null, codex: undefined, secrets: null, messages: await inbox?.view(reads++ % 10 === 0) ?? null, live: !!runtime()?.online } },
+    async read() { return { map: runtime()?.workspace.map ?? null, approvalHistory: null, codex: undefined, secrets: null, messages: await inbox?.view(reads++ % 10 === 0) ?? null, live: !!runtime()?.online } },
     ...(inbox ? { messages: (command: MessagesAccessCommand) => inbox.command(command, change => messages!(change)) } : {}),
     async command(request) {
       if (!runtime()?.online) throw new Error('Desktop offline')

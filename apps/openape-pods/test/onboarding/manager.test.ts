@@ -33,7 +33,7 @@ async function fixture(architecture = process.arch, jevKey?: () => string | unde
 async function namedBrokerFixture(registeredName?: string) {
   const context = await fixture(); const pod = context.store.createPod({ name: 'Invoice review' })
   const owner = randomUUID(); const account = 'owner@example.invalid'; const issuer = 'https://id.example.invalid'
-  const broker = { issuer: 'https://pods.example.invalid', domain: 'pods.example.invalid', connectionId: randomUUID() }
+  const broker = { issuer: 'https://pods.example.invalid', approvalHistory: 'pods.example.invalid', connectionId: randomUUID() }
   const identity = { connectionId: randomUUID(), podId: pod.id, issuer: broker.issuer, decisionIssuer: issuer, brokerConnectionId: broker.connectionId, owner: account, subject: 'pod@pods.example.invalid', keyId: 'existing-key' }
   context.control.execute({ type: 'save', connection: { id: owner, provider: 'openape', account, state: 'ready', error: null }, metadata: { issuer, subject: account, broker, pods: { [pod.id]: { connectionId: identity.connectionId, prepared: true, broker, identity, ...(registeredName === undefined ? {} : { registeredName }) } } } })
   const bearer = vi.spyOn(OwnerConnection.prototype, 'bearer').mockResolvedValue('synthetic-owner-token')
@@ -182,7 +182,7 @@ it('uses the single owner for new pods, only through the Pods provider, without 
   control.execute({ type: 'save', connection: { id: owner, provider: 'openape', account, state: 'ready', error: null }, metadata: { issuer, subject: account, pods: { [existing.id]: { connectionId: identity.connectionId, prepared: true, identity } } } })
   expect((await manager.podConnection(existing.id)).identity).toEqual(identity)
   expect((await manager.podConnection(existing.id, { issuer, subject: account }, true)).identity).toEqual(identity)
-  const broker = { issuer: 'https://pods.example.invalid', domain: 'pods.example.invalid', connectionId: randomUUID() }
+  const broker = { issuer: 'https://pods.example.invalid', approvalHistory: 'pods.example.invalid', connectionId: randomUUID() }
   const provision = vi.spyOn(PodIdentityManager.prototype, 'provision').mockImplementation(async connectionId => ({ identity: { ...identity, connectionId, podId: fresh.id, issuer: 'https://pods.example.invalid', decisionIssuer: issuer, brokerConnectionId: broker.connectionId } }))
   await expect(manager.podConnection(fresh.id)).rejects.toThrow('Allow Pods to create agents')
   expect(provision).not.toHaveBeenCalled()
@@ -224,7 +224,7 @@ it('switches the owner only after confirmation and releases pods bound to the pr
   const { root, manager, control, store, credentials } = await fixture(); const pod = store.createPod({ name: 'Bound' })
   const id = randomUUID(); const connectionId = randomUUID()
   await credentials.create(connectionId, JSON.stringify({ podId: pod.id, privateKey: 'synthetic-key' }))
-  control.execute({ type: 'save', connection: { id, provider: 'openape', account: 'first@example.invalid', state: 'ready', error: null }, metadata: { issuer: 'https://id.example.invalid', subject: 'first@example.invalid', broker: { issuer: 'https://pods.example.invalid', domain: 'pods.example.invalid', connectionId: randomUUID() }, pods: { [pod.id]: { connectionId, prepared: true } } } })
+  control.execute({ type: 'save', connection: { id, provider: 'openape', account: 'first@example.invalid', state: 'ready', error: null }, metadata: { issuer: 'https://id.example.invalid', subject: 'first@example.invalid', broker: { issuer: 'https://pods.example.invalid', approvalHistory: 'pods.example.invalid', connectionId: randomUUID() }, pods: { [pod.id]: { connectionId, prepared: true } } } })
   const login = vi.spyOn(OwnerConnection.prototype, 'login').mockRejectedValueOnce(new Error('Declined')).mockResolvedValue({ issuer: 'https://id.example.invalid', subject: 'second@example.invalid' })
   await expect(manager.execute({ type: 'connect', provider: 'openape', account: 'second@example.invalid' })).rejects.toThrow('Confirm switching')
   expect(login).not.toHaveBeenCalled()
@@ -255,7 +255,7 @@ it('reads a pod identity without creating credentials, changing owners or exposi
   const existing = store.createPod({ name: 'Existing' }); const fresh = store.createPod({ name: 'New' })
   const first = randomUUID(); const brokerId = randomUUID()
   const identity = { connectionId: randomUUID(), podId: existing.id, issuer: 'https://pods.example.invalid', decisionIssuer: 'https://id.example.invalid', owner: 'original@example.invalid', subject: 'agent@pods.example.invalid', keyId: 'private-metadata-key', brokerConnectionId: brokerId }
-  const metadata = { issuer: identity.decisionIssuer, privateMetadata: 'must-not-leak', broker: { issuer: 'https://new-pods.example.invalid', domain: 'new-pods.example.invalid', connectionId: randomUUID() }, pods: { [existing.id]: { connectionId: identity.connectionId, prepared: true, identity } } }
+  const metadata = { issuer: identity.decisionIssuer, privateMetadata: 'must-not-leak', broker: { issuer: 'https://new-pods.example.invalid', approvalHistory: 'new-pods.example.invalid', connectionId: randomUUID() }, pods: { [existing.id]: { connectionId: identity.connectionId, prepared: true, identity } } }
   control.execute({ type: 'save', connection: { id: first, provider: 'openape', account: identity.owner, state: 'revoked', error: null }, metadata })
   const create = vi.spyOn(credentials, 'create'); const provision = vi.spyOn(PodIdentityManager.prototype, 'provision')
   const view = await manager.execute({ type: 'list', podId: existing.id })

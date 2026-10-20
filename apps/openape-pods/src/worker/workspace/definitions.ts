@@ -123,7 +123,7 @@ export class DefinitionWorkspace {
     const row = pod.activeScript ? this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(podId, pod.activeScript) : undefined
     const manifest = row ? parseManifest(JSON.parse(row.manifest as string)) : null
     const beforeCode = pod.activeScript ? this.store.readBlob(pod.activeScript).toString('utf8') : ''
-    const before = { ...selected, contentHash: manifest?.contentHash ?? digest(''), lockHash: manifest?.dependencyLockHash ?? digest(''), work: manifest?.work ?? null, capabilities: manifest?.capabilities ?? [], packages: new DependencyStore(this.store).scriptManifest(podId, pod.activeScript ?? '') }
+    const before = { ...selected, contentHash: manifest?.contentHash ?? digest(''), lockHash: manifest?.dependencyLockHash ?? digest(''), work: null, capabilities: manifest?.capabilities ?? [], packages: new DependencyStore(this.store).scriptManifest(podId, pod.activeScript ?? '') }
     const after = this.catalog.source(id, version).view
     const afterCode = this.store.readBlob(after.contentHash).toString('utf8')
     if (beforeCode.length > 200000 || afterCode.length > 200000) throw new Error('Definition source exceeds the review limit')

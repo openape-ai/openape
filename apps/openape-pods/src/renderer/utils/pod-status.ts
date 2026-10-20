@@ -28,8 +28,8 @@ export function lastResult(pod: MapPod, now: number): string {
 export function nextRun(pod: MapPod, now: number): string {
   if (pod.lifecycle !== 'active') return t('paused')
   const schedule = pod.schedule
-  const rhythm = cadence(schedule, pod.data.reads)
-  if (!schedule?.enabled || !schedule.spec) return pod.data.reads.length ? t('on new shared data') : t('manual only')
+  const rhythm = cadence(schedule)
+  if (!schedule?.enabled || !schedule.spec) return t('manual only')
   if (!schedule.nextAt) return rhythm
   const minutes = Math.max(0, Math.round((schedule.nextAt - now) / 60000))
   return `${rhythm} · ${minutes < 1 ? t('due now') : minutes < 60 ? t('in {count} min', { count: minutes }) : t('in {count} h', { count: Math.round(minutes / 60) })}`
@@ -44,6 +44,5 @@ export function failureCount(pod: MapPod): string {
 export function waitsFor(pod: MapPod, view: MapView): string {
   if (pod.approvals.length || pod.grants?.length) return t('your approval at the IdP')
   if (view.kpis.decisions.some(item => item.podId === pod.id && item.kind === 'question')) return t('your answer')
-  if (pod.work.held) return t('{count} failed work items', { count: pod.work.held })
   return ''
 }

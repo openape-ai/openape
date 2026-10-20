@@ -8,7 +8,6 @@ import type { DatabaseSync } from 'node:sqlite'
  */
 export function fenceRestoredRuntime(database: DatabaseSync, backupCreatedAt: string): void {
   const now = Date.now()
-  database.prepare(`UPDATE work_items SET state=CASE WHEN state='unknown' THEN 'unknown' ELSE 'blocked' END,claim_token=NULL,reason='Restored backup: check whether this work was finished after the backup before releasing it',updated_at=? WHERE state IN ('claimed','unknown')`).run(now)
   for (const row of database.prepare('SELECT action_key,attempt FROM effect_attempts WHERE state=\'intent\'').all()) {
     const sequence = Number(database.prepare('SELECT coalesce(max(sequence),0)+1 AS next FROM effect_receipts WHERE action_key=? AND attempt=?').get(row.action_key, row.attempt)!.next)
     database.prepare('INSERT INTO effect_receipts VALUES(?,?,?,\'unknown\',?,?)').run(row.action_key, row.attempt, sequence, JSON.stringify({ reason: 'Restored backup: the outcome after the backup is unknown' }), now)
