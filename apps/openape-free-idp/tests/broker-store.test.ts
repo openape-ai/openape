@@ -56,7 +56,7 @@ beforeEach(async () => {
   await client.executeMultiple(`
     CREATE TABLE users(email TEXT PRIMARY KEY, id TEXT, name TEXT NOT NULL, owner TEXT, approver TEXT, type TEXT, public_key TEXT, is_active INTEGER NOT NULL, created_at INTEGER NOT NULL, last_login_at INTEGER, recovery_vacation_mode INTEGER NOT NULL DEFAULT 0, recovery_vacation_days INTEGER);
     CREATE TABLE ssh_keys(key_id TEXT PRIMARY KEY, user_email TEXT NOT NULL, public_key TEXT NOT NULL, name TEXT NOT NULL, created_at INTEGER NOT NULL);
-    CREATE TABLE grants(id TEXT PRIMARY KEY, status TEXT NOT NULL, type TEXT, requester TEXT NOT NULL, brokered TEXT, broker_owner TEXT, target_host TEXT NOT NULL, audience TEXT NOT NULL, grant_type TEXT NOT NULL, request TEXT NOT NULL, created_at INTEGER NOT NULL, decided_at INTEGER, decided_by TEXT, expires_at INTEGER, used_at INTEGER, decided_by_standing_grant TEXT, auto_approval_kind TEXT, consumed_jti TEXT);
+    CREATE TABLE grants(id TEXT PRIMARY KEY, status TEXT NOT NULL, type TEXT, requester TEXT NOT NULL, reference_key TEXT UNIQUE, brokered TEXT, broker_owner TEXT, target_host TEXT NOT NULL, audience TEXT NOT NULL, grant_type TEXT NOT NULL, request TEXT NOT NULL, created_at INTEGER NOT NULL, decided_at INTEGER, decided_by TEXT, expires_at INTEGER, used_at INTEGER, decided_by_standing_grant TEXT, auto_approval_kind TEXT, consumed_jti TEXT);
     CREATE TABLE broker_connections(id TEXT PRIMARY KEY, owner TEXT NOT NULL, owner_issuer TEXT NOT NULL, broker_issuer TEXT NOT NULL, agent_domain TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL);
     CREATE TABLE broker_requests(connection_id TEXT NOT NULL, jti TEXT NOT NULL, expires_at INTEGER NOT NULL, subject TEXT, PRIMARY KEY(connection_id,jti));
     CREATE TABLE broker_audit(id INTEGER PRIMARY KEY AUTOINCREMENT, grant_id TEXT NOT NULL, owner TEXT NOT NULL, agent TEXT NOT NULL, broker_issuer TEXT NOT NULL, connection_id TEXT NOT NULL, event TEXT NOT NULL, created_at INTEGER NOT NULL);
@@ -523,5 +523,80 @@ describe('grant batch listing', () => {
     const page = await grantStore.listGrants({ requester: subject, batch: 'b-1', limit: 100 })
     expect(page.data.map(value => value.id).toSorted()).toEqual(['a', 'b'])
     expect(page.data[0]!.request.batch).toEqual({ id: 'b-1', size: 2 })
+  })
+})
+
+describe('durable generic grant references', () => {
+  function referenced(): OpenApeGrant {
+    const value = grant()
+    return { ...value, status: 'pending', request: { ...value.request, reference: 'export:document-42:v1', batch: { id: 'exports' } } }
+  }
+
+  it('atomically creates one decision and one audit entry across concurrent stores and lost replies', async () => {
+    await client.execute('PRAGMA journal_mode = WAL')
+    const value = referenced()
+    const replies = await Promise.all(Array.from({ length: 8 }, () => createDrizzleGrantStore().createReferenced!({ ...value, id: randomUUID() })))
+    expect(new Set(replies.map(reply => reply.grant.id)).size).toBe(1)
+    expect(replies.filter(reply => reply.created)).toHaveLength(1)
+    const retried = await createDrizzleGrantStore().createReferenced!({ ...value, id: randomUUID() })
+    expect(retried.created).toBe(false)
+    expect(retried.grant.id).toBe(replies[0]!.grant.id)
+    expect(await database.select().from(schema.brokerAudit)).toHaveLength(1)
+  })
+
+  it.each(['pending', 'approved', 'denied', 'revoked', 'expired', 'used'] as const)('retains %s without renewing or regrouping it', async (status) => {
+    const value = referenced()
+    await grantStore.createReferenced!(value)
+    await grantStore.updateStatus(value.id, status)
+    const retry = { ...value, id: randomUUID(), request: { ...value.request, summary: { title: 'New display' }, batch: { id: 'another-run' } } }
+    const result = await createDrizzleGrantStore().createReferenced!(retry)
+    expect(result).toMatchObject({ created: false, grant: { id: value.id, status, request: { batch: { id: 'exports' } } } })
+    expect((await grantStore.listGrants({ reference: value.request.reference })).data).toHaveLength(1)
+  })
+
+  it('rejects changed commands, targets and grant semantics while leaving the original unchanged', async () => {
+    const value = referenced()
+    await grantStore.createReferenced!(value)
+    for (const change of [{ command: ['printf', 'changed'] }, { target_host: 'other-target' }]) {
+      await expect(grantStore.createReferenced!({ ...value, id: randomUUID(), request: { ...value.request, ...change } })).rejects.toThrow('already bound')
+    }
+    await expect(grantStore.createReferenced!({ ...value, request: { ...value.request, grant_type: 'always' } })).rejects.toThrow('single-use')
+    expect((await grantStore.findById(value.id))?.request).toEqual(value.request)
+  })
+
+  it('separates requester, broker binding and direct authority, but not display names', async () => {
+    const value = referenced()
+    const variants = [value, { ...value, id: randomUUID(), brokered: undefined }, { ...value, id: randomUUID(), request: { ...value.request, requester: 'other@pods.provider.test' } }, { ...value, id: randomUUID(), brokered: { ...value.brokered!, key_id: 'rotated-key' } }]
+    for (const variant of variants) expect((await grantStore.createReferenced!(variant)).created).toBe(true)
+    expect((await grantStore.createReferenced!({ ...value, id: randomUUID(), brokered: { ...value.brokered!, requester_name: 'Renamed client' } })).created).toBe(false)
+    expect(await grantStore.findAll()).toHaveLength(4)
+  })
+
+  it('keeps expired references after the pending TTL and refuses a revoked connection', async () => {
+    const value = { ...referenced(), created_at: Math.floor(Date.now() / 1000) - 49 * 3600 }
+    await grantStore.createReferenced!(value)
+    expect((await grantStore.createReferenced!({ ...value, id: randomUUID() })).grant.status).toBe('expired')
+    await database.update(schema.brokerConnections).set({ status: 'revoked' }).where(eq(schema.brokerConnections.id, connection.id))
+    await expect(grantStore.createReferenced!(value)).rejects.toMatchObject({ statusCode: 403 })
+  })
+})
+
+describe('stable batch pagination', () => {
+  it('returns every equal-timestamp pending member once, independently of paginated history', async () => {
+    const timestamp = Math.floor(Date.now() / 1000)
+    const values = Array.from({ length: 150 }, (_, index) => {
+      const value = grant()
+      return { ...value, id: `same-${String(index).padStart(3, '0')}`, created_at: timestamp, status: 'pending' as const, request: { ...value.request, batch: { id: 'collection' } } }
+    })
+    for (const value of values) await grantStore.save(value)
+    const historic = { ...grant(), request: { ...grant().request, batch: { id: 'collection' } } }
+    await grantStore.save(historic)
+    const first = await grantStore.listGrants({ batch: 'collection', requester: subject, status: 'pending', limit: 100 })
+    const second = await grantStore.listGrants({ batch: 'collection', requester: subject, status: 'pending', limit: 100, cursor: first.pagination.cursor! })
+    expect(first.pagination.has_more).toBe(true)
+    expect(second.pagination.has_more).toBe(false)
+    expect(new Set([...first.data, ...second.data].map(value => value.id))).toHaveLength(150)
+    expect((await grantStore.listGrants({ batch: 'collection', requester: subject, excludeStatus: 'pending', limit: 100 })).data.map(value => value.id)).toEqual([historic.id])
+    expect((await grantStore.listGrants({ cursor: String(timestamp), requester: subject })).data).toEqual([])
   })
 })

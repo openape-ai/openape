@@ -8,6 +8,8 @@ export default defineNitroPlugin(async () => {
   const columns = await db.all<{ name: string }>(sql`PRAGMA table_info(grants)`)
   if (!columns.some(column => column.name === 'brokered')) await db.run(sql`ALTER TABLE grants ADD COLUMN brokered TEXT`)
   if (!columns.some(column => column.name === 'broker_owner')) await db.run(sql`ALTER TABLE grants ADD COLUMN broker_owner TEXT`)
+  if (!columns.some(column => column.name === 'reference_key')) await db.run(sql`ALTER TABLE grants ADD COLUMN reference_key TEXT`)
+  await db.run(sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_grants_reference_key ON grants(reference_key)`)
   await db.run(sql`CREATE INDEX IF NOT EXISTS idx_grants_broker_owner ON grants(broker_owner)`)
   await db.run(sql`CREATE TABLE IF NOT EXISTS broker_connections (id TEXT PRIMARY KEY, owner TEXT NOT NULL, owner_issuer TEXT NOT NULL, broker_issuer TEXT NOT NULL, agent_domain TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL)`)
   await db.run(sql`CREATE INDEX IF NOT EXISTS idx_broker_connections_owner ON broker_connections(owner)`)

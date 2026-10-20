@@ -53,3 +53,9 @@ it('validates optional run context while accepting older workers without a descr
   expect(parseRunContext(legacy)).toEqual(legacy)
   for (const value of [{ ...legacy, description: null }, { ...legacy, description: 'x'.repeat(4001) }, { ...legacy, reason: 'unknown' }, { ...legacy, title: 'Injected purpose' }, []]) expect(() => parseRunContext(value)).toThrow('run context')
 })
+
+it('separates an opaque reference from program arguments without interpreting its client syntax', () => {
+  const call = { application: 'exporter', argv: ['render', '42'] }
+  expect(splitScriptSummary({ ...call, reference: 'invoice/42/export:v1' })).toEqual({ payload: call, reference: 'invoice/42/export:v1' })
+  expect(() => splitScriptSummary({ ...call, reference: 'hidden\u202Evalue' })).toThrow(/reference/)
+})

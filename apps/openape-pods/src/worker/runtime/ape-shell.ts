@@ -16,6 +16,7 @@ export interface MachineLaunch {
   grantType?: 'once' | 'always'
   summary?: OpenApeProgramExecutionRequest['summary']
   batch?: OpenApeProgramExecutionRequest['batch']
+  reference?: string
   waitMs?: number
   forwardChannel?: boolean
   mode?: 'owner-script'
@@ -47,7 +48,7 @@ export async function launchApeShell(helper: string, privateDirectory: string, p
   }
   const request: OpenApeMachineExecutionRequest = ownerAuthority
     ? { ...execution, version: 1, mode: 'owner-script', authority: ownerAuthority }
-    : { ...execution, version: 1, grantType: launch.grantType ?? 'always', ...(launch.summary ? { summary: launch.summary } : {}), ...(launch.batch ? { batch: launch.batch } : {}), waitMs: launch.waitMs ?? 300000 }
+    : { ...execution, version: 1, grantType: launch.grantType ?? 'always', ...(launch.summary ? { summary: launch.summary } : {}), ...(launch.batch ? { batch: launch.batch } : {}), ...(launch.reference !== undefined ? { reference: launch.reference } : {}), waitMs: launch.waitMs ?? 300000 }
   const frame = `${JSON.stringify(request)}\n`
   if (Buffer.byteLength(frame) > 1024 * 1024) { await rm(profile, { force: true }); throw new Error('Execution context exceeds its size bound') }
   // Environment values travel only over the private channel, never through a persisted request or shell text.

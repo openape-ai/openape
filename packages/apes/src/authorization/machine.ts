@@ -163,6 +163,7 @@ export async function runMachineRequest(mode: 'program' | 'owner-script' = 'prog
       grantType: request.grantType,
       summary: request.summary,
       batch: request.batch,
+      reference: request.reference,
       context: { cwd: request.cwd, env: request.environment },
       wait: request.waitMs > 0,
       waitMs: request.waitMs,

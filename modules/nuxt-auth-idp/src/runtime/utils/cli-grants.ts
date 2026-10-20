@@ -46,7 +46,7 @@ export function describeExtension(
   return descriptions
 }
 
-/** Registry-protected requests permit one exact invocation only. */
-export function requiresSingleUse(grant: { request?: { authorization_details?: OpenApeAuthorizationDetail[] } } | null | undefined): boolean {
-  return grant?.request?.authorization_details?.some(detail => detail.type === 'openape_cli' && detail.constraints?.single_use === true) ?? false
+/** Registry-protected and referenced requests permit one exact invocation only. */
+export function requiresSingleUse(grant: { request?: { reference?: string, authorization_details?: OpenApeAuthorizationDetail[] } } | null | undefined): boolean {
+  return !!grant?.request?.reference || (grant?.request?.authorization_details?.some(detail => detail.type === 'openape_cli' && detail.constraints?.single_use === true) ?? false)
 }

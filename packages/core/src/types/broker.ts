@@ -43,6 +43,7 @@ export type BrokerRequest = BrokerRequestBase & (
   | { operation: 'connection' }
   | { operation: 'create', sub: string, key_id: string, requester_name?: string, request: OpenApeGrantRequest }
   | { operation: 'authorize', sub: string, key_id: string, requester_name?: string, request: OpenApeProgramAuthorizeRequest }
+  | { operation: 'get', sub: string, key_id: string, requester_name?: string, reference: string }
   | { operation: 'get' | 'token', sub: string, key_id: string, requester_name?: string, grant_id: string }
 )
 
@@ -62,10 +63,11 @@ export interface OpenApeProgramAuthorizeRequest {
   grant_type: 'always' | 'once'
   summary?: OpenApeGrantSummary
   batch?: OpenApeGrantBatch
+  reference?: string
 }
 
 /** Answer of `POST /api/grants/authorize` (200, 202 or 403 by `state`). */
 export type OpenApeProgramAuthorizeResponse =
   | { state: 'approved', grant_id: string, authz_jwt: string, expires_at: number }
   | { state: 'pending', grant_id: string, approval_url: string }
-  | { state: 'denied' | 'revoked', grant_id: string }
+  | { state: 'denied' | 'revoked' | 'expired' | 'used', grant_id: string }

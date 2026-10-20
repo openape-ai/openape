@@ -1,7 +1,7 @@
 import { defineCommand } from 'citty'
 import consola from 'consola'
 import { getIdpUrl, loadAuth } from '../../config'
-import { apiFetch, getGrantsEndpoint } from '../../http'
+import { apiFetch, discoverEndpoints, getGrantsEndpoint } from '../../http'
 import { CliError } from '../../errors'
 
 interface Grant {
@@ -11,6 +11,8 @@ interface Grant {
   requester: string
   owner: string
   request: {
+    requester?: string
+    reference?: string
     command?: string[]
     grant_type?: string
     reason?: string
@@ -32,6 +34,10 @@ export const listCommand = defineCommand({
     description: 'List your grants (as requester)',
   },
   args: {
+    reference: {
+      type: 'string',
+      description: 'Find the existing decision for your opaque operation reference without consuming it',
+    },
     status: {
       type: 'string',
       description: 'Filter by status (pending, approved, denied, revoked, used)',
@@ -65,6 +71,12 @@ export const listCommand = defineCommand({
       params.set('status', args.status)
     if (args.limit)
       params.set('limit', args.limit)
+    if (args.reference !== undefined) {
+      if (!auth?.email) throw new CliError('Reference lookup requires an authenticated requester')
+      if ((await discoverEndpoints(idp)).openape_grant_reference_supported !== true) throw new CliError('This IdP does not advertise grant reference lookup')
+      params.set('requester', auth.email)
+      params.set('reference', args.reference)
+    }
     const query = params.toString() ? `?${params.toString()}` : ''
 
     const response = await apiFetch<PaginatedGrants>(`${grantsUrl}${query}`)
@@ -73,7 +85,7 @@ export const listCommand = defineCommand({
 
     // Filter to own grants unless --all
     if (!args.all && auth?.email) {
-      grants = grants.filter(g => g.requester === auth.email)
+      grants = grants.filter(g => (g.request?.requester ?? g.requester) === auth.email)
     }
 
     if (args.json) {

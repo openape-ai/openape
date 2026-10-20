@@ -1,5 +1,6 @@
 import type { OpenApeCliAuthorizationDetail, OpenApeExecutionContext, OpenApeProgramAuthorizeRequest } from '@openape/core'
 import { computeArgvHash } from './cli-permissions.js'
+import { InvalidGrantReferenceError, parseGrantReference } from './grant-reference.js'
 import { InvalidGrantBatchError, parseGrantBatch } from './grants.js'
 import { InvalidGrantSummaryError, parseGrantSummary } from './grant-summary.js'
 import { buildGenericResolvedServer, resolveServerShape } from './server-resolver.js'
@@ -17,7 +18,7 @@ export class InvalidProgramAuthorizeRequestError extends Error {}
  */
 export const PROGRAM_AUTHORIZE_LIMITS = { bodyBytes: 64 * 1024, argvItems: 256, tokenChars: 120 * 1024 } as const
 
-const FIELDS = ['target_host', 'audience', 'program', 'argv', 'files', 'grant_type', 'summary', 'batch']
+const FIELDS = ['target_host', 'audience', 'program', 'argv', 'files', 'grant_type', 'summary', 'batch', 'reference']
 const PROGRAM_FIELDS = ['name', 'sha256']
 const SHA256_HEX = /^[0-9a-f]{64}$/
 
@@ -94,12 +95,18 @@ export function parseProgramAuthorizeRequest(input: unknown): OpenApeProgramAuth
   const files = programFiles(input.files)
   if (files) request.files = files
   try {
+    const reference = parseGrantReference(input.reference)
+    if (reference !== undefined) {
+      if (request.grant_type !== 'once') fail('reference requires grant_type once')
+      request.reference = reference
+    }
     const summary = parseGrantSummary(input.summary)
     if (summary) request.summary = summary
     const batch = parseGrantBatch(input.batch)
     if (batch) request.batch = batch
   }
   catch (error) {
+    if (error instanceof InvalidGrantReferenceError) fail(error.message)
     if (error instanceof InvalidGrantSummaryError) fail(`Invalid summary: ${error.message}`)
     if (error instanceof InvalidGrantBatchError) fail(`Invalid batch: ${error.message}`)
     throw error
