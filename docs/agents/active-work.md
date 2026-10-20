@@ -1,3 +1,10 @@
+# Grant request dates — issue 1526
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1526. Branch `feature/issue-1526-grant-request-dates`, reused checkout `cross-run-grant-reference`, canonical base `110697ded886a9221349299edbf55e180d4abedd`.
+- Show localized request dates with a time zone on individual cards and oldest/newest pending member dates on batch cards. Preserve decision behavior and existing newest-first sorting.
+- Verification: 68 existing page/component tests and a focused real-CSS browser case pass, including unsorted cross-day members, single-member groups and individual cards. Mobile light and desktop dark screenshots were inspected. Next: required affected gate, native PR review and deployment gate, then IdP rollout.
+- Docpit grant assessment is read-only. No Pod scripts, decisions, batches or mail data are changed by this work.
+
 # Cross-run grant references — issue 1523
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1523. Approved proposal revision 2: https://report.openape.ai/d/01M5CA08QYSZV34SMQ0Z129XWJ?v=2. Worktree `cross-run-grant-reference`, branch `feature/issue-1523-cross-run-grant-reference`, canonical base `a02d5a7b69a275cb7091dac83779757594a53d40`.
