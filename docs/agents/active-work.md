@@ -4,6 +4,12 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 # Active work
 
+## Remove relay request rate limits — issue 1521
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1521. Branch `bugfix/issue-1521-remove-relay-rate-limit`, checkout `openape-monorepo.worktrees/pods-tray-status`, canonical base `dc7569088781cfa1e08d800032fccd09507ab6f8`.
+- Remove both API and registration/login rate buckets at the owner's request after `429 rate_limited` prevented desktop reconnection. Preserve authentication, proof, origin and body-size checks.
+- Verification covers 650 requests per route class within one fixed minute, missing authentication and the existing 503 retry hint. Next: affected gate, reviewed native PR, full deployment gate and tested relay image rollout, then restore the previously active desktop Pods.
+
 ## Desktop tray Pod list — issue 1520
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1520. Branch `feature/issue-1520-pods-tray`, checkout `openape-monorepo.worktrees/pods-tray-status`, canonical base `b947f30b430a6ef02ffb91636800b12c7ec1d909`.
