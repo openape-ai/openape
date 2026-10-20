@@ -2,9 +2,9 @@ import { assertIntegrity } from './integrity.ts'
 import { baselineRows, baselineSchema, schemaVersion } from './schema.ts'
 import { assertSupportedSchema, assertUpgradable, upgradeToCurrent } from './upgrade.ts'
 import { restoreReviewGate } from './restore-fence.ts'
+import { assertSharedStorageUnused } from './retire-shared.ts'
+import { assertCurrentScript } from '../../contracts/retired-storage.ts'
 import { StorageError } from './errors.ts'
-import { parseWorkDeclarations } from '../../contracts/work.ts'
-import type { WorkDeclaration } from '../../contracts/work.ts'
 import type { SandboxLevel } from '../../contracts/sandbox.ts'
 import { createHash, randomUUID } from 'node:crypto'
 import { chmodSync, closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rmSync, statfsSync, writeFileSync } from 'node:fs'
@@ -34,8 +34,9 @@ export interface ScriptManifest {
   effects: 'readOnly' | 'reconciledEffects'
   /** Retired network contract (takes/gives) kept only on archived script history; never executed (issue 1465). */
   contract?: unknown
-  work?: WorkDeclaration[]
-  /** The Pod also reads an external source on its schedule, so its scheduled runs are never skipped as idle. */
+  /** Retired declarations retained only when inspecting historical manifests. */
+  work?: unknown
+  /** Retired scheduler declaration; never accepted for new scripts. */
   polls?: true
 }
 export interface SourceInput { id: string, locator: string, version: string, content: string }
@@ -71,7 +72,6 @@ export function parseManifest(value: unknown): ScriptManifest {
   if (!Array.isArray(value.capabilities) || value.capabilities.length > 100 || value.capabilities.some(cap => typeof cap !== 'string' || !/^[a-z][\w.-]{0,100}$/.test(cap))) throw new Error('Invalid capabilities')
   if (!Array.isArray(value.triggers) || !value.triggers.length || value.triggers.some(trigger => !['manual', 'schedule', 'event'].includes(trigger))) throw new Error('Invalid triggers')
   const manifest = structuredClone(value) as unknown as ScriptManifest
-  if (value.work !== undefined) manifest.work = parseWorkDeclarations(value.work)
   if (value.polls !== undefined && value.polls !== true) throw new Error('Invalid polls declaration')
   return manifest
 }
@@ -129,6 +129,7 @@ export class PodDatabase {
     }
     // Refuse an unsupported database before writing a full copy of it on every start.
     assertUpgradable(this.db, version)
+    if (version >= 48) assertSharedStorageUnused(this.db, this.root)
     const backup = join(this.root, `before-v${version}-${randomUUID()}.sqlite`)
     this.db.prepare('VACUUM INTO ?').run(backup); chmodSync(backup, 0o600)
     const copy = openSync(backup, 'r')
@@ -194,10 +195,16 @@ export class PodDatabase {
     return this.getPod(id)
   }
 
+  assertCurrentScript(podId: string): void {
+    const row = this.db.prepare('SELECT s.hash,s.manifest FROM pods p JOIN scripts s ON s.pod_id=p.id AND s.hash=p.active_script WHERE p.id=?').get(podId)
+    if (row) assertCurrentScript(this.readBlob(String(row.hash)).toString('utf8'), parseManifest(JSON.parse(String(row.manifest))))
+  }
+
   updatePod(id: string, expectedRevision: number, input: unknown): Pod {
     record(input, ['name', 'lifecycle']); text(input.name, 'name', 100); integer(expectedRevision)
     if (!['active', 'paused', 'archived'].includes(input.lifecycle as string)) throw new Error('Invalid lifecycle')
     const { name, lifecycle } = input
+    if (lifecycle === 'active') this.assertCurrentScript(id)
     this.transaction(() => {
       const update = this.db.prepare('UPDATE pods SET name=?,lifecycle=?,metadata_revision=metadata_revision+1 WHERE id=? AND metadata_revision=?').run(name, lifecycle as string, id, expectedRevision)
       if (update.changes !== 1) throw new Error('Stale pod revision')
@@ -238,6 +245,7 @@ export class PodDatabase {
 
   storeScript(podId: string, input: unknown, artifact: string): ScriptManifest {
     const manifest = parseManifest(input)
+    assertCurrentScript(artifact, manifest)
     const pod = this.getPod(podId)
     if (manifest.assignmentRevision !== pod.bindingRevision) throw new Error('Stale script binding')
     if (digest(artifact) !== manifest.contentHash) throw new Error('Artifact hash mismatch')

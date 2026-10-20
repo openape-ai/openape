@@ -1,3 +1,4 @@
+import { assertCurrentScript } from '../../contracts/retired-storage'
 import { scriptFrameBytes } from './response'
 import type { OpenApeGrantBatch } from '@openape/core'
 import type { SandboxReach } from '../../contracts/sandbox'
@@ -42,10 +43,6 @@ import type { AgentRuntime } from '../agent/executor'
 import type { AgentGatewayServices } from '../agent/gateway'
 import { parseProgress } from './progress'
 import { installExample } from './examples'
-import { DomainData } from '../data/domain'
-import { WorkLedger } from '../data/work'
-import { OwnerQuestions } from '../data/questions'
-import { dataOperations, handleDataOperation } from '../data/ports'
 import { releaseHeldWork } from '../recovery/release'
 
 export interface RunServiceScope {
@@ -75,16 +72,10 @@ const maxAgentCallsPerRun = 50
 
 export class RunDispatcher {
   readonly runs: RunStore
-  readonly data: DomainData
-  readonly work: WorkLedger
-  readonly questions: OwnerQuestions
   readonly approvals: ApprovalHistory
   private active = new Map<string, { controller: AbortController, work: Promise<void> }>()
   constructor(private readonly store: PodDatabase, private readonly resources: ResourceRegistry, private readonly runtime: AgentRuntime, private readonly services?: RunServices) {
     this.runs = new RunStore(store)
-    this.data = new DomainData(store)
-    this.work = new WorkLedger(store, this.data)
-    this.questions = new OwnerQuestions(store, this.data)
     this.approvals = new ApprovalHistory(store)
     store.transaction(() => {
       store.db.prepare('UPDATE runs SET state=\'interrupted\',error=\'Previous worker stopped\',checkpoint_revision=(SELECT revision FROM checkpoints WHERE pod_id=runs.pod_id) WHERE state=\'running\' AND id IN (SELECT run_id FROM run_leases)').run()
@@ -190,6 +181,7 @@ export class RunDispatcher {
       const manifestRow = this.store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, run.scriptHash)
       if (!manifestRow) throw new Error('Pinned script is missing')
       const manifest = parseManifest(JSON.parse(manifestRow.manifest as string))
+      assertCurrentScript(this.store.readBlob(run.scriptHash).toString('utf8'), manifest)
       if (!manifest.triggers.includes(trigger.reason)) throw new Error('Script does not allow this trigger')
       const assigned = this.resources.list(pod.id).filter(resource => resource.kind === 'tool' && resource.state === 'ready').map(resource => resource.configuration.capability)
       if (manifest.capabilities.filter(capability => !capability.startsWith('credential.')).some(capability => !assigned.includes(capability))) throw new Error('No tool assignments are available for this script')
@@ -281,11 +273,6 @@ export class RunDispatcher {
             const receipt = new InboxOutbox(this.store).queue(pod, id, parseNotify(payload))
             appendEvent('notify', receipt); return receipt
           }
-          if (dataOperations.has(operation)) {
-            const reply = handleDataOperation(this, operation, payload, { podId: pod.id, runId: id }, manifest)
-            if (operation.startsWith('work.') && operation !== 'work.find' && operation !== 'work.contract') appendEvent('work', { operation, ...(reply && typeof reply === 'object' && 'key' in reply ? { key: (reply as { key: unknown }).key } : {}) })
-            return reply
-          }
           if (operation === 'http.request') {
             if (!this.services?.http) throw new Error('HTTP service is unavailable')
             const request = parseHttpRequest(payload)
@@ -344,7 +331,6 @@ export class RunDispatcher {
       return
     }
     this.store.transaction(() => {
-      this.work.settleRun(id)
       this.runs.finish(id, state, summary, error, completedInputIds, retryEpoch, failure)
     })
   }

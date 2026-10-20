@@ -16,6 +16,6 @@ export function codexBrief(view: MapView, pinned: string | null, tags: string[])
     parts.push(t('Starting point: {name} ({direction}).', { name: system.name, direction: t(writes ? 'write' : 'read') }))
   }
   if (pod) parts.push(t('Like {name}, but with another source.', { name: pod.name }))
-  parts.push(t('Show me first the shape (which Pods, which shared data they read and write), the map, the access it needs and the examples you use as checks. Create only afterwards, activate only as a preview, and request rights exclusively through Permissions and the identity provider.'))
+  parts.push(t('Show me first the tasks, the files or external services they use, the map, the access they need and the examples you use as checks. Create only afterwards, activate only as a preview, and request rights exclusively through Permissions and the identity provider.'))
   return parts.join(' ')
 }

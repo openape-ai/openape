@@ -37,7 +37,7 @@ import { modelResources } from '../worker/master/resources'
 import { sameOwner } from '@openape/pods-protocol'
 import type { RemoteInternal } from '../worker/remote/registration'
 import type { Owner } from '@openape/pods-protocol'
-import type { DomainCommand, DomainOverview } from '../contracts/domain-admin'
+import type { ApprovalHistoryCommand, ApprovalHistoryView } from '../contracts/approval-history'
 import type { RunContextRequest, ServiceCheck, ServiceRequest  } from '../contracts/services'
 import { approvalURL } from '../contracts/activity'
 import type { RunApproval } from '../contracts/activity'
@@ -834,8 +834,8 @@ export class RuntimeWorker {
 
   // Direct reads for the inbox projection: reading never becomes a workspace operation.
   async inboxSources(): Promise<DecisionSources> {
-    const [workspace, domain, secrets] = await Promise.all([this.dispatch({ type: 'map' }), this.dispatch({ domain: { type: 'list' } }), this.secretsGate?.view() ?? null])
-    return { map: parseWorkspace(workspace).map ?? null, domain: domain as DomainOverview, secrets }
+    const [workspace, approvalHistory, secrets] = await Promise.all([this.dispatch({ type: 'map' }), this.dispatch({ approvalHistory: { type: 'list' } }), this.secretsGate?.view() ?? null])
+    return { map: parseWorkspace(workspace).map ?? null, approvalHistory: approvalHistory as ApprovalHistoryView, secrets }
   }
 
   // Imported Pods are ordinary local Pods: a connected workspace gives each its own identity as soon as the paused copy exists.
@@ -889,19 +889,16 @@ export class RuntimeWorker {
     }
   }
 
-  /** Owner administration of shared domain data; changes run as central local operations like every other owner command. */
-  async domain(command: DomainCommand): Promise<unknown> {
+  /** Historical approvals have their own read-only route, independent of retired storage. */
+  async approvalHistory(command: ApprovalHistoryCommand): Promise<unknown> {
     if (command.type === 'openApproval') {
-      const overview = await this.dispatch({ domain: { type: 'list' } }) as DomainOverview
+      const overview = await this.dispatch({ approvalHistory: { type: 'list' } }) as ApprovalHistoryView
       const url = overview.approvals.find(item => item.id === command.id && item.state === 'requested')?.batchUrl
       if (!url || URL.parse(url)?.protocol !== 'https:') throw new Error('No approval is waiting at the IdP for this item')
       await this.host.openExternal(url)
       return overview
     }
-    const reading = ['list', 'entries', 'work'].includes(command.type)
-    const central = reading ? null : this.centralAction(command.type)
-    if (central) return central.local(() => this.domain(command))
-    return this.dispatch({ domain: command })
+    return this.dispatch({ approvalHistory: command })
   }
 
   async scheduling(command: ScheduleCommand): Promise<ScheduleView> { const central = this.centralAction(command.type); if (central) return central.local(() => this.scheduling(command)); return parseScheduleView(await this.dispatch({ schedule: command })) }
@@ -966,7 +963,7 @@ export class RuntimeWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { cliRun: Extract<RunCommand, { type: 'start' }> } | { programExecution: ProgramExecutionCheck } | { approvalRelease: { type: 'list' } | { type: 'released', keys: string[] } } | { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { domain: DomainCommand } | { central: { type: 'snapshot', owner: Owner } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { httpCredentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { cliRun: Extract<RunCommand, { type: 'start' }> } | { programExecution: ProgramExecutionCheck } | { approvalRelease: { type: 'list' } | { type: 'released', keys: string[] } } | { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { approvalHistory: ApprovalHistoryCommand } | { central: { type: 'snapshot', owner: Owner } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { httpCredentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     if (this.updateFrozen && !('data' in command && ['prepareUpdate', 'releaseUpdate'].includes(command.data.type))) return Promise.reject(new Error('Pods is preparing an update; retry after restart'))
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))

@@ -13,7 +13,7 @@ import { CentralController, offlineAlert } from './central/controller'
 import { centralObject } from '../contracts/central'
 import { RemoteController, RemoteServiceError } from './remote/controller'
 import { InboxDecisions } from './inbox/decisions'
-import { parseDomainCommand } from '../contracts/domain-admin'
+import { parseApprovalHistoryCommand } from '../contracts/approval-history'
 import { searchPackages } from './package-catalog'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
@@ -425,9 +425,9 @@ async function start(): Promise<void> {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
     return worker.definitions(parseDefinitionCommand(command))
   })
-  ipcMain.handle(channels.domain, (event, command: unknown, ...extra: unknown[]) => {
+  ipcMain.handle(channels.approvalHistory, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)
-    return worker.domain(parseDomainCommand(command))
+    return worker.approvalHistory(parseApprovalHistoryCommand(command))
   })
   ipcMain.handle(channels.scheduling, (event, command: unknown, ...extra: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, extra)

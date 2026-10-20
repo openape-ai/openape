@@ -29,7 +29,7 @@ const list = (items: { name: string, flow: number }[]) => items.map(item => `${i
         {{ pod.description }}
       </div>
       <div v-if="pod" class="k">
-        {{ cadence(pod.schedule, pod.data.reads) }}<template v-if="pod.runs">
+        {{ cadence(pod.schedule) }}<template v-if="pod.runs">
           · {{ t('{count} runs in total', { count: pod.runs }) }}
         </template>
       </div>
@@ -38,9 +38,6 @@ const list = (items: { name: string, flow: number }[]) => items.map(item => `${i
       </div>
       <div v-else-if="pod" class="k">
         {{ t('no run yet') }}
-      </div>
-      <div v-if="facts?.data.length" class="k">
-        {{ t('Shared data') }}: {{ facts.data.map(item => `${item.direction === 'writes' ? '→' : '←'} ${item.namespace} (${item.flow})`).join(', ') }}
       </div>
       <div v-if="facts?.reads.length" class="k">
         {{ t('reads') }}: {{ list(facts.reads) }}

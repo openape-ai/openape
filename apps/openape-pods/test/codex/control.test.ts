@@ -25,34 +25,16 @@ function fixture() {
   const resources = new ResourceRegistry(store, () => {}); const runtime = {} as AgentRuntime
   const dispatcher = new RunDispatcher(store, resources, runtime); const scheduler = new Scheduler(store, dispatcher)
   const master = new MasterControl(store, resources, dispatcher, scheduler, runtime)
-  const codex = new CodexControl(store, master, dispatcher)
+  const codex = new CodexControl(store, master)
   const send = (action: Record<string, unknown>) => codex.execute(parseCodexRequest({ id: randomUUID(), action }), new AbortController().signal)
   const current = () => store.getPod(pod.id)
   return { store, pod, resources, master, codex, send, current, dispatcher }
 }
 
-it('administers shared data as the owner: namespaces, owner records and questions, but no effect reconciliation', async () => {
-  const { store, send, pod, codex } = fixture()
-  const reader = store.createPod({ name: 'Reader' })
-  const domain = (command: Record<string, unknown>) => send({ action: 'domain', command })
-  await domain({ type: 'define', path: 'synthetic/records', writer: 'owner', mode: 'records', readers: [reader.id] })
-  await domain({ type: 'define', path: 'synthetic/results', writer: pod.id, mode: 'results', readers: [] })
-  await expect(domain({ type: 'define', path: 'synthetic/records/inner', writer: 'owner', mode: 'records', readers: [] })).rejects.toThrow('may not contain or lie inside another namespace')
-  const write = parseCodexRequest({ id: randomUUID(), action: { action: 'domain', command: { type: 'set', key: 'synthetic/records/sender-a', value: { rule: 'newsletter' }, revision: 0 } } })
-  await expect(codex.execute(write, new AbortController().signal)).resolves.toEqual({ revision: 1 })
-  // A lost response is retried with the same requestId and returns the recorded result instead of writing again.
-  await expect(codex.execute(write, new AbortController().signal)).resolves.toEqual({ revision: 1 })
-  await expect(codex.execute({ ...write, action: { action: 'domain', command: { type: 'set', key: 'synthetic/records/sender-a', value: {}, revision: 1 } } }, new AbortController().signal)).rejects.toThrow('different command')
-  await expect(domain({ type: 'set', key: 'synthetic/results/x', value: {}, revision: 0 })).rejects.toThrow()
-  expect(await domain({ type: 'entries', path: 'synthetic/records' })).toMatchObject({ entries: [{ key: 'synthetic/records/sender-a', value: { rule: 'newsletter' } }] })
-  // An effect with an unknown outcome is the script's to reconcile (issue 1518); Pods neither lists nor settles it.
-  store.db.prepare('INSERT INTO effect_attempts VALUES(?,1,?,NULL,\'mail.archive\',?,\'unknown\',\'{}\',1)').run('a'.repeat(64), pod.id, 'b'.repeat(64))
-  const overview = await domain({ type: 'list' })
-  expect(overview).toMatchObject({ namespaces: [expect.objectContaining({ path: 'synthetic/records', readers: [reader.id], entries: 1 }), expect.objectContaining({ path: 'synthetic/results', writer: pod.id })] })
-  expect(overview).not.toHaveProperty('unknownEffects')
-  await expect(domain({ type: 'resolveEffect', actionKey: 'a'.repeat(64), attempt: 1, applied: true, evidence: 'The message is in the Archive folder' })).rejects.toThrow('Invalid domain data command')
-  expect(store.db.prepare('SELECT state FROM effect_attempts').get()).toEqual({ state: 'unknown' })
-  await expect(domain({ type: 'openApproval', id: randomUUID() })).rejects.toThrow('desktop window')
+it('rejects retired shared-storage administration without creating tables or writing records', async () => {
+  const { store, send } = fixture()
+  for (const type of ['list', 'define', 'entries', 'set', 'work', 'answer']) await expect(send({ action: 'domain', command: { type } })).rejects.toThrow('not allowed')
+  expect(store.db.prepare('SELECT name FROM sqlite_schema WHERE name=\'data_namespaces\'').get()).toBeUndefined()
 })
 
 it('applies variables directly, preserves scope and validation checks, and creates no reviews', async () => {
@@ -222,13 +204,14 @@ it('journals a local private Jev import without accepting a raw key or unselecte
   expect(codex.administration({ type: 'begin', request })).toEqual({ completed: true, result: { jev: { state: 'ready' } } })
 })
 
-it('describes shared data as the only way Pods compose and offers no network, workflow or gate actions', async () => {
+it('describes files and external services for data exchange and offers no network, workflow or gate actions', async () => {
   const { send } = fixture()
-  const reference = await send({ action: 'runtime' }) as { contractVersion: number, sharedData: Record<string, string>, domain: unknown, actions: Record<string, unknown> }
-  expect(reference.contractVersion).toBe(4)
-  expect(Object.keys(reference.sharedData)).toEqual(['purpose', 'data', 'work', 'decisions', 'presentation', 'engineering', 'example'])
+  const reference = await send({ action: 'runtime' }) as { contractVersion: number, dataExchange: Record<string, string>, approvalHistory: unknown, actions: Record<string, unknown> }
+  expect(reference.contractVersion).toBe(5)
+  expect(reference.dataExchange.purpose).toContain('files')
+  expect(reference).not.toHaveProperty('sharedData')
   expect(reference).not.toHaveProperty('networks')
-  expect(reference).toHaveProperty('domain')
+  expect(reference).not.toHaveProperty('domain')
   await expect(send({ action: 'networks', command: { type: 'list' } })).rejects.toThrow()
   expect(Object.keys(reference.actions).filter(action => /workflow|graph|gate|approve/i.test(action))).toEqual([])
   await expect(send({ action: 'saveWorkflow', definition: {} })).rejects.toThrow()

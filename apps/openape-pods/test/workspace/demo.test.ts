@@ -8,8 +8,7 @@ import { parseScriptView } from '../../src/contracts/scripts'
 import { parseResourceState } from '../../src/contracts/resources'
 import { parseRunView } from '../../src/contracts/runs'
 import { parseScheduleView } from '../../src/contracts/scheduling'
-import type { DomainOverview } from '../../src/contracts/domain-admin'
-import { localWorkspaceAccess, browserWorkspaceAccess } from '../../src/renderer/workspace-access'
+import { browserWorkspaceAccess } from '../../src/renderer/workspace-access'
 import { centralFixture } from './central-fixture'
 
 let demo: ReturnType<typeof createDemoAdapter> | undefined
@@ -47,20 +46,6 @@ it('confirms edits across views, rejects stale writes and returns detached snaps
   expect((await bridge.workspace({ type: 'list' })).pods[0]!.name).toBe('Rechnungseingang')
 })
 
-it('retains a refused choice, then applies single and grouped choices to counters', async () => {
-  demo = createDemoAdapter('attention')
-  const access = localWorkspaceAccess(demo.bridge)
-  const command = { type: 'answer' as const, questionId: 'demo-question-1', option: 'archive' }
-  await expect(access.domain!(command)).rejects.toThrow('Saving failed')
-  expect((await access.read()).map!.kpis.decisions.filter(row => row.kind === 'question').reduce((sum, row) => sum + row.count, 0)).toBe(4)
-  await access.domain!(command)
-  const domain = await demo.bridge.domain({ type: 'list' }) as DomainOverview
-  await Promise.all(domain.questions.map(question => access.domain!({ type: 'answer', questionId: question.id, option: 'keep' })))
-  expect((await access.read()).map!.kpis.decisions.filter(row => row.kind === 'question')).toEqual([])
-  expect((await demo.bridge.domain({ type: 'list' }) as DomainOverview).questions).toEqual([])
-  await expect(access.domain!(command)).rejects.toThrow('already answered')
-})
-
 it('shows a running command before completion and cancels pending work when disposed', async () => {
   vi.useFakeTimers()
   demo = createDemoAdapter('everyday')
@@ -91,13 +76,13 @@ it('makes native side effects explicit and keeps unavailable remote capabilities
   const notify = vi.fn()
   demo = createDemoAdapter('attention', notify)
   await expect(demo.bridge.programs({ type: 'openFolder', podId: demoId(1) })).rejects.toThrow('Demo:')
-  await demo.bridge.domain({ type: 'openApproval', id: demoId(900) })
+  await demo.bridge.approvalHistory({ type: 'openApproval', id: demoId(900) })
   expect(notify).toHaveBeenCalledWith(expect.stringContaining('No permission was granted'))
   const fixture = centralFixture()
   const dispatch = vi.fn(async () => 'confirmed')
   const browser = browserWorkspaceAccess(() => fixture.host, dispatch)
   const request = { channel: 'scheduling' as const, body: { type: 'lifecycle', podId: fixture.view.id, revision: 1, lifecycle: 'paused' } }
-  expect(browser.desktop).toBe(false); expect(browser.domain).toBeUndefined()
+  expect(browser.desktop).toBe(false); expect(browser.approvalHistory).toBeUndefined()
   expect(await browser.command(request)).toBe('confirmed')
   expect(dispatch).toHaveBeenCalledWith(request)
   fixture.host.online = false

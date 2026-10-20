@@ -38,10 +38,10 @@ it('keeps a confirmed provider consent across a restart without moving existing 
   const metadata = { issuer: 'https://id.example.invalid', subject: 'owner@example.invalid', pods: { [pods[1]!.id]: { connectionId: randomUUID(), prepared: false } } }
   setup(store).execute({ type: 'save', connection: owner, metadata })
   expect(setup(store).connections.metadata(owner.id)).not.toHaveProperty('broker')
-  setup(store).execute({ type: 'save', connection: owner, metadata: { ...metadata, broker: { issuer: 'https://pods.example.invalid', domain: 'pods.example.invalid', connectionId: randomUUID() } } })
+  setup(store).execute({ type: 'save', connection: owner, metadata: { ...metadata, broker: { issuer: 'https://pods.example.invalid', approvalHistory: 'pods.example.invalid', connectionId: randomUUID() } } })
   store.close(); store = new PodDatabase(root)
   try {
-    expect(setup(store).connections.metadata(owner.id)).toMatchObject({ broker: { domain: 'pods.example.invalid' } })
+    expect(setup(store).connections.metadata(owner.id)).toMatchObject({ broker: { approvalHistory: 'pods.example.invalid' } })
     expect(store.listPods()).toEqual(pods)
   }
   finally { store.close() }

@@ -1,3 +1,4 @@
+import { assertSharedStorageUnused } from '../storage/retire-shared'
 import { assertIntegrity } from '../storage/integrity'
 import { fenceRestoredRuntime } from '../storage/restore-fence'
 import { assertSupportedSchema, upgradeToCurrent } from '../storage/upgrade'
@@ -58,6 +59,7 @@ function upgradeRestored(database: DatabaseSync, schema: number): void {
   database.exec('PRAGMA foreign_keys=OFF; BEGIN IMMEDIATE;')
   try { upgradeToCurrent(database, schema); database.exec(`PRAGMA user_version=${schemaVersion}; COMMIT;`) }
   catch (error) { database.exec('ROLLBACK'); throw error }
+  database.exec('VACUUM')
 }
 
 export async function createBackup(store: PodDatabase, parent: string, observe: (path: string) => void = () => {}): Promise<string> {
@@ -123,6 +125,7 @@ export async function restoreBackup(backup: string, parent: string, maximumSchem
     const database = new DatabaseSync(join(stage, 'control.sqlite'))
     try {
       checkDatabase(database, manifest.schema)
+      if (manifest.schema >= 48 && manifest.schema < schemaVersion) assertSharedStorageUnused(database, stage)
       upgradeRestored(database, manifest.schema)
       assertIntegrity(database, true)
       const records = new Map(manifest.files.map(file => [file.path, file]))

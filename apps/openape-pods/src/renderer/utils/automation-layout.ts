@@ -1,14 +1,13 @@
 import type { MapSystemKind, MapView } from '../../contracts/map-view'
-import { graphLayers } from './graph-layout'
 
 /**
  * The picture of the Automatisierungen map: fixed columns (systems left, Pods in the middle, pure
- * sinks right, authorities and AI on top), no force layout. Pods that share data are laid out in
- * layers from writer to reader. Nodes glide to their targets; the canvas height follows the content.
+ * sinks right, authorities and AI on top), no force layout. Pods occupy bounded rows.
+ * Nodes glide to their targets; the canvas height follows the content.
  * All numbers are logical canvas units (width 1200).
  */
 export type NodeKind = 'pod' | 'system' | 'sink' | 'auth' | 'ai'
-export type LinkType = 'data' | 'read' | 'write' | 'auth'
+export type LinkType = 'read' | 'write' | 'auth'
 export interface MapNode {
   id: string
   kind: NodeKind
@@ -31,9 +30,9 @@ export interface MapNode {
 }
 export interface MapLink { from: string, to: string, type: LinkType, label: string, flow: number }
 export interface MapModel { nodes: MapNode[], links: MapLink[], height: number }
-export interface Layers { data: boolean, read: boolean, write: boolean, auth: boolean, paused: boolean }
+export interface Layers { read: boolean, write: boolean, auth: boolean, paused: boolean }
 export const canvasWidth = 1200
-export const geometry = { systemX: 100, sinkX: 1095, topY: 56, topGap: 270, firstRow: 150, rowGap: 30, shared: { x: 250, w: 660, layerHeight: 90 }, single: { h: 80, gap: 170 }, podRadius: 18, columnStart: 200, columnStep: 90, minimumHeight: 420 } as const
+export const geometry = { systemX: 100, sinkX: 1095, topY: 56, topGap: 270, firstRow: 150, rowGap: 30, single: { h: 80, gap: 170 }, podRadius: 18, columnStart: 200, columnStep: 90, minimumHeight: 420 } as const
 export const boxSize = (kind: NodeKind): { w: number, h: number } => kind === 'sink' ? { w: 190, h: 40 } : kind === 'auth' || kind === 'ai' ? { w: 160, h: 40 } : kind === 'pod' ? { w: 36, h: 36 } : { w: 160, h: 40 }
 export const IDP = 'auth:idp'
 export const YOU = 'auth:you'
@@ -49,7 +48,7 @@ export function buildModel(view: MapView, previous?: MapModel): MapModel {
   for (const pod of view.pods) {
     if (pod.lifecycle === 'archived') continue
     shown.add(pod.id)
-    nodes.push(node(pod.id, 'pod', pod.name, { paused: pod.lifecycle === 'paused', ai: pod.ai, degraded: degraded.has(pod.id), blocked: pod.work.held > 0, running: pod.lastRun?.state === 'running', secrets: pod.secrets.length > 0 }))
+    nodes.push(node(pod.id, 'pod', pod.name, { paused: pod.lifecycle === 'paused', ai: pod.ai, degraded: degraded.has(pod.id), blocked: false, running: pod.lastRun?.state === 'running', secrets: pod.secrets.length > 0 }))
     for (const approval of pod.approvals) links.push({ from: pod.id, to: IDP, type: 'auth', label: approval.title, flow: 1 })
   }
   for (const decision of view.kpis.decisions.filter(item => shown.has(item.podId))) links.push({ from: decision.podId, to: decision.kind === 'question' ? YOU : IDP, type: 'auth', label: decision.kind, flow: decision.count })
@@ -59,7 +58,7 @@ export function buildModel(view: MapView, previous?: MapModel): MapModel {
     const kind: NodeKind = system.id.startsWith('ai:') ? 'ai' : reads.has(system.id) ? 'system' : 'sink'
     nodes.push(node(system.id, kind, system.name, { sub: system.how, rk: system.kind, both: reads.has(system.id) && writes.has(system.id) }))
   }
-  for (const edge of view.edges) links.push({ from: edge.from, to: edge.to, type: edge.type, label: edge.channel ?? '', flow: edge.flow })
+  for (const edge of view.edges.filter(edge => edge.type !== 'data')) links.push({ from: edge.from, to: edge.to, type: edge.type as 'read' | 'write', label: edge.channel ?? '', flow: edge.flow })
   const questions = view.kpis.decisions.filter(item => item.kind === 'question').reduce((sum, item) => sum + item.count, 0)
   if (links.some(link => link.from === YOU || link.to === YOU)) nodes.push(node(YOU, 'auth', 'you', { badge: questions }))
   if (links.some(link => link.from === IDP || link.to === IDP)) nodes.push(node(IDP, 'auth', 'id.openape.ai', { sub: 'idp' }))
@@ -97,21 +96,13 @@ export function relayout(model: MapModel, view: MapView, layers: Layers): MapMod
   const column = (items: MapNode[], x: number, y0: number, y1: number) => items.forEach((item, index) => { item.tx = x; item.ty = items.length === 1 ? (y0 + y1) / 2 : y0 + (y1 - y0) * index / (items.length - 1) })
   row(shown.filter(item => item.kind === 'auth' || item.kind === 'ai'), g.topY, g.topGap)
   let y = g.firstRow
-  // Pods that share data form layers from writer to reader; the others sit in one row below.
   const pods = shown.filter(item => item.kind === 'pod')
-  const shared = view.edges.filter(edge => edge.type === 'data' && pods.some(item => item.id === edge.from) && pods.some(item => item.id === edge.to))
-  const connected = pods.filter(item => shared.some(edge => edge.from === item.id || edge.to === item.id))
-  if (connected.length) {
-    const ids = connected.map(item => item.id)
-    const layered = graphLayers(ids, shared.map(edge => ({ from: edge.from, to: edge.to, channel: edge.channel ?? '' })))
-    const x0 = g.shared.x + 50; const x1 = g.shared.x + g.shared.w - 50
-    const height = Math.max(...layered.map(layer => layer.length)) * g.shared.layerHeight
-    for (const item of connected) item.labelWidth = 110
-    layered.forEach((layer, index) => layer.forEach((id, position) => { const item = connected.find(member => member.id === id)!; item.tx = layered.length === 1 ? (x0 + x1) / 2 : x0 + (x1 - x0) * index / (layered.length - 1); item.ty = y + 40 + (layer.length === 1 ? height / 2 : height * position / (layer.length - 1)) }))
-    y += height + 80 + g.rowGap
+  for (let index = 0; index < pods.length; index += 4) {
+    const group = pods.slice(index, index + 4)
+    for (const item of group) item.labelWidth = g.single.gap - 10
+    row(group, y + g.single.h / 2 - 10, g.single.gap)
+    y += g.single.h + g.rowGap
   }
-  const singles = pods.filter(item => !connected.includes(item))
-  if (singles.length) { for (const item of singles) item.labelWidth = g.single.gap - 10; row(singles, y + g.single.h / 2 - 10, g.single.gap); y += g.single.h + g.rowGap }
   const systems = shown.filter(item => item.kind === 'system'); const sinks = shown.filter(item => item.kind === 'sink')
   const columns = Math.max(systems.length, sinks.length)
   const height = Math.max(g.minimumHeight, y - g.rowGap + 30, g.columnStart + (columns - 1) * g.columnStep + 60)
@@ -142,12 +133,12 @@ export function anchor(item: MapNode, toward: { x: number, y: number }): { x: nu
   return { x: item.x + dx * k, y: item.y + dy * k }
 }
 
-/** A quadratic curve from a to b; data links run straight, other links bend 15 % of their length (at most 60), write-backs to a left system the other way. */
+/** A quadratic curve from a to b; links bend 15 % of their length (at most 60), write-backs to a left system the other way. */
 export function curve(a: MapNode, b: MapNode, type: LinkType): { p0: { x: number, y: number }, p1: { x: number, y: number }, c: { x: number, y: number } } {
   const p0 = anchor(a, b); const p1 = anchor(b, a)
   const mx = (p0.x + p1.x) / 2; const my = (p0.y + p1.y) / 2
   const dx = p1.x - p0.x; const dy = p1.y - p0.y; const d = Math.hypot(dx, dy) || 1
-  const bend = type === 'data' ? 0 : Math.min(60, d * 0.15) * (a.id < b.id ? 1 : -1) * (type === 'write' && b.kind === 'system' ? -1.6 : 1)
+  const bend = Math.min(60, d * 0.15) * (a.id < b.id ? 1 : -1) * (type === 'write' && b.kind === 'system' ? -1.6 : 1)
   return { p0, p1, c: { x: mx - dy / d * bend, y: my + dx / d * bend } }
 }
 export const pointAt = (c: ReturnType<typeof curve>, t: number) => ({ x: (1 - t) * (1 - t) * c.p0.x + 2 * (1 - t) * t * c.c.x + t * t * c.p1.x, y: (1 - t) * (1 - t) * c.p0.y + 2 * (1 - t) * t * c.c.y + t * t * c.p1.y })
@@ -163,15 +154,13 @@ export function hitTest(model: MapModel, visible: Set<string>, x: number, y: num
   return null
 }
 
-export interface NodeFacts { reads: { name: string, flow: number }[], writes: { name: string, flow: number }[], data: { direction: 'writes' | 'reads', namespace: string, flow: number }[] }
-/** What one node reads, writes and shares, with the measured flows of the window. */
+export interface NodeFacts { reads: { name: string, flow: number }[], writes: { name: string, flow: number }[] }
+/** What one node reads and writes, with the measured flows of the window. */
 export function nodeFacts(view: MapView, id: string): NodeFacts {
   const name = (systemId: string) => view.systems.find(system => system.id === systemId)?.name ?? systemId
   return {
     reads: view.edges.filter(edge => edge.type === 'read' && edge.to === id).map(edge => ({ name: name(edge.from), flow: edge.flow })),
     writes: view.edges.filter(edge => edge.type === 'write' && edge.from === id).map(edge => ({ name: name(edge.to), flow: edge.flow })),
-    // A namespace with several readers is one fact for its writer.
-    data: [...new Map(view.edges.filter(edge => edge.type === 'data' && (edge.from === id || edge.to === id)).map(edge => ({ direction: edge.from === id ? 'writes' as const : 'reads' as const, namespace: edge.channel ?? '', flow: edge.flow })).map(fact => [`${fact.direction}:${fact.namespace}`, fact])).values()],
   }
 }
 

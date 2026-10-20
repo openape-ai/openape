@@ -505,11 +505,11 @@ it('publishes a local-only Pod as a placeholder with stable parts and leaves its
 }, 15000)
 
 it('applies a phone decision once through the workspace operation and refuses the same decision afterwards', async () => {
-  const key = 'a'.repeat(64)
+  const key = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   let waiting = true
   let podId = ''
-  const sources = async () => ({ map: { pods: [{ id: podId, name: 'Monitor', approvals: [] }] }, domain: { namespaces: [], operations: [], questions: [], approvals: [], held: waiting ? [{ key, operation: 'acme/invoices', object: 'invoice-7', state: 'blocked', attempt: 5, readyAt: 0, reason: 'Automatic attempts exhausted', inputRevision: 1 }] : [] }, secrets: null })
-  const worker = { inboxSources: sources, domain: vi.fn(async () => { waiting = false; return {} }), secrets: vi.fn(), runs: vi.fn() } as unknown as DecisionWorker & { domain: ReturnType<typeof vi.fn> }
+  const sources = async () => ({ map: { pods: [{ id: podId, name: 'Monitor', approvals: [] }] }, approvalHistory: { approvals: [] }, secrets: { origin: 'https://secrets.openape.ai', requests: waiting ? [{ id: key, podId, alias: 'mail', purpose: 'Read mail', status: 'requested', error: null }] : [] } })
+  const worker = { inboxSources: sources, approvalHistory: vi.fn(), secrets: vi.fn(async () => { waiting = false; return {} }), runs: vi.fn() } as unknown as DecisionWorker & { secrets: ReturnType<typeof vi.fn> }
   const decisions = new InboxDecisions(worker, key => key)
   const { controller, server, actor, pod } = connected({ executor: { execute: async command => decisions.decide(parseInboxDecide(command.body)) } })
   podId = pod.id
@@ -521,17 +521,17 @@ it('applies a phone decision once through the workspace operation and refuses th
   const { digest } = inbox.openDecision(actor.owner, item!.id)
   // The command the relay route builds from the stored decision; the phone never sends a desktop command itself.
   // An older phone app may still send an observation; retrying failed work needs none (issue 1518).
-  const command = { channel: 'inbox' as const, body: { type: 'decide', sourceId: item!.decision!.sourceId, digest, option: 'release', input: 'Im Postfach gesehen' } }
+  const command = { channel: 'inbox' as const, body: { type: 'decide', sourceId: item!.decision!.sourceId, digest, option: 'cancel' } }
   const first = randomUUID()
   server.submitDecision(actor.owner, actor.id, command, first)
   server.submitDecision(actor.owner, actor.id, command, first)
   await vi.waitFor(() => expect(server.operation(actor.owner, first)).toMatchObject({ state: 'applied', result: { status: 'applied' } }), { timeout: 5000 })
-  expect(worker.domain).toHaveBeenCalledExactlyOnceWith({ type: 'release', key })
+  expect(worker.secrets).toHaveBeenCalledExactlyOnceWith({ type: 'cancel', id: key })
   // A second device acting on the same, already decided item fails clearly instead of applying twice.
   const second = randomUUID()
   server.submitDecision(actor.owner, actor.id, command, second)
   await vi.waitFor(() => expect(server.operation(actor.owner, second)).toMatchObject({ state: 'failed', error: 'This decision is no longer waiting' }), { timeout: 5000 })
-  expect(worker.domain).toHaveBeenCalledOnce()
+  expect(worker.secrets).toHaveBeenCalledOnce()
   expect(inbox.syncDecisions(actor.owner, actor.id, await decisions.collect())).toEqual({ created: 0, updated: 0, resolved: 1, skipped: 0 })
 }, 12000)
 

@@ -20,9 +20,9 @@ For a first task, use a small folder of non-sensitive sample files and read-only
 
 Automations is the landing tab. The counters at the top are system counts: active, current errors and decisions waiting for you. Their subtitles come from your data, for example the name of a degraded Pod and its reason.
 
-The map shows your Pods in the middle, the services, applications and folders they read on the left, pure destinations on the right and the authorities above: your decisions, the identity provider and the AI. Dotted lines carry the recorded reads and writes of the last 24 hours; Pods that share data are laid out writer before reader, and each shared-data line names its namespace. List shows the same Pods as a table. With tags, the map starts empty: activate one or more tags to show their Pods; each tag shows how many Pods carry it, and Without tag, All and None are always available. The choice is remembered on this device. Layers opens the chips Shared data, Read, Write, Approvals and Paused; Legend explains the node shapes.
+The map shows your Pods in the middle, the services, applications and folders they read on the left, pure destinations on the right and the authorities above: your decisions, the identity provider and the AI. Dotted lines carry the recorded reads and writes of the last 24 hours; Pods appear in rows between the external systems they use. List shows the same Pods as a table. With tags, the map starts empty: activate one or more tags to show their Pods; each tag shows how many Pods carry it, and Without tag, All and None are always available. The choice is remembered on this device. Layers opens the chips Read, Write, Approvals and Paused; Legend explains the node shapes.
 
-Select a node to read its facts in the info panel. Open details opens the detail page with schedule, the shared data a Pod writes and reads, its waiting work, numbers, access by kind, secrets as aliases, the developer section and the latest run. Pause, Resume and Run now are the owner commands on this page; nothing here writes to your accounts.
+Select a node to read its facts in the info panel. Open details opens the detail page with schedule, numbers, access by kind, secrets as aliases, the developer section and the latest run. Pause, Resume and Run now are the owner commands on this page; nothing here writes to your accounts.
 
 Stand HH:MM marks a published snapshot in the browser; Live · HH:MM means the desktop answers directly. The browser renders the same tab from the snapshot of the selected desktop. Native controls such as opening the script folder or choosing a private file stay on the desktop and are shown disabled in the browser.
 
@@ -31,22 +31,15 @@ Stand HH:MM marks a published snapshot in the browser; Live · HH:MM means the d
 3. Select a Pod and choose Open details.
 4. Use Pause, Resume or Run now on the detail page. Details öffnen in the developer section opens the Pod editor for permissions, variables and secrets, history and identity.
 
-![Automations: map, list and detail](images/handbook-automations.png)
-
 ## Decisions: everything that waits for you
 
-The Decisions tab lists what waits for you: Questions your Pods asked, Approvals of single actions on single objects at the identity provider, Rights a Pod is missing, Failed work that no longer retries on its own and Secrets requested through OpenApe Secrets. The number in the tab is the count of open items.
-
-A question shows the recorded fields of its case and the options with their exact titles; Group by bundles cases by one field so a single choice answers the whole group. Your answer is stored as shared data that the asking Pod reads; it does not run anything by itself. An approval binds one action to one object, for example archiving one message, and is decided at the identity provider; an expired or denied approval can be asked again or withdrawn. Failed work has used up its automatic attempts; fix the cause and choose Retry. Pods holds nothing else for your review: a run can be interrupted at any point and repeat, and the script is responsible for not repeating an external action.
+The Decisions tab lists historical approvals, rights a Pod is missing, and secrets requested through OpenApe Secrets. Historical approvals are read-only; reconcile their outcomes in the responsible external tool. The number in the tab counts the displayed open items.
 
 Pods never decides for you: no model and no schedule chooses, approves, excludes or pauses. Your signed-in Codex session acts with your identity for one hour, like a signed-in CLI you use with Codex: it can approve, deny and revoke the rights your Pods request, and the run activity marks such approvals as approved in Codex session. Outside that session rights are decided at the identity provider only; the app shows status and links.
 
 1. Open Decisions; the tab shows how many items wait.
-2. Read the case, then choose an option; Group by decides many cases with the same field at once. For an approval, open it at the identity provider and decide it there.
-3. For failed work, fix the cause first, then choose Retry.
-4. Secrets lists open secret requests with the link to fill them in at secrets.openape.ai.
-
-![Decisions: everything that waits for you](images/handbook-decisions.png)
+2. Read the requested right and decide it at the identity provider. Historical records grant no authority.
+3. Secrets lists open secret requests with the link to fill them in at secrets.openape.ai.
 
 ## Connect your personal accounts
 
@@ -431,27 +424,17 @@ Keep your personal mail notification script locally and activate it through the 
 
 Validate and run manually before enabling a 15-minute interval in Settings. Review the secrets assigned to this Pod. The recipe records a pending notification before sending it and stores the receipt before acknowledging progress. If a run is interrupted between sending and storing the receipt, the repeated run can send the notification again unless the destination deduplicates it.
 
-## Shared data between Pods
+## Data exchange between Pods
 
-Pods never call each other. A Pod writes its results to shared data, and other Pods find their own work there. Shared data lives in namespaces such as delta-mind/mail/messages; each namespace has exactly one writer, a Pod or you, and the Pods you list as readers. Nothing is inherited from a parent namespace.
+Pods exchange data through files in assigned folders or external services. Each script selects its input and prevents duplicate effects. A Pod keeps its own identity, sandbox and grants.
 
-A Pod that declares work names the namespace it reads and the one it writes its results to. Every new or changed input becomes one piece of work; an unchanged input is never processed again, also when its result was negative. A scheduled run without ready work is skipped. A Pod keeps its own rights: each application, HTTP destination, secret and folder still needs its grant, approved at the identity provider or in your Codex session.
+Shared storage, namespace administration, declared work and stored owner questions have been removed. The upgrade saves a verified private database backup, then deletes the old shared tables. Private checkpoints, files, run history, effects and historical approvals remain. Restore never re-enables the retired feature.
 
-Dotted lines on the map show the recorded writes and reads of the last 24 hours. A count does not confirm an external action succeeded: inspect the Pod's history and the actual result. Questions and approvals of your Pods are counted on the Decisions tab.
-
-Prompt engineering defines one bounded task and its result criteria inside a Pod. Loop engineering uses finite attempts and time limits inside a script, with a visible failure or review result at the limit. A model never grants rights or approves an action.
-
-Mail handling runs as separate Pods for synchronisation, classification and the follow-up checks, each reading the shared mail data it needs. Nothing is archived without an approval for that message at the identity provider, and uncertain mail waits as a question on the Decisions tab.
-
-Earlier versions connected Pods through networks. Networks were retired; their history stays readable, and Pods that belonged to a network keep their data on the desktop.
-
-1. Hand the brief to Codex: which Pods write which data, who reads it and which actions need your approval.
-2. Inspect the namespaces, writers and readers on the map and on the detail pages.
-3. Run each Pod once, answer the open questions, and enable schedules only after the result is checked.
+Prompt engineering defines one bounded task and its result criteria. Use finite attempts and time limits, with a visible failure at the limit. A model never grants rights or approves an action.
 
 ## Work from your Codex
 
-Connected Codex on this Mac administers Pods directly: it can manage variables and resources, validate and activate scripts, enable schedules, start, cancel and inspect runs, and define shared-data namespaces with their writer and readers. No global Node installation is needed; Pods supplies its runtime.
+Connected Codex on this Mac administers Pods directly: it can manage variables and resources, validate and activate scripts, enable schedules, start, cancel and inspect runs. No global Node installation is needed; Pods supplies its runtime.
 
 New automation with Codex on the Automations tab writes a brief with the tags of the pinned Pod or node and the Pods it already knows; the desktop opens Codex, the browser copies the brief for you to paste.
 
