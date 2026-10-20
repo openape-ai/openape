@@ -74,6 +74,11 @@ async function runPod(client: CliClient, pod: StoredPod, io: CliIO): Promise<num
 }
 
 export async function executeCli(args: CliArguments, client: CliClient, io: CliIO): Promise<number> {
+  if (args.command === 'agent-backends') {
+    const type = args.id === 'reload' ? 'reloadProxy' : args.id === 'disable' ? 'disableProxy' : 'proxyStatus'
+    io.output(await client.request({ channel: 'agentBackends', command: { type } }))
+    return 0
+  }
   let state = await workspace(client)
   if (args.command === 'list') {
     const pods: (StoredPod & { tags: string[], lastRun: Pick<RunRecord, 'id' | 'state' | 'startedAt'> | null })[] = []

@@ -11,15 +11,16 @@ import { Scheduler } from '../../src/worker/scheduling/scheduler'
 import { MasterControl } from '../../src/worker/master/control'
 import { executeScript } from '../../src/worker/runs/runner'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
+import { AgentCallError } from '../../src/contracts/agent-errors'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
 const stores: PodDatabase[] = []
 afterEach(() => { vi.mocked(executeScript).mockReset(); for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) } })
 
-async function drafted() {
+async function drafted(extraRuntime: Partial<AgentRuntime> = {}) {
   const store = new PodDatabase(mkdtempSync(join(tmpdir(), 'pods-validation-'))); stores.push(store)
   const manifest = join(store.root, 'runtime.json'); writeFileSync(manifest, JSON.stringify({ dependencyLockHash: 'a'.repeat(64) }))
-  const runtime = { manifest } as AgentRuntime
+  const runtime = { manifest, ...extraRuntime } as AgentRuntime
   const resources = new ResourceRegistry(store, () => {}); const dispatcher = new RunDispatcher(store, resources, runtime)
   const master = new MasterControl(store, resources, dispatcher, new Scheduler(store, dispatcher), runtime)
   const pod = store.createPod({ name: 'Input checker' })
@@ -69,4 +70,26 @@ it('provides only local elapsed timing during synthetic validation', async () =>
     return { status: 'completed', summary: 'Synthetic timing checked', completedInputIds: [], gapIds: [] }
   })
   await expect(validate()).resolves.toMatchObject({ status: 'completed' })
+})
+
+it('resolves proxy configuration without performing inference and preserves synthetic output', async () => {
+  const validateProxyAgent = vi.fn(async () => undefined)
+  const { validate } = await drafted({ validateProxyAgent })
+  vi.mocked(executeScript).mockImplementation(async (_runtime, _root, _artifact, _input, signal, services) => {
+    expect(await services.request('agent.run', { backend: 'proxy', provider: 'claude', modelSize: 'medium', thinking: 'high', prompt: 'Validate selection' }, signal)).toEqual({ threadId: 'synthetic-validation', response: '{"claims":[]}' })
+    return { status: 'completed', summary: 'Only the contract was checked', completedInputIds: [], gapIds: [] }
+  })
+  await expect(validate()).resolves.toMatchObject({ status: 'completed' })
+  expect(validateProxyAgent).toHaveBeenCalledWith(expect.objectContaining({ backend: 'proxy', provider: 'claude', modelSize: 'medium', thinking: 'high', tools: [], timeoutSeconds: 120 }), expect.any(AbortSignal))
+})
+
+it.each(['missing', 'disabled', 'tools'] as const)('refuses %s proxy configuration or tools during synthetic validation', async (kind) => {
+  const validateProxyAgent = vi.fn(async () => { throw new AgentCallError('model_unavailable', 'Mapping is disabled', { phase: 'resolve' }) })
+  const { validate } = await drafted(kind === 'missing' ? {} : { validateProxyAgent })
+  vi.mocked(executeScript).mockImplementation(async (_runtime, _root, _artifact, _input, signal, services) => {
+    await services.request('agent.run', { backend: 'proxy', provider: 'claude', modelSize: 'medium', prompt: 'Validate selection', ...(kind === 'tools' ? { tools: ['ape_shell'] } : {}) }, signal)
+    return { status: 'completed', summary: 'Unexpected acceptance', completedInputIds: [], gapIds: [] }
+  })
+  await expect(validate()).rejects.toMatchObject({ code: kind === 'missing' ? 'proxy_not_configured' : kind === 'disabled' ? 'model_unavailable' : 'unsupported_combination' })
+  expect(validateProxyAgent).toHaveBeenCalledTimes(kind === 'disabled' ? 1 : 0)
 })

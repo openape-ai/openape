@@ -119,3 +119,17 @@ it('captures a supplied Jev key only in the CLI controller and removes inherited
     else process.env.JEV_API_KEY = previous
   }
 })
+
+it('routes proxy status and administration without selecting or starting a Pod', async () => {
+  const request = vi.fn(async () => ({ configured: false, enabled: false, available: false, mappings: [] }))
+  const output = vi.fn()
+  for (const [action, type] of [['status', 'proxyStatus'], ['reload', 'reloadProxy'], ['disable', 'disableProxy']] as const) {
+    const args = cliArguments(['agent-backends', action, '--json'])
+    expect(await executeCli(args, { request, close: async () => {} }, { output, progress: vi.fn(), signal: new AbortController().signal })).toBe(0)
+    expect(request).toHaveBeenLastCalledWith({ channel: 'agentBackends', command: { type } })
+    expect(parseCliRequest({ channel: 'agentBackends', command: { type } })).toEqual({ channel: 'agentBackends', command: { type } })
+  }
+  expect(request).toHaveBeenCalledTimes(3)
+  for (const argv of [['agent-backends', 'login'], ['agent-backends', 'status', '--script', 'x'], ['agent-backends', 'status', '--name', 'x']]) expect(() => cliArguments(argv)).toThrow()
+  expect(() => parseCliRequest({ channel: 'agentBackends', command: { type: 'connect', provider: 'chatgpt', account: '' } })).toThrow()
+})

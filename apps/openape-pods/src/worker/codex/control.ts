@@ -14,7 +14,7 @@ import { ChatRegistry } from '../master/chat-registry'
 import type { MasterControl } from '../master/control'
 
 export class CodexControl {
-  constructor(private readonly store: PodDatabase, private readonly master: MasterControl) {}
+  constructor(private readonly store: PodDatabase, private readonly master: MasterControl, private readonly agentBackends?: () => unknown) {}
 
   async execute(request: CodexRequest, signal: AbortSignal): Promise<unknown> {
     const { action } = request
@@ -34,6 +34,7 @@ export class CodexControl {
     const { actions } = runtimeReference
     return {
       ...runtimeReference,
+      ...(this.agentBackends ? { agentBackends: this.agentBackends() } : {}),
       jevConnection: jevAvailability(this.store),
       programHelp,
       desktop: desktopHelp,

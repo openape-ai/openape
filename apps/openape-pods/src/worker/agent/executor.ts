@@ -1,5 +1,8 @@
 import { defaultAgentTimeoutSeconds } from '../../contracts/agent'
-import type { AgentRequest } from '../../contracts/agent'
+import type { AgentRequest, ProxyAgentRequest } from '../../contracts/agent'
+import { AgentCallError, safeSystemCause, serializeSafeError } from '../../contracts/agent-errors'
+import { freezeAgentMetadata } from '../../contracts/agent-metadata'
+import type { AgentCallMetadata } from '../../contracts/agent-metadata'
 import { mkdir, readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
@@ -9,20 +12,58 @@ import { startAgentGateway } from './gateway'
 import type { AgentGatewayServices } from './gateway'
 import { assignedModel } from './model'
 
-export interface AgentRuntime extends ScriptRuntime { binary: string, catalog: string, manifest: string, sdkHost: string }
+export interface AgentRuntime extends ScriptRuntime { binary: string, catalog: string, manifest: string, sdkHost: string, validateProxyAgent?: (request: ProxyAgentRequest, signal: AbortSignal) => Promise<void> }
 export const disabledFeatures = ['shell_tool', 'unified_exec', 'shell_snapshot', 'apps', 'plugins', 'remote_plugin', 'browser_use', 'computer_use', 'in_app_browser', 'code_mode', 'code_mode_host', 'multi_agent', 'multi_agent_v2', 'hooks', 'memories', 'image_generation', 'view_image', 'goals', 'skill_search', 'skill_mcp_dependency_install', 'workspace_dependencies', 'enable_request_compression', 'sleep_tool']
 const quote = (value: string) => `'${value.replaceAll('\'', '\'\\\'\'')}'`
-export async function executeAgent(runtime: AgentRuntime, privateRoot: string, prompt: string, references: string[], services: AgentGatewayServices, signal: AbortSignal, event: (value: unknown) => void, tools: AgentRequest['tools'] = [], timeoutSeconds = defaultAgentTimeoutSeconds): Promise<{ threadId: string, response: string }> {
+export async function executeAgent(runtime: AgentRuntime, privateRoot: string, prompt: string, references: string[], services: AgentGatewayServices, signal: AbortSignal, event: (value: unknown) => void, tools: AgentRequest['tools'] = [], timeoutSeconds = defaultAgentTimeoutSeconds, onMetadata?: (value: AgentCallMetadata) => void): Promise<{ threadId: string, response: string }> {
+  const started = Date.now()
+  let metadata: AgentCallMetadata = { callId: randomUUID(), backend: 'native', provider: 'codex', modelSize: null, modelId: null, reportedModelId: null, requestedThinking: null, effectiveThinking: null, wireThinking: null, configRevision: null, configHash: null, modelSelection: 'account-default', startedAt: new Date(started).toISOString(), endedAt: null, durationMs: null, status: 'running', threadId: null }
+  const deadline = new AbortController()
+  const timer = setTimeout(() => deadline.abort(new AgentCallError('timeout', 'Native agent call timed out', { phase: 'request' })), timeoutSeconds * 1000)
+  const active = AbortSignal.any([signal, deadline.signal])
+  const emit = () => onMetadata?.(freezeAgentMetadata(metadata))
+  try {
+    const result = await executeNativeAgent(runtime, privateRoot, prompt, references, services, active, (value) => {
+      if (value && typeof value === 'object') {
+        const frame = value as { type?: string, thread_id?: unknown, usage?: Record<string, unknown> }
+        if (frame.type === 'thread.started' && typeof frame.thread_id === 'string') metadata = { ...metadata, threadId: frame.thread_id }
+        if (frame.type === 'turn.completed' && frame.usage) {
+          const tokens = Object.fromEntries(Object.entries({ input: frame.usage.input_tokens, output: frame.usage.output_tokens, cacheRead: frame.usage.cached_input_tokens }).filter(([, count]) => typeof count === 'number' && Number.isFinite(count) && count >= 0))
+          metadata = { ...metadata, usage: { source: 'native', unit: 'tokens', ...tokens } }
+        }
+      }
+      event(value)
+    }, tools, timeoutSeconds, (modelId) => { metadata = { ...metadata, modelId }; emit() })
+    active.throwIfAborted()
+    metadata = { ...metadata, status: 'completed', threadId: result.threadId, endedAt: new Date().toISOString(), durationMs: Date.now() - started }
+    emit()
+    return result
+  }
+  catch (failure) {
+    const error = active.aborted
+      ? (deadline.signal.aborted && !signal.aborted ? deadline.signal.reason as AgentCallError : new AgentCallError('cancelled', 'Native agent call cancelled', { phase: 'request' }))
+      : failure instanceof AgentCallError ? failure : new AgentCallError('provider_error', 'Native agent call failed', { phase: metadata.modelId ? 'request' : 'resolve', ...(safeSystemCause(failure) ? { cause: safeSystemCause(failure) } : {}) })
+    metadata = { ...metadata, status: error.code === 'timeout' ? 'timeout' : error.code === 'cancelled' ? 'cancelled' : 'failed', endedAt: new Date().toISOString(), durationMs: Date.now() - started, error: serializeSafeError(error) }
+    error.metadata = freezeAgentMetadata(metadata)
+    emit()
+    if (active.aborted) throw signal.aborted && signal.reason instanceof Error ? signal.reason : error
+    throw failure
+  }
+  finally { clearTimeout(timer) }
+}
+
+async function executeNativeAgent(runtime: AgentRuntime, privateRoot: string, prompt: string, references: string[], services: AgentGatewayServices, signal: AbortSignal, event: (value: unknown) => void, tools: AgentRequest['tools'], timeoutSeconds: number, resolved: (model: string) => void): Promise<{ threadId: string, response: string }> {
   const timeMs = timeoutSeconds * 1000
   if (!prompt.trim() || prompt.length > 128 * 1024) throw new Error('Invalid agent prompt')
   const manifest = JSON.parse(await readFile(runtime.manifest, 'utf8')) as { sdk: string, binaryHash: string, catalogHash: string }
   if (manifest.sdk !== '0.153.4') throw new Error('Unsupported SDK runtime')
   await verifyExecutable(runtime.binary, manifest.binaryHash); await verifyExecutable(runtime.catalog, manifest.catalogHash)
-  const model = await assignedModel(runtime, services.model, signal)
+  const model = await assignedModel(runtime, services.model, signal, resolved)
+  signal.throwIfAborted()
   const root = join(privateRoot, `agent-${randomUUID()}`); const confined = join(root, 'confined'); const home = join(confined, 'home'); const workspace = join(confined, 'workspace'); const codexHome = join(home, 'codex')
   await Promise.all([mkdir(workspace, { recursive: true, mode: 0o700 }), mkdir(codexHome, { recursive: true, mode: 0o700 })])
   const lifecycle = new AbortController()
-  const activeSignal = AbortSignal.any([signal, lifecycle.signal, AbortSignal.timeout(timeMs)])
+  const activeSignal = AbortSignal.any([signal, lifecycle.signal])
   const useTools = tools.length === 1
   const gateway = await startAgentGateway(useTools ? { provider: services.provider, tool: services.tool } : { provider: services.provider }, activeSignal)
   try {

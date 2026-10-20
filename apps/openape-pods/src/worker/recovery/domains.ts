@@ -14,6 +14,11 @@ export function ownerGone(pid: number): boolean {
   }
 }
 export async function confirmDomainsStopped(store: PodDatabase, runId: string, helper: string): Promise<void> {
+  const proxyCleanup = store.db.prepare("SELECT json_extract(data,'$.hostPid') AS host_pid FROM run_events WHERE run_id=? AND type='agent-cleanup' AND json_extract(data,'$.state')='unconfirmed'").all(runId)
+  for (const event of proxyCleanup) {
+    // PID reuse deliberately keeps the lease fenced rather than assuming termination.
+    if (!Number.isSafeInteger(event.host_pid) || Number(event.host_pid) <= 1 || !ownerGone(Number(event.host_pid))) throw new Error('Proxy request cleanup is unconfirmed; restart the idle runtime after its previous host has stopped')
+  }
   const domains = store.db.prepare('SELECT * FROM execution_domains WHERE run_id=?').all(runId)
   await inspectDomainRecords(domains, join(store.root, 'runs', runId), helper)
 }

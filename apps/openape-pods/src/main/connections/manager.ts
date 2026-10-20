@@ -75,10 +75,15 @@ export class ConnectionManager {
         }
         await rm(join(this.root, 'credentials/temporary'), { recursive: true, force: true })
       }
-      const manifest = JSON.parse(await readFile(this.runtime.manifest, 'utf8')) as { binaryHash: string, cli: string }
-      if (manifest.cli !== `0.153.4-${process.platform}-${process.arch}`) throw new Error('Bundled Codex architecture does not match this Mac')
-      await verifyExecutable(this.runtime.binary, manifest.binaryHash)
-      this.runtimeState = { ready: true, error: null }; await this.availability()
+      try {
+        const manifest = JSON.parse(await readFile(this.runtime.manifest, 'utf8')) as { binaryHash: string, cli: string }
+        if (manifest.cli !== `0.153.4-${process.platform}-${process.arch}`) throw new Error('Bundled Codex architecture does not match this Mac')
+        await verifyExecutable(this.runtime.binary, manifest.binaryHash)
+        this.runtimeState = { ready: true, error: null }
+      }
+      catch (error) { this.runtimeState = { ready: false, error: error instanceof Error ? error.message : 'Runtime inspection failed' } }
+      // Storage and credential recovery succeeded; an unavailable native backend must not block proxy execution.
+      await this.availability()
     }
     catch (error) { this.runtimeState = { ready: false, error: error instanceof Error ? error.message : 'Runtime inspection failed' } }
   }

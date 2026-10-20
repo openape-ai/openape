@@ -58,3 +58,68 @@ it('passes the automatic backup directory beside the profile base to the worker'
   expect(environment.PODS_BACKUP_DIRECTORY).toMatch(/ Backups$/)
   expect(environment.PODS_BACKUP_DIRECTORY.startsWith(`${fork.mock.calls[0]![2].cwd as string}/`)).toBe(false)
 })
+
+it('keeps proxy cancellation acknowledgement available until the worker has drained shutdown', async () => {
+  const { startAgentGateway } = await import('../../src/worker/agent/gateway')
+  const { proxyAgentCall } = await import('../../src/worker/agent/proxy-client')
+  const { AgentCallError } = await import('../../src/contracts/agent-errors')
+  const { worker, published, children } = await started()
+  const order: string[] = []
+  const providerAbort = new AbortController()
+  let began: () => void = () => undefined
+  const running = new Promise<void>((resolve) => { began = resolve })
+  const gateway = await startAgentGateway({
+    provider: async () => new Response('{}'),
+    proxy: async (_request, signal, onMetadata) => {
+      onMetadata({ callId: 'shutdown-fixture', backend: 'proxy', provider: 'codex', modelSize: 'small', modelId: 'fixture-model', reportedModelId: null, requestedThinking: null, effectiveThinking: 'medium', wireThinking: { reasoning_effort: 'medium' }, configRevision: 'fixture', configHash: 'a'.repeat(64), startedAt: new Date().toISOString(), endedAt: null, durationMs: null, status: 'running', threadId: 'proxy-call:shutdown-fixture' })
+      began()
+      await new Promise<void>(resolve => signal.addEventListener('abort', () => resolve(), { once: true }))
+      order.push('proxy-drained')
+      throw new AgentCallError('cancelled', 'Shutdown fixture cancelled', { phase: 'read' })
+    },
+  }, providerAbort.signal)
+  let gatewayClosed = false
+  Object.assign(worker, { providerAbort, providerGateway: { ...gateway, close: async () => { await gateway.close(); gatewayClosed = true; order.push('gateway-closed') } }, agentBackends: { drain: async () => { order.push('host-drained') } } })
+  const runAbort = new AbortController()
+  const call = proxyAgentCall(gateway)({ backend: 'proxy', provider: 'codex', modelSize: 'small', prompt: 'Synthetic shutdown', tools: [], timeoutSeconds: 30 }, runAbort.signal, () => {}).catch(error => error)
+  try {
+    await running
+    children[0]!.postMessage.mockImplementation((message: unknown) => {
+      if (message !== 'stop') return
+      order.push('worker-stop')
+      runAbort.abort()
+      void (async () => { await call; order.push('worker-drained'); children[0]!.emit('exit', 0) })()
+    })
+    await worker.stop()
+    expect(await call).toMatchObject({ code: 'cancelled' })
+    expect(order.indexOf('worker-stop')).toBeLessThan(order.indexOf('proxy-drained'))
+    expect(order.indexOf('proxy-drained')).toBeLessThan(order.indexOf('worker-drained'))
+    expect(order.indexOf('worker-drained')).toBeLessThan(order.indexOf('host-drained'))
+    expect(order.indexOf('host-drained')).toBeLessThan(order.indexOf('gateway-closed'))
+    expect(published.at(-1)?.state).toBe('stopped')
+  }
+  finally { runAbort.abort(); if (!gatewayClosed) await gateway.close() }
+})
+
+it('drains and closes the old proxy gateway before a storage recovery starts a fresh host lifetime', async () => {
+  const { worker, children } = await started()
+  const order: string[] = []
+  const providerAbort = new AbortController()
+  providerAbort.abort(new Error('Previous lifetime ended'))
+  let release: () => void = () => undefined
+  const closing = new Promise<void>((resolve) => { release = resolve })
+  const close = vi.fn(async () => { order.push('gateway-closing'); await closing; order.push('gateway-closed') })
+  const drain = vi.fn(async () => { order.push('proxy-drained') })
+  Object.assign(worker, { providerAbort, agentBackends: { drain }, providerGateway: { close }, state: { state: 'recovery', pid: children[0]!.pid, error: null } })
+  const recovered = worker.retryStorage()
+  await expect.poll(() => close.mock.calls.length).toBe(1)
+  expect(fork).toHaveBeenCalledTimes(1)
+  expect(drain).toHaveBeenCalled()
+  release(); await recovered
+  expect(fork).toHaveBeenCalledTimes(2)
+  expect(order.indexOf('proxy-drained')).toBeLessThan(order.indexOf('gateway-closing'))
+  const lifetime = (worker as unknown as { providerAbort: AbortController }).providerAbort
+  expect(lifetime).not.toBe(providerAbort)
+  expect(lifetime.signal.aborted).toBe(false)
+  children[1]!.emit('exit', 0)
+})

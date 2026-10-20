@@ -104,6 +104,9 @@ import type { WorkerStatus } from '../contracts/ipc'
 import type { ApprovalManifest } from '../contracts/approvals'
 import { parseStorageFailure, storageReadinessMs } from '../contracts/storage'
 import { automaticBackupDirectory } from './storage-recovery'
+import { AgentBackendManager } from './agent-backends/manager'
+import { setMandatorySecretPaths } from '../runtime/secret-paths'
+import type { AgentBackendStatus } from '../contracts/agent-status'
 import type { StorageFailure } from '../contracts/storage'
 
 const secretsOrigin = 'https://secrets.openape.ai'
@@ -148,6 +151,7 @@ export class RuntimeWorker {
   private readonly releaseRetry = new Map<string, { at: number, failures: number }>()
   private providerGateway: Awaited<ReturnType<typeof startAgentGateway>> | null = null
   private providerAbort = new AbortController()
+  private agentBackends: AgentBackendManager | null = null
   private jevAttempts = new Map<string, number>()
   private setupReady: Promise<void> | null = null
   private child: RuntimeChild | null = null
@@ -171,6 +175,8 @@ export class RuntimeWorker {
   private get directory(): string { return this.host.directory ?? join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/') }
 
   start(root: string, profileBase: string): void {
+    this.providerAbort = new AbortController()
+    this.stopping = false
     try { assertPilotRuntime() }
     catch (error) { this.state = { state: 'error', pid: null, error: error instanceof Error ? error.message : 'Unsupported Mac' }; this.publish(this.state); return }
     this.root = realpathSync(root)
@@ -251,6 +257,8 @@ export class RuntimeWorker {
       this.setupReady = (async () => { if (!this.host.oneShot) await this.initializeConnections(); this.publish(this.state) })().catch((error: unknown) => { reportError(error instanceof Error ? error.message : 'Connection setup failed') })
     })
     child.on('exit', (code) => {
+      this.providerAbort.abort(new Error('Owning worker stopped'))
+      void this.agentBackends?.drain().catch((error: unknown) => { console.error('Proxy cleanup failed', error instanceof Error ? error.name : 'Error') })
       this.programs?.cancelAll()
       void this.closeShellIdentities().catch((error: unknown) => { console.error('Pod shell credential cleanup failed', error) })
       for (const service of this.services.values()) service.abort(new Error('Owning worker stopped'))
@@ -264,13 +272,18 @@ export class RuntimeWorker {
   }
 
   private async initializeConnections(): Promise<void> {
+    this.agentBackends = new AgentBackendManager({ profileRoot: this.root })
+    await this.agentBackends.reload()
+    setMandatorySecretPaths(this.agentBackends.protectedPaths())
+    await this.dispatch({ secretPaths: this.agentBackends.protectedPaths() })
     const dist = this.directory
     const runtime = { helper: join(dist, 'native/pods-helper'), executable: process.execPath, entry: join(dist, 'runtime/script-entry.mjs'), runtimeDirectories: [dirname(dirname(process.execPath))], environment: { ELECTRON_RUN_AS_NODE: '1' }, binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs') }
     this.connections = new ConnectionManager(this.root, runtime, this.credentials!, command => this.dispatch({ setup: command }), async () => {
       const ready = await this.connections!.providerReady()
       await this.dispatch({ provider: ready && this.providerGateway ? { port: this.providerGateway.port, capability: this.providerGateway.capability } : null })
     }, podId => this.podName(podId), !!process.env.OPENAPE_PODS_FIXTURE_DIR && process.env.NODE_ENV === 'test', this.host.oneShot ? this.host.jevKey : undefined)
-    this.providerGateway = await startAgentGateway({ provider: (body, signal) => this.connections!.provider(body, signal), model: signal => this.connections!.model(signal), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
+    this.providerGateway = await startAgentGateway({ provider: (body, signal) => this.connections!.provider(body, signal), model: signal => this.connections!.model(signal), proxy: (request, signal, onMetadata) => this.agentBackends!.run(request, { signal, onMetadata }), proxyValidate: request => this.agentBackends!.validate(request), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
+    await this.publishProxyStatus()
     const connections = this.connections
     const grants = this.podGrants()!
     this.programs = new ProgramManager(join(this.root, 'authentication'), runtime.helper, this.credentials!, this.connections, podId => this.resources({ type: 'list', podId }), command => this.dispatch({ program: command }), podId => ({ connection: () => connections.podConnection(podId), ledger: grants.port(podId), reach: () => this.sandboxReach(podId), origin: () => this.podName(podId), runtime: { executable: process.execPath, cli: this.host.apesCli, environment: {} } }))
@@ -455,7 +468,19 @@ export class RuntimeWorker {
   async onboarding(command: OnboardingCommand): Promise<OnboardingView> {
     await this.setupReady
     if (!this.connections) throw new Error('Connection setup is not ready')
-    return this.connections.execute(command)
+    if (command.type === 'proxyStatus' || command.type === 'reloadProxy' || command.type === 'disableProxy') {
+      if (!this.agentBackends) throw new Error('Agent backend setup is not ready')
+      if (command.type === 'reloadProxy') await this.agentBackends.reload()
+      if (command.type === 'disableProxy') await this.agentBackends.disable()
+      await this.publishProxyStatus()
+      return { ...await this.connections.execute({ type: 'list' }), proxy: this.agentBackends.status() }
+    }
+    return { ...await this.connections.execute(command), ...(this.agentBackends ? { proxy: this.agentBackends.status() } : {}) }
+  }
+
+  private async publishProxyStatus(): Promise<void> {
+    if (!this.agentBackends || !this.providerGateway) return
+    await this.dispatch({ proxy: { port: this.providerGateway.port, capability: this.providerGateway.capability, status: this.agentBackends.status() } })
   }
 
   inboxOutbox(command: InboxOutboxCommand): Promise<unknown> { return this.dispatch({ inboxOutbox: command }) }
@@ -548,6 +573,10 @@ export class RuntimeWorker {
   }
 
   async cli(command: CliRequest): Promise<unknown> {
+    if (command.channel === 'agentBackends') {
+      await this.executionReady()
+      return (await this.onboarding(command.command)).proxy
+    }
     const central = this.centralAction(command.command.type)
     if (central) return central.local(() => this.cli(command))
     if (command.channel === 'workspace') return this.request(command.command)
@@ -963,7 +992,7 @@ export class RuntimeWorker {
     throw new Error('Unsupported central execution')
   }
 
-  private dispatch(command: { cliRun: Extract<RunCommand, { type: 'start' }> } | { programExecution: ProgramExecutionCheck } | { approvalRelease: { type: 'list' } | { type: 'released', keys: string[] } } | { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { approvalHistory: ApprovalHistoryCommand } | { central: { type: 'snapshot', owner: Owner } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { httpCredentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
+  private dispatch(command: { secretPaths: string[] } | { proxy: { port: number, capability: string, status: AgentBackendStatus } } | { cliRun: Extract<RunCommand, { type: 'start' }> } | { programExecution: ProgramExecutionCheck } | { approvalRelease: { type: 'list' } | { type: 'released', keys: string[] } } | { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { approvalHistory: ApprovalHistoryCommand } | { central: { type: 'snapshot', owner: Owner } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { httpCredentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     if (this.updateFrozen && !('data' in command && ['prepareUpdate', 'releaseUpdate'].includes(command.data.type))) return Promise.reject(new Error('Pods is preparing an update; retry after restart'))
     const child = this.child
     if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
@@ -1183,24 +1212,31 @@ export class RuntimeWorker {
   /** Opens storage again after the owner fixed or restored it; automation starts only if it becomes ready. */
   async retryStorage(): Promise<void> {
     await this.stopForRecovery()
+    await this.agentBackends?.drain()
+    await this.providerGateway?.close()
+    this.providerGateway = null
     this.start(this.root, this.profileBase)
   }
 
   async stop(): Promise<void> {
     await this.setupReady
+    this.stopping = true
+    const child = this.child
+    // The worker cancels and drains its calls while the private gateway can still acknowledge cleanup.
+    if (child) {
+      await new Promise<void>((resolve) => {
+        const deadline = setTimeout(() => child.kill(), 20000)
+        child.once('exit', () => { clearTimeout(deadline); resolve() })
+        child.postMessage('stop')
+      })
+    }
+    await this.agentBackends?.drain()
+    this.providerAbort.abort(new Error('Runtime shutdown'))
     await this.programs?.stop()
     await this.closeShellIdentities()
     await this.secretsGate?.stop()
     await this.connections?.stop()
-    this.providerAbort.abort()
     await this.providerGateway?.close()
-    this.stopping = true
-    const child = this.child
-    if (!child) return
-    await new Promise<void>((resolve) => {
-      const deadline = setTimeout(() => child.kill(), 10000)
-      child.once('exit', () => { clearTimeout(deadline); resolve() })
-      child.postMessage('stop')
-    })
+    this.providerGateway = null
   }
 }

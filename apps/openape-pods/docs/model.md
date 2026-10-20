@@ -13,6 +13,10 @@ disabled. The desktop app executes; the browser workspace at
 `https://pods.openape.ai/workspace` and the phone inbox show the same data.
 Details: [handbook](handbook.md), [central workspace](../../../docs/operations/pods-central-workspace.md).
 
+Agent calls retain native Codex by default; scripts can explicitly select the
+optional CLIProxyAPI text backend. Configuration, selection, cancellation and
+call history are documented in [agent backends](agent-backends.md).
+
 ## Data exchange
 
 Pods exchange data through files in assigned directories or through external services.

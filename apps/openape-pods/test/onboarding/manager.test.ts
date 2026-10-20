@@ -171,7 +171,30 @@ it('rejects global Microsoft setup without touching its cache or starting login'
 it('fails visibly for a mismatched runtime architecture', async () => {
   const wrong = await fixture(process.arch === 'x64' ? 'arm64' : 'x64')
   expect((await wrong.manager.view()).runtime).toMatchObject({ ready: false, error: 'Bundled Codex architecture does not match this Mac' })
+  expect(wrong.availability).toHaveBeenCalledOnce()
+  await expect(wrong.manager.providerReady()).resolves.toBe(false)
   await expect(wrong.manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })).rejects.toThrow('architecture')
+})
+
+it.each(['manifest', 'binary'] as const)('publishes native unavailability after recovery when the bundled %s is invalid', async (target) => {
+  const { manager, availability, runtime } = await fixture()
+  availability.mockClear()
+  if (target === 'manifest') await rm(runtime.manifest)
+  else await writeFile(runtime.binary, 'changed-synthetic-codex')
+  const inspectCredentials = vi.fn(async () => {})
+  await manager.initialize(inspectCredentials)
+  expect(inspectCredentials).toHaveBeenCalledOnce()
+  expect(availability).toHaveBeenCalledOnce()
+  expect((await manager.view()).runtime.ready).toBe(false)
+  await expect(manager.providerReady()).resolves.toBe(false)
+})
+
+it('keeps all execution blocked when shared credential recovery fails', async () => {
+  const { manager, availability } = await fixture()
+  availability.mockClear()
+  await manager.initialize(async () => { throw new Error('Synthetic credential recovery failure') })
+  expect(availability).not.toHaveBeenCalled()
+  expect((await manager.view()).runtime).toEqual({ ready: false, error: 'Synthetic credential recovery failure' })
 })
 
 it('uses the single owner for new pods, only through the Pods provider, without changing its account', async () => {

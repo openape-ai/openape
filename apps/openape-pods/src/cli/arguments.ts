@@ -2,7 +2,7 @@ import { parseArgs } from 'node:util'
 
 export class UsageError extends Error {}
 export interface CliArguments {
-  command: 'list' | 'run' | 'create' | 'edit'
+  command: 'list' | 'run' | 'create' | 'edit' | 'agent-backends'
   id?: string
   profile?: string
   name?: string
@@ -18,6 +18,7 @@ export const cliHelp = `ape-pods — local Pod development
   ape-pods run <id> [--json]
   ape-pods create [--name NAME] [--tags a,b] [--script pod-script.mjs]
   ape-pods edit [<id>] [--name NAME] [--tags a,b] [--lifecycle STATE] [--script pod-script.mjs]
+  ape-pods agent-backends [status|reload|disable] [--json]
 
 Options: --profile PATH, --json, --help
 An empty --tags value clears tags. create/edit prompt only in a terminal.
@@ -47,11 +48,12 @@ export function cliArguments(argv: string[]): CliArguments {
   }
   catch (error) { throw new UsageError((error as Error).message) }
   const [command, id, ...extra] = parsed.positionals
-  if (!['list', 'run', 'create', 'edit'].includes(command ?? '') || extra.length) throw new UsageError('Expected list, run <id>, create or edit <id>; see --help')
+  if (!['list', 'run', 'create', 'edit', 'agent-backends'].includes(command ?? '') || extra.length) throw new UsageError('Expected list, run <id>, create, edit <id> or agent-backends; see --help')
+  if (command === 'agent-backends' && id && !['status', 'reload', 'disable'].includes(id)) throw new UsageError('agent-backends accepts status, reload or disable')
   if ((command === 'list' || command === 'create') && id) throw new UsageError(`${command} does not accept an ID`)
   if (command === 'run' && !id) throw new UsageError('run requires a Pod ID')
   const { values } = parsed
-  if (command === 'list' || command === 'run') {
+  if (command === 'list' || command === 'run' || command === 'agent-backends') {
     if (['name', 'tags', 'lifecycle', 'script'].some(key => values[key] !== undefined)) throw new UsageError(`${command} does not accept edit options`)
   }
   if (command === 'create' && values.lifecycle !== undefined) throw new UsageError('create always creates a paused Pod')
