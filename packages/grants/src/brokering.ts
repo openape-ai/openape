@@ -1,3 +1,4 @@
+import { parseGrantReference } from './grant-reference.js'
 import type { BrokeredGrant, BrokerReceipt, BrokerRequest } from '@openape/core'
 import type { JWTVerifyGetKey, KeyLike } from 'jose'
 import { jwtVerify, SignJWT } from 'jose'
@@ -73,6 +74,10 @@ export function parseBrokerRequest(input: unknown): BrokerRequest {
   if (value.operation === 'create' || value.operation === 'authorize') {
     fields(value, [...common, 'sub', 'key_id', 'requester_name', 'request'])
     brokerObject(value.request)
+  }
+  else if (value.operation === 'get' && value.reference !== undefined) {
+    fields(value, [...common, 'sub', 'key_id', 'requester_name', 'reference'])
+    parseGrantReference(value.reference)
   }
   else if (value.operation === 'get' || value.operation === 'token') {
     fields(value, [...common, 'sub', 'key_id', 'requester_name', 'grant_id'])

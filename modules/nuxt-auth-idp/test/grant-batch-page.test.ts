@@ -394,3 +394,66 @@ describe('grant batch sections', () => {
     expect(grantBatchOperations(rows, new Set())).toEqual([{ id: 'selected', action: 'deny' }, { id: 'unselected', action: 'deny' }])
   })
 })
+
+describe('cross-run batch review', () => {
+  beforeEach(() => {
+    __resetNuxtImportsMocks()
+    __setUser({ email: 'owner@example.com' })
+    __setFetchUser(async () => {})
+    __setRouteQuery({ requester: 'pod-agent@example.com', batch: 'b-1' })
+    vi.unstubAllGlobals()
+    vi.spyOn(navigator, 'language', 'get').mockReturnValue('en-GB')
+  })
+
+  it('loads 150 members, preserves refreshed choices and retries only failed frozen decisions', async () => {
+    let current = Array.from({ length: 150 }, (_, index) => member(`g-${index}`, index))
+    let requests = 0
+    const submissions: { id: string, action: string }[][] = []
+    const fetchMock = vi.fn(async (url: string, opts: { query?: Record<string, string | number>, body?: { operations: { id: string, action: string }[] } }) => {
+      if (url === '/api/grants/batch') {
+        const operations = opts.body!.operations
+        submissions.push(operations)
+        if (submissions.length === 1) current.push(member('late-during-submit', 152))
+        const results = operations.map(operation => ({ id: operation.id, success: !(submissions.length === 1 && operation.id === 'g-2'), error: { title: 'Retry this item' } }))
+        current = current.map(grant => results.find(result => result.id === grant.id)?.success ? { ...grant, status: operations.find(operation => operation.id === grant.id)!.action === 'approve' ? 'approved' : 'denied' } : grant)
+        return { results }
+      }
+      requests++
+      const rows = current.filter(grant => opts.query?.section === 'history' ? grant.status !== 'pending' : grant.status === 'pending')
+      const offset = Number(opts.query?.cursor ?? 0)
+      return { data: rows.slice(offset, offset + 100), pagination: { cursor: String(offset + 100), has_more: offset + 100 < rows.length } }
+    })
+    vi.stubGlobal('$fetch', fetchMock)
+    const wrapper = mount(GrantApprovalPage, { global: { stubs } })
+    await flushPromises()
+    expect(wrapper.findAll('[data-batch-rows] input')).toHaveLength(150)
+    expect(requests).toBe(3)
+    await wrapper.find('[data-batch-row="g-1"] input').setValue(false)
+    current.push(member('new-on-refresh', 151))
+    await wrapper.find('[data-batch-refresh]').trigger('click')
+    await flushPromises()
+    expect((wrapper.find('[data-batch-row="g-1"] input').element as HTMLInputElement).checked).toBe(false)
+    expect((wrapper.find('[data-batch-row="new-on-refresh"] input').element as HTMLInputElement).checked).toBe(false)
+    await button(wrapper, 'Approve 149').trigger('click')
+    await flushPromises()
+    expect(submissions[0]).toHaveLength(151)
+    expect(submissions[0]).not.toContainEqual(expect.objectContaining({ id: 'late-during-submit' }))
+    expect(wrapper.text()).toContain('Retry this item')
+    await wrapper.find('[data-batch-retry]').trigger('click')
+    await flushPromises()
+    expect(submissions[1]).toEqual([{ id: 'g-2', action: 'approve' }])
+    expect(current.find(grant => grant.id === 'late-during-submit')?.status).toBe('pending')
+    expect(wrapper.find('[data-history-more]').exists()).toBe(true)
+  })
+
+  it('disables decisions when a later pending page fails instead of presenting a complete collection', async () => {
+    vi.stubGlobal('$fetch', vi.fn(async (_url: string, opts: { query?: { cursor?: string } }) => {
+      if (opts.query?.cursor) throw new Error('Second page unavailable')
+      return { data: [member('g-1', 1)], pagination: { cursor: 'next', has_more: true } }
+    }))
+    const wrapper = mount(GrantApprovalPage, { global: { stubs } })
+    await flushPromises()
+    expect(wrapper.text()).toContain('Second page unavailable')
+    expect(wrapper.findAll('button').some(button => button.text().startsWith('Approve') && !button.attributes('disabled'))).toBe(false)
+  })
+})

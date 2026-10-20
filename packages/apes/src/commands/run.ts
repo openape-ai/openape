@@ -285,6 +285,10 @@ export const runCommand = defineCommand({
       description: 'Approval type: once or always (timed only for --as and audience mode)',
       default: 'once',
     },
+    'reference': {
+      type: 'string',
+      description: 'Opaque identity for this exact single-use program operation; reuse unchanged on retry',
+    },
     'reason': {
       type: 'string',
       description: 'Reason for the grant request',
@@ -340,6 +344,8 @@ export const runCommand = defineCommand({
   },
   async run({ rawArgs, args }) {
     const wrappedCommand = extractWrappedCommand(rawArgs ?? [])
+    if (args.reference !== undefined && (args.shell || args.as || !wrappedCommand.length || args.approval !== 'once'))
+      throw new CliError('--reference requires an exact program call with --approval once')
 
     // Agent capturing a wrapped command's stdout — keep apes diagnostics
     // off it (see routeDiagnosticsToStderrForWrappedAgentRun).
@@ -587,6 +593,7 @@ async function authorizeAndRun(
     subject,
     targetHost,
     grantType: grantTypeFrom(args),
+    ...(args.reference !== undefined ? { reference: args.reference as string } : {}),
     ...summaryFrom(args),
     wait,
     onPending: (pending) => {

@@ -43,14 +43,14 @@ export class ServiceBridge {
     this.timers.set(id, setTimeout(() => this.send({ serviceCancel: id }), serviceTimeoutMs))
   }
 
-  async execute(scope: ServiceScope, body: unknown, signal: AbortSignal, kind?: ServiceKind, summary?: ScriptSummary, batch?: OpenApeGrantBatch): Promise<unknown> {
+  async execute(scope: ServiceScope, body: unknown, signal: AbortSignal, kind?: ServiceKind, summary?: ScriptSummary, batch?: OpenApeGrantBatch, reference?: string): Promise<unknown> {
     signal.throwIfAborted()
     if (this.queued() >= 16) throw new Error('Service broker queue is full')
     const id = randomUUID()
     const cancel = () => this.send({ serviceCancel: id })
     signal.addEventListener('abort', cancel, { once: true })
     try {
-      return await new Promise((resolve, reject) => { this.pending.set(id, { resolve, reject }); this.arm(id); this.send({ service: { id, scope, body, ...(kind ? { kind } : {}), ...(summary ? { summary } : {}), ...(batch ? { batch } : {}) } }); if (signal.aborted) cancel() })
+      return await new Promise((resolve, reject) => { this.pending.set(id, { resolve, reject }); this.arm(id); this.send({ service: { id, scope, body, ...(kind ? { kind } : {}), ...(summary ? { summary } : {}), ...(batch ? { batch } : {}), ...(reference !== undefined ? { reference } : {}) } }); if (signal.aborted) cancel() })
     }
     finally { clearTimeout(this.timers.get(id)); this.timers.delete(id); this.parked.delete(id); signal.removeEventListener('abort', cancel) }
   }

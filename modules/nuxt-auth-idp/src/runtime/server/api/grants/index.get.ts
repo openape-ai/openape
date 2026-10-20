@@ -1,3 +1,5 @@
+import { InvalidGrantReferenceError, parseGrantReference, parseGrantCursor } from '@openape/grants'
+import { maybeForwardBrokerGrant } from '../../utils/broker-forward'
 import { hasBrokerStore } from '../../utils/broker-store'
 import type { GrantStatus, OpenApeGrant } from '@openape/core'
 import { createError, defineEventHandler, getQuery } from 'h3'
@@ -21,9 +23,19 @@ export default defineEventHandler(async (event) => {
 
   const limit = Math.min(Math.max(Number(query.limit) || 20, 1), 100)
   const cursor = query.cursor ? String(query.cursor) : undefined
+  if (cursor) {
+    try { parseGrantCursor(cursor) }
+    catch { throw createError({ statusCode: 400, message: 'Invalid grant cursor' }) }
+  }
   const status = query.status ? String(query.status) as GrantStatus : undefined
   const requester = query.requester ? String(query.requester) : undefined
   const batch = query.batch ? String(query.batch) : undefined
+  let reference: string | undefined
+  try { reference = parseGrantReference(query.reference) }
+  catch (error) {
+    if (!(error instanceof InvalidGrantReferenceError)) throw error
+    throw createError({ statusCode: 400, message: error.message })
+  }
   const section = query.section ? String(query.section) : undefined
   const days = Math.min(Math.max(Number(query.days) || 7, 1), 90)
 
@@ -53,6 +65,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, message: 'Authentication required' })
   }
 
+  if (reference !== undefined && bearerPayload && !delegate) {
+    const forwarded = await maybeForwardBrokerGrant(event, 'get', { reference })
+    if (forwarded !== undefined) {
+      if (requester && requester !== email) throw createError({ statusCode: 403, message: 'Reference lookup must name the authenticated requester' })
+      return { data: forwarded === null ? [] : [forwarded], pagination: { cursor: null, has_more: false } }
+    }
+  }
+
   // The set of requesters this caller may see: itself + users it owns/approves.
   const ownedUsers = await userStore.findByOwner(email)
   const approvedUsers = await userStore.findByApprover(email)
@@ -72,14 +92,14 @@ export default defineEventHandler(async (event) => {
     brokerVisibility.brokerOwner = owner?.isActive && owner.type !== 'agent' && !owner.owner && !bearerPayload?.delegation_grant && bearerPayload?.act !== 'agent' ? email : null
   }
   // Batch ids are scoped to their requester (grants.md §4.2).
-  if (batch && !requester) {
-    throw createError({ statusCode: 400, message: 'The batch filter requires a requester' })
+  if ((batch || reference) && !requester) {
+    throw createError({ statusCode: 400, message: 'The batch or reference filter requires a requester' })
   }
   if (requester) {
     if (!requesters.includes(requester) && !hasBrokerStore()) {
       throw createError({ statusCode: 403, message: 'Not authorized to list grants for this requester' })
     }
-    const page = await grantStore.listGrants({ limit, cursor, status, batch, ...(hasBrokerStore() ? { requester: requesters, requesterFilter: requester, ...brokerVisibility } : { requester }) })
+    const page = await grantStore.listGrants({ limit, cursor, status, batch, reference, ...(batch && section === 'history' ? { excludeStatus: 'pending' as const } : {}), ...(hasBrokerStore() ? { requester: requesters, requesterFilter: requester, ...brokerVisibility } : { requester }) })
     return { ...page, data: await withGrantCards(await expireStaleGrants(page.data, grantStore)) }
   }
 

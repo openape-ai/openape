@@ -1,6 +1,7 @@
 import type { GrantType, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGrantBatch, OpenApeGrantRequest } from '@openape/core'
 import { canonicalizeCliPermission, cliAuthorizationDetailCovers, cliAuthorizationDetailIsSimilar, mergeCliAuthorizationDetails, resourceChainsStructurallyMatch, widenCliAuthorizationDetail } from './cli-permissions.js'
 import { codePointLength, GRANT_DESCRIPTION_LIMIT, hasHiddenCharacter } from './grant-summary.js'
+import { assertGrantReferenceRequest } from './grant-reference.js'
 import type { GrantStore } from './stores.js'
 
 export type ExtendMode = 'widen' | 'merge'
@@ -24,6 +25,11 @@ export async function createGrant(
     request,
     status: 'pending',
     created_at: Math.floor(Date.now() / 1000),
+  }
+  if (request.reference !== undefined) {
+    assertGrantReferenceRequest(request)
+    if (!store.createReferenced) throw new Error('Grant references require an atomic store')
+    return (await store.createReferenced(grant)).grant
   }
   await store.save(grant)
   return grant
@@ -49,6 +55,8 @@ export async function approveGrant(
 
   const effectiveType = overrides?.grant_type ?? grant.request.grant_type ?? 'once'
   const effectiveDuration = overrides?.duration ?? grant.request.duration
+  if (grant.request.reference && (effectiveType !== 'once' || effectiveDuration !== undefined || overrides?.extend_mode || overrides?.extend_grant_ids?.length))
+    throw new Error('A referenced grant must retain its exact single-use binding')
   if (grant.request.authorization_details?.some(detail => detail.type === 'openape_cli' && detail.constraints?.single_use) && effectiveType !== 'once')
     throw new Error('This operation requires one exact single-use approval')
 
@@ -313,7 +321,7 @@ export async function approveGrantWithExtension(
     throw new Error(`Grant not found: ${grantId}`)
   if (pendingGrant.status !== 'pending')
     throw new Error(`Grant is not pending: ${pendingGrant.status}`)
-  if (pendingGrant.request.authorization_details?.some(detail => detail.type === 'openape_cli' && detail.constraints?.single_use))
+  if (pendingGrant.request.reference || pendingGrant.request.authorization_details?.some(detail => detail.type === 'openape_cli' && detail.constraints?.single_use))
     throw new Error('This operation requires one exact single-use approval and cannot be widened')
 
   const oldGrants: OpenApeGrant[] = []
@@ -392,7 +400,7 @@ export async function approveGrantWithWidening(
     throw new Error(`Grant not found: ${grantId}`)
   if (pendingGrant.status !== 'pending')
     throw new Error(`Grant is not pending: ${pendingGrant.status}`)
-  if (pendingGrant.request.authorization_details?.some(detail => detail.type === 'openape_cli' && detail.constraints?.single_use))
+  if (pendingGrant.request.reference || pendingGrant.request.authorization_details?.some(detail => detail.type === 'openape_cli' && detail.constraints?.single_use))
     throw new Error('This operation requires one exact single-use approval and cannot be widened')
 
   const originalDetails = cliDetails(pendingGrant.request.authorization_details)

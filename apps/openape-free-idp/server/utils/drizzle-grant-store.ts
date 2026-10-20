@@ -1,6 +1,7 @@
 import type { OpenApeGrant, OpenApeGrantRequest, PaginatedResponse } from '@openape/core'
 import type { GrantListParams, GrantStore } from '@openape/grants'
-import { and, desc, eq, inArray, isNull, or, lt, sql } from 'drizzle-orm'
+import { assertGrantReferenceRequest, assertSameReferencedGrant, grantReferenceKey, grantCursor, parseGrantCursor } from '@openape/grants'
+import { and, desc, eq, ne, inArray, isNull, or, lt, sql } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { brokerAudit, brokerConnections, grants } from '../database/schema'
 import { createError } from 'h3'
@@ -26,6 +27,7 @@ export function grantToRow(grant: OpenApeGrant) {
     status: grant.status,
     type: grant.type ?? null,
     requester: grant.request.requester,
+    referenceKey: grant.request.reference === undefined ? null : grantReferenceKey(grant.request.requester, grant.request.reference, grant.brokered),
     brokered: grant.brokered ?? null,
     brokerOwner: grant.brokered?.owner ?? null,
     targetHost: grant.request.target_host,
@@ -66,6 +68,17 @@ export function rowToGrant(row: GrantRow): OpenApeGrant {
   }
 }
 
+/** SQLite serializes writers; retry only lock contention, never a binding conflict. */
+async function retryReferenceTransaction<T>(write: () => Promise<T>): Promise<T> {
+  for (let attempt = 0; ; attempt++) {
+    try { return await write() }
+    catch (error) {
+      if (attempt >= 7 || !(error && typeof error === 'object' && 'code' in error && error.code === 'SQLITE_BUSY')) throw error
+      await new Promise(resolve => setTimeout(resolve, 10 * (attempt + 1)))
+    }
+  }
+}
+
 export function createDrizzleGrantStore(): ExtendedGrantStore {
   const db = useDb()
 
@@ -95,7 +108,34 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
   }
 
   return {
+    async createReferenced(grant) {
+      assertGrantReferenceRequest(grant.request)
+      const row = grantToRow(grant)
+      if (!row.referenceKey) throw new Error('A reference is required')
+      await expirePendingRequests()
+      return await retryReferenceTransaction(() => db.transaction(async (tx) => {
+        if (grant.brokered) {
+          const connection = await tx.select().from(brokerConnections).where(eq(brokerConnections.id, grant.brokered.connection_id)).get()
+          if (!connection || connection.status !== 'active' || connection.owner !== grant.brokered.owner) throw createError({ statusCode: 403, statusMessage: 'Broker connection is missing or revoked' })
+        }
+        const existing = await tx.select().from(grants).where(eq(grants.referenceKey, row.referenceKey!)).get()
+        if (existing) {
+          const retained = rowToGrant(existing)
+          assertSameReferencedGrant(retained, grant)
+          return { grant: retained, created: false }
+        }
+        if (grant.brokered) {
+          const pending = await tx.select({ count: sql<number>`count(*)` }).from(grants).where(and(eq(grants.brokerOwner, grant.brokered.owner), eq(grants.status, 'pending'))).get()
+          if ((pending?.count ?? 0) >= BROKER_PENDING_LIMIT) throw createError({ statusCode: 429, statusMessage: 'Decide or dismiss existing broker requests before submitting more' })
+        }
+        await tx.insert(grants).values(row)
+        if (grant.brokered) await tx.insert(brokerAudit).values(brokerAuditRow(grant, 'created'))
+        return { grant, created: true }
+      }, { behavior: 'immediate' }))
+    },
+
     async save(grant) {
+      if (grant.request.reference !== undefined) throw new Error('Use atomic createReferenced for a referenced grant')
       const row = grantToRow(grant)
       if (grant.brokered) {
         await expirePendingRequests()
@@ -148,7 +188,8 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
         if (!existing)
           throw new Error(`Grant not found: ${id}`)
 
-        if ((existing.brokered || existing.status === 'expired') && (status === 'approved' || status === 'denied') && existing.status !== 'pending') throw createError({ statusCode: 409, statusMessage: 'Grant was already decided' })
+        if (extra?.request && rowToGrant(existing).request.reference) assertSameReferencedGrant(rowToGrant(existing), { ...rowToGrant(existing), request: extra.request })
+        if ((existing.brokered || existing.referenceKey || existing.status === 'expired') && (status === 'approved' || status === 'denied') && existing.status !== 'pending') throw createError({ statusCode: 409, statusMessage: 'Grant was already decided' })
         const updates: Record<string, unknown> = { status }
         if (extra?.decided_by !== undefined) updates.decidedBy = extra.decided_by
         if (extra?.decided_at !== undefined) updates.decidedAt = extra.decided_at
@@ -222,6 +263,7 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
       const limit = Math.min(Math.max(params?.limit ?? 20, 1), 1000)
       const conditions = []
 
+      if (params?.excludeStatus) conditions.push(ne(grants.status, params.excludeStatus))
       if (params?.status)
         conditions.push(eq(grants.status, params.status))
       if (params?.requester) {
@@ -232,13 +274,15 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
       }
       if (params?.requesterFilter) conditions.push(eq(grants.requester, params.requesterFilter))
       if (params?.batch) conditions.push(sql`json_extract(${grants.request}, '$.batch.id') = ${params.batch}`)
+      if (params?.reference) conditions.push(sql`json_extract(${grants.request}, '$.reference') = ${params.reference}`)
+      if (params?.referenceKey) conditions.push(eq(grants.referenceKey, params.referenceKey))
       if (params?.cursor) {
-        const cursorTs = Number(params.cursor)
-        conditions.push(lt(grants.createdAt, cursorTs))
+        const position = parseGrantCursor(params.cursor)
+        conditions.push(position.id === undefined ? lt(grants.createdAt, position.createdAt) : or(lt(grants.createdAt, position.createdAt), and(eq(grants.createdAt, position.createdAt), lt(grants.id, position.id))))
       }
 
       const where = conditions.length > 0 ? and(...conditions) : undefined
-      const rows = await db.select().from(grants).where(where).orderBy(desc(grants.createdAt)).limit(limit + 1)
+      const rows = await db.select().from(grants).where(where).orderBy(desc(grants.createdAt), desc(grants.id)).limit(limit + 1)
 
       const hasMore = rows.length > limit
       const page = rows.slice(0, limit)
@@ -247,7 +291,7 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
       return {
         data: result,
         pagination: {
-          cursor: result.length > 0 ? String(result.at(-1)!.created_at) : null,
+          cursor: result.length > 0 ? grantCursor(result.at(-1)!) : null,
           has_more: hasMore,
         },
       }

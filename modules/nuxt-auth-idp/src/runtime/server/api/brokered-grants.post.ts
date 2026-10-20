@@ -1,8 +1,9 @@
+import { requestReferencedGrant } from '../utils/grant-reference'
 import { brokerInput } from '../utils/broker-input'
 import type { BrokeredGrant } from '@openape/core'
 import { defineEventHandler, readBody, setHeader, setResponseStatus } from 'h3'
 import { decodeJwt } from 'jose'
-import { assertGrantBatchMember, BROKER_REQUEST_TYPE, InvalidGrantBatchError, brokerObject, introspectGrant, issueAuthzJWT, parseBrokerRequest, parseProgramAuthorizeRequest, sameBrokeredGrant, verifyBrokerToken } from '@openape/grants'
+import { grantReferenceKey, assertGrantBatchMember, BROKER_REQUEST_TYPE, InvalidGrantBatchError, brokerObject, introspectGrant, issueAuthzJWT, parseBrokerRequest, parseProgramAuthorizeRequest, sameBrokeredGrant, verifyBrokerToken } from '@openape/grants'
 import { enforceAuthorizeRateLimit } from '../utils/authorize-rate-limit'
 import { authorizeProgramCall, sendProgramAuthorizeResult } from '../utils/program-authorize'
 import { brokerVerificationKey, discoverBroker } from '../utils/broker-network'
@@ -45,6 +46,12 @@ export default defineEventHandler(async (event) => {
   }
   if (request.operation === 'create') {
     const grantRequest = await brokerInput(() => parseBrokerGrantRequest(request.request, request.sub))
+    if (grantRequest.reference !== undefined) {
+      await store.assertConnection(provenance)
+      const result = await requestReferencedGrant(grantRequest, provenance)
+      setResponseStatus(event, result.created ? 201 : 200)
+      return result.grant
+    }
     try { await assertGrantBatchMember(grantRequest, grantStore) }
     catch (error) {
       if (!(error instanceof InvalidGrantBatchError)) throw error
@@ -62,6 +69,11 @@ export default defineEventHandler(async (event) => {
     await runGrantPendingHooks(grant)
     setResponseStatus(event, 201)
     return grant
+  }
+  if (request.operation === 'get' && 'reference' in request) {
+    await store.assertConnection(provenance)
+    const { data } = await grantStore.listGrants({ referenceKey: grantReferenceKey(request.sub, request.reference, provenance), limit: 1 })
+    return data[0] ?? null
   }
   let grant = await introspectGrant(request.grant_id, grantStore)
   if (!grant || grant.request.requester !== request.sub || !sameBrokeredGrant(grant.brokered, provenance)) throw createProblemError({ status: 403, title: 'Grant does not belong to this brokered identity' })

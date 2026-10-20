@@ -1,3 +1,5 @@
+import { grantCursor, parseGrantCursor } from './grant-cursor.js'
+import { assertGrantReferenceRequest, assertSameReferencedGrant, grantReferenceKey } from './grant-reference.js'
 import type { GrantStatus, OpenApeGrant, PaginatedResponse, PaginationParams } from '@openape/core'
 
 export interface GrantListParams extends PaginationParams {
@@ -5,12 +7,17 @@ export interface GrantListParams extends PaginationParams {
   requesterFilter?: string
   /** Filter by request.batch.id (grants.md §4.2). */
   batch?: string
+  reference?: string
+  referenceKey?: string
   status?: GrantStatus
+  excludeStatus?: GrantStatus
   requester?: string | string[]
   role?: string
 }
 
 export interface GrantStore {
+  /** Atomic insert-or-return; must retain terminal references and reject changed bindings. */
+  createReferenced?: (grant: OpenApeGrant) => Promise<{ grant: OpenApeGrant, created: boolean }>
   save: (grant: OpenApeGrant) => Promise<void>
   findById: (id: string) => Promise<OpenApeGrant | null>
   updateStatus: (id: string, status: GrantStatus, extra?: Partial<OpenApeGrant>) => Promise<void>
@@ -35,7 +42,21 @@ export class InMemoryGrantStore implements GrantStore {
   private grants = new Map<string, OpenApeGrant>()
   private consumed = new Map<string, string>()
 
+  async createReferenced(grant: OpenApeGrant): Promise<{ grant: OpenApeGrant, created: boolean }> {
+    assertGrantReferenceRequest(grant.request)
+    if (!grant.request.reference) throw new Error('A reference is required')
+    const key = grantReferenceKey(grant.request.requester, grant.request.reference, grant.brokered)
+    const existing = [...this.grants.values()].find(item => item.request.reference !== undefined && grantReferenceKey(item.request.requester, item.request.reference, item.brokered) === key)
+    if (existing) {
+      assertSameReferencedGrant(existing, grant)
+      return { grant: structuredClone(existing), created: false }
+    }
+    this.grants.set(grant.id, structuredClone(grant))
+    return { grant: structuredClone(grant), created: true }
+  }
+
   async save(grant: OpenApeGrant): Promise<void> {
+    if (grant.request.reference !== undefined) throw new Error('Use atomic createReferenced for a referenced grant')
     this.grants.set(grant.id, { ...grant })
   }
 
@@ -53,6 +74,7 @@ export class InMemoryGrantStore implements GrantStore {
     if (!grant) {
       throw new Error(`Grant not found: ${id}`)
     }
+    if (grant.request.reference && extra?.request) assertSameReferencedGrant(grant, { ...grant, request: extra.request })
     this.grants.set(id, { ...grant, status, ...extra })
   }
 
@@ -119,6 +141,7 @@ export class InMemoryGrantStore implements GrantStore {
     if (params?.status) {
       grants = grants.filter(g => g.status === params.status)
     }
+    if (params?.excludeStatus) grants = grants.filter(g => g.status !== params.excludeStatus)
     if (params?.requester) {
       const requesters = Array.isArray(params.requester) ? new Set(params.requester) : new Set([params.requester])
       grants = grants.filter(g => params.brokerOwner !== undefined ? (g.brokered ? g.brokered.owner === params.brokerOwner : requesters.has(g.request.requester)) : requesters.has(g.request.requester))
@@ -127,14 +150,16 @@ export class InMemoryGrantStore implements GrantStore {
     if (params?.requesterFilter) grants = grants.filter(g => g.request.requester === params.requesterFilter)
     if (params?.batch) grants = grants.filter(g => g.request.batch?.id === params.batch)
 
+    if (params?.reference) grants = grants.filter(g => g.request.reference === params.reference)
+    if (params?.referenceKey) grants = grants.filter(g => g.request.reference !== undefined && grantReferenceKey(g.request.requester, g.request.reference, g.brokered) === params.referenceKey)
+
     // Sort by created_at DESC
-    grants.sort((a, b) => b.created_at - a.created_at)
+    grants.sort((a, b) => b.created_at - a.created_at || (a.id < b.id ? 1 : a.id > b.id ? -1 : 0))
 
     // Apply cursor (skip grants until created_at < cursor)
     if (cursor) {
-      const cursorTs = Number(cursor)
-      const idx = grants.findIndex(g => g.created_at < cursorTs)
-      grants = idx >= 0 ? grants.slice(idx) : []
+      const position = parseGrantCursor(cursor)
+      grants = grants.filter(g => g.created_at < position.createdAt || (position.id !== undefined && g.created_at === position.createdAt && g.id < position.id))
     }
 
     const page = grants.slice(0, limit)
@@ -143,7 +168,7 @@ export class InMemoryGrantStore implements GrantStore {
     return {
       data: page.map(g => ({ ...g })),
       pagination: {
-        cursor: page.length > 0 ? String(page.at(-1)!.created_at) : null,
+        cursor: page.length > 0 ? grantCursor(page.at(-1)!) : null,
         has_more: hasMore,
       },
     }
