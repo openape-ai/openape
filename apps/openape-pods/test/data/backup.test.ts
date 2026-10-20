@@ -456,13 +456,41 @@ it.each([
   expect(await readdir(exports)).toEqual(before)
 })
 
-it('protects a Pod with uncertain actions without changing its shared data assignment', async () => {
+it.each(['collecting', 'requested', 'approved', 'unknown'])('discards historical %s approvals only with explicit review, preserving uncertain actions', async (state) => {
+  const { store, pod } = await fixture()
+  const other = store.createPod({ name: 'Other automation' })
+  store.updatePod(pod.id, 1, { name: pod.name, lifecycle: 'archived' })
+  store.db.prepare('INSERT INTO approval_batches VALUES(?,?,?,1,NULL,1,0,NULL,1)').run('old-batch', pod.id, 'Historical requests')
+  const insert = store.db.prepare(`INSERT INTO action_approvals(id,pod_id,action,object,payload,payload_hash,title,authority,batch_id,state,created_at,updated_at)
+    VALUES(?,?,'mail.archive','message','{}',?,'Historical request','{}',?,?,1,1)`)
+  insert.run('old-request', pod.id, 'a'.repeat(64), 'old-batch', state)
+  insert.run('other-request', other.id, 'b'.repeat(64), null, 'collecting')
+  store.db.prepare(`INSERT INTO effect_attempts VALUES(?,1,?,NULL,'mail.archive',?,'confirmed_applied','{}',1)`).run('c'.repeat(64), pod.id, 'd'.repeat(64))
+  const data = new DataControl(store, 'unused-helper')
+  const command = { type: 'deletePod' as const, podId: pod.id, revision: 2, name: pod.name }
+  await expect(data.execute(command)).rejects.toThrow('open approvals or uncertain actions')
+  expect(store.db.prepare('SELECT state FROM action_approvals WHERE id=?').get('old-request')).toEqual({ state })
+  if (state === 'unknown') {
+    await expect(data.execute({ ...command, discardApprovals: true })).rejects.toThrow('uncertain actions')
+    expect(store.getPod(pod.id).lifecycle).toBe('archived')
+  }
+  else {
+    await data.execute({ ...command, discardApprovals: true })
+    expect(store.db.prepare('SELECT id FROM action_approvals').all()).toEqual([{ id: 'other-request' }])
+    expect(store.db.prepare('SELECT id FROM approval_batches').all()).toEqual([])
+    expect(store.listPods().map(item => item.id)).toEqual([other.id])
+  }
+  expect(store.db.prepare('SELECT state FROM effect_attempts').all()).toEqual([{ state: 'confirmed_applied' }])
+  expect(store.db.prepare('PRAGMA foreign_key_check').all()).toEqual([])
+})
+
+it.each(['intent', 'unknown'])('protects a Pod with %s effects even when discarding historical approvals', async (state) => {
   const { store, pod } = await fixture()
   store.db.prepare('UPDATE pods SET lifecycle=\'archived\' WHERE id=?').run(pod.id)
   const retention = new DataRetention(store, '/unused/helper')
   new DomainData(store).define({ path: 'synthetic/results', writer: pod.id, mode: 'results' })
-  store.db.prepare('INSERT INTO effect_attempts VALUES(?,1,?,NULL,\'mail.archive\',?,\'unknown\',\'{}\',1)').run('a'.repeat(64), pod.id, 'b'.repeat(64))
-  await expect(retention.deletePod(pod.id, 1, pod.name)).rejects.toThrow('uncertain actions')
+  store.db.prepare('INSERT INTO effect_attempts VALUES(?,1,?,NULL,\'mail.archive\',?,?,\'{}\',1)').run('a'.repeat(64), pod.id, 'b'.repeat(64), state)
+  await expect(retention.deletePod(pod.id, 1, pod.name, true)).rejects.toThrow('uncertain actions')
   expect(new DomainData(store).namespace('synthetic/results').writer).toBe(pod.id)
 })
 
