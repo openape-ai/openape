@@ -116,16 +116,21 @@ export class RunStore {
     })
   }
 
-  /** A changed script or permission set isolates the attempt; otherwise the failure decides between retry and isolation. */
+  /** A dispatched proxy call or changed authority isolates the attempt; otherwise the failure decides recovery. */
   recover(id: string, epoch: number | undefined, failure: RecoveryFailure): void {
     const run = this.get(id)
     const pod = this.store.getPod(run.podId)
     const inputs = this.store.db.prepare('SELECT * FROM run_inputs WHERE run_id=?').get(id)!
     const initial = this.store.db.prepare('SELECT assignment_revision FROM runs WHERE id=?').get(id)!
     const changed = epoch === undefined || pod.activeScript !== run.scriptHash || pod.bindingRevision !== initial.assignment_revision || (this.store.db.prepare('SELECT epoch FROM resource_epochs WHERE pod_id=?').get(pod.id)?.epoch ?? 0) !== epoch
-    const decision: RecoveryDecision = changed
-      ? { disposition: 'isolated', reason: 'Script or permissions changed; future schedules use the current ones', nextAt: null, attempt: Number(inputs.retry_attempt) + 1 }
-      : recoveryDecision(failure, Number(inputs.retry_attempt), Date.now())
+    // Older runs may only have host metadata or cleanup evidence. Even a completed call must not repeat
+    // when a later operation fails: recovery starts the entire script again, not its remaining statements.
+    const proxyDispatched = !!this.store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND type IN (\'agent-dispatch\',\'agent-call\',\'agent-cleanup\') AND json_extract(data,\'$.backend\')=\'proxy\' LIMIT 1').get(id)
+    const decision: RecoveryDecision = proxyDispatched
+      ? { disposition: 'isolated', reason: 'Proxy inference may have run; automatic replay could repeat it', nextAt: null, attempt: Number(inputs.retry_attempt) + 1 }
+      : changed
+        ? { disposition: 'isolated', reason: 'Script or permissions changed; future schedules use the current ones', nextAt: null, attempt: Number(inputs.retry_attempt) + 1 }
+        : recoveryDecision(failure, Number(inputs.retry_attempt), Date.now())
     const ids = JSON.parse(inputs.event_ids as string) as string[]
     if (!ids.length && decision.disposition === 'retry') {
       const eventId = randomUUID()
@@ -134,7 +139,7 @@ export class RunStore {
     }
     this.store.db.prepare('UPDATE accepted_events SET state=?,error=? WHERE run_id=? AND state IN (\'blocked\',\'claimed\')').run(decision.disposition === 'retry' ? 'pending' : 'failed', run.error, id)
     this.store.db.prepare('UPDATE run_inputs SET retry_at=?,retry_attempt=?,retry_epoch=? WHERE run_id=?').run(decision.nextAt, decision.attempt, epoch ?? null, id)
-    this.append(id, 'recovery', { ...decision, cause: failure.cause, retainedInputs: !!this.store.db.prepare('SELECT 1 FROM accepted_events WHERE run_id=? AND state=\'failed\' AND source NOT IN (\'schedule\',\'manual\')').get(id) })
+    this.append(id, 'recovery', { ...decision, cause: proxyDispatched ? 'non-retryable' : failure.cause, retainedInputs: !!this.store.db.prepare('SELECT 1 FROM accepted_events WHERE run_id=? AND state=\'failed\' AND source NOT IN (\'schedule\',\'manual\')').get(id) })
   }
 
   finish(id: string, state: RunState, summary: string, error: string | null, completedInputIds: string[] = [], retryEpoch?: number, failure?: RecoveryFailure): void {

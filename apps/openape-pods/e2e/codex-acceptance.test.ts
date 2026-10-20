@@ -33,7 +33,7 @@ function appServer(home: string) {
   return { request, statuses, notify: (method: string) => child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', method })}\n`), close: () => child.kill() }
 }
 
-it('lets connected Codex configure and run a Pod and administer shared data (packaged)', async () => {
+it('lets connected Codex configure and run a Pod while refusing retired shared data (packaged)', async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-codex-'))); fixtureDirectory(root)
   cleanups.push(() => removeProfile(root))
   const store = new PodDatabase(root); store.createPod({ name: 'Invoices' }); store.close()
@@ -99,11 +99,17 @@ it('lets connected Codex configure and run a Pod and administer shared data (pac
   const started = await call({ action: 'run', ...scoped })
   expect(started.error).toBe(false); expect(started.value.runId).toMatch(/^[a-f0-9-]{36}$/)
   await expect.poll(async () => (await call({ action: 'inspect', ...scoped })).value.runs.find((run: { id: string }) => run.id === started.value.runId)?.state, { timeout: 20000 }).toBe('completed')
-  expect((await call({ action: 'runtime' })).value).toHaveProperty('domain')
+  const runtime = (await call({ action: 'runtime' })).value
+  expect(runtime).toMatchObject({ contractVersion: 6, agentSelection: { backends: ['native', 'proxy'], providers: ['claude', 'codex'], modelSizes: ['small', 'medium', 'large', 'xlarge'], thinkingLevels: ['low', 'medium', 'high', 'xhigh'] } })
+  expect(runtime).not.toHaveProperty('domain')
   const define = { action: 'domain', requestId: randomUUID(), command: { type: 'define', path: 'codex/records', writer: 'owner', mode: 'records', readers: [] } }
   const defined = await call(define)
-  expect(defined.error).toBe(false); expect(await call(define)).toEqual(defined)
-  expect((await call({ action: 'domain', command: { type: 'list' } })).value.namespaces).toMatchObject([{ path: 'codex/records', writer: 'owner' }])
+  expect(defined).toMatchObject({ error: true, value: expect.stringContaining('not allowed') })
+  expect(await call(define)).toEqual(defined)
+  expect((await call({ action: 'domain', command: { type: 'list' } })).error).toBe(true)
+  const inspected = new PodDatabase(root)
+  try { expect(inspected.db.prepare('SELECT name FROM sqlite_schema WHERE name=\'data_namespaces\'').get()).toBeUndefined() }
+  finally { inspected.close() }
   expect((await call({ action: 'networks', command: { type: 'list' } })).error).toBe(true)
   await page.reload()
   expect(await page.getByRole('tab', { name: 'Chat', exact: true }).count()).toBe(0)

@@ -61,7 +61,7 @@
     "playwright": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
-    "vite": "8.2.1",
+    "vite": "8.2.4",
     "vitest": "catalog:",
     "vue-tsc": "catalog:"
   },

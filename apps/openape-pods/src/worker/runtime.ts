@@ -56,6 +56,9 @@ import { CodexControl } from './codex/control'
 import { parseCodexRequest } from '../contracts/codex'
 import type { AgentRuntime } from './agent/executor'
 import { endpointModel } from './agent/model'
+import { proxyAgentCall, proxyAgentValidation, assertProxyEndpoint } from './agent/proxy-client'
+import type { ProxyEndpoint } from './agent/proxy-client'
+import { setMandatorySecretPaths } from '../runtime/secret-paths'
 import { authorizeRunService, authorizeCredentialService, readRunContext } from './runtime/service-authorization'
 import { ServiceBridge } from './runtime/service-bridge'
 import { parseDetailsCommand } from '../contracts/details'
@@ -142,7 +145,8 @@ const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
 const master = new MasterService(store, runtime, masterControl, fixtureServices)
 const ownerOperations = new AsyncLocalStorage<boolean>()
-const codex = new CodexControl(store, masterControl)
+let proxyStatus: unknown = { configured: false, enabled: false, available: false }
+const codex = new CodexControl(store, masterControl, () => ({ native: { available: Boolean(runServices.provider) }, proxy: proxyStatus }))
 
 const remote = new DesktopRegistration(store)
 function registeredOwner() {
@@ -239,6 +243,10 @@ port.on('message', async (event) => {
   const request = event.data as { id?: unknown, command?: unknown }
   if (!request || typeof request.id !== 'string') throw new Error('Invalid worker request')
   try {
+    if (request.command && typeof request.command === 'object' && 'secretPaths' in request.command) {
+      setMandatorySecretPaths(request.command.secretPaths as string[])
+      port.postMessage({ id: request.id, state: true }); return
+    }
     if (request.command && typeof request.command === 'object' && 'central' in request.command) {
       const command = request.command.central as { type: string, until?: number, owner?: unknown, command?: unknown }
       if (command.type === 'gate') {
@@ -292,6 +300,15 @@ port.on('message', async (event) => {
     const incoming = request.command
     const ongoingService = incoming && typeof incoming === 'object' && ['credentialCheck', 'runContext', 'programExecution', 'serviceCheck'].some(key => key in incoming)
     if (maintenance && !(deletingPod && ongoingService)) throw new Error('Application data is being maintained; retry when it finishes')
+    if (request.command && typeof request.command === 'object' && 'proxy' in request.command) {
+      const endpoint = request.command.proxy as (ProxyEndpoint & { status: { enabled?: boolean } }) | null
+      if (endpoint) assertProxyEndpoint(endpoint)
+      if (runServices.proxy && (!endpoint || endpoint.status?.enabled === false)) dispatcher.cancelBackend('proxy')
+      runServices.proxy = endpoint ? proxyAgentCall(endpoint) : undefined
+      runtime.validateProxyAgent = endpoint ? proxyAgentValidation(endpoint) : undefined
+      proxyStatus = endpoint?.status ?? { configured: false, enabled: false, available: false }
+      port.postMessage({ id: request.id, state: true }); return
+    }
     if (request.command && typeof request.command === 'object' && 'provider' in request.command) {
       const endpoint = request.command.provider as { port: number, capability: string } | null
       if (endpoint && (!Number.isInteger(endpoint.port) || endpoint.port < 1024 || endpoint.port > 65535 || !/^[a-f0-9]{64}$/.test(endpoint.capability))) throw new Error('Invalid trusted provider endpoint')
@@ -299,7 +316,7 @@ port.on('message', async (event) => {
       const removed = !!runServices.provider && !services
       runServices.provider = services?.provider; runServices.model = services?.model; master.setProvider(services); providerReady = true; startupReady = processesReady
       if (removed) {
-        for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, 'Model connection was removed')
+        dispatcher.cancelBackend('native')
       }
       port.postMessage({ id: request.id, state: true }); return
     }

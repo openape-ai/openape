@@ -9,9 +9,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { OwnerSession } from '../../src/main/connections/owner-session'
 import type { OwnerSessionTokens } from '../../src/main/connections/owner-session'
 import { deniedPaths, ownerProtectedPaths, sandboxPolicy } from '../../src/worker/runtime/sandbox'
+import { mandatorySecretPaths, setMandatorySecretPaths } from '../../src/runtime/secret-paths'
 
 const roots: string[] = []
-afterEach(() => { vi.useRealTimers(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
+afterEach(() => { setMandatorySecretPaths([]); vi.useRealTimers(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 const policy = { executable: '/opt/fixture/bin/tool', workspace: '/Users/owner/Library/Application Support/OpenApe Pods/profile/pods/p/workspace', readFiles: ['/opt/fixture/share/roots.pem'], runtimeDirectories: ['/opt/fixture/runtime'], readDirectories: ['/Users/owner/Documents'], writeDirectories: ['/Users/owner/Library/Application Support/OpenApe Pods/profile/credentials/temporary/state'] }
 const protectedPaths = ['/Users/owner/Library/Application Support/OpenApe Pods', '/Users/owner/.config/apes']
 const subpaths = (paths: string[]) => paths.map(path => `(subpath ${JSON.stringify(path)})`).join(' ')
@@ -73,6 +74,29 @@ function sandboxed(profile: string, command: string[]): Promise<{ code: number, 
   })
 }
 const write = (profile: string, path: string) => sandboxed(profile, ['/bin/sh', '-c', 'echo planted > "$1"', '-', path])
+
+it.runIf(process.platform === 'darwin')('denies runtime key and config files after every assigned folder at both sandbox levels without adding network access', async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'pods-runtime-deny-'))); roots.push(root)
+  const privateDirectory = join(root, 'private'); const linkedDirectory = join(root, 'linked')
+  mkdirSync(privateDirectory); symlinkSync(privateDirectory, linkedDirectory)
+  const key = join(privateDirectory, 'key.json'); const config = join(privateDirectory, 'agent-backends.json')
+  writeFileSync(key, 'synthetic-runtime-key'); writeFileSync(config, '{}'); writeFileSync(join(root, 'ordinary.txt'), 'ordinary')
+  setMandatorySecretPaths([join(linkedDirectory, 'key.json'), config])
+  expect(mandatorySecretPaths()).toContain(key)
+  const read = 'try{console.log(require("fs").readFileSync(process.argv[1],"utf8"))}catch(e){console.log(e.code)}'
+  const rename = 'try{require("fs").renameSync(process.argv[1],process.argv[2]);console.log("renamed")}catch(e){console.log(e.code)}'
+  for (const level of ['isolated', 'owner'] as const) {
+    const profile = join(root, `${level}.sb`)
+    const text = sandboxPolicy({ executable: process.execPath, workspace: root, readFiles: [key, config], readDirectories: [root], writeDirectories: [root], runtimeDirectories: [], reach: { level, protectedPaths: [join(root, 'owner-state')], deny: [] } })
+    writeFileSync(profile, text)
+    expect(text).not.toContain('(allow network-outbound')
+    expect(text.trim().split('\n').at(-1)).toBe(`(deny file-read* file-write* ${subpaths(mandatorySecretPaths())})`)
+    expect(await sandboxed(profile, [process.execPath, '-e', read, join(root, 'ordinary.txt')])).toEqual({ code: 0, output: 'ordinary\n' })
+    for (const path of [key, config, join(linkedDirectory, 'key.json')]) expect(await sandboxed(profile, [process.execPath, '-e', read, path])).toEqual({ code: 0, output: 'EPERM\n' })
+    expect(await sandboxed(profile, [process.execPath, '-e', rename, privateDirectory, join(root, 'moved')])).toEqual({ code: 0, output: 'EPERM\n' })
+    expect(existsSync(join(root, 'moved'))).toBe(false)
+  }
+}, 20000)
 
 it.runIf(process.platform === 'darwin')('lets the owner level write SSH and launch agent files but never the Pods data, the apes login or a denied path under the real macOS sandbox', async () => {
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'pr-'))); roots.push(root)

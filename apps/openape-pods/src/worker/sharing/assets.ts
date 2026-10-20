@@ -6,6 +6,7 @@ import { portableFileLimits, portablePath, sharingLimits } from '@openape/pods-p
 import type { PortablePodSource } from './source'
 import type { PortablePayload } from './package'
 import { assertPortableAsset } from './package'
+import { assertNotSecretPath } from '../../runtime/secret-paths'
 
 export type { PortableAssetSelection } from '../../contracts/sharing'
 
@@ -19,6 +20,7 @@ export async function readPortableAssets(root: string, source: PortablePodSource
     const resource = source.resources.find(resource => resource.id === selection.resourceId && resource.kind === 'reference' && resource.state === 'ready')
     if (!resource || typeof resource.configuration.path !== 'string' || !isAbsolute(resource.configuration.path)) throw new Error('Portable assets require an explicitly selected current reference')
     const path = resource.configuration.path
+    assertNotSecretPath(path)
     const canonical = await realpath(path)
     if (canonical !== resolve(path) || canonical === privateRoot || canonical.startsWith(`${privateRoot}${sep}`)) throw new Error('Portable assets cannot use symbolic links or private workspace storage')
     const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK)
@@ -36,6 +38,7 @@ export async function readPortableAssets(root: string, source: PortablePodSource
       }
       const after = await file.stat({ bigint: true }); const current = await stat(path, { bigint: true })
       if (before.dev !== current.dev || before.ino !== current.ino || before.size !== after.size || before.mtimeNs !== after.mtimeNs || before.ctimeNs !== after.ctimeNs || after.nlink !== 1n || await realpath(path) !== canonical) throw new Error('Portable asset changed during capture')
+      assertNotSecretPath(path)
       assertPortableAsset(path, content); assertPortableAsset(selection.path, content)
       files.push({ path: selection.path, kind: 'asset', mediaType: selection.mediaType, content })
     }

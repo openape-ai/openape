@@ -1,4 +1,18 @@
 import type { RunEvent, RunRecord } from '../contracts/runs'
+import type { AgentCallMetadata } from '../contracts/agent-metadata'
+
+export function agentCalls(events: RunEvent[]): AgentCallMetadata[] {
+  const calls = new Map<string, AgentCallMetadata>()
+  for (const event of events) {
+    if (event.type !== 'agent-call' || !event.data || typeof event.data !== 'object') continue
+    const call = event.data as AgentCallMetadata
+    if (typeof call.callId !== 'string' || !['native', 'proxy'].includes(call.backend)) continue
+    const previous = calls.get(call.callId)
+    if (previous && previous.status !== 'running') continue
+    calls.set(call.callId, call)
+  }
+  return [...calls.values()]
+}
 
 export interface ActivityItem { sequence: number, at: number, title: string, state: string }
 const operations: Record<string, string> = { 'jev.evaluate': 'Jev decision', 'tools.invoke': 'Application call', 'agent.run': 'AI request', 'http.request': 'HTTP delivery', 'progress.commit': 'Save progress', 'credentials.get': 'Read an assigned secret', 'mail.next': 'Read mail', 'mail.commit': 'Save mail knowledge' }
