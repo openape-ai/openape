@@ -338,11 +338,13 @@ it('serves the published map read model through view=map without naming a Pod', 
   expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toEqual({ revision: 2, map })
   expect(() => store.view(other, actor.id, null, { view: 'map' })).toThrow()
   expect(() => store.view(actor.owner, actor.id, null, { view: 'summary' })).toThrow('invalid_workspace_request')
-  // Desktops before issue 1518 publish held deliveries and their count; the relay still accepts and serves them.
+  // Legacy delivery metadata stays readable, while retired shared-data counters and paths are neutralized.
   const [pod] = map.pods
-  const legacy = { ...map, kpis: { ...map.kpis, unknownDeliveries: 2 }, pods: [{ ...pod!, work: { pending: 0, held: 1 }, queue: { blocked: 1, error: 'Held for owner review' }, unknown: [{ key: `owner-script:${pod!.id}`, runId: pod!.id, authority: { source: 'owner-activation', activationId: 'synthetic', podId: pod!.id, scriptHash: 'a'.repeat(64), assignmentRevision: 1, resourceEpoch: 0 } }] }] }
+  const legacy = { ...map, kpis: { ...map.kpis, unknownDeliveries: 2 }, pods: [{ ...pod!, data: { reads: ['old/records'], writes: [] }, work: { pending: 0, held: 1 }, queue: { blocked: 1, error: 'Held for owner review' }, unknown: [{ key: `owner-script:${pod!.id}`, runId: pod!.id, authority: { source: 'owner-activation', activationId: 'synthetic', podId: pod!.id, scriptHash: 'a'.repeat(64), assignmentRevision: 1, resourceEpoch: 0 } }] }] }
   publishV2(store, actor, lease, {}, { ...state, workspace: { ...state.workspace, map: legacy } }, 2)
-  expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toEqual({ revision: 3, map: legacy })
+  const normalized = { ...legacy, pods: [{ ...legacy.pods[0], data: { reads: [], writes: [] }, work: { pending: 0, held: 0 } }] }
+  expect(store.view(actor.owner, actor.id, null, { view: 'map' })).toEqual({ revision: 3, map: normalized })
+  expect(store.inventory(actor.owner)[0]!.workspace.map).toEqual(normalized)
   // Later desktops may omit these fields.
   const { queue: _queue, unknown: _unknown, ...current } = pod!
   const { unknownDeliveries: _deliveries, ...kpis } = map.kpis
