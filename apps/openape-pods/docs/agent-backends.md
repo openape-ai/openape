@@ -154,7 +154,7 @@ enums.
 A reload applies mapping and enabled-flag changes to new calls. Active calls
 keep their immutable starting configuration. Changing `baseUrl` or `keyFile`
 requires an idle runtime restart, including adding a first configuration to an
-already running unconfigured runtime. Stop active work before that restart.
+already running unconfigured runtime. Wait for active work to finish before that restart.
 Rotate key contents securely at the same path: each call rereads the key and
 fails explicitly if it is unavailable. Reload updates displayed readiness.
 
@@ -204,6 +204,12 @@ with a fenced lease even when the script caught the error. Recovery requires
 proof that the previous host process stopped; restart the idle runtime after
 that host has exited. A still-live or ambiguous process does not release the
 lease.
+
+Before proxy dispatch, the run stores a durable intent without prompt or credential
+data. A run with a dispatched proxy call is never replayed automatically, even
+after shutdown, a crash, or a later failure following successful inference.
+Future scheduled runs and explicit owner runs remain eligible. Native-only runs
+retain their existing recovery policy.
 
 ## Call history
 

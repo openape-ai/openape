@@ -282,6 +282,8 @@ export class RunDispatcher {
             if (backend === 'native' && !this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
             if (request.backend === 'proxy' && !this.services?.proxy) { recordFailure({ cause: 'non-retryable' }); throw new AgentCallError('proxy_not_configured', 'Proxy agent backend is not configured', { phase: 'resolve' }) }
             if (agentCalls++ >= maxAgentCallsPerRun) throw new Error('A run can start at most 50 agent calls')
+            // Persist before dispatch: a crash can lose every host receipt after inference has started.
+            if (request.backend === 'proxy') { this.runs.assertLease(id); appendEvent('agent-dispatch', { backend: 'proxy' }) }
             const controller = new AbortController()
             const calls = this.agentCalls.get(backend) ?? new Set<AbortController>()
             calls.add(controller); this.agentCalls.set(backend, calls)

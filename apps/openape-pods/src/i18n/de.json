@@ -3235,6 +3235,7 @@
   "An application call requires its own IdP grant": "Ein Anwendungsaufruf benötigt eine eigene Freigabe am IdP",
   "Owner activation changed; validate and activate the selected script": "Die Aktivierung durch den Eigentümer hat sich geändert. Validiere und aktiviere das ausgewählte Skript erneut.",
   "Permission is unavailable; future schedules will check again": "Die Freigabe ist nicht verfügbar. Künftige geplante Starts prüfen sie erneut.",
+  "Proxy inference may have run; automatic replay could repeat it": "Die Proxy-Inferenz könnte bereits erfolgt sein. Ein automatischer Neustart könnte sie wiederholen.",
   "Pod execution permission is {p0}; review the Pod permissions before retrying": "Die Ausführungsfreigabe des Pods hat den Status {p0}. Prüfe vor einem erneuten Versuch die Pod-Berechtigungen.",
   "Owner-script start evidence is invalid": "Der Startnachweis des Pod-Skripts ist ungültig",
   "Owner-script boundary is not awaiting owner review": "Die Skriptwirkung wartet nicht auf einen Eigentümerabgleich",
