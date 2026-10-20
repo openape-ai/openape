@@ -4,12 +4,12 @@ import type { PropType } from 'vue'
 import type { RunEvent } from '../contracts/runs'
 import { agentModelSizeLabels, agentThinkingLabels } from '../contracts/agent'
 import { agentCalls } from './run-activity'
-import { t, label } from './i18n'
+import { t, label, diagnostic } from './i18n'
 
 export default defineComponent({
   props: { events: { type: Array as PropType<RunEvent[]>, required: true } },
   computed: { calls() { return agentCalls(this.events) } },
-  methods: { t, label, size(value: keyof typeof agentModelSizeLabels) { return label(agentModelSizeLabels[value]) }, thinking(value: keyof typeof agentThinkingLabels) { return label(agentThinkingLabels[value]) } },
+  methods: { t, label, diagnostic, size(value: keyof typeof agentModelSizeLabels) { return label(agentModelSizeLabels[value]) }, thinking(value: keyof typeof agentThinkingLabels) { return label(agentThinkingLabels[value]) } },
 })
 </script>
 
@@ -34,7 +34,7 @@ export default defineComponent({
         {{ t('Tokens in / out') }}: {{ call.usage?.input ?? t('Unknown') }} / {{ call.usage?.output ?? t('Unknown') }}
       </p>
       <p v-if="call.error" class="error-message">
-        {{ call.error.code }} · {{ call.error.details.phase }}<span v-if="call.error.details.httpStatus"> · HTTP {{ call.error.details.httpStatus }}</span>: {{ call.error.message }}
+        {{ call.error.code }} · {{ call.error.details.phase }}<span v-if="call.error.details.httpStatus"> · {{ t('HTTP {p0}', { p0: call.error.details.httpStatus }) }}</span>: {{ diagnostic(call.error.message) }}
       </p>
       <p v-if="call.error?.details.cause || call.error?.details.providerCode || call.error?.details.retryAfter" class="muted">
         {{ [call.error.details.cause, call.error.details.providerCode, call.error.details.retryAfter ? `Retry-After: ${call.error.details.retryAfter}` : ''].filter(Boolean).join(' · ') }}
