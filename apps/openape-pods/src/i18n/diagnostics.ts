@@ -60,6 +60,7 @@ export const diagnosticPatterns = [
   'Value does not match the declared input {p0}',
   'Feedback exceeded {p0} hops',
   'Tool output exceeded {p0} bytes; read smaller pages, for example with --limit',
+  'Tool stderr exceeded {p0} bytes',
   'Feedback case is older than {p0} ms',
   'Definition update blocked: {p0}. The current version remains pinned.',
   'Member script update blocked: {p0}. The current version remains pinned.',
