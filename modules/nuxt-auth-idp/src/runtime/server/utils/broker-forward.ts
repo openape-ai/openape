@@ -13,11 +13,14 @@ export type BrokerOperation = 'connection' | 'create' | 'authorize' | 'get' | 't
 function brokerClaims(operation: BrokerOperation, common: Record<string, unknown>, identity: Record<string, unknown>, input: unknown): Record<string, unknown> {
   if (operation === 'connection') return { ...common, operation }
   if (operation === 'create' || operation === 'authorize') return { ...common, ...identity, operation, request: input }
+  if (operation === 'get' && input && typeof input === 'object') return { ...common, ...identity, operation, reference: (input as { reference: string }).reference }
   return { ...common, ...identity, operation, grant_id: input }
 }
 
 export async function forwardBrokerOperation(binding: BrokerAgentBinding, operation: BrokerOperation, input?: unknown, requesterName?: string): Promise<unknown> {
   const discovery = await discoverBroker(binding.decision_issuer, binding.owner.split('@')[1] ?? '')
+  const hasReference = input && typeof input === 'object' && 'reference' in input
+  if (hasReference && discovery.openape_grant_reference_supported !== true) throw createProblemError({ status: 501, title: 'The decision provider does not support grant references' })
   const key = await useIdpStores().keyStore.getSigningKey()
   const now = Math.floor(Date.now() / 1000)
   const common = { iss: getIdpIssuer(), aud: binding.decision_issuer, iat: now, exp: now + 60, jti: crypto.randomUUID(), connection_id: binding.connection_id, owner: binding.owner }

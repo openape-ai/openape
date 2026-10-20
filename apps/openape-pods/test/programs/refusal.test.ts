@@ -16,7 +16,7 @@ vi.mock('../../src/worker/runtime/ape-shell', () => ({ launchApeShell: vi.fn() }
 const roots: string[] = []
 afterEach(async () => { vi.clearAllMocks(); for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }) })
 
-async function invoke(frames: object[], options: { exitCode?: number, stdout?: string, batch?: OpenApeGrantBatch } = {}) {
+async function invoke(frames: object[], options: { exitCode?: number, stdout?: string, batch?: OpenApeGrantBatch, reference?: string } = {}) {
   const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-tool-refusal-'))); roots.push(root)
   const executable = await realpath(process.execPath)
   const hash = createHash('sha256').update(await readFile(executable)).digest('hex')
@@ -30,12 +30,12 @@ async function invoke(frames: object[], options: { exitCode?: number, stdout?: s
     return { stdout, stderr, authority: channel, processId: Promise.resolve(123), completed: Promise.resolve(options.exitCode ?? 1), cancel: vi.fn() } as never
   })
   const assignment: ToolAssignment = { id: 'application', identityConnection: { issuer: 'https://id.example.test', subject: 'pod@example.test', owner: 'owner@example.test', keyId: 'key', targetHost: 'pods:fixture', accessToken: async () => 'SYNTHETIC_POD_TOKEN' }, program: { path: executable, name: 'fixture', sha256: hash }, argv: ['read'], reach: { level: 'owner', protectedPaths: [] }, capability: 'tool.fixture.invoke', executable, executableHash: hash, entryFiles: [], prefix: [], runtimeDirectories: [], environment: {}, networkPorts: [], approvalWaitMs: 0 }
-  const broker = new PodToolBroker('/unused/helper', root, { runtime: { executable, cli: '/unused/ape-shell.mjs' }, operationId: 'operation', targetHost: 'pods:fixture', batch: options.batch, observer: { authorized, notStarted } }, new CredentialCache(root))
+  const broker = new PodToolBroker('/unused/helper', root, { runtime: { executable, cli: '/unused/ape-shell.mjs' }, operationId: 'operation', targetHost: 'pods:fixture', batch: options.batch, reference: options.reference, observer: { authorized, notStarted } }, new CredentialCache(root))
   const result = broker.execute(assignment, { toolId: assignment.id, argv: assignment.argv }, { capabilities: [assignment.capability], assertCurrent: () => {}, signal: AbortSignal.timeout(5000) })
   return { result, authorized, notStarted }
 }
 
-it.each(['missing', 'pending', 'denied', 'revoked', 'expired'])('returns the verified %s decision without starting the target', async (state) => {
+it.each(['missing', 'pending', 'denied', 'revoked', 'expired', 'used'])('returns the verified %s decision without starting the target', async (state) => {
   const f = await invoke([{ state: 'not-started', error: 'Synthetic permission refusal', failure: { kind: 'permission', state, grantId: 'reviewed-grant' } }])
   expect(await f.result).toEqual({ exitCode: 126, stdout: '', stderr: '', refusal: { reason: 'Synthetic permission refusal', state, grantId: 'reviewed-grant' } })
   expect(f.authorized).not.toHaveBeenCalled(); expect(f.notStarted).toHaveBeenCalledOnce()
@@ -82,4 +82,11 @@ it('retains an unknown process outcome instead of returning a pre-dispatch refus
   const f = await invoke([{ state: 'authorized', grantId: 'approved-grant', write: true }, { state: 'starting' }, { state: 'started', pid: 123 }])
   await expect(f.result).rejects.toBeInstanceOf(NonRetryableError)
   expect(f.authorized).toHaveBeenCalledOnce(); expect(f.notStarted).not.toHaveBeenCalled()
+})
+
+it('passes a generic reference to ape-shell without changing argv or keeping decision state', async () => {
+  const f = await invoke([{ state: 'pending', grantId: 'review', approvalUrl: 'https://id.example.test/review' }], { exitCode: 75, reference: 'document-42:export:v1' })
+  await f.result
+  expect(vi.mocked(launchApeShell).mock.calls[0]![3]).toEqual(['read'])
+  expect(vi.mocked(launchApeShell).mock.calls[0]![5]).toMatchObject({ reference: 'document-42:export:v1', grantType: 'once' })
 })

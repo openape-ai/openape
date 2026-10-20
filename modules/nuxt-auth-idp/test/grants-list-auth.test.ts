@@ -78,3 +78,28 @@ describe('GET /api/grants — requester authorization', () => {
     expect(listGrantsMock).toHaveBeenCalledWith(expect.objectContaining({ requester: 'agent@hofmann.eco', batch: 'b-1' }))
   })
 })
+
+describe('reference lookup preserves grant visibility', () => {
+  beforeEach(() => {
+    listGrantsMock.mockClear()
+    bearerMock.mockReset().mockResolvedValue({ sub: 'owner@example.com' })
+    findByOwnerMock.mockReset().mockResolvedValue([{ email: 'agent@example.com' }])
+    findByApproverMock.mockReset().mockResolvedValue([])
+  })
+  it('looks up an owned requester without changing its decision', async () => {
+    queryMock.mockReturnValue({ requester: 'agent@example.com', reference: 'document-42:v1' })
+    await handler({} as any)
+    expect(listGrantsMock).toHaveBeenCalledWith(expect.objectContaining({ requester: 'agent@example.com', reference: 'document-42:v1' }))
+  })
+  it('refuses a reference belonging to a foreign requester', async () => {
+    queryMock.mockReturnValue({ requester: 'foreign@example.com', reference: 'document-42:v1' })
+    await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 403 })
+    expect(listGrantsMock).not.toHaveBeenCalled()
+  })
+  it('requires the requester namespace and rejects hidden reference characters', async () => {
+    for (const query of [{ reference: 'document-42:v1' }, { requester: 'owner@example.com', reference: 'hidden\u202Evalue' }]) {
+      queryMock.mockReturnValue(query)
+      await expect(handler({} as any)).rejects.toMatchObject({ statusCode: 400 })
+    }
+  })
+})
