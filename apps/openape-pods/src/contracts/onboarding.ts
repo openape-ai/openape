@@ -1,3 +1,5 @@
+import { parseModelApiSave } from './model-api'
+import type { ModelApiId, ModelApiSave } from './model-api'
 import { parseTypesafeKey } from './jev'
 import type { AgentBackendStatus } from './agent-status'
 
@@ -6,7 +8,7 @@ export interface ConnectionView { id: string, provider: ConnectionProvider, acco
 export interface MailSetup { podId: string, revision: number, ownerConnection: string, mailConnection: string, account: string, folders: { id: string, name: string }[], since: string | null, attachments: boolean }
 export interface PodIdentityView { podId: string, bound: boolean, ownerConnection: string | null, issuer: string | null, decisionIssuer: string | null, subject: string | null, brokerConnectionId: string | null }
 export interface OnboardingView { proxy?: AgentBackendStatus, podIdentity?: PodIdentityView, connections: ConnectionView[], owner: string | null, runtime: { ready: boolean, error: string | null }, complete: boolean, folders?: { connectionId: string, items: { id: string, name: string }[] } }
-export interface ProxyCommand { type: 'proxyStatus' | 'reloadProxy' | 'disableProxy' }
+export type ProxyCommand = { type: 'proxyStatus' | 'reloadProxy' | 'disableProxy' } | { type: 'saveModelApis', settings: ModelApiSave } | { type: 'checkModelApi', id: ModelApiId }
 export type OnboardingCommand = ProxyCommand | { type: 'saveTypesafe', key: string } | { type: 'enableBroker', id: string, issuer: string, domain: string } | { type: 'revokeBroker', id: string } | { type: 'list', podId?: string } | { type: 'connect', provider: ConnectionProvider, account: string, switchAccount?: boolean } | { type: 'cancel' | 'disconnect' | 'openLogin', id: string } | { type: 'folders', id: string } | { type: 'assign', setup: MailSetup } | { type: 'finish' | 'openGrants' }
 export function parseSince(value: unknown): string | null {
   if (value === null) return null
@@ -17,8 +19,13 @@ const uuid = (value: unknown): value is string => typeof value === 'string' && /
 export function parseOnboardingCommand(value: unknown): OnboardingCommand {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid setup request')
   const item = value as Record<string, unknown>
-  const fields: Record<string, string[]> = { proxyStatus: [], reloadProxy: [], disableProxy: [], saveTypesafe: ['key'], enableBroker: ['id', 'issuer', 'domain'], revokeBroker: ['id'], list: ['podId'], connect: ['provider', 'account', 'switchAccount'], openLogin: ['id'], cancel: ['id'], disconnect: ['id'], folders: ['id'], assign: ['setup'], finish: [], openGrants: [] }
+  const fields: Record<string, string[]> = { proxyStatus: [], reloadProxy: [], disableProxy: [], saveModelApis: ['settings'], checkModelApi: ['id'], saveTypesafe: ['key'], enableBroker: ['id', 'issuer', 'domain'], revokeBroker: ['id'], list: ['podId'], connect: ['provider', 'account', 'switchAccount'], openLogin: ['id'], cancel: ['id'], disconnect: ['id'], folders: ['id'], assign: ['setup'], finish: [], openGrants: [] }
   if (typeof item.type !== 'string' || !Object.hasOwn(fields, item.type) || Object.keys(item).some(key => key !== 'type' && !fields[item.type as string]?.includes(key))) throw new Error('Unsupported setup request')
+  if (item.type === 'saveModelApis') return { type: item.type, settings: parseModelApiSave(item.settings) }
+  if (item.type === 'checkModelApi') {
+    if (item.id !== 'openai' && item.id !== 'anthropic') throw new Error('Invalid model API connection')
+    return { type: item.type, id: item.id }
+  }
   if (item.type === 'saveTypesafe') parseTypesafeKey(item.key)
   if (item.type === 'assign' || item.type === 'folders' || (item.type === 'connect' && item.provider === 'microsoft')) throw new Error('Configure application accounts in the pod Permissions tab')
   if (fields[item.type]?.includes('id') && !uuid(item.id)) throw new Error('Invalid connection identity')

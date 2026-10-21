@@ -103,3 +103,24 @@ it.each([[1280, false], [390, true]] as const)('shows the browser account with s
   expect(wrapper.emitted('logout')).toHaveLength(1)
   expect(wrapper.emitted('import')).toHaveLength(1)
 })
+
+it.each([[1060, 'en', false], [390, 'de', true]] as const)('edits model API formats using production CSS without overflow (%i px, %s)', async (width, language, dark) => {
+  const { default: ProxyConnection } = await import('../../src/renderer/ProxyConnection.vue')
+  await page.viewport(width, 900); applyLanguage(language); document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+  const onboarding = vi.fn(async () => ({ owner: null, complete: true, runtime: { ready: true, error: null }, connections: [], proxy: { configured: true, enabled: true, available: true, hash: 'a'.repeat(64), mappings: [], connections: [{ id: 'openai', enabled: true, baseUrl: 'http://127.0.0.1:8317/v1', authentication: 'token', hasToken: true, format: 'chat-completions', defaultThinking: 'medium' }, { id: 'anthropic', enabled: true, baseUrl: 'http://127.0.0.1:8317/v1', authentication: 'none', hasToken: false, format: 'messages', defaultThinking: 'high' }] } }))
+  window.pods = { modelApiSettings: true, onboarding } as unknown as typeof window.pods
+  wrapper = mount(ProxyConnection, { attachTo: document.body }); await settle()
+  wrapper.element.setAttribute('style', 'max-width:720px;margin:auto;padding:16px;box-sizing:border-box')
+  await wrapper.findAll('select')[0].setValue('responses'); await settle()
+  expect(wrapper.findAll('select')[0].element.value).toBe('responses')
+  expect(wrapper.findAll('fieldset')).toHaveLength(2)
+  expect(wrapper.findAll('input[type=password]')).toHaveLength(0)
+  for (const element of wrapper.findAll('input,select,button,fieldset')) {
+    const box = element.element.getBoundingClientRect(); expect(box.right).toBeLessThanOrEqual(width); expect(box.left).toBeGreaterThanOrEqual(0)
+  }
+  await shot(`model-apis-${width}-${language}`)
+  await wrapper.findAll('button').find(item => item.text() === (language === 'de' ? 'Ersetzen' : 'Replace'))?.trigger('click'); await settle()
+  expect(wrapper.find('input[type=password]').exists()).toBe(true)
+  await wrapper.get('input[type=password]').setValue('synthetic-token'); await wrapper.get('form').trigger('submit'); await settle()
+  expect(wrapper.html()).not.toContain('synthetic-token')
+})

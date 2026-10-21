@@ -41,7 +41,7 @@ export function proxyAgentCall(endpoint: ProxyEndpoint): ProxyAgentCall {
   return async (request, signal, event) => {
     const started = Date.now()
     const callId = randomUUID()
-    let metadata: AgentCallMetadata = { callId, backend: 'proxy', provider: request.provider, modelSize: request.modelSize, modelId: null, reportedModelId: null, requestedThinking: request.thinking ?? null, effectiveThinking: null, wireThinking: null, configRevision: null, configHash: null, modelSelection: 'explicit-mapping', startedAt: new Date(started).toISOString(), endedAt: null, durationMs: null, status: 'running', threadId: `proxy-call:${callId}` }
+    let metadata: AgentCallMetadata = { callId, backend: 'proxy', provider: request.provider, modelSize: request.modelSize, modelId: null, reportedModelId: null, requestedThinking: request.thinking ?? null, effectiveThinking: null, wireThinking: null, configRevision: null, configHash: null, modelSelection: 'latest-family', startedAt: new Date(started).toISOString(), endedAt: null, durationMs: null, status: 'running', threadId: `proxy-call:${callId}` }
     const deadline = new AbortController()
     const timer = setTimeout(() => deadline.abort(new AgentCallError('timeout', 'Proxy agent call timed out', { phase: 'read' })), request.timeoutSeconds * 1000)
     const active = AbortSignal.any([signal, deadline.signal])

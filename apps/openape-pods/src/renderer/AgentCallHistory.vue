@@ -27,6 +27,16 @@ export default defineComponent({
       <p v-else-if="call.effectiveThinking" class="muted">
         {{ t('Thinking') }}: {{ thinking(call.effectiveThinking) }}<span v-if="call.requestedThinking === null"> · {{ t('Configured default') }}</span>
       </p>
+      <p v-if="call.apiFormat" class="muted">
+        {{ call.apiFormat === 'chat-completions' ? 'Chat Completions' : call.apiFormat === 'responses' ? 'Responses' : 'Messages' }}<span v-if="call.catalogCheckedAt"> · {{ t('Catalog checked') }}: {{ call.catalogCheckedAt }}</span>
+      </p>
+      <details v-if="call.catalogHash">
+        <summary>{{ t('Model selection') }}</summary>
+        <p>{{ call.connectionId }} · {{ call.modelFamily }} · {{ call.modelVersion }}</p>
+        <p>{{ t('Reported model') }}: <code>{{ call.reportedModelId ?? t('Unknown') }}</code></p>
+        <p>{{ t('Configuration revision') }}: {{ call.configRevision }} · {{ t('Resolver revision') }}: {{ call.resolverVersion }}</p>
+        <p>{{ t('Catalog digest') }}: <code>{{ call.catalogHash }}</code></p>
+      </details>
       <p v-if="call.durationMs !== null" class="muted">
         {{ t('Duration: {p0} ms', { p0: call.durationMs }) }}
       </p>

@@ -19,7 +19,7 @@ export function parseCliRequest(value: unknown): CliRequest {
   if (Object.keys(input).some(key => !['channel', 'command'].includes(key))) throw new Error('Unsupported CLI fields')
   if (input.channel === 'agentBackends') {
     const command = parseOnboardingCommand(input.command)
-    if (command.type !== 'proxyStatus' && command.type !== 'reloadProxy' && command.type !== 'disableProxy') throw new Error('Unsupported CLI agent backend command')
+    if (command.type !== 'proxyStatus' && command.type !== 'reloadProxy' && command.type !== 'disableProxy' && command.type !== 'saveModelApis' && command.type !== 'checkModelApi') throw new Error('Unsupported CLI agent backend command')
     return { channel: input.channel, command }
   }
   if (input.channel === 'workspace') {

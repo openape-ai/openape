@@ -1,4 +1,4 @@
-import example from '../../docs/agent-backends.example.json'
+import example from './agent-backends-legacy.json'
 import { parseAgentBackendConfig } from '../../src/main/agent-backends/config'
 import type { AgentBackendConfig } from '../../src/main/agent-backends/types'
 
