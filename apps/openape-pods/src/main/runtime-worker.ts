@@ -468,8 +468,10 @@ export class RuntimeWorker {
   async onboarding(command: OnboardingCommand): Promise<OnboardingView> {
     await this.setupReady
     if (!this.connections) throw new Error('Connection setup is not ready')
-    if (command.type === 'proxyStatus' || command.type === 'reloadProxy' || command.type === 'disableProxy') {
+    if (command.type === 'proxyStatus' || command.type === 'reloadProxy' || command.type === 'disableProxy' || command.type === 'saveModelApis' || command.type === 'checkModelApi') {
       if (!this.agentBackends) throw new Error('Agent backend setup is not ready')
+      if (command.type === 'saveModelApis') await this.agentBackends.save(command.settings)
+      if (command.type === 'checkModelApi') await this.agentBackends.check(command.id)
       if (command.type === 'reloadProxy') await this.agentBackends.reload()
       if (command.type === 'disableProxy') await this.agentBackends.disable()
       await this.publishProxyStatus()

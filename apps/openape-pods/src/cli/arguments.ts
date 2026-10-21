@@ -9,6 +9,7 @@ export interface CliArguments {
   tags?: string[]
   lifecycle?: 'active' | 'paused' | 'archived'
   script?: string
+  settingsFile?: string
   json: boolean
 }
 
@@ -18,7 +19,7 @@ export const cliHelp = `ape-pods — local Pod development
   ape-pods run <id> [--json]
   ape-pods create [--name NAME] [--tags a,b] [--script pod-script.mjs]
   ape-pods edit [<id>] [--name NAME] [--tags a,b] [--lifecycle STATE] [--script pod-script.mjs]
-  ape-pods agent-backends [status|reload|disable] [--json]
+  ape-pods agent-backends [status|reload|disable|check-openai|check-anthropic|save] [--settings-file PRIVATE_JSON] [--json]
 
 Options: --profile PATH, --json, --help
 An empty --tags value clears tags. create/edit prompt only in a terminal.
@@ -41,6 +42,7 @@ export function cliArguments(argv: string[]): CliArguments {
         tags: { type: 'string' },
         lifecycle: { type: 'string' },
         script: { type: 'string' },
+        'settings-file': { type: 'string' },
         json: { type: 'boolean' },
         help: { type: 'boolean' },
       },
@@ -49,15 +51,16 @@ export function cliArguments(argv: string[]): CliArguments {
   catch (error) { throw new UsageError((error as Error).message) }
   const [command, id, ...extra] = parsed.positionals
   if (!['list', 'run', 'create', 'edit', 'agent-backends'].includes(command ?? '') || extra.length) throw new UsageError('Expected list, run <id>, create, edit <id> or agent-backends; see --help')
-  if (command === 'agent-backends' && id && !['status', 'reload', 'disable'].includes(id)) throw new UsageError('agent-backends accepts status, reload or disable')
+  if (command === 'agent-backends' && id && !['status', 'reload', 'disable', 'check-openai', 'check-anthropic', 'save'].includes(id)) throw new UsageError('agent-backends accepts status, reload, disable, check-openai, check-anthropic or save')
   if ((command === 'list' || command === 'create') && id) throw new UsageError(`${command} does not accept an ID`)
   if (command === 'run' && !id) throw new UsageError('run requires a Pod ID')
   const { values } = parsed
+  if ((values['settings-file'] !== undefined && (command !== 'agent-backends' || id !== 'save')) || (command === 'agent-backends' && id === 'save' && !values['settings-file'])) throw new UsageError('agent-backends save requires --settings-file with a private JSON file')
   if (command === 'list' || command === 'run' || command === 'agent-backends') {
     if (['name', 'tags', 'lifecycle', 'script'].some(key => values[key] !== undefined)) throw new UsageError(`${command} does not accept edit options`)
   }
   if (command === 'create' && values.lifecycle !== undefined) throw new UsageError('create always creates a paused Pod')
   if (values.lifecycle !== undefined && !['active', 'paused', 'archived'].includes(String(values.lifecycle))) throw new UsageError('lifecycle must be active, paused or archived')
   if (values.profile === '' || values.script === '' || values.name === '') throw new UsageError('profile, script and name must not be empty')
-  return { command: command as CliArguments['command'], ...(id ? { id } : {}), profile: values.profile as string | undefined, name: values.name as string | undefined, tags: values.tags === undefined ? undefined : String(values.tags).split(',').map(tag => tag.trim()).filter(Boolean), lifecycle: values.lifecycle as CliArguments['lifecycle'], script: values.script as string | undefined, json: values.json === true }
+  return { command: command as CliArguments['command'], ...(id ? { id } : {}), profile: values.profile as string | undefined, settingsFile: values['settings-file'] as string | undefined, name: values.name as string | undefined, tags: values.tags === undefined ? undefined : String(values.tags).split(',').map(tag => tag.trim()).filter(Boolean), lifecycle: values.lifecycle as CliArguments['lifecycle'], script: values.script as string | undefined, json: values.json === true }
 }

@@ -2,20 +2,35 @@
 
 Desktop and `ape-pods` use the same runtime for `context.agent.run()`. Existing
 calls keep the native Codex SDK and the connected account's current default
-model. Enabling the optional CLIProxyAPI backend does not change existing Pod
+model. Enabling the optional model API backend does not change existing Pod
 scripts, their schedules or their model selection.
 
-## Verified proxy configuration
+## Model APIs
 
-The eight example model mappings have real acceptance evidence for the selected
-thinking levels. Revision 2 also verified Sonnet/high followed by Sol/xhigh in
-one disposable Pod with explicit response handoff. The complete mapping/thinking
-matrix uses fixtures; successful catalog listing alone is not inference evidence.
+Settings offers independent **OpenAI-compatible** and **Anthropic-compatible**
+connections. OpenAI supports an explicit Chat Completions or Responses selection;
+Anthropic uses native Messages. Each connection has its own enabled flag, base
+URL, authentication (token or none), and thinking default. Token replacement is
+available locally in Desktop; token values never pass through Relay. The format
+is a connection setting, never an automatic fallback.
 
-CLIProxyAPI 8.0.0 needs the exact Claude payload filter below. Without it, the
-upstream rejects the explicit empty `fallbacks` list with HTTP 400. Omitting the
-field in Pods would instead allow the proxy to inject fallback models. Preserve
-the explicit field in Pods and remove it only through the reviewed proxy filter.
+Every call reads a fresh bounded authenticated catalog and chooses the newest
+numeric release in its assigned family:
+
+| Class | Claude | Codex |
+| --- | --- | --- |
+| small | Haiku | Luna |
+| medium | Sonnet | Terra |
+| large | Opus | Sol |
+| xlarge | Fable | Astra |
+
+The versioned resolver accepts explicit numeric release IDs and recognized dated
+revisions, excludes preview/beta/experimental releases, and rejects ambiguous or
+unknown family versions. It chooses newest before checking thinking support.
+There are no version pins or exact-ID overrides. Failure never selects an older
+version, another family, a different API format or reduced thinking. New calls
+refresh the catalog; active calls and historical metadata retain their snapshot.
+A catalog entry is availability evidence, not successful inference evidence.
 
 ## Select a backend in the script
 
@@ -68,23 +83,34 @@ Pass a prior response in the next prompt to share context. There is one shared
 limit of 50 agent calls per run. `timeoutSeconds` defaults to 120 and accepts
 integers from 30 through 900.
 
-## Configure the existing gateway
+## Configuration and private storage
 
-The selected profile owns `agent-backends.json`. Start from
-[the configuration example](agent-backends.example.json), which is disabled by
-default. Configure the documented existing CLIProxyAPI connection and its
-private key-file reference. Pods does not log in to the proxy's accounts, copy
-OAuth files or install a second proxy. The example's model entries describe
-explicit mappings, not proof that a provider currently accepts each combination.
-Enable only combinations with the required verification evidence.
+The shared Desktop/CLI runtime reads `<profileRoot>/agent-backends.json`.
+[The schema-2 example](agent-backends.example.json) has both connections disabled.
+Use the settings editor or shared CLI save command; the configuration contains
+family policies and opaque credential references, never a token or a fixed model
+version. Base URLs may include a version/prefix path. Credentials in URLs,
+queries, fragments, redirects and remote plaintext HTTP are refused. Both local
+defaults are `http://127.0.0.1:8317/v1`; this grants scripts no network access.
 
-The base URL ends in `/v1`, contains no credentials, query or fragment, and uses
-HTTPS for remote hosts. HTTP is accepted only for loopback. On the gateway host,
-the documented local URL is `http://127.0.0.1:8317/v1`. Do not expose that port as
-a general Pod network destination.
+New tokens live in immutable 0600 JSON files inside the profile's 0700
+`model-api-private` directory, with owner, hard-link, symlink, ancestor and ACL
+checks. No macOS Keychain is used. An exclusive lock and expected configuration
+hash reject concurrent/stale edits. The runtime flushes the new secret first,
+then atomically commits configuration; old references and private backups remain
+for active calls and guarded rollback. Unchanged save is a no-op. These private
+files remain accessible to other processes running as the same user.
 
-For the existing CLIProxyAPI 8.0.0 service, append this rule to
-`requests.payload.filter` in its private configuration, preserving other rules:
+Legacy schema 1 is read without rewriting it. Recognized exact IDs migrate to
+families, retaining thinking policies and enabled state. Both connections refer
+to the existing external key file without copying or altering it. Explicit save
+writes schema 2 with a private schema-1 backup. Unknown custom mappings require
+review instead of guessed migration. Existing OpenAI connections keep Chat
+Completions. An external credential reference uses `type: "external"` and an
+absolute `path` to the existing JSON with its `api_key` field.
+
+The existing CLIProxyAPI 8.0.0 service already has this owner-approved rule in
+`requests.payload.filter`. It is provenance, not permission to change the proxy:
 
 ```yaml
 requests:
@@ -113,59 +139,56 @@ thinking or model selection. The proxy records the field removal and suppresses
 later fallback reinjection. Back up the private configuration and use its
 documented idle reload procedure; verify the effective rule before inference.
 
-The configuration and the existing credential JSON must be regular files owned
-by the runtime user, without group/other access or additional hard links. Direct
-symlinks are refused. Use private permissions such as `0600`; the credential
-file contains the existing `api_key` field and the configuration refers to it
-through an absolute `keyFile` path and `keyField: 'api_key'`. Do not paste key
-values into scripts, configuration examples, logs, reports or chat.
+The filter names only those four exact historical IDs. A newer Claude release
+may reject `fallbacks: []`; the runtime preserves the newest selection and error.
+Extending the shared filter requires a separately reviewed change. No proxy
+upgrade, new login or OAuth file copy belongs to API configuration.
 
-The trusted host reads the key. It never sends it to the worker, renderer,
-script, Pod snapshot/export or child environment. Mandatory denies cover the
-configured and canonical configuration/key paths in both sandbox levels and
-override assigned folders. Key files are also refused as imports and snapshots.
-The script's existing network restrictions stay in force.
+The trusted host reads credentials and constructs the selected API headers.
+OpenAI token authentication uses Bearer; Anthropic uses `x-api-key` with
+`anthropic-version: 2023-06-01`. No-auth reads no secret and sends no credential
+header. Unauthorized requests never retry without authentication. Mandatory
+sandbox and capture denies cover configuration, external keys and the complete
+managed directory, including temporary files and backups. Portable exports and
+Relay contain no host credentials. Existing script restrictions remain in force.
 
-Each mapping specifies `modelId`, protocol, output limit, default thinking,
-all four thinking translations and their enabled flags, plus a
-`capabilityEvidenceVersion`. `schemaVersion` is 1. Change `revision` when changing
-the configuration; the runtime also records its content hash. A missing,
-malformed or unsafe configuration disables the proxy while native Codex remains
-available independently.
+## Inspect, check, save and disable
 
-## Inspect, reload and disable
-
-Use desktop connection settings, or the CLI with the desktop closed as described
-in [CLI development](cli-development.md):
+Use local Desktop settings, or the CLI with Desktop closed as described in
+[CLI development](cli-development.md):
 
 ```sh
 ape-pods agent-backends status --json
+ape-pods agent-backends check-openai --json
+ape-pods agent-backends check-anthropic --json
+ape-pods agent-backends save --settings-file /absolute/profile/model-api-private/edit.json --json
 ape-pods agent-backends reload --json
 ape-pods agent-backends disable --json
 ```
 
-These commands honor `--profile /absolute/path`. Status exposes availability,
-configuration revision/hash, mappings, supported thinking levels and safe error
-details. It never returns the base URL, private paths or keys. Status is local
-configuration/readiness information, not a live inference check. The owner MCP
-runtime reference also reports backend availability and the common selection
-enums.
+The private save file has `expectedHash` (the last status hash, or null for a new
+configuration) and `connections.openai` / `connections.anthropic`. Each entry
+contains `enabled`, `baseUrl`, `format`, `authentication`, `defaultThinking`, and
+optionally a replacement `token`. Do not put token values in argv or environment.
+Omitting a replacement retains the configured reference; authentication `none`
+removes that connection's reference. Both entries are validated before commit.
+The input file must be inside this profile's `model-api-private` directory, so
+mandatory Pod/capture exclusions protect it even after saving. Create that
+directory with mode 0700 and the input with mode 0600; the file remains under
+the owner's control. Arbitrary input locations are refused before reading tokens.
 
-A reload applies mapping and enabled-flag changes to new calls. Active calls
-keep their immutable starting configuration. Changing `baseUrl` or `keyFile`
-requires an idle runtime restart, including adding a first configuration to an
-already running unconfigured runtime. Wait for active work to finish before that restart.
-Rotate key contents securely at the same path: each call rereads the key and
-fails explicitly if it is unavailable. Reload updates displayed readiness.
+Commands honor `--profile /absolute/path`. Status includes URLs, formats,
+configuration revision/hash, safe errors and catalog check time, but no credential
+paths or values. Connection checking reads only the catalog; it never infers.
+Read-only resolved models and selection errors appear in Advanced settings.
+Unsaved edits must be saved before checking that connection.
 
-Disable aborts active proxy calls, waits for their cleanup and persists
-`proxy.enabled: false`. Re-enable by editing the private configuration and
-reloading it. Removing a native connection aborts only active native calls;
-disabling/removing proxy availability aborts only proxy calls. A script may catch
-ordinary backend errors and continue its other work.
-If a run fails after a proxy error, automatic run recovery does not repeat that
-inference. A script can handle the error explicitly; existing native recovery
-and independently scheduled future runs retain their current behavior.
+Reload applies changes to later calls. Endpoint or external-key protection
+changes require an idle runtime restart, reported by settings. Never stop active
+Pods for that restart. Disabling one connection cancels only its dependent calls;
+other API and native calls continue. The CLI disable command disables both APIs.
+Native connection removal remains independent. Errors never trigger automatic
+proxy inference replay; explicit future runs retain their normal behavior.
 
 ## Text-only protocol and failure handling
 
@@ -178,9 +201,16 @@ successful validation does not verify credentials, model availability or quality
 Claude uses native Messages with explicit `fallbacks: []`, an explicit model,
 thinking translation and output limit. Together with the required proxy filter,
 this preserves the configured fallback and thinking semantics through
-CLIProxyAPI 8.0.0. The sample Haiku mapping uses
-token budgets; the other sample Claude models use adaptive effort. Codex uses
+CLIProxyAPI 8.0.0. The Haiku family contract uses
+token budgets; the other Claude families use adaptive effort. Codex uses
 Chat Completions with `reasoning_effort`, `tools: []` and `tool_choice: 'none'`.
+Responses sends `input_text`, exact `reasoning.effort`, `store: false`,
+`stream: false`, empty tools, `tool_choice: 'none'` and `max_output_tokens`. Only
+completed assistant `output_text` is returned; reasoning is ignored and
+refusal, incomplete, malformed or nontext output is rejected. CLIProxyAPI 8.0.0
+aggregates upstream streaming, strips the requested output-token limit and may
+inject tools. The runtime bounds response bytes and deadlines, but does not
+promise an upstream token/cost cap or remote-computation cancellation.
 The runtime still rejects tool/function/image output because upstream translation
 can introduce tools despite these request fields.
 
@@ -215,7 +245,8 @@ retain their existing recovery policy.
 
 History records immutable `agent-call` metadata at resolution/start and at the
 terminal outcome. It includes backend/provider, requested class and thinking,
-resolved and reported model IDs, effective and wire thinking, configuration
+resolved and reported model IDs, family/version, catalog digest/time, resolver
+revision, connection/API format, effective and wire thinking, configuration
 revision/hash, call/thread IDs, timestamps, duration, status and safe errors.
 Reported usage retains its source and token units; unavailable counts are omitted.
 Failures before resolution retain nullable unresolved fields instead of inventing

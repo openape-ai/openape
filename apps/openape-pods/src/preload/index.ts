@@ -27,6 +27,7 @@ import { channels, isPodStatus } from '../contracts/ipc'
 import type { PodsBridge } from '../contracts/ipc'
 
 const bridge: PodsBridge = {
+  modelApiSettings: true,
   async storage(command) { return ipcRenderer.invoke(channels.storage, parseStorageRecoveryCommand(command)) as Promise<StorageRecoveryView> },
   async updates(command) { return parseUpdateView(await ipcRenderer.invoke(channels.updates, parseUpdateCommand(command))) },
   async mcpSession(command) { return parseMcpSessionView(await ipcRenderer.invoke(channels.mcpSession, parseMcpSessionCommand(command))) },

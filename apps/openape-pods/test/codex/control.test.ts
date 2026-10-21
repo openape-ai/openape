@@ -207,7 +207,7 @@ it('journals a local private Jev import without accepting a raw key or unselecte
 it('describes files and external services for data exchange and offers no network, workflow or gate actions', async () => {
   const { send } = fixture()
   const reference = await send({ action: 'runtime' }) as { contractVersion: number, dataExchange: Record<string, string>, approvalHistory: unknown, actions: Record<string, unknown> }
-  expect(reference.contractVersion).toBe(6)
+  expect(reference.contractVersion).toBe(7)
   expect(reference.dataExchange.purpose).toContain('files')
   expect(reference).not.toHaveProperty('sharedData')
   expect(reference).not.toHaveProperty('networks')
