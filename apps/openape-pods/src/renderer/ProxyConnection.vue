@@ -67,7 +67,7 @@ export default defineComponent({
         <legend>{{ t(id === 'openai' ? 'OpenAI-compatible' : 'Anthropic-compatible') }}</legend>
         <label class="enable"><input v-model="draft[id].enabled" type="checkbox"> {{ t('Enabled') }}</label>
         <label v-if="id === 'openai'">{{ t('API format') }}
-          <select v-model="draft[id].format"><option value="chat-completions">Chat Completions</option><option value="responses">Responses</option></select>
+          <select v-model="draft[id].format"><option value="chat-completions">{{ t('Chat Completions') }}</option><option value="responses">{{ t('Responses') }}</option></select>
         </label>
         <label>{{ t('Base URL') }}<input v-model="draft[id].baseUrl" type="url" required autocomplete="off" spellcheck="false"></label>
         <label>{{ t('Authentication') }}
@@ -76,7 +76,7 @@ export default defineComponent({
         <div v-if="draft[id].authentication === 'token'">
           <label v-if="replacing[id] || !connection(id)?.hasToken">{{ t('API token') }}<input v-model="draft[id].token" type="password" autocomplete="new-password" spellcheck="false"></label>
           <div v-else class="token-state">
-            <span aria-label="API token">••••••••</span><button type="button" class="secondary" @click="replacing[id] = true">
+            <span :aria-label="t('API token')">••••••••</span><button type="button" class="secondary" @click="replacing[id] = true">
               {{ t('Replace') }}
             </button>
           </div>

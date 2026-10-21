@@ -100,7 +100,7 @@ it('lets connected Codex configure and run a Pod while refusing retired shared d
   expect(started.error).toBe(false); expect(started.value.runId).toMatch(/^[a-f0-9-]{36}$/)
   await expect.poll(async () => (await call({ action: 'inspect', ...scoped })).value.runs.find((run: { id: string }) => run.id === started.value.runId)?.state, { timeout: 20000 }).toBe('completed')
   const runtime = (await call({ action: 'runtime' })).value
-  expect(runtime).toMatchObject({ contractVersion: 6, agentSelection: { backends: ['native', 'proxy'], providers: ['claude', 'codex'], modelSizes: ['small', 'medium', 'large', 'xlarge'], thinkingLevels: ['low', 'medium', 'high', 'xhigh'] } })
+  expect(runtime).toMatchObject({ contractVersion: 7, agentSelection: { backends: ['native', 'proxy'], providers: ['claude', 'codex'], modelSizes: ['small', 'medium', 'large', 'xlarge'], thinkingLevels: ['low', 'medium', 'high', 'xhigh'] } })
   expect(runtime).not.toHaveProperty('domain')
   const define = { action: 'domain', requestId: randomUUID(), command: { type: 'define', path: 'codex/records', writer: 'owner', mode: 'records', readers: [] } }
   const defined = await call(define)
