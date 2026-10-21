@@ -2,7 +2,7 @@ import type { AgentBackend, AgentModelSize, AgentProvider, AgentThinking } from 
 import type { SafeAgentError } from './agent-errors'
 
 export type AgentWireThinking = { type: 'enabled', budget_tokens: number } | { type: 'adaptive', effort: AgentThinking } | { reasoning_effort: AgentThinking }
-export interface AgentUsage { source: 'messages.usage' | 'chat-completions.usage' | 'native', unit: 'tokens', input?: number, output?: number, total?: number, reasoning?: number, cacheRead?: number, cacheCreation?: number }
+export interface AgentUsage { source: 'messages.usage' | 'chat-completions.usage' | 'responses.usage' | 'native', unit: 'tokens', input?: number, output?: number, total?: number, reasoning?: number, cacheRead?: number, cacheCreation?: number }
 export interface AgentCallMetadata {
   callId: string
   backend: AgentBackend
@@ -15,7 +15,14 @@ export interface AgentCallMetadata {
   wireThinking: AgentWireThinking | null
   configRevision: string | null
   configHash: string | null
-  modelSelection?: 'account-default' | 'explicit-mapping'
+  modelSelection?: 'account-default' | 'explicit-mapping' | 'latest-family'
+  connectionId?: import('./model-api').ModelApiId
+  apiFormat?: import('./model-api').ModelApiFormat
+  resolverVersion?: string
+  modelFamily?: string
+  modelVersion?: string
+  catalogHash?: string
+  catalogCheckedAt?: string
   startedAt: string
   endedAt: string | null
   durationMs: number | null

@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { createServer } from 'node:http'
 import type { Server, IncomingMessage, ServerResponse } from 'node:http'
-import { chmod, link, mkdtemp, readFile, rm, symlink, writeFile } from 'node:fs/promises'
+import { chmod, link, mkdtemp, realpath, readFile, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -9,6 +9,7 @@ import { agentModelSizes, agentProviders, agentThinkingLevels, parseAgentRequest
 import type { ProxyAgentRequest } from '../../src/contracts/agent'
 import type { AgentCallMetadata } from '../../src/contracts/agent-metadata'
 import { AgentBackendManager } from '../../src/main/agent-backends/manager'
+import { parseModelApiConfig } from '../../src/main/agent-backends/model-config'
 import { configurationHash, parseAgentBackendConfig, resolveProxyRequest } from '../../src/main/agent-backends/config'
 import { normalizeProxyResponse, proxyPayload, proxyResponseBytes } from '../../src/main/agent-backends/transport'
 import { readPrivateJson } from '../../src/main/agent-backends/private-file'
@@ -29,10 +30,15 @@ const chat = (model = 'gpt-6-luna', extra: object = {}) => ({ id: 'chat-123', mo
 const messages = () => ({ id: 'message-123', type: 'message', role: 'assistant', model: 'claude-haiku-4-5-20251001', content: [{ type: 'thinking', thinking: 'private reasoning' }, { type: 'text', text: 'marker' }], stop_reason: 'end_turn' })
 
 async function fixture(handler: (request: IncomingMessage, response: ServerResponse) => void) {
-  const server = createServer(handler); servers.push(server)
+  const server = createServer((request, response) => {
+    if (request.method === 'GET' && request.url === '/v1/models') {
+      response.end(JSON.stringify({ data: Object.values(config().proxy.models).flatMap(provider => Object.values(provider).map(entry => ({ id: entry.modelId, max_tokens: 128000 }))) })); return
+    }
+    handler(request, response)
+  }); servers.push(server)
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
   const address = server.address(); if (!address || typeof address === 'string') throw new Error('Missing fixture address')
-  const root = await mkdtemp(join(tmpdir(), 'pods-agent-backends-')); roots.push(root)
+  const root = await realpath(await mkdtemp(join(tmpdir(), 'pods-agent-backends-'))); roots.push(root)
   const keyFile = join(root, 'key.json'); const configFile = join(root, 'agent-backends.json')
   await writeFile(keyFile, JSON.stringify({ api_key: 'synthetic-private-key' }), { mode: 0o600 })
   const value = structuredClone(approvedAgentBackendConfig(keyFile, `http://127.0.0.1:${address.port}/v1`))
@@ -80,7 +86,7 @@ it('serializes all 32 explicit mappings and refuses disabled combinations withou
 })
 
 it('rejects malformed configuration, effort downgrade, budget clamp and unsafe destinations', () => {
-  for (const baseUrl of ['http://example.com/v1', 'http://user:password@127.0.0.1/v1', 'http://127.0.0.1/v1?secret=a', 'http://127.0.0.1/v1#x', 'http://127.0.0.1/other', 'file:///v1']) expect(() => parseAgentBackendConfig({ ...config(), proxy: { ...config().proxy, baseUrl } })).toThrow()
+  for (const baseUrl of ['http://example.com/v1', 'http://user:password@127.0.0.1/v1', 'http://127.0.0.1/v1?secret=a', 'http://127.0.0.1/v1#x', 'file:///v1']) expect(() => parseAgentBackendConfig({ ...config(), proxy: { ...config().proxy, baseUrl } })).toThrow()
   const changed = structuredClone(config()); const model = changed.proxy.models.claude.small
   if (!model) throw new Error('Missing fixture model')
   model.outputLimit = 32768
@@ -123,7 +129,7 @@ it('enforces private stable single-link files and never includes credential valu
   await expect(readPrivateJson(f.keyFile, 'credential')).rejects.toMatchObject({ code: 'credential_unavailable' })
   await rm(hard); await writeFile(f.keyFile, '{invalid-json-secret')
   const status = await f.manager.reload()
-  expect(status).toMatchObject({ available: false, error: { code: 'credential_unavailable' } })
+  expect(status).toMatchObject({ available: false, connections: expect.arrayContaining([expect.objectContaining({ error: expect.objectContaining({ code: 'credential_unavailable' }) })]) })
   expect(JSON.stringify(status)).not.toMatch(/invalid-json-secret|agent-backends.json|key.json/)
 })
 
@@ -178,7 +184,7 @@ it('preserves call snapshots across reload and requires restart for connection c
   expect(() => f.manager.validate(request('codex', { thinking: 'high' }))).toThrow('disabled')
   f.config.proxy.keyFile = join(f.root, 'new-key.json')
   await writeFile(f.configFile, JSON.stringify(f.config))
-  expect(await f.manager.reload()).toMatchObject({ available: false, error: { details: { cause: 'restart_required' } } })
+  expect(await f.manager.reload()).toMatchObject({ available: false, connections: expect.arrayContaining([expect.objectContaining({ restartRequired: true })]) })
   expect(f.manager.protectedPaths()).not.toContain(f.config.proxy.keyFile)
   await expect(f.manager.run(request())).rejects.toMatchObject({ code: 'proxy_not_configured' })
 })
@@ -189,13 +195,13 @@ it('requires restart when configuration is first added after an absent startup b
   const manager = new AgentBackendManager({ profileRoot: f.root }); managers.push(manager)
   await manager.reload()
   await writeFile(f.configFile, JSON.stringify(f.config), { mode: 0o600 })
-  expect(await manager.reload()).toMatchObject({ available: false, error: { details: { cause: 'restart_required' } } })
+  expect(await manager.reload()).toMatchObject({ available: false, connections: expect.arrayContaining([expect.objectContaining({ restartRequired: true })]) })
 })
 
 it('reads a repaired key on the next call without retaining an unavailable credential error', async () => {
   const f = await fixture((_request, response) => response.end(JSON.stringify(chat())))
   await rm(f.keyFile)
-  expect(await f.manager.reload()).toMatchObject({ available: false, error: { code: 'credential_unavailable' } })
+  expect(await f.manager.reload()).toMatchObject({ available: false, connections: expect.arrayContaining([expect.objectContaining({ error: expect.objectContaining({ code: 'credential_unavailable' }) })]) })
   await writeFile(f.keyFile, JSON.stringify({ api_key: 'repaired-fake-key' }), { mode: 0o600 })
   expect((await f.manager.run(request())).response).toBe('marker')
   expect(f.manager.status().available).toBe(true)
@@ -229,8 +235,8 @@ it('persists Disable while drain leaves host configuration unchanged', async () 
   await f.manager.drain()
   expect(await readFile(f.configFile, 'utf8')).toBe(before)
   await f.manager.reload(); await f.manager.disable()
-  const persisted = parseAgentBackendConfig(JSON.parse(await readFile(f.configFile, 'utf8')))
-  expect(persisted.proxy.enabled).toBe(false)
+  const persisted = parseModelApiConfig(JSON.parse(await readFile(f.configFile, 'utf8')))
+  expect(Object.values(persisted.connections).every(connection => !connection.enabled)).toBe(true)
   expect(configurationHash(persisted)).toBe(f.manager.status().hash)
   const restarted = new AgentBackendManager({ profileRoot: f.root }); managers.push(restarted)
   expect(await restarted.reload()).toMatchObject({ enabled: false, available: false })
@@ -263,7 +269,7 @@ it('preserves a safe connection cause without copying network internals', async 
   const manager = new AgentBackendManager({ profileRoot: f.root, fetch: vi.fn(async () => { throw new TypeError('private connection URL', { cause: { code: 'ECONNREFUSED', secret: 'private-key' } }) }) }); managers.push(manager)
   await manager.reload()
   const error = await manager.run(request()).catch(error => error)
-  expect(error).toMatchObject({ code: 'proxy_unreachable', details: { phase: 'connect', cause: 'ECONNREFUSED' } })
+  expect(error).toMatchObject({ code: 'proxy_unreachable', details: { phase: 'resolve', cause: 'ECONNREFUSED' } })
   expect(JSON.stringify(error)).not.toMatch(/private connection|private-key/)
 })
 
@@ -327,7 +333,7 @@ it('serializes Reload and Disable so concurrent requests persist the final disab
     expect(disabled).toBe(false)
     release(); await reload; await disable
     expect(f.manager.status()).toMatchObject({ enabled: false, available: false })
-    expect(JSON.parse(await readFile(f.configFile, 'utf8')).proxy.enabled).toBe(false)
+    expect(JSON.parse(await readFile(f.configFile, 'utf8')).connections.openai.enabled).toBe(false)
   }
   finally { release(); reader.mockRestore() }
 })

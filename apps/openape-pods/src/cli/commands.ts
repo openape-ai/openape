@@ -1,3 +1,7 @@
+import { resolve } from 'node:path'
+import { assertPrivatePath } from '../main/agent-backends/settings-store'
+import { readPrivateJson } from '../main/agent-backends/private-file'
+import { parseModelApiSave } from '../contracts/model-api'
 import { readFile, stat } from 'node:fs/promises'
 import { setTimeout as delay } from 'node:timers/promises'
 import type { CliClient } from './client'
@@ -75,6 +79,14 @@ async function runPod(client: CliClient, pod: StoredPod, io: CliIO): Promise<num
 
 export async function executeCli(args: CliArguments, client: CliClient, io: CliIO): Promise<number> {
   if (args.command === 'agent-backends') {
+    if (args.id === 'save' && args.settingsFile) {
+      const path = resolve(args.settingsFile); await assertPrivatePath(path)
+      const settings = parseModelApiSave(await readPrivateJson(path, 'configuration', io.signal))
+      io.output(await client.request({ channel: 'agentBackends', command: { type: 'saveModelApis', settings } })); return 0
+    }
+    if (args.id === 'check-openai' || args.id === 'check-anthropic') {
+      io.output(await client.request({ channel: 'agentBackends', command: { type: 'checkModelApi', id: args.id === 'check-openai' ? 'openai' : 'anthropic' } })); return 0
+    }
     const type = args.id === 'reload' ? 'reloadProxy' : args.id === 'disable' ? 'disableProxy' : 'proxyStatus'
     io.output(await client.request({ channel: 'agentBackends', command: { type } }))
     return 0

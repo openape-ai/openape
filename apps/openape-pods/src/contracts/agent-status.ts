@@ -8,5 +8,6 @@ export interface AgentBackendStatus {
   revision?: string
   hash?: string
   error?: SafeAgentError
-  mappings: { provider: AgentProvider, modelSize: AgentModelSize, modelId: string, enabled: boolean, defaultThinking: AgentThinking, thinking: AgentThinking[], capabilityEvidenceVersion: string }[]
+  connections?: (import('./model-api').ModelApiSettings & { id: import('./model-api').ModelApiId, hasToken: boolean, restartRequired?: boolean, checkedAt?: string, error?: SafeAgentError })[]
+  mappings: { provider: AgentProvider, modelSize: AgentModelSize, modelId: string, error?: SafeAgentError, enabled: boolean, defaultThinking: AgentThinking, thinking: AgentThinking[], capabilityEvidenceVersion: string }[]
 }
