@@ -1,3 +1,9 @@
+# Inbox message swipe gestures — issue 1531
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1531. Branch `feature/issue-1531-pods-inbox-swipe`, worktree `.claude/worktrees/openape-pods-tags-discussion-586b3a`, canonical base `2025040a2ebde6e802e51d537c24fd9dd4b197e4`.
+- On the PWA Messages tab, swiping a message card right archives it and swiping left marks it read, through the existing account-wide `PATCH items/:id`. `touch-action: pan-y` keeps vertical scrolling with the browser; archived lists, offline state and decisions are not swipeable.
+- Verification: a real-CSS Chromium layout case drives CDP touch input in light and dark: a vertical drag scrolls without changes, a short swipe does nothing, each full swipe sends exactly one request for the swiped message only. Screenshots inspected. Physical iPhone acceptance and relay rollout remain.
+
 # CLIProxyAPI agent backend — issue 1530
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1530. Approved proposal revision 2: https://report.openape.ai/d/01M5DAMFMDW26PAF781Z9T2A26?v=4; the plan preserves the original revision-1 approval and failures.
