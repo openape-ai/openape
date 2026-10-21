@@ -7,64 +7,60 @@ import type { AgentBackendStatus } from '../../src/contracts/agent-status'
 import type { OnboardingCommand, OnboardingView } from '../../src/contracts/onboarding'
 
 afterEach(() => applyLanguage('en'))
-const status = (patch: Partial<AgentBackendStatus> = {}): AgentBackendStatus => ({ configured: true, enabled: true, available: true, revision: 'fixture-revision-1', hash: 'a'.repeat(64), mappings: [{ provider: 'claude', modelSize: 'medium', modelId: 'claude-sonnet-5-5', enabled: true, defaultThinking: 'medium', thinking: ['low', 'medium', 'high', 'xhigh'], capabilityEvidenceVersion: 'fixture-only' }], ...patch })
-const view = (proxy: AgentBackendStatus): OnboardingView => ({ connections: [], owner: null, runtime: { ready: true, error: null }, complete: false, proxy })
+const status = (patch: Partial<AgentBackendStatus> = {}): AgentBackendStatus => ({ configured: true, enabled: true, available: true, revision: 'fixture-1', hash: 'a'.repeat(64), mappings: [{ provider: 'claude', modelSize: 'medium', modelId: 'claude-sonnet-5-5', enabled: true, defaultThinking: 'medium', thinking: ['low', 'medium', 'high', 'xhigh'], capabilityEvidenceVersion: 'fixture-only' }], connections: [{ id: 'openai', enabled: true, baseUrl: 'http://127.0.0.1:8317/v1', format: 'chat-completions', authentication: 'token', hasToken: true, defaultThinking: 'medium' }, { id: 'anthropic', enabled: true, baseUrl: 'http://127.0.0.1:8317/v1', format: 'messages', authentication: 'none', hasToken: false, defaultThinking: 'high' }], ...patch })
+const view = (proxy: AgentBackendStatus): OnboardingView => ({ proxy, connections: [], owner: null, runtime: { ready: true, error: null }, complete: true })
 
-it.each(['en', 'de'] as const)('shows safe mappings and sends explicit reload and disable commands from app settings (%s)', async (language) => {
+it.each(['en', 'de'] as const)('edits both API connections, selects Responses and saves a transient token without a model pin (%s)', async (language) => {
   applyLanguage(language)
-  const onboarding = vi.fn(async (command: OnboardingCommand) => view(status(command.type === 'disableProxy' ? { enabled: false, available: false } : command.type === 'reloadProxy' ? { revision: 'fixture-revision-2' } : {})))
-  window.pods = { onboarding } as unknown as typeof window.pods
-  const wrapper = mount(AppSettings, { global: { stubs: { JevConnection: true, McpSession: true, DataManagement: true, LanguageSwitcher: true } } }); await flushPromises()
-  const section = wrapper.get('section[aria-label="CLIProxyAPI"]')
-  expect(onboarding).toHaveBeenCalledWith({ type: 'proxyStatus' })
-  expect(section.get('[role="status"]').text()).toBe(language === 'de' ? 'Konfiguriert und aktiviert' : 'Configured and enabled')
-  expect(section.text()).toContain('claude-sonnet-5-5')
-  expect(section.text()).toContain(language === 'de' ? 'Mittel' : 'Medium')
-  expect(section.findAll('input, select')).toHaveLength(0)
-  expect(section.text()).not.toMatch(/api_key|Authorization|keyFile|http:\/\//)
-  const reload = section.findAll('button').find(button => button.text() === (language === 'de' ? 'Konfiguration neu laden' : 'Reload configuration'))!
-  await reload.trigger('click'); await flushPromises()
-  expect(onboarding).toHaveBeenLastCalledWith({ type: 'reloadProxy' })
-  expect(section.text()).toContain('fixture-revision-2')
-  const disable = section.findAll('button').find(button => button.text() === (language === 'de' ? 'Proxy deaktivieren' : 'Disable proxy'))!
-  await disable.trigger('click'); await flushPromises()
-  expect(onboarding).toHaveBeenLastCalledWith({ type: 'disableProxy' })
-  expect(section.get('[role="status"]').text()).toBe(language === 'de' ? 'Deaktiviert' : 'Disabled')
-  expect((disable.element as HTMLButtonElement).disabled).toBe(true)
-  wrapper.unmount()
-})
-
-it.each(['en', 'de'] as const)('disables actions during a reload and translates its actual failure without claiming a new configuration (%s)', async (language) => {
-  applyLanguage(language)
-  let rejectReload: (error: Error) => void = () => {}
-  const onboarding = vi.fn((command: OnboardingCommand) => command.type === 'reloadProxy' ? new Promise<OnboardingView>((_resolve, reject) => { rejectReload = reject }) : Promise.resolve(view(status())))
-  window.pods = { onboarding } as unknown as typeof window.pods
+  const onboarding = vi.fn(async (_command: OnboardingCommand) => view(status()))
+  window.pods = { onboarding, modelApiSettings: true } as unknown as typeof window.pods
   const wrapper = mount(ProxyConnection); await flushPromises()
-  await wrapper.findAll('button')[0]!.trigger('click')
-  for (const button of wrapper.findAll('button')) expect((button.element as HTMLButtonElement).disabled).toBe(true)
-  rejectReload(new Error('Changing the proxy connection requires an idle runtime restart')); await flushPromises()
-  expect(wrapper.get('[role="alert"]').text()).toBe(language === 'de' ? 'Eine Änderung der Proxy-Verbindung benötigt einen Neustart der Runtime im Leerlauf' : 'Changing the proxy connection requires an idle runtime restart')
-  expect(wrapper.text()).toContain('fixture-revision-1')
-  for (const button of wrapper.findAll('button')) expect((button.element as HTMLButtonElement).disabled).toBe(false)
+  expect(wrapper.findAll('fieldset')).toHaveLength(2)
+  expect(wrapper.text()).toContain(language === 'de' ? 'OpenAI-kompatibel' : 'OpenAI-compatible')
+  expect(wrapper.text()).toContain('claude-sonnet-5-5')
+  expect(wrapper.findAll('input').some(input => input.attributes('value')?.includes('claude-'))).toBe(false)
+  const openai = wrapper.findAll('fieldset')[0]
+  await openai.findAll('select')[0].setValue('responses')
+  await openai.findAll('button')[0].trigger('click')
+  await openai.get('input[type=password]').setValue('synthetic-secret')
+  await wrapper.get('form').trigger('submit'); await flushPromises()
+  expect(onboarding).toHaveBeenCalledWith(expect.objectContaining({ type: 'saveModelApis', settings: expect.objectContaining({ expectedHash: 'a'.repeat(64), connections: expect.objectContaining({ openai: expect.objectContaining({ format: 'responses', token: 'synthetic-secret' }), anthropic: expect.objectContaining({ format: 'messages', authentication: 'none' }) }) }) }))
+  expect(wrapper.find('input[type=password]').exists()).toBe(false)
+  expect(wrapper.html()).not.toContain('synthetic-secret')
+  expect(wrapper.text()).not.toMatch(/CLIProxyAPI|Keychain|Schlüsselbund|simulation|simuliert|Codex nativ bleibt|agent-backends.json/)
   wrapper.unmount()
 })
 
-it('renders missing and invalid configurations without enabled or inference-verified claims', async () => {
-  for (const proxy of [status({ configured: false, enabled: false, available: false, mappings: [] }), status({ available: false, error: { code: 'proxy_not_configured', message: 'Model configuration contains an unsupported mapping', details: { phase: 'resolve' } } })]) {
-    window.pods = { onboarding: async () => view(proxy) } as unknown as typeof window.pods
-    const wrapper = mount(ProxyConnection); await flushPromises()
-    expect(wrapper.get('[role="status"]').text()).toBe(proxy.configured ? 'Unavailable' : 'Not configured')
-    if (proxy.error) expect(wrapper.get('[role="alert"]').text()).toBe(proxy.error.message)
-    expect(wrapper.text()).not.toMatch(/Verified|Inference successful|Connected and ready/)
-    wrapper.unmount()
-  }
+it('checks only saved connection IDs and disables changes during a pending operation', async () => {
+  let rejectReload: (error: Error) => void = () => undefined
+  const onboarding = vi.fn((command: OnboardingCommand) => command.type === 'reloadProxy' ? new Promise<OnboardingView>((_resolve, reject) => { rejectReload = reject }) : Promise.resolve(view(status())))
+  window.pods = { onboarding, modelApiSettings: true } as unknown as typeof window.pods
+  const wrapper = mount(ProxyConnection); await flushPromises()
+  const check = wrapper.findAll('button').find(button => button.text() === 'Check connection')
+  await check?.trigger('click'); await flushPromises(); expect(onboarding).toHaveBeenLastCalledWith({ type: 'checkModelApi', id: 'openai' })
+  await wrapper.findAll('button').find(button => button.text() === 'Reload configuration')?.trigger('click')
+  expect(wrapper.findAll('fieldset').every(field => field.attributes('disabled') !== undefined)).toBe(true)
+  rejectReload(new Error('Model API configuration changed; reload before saving')); await flushPromises()
+  expect(wrapper.get('[role=alert]').text()).toContain('changed')
+  expect(wrapper.findAll('fieldset').every(field => field.attributes('disabled') === undefined)).toBe(true)
+  wrapper.unmount()
 })
 
-it('keeps host-only proxy controls out of browser settings', async () => {
-  const onboarding = vi.fn()
+it('shows invalid configuration causes without claiming inference acceptance', async () => {
+  window.pods = { modelApiSettings: true, onboarding: async () => view(status({ available: false, error: { code: 'proxy_not_configured', message: 'Invalid API configuration', details: { phase: 'resolve' } } })) } as unknown as typeof window.pods
+  const wrapper = mount(ProxyConnection); await flushPromises()
+  expect(wrapper.get('[role=alert]').text()).toContain('Invalid API configuration')
+  expect(wrapper.text()).not.toMatch(/Inference successful|Verified model/)
+  wrapper.unmount()
+})
+
+it('keeps token editing local and model API controls out of browser settings', async () => {
+  const onboarding = vi.fn(async () => view(status()))
   window.pods = { onboarding } as unknown as typeof window.pods
+  const readOnly = mount(ProxyConnection); await flushPromises()
+  expect(readOnly.findAll('fieldset').every(field => field.attributes('disabled') !== undefined)).toBe(true)
+  expect(readOnly.findAll('button').some(button => button.text() === 'Save')).toBe(false)
+  readOnly.unmount(); onboarding.mockClear()
   const wrapper = mount(AppSettings, { props: { browser: true, subject: 'fixture@example.invalid' }, global: { stubs: { LanguageSwitcher: true } } }); await flushPromises()
-  expect(wrapper.find('section[aria-label="CLIProxyAPI"]').exists()).toBe(false)
-  expect(onboarding).not.toHaveBeenCalled()
-  wrapper.unmount()
+  expect(wrapper.find('.proxy-connection').exists()).toBe(false); expect(onboarding).not.toHaveBeenCalled(); wrapper.unmount()
 })

@@ -32,6 +32,7 @@ export interface PodStatus {
   runtime: { electron: string, node: string }
 }
 export interface PodsBridge {
+  modelApiSettings?: boolean
   /** Diagnostics and recovery that work without the database (issue 1465); optional for older fixtures. */
   storage?: (command: StorageRecoveryCommand) => Promise<StorageRecoveryView>
   updates?: (command: UpdateCommand) => Promise<UpdateView>

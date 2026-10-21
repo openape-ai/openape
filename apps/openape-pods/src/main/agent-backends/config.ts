@@ -7,25 +7,25 @@ import type { AgentWireThinking } from '../../contracts/agent-metadata'
 import type { AgentBackendConfig, ProxyModelConfig, ProxySnapshot } from './types'
 
 function invalid(message: string): never { throw new AgentCallError('proxy_not_configured', message, { phase: 'resolve' }) }
-function record(value: unknown, keys: string[], label: string): Record<string, unknown> {
+export function record(value: unknown, keys: string[], label: string): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value) || Object.keys(value).some(key => !keys.includes(key))) invalid(`Invalid proxy configuration: ${label}`)
   return value as Record<string, unknown>
 }
-function identifier(value: unknown, label: string): string {
+export function identifier(value: unknown, label: string): string {
   if (typeof value !== 'string' || !/^[a-z0-9][\w.:@+-]{0,159}$/i.test(value)) invalid(`Invalid proxy configuration: ${label}`)
   return value
 }
-function boolean(value: unknown, label: string): boolean { if (typeof value !== 'boolean') invalid(`Invalid proxy configuration: ${label}`); return value }
-function thinking(value: unknown): AgentThinking { if (!agentThinkingLevels.includes(value as AgentThinking)) invalid('Invalid proxy thinking level'); return value as AgentThinking }
+export function boolean(value: unknown, label: string): boolean { if (typeof value !== 'boolean') invalid(`Invalid proxy configuration: ${label}`); return value }
+export function thinking(value: unknown): AgentThinking { if (!agentThinkingLevels.includes(value as AgentThinking)) invalid('Invalid proxy thinking level'); return value as AgentThinking }
 
 export function validateProxyBaseUrl(value: unknown): string {
   if (typeof value !== 'string') invalid('Proxy base URL is required')
   let url: URL
   try { url = new URL(value) }
   catch { return invalid('Invalid proxy base URL') }
-  if (url.username || url.password || url.search || url.hash || !['http:', 'https:'].includes(url.protocol) || url.pathname.replace(/\/$/, '') !== '/v1') invalid('Proxy base URL requires the /v1 path without credentials, query or fragment')
+  if (url.username || url.password || url.search || url.hash || !['http:', 'https:'].includes(url.protocol)) invalid('API base URL must not contain credentials, query or fragment')
   if (url.protocol === 'http:' && !['127.0.0.1', '[::1]', 'localhost'].includes(url.hostname)) invalid('Remote proxy connections require HTTPS')
-  return `${url.origin}/v1`
+  return `${url.origin}${url.pathname.replace(/\/+$/, '')}`
 }
 
 function translation(value: unknown, provider: AgentProvider, level: AgentThinking, outputLimit: number): AgentWireThinking {
@@ -36,7 +36,7 @@ function translation(value: unknown, provider: AgentProvider, level: AgentThinki
   return invalid('Invalid proxy thinking translation; levels cannot be substituted and budgets must fit the output limit')
 }
 
-function model(value: unknown, provider: AgentProvider): ProxyModelConfig {
+export function model(value: unknown, provider: AgentProvider): ProxyModelConfig {
   const entry = record(value, ['enabled', 'modelId', 'protocol', 'defaultThinking', 'thinking', 'outputLimit', 'capabilityEvidenceVersion'], 'model mapping')
   const protocol = provider === 'claude' ? 'messages' : 'chat-completions'
   if (entry.protocol !== protocol) invalid(`Proxy ${provider} requires ${protocol}`)
@@ -70,7 +70,7 @@ export function parseAgentBackendConfig(value: unknown): AgentBackendConfig {
   return deepFreeze({ schemaVersion: 1, revision: identifier(config.revision, 'revision'), proxy: { enabled: boolean(proxy.enabled, 'proxy enabled'), baseUrl: validateProxyBaseUrl(proxy.baseUrl), keyFile: proxy.keyFile, keyField: 'api_key', models } })
 }
 
-export function configurationHash(config: AgentBackendConfig): string { return createHash('sha256').update(JSON.stringify(config)).digest('hex') }
+export function configurationHash(config: AgentBackendConfig | import('./types').ModelApiConfig): string { return createHash('sha256').update(JSON.stringify(canonical(config))).digest('hex') }
 export function resolveProxyRequest(config: AgentBackendConfig, request: ProxyAgentRequest): ProxySnapshot {
   if (!config.proxy.enabled) throw new AgentCallError('proxy_not_configured', 'Proxy agent backend is disabled', { phase: 'resolve' })
   const model = config.proxy.models[request.provider][request.modelSize]
@@ -82,5 +82,11 @@ export function resolveProxyRequest(config: AgentBackendConfig, request: ProxyAg
 }
 function deepFreeze<T>(value: T): T {
   if (value && typeof value === 'object') { for (const child of Object.values(value)) deepFreeze(child); Object.freeze(value) }
+  return value
+}
+
+function canonical(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonical)
+  if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).sort(([a], [b]) => a.localeCompare(b)).map(([key, child]) => [key, canonical(child)]))
   return value
 }

@@ -13,6 +13,7 @@ function identifier(value: unknown): string | undefined { return typeof value ==
 export function proxyPayload(snapshot: ProxySnapshot, request: ProxyAgentRequest): Record<string, unknown> {
   const common = { model: snapshot.model.modelId, messages: [{ role: 'user', content: request.prompt }], stream: false }
   const wire = snapshot.wireThinking
+  if (snapshot.model.protocol === 'responses' && 'reasoning_effort' in wire) return { model: snapshot.model.modelId, input: [{ role: 'user', content: [{ type: 'input_text', text: request.prompt }] }], reasoning: { effort: wire.reasoning_effort }, stream: false, store: false, tools: [], tool_choice: 'none', max_output_tokens: snapshot.model.outputLimit }
   if (snapshot.model.protocol === 'chat-completions' && 'reasoning_effort' in wire) return { ...common, max_completion_tokens: snapshot.model.outputLimit, tools: [], tool_choice: 'none', reasoning_effort: wire.reasoning_effort }
   if ('type' in wire) return { ...common, max_tokens: snapshot.model.outputLimit, tool_choice: { type: 'none' }, fallbacks: [], thinking: wire.type === 'enabled' ? { type: 'enabled', budget_tokens: wire.budget_tokens } : { type: 'adaptive' }, ...(wire.type === 'adaptive' ? { output_config: { effort: wire.effort } } : {}) }
   throw new AgentCallError('unsupported_combination', 'Proxy thinking protocol does not match the configured model', { phase: 'resolve' })
@@ -21,10 +22,12 @@ export function proxyPayload(snapshot: ProxySnapshot, request: ProxyAgentRequest
 function usage(value: unknown, protocol: ProxySnapshot['model']['protocol']): AgentUsage | undefined {
   if (!value || typeof value !== 'object') return undefined
   const source = object(value)
-  const result: AgentUsage = { source: protocol === 'messages' ? 'messages.usage' : 'chat-completions.usage', unit: 'tokens' }
+  const result: AgentUsage = { source: protocol === 'messages' ? 'messages.usage' : protocol === 'responses' ? 'responses.usage' : 'chat-completions.usage', unit: 'tokens' }
   const fields: [keyof AgentUsage, unknown][] = protocol === 'messages'
     ? [['input', source.input_tokens], ['output', source.output_tokens], ['cacheRead', source.cache_read_input_tokens], ['cacheCreation', source.cache_creation_input_tokens]]
-    : [['input', source.prompt_tokens], ['output', source.completion_tokens], ['total', source.total_tokens], ['reasoning', object(source.completion_tokens_details).reasoning_tokens], ['cacheRead', object(source.prompt_tokens_details).cached_tokens]]
+    : protocol === 'responses'
+      ? [['input', source.input_tokens], ['output', source.output_tokens], ['total', source.total_tokens], ['reasoning', object(source.output_tokens_details).reasoning_tokens], ['cacheRead', object(source.input_tokens_details).cached_tokens]]
+      : [['input', source.prompt_tokens], ['output', source.completion_tokens], ['total', source.total_tokens], ['reasoning', object(source.completion_tokens_details).reasoning_tokens], ['cacheRead', object(source.prompt_tokens_details).cached_tokens]]
   for (const [key, value] of fields) {
     if (Number.isSafeInteger(value) && (value as number) >= 0) Object.assign(result, { [key]: value })
   }
@@ -61,6 +64,24 @@ export function normalizeProxyResponse(value: unknown, snapshot: ProxySnapshot, 
     }
     response = text.join('')
   }
+  else if (snapshot.model.protocol === 'responses') {
+    if (reply.status === 'incomplete') failure('response_truncated', 'Responses output is incomplete')
+    if (reply.status !== 'completed' || reply.error != null || !Array.isArray(reply.output)) failure('invalid_response', 'Responses output is not completed')
+    const text: string[] = []
+    for (const item of reply.output) {
+      const output = object(item)
+      if (output.type === 'reasoning') continue
+      if (output.type !== 'message') failure('unexpected_tool_call', 'Responses output contains a tool or nontext item')
+      if (output.role !== 'assistant' || output.status !== 'completed' || !Array.isArray(output.content)) failure('invalid_response', 'Responses assistant message is not completed')
+      for (const block of output.content) {
+        const content = object(block)
+        if (content.type === 'refusal') failure('invalid_response', 'Responses request was refused')
+        if (content.type !== 'output_text' || typeof content.text !== 'string') failure('unexpected_tool_call', 'Responses message contains nontext output')
+        text.push(content.text)
+      }
+    }
+    response = text.join('')
+  }
   else {
     if (!Array.isArray(reply.choices) || reply.choices.length !== 1) failure('invalid_response', 'Proxy Chat Completions response requires one choice')
     const choice = object(reply.choices[0]); const message = object(choice.message)
@@ -76,7 +97,7 @@ export function normalizeProxyResponse(value: unknown, snapshot: ProxySnapshot, 
 }
 
 const knownProviderCodes = new Set(['authentication_error', 'invalid_api_key', 'auth_unavailable', 'no_auth_available', 'model_not_found', 'unsupported_model', 'rate_limit_exceeded', 'insufficient_quota', 'invalid_request_error', 'overloaded_error', 'server_error', 'thinking_not_supported'])
-function httpError(status: number, body: unknown, retryAfter: string | null): AgentCallError {
+export function httpError(status: number, body: unknown, retryAfter: string | null): AgentCallError {
   const payload = object(object(body).error)
   const candidate = payload.code ?? payload.type
   const providerCode = typeof candidate === 'string' && knownProviderCodes.has(candidate) ? candidate : undefined
@@ -89,7 +110,7 @@ function httpError(status: number, body: unknown, retryAfter: string | null): Ag
   return new AgentCallError(code, `Proxy request failed (HTTP ${status}${providerCode ? `, ${providerCode}` : ''})`, { phase: 'request', httpStatus: status, ...(providerCode ? { providerCode } : {}), ...(safeRetry ? { retryAfter: safeRetry } : {}) })
 }
 
-async function readBody(response: Response, signal: AbortSignal): Promise<unknown> {
+export async function readBody(response: Response, signal: AbortSignal): Promise<unknown> {
   if (!response.body) throw new AgentCallError('invalid_response', 'Proxy response has no body', { phase: 'read' })
   const reader = response.body.getReader(); const chunks: Uint8Array[] = []; let bytes = 0
   const abortRead = () => { void reader.cancel(signal.reason).catch(() => undefined) }
@@ -118,8 +139,8 @@ export async function requestProxy(snapshot: ProxySnapshot, request: ProxyAgentR
   let phase: AgentPhase = 'connect'
   try {
     signal.throwIfAborted()
-    const endpoint = snapshot.model.protocol === 'messages' ? 'messages' : 'chat/completions'
-    const response = await fetcher(`${snapshot.baseUrl}/${endpoint}`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${key}`, ...(snapshot.model.protocol === 'messages' ? { 'anthropic-version': '2023-06-01' } : {}) }, body: JSON.stringify(proxyPayload(snapshot, request)), signal, redirect: 'manual' })
+    const endpoint = snapshot.model.protocol === 'chat-completions' ? 'chat/completions' : snapshot.model.protocol
+    const response = await fetcher(`${snapshot.baseUrl}/${endpoint}`, { method: 'POST', headers: apiHeaders(snapshot.model.protocol, snapshot.authentication ?? 'token', key), body: JSON.stringify(proxyPayload(snapshot, request)), signal, redirect: 'manual' })
     phase = 'read'; onPhase?.(phase)
     if (response.status >= 300 && response.status < 400) { await response.body?.cancel(); throw new AgentCallError('proxy_unreachable', 'Proxy redirects are not permitted', { phase: 'request', httpStatus: response.status }) }
     let value: unknown
@@ -135,4 +156,14 @@ export async function requestProxy(snapshot: ProxySnapshot, request: ProxyAgentR
     if (error instanceof AgentCallError) throw error
     throw new AgentCallError('proxy_unreachable', 'Proxy connection failed', { phase, cause: safeSystemCause(error) })
   }
+}
+
+export function apiHeaders(protocol: ProxySnapshot['model']['protocol'], authentication: 'none' | 'token', key?: string): Record<string, string> {
+  const headers: Record<string, string> = { 'content-type': 'application/json', ...(protocol === 'messages' ? { 'anthropic-version': '2023-06-01' } : {}) }
+  if (authentication === 'token') {
+    if (!key) throw new AgentCallError('credential_unavailable', 'An API token is required', { phase: 'resolve' })
+    if (protocol === 'messages') headers['x-api-key'] = key
+    else headers.authorization = `Bearer ${key}`
+  }
+  return headers
 }

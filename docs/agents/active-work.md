@@ -1,3 +1,10 @@
+# Model API settings and latest family versions — issue 1532
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1532. Approved revision 4: https://report.openape.ai/d/01M5DAMFMDW26PAF781Z9T2A26?v=9.
+- Branch `feature/issue-1532-pods-model-api-settings`, isolated worktree `openape-monorepo.worktrees/pods-model-api-1532`, canonical base `c5a18e3b735fd5432a9dcd8494f6b9bd7fc45519`. Shared checkout and unrelated work remain untouched.
+- Adds two local API settings sections, private atomic token storage, explicit Responses support and fresh latest-version selection within the eight approved families. Native calls retain account defaults and tools; proxy remains text-only without fallback or retries.
+- Focused runtime/UI/CLI tests pass. Browser, packaged acceptance and the eight newly authorized inference attempts are recorded separately in the maintained plan. Native PR review, final gates and reversible private delivery remain required before closure. No personal Pod is used for testing; the shared proxy remains unchanged.
+
 # Inbox message swipe gestures — issue 1531
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1531. Branch `feature/issue-1531-pods-inbox-swipe`, worktree `.claude/worktrees/openape-pods-tags-discussion-586b3a`, canonical base `2025040a2ebde6e802e51d537c24fd9dd4b197e4`.
