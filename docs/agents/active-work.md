@@ -1,9 +1,11 @@
 # Model API settings and latest family versions — issue 1532
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1532. Approved revision 4: https://report.openape.ai/d/01M5DAMFMDW26PAF781Z9T2A26?v=9.
-- Branch `feature/issue-1532-pods-model-api-settings`, isolated worktree `openape-monorepo.worktrees/pods-model-api-1532`, canonical base `c5a18e3b735fd5432a9dcd8494f6b9bd7fc45519`. Shared checkout and unrelated work remain untouched.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1532. Native PR: https://repos.openape.ai/patrick/monorepo/pulls/495, with an explicit issue relation. Approved revision 4: https://report.openape.ai/d/01M5DAMFMDW26PAF781Z9T2A26?v=10.
+- Branch `feature/issue-1532-pods-model-api-settings`, isolated worktree `openape-monorepo.worktrees/pods-model-api-1532`, canonical base `c5a18e3b735fd5432a9dcd8494f6b9bd7fc45519`. Product source `20f1634d97ef6610e934a0cf28a95d1ddaed8775`; shared checkout and unrelated work remain untouched.
 - Adds two local API settings sections, private atomic token storage, explicit Responses support and fresh latest-version selection within the eight approved families. Native calls retain account defaults and tools; proxy remains text-only without fallback or retries.
-- Focused runtime/UI/CLI tests pass. Browser, packaged acceptance and the eight newly authorized inference attempts are recorded separately in the maintained plan. Native PR review, final gates and reversible private delivery remain required before closure. No personal Pod is used for testing; the shared proxy remains unchanged.
+- Required affected gate passed all seven steps, including 1,928 Pods tests. Native/CLI acceptance: 151 existing passes and one existing optional parser skip, plus a successful real CLI settings save/reopen/no-op/catalog check. Six real-CSS browser cases pass; wide/light English and narrow/dark German screenshots were inspected.
+- All eight additional real attempts passed on product source `20f1634d`: four Responses sizes, Chat Completions Sol/high, same-run Messages Sonnet/high → Responses Sol/xhigh, and unchanged native account-default Codex. Total budget is exhausted at 22/22 with no retry, model substitution, shared gateway mutation or personal-Pod test. Latest Haiku 5.5 is catalog-only under this matrix; older Haiku success does not verify it.
+- Durable evidence is in the approved local plan's `evidence/revision-4/`, including immutable call snapshots, source/build/harness hashes, original failures and the budget ledger. Next: final native diff review, guarded merge, full deployment gate, Relay-first private rollout and idle Owner/CLI installation with matching rollback. Publish final receipts on the PR and issue; close only after installed acceptance.
 
 # Inbox message swipe gestures — issue 1531
 
