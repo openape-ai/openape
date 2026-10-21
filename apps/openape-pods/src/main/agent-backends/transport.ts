@@ -7,7 +7,7 @@ import type { ProxySnapshot } from './types'
 export const proxyResponseBytes = 240 * 1024
 interface ProxyReply { response: string, reportedModelId: string, upstreamId?: string, usage?: AgentUsage }
 function object(value: unknown): Record<string, unknown> { return value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {} }
-function failure(code: AgentErrorCode, message: string): never { throw new AgentCallError(code, message, { phase: 'validate' }) }
+function failure(code: AgentErrorCode, message: string, cause?: string): never { throw new AgentCallError(code, message, { phase: 'validate', ...(cause ? { cause } : {}) }) }
 function identifier(value: unknown): string | undefined { return typeof value === 'string' && /^[a-z0-9][\w.:@+-]{0,159}$/i.test(value) ? value : undefined }
 
 export function proxyPayload(snapshot: ProxySnapshot, request: ProxyAgentRequest): Record<string, unknown> {
@@ -66,6 +66,7 @@ export function normalizeProxyResponse(value: unknown, snapshot: ProxySnapshot, 
   }
   else if (snapshot.model.protocol === 'responses') {
     if (reply.status === 'incomplete') failure('response_truncated', 'Responses output is incomplete')
+    if (reply.status === 'failed' || reply.status === 'cancelled') failure('invalid_response', 'Responses output is not completed', `response_${reply.status}`)
     if (reply.status !== 'completed' || reply.error != null || !Array.isArray(reply.output)) failure('invalid_response', 'Responses output is not completed')
     const text: string[] = []
     for (const item of reply.output) {
@@ -75,7 +76,7 @@ export function normalizeProxyResponse(value: unknown, snapshot: ProxySnapshot, 
       if (output.role !== 'assistant' || output.status !== 'completed' || !Array.isArray(output.content)) failure('invalid_response', 'Responses assistant message is not completed')
       for (const block of output.content) {
         const content = object(block)
-        if (content.type === 'refusal') failure('invalid_response', 'Responses request was refused')
+        if (content.type === 'refusal') failure('invalid_response', 'Responses request was refused', 'response_refused')
         if (content.type !== 'output_text' || typeof content.text !== 'string') failure('unexpected_tool_call', 'Responses message contains nontext output')
         text.push(content.text)
       }
