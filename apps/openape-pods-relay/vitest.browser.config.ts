@@ -26,6 +26,25 @@ export default defineConfig({
           // element capture produces blank areas beyond Vitest's iframe viewport.
           await page.screenshot({ path: resolve(directory, `${name}.png`), clip: bounds })
         },
+        // Real touch input through Chrome's input pipeline, so `touch-action` decides between scrolling and swiping.
+        async touchDrag({ frame, page }, from: [number, number], to: [number, number], screenshot?: string) {
+          const bounds = await (await (await frame()).frameElement()).boundingBox()
+          if (!bounds) throw new Error('Inbox test frame is not visible')
+          const session = await page.context().newCDPSession(page)
+          const point = ([x, y]: [number, number]) => [{ x: bounds.x + x, y: bounds.y + y }]
+          await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: point(from) })
+          for (let step = 1; step <= 12; step++) {
+            await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: point([from[0] + (to[0] - from[0]) * step / 12, from[1] + (to[1] - from[1]) * step / 12]) })
+            await new Promise(resolve => setTimeout(resolve, 16))
+          }
+          if (screenshot && /^[a-z0-9-]+$/.test(screenshot)) {
+            const directory = resolve(process.env.PODS_INBOX_SCREENSHOTS ?? '.artifacts/layout')
+            await mkdir(directory, { recursive: true })
+            await page.screenshot({ path: resolve(directory, `${screenshot}.png`), clip: bounds })
+          }
+          await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] })
+          await session.detach()
+        },
       },
       instances: (['light', 'dark'] as const).map(colorScheme => ({
         browser: 'chromium',
