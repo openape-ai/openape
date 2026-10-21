@@ -70,14 +70,13 @@ export class AgentBackendManager {
         const connection = config.connections[id]; const previous = this.connections?.[id]
         const path = credentialPath(this.root, connection)
         const changedProtection = path && !this.paths.has(path) && connection.credential?.type === 'external'
+        if (!connection.enabled) await this.abortActive(id)
         if (this.initialized && ((!previous && connection.enabled) || previous?.baseUrl !== connection.baseUrl || changedProtection)) {
           this.restart.add(id)
           this.connectionErrors.set(id, new AgentCallError('proxy_not_configured', 'Changing the API connection requires an idle runtime restart', { phase: 'resolve', cause: 'restart_required' }))
-          await this.abortActive(id)
           continue
         }
         if (path && connection.credential?.type === 'external') this.paths.add(path)
-        if (!connection.enabled) await this.abortActive(id)
         if (connection.enabled) {
           try { await readConnectionKey(this.root, connection, new AbortController().signal) }
           catch (error) { this.connectionErrors.set(id, error instanceof AgentCallError ? error : new AgentCallError('credential_unavailable', 'API credential could not be read', { phase: 'resolve', cause: safeSystemCause(error) })) }

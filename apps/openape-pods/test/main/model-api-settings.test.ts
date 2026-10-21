@@ -205,3 +205,20 @@ it.skipIf(process.platform !== 'darwin')('rejects grant ACLs and writable ancest
   await execute('/bin/chmod', ['-N', path]); await chmod(root, 0o720)
   await expect(assertPrivatePath(path)).rejects.toThrow('ancestor'); await chmod(root, 0o700)
 })
+
+it('keeps an active snapshot alive after an endpoint edit and refuses new calls until an idle restart', async () => {
+  const root = await profile(); const input = edit(); input.connections.openai.format = 'responses'; const initial = await saveModelApiSettings(root, input)
+  let began: () => void = () => undefined; const started = new Promise<void>((resolve) => { began = resolve }); let finish: (value: Response) => void = () => undefined
+  const fetcher = vi.fn(async (url: unknown, init?: RequestInit) => {
+    if (String(url).endsWith('/models')) return Response.json({ data: [{ id: 'gpt-6.1-sol' }] })
+    began(); return new Promise<Response>((resolve, reject) => { finish = resolve; init?.signal?.addEventListener('abort', () => reject(init.signal?.reason), { once: true }) })
+  }) as typeof fetch
+  const manager = new AgentBackendManager({ profileRoot: root, fetch: fetcher }); await manager.reload()
+  const active = manager.run(request()); await started
+  input.expectedHash = configurationHash(initial); input.connections.openai.baseUrl = 'http://127.0.0.1:8317/new-prefix'
+  const status = await manager.save(input); expect(status.connections?.find(item => item.id === 'openai')?.restartRequired).toBe(true)
+  await expect(manager.run(request())).rejects.toMatchObject({ details: { cause: 'restart_required' } })
+  expect(fetcher).toHaveBeenCalledTimes(2)
+  finish(Response.json(reply('gpt-6.1-sol'))); expect((await active).metadata.configHash).toBe(configurationHash(initial))
+  await manager.drain()
+})
