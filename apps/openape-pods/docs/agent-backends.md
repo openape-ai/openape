@@ -161,7 +161,7 @@ Use local Desktop settings, or the CLI with Desktop closed as described in
 ape-pods agent-backends status --json
 ape-pods agent-backends check-openai --json
 ape-pods agent-backends check-anthropic --json
-ape-pods agent-backends save --settings-file /absolute/private/settings.json --json
+ape-pods agent-backends save --settings-file /absolute/profile/model-api-private/edit.json --json
 ape-pods agent-backends reload --json
 ape-pods agent-backends disable --json
 ```
@@ -172,7 +172,10 @@ contains `enabled`, `baseUrl`, `format`, `authentication`, `defaultThinking`, an
 optionally a replacement `token`. Do not put token values in argv or environment.
 Omitting a replacement retains the configured reference; authentication `none`
 removes that connection's reference. Both entries are validated before commit.
-The private input file remains under the owner's control after saving.
+The input file must be inside this profile's `model-api-private` directory, so
+mandatory Pod/capture exclusions protect it even after saving. Create that
+directory with mode 0700 and the input with mode 0600; the file remains under
+the owner's control. Arbitrary input locations are refused before reading tokens.
 
 Commands honor `--profile /absolute/path`. Status includes URLs, formats,
 configuration revision/hash, safe errors and catalog check time, but no credential

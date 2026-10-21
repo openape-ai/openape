@@ -3473,5 +3473,6 @@
   "Invalid API connection format or authentication": "Ungültiges API-Verbindungsformat oder ungültige Authentifizierung",
   "Unauthenticated connections cannot reference credentials": "Verbindungen ohne Authentifizierung dürfen keine Zugangsdaten referenzieren",
   "Model family assignment is not supported": "Die Modellfamilienzuordnung wird nicht unterstützt",
-  "Missing model family": "Modellfamilie fehlt"
+  "Missing model family": "Modellfamilie fehlt",
+  "The settings input must be inside this profile’s model-api-private directory": "Die Eingabedatei muss im Ordner model-api-private dieses Profils liegen"
 }
