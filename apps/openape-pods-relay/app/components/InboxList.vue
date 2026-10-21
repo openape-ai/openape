@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import { blocking } from '../inbox/client'
 import type { InboxItem, PendingAnswer, Receipt } from '../inbox/client'
 import { formatTime, t } from '../inbox/i18n'
@@ -9,8 +9,8 @@ import { needsRepair, repairTitle } from '../inbox/repair'
 import InboxRepair from './InboxRepair.vue'
 import InboxTags from './InboxTags.vue'
 
-const props = defineProps<{ items: InboxItem[], empty: string, receipts?: Record<string, Receipt>, pending?: Record<string, PendingAnswer>, online?: boolean, actions?: boolean }>()
-const emit = defineEmits<{ decide: [item: InboxItem, option: string], undo: [item: InboxItem] }>()
+const props = defineProps<{ items: InboxItem[], empty: string, receipts?: Record<string, Receipt>, pending?: Record<string, PendingAnswer>, online?: boolean, actions?: boolean, swipe?: boolean }>()
+const emit = defineEmits<{ decide: [item: InboxItem, option: string], undo: [item: InboxItem], mark: [item: InboxItem, change: { read: true } | { archived: true }] }>()
 const cards = computed(() => props.items.map(item => ({ item, summary: cardSummary(item) })))
 // Pods decisions can be answered on the card; an option that needs evidence or a value opens the detail with it preselected.
 // Once shown, the answer area keeps its height: a status covers the choices instead of removing them, so cards below never move under a finger.
@@ -22,14 +22,71 @@ function cover(item: InboxItem): string | null {
   if (receipt && (blocking(receipt, item) || item.state !== 'open')) return receiptText(receipt)
   return item.state === 'open' ? null : t('itemResolved')
 }
+
+// A message card follows a horizontal swipe: right archives it, left marks it read. `touch-action: pan-y` leaves
+// vertical scrolling to the browser, which then cancels the pointer, so a scroll never moves or changes a card.
+const swipeDistance = 96
+const drag = ref<{ id: string, pointer: number, x: number, y: number, dx: number, locked: boolean } | null>(null)
+let swallowClick = false
+const swipeable = (item: InboxItem) => !!props.swipe && !!props.online && item.kind === 'message' && !item.archived
+const offset = (item: InboxItem) => drag.value?.id === item.id && drag.value.locked ? drag.value.dx : 0
+function press(event: PointerEvent, item: InboxItem) {
+  swallowClick = false
+  if (!swipeable(item) || !event.isPrimary || event.button !== 0) return
+  drag.value = { id: item.id, pointer: event.pointerId, x: event.clientX, y: event.clientY, dx: 0, locked: false }
+}
+function slide(event: PointerEvent, item: InboxItem) {
+  const current = drag.value
+  if (current?.id !== item.id || event.pointerId !== current.pointer) return
+  const dx = event.clientX - current.x
+  const dy = event.clientY - current.y
+  if (!current.locked) {
+    if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return
+    if (Math.abs(dy) >= Math.abs(dx)) { drag.value = null; return }
+    current.locked = true
+    ;(event.currentTarget as Element).setPointerCapture(event.pointerId)
+  }
+  // A read message has nothing to mark, so it only moves towards archiving.
+  current.dx = item.read ? Math.max(0, dx) : dx
+}
+function release(event: PointerEvent, item: InboxItem) {
+  const current = drag.value
+  if (current?.id !== item.id || event.pointerId !== current.pointer) return
+  drag.value = null
+  if (!current.locked) return
+  swallowClick = true
+  if (current.dx >= swipeDistance) emit('mark', item, { archived: true })
+  else if (current.dx <= -swipeDistance) emit('mark', item, { read: true })
+}
+function cancel(event: PointerEvent) { if (drag.value?.pointer === event.pointerId) drag.value = null }
+// A mouse swipe ends with a click; it must not also open the message.
+function swallow(event: MouseEvent) {
+  if (!swallowClick) return
+  swallowClick = false
+  event.preventDefault(); event.stopPropagation()
+}
 </script>
 
 <template>
   <p v-if="!items.length" class="inbox-muted">
     {{ empty }}
   </p>
-  <ul v-else class="list">
-    <li v-for="{ item, summary } in cards" :key="item.id" class="inbox-card" :class="{ unread: item.kind === 'message' && !item.read }">
+  <ul v-else class="list" :class="{ swipe }">
+    <li
+      v-for="{ item, summary } in cards"
+      :key="item.id"
+      class="inbox-card"
+      :class="{ unread: item.kind === 'message' && !item.read, swipeable: swipeable(item), dragging: drag?.id === item.id, armed: Math.abs(offset(item)) >= swipeDistance }"
+      :style="offset(item) ? { transform: `translateX(${offset(item)}px)` } : undefined"
+      @pointerdown="press($event, item)"
+      @pointermove="slide($event, item)"
+      @pointerup="release($event, item)"
+      @pointercancel="cancel"
+      @click.capture="swallow"
+    >
+      <span v-if="offset(item)" class="swipe-hint" :class="offset(item) > 0 ? 'archive' : 'read'" aria-hidden="true">
+        {{ offset(item) > 0 ? t('swipeArchive') : t('swipeRead') }}
+      </span>
       <NuxtLink class="card-link" :class="{ 'has-sender': summary.sender }" :to="`/inbox/item/${item.id}`">
         <span v-if="item.kind === 'message' && !item.read" class="visually-hidden">{{ t('unread') }}: </span>
         <strong v-if="!needsRepair(item) && summary.sender" class="sender"><span class="visually-hidden">{{ t('cardSender') }}: </span>{{ summary.sender }}</strong>
@@ -69,6 +126,14 @@ function cover(item: InboxItem): string | null {
 
 <style scoped>
 .list { list-style: none; margin: 0; padding: 0; }
+/* A swiped card reveals its action beside it; the list clips it so the page never scrolls sideways. */
+.list.swipe { overflow-x: clip; }
+.swipeable { position: relative; touch-action: pan-y; transition: transform .2s ease-out; }
+.swipeable.dragging { transition: none; user-select: none; -webkit-user-select: none; }
+.swipe-hint { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; padding: 0 14px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+.swipe-hint.archive { right: 100%; }
+.swipe-hint.read { left: 100%; }
+.armed .swipe-hint { color: var(--accent); }
 .card-link { display: grid; gap: 2px; color: inherit; text-decoration: none; font-size: .9em; }
 .card-link .sender { font-size: 1.05em; }
 .has-sender .title { font-weight: 400; }

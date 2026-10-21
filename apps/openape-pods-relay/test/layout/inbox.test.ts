@@ -7,6 +7,7 @@ import type { Inbox } from '../../app/inbox/client'
 import { chooseLanguage } from '../../app/inbox/i18n'
 import IndexPage from '../../app/pages/inbox/index.vue'
 import ItemPage from '../../app/pages/inbox/item/[id].vue'
+import MessagesPage from '../../app/pages/inbox/messages.vue'
 import SettingsPage from '../../app/pages/inbox/settings.vue'
 import { decision, installNuxtBoundary, NuxtLink, route, transport } from './fixture'
 
@@ -183,4 +184,45 @@ it.each([375, 390])('keeps settings values and navigation readable with large te
   window.scrollTo(0, document.documentElement.scrollHeight); await settle()
   await shot(`settings-large-text-bottom-${width}`)
   expect(wrapper!.get('main > .inbox-muted').element.getBoundingClientRect().bottom).toBeLessThanOrEqual(wrapper!.get('.inbox-tabs').element.getBoundingClientRect().top)
+})
+
+it('swipes a single message to read or archive on touch and leaves vertical scrolling alone', async () => {
+  const theme = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+  const messages = Array.from({ length: 10 }, (_, index) => decision({ kind: 'message', decision: null, title: `Mitteilung ${index + 1}`, created: 1792051200000 - index * 60000 }))
+  const fixture = transport(messages); inbox = fixture.inbox
+  await inbox.start()
+  Object.assign(route, { path: '/inbox/messages', params: {}, query: {} })
+  await open(MessagesPage)
+  const card = (title: string) => [...document.querySelectorAll<HTMLElement>('li.inbox-card')].find(node => node.textContent?.includes(title))
+  const centre = (title: string): [number, number] => { const box = card(title)!.getBoundingClientRect(); return [box.left + box.width / 2, box.top + box.height / 2] }
+  const drag = async (title: string, dx: number, dy = 0, screenshot?: string) => {
+    const [x, y] = centre(title)
+    await commands.touchDrag([x, y], [x + dx, y + dy], screenshot)
+    await settle()
+  }
+
+  // A vertical drag over a card scrolls the page and changes nothing.
+  await drag('Mitteilung 3', 0, -300)
+  expect(scrollY).toBeGreaterThan(100)
+  expect(fixture.requests).toHaveLength(0)
+  expect(card('Mitteilung 3')!.style.transform).toBe('')
+  scrollTo(0, 0); await settle()
+
+  // A short swipe springs back without an action.
+  await drag('Mitteilung 1', -50)
+  expect(fixture.requests).toHaveLength(0)
+
+  // Right to left marks only this message read.
+  await drag('Mitteilung 1', -180, 0, `swipe-read-${theme}`)
+  expect(fixture.requests).toEqual([{ path: expect.stringContaining(`/items/${messages[0]!.id}`), body: { read: true } }])
+  expect(card('Mitteilung 1')!.classList.contains('unread')).toBe(false)
+  expect(document.querySelectorAll('li.inbox-card.unread')).toHaveLength(9)
+
+  // Left to right archives only this message; it leaves the inbox list.
+  await drag('Mitteilung 2', 180, 0, `swipe-archive-${theme}`)
+  expect(fixture.requests.at(-1)).toEqual({ path: expect.stringContaining(`/items/${messages[1]!.id}`), body: { archived: true } })
+  expect(card('Mitteilung 2')).toBeUndefined()
+  expect(document.querySelectorAll('li.inbox-card')).toHaveLength(9)
+  expect(card('Mitteilung 3')!.classList.contains('unread')).toBe(true)
+  await shot('swipe-after')
 })

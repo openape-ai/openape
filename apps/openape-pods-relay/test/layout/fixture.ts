@@ -45,6 +45,13 @@ export function transport(items: InboxItem[]) {
         return json({ operation: { state: 'accepted', error: null } })
       }
       if (path.includes('/operations/')) return json({ operation: { state: server.operation, error: null } })
+      if (init.method === 'PATCH' && path.includes('/items/')) {
+        const body = JSON.parse(String(init.body)) as { read?: boolean, archived?: boolean }
+        requests.push({ path, body })
+        const item = server.items.find(entry => path.endsWith(`/items/${entry.id}`))!
+        Object.assign(item, 'read' in body ? { read: body.read ? 1792051200000 : null } : {}, 'archived' in body ? { archived: body.archived ? 1792051200000 : null } : {})
+        return json({ item })
+      }
       if (path.endsWith('/devices')) return json({ devices: [] })
       throw new Error(`Unexpected fixture request: ${init.method} ${path}`)
     },
