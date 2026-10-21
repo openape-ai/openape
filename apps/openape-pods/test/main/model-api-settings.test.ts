@@ -60,6 +60,10 @@ it('serializes all sizes and thinking levels for both OpenAI formats and validat
           expect(normalizeProxyResponse(reply(snapshot.model.modelId), snapshot)).toMatchObject({ response: 'answer', usage: { source: 'responses.usage', input: 4, output: 2, reasoning: 1 } })
           for (const output of [[{ type: 'function_call' }], [{ type: 'image_generation_call' }], [{ type: 'message', role: 'assistant', status: 'in_progress', content: [] }]]) expect(() => normalizeProxyResponse({ ...reply(snapshot.model.modelId), output }, snapshot)).toThrow()
           expect(() => normalizeProxyResponse({ ...reply(snapshot.model.modelId), status: 'incomplete' }, snapshot)).toThrow('incomplete')
+          for (const status of ['failed', 'cancelled']) {
+            try { normalizeProxyResponse({ ...reply(snapshot.model.modelId), status }, snapshot); throw new Error('Expected rejection') }
+            catch (error) { expect(error).toMatchObject({ code: 'invalid_response', details: { phase: 'validate', cause: `response_${status}` } }) }
+          }
         }
         else {
           expect(payload).toMatchObject({ reasoning_effort: thinking })
