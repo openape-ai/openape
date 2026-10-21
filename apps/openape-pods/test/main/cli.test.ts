@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { mkdtemp, realpath, rm, symlink, readlink } from 'node:fs/promises'
+import { mkdtemp, realpath, rm, symlink, readlink, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir, hostname } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -132,4 +132,15 @@ it('routes proxy status and administration without selecting or starting a Pod',
   expect(request).toHaveBeenCalledTimes(3)
   for (const argv of [['agent-backends', 'login'], ['agent-backends', 'status', '--script', 'x'], ['agent-backends', 'status', '--name', 'x']]) expect(() => cliArguments(argv)).toThrow()
   expect(() => parseCliRequest({ channel: 'agentBackends', command: { type: 'connect', provider: 'chatgpt', account: '' } })).toThrow()
+})
+
+it('accepts API save input only inside the mandatory protected profile directory', async () => {
+  const root = await directory(); const request = vi.fn(async () => ({ configured: true })); const io = { output: vi.fn(), progress: vi.fn(), signal: new AbortController().signal }
+  await expect(executeCli(cliArguments(['agent-backends', 'save', '--profile', root, '--settings-file', join(root, 'unprotected.json')]), { request, close: async () => {} }, io)).rejects.toThrow('model-api-private')
+  expect(request).not.toHaveBeenCalled()
+  const directoryPath = join(root, 'model-api-private'); await mkdir(directoryPath, { mode: 0o700 }); const path = join(directoryPath, 'edit.json')
+  const settings = { expectedHash: null, connections: Object.fromEntries(['openai', 'anthropic'].map(id => [id, { enabled: false, baseUrl: 'http://127.0.0.1:8317/v1', format: id === 'openai' ? 'responses' : 'messages', authentication: 'none', defaultThinking: 'medium' }])) }
+  await writeFile(path, JSON.stringify(settings), { mode: 0o600 })
+  await executeCli(cliArguments(['agent-backends', 'save', '--profile', root, '--settings-file', path]), { request, close: async () => {} }, io)
+  expect(request).toHaveBeenCalledExactlyOnceWith({ channel: 'agentBackends', command: { type: 'saveModelApis', settings } })
 })
