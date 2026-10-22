@@ -221,6 +221,11 @@ export function saveSecret(vault: VaultView, input: { secretId?: string, alias?:
   }))
 }
 
+/** Remove a lost passkey, confirmed with one of the passkeys that stay. */
+export function removePasskey(vault: VaultView, credentialId: string) {
+  return runAction(vault, { action: 'credential.disable', credentialId })
+}
+
 export function deleteSecret(vault: VaultView, secretId: string) {
   return runAction(vault, { action: 'secret.delete', secretId })
 }

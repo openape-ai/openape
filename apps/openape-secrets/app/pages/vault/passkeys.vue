@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import type { VaultView } from '~/utils/vault-client'
+import type { VaultCredential, VaultView } from '~/utils/vault-client'
 import { onMounted, ref } from 'vue'
 import { useOpenApeAuth } from '#imports'
-import { addPasskey, flowError, loadVault, shortFingerprint, testUnlock } from '~/utils/vault-client'
+import { addPasskey, flowError, loadVault, removePasskey, shortFingerprint, testUnlock } from '~/utils/vault-client'
 
 const { user, fetchUser } = useOpenApeAuth()
 const ready = ref(false)
 const vault = ref<VaultView | null>(null)
 const unavailable = ref('')
-const busy = ref<'unlock' | 'add' | null>(null)
+const busy = ref<'unlock' | 'add' | 'remove' | null>(null)
+const removing = ref<VaultCredential | null>(null)
 const error = ref('')
 const notice = ref('')
 
@@ -22,7 +23,7 @@ async function refresh() {
   })
 }
 
-async function run(kind: 'unlock' | 'add', action: () => Promise<string>) {
+async function run(kind: 'unlock' | 'add' | 'remove', action: () => Promise<string>) {
   busy.value = kind
   error.value = ''
   notice.value = ''
@@ -43,6 +44,16 @@ function add() {
     await addPasskey(vault.value!)
     await refresh()
     return 'Passkey added. Either one can now unlock your vault.'
+  })
+}
+
+function remove() {
+  const target = removing.value!
+  return run('remove', async () => {
+    await removePasskey(vault.value!, target.id)
+    removing.value = null
+    await refresh()
+    return `${target.label || 'Passkey'} removed. It can no longer open your vault.`
   })
 }
 
@@ -106,7 +117,7 @@ onMounted(async () => {
                 <span class="inline-flex size-10 items-center justify-center rounded-xl bg-[#16344A] text-sky-300" aria-hidden="true">
                   <UIcon :name="c.label === 'Security key' ? 'i-lucide-usb' : 'i-lucide-key-round'" class="size-5" />
                 </span>
-                <div class="min-w-0">
+                <div class="min-w-0 flex-1">
                   <div class="font-medium">
                     {{ c.label || 'Passkey' }}
                   </div>
@@ -114,6 +125,9 @@ onMounted(async () => {
                     Added {{ added(c.created_at) }}
                   </div>
                 </div>
+                <UButton v-if="vault.credentials.length > 1" color="error" variant="ghost" :disabled="!!busy" :aria-label="`Remove ${c.label || 'passkey'} added ${added(c.created_at)}`" @click="removing = c">
+                  Remove
+                </UButton>
               </li>
             </ul>
           </section>
@@ -155,6 +169,18 @@ onMounted(async () => {
             </div>
           </aside>
         </div>
+        <UModal :open="!!removing" :title="`Remove ${removing?.label || 'this passkey'}?`" description="It can no longer open your vault. Confirm with one of the passkeys you keep. Do this for a passkey on a lost or replaced device." @update:open="(o: boolean) => { if (!o) removing = null }">
+          <template #footer>
+            <div class="flex w-full justify-end gap-2">
+              <UButton color="neutral" variant="ghost" @click="removing = null">
+                Cancel
+              </UButton>
+              <UButton color="error" icon="i-lucide-key-round" :loading="busy === 'remove'" @click="remove">
+                Remove with another passkey
+              </UButton>
+            </div>
+          </template>
+        </UModal>
       </template>
     </main>
   </div>
