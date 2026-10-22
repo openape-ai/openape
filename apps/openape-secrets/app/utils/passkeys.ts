@@ -87,9 +87,11 @@ function sameBytes(a: Bytes, b: Bytes): boolean {
 }
 
 /**
- * Create a passkey and prove it can carry a vault: its PRF output must be
- * available and identical in a second, separate ceremony. Anything less is
- * refused here, before the server learns about the passkey at all.
+ * Create a passkey that can carry a vault. When the authenticator already
+ * returns its PRF output while creating the passkey, that one confirmation is
+ * enough (owner decision, issue 1535); the recovery kit covers an authenticator
+ * that would later answer differently. Otherwise the PRF output is read in two
+ * separate local ceremonies and must match before the server learns about it.
  */
 export async function createVaultPasskey(options: PublicKeyCredentialCreationOptionsJSON, prfInput: Bytes) {
   const credential = await navigator.credentials.create({
@@ -112,7 +114,9 @@ export async function createVaultPasskey(options: PublicKeyCredentialCreationOpt
   const prf = prfOf(credential)
   if (prf?.enabled === false) throw new PasskeyError(NO_PRF)
   const rpId = options.rp.id ?? location.hostname
-  const first = prf?.results?.first ? copy(prf.results.first) : await localPrf(credential.id, rpId, prfInput)
+  if (prf?.results?.first) return { response: registrationJSON(credential), prf: copy(prf.results.first) }
+
+  const first = await localPrf(credential.id, rpId, prfInput)
   const second = await localPrf(credential.id, rpId, prfInput)
   const stable = sameBytes(first, second)
   second.fill(0)

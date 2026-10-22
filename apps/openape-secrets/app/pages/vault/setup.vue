@@ -131,7 +131,7 @@ onMounted(async () => {
                   Create your vault passkey
                 </h2>
                 <p class="max-w-xl text-muted">
-                  You’ll confirm twice: once to create the passkey, and once more to check that it can keep your vault locked.
+                  Your device asks you to confirm with Face ID, Touch ID or your PIN. Some devices ask once more to check that the passkey can keep your vault locked.
                 </p>
               </div>
               <div>
