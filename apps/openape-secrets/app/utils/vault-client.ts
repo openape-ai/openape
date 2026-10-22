@@ -1,6 +1,6 @@
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/server'
-import type { RecoveryRecord, Sealed } from '#shared/vault-crypto'
-import { b64u, createRecovery, credentialKek, formatRecoveryCode, fromB64u, newRecoverySecret, newVmk, openRecovery, parseRecoveryCode, unwrapVmk, wrapVmk } from '#shared/vault-crypto'
+import type { RecoveryRecord, Sealed, SealedSecret } from '#shared/vault-crypto'
+import { b64u, createRecovery, credentialKek, formatRecoveryCode, fromB64u, newRecoverySecret, newVmk, openRecovery, openSecret, parseRecoveryCode, sealSecret, unwrapVmk, wrapVmk } from '#shared/vault-crypto'
 import { confirmWithPasskey, createVaultPasskey, PasskeyError, passkeyLabel } from './passkeys'
 
 /**
@@ -135,6 +135,92 @@ export async function recoverVault(code: string) {
     method: 'POST',
     body: { challengeId: options.challengeId, challenge: options.challenge, proof, credential: passkey.response, label: passkeyLabel(passkey.response.authenticatorAttachment), prfInput: b64u(prfInput), ...wrapped },
   })
+}
+
+export type SecretType = 'token' | 'password' | 'key' | 'note'
+
+export const SECRET_TYPE_LABELS: Record<SecretType, string> = {
+  token: 'API token',
+  password: 'Password',
+  key: 'Key',
+  note: 'Note',
+}
+
+export interface SecretSummary {
+  id: string
+  alias: string
+  type: SecretType
+  version: number
+  created_at: number
+  updated_at: number
+}
+
+export interface SecretDetail extends SecretSummary {
+  versions: Array<{ version: number, created_at: number }>
+  sealed: SealedSecret
+}
+
+interface ActionOptions {
+  challengeId: string
+  vaultId: string
+  secretId: string
+  version: number
+  assertion: PublicKeyCredentialRequestOptionsJSON
+}
+
+export function listSecrets(): Promise<SecretSummary[]> {
+  return $fetch<SecretSummary[]>('/api/v2/secrets')
+}
+
+export function readSecret(id: string): Promise<SecretDetail> {
+  return $fetch<SecretDetail>(`/api/v2/secrets/${id}`)
+}
+
+/** Open the current value locally. The passkey ceremony never reaches the server. */
+export async function revealSecret(vault: VaultView, secret: SecretDetail): Promise<string> {
+  const confirmation = await confirmWithPasskey({
+    challenge: b64u(random(32)),
+    allowCredentials: vault.credentials.map(c => ({ id: c.id, type: 'public-key' })),
+    userVerification: 'required',
+  }, prfInputs(vault))
+  const vmk = await vmkFromConfirmation(vault, confirmation)
+  try {
+    return await openSecret(vmk, secret.sealed, { vaultId: vault.id!, secretId: secret.id, version: secret.version })
+  }
+  finally {
+    vmk.fill(0)
+  }
+}
+
+/** Confirm a prepared change with a passkey; `seal` gets the unlocked VMK for saves. */
+async function runAction(vault: VaultView, request: Record<string, unknown>, seal?: (vmk: Bytes, o: ActionOptions) => Promise<Record<string, unknown>>) {
+  const options = await $fetch<ActionOptions>('/api/v2/vault/actions/options', { method: 'POST', body: request })
+  const confirmation = await confirmWithPasskey(options.assertion, prfInputs(vault))
+  const vmk = await vmkFromConfirmation(vault, confirmation)
+  let fields: Record<string, unknown> = {}
+  try {
+    if (seal) fields = await seal(vmk, options)
+  }
+  finally {
+    vmk.fill(0)
+  }
+  return $fetch<{ secret_id: string, version: number }>('/api/v2/vault/actions/commit', {
+    method: 'POST',
+    body: { challengeId: options.challengeId, assertion: confirmation.response, ...fields },
+  })
+}
+
+/** Save a new secret, or the next version of an existing one. */
+export function saveSecret(vault: VaultView, input: { secretId?: string, alias?: string, type?: SecretType, value: string }) {
+  return runAction(vault, { action: 'secret.save', secretId: input.secretId }, async (vmk, o) => ({
+    alias: input.alias,
+    type: input.type,
+    sealed: await sealSecret(vmk, input.value, { vaultId: o.vaultId, secretId: o.secretId, version: o.version }),
+  }))
+}
+
+export function deleteSecret(vault: VaultView, secretId: string) {
+  return runAction(vault, { action: 'secret.delete', secretId })
 }
 
 /** A message for the owner from any error a flow can raise. */
