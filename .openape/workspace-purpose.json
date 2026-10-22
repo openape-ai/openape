@@ -34,6 +34,7 @@
   "packages/ape-kpi": "Kommandozeile und Client für kpi.",
   "packages/ape-plans": "Kommandozeile und Client für plans.",
   "packages/ape-secrets": "Kommandozeile und Client für secrets.",
+  "packages/secrets-crypto": "Tresor-Verschlüsselung für Secrets, gemeinsam für App und CLI.",
   "packages/ape-calls": "Kommandozeile und Client für calls.",
   "packages/ape-tasks": "Kommandozeile und Client für tasks.",
   "packages/ape-testruns": "Kommandozeile und Client für testruns.",
