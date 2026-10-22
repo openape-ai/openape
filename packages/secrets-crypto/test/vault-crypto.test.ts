@@ -19,7 +19,7 @@ import {
   verifyDelivery,
   verifyRecoveryProof,
   wrapVmk,
-} from '../shared/vault-crypto'
+} from '../src/index'
 
 // The vault is only as good as its refusals: every test that proves a value
 // opens is paired with the context swap, wrong key or tampering that must not.

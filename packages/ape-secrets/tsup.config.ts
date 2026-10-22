@@ -13,4 +13,6 @@ export default defineConfig({
   outExtension: () => ({ js: '.mjs' }),
   banner: { js: '#!/usr/bin/env node' },
   loader: { '.md': 'text' },
+  // Bundled so the published CLI needs no extra package; the vault format has one source.
+  noExternal: ['@openape/secrets-crypto'],
 })
