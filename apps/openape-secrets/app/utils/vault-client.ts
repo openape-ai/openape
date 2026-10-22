@@ -1,6 +1,6 @@
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/server'
 import type { RecoveryRecord, Sealed, SealedSecret } from '#shared/vault-crypto'
-import { b64u, createRecovery, credentialKek, formatRecoveryCode, fromB64u, newRecoverySecret, newVmk, openRecovery, openSecret, parseRecoveryCode, sealSecret, unwrapVmk, wrapVmk } from '#shared/vault-crypto'
+import { b64u, createRecovery, credentialKek, formatRecoveryCode, fromB64u, newRecoverySecret, newVmk, openRecovery, openSecret, parseRecoveryCode, sealDelivery, sealSecret, unwrapVmk, wrapVmk } from '#shared/vault-crypto'
 import { confirmWithPasskey, createVaultPasskey, PasskeyError, passkeyLabel } from './passkeys'
 
 /**
@@ -221,6 +221,94 @@ export function saveSecret(vault: VaultView, input: { secretId?: string, alias?:
 
 export function deleteSecret(vault: VaultView, secretId: string) {
   return runAction(vault, { action: 'secret.delete', secretId })
+}
+
+export type ApprovalMode = 'once' | 'timed' | 'standing'
+
+export interface OwnerRequest {
+  id: string
+  status: string
+  field_name: string
+  purpose: string
+  requester: string
+  requester_act: string
+  created_at: number
+  expires_at: number
+  consumer: { id: string, name: string, fingerprint: string, key_changed: boolean }
+  secret: { id: string, alias: string, type: SecretType, version: number } | null
+  approval?: { id: string, mode: ApprovalMode, expires_at: number | null, created_at: number, decided_at: number | null } | null
+}
+
+export interface ApprovalView {
+  id: string
+  status: string
+  mode: ApprovalMode
+  expires_at: number | null
+  created_at: number
+  consumed_at: number | null
+  revoked_at: number | null
+  requester: string
+  consumer: { id: string, name: string, fingerprint: string }
+  secret: { id: string, alias: string, version: number }
+}
+
+interface ApprovalOptions {
+  challengeId: string
+  approvalId: string
+  descriptor: { secretId: string, version: number, consumerKeyFingerprint: string }
+  consumer: { publicKeyJwk: JsonWebKey }
+  sealed: SealedSecret | null
+  assertion: PublicKeyCredentialRequestOptionsJSON
+}
+
+export const listRequests = () => $fetch<OwnerRequest[]>('/api/v2/requests')
+export const readRequest = (id: string) => $fetch<OwnerRequest>(`/api/v2/requests/${id}`)
+export const denyRequest = (id: string) => $fetch(`/api/v2/requests/${id}/deny`, { method: 'POST' })
+export const listApprovals = () => $fetch<ApprovalView[]>('/api/v2/approvals')
+export const revokeApproval = (id: string) => $fetch(`/api/v2/approvals/${id}/revoke`, { method: 'POST' })
+
+/**
+ * Approve one handover: the server fixes what is approved, a passkey unlocks
+ * the vault here, the value is opened and sealed for the machine's key, and
+ * only that package goes back. The value itself never leaves this browser.
+ */
+export async function approveRequest(vault: VaultView, requestId: string, mode: { mode: ApprovalMode, durationSec?: number }) {
+  const options = await $fetch<ApprovalOptions>(`/api/v2/requests/${requestId}/approval/options`, { method: 'POST', body: mode })
+  if (!options.sealed) throw new PasskeyError('This secret has no stored value to hand over.')
+  const confirmation = await confirmWithPasskey(options.assertion, prfInputs(vault))
+  const vmk = await vmkFromConfirmation(vault, confirmation)
+  const d = options.descriptor
+  let pkg: Awaited<ReturnType<typeof sealDelivery>>
+  try {
+    const value = await openSecret(vmk, options.sealed, { vaultId: vault.id!, secretId: d.secretId, version: d.version })
+    pkg = await sealDelivery(options.consumer.publicKeyJwk, value, { approvalId: options.approvalId, consumerKeyFingerprint: d.consumerKeyFingerprint, secretId: d.secretId, version: d.version })
+  }
+  finally {
+    vmk.fill(0)
+  }
+  return $fetch<{ id: string, status: string, mode: ApprovalMode, expires_at: number | null, created_at: number }>(`/api/v2/requests/${requestId}/approval/commit`, {
+    method: 'POST',
+    body: { challengeId: options.challengeId, assertion: confirmation.response, package: pkg },
+  })
+}
+
+/** "21:40 today" or "Fri 23 Oct, 21:25" — exact, in the owner's time zone. */
+export function endsAt(sec: number): string {
+  const date = new Date(sec * 1000)
+  const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+  if (date.toDateString() === new Date().toDateString()) return `${time} today`
+  return `${date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}, ${time}`
+}
+
+/** "mail-triage@agents.example" → "Mail triage", for headings; the full identity is shown too. */
+export function requesterName(identity: string): string {
+  const local = identity.split('@')[0]?.replace(/[-_.]+/g, ' ').trim() || identity
+  return local.charAt(0).toUpperCase() + local.slice(1)
+}
+
+/** The first 16 fingerprint characters in groups of four, as on every screen. */
+export function shortFingerprint(fingerprint: string): string {
+  return fingerprint.slice(0, 16).match(/.{1,4}/g)?.join(' ') ?? fingerprint
 }
 
 /** A message for the owner from any error a flow can raise. */

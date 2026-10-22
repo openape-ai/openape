@@ -144,6 +144,56 @@ export const vaultSecretVersions = sqliteTable('vault_secret_versions', {
   createdAt: integer('created_at').notNull(),
 }, t => [primaryKey({ columns: [t.secretId, t.version] })])
 
+/**
+ * An agent's request for one vault secret for one machine. The machine key's
+ * fingerprint is pinned when the request is made; the request carries no value.
+ * `pending` → `approved` | `denied` | `cancelled` (expiry is read from `expires_at`).
+ */
+export const secretAccessRequests = sqliteTable('secret_access_requests', {
+  id: text('id').primaryKey(),
+  vaultId: text('vault_id').notNull(),
+  ownerEmail: text('owner_email').notNull(),
+  requester: text('requester').notNull(),
+  requesterAct: text('requester_act').notNull(),
+  consumerId: text('consumer_id').notNull(),
+  consumerFingerprint: text('consumer_fingerprint').notNull(),
+  fieldName: text('field_name').notNull(),
+  secretId: text('secret_id'),
+  secretVersion: integer('secret_version'),
+  purpose: text('purpose').notNull().default(''),
+  status: text('status', { enum: ['pending', 'approved', 'denied', 'cancelled'] }).notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  createdAt: integer('created_at').notNull(),
+  decidedAt: integer('decided_at'),
+}, t => [index('idx_access_requests_owner').on(t.ownerEmail, t.status)])
+
+/**
+ * One approved handover: an exact secret version, sealed for one machine key,
+ * with a release mode. The package opens only with that machine's private key.
+ * `active` → `consumed` | `revoked`; expiry and supersession are read from the row.
+ */
+export const secretApprovals = sqliteTable('secret_approvals', {
+  id: text('id').primaryKey(),
+  requestId: text('request_id').notNull(),
+  vaultId: text('vault_id').notNull(),
+  ownerEmail: text('owner_email').notNull(),
+  requester: text('requester').notNull(),
+  consumerId: text('consumer_id').notNull(),
+  consumerFingerprint: text('consumer_fingerprint').notNull(),
+  secretId: text('secret_id').notNull(),
+  secretVersion: integer('secret_version').notNull(),
+  mode: text('mode', { enum: ['once', 'timed', 'standing'] }).notNull(),
+  expiresAt: integer('expires_at'),
+  status: text('status', { enum: ['active', 'consumed', 'revoked'] }).notNull(),
+  packageEpk: text('package_epk').notNull(),
+  packageIv: text('package_iv').notNull(),
+  packageCt: text('package_ct').notNull(),
+  credentialId: text('credential_id').notNull(),
+  createdAt: integer('created_at').notNull(),
+  consumedAt: integer('consumed_at'),
+  revokedAt: integer('revoked_at'),
+}, t => [index('idx_approvals_owner').on(t.ownerEmail, t.status)])
+
 /** What happened, by IDs only: never values, keys or packages. */
 export const secretAuditEvents = sqliteTable('secret_audit_events', {
   id: text('id').primaryKey(),

@@ -1,10 +1,10 @@
-# Secrets PRF vault, milestone M2a — issue 1535
+# Secrets PRF vault, milestone M2b — issue 1535
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Approved plan revision 2: https://report.openape.ai/d/01M5JEGAHN8GK0VWGQ4HAYH0VM. M1 merged as `2da871d98569f1c991a61d2cfb02b1ad1c0e828d` (PR 497, receipt on the PR and issue).
-- Branch `feature/issue-1535-secrets-vault-entries`, worktree `openape-monorepo.worktrees/secrets-vault`, canonical base `2da871d98569f1c991a61d2cfb02b1ad1c0e828d`.
-- First of two M2 PRs: vault secrets with append-only versions and deletion, each change confirmed by a fresh passkey assertion bound to a server-fixed descriptor; the vault screen in the approved design; passkey management moved to `/vault/passkeys`; vault write transactions retry SQLite lock contention through `@openape/sp-tasks` `withBusyRetry`, and file databases switch to WAL.
-- Verification at `f505eb80` (browser run at `b1b95e10`): 81 app tests including 9 new route tests, 4 safeguard mutations caught, lint/typecheck/build, the pre-push gate after regenerating the dependency graph, and 16 of 16 real-Chromium checks. Test Run: https://report.openape.ai/d/01M5JJ3T46XZQA0043A38405YE
-- Next: owner review and merge; then M2b (requests, phone approval, receipt, approvals page, key seal). No deployment.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Approved plan revision 2: https://report.openape.ai/d/01M5JEGAHN8GK0VWGQ4HAYH0VM. M2a merged as `b0121997f784ba9e5a86a204353aaac3ea3ce22c` (PR 498, receipt on the PR and issue).
+- Branch `feature/issue-1535-secrets-approvals`, worktree `openape-monorepo.worktrees/secrets-vault`, canonical base `b0121997f784ba9e5a86a204353aaac3ea3ce22c`.
+- Second M2 PR: delivery package v2 (sealed for one machine key, bound to approval, fingerprint, secret and version), `/api/v2/requests` (unknown names answer like known ones), approval options/commit with a fresh passkey over a server-fixed descriptor, deny, approvals list and revoke; the phone approval, receipt, approvals page, key seal and waiting list in the approved design. Notifications always name the requester and quote the reason without links; approval links use the configured vault origin.
+- Verification at `0cbcc9f2`: 101 app tests including 16 approval and 4 delivery tests, 8 safeguard mutations caught, lint/typecheck/build, pre-push gate, and 28 of 28 real-Chromium checks including a machine opening the stored package. Test Run: https://report.openape.ai/d/01M5JKB0ZHB5S7PA5PXSHY6F8V
+- Next: owner review and merge; then M3 (collection rules, consumer identity binding, vault-signed packages). No deployment.
 
 # Model API settings and latest family versions — issue 1532
 
