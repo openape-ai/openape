@@ -90,7 +90,7 @@ onMounted(async () => {
   <div class="min-h-dvh bg-default text-default">
     <VaultHeader :email="user?.sub" />
 
-    <main class="mx-auto flex max-w-5xl flex-col gap-8 px-4 pb-16 pt-8 sm:px-8">
+    <main class="mx-auto flex max-w-6xl flex-col gap-8 px-4 pb-16 pt-8 sm:px-8">
       <OpenApeAuth v-if="ready && !user" subtitle="Sign in to set up your vault." />
 
       <template v-else-if="ready">

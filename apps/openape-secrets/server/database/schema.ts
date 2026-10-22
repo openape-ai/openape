@@ -1,4 +1,4 @@
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core'
+import { index, integer, primaryKey, sqliteTable, text } from 'drizzle-orm/sqlite-core'
 
 /** How long a request may wait to be filled before it lapses. */
 export const DEFAULT_TTL_SEC = 24 * 60 * 60
@@ -114,10 +114,35 @@ export const webauthnChallenges = sqliteTable('webauthn_challenges', {
   ownerEmail: text('owner_email').notNull(),
   operation: text('operation').notNull(),
   vaultId: text('vault_id').notNull(),
+  /** JSON of what exactly the challenge may confirm, e.g. which secret version a save creates. */
+  descriptor: text('descriptor'),
   expiresAt: integer('expires_at').notNull(),
   consumedAt: integer('consumed_at'),
   createdAt: integer('created_at').notNull(),
 })
+
+/** A named secret in a vault. Name and type are visible metadata; the value lives only in its versions. */
+export const vaultSecrets = sqliteTable('vault_secrets', {
+  id: text('id').primaryKey(),
+  vaultId: text('vault_id').notNull(),
+  alias: text('alias').notNull(),
+  type: text('type').notNull(),
+  currentVersion: integer('current_version').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+  deletedAt: integer('deleted_at'),
+})
+
+/** One immutable version: the value under a fresh DEK, and that DEK under the VMK. */
+export const vaultSecretVersions = sqliteTable('vault_secret_versions', {
+  secretId: text('secret_id').notNull(),
+  version: integer('version').notNull(),
+  valueIv: text('value_iv').notNull(),
+  valueCt: text('value_ct').notNull(),
+  dekIv: text('dek_iv').notNull(),
+  dekCt: text('dek_ct').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, t => [primaryKey({ columns: [t.secretId, t.version] })])
 
 /** What happened, by IDs only: never values, keys or packages. */
 export const secretAuditEvents = sqliteTable('secret_audit_events', {

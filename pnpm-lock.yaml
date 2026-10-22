@@ -825,6 +825,9 @@ importers:
       '@openape/nuxt-auth-sp':
         specifier: workspace:*
         version: link:../../modules/nuxt-auth-sp
+      '@openape/sp-tasks':
+        specifier: workspace:*
+        version: link:../../packages/sp-tasks
       '@simplewebauthn/server':
         specifier: ^13.3.2
         version: 13.3.2

@@ -1,10 +1,12 @@
 import { sql } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
-import { VAULT_TABLES } from '../database/vault-tables'
+import { applyVaultSchema } from '../database/vault-tables'
 
 export default defineNitroPlugin(async () => {
   try {
     const db = useDb()
+    // Readers keep working while a vault transaction writes; persists in the database file.
+    if (String(useRuntimeConfig().tursoUrl).startsWith('file:')) await db.run(sql`PRAGMA journal_mode = WAL`)
 
     await db.run(sql`CREATE TABLE IF NOT EXISTS consumers (
       id TEXT PRIMARY KEY,
@@ -36,7 +38,7 @@ export default defineNitroPlugin(async () => {
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_requests_owner ON secret_requests(owner_email)`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_requests_consumer ON secret_requests(consumer_id)`)
 
-    for (const statement of VAULT_TABLES) await db.run(sql.raw(statement))
+    await applyVaultSchema(statement => db.run(sql.raw(statement)))
   }
   catch (err) {
     console.error('[database] Table creation failed (tables may already exist):', err)
