@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import type { SecretDetail, SecretSummary, SecretType, VaultView } from '~/utils/vault-client'
+import type { ApprovalView, OwnerRequest, SecretDetail, SecretSummary, SecretType, VaultView } from '~/utils/vault-client'
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useOpenApeAuth } from '#imports'
-import { deleteSecret, flowError, listSecrets, loadVault, readSecret, revealSecret, saveSecret, SECRET_TYPE_LABELS } from '~/utils/vault-client'
+import { deleteSecret, endsAt, flowError, listApprovals, listRequests, listSecrets, loadVault, readSecret, requesterName, revealSecret, saveSecret, SECRET_TYPE_LABELS } from '~/utils/vault-client'
 
 const REVEAL_SECONDS = 30
 
@@ -11,6 +11,8 @@ const ready = ref(false)
 const unavailable = ref('')
 const vault = ref<VaultView | null>(null)
 const secrets = ref<SecretSummary[]>([])
+const waiting = ref<OwnerRequest[]>([])
+const approvals = ref<ApprovalView[]>([])
 const query = ref('')
 const selected = ref<SecretDetail | null>(null)
 const revealed = ref('')
@@ -50,8 +52,16 @@ function hide() {
   clearTimeout(hideTimer)
 }
 
+/** Who may collect the selected secret right now. */
+const collectors = computed(() => approvals.value.filter(a => a.status === 'active' && a.secret.id === selected.value?.id))
+const MODE_TERMS: Record<string, (a: ApprovalView) => string> = {
+  standing: a => `Until you revoke it, for ${requesterName(a.requester)}`,
+  timed: a => `Until ${endsAt(a.expires_at!)}, for ${requesterName(a.requester)}`,
+  once: a => `Once, until ${endsAt(a.expires_at!)}`,
+}
+
 async function refresh(selectId?: string) {
-  secrets.value = await listSecrets()
+  ;[secrets.value, waiting.value, approvals.value] = await Promise.all([listSecrets(), listRequests(), listApprovals()])
   const id = selectId ?? selected.value?.id
   selected.value = id && secrets.value.some(s => s.id === id) ? await readSecret(id) : null
 }
@@ -171,6 +181,32 @@ onBeforeUnmount(hide)
         </p>
         <UAlert v-if="error" color="error" variant="subtle" :title="error" class="-mt-4" />
 
+        <section v-if="waiting.length" aria-labelledby="waiting-title" class="flex flex-col gap-3.5">
+          <div class="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+            <h2 id="waiting-title" class="text-[22px] font-semibold tracking-tight">
+              Waiting for you
+            </h2>
+            <span class="text-sm text-dimmed">Each request asks for one secret, for one machine.</span>
+          </div>
+          <ul class="flex flex-col rounded-2xl border border-default bg-muted p-1.5">
+            <li v-for="r in waiting" :key="r.id" class="flex flex-wrap items-center gap-x-4 gap-y-3 rounded-xl px-3.5 py-3">
+              <KeySeal :fingerprint="r.consumer.fingerprint" :size="36" />
+              <div class="min-w-0 flex-[999_1_200px]">
+                <div>
+                  <span class="font-semibold">{{ requesterName(r.requester) }}</span> wants
+                  <span class="font-mono text-sm">{{ r.field_name }}</span> for {{ r.consumer.name }}
+                </div>
+                <div class="truncate text-[13px] text-dimmed">
+                  {{ r.purpose || (r.secret ? `Version ${r.secret.version} in your vault` : 'Not in your vault yet') }}
+                </div>
+              </div>
+              <UButton :to="`/approve/${r.id}`">
+                Review
+              </UButton>
+            </li>
+          </ul>
+        </section>
+
         <div class="flex flex-wrap items-start gap-6">
           <section aria-labelledby="list-title" class="flex min-w-0 flex-[999_1_560px] flex-col gap-3">
             <h2 id="list-title" class="sr-only">
@@ -272,6 +308,26 @@ onBeforeUnmount(hide)
                   Show with passkey
                 </UButton>
               </template>
+            </div>
+
+            <div v-if="collectors.length" class="flex flex-col gap-2.5">
+              <h3 class="text-[15px] font-semibold">
+                Who can collect it
+              </h3>
+              <div v-for="a in collectors" :key="a.id" class="flex items-center gap-3">
+                <KeySeal :fingerprint="a.consumer.fingerprint" :size="34" tone="brass" />
+                <div class="min-w-0">
+                  <div class="font-medium">
+                    {{ a.consumer.name }}
+                  </div>
+                  <div class="text-[13px] text-dimmed">
+                    {{ MODE_TERMS[a.mode]!(a) }}
+                  </div>
+                </div>
+              </div>
+              <NuxtLink to="/vault/approvals" class="text-sm font-medium text-sky-300 hover:text-sky-200">
+                Manage approvals
+              </NuxtLink>
             </div>
 
             <div class="flex flex-col gap-2.5">

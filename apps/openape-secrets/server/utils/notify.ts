@@ -40,7 +40,12 @@ export async function notifyOwnerOfRequest(
   consumerName: string,
   deps: NotifyDeps,
 ): Promise<'sent' | 'skipped'> {
-  if (row.ownerEmail !== deps.approver) return 'skipped'
-  await deps.send(deps.chatId, formatRequestMessage(row, consumerName, deps.publicUrl))
+  return notifyOwner(row.ownerEmail, formatRequestMessage(row, consumerName, deps.publicUrl), deps)
+}
+
+/** Send a message to the configured chat, but only for the one person it belongs to. */
+export async function notifyOwner(ownerEmail: string, text: string, deps: NotifyDeps): Promise<'sent' | 'skipped'> {
+  if (ownerEmail !== deps.approver) return 'skipped'
+  await deps.send(deps.chatId, text)
   return 'sent'
 }
