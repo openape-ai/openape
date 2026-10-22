@@ -8,7 +8,7 @@ import { webcrypto } from 'node:crypto'
  * It is generated here, only the public half is registered, and the file is
  * written 0600. Whoever compromises the service gets envelopes and no keys.
  */
-const KEY_DIR = join(homedir(), '.config', 'apes', 'secrets')
+export const KEY_DIR = join(homedir(), '.config', 'apes', 'secrets')
 
 export interface ConsumerKey {
   consumerId: string

@@ -2,9 +2,16 @@ import { writeFileSync } from 'node:fs'
 import { hostname } from 'node:os'
 import { defineCommand } from 'citty'
 import { error, printJson, printLine } from '@openape/proof-cli'
+import type { Collected } from './deliver.ts'
+import { keyFingerprint } from '@openape/secrets-crypto'
 import { _request, resolveEndpoint } from './client.ts'
-import { generateKeyPair, loadKey, openBox, saveKey  } from './keys.ts'
+import { filePins, openCollected, prepareFileTarget, runWithSecret } from './deliver.ts'
+import { generateKeyPair, loadKey, openBox, saveKey } from './keys.ts'
 import type { SealedBox } from './keys.ts'
+
+function printErr(line: string) {
+  process.stderr.write(`${line}\n`)
+}
 
 interface ConsumerView { id: string, name: string, allowed_requesters: string[] }
 interface RequestView { id: string, requester: string, field_name: string, purpose: string, status: string, expires_at: number }
@@ -46,16 +53,33 @@ export const consumersCommand = defineCommand({
   },
 })
 
+interface VaultRequestView { id: string, status: string, field_name: string, consumer_id: string, expires_at: number, approval_id?: string, approve_url?: string }
+interface ApprovalMeta { id: string, status: string, mode: string, expires_at: number | null, consumer_id: string, consumer_key_fingerprint: string }
+
 export const requestCommand = defineCommand({
-  meta: { name: 'request', description: 'Ask a human for one value. Prints the link they open.' },
+  meta: { name: 'request', description: 'Ask for a secret. --secret asks the owner\'s vault (approve with a passkey); --field asks a human to type a value (legacy).' },
   args: {
-    consumer: { type: 'string', description: 'Consumer id the value is for', required: true },
-    field: { type: 'string', description: 'What is needed, e.g. NUXT_TELEGRAM_BOT_TOKEN', required: true },
-    purpose: { type: 'string', description: 'Why — shown verbatim on the fill page' },
+    consumer: { type: 'string', description: 'Consumer id of the machine the value is for', required: true },
+    secret: { type: 'string', description: 'Name of a secret in the owner\'s vault, e.g. TELEGRAM_BOT_TOKEN' },
+    field: { type: 'string', description: 'Legacy: what a human should type in, e.g. NUXT_TELEGRAM_BOT_TOKEN' },
+    purpose: { type: 'string', description: 'Why — shown to the owner' },
     ttl: { type: 'string', description: 'Seconds the request stays open (default 86400)' },
-    json: { type: 'boolean', description: 'JSON output' },
+    json: { type: 'boolean', description: 'JSON output (metadata only)' },
   },
   async run({ args }) {
+    if (!args.secret === !args.field) throw new Error('Pass exactly one of --secret (vault) or --field (legacy).')
+    if (args.secret) {
+      const req = await _request<VaultRequestView>('/api/v2/requests', {
+        method: 'POST',
+        body: { consumerId: args.consumer, secret: args.secret, purpose: args.purpose ?? '', ...(args.ttl ? { ttlSec: Number(args.ttl) } : {}) },
+      })
+      if (args.json) return printJson(req)
+      printLine(`Waiting for the owner to approve ${req.field_name}:`)
+      printLine(req.approve_url ?? '')
+      printLine('')
+      printLine(`Then:  ape-secrets wait ${req.id}`)
+      return
+    }
     const req = await _request<RequestView>('/api/requests', {
       method: 'POST',
       body: {
@@ -69,6 +93,79 @@ export const requestCommand = defineCommand({
     if (args.json) return printJson({ ...req, fill_url: url })
     printLine(`Waiting for ${req.field_name}:`)
     printLine(url)
+  },
+})
+
+const POLL_MS = 5000
+
+export const waitCommand = defineCommand({
+  meta: { name: 'wait', description: 'Wait until the owner approves or declines a vault request. Prints the approval id.' },
+  args: {
+    id: { type: 'positional', description: 'Request id from `request --secret`', required: true },
+    timeout: { type: 'string', description: 'Seconds to wait (default 900)' },
+    json: { type: 'boolean', description: 'JSON output' },
+  },
+  async run({ args }) {
+    const deadline = Date.now() + Number(args.timeout ?? 900) * 1000
+    for (;;) {
+      const req = await _request<VaultRequestView>(`/api/v2/requests/${args.id}`)
+      if (req.status !== 'pending_approval') {
+        if (args.json) return printJson(req)
+        if (req.status !== 'approved' || !req.approval_id) throw new Error(`The request is ${req.status.replace('_', ' ')}. Nothing will be delivered.`)
+        printLine(`Approved. Deliver it with:  ape-secrets deliver ${req.approval_id} --out PATH   (or --stdin / --env NAME -- COMMAND)`)
+        printLine(req.approval_id)
+        return
+      }
+      if (Date.now() >= deadline) throw new Error('Still waiting for the owner. Run `ape-secrets wait` again later.')
+      await new Promise(resolve => setTimeout(resolve, POLL_MS))
+    }
+  },
+})
+
+export const deliverCommand = defineCommand({
+  meta: { name: 'deliver', description: 'Collect an approved secret and hand it straight to a file, or to a command via stdin or one environment variable. Never prints the value.' },
+  args: {
+    id: { type: 'positional', description: 'Approval id from `wait`', required: true },
+    out: { type: 'string', description: 'Write the value to this file (0600). Refuses symlinks and existing files.' },
+    overwrite: { type: 'boolean', description: 'With --out: replace an existing file atomically' },
+    stdin: { type: 'boolean', description: 'Pipe the value into the command after --' },
+    env: { type: 'string', description: 'Pass the value to the command after -- in this environment variable' },
+    json: { type: 'boolean', description: 'JSON output (metadata only)' },
+  },
+  async run({ args }) {
+    const command = (args._ as string[] | undefined ?? []).slice(1)
+    const targets = [args.out, args.stdin, args.env].filter(Boolean).length
+    if (targets !== 1) throw new Error('Pick exactly one target: --out PATH, --stdin -- COMMAND or --env NAME -- COMMAND.')
+    if (args.out && command.length) throw new Error('--out writes a file; it does not run a command.')
+    if (!args.out && !command.length) throw new Error('Put the command after --, e.g. -- ./deploy.sh')
+
+    // Everything that can fail on this side is checked before collecting, so a
+    // one-time approval is not used up on a delivery that cannot happen.
+    const meta = await _request<ApprovalMeta>(`/api/v2/approvals/${args.id}`)
+    if (meta.status !== 'active') throw new Error(`This approval is ${meta.status}. Nothing to collect.`)
+    const key = loadKey(meta.consumer_id)
+    const { kty, crv, x, y } = key.privateJwk
+    if (await keyFingerprint({ kty, crv, x, y }) !== meta.consumer_key_fingerprint) {
+      throw new Error(`The key for ${meta.consumer_id} on this machine is not the one this approval was sealed for.`)
+    }
+    const file = args.out ? prepareFileTarget(String(args.out), !!args.overwrite) : null
+
+    const collected = await _request<Collected>(`/api/v2/approvals/${args.id}/collect`, { method: 'POST' })
+    const opened = await openCollected(collected, key.privateJwk, filePins)
+    if (opened.pin === 'pinned') printErr(`Pinned the vault key ${opened.vaultKeyFingerprint.slice(0, 16)} for vault ${collected.vault_id} (first use). Later packages must carry the same key.`)
+
+    if (file) {
+      file.write(opened.value)
+      if (args.json) return printJson({ approval_id: collected.approval_id, delivered_to: 'file', path: args.out })
+      printLine(`Wrote the secret to ${args.out} (0600).`)
+      return
+    }
+    const code = await runWithSecret(command, opened.value, args.stdin ? { stdin: true } : { env: String(args.env) })
+    if (code !== 0) {
+      const used = collected.mode === 'once' ? ' The one-time approval is used up; ask for a new one.' : ''
+      throw new Error(`The command exited with ${code}.${used}`)
+    }
+    if (args.json) return printJson({ approval_id: collected.approval_id, delivered_to: args.stdin ? 'stdin' : 'env', exit_code: code })
   },
 })
 
