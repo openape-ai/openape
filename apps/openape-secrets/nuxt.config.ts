@@ -15,6 +15,15 @@ export default defineNuxtConfig({
 
   css: ['~/assets/main.css'],
 
+  // Downloaded at build time and served from this app: a secrets page makes
+  // no third-party font requests.
+  fonts: {
+    families: [
+      { name: 'Schibsted Grotesk', provider: 'google', weights: [400, 500, 600, 700] },
+      { name: 'IBM Plex Mono', provider: 'google', weights: [400, 500] },
+    ],
+  },
+
   runtimeConfig: {
     // DB — overridden at runtime by NUXT_TURSO_URL. Local dev file default so
     // `pnpm dev` works without env setup. Production MUST set NUXT_TURSO_URL
@@ -31,6 +40,12 @@ export default defineNuxtConfig({
     // Empty default → public URLs derive from the request origin. Production
     // sets NUXT_PUBLIC_URL=https://secrets.openape.ai explicitly.
     publicUrl: '',
+    // v2 vault, off until explicitly enabled (NUXT_VAULT_ENABLED=true). Passkeys
+    // are bound to this WebAuthn RP ID and origin; production sets
+    // NUXT_VAULT_RP_ID=secrets.openape.ai and NUXT_VAULT_ORIGIN=https://secrets.openape.ai.
+    vaultEnabled: false,
+    vaultRpId: 'localhost',
+    vaultOrigin: 'http://localhost:3025',
     public: {
       siteName: 'OpenApe Secrets',
     },
