@@ -1,11 +1,10 @@
 import { eq } from 'drizzle-orm'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
 import { verifyRecoveryProof } from '#shared/vault-crypto'
-import { useDb } from '../../../../database/drizzle'
 import { vaultRecovery } from '../../../../database/schema'
 import { createProblemError } from '../../../../utils/problem'
 import { requireVaultOwner } from '../../../../utils/vault-owner'
-import { audit, b64uField, consumeChallenge, insertCredential, verifyNewPasskey, wrappedCredentialFields } from '../../../../utils/vault-passkeys'
+import { audit, b64uField, consumeChallenge, insertCredential, vaultTransaction, verifyNewPasskey, wrappedCredentialFields } from '../../../../utils/vault-passkeys'
 
 /**
  * POST /api/v2/vault/recovery/commit — register a replacement passkey after the
@@ -20,7 +19,7 @@ export default defineEventHandler(async (event) => {
   const proof = b64uField(body.proof, 'proof', { max: 128 })
   const signed = typeof body.challenge === 'string' ? body.challenge : ''
 
-  const result = await useDb().transaction(async (tx) => {
+  const result = await vaultTransaction(async (tx) => {
     const challenge = await consumeChallenge(tx, body.challengeId, owner, 'vault.recover')
     const recovery = await tx.select().from(vaultRecovery).where(eq(vaultRecovery.vaultId, challenge.vaultId)).get()
     const proven = !!recovery
