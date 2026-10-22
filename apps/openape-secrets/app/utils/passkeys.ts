@@ -123,6 +123,9 @@ export async function createVaultPasskey(options: PublicKeyCredentialCreationOpt
 
 /** A fresh assertion from one of the vault's passkeys, with that passkey's PRF output. */
 export async function confirmWithPasskey(options: PublicKeyCredentialRequestOptionsJSON, prfInputs: Record<string, string>) {
+  // Browsers refuse PRF inputs for credentials the server did not allow (e.g. the passkey being removed).
+  const allowed = new Set((options.allowCredentials ?? []).map(c => c.id))
+  const inputs = Object.entries(prfInputs).filter(([id]) => !allowed.size || allowed.has(id))
   const credential = await getAssertion({
     challenge: fromB64u(options.challenge),
     rpId: options.rpId,
@@ -130,7 +133,7 @@ export async function confirmWithPasskey(options: PublicKeyCredentialRequestOpti
     userVerification: 'required',
     allowCredentials: (options.allowCredentials ?? []).map(c => ({ type: 'public-key' as const, id: fromB64u(c.id), transports: c.transports as AuthenticatorTransport[] })),
     extensions: {
-      prf: { evalByCredential: Object.fromEntries(Object.entries(prfInputs).map(([id, input]) => [id, { first: fromB64u(input) }])) },
+      prf: { evalByCredential: Object.fromEntries(inputs.map(([id, input]) => [id, { first: fromB64u(input) }])) },
     } as AuthenticationExtensionsClientInputs,
   })
   const first = prfOf(credential)?.results?.first

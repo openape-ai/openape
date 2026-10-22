@@ -17,6 +17,15 @@ interface SessionClaims {
  * reads the same `openape-sp` session directly: a token with `act: human` is
  * not enough to manage a vault. Writes must come from the vault's own origin.
  */
+/**
+ * The rollout allowlist: when NUXT_VAULT_OWNERS names people, only they get a
+ * vault; everyone else sees the routes as absent. Empty means everybody.
+ */
+export function vaultOwnerAllowed(email: string): boolean {
+  const allowed = String(useRuntimeConfig().vaultOwners ?? '').split(',').map(s => s.trim()).filter(Boolean)
+  return !allowed.length || allowed.includes(email)
+}
+
 export async function requireVaultOwner(event: H3Event): Promise<string> {
   const config = useRuntimeConfig()
   if (!config.vaultEnabled) throw createProblemError({ status: 404, title: 'Not found' })
@@ -26,6 +35,7 @@ export async function requireVaultOwner(event: H3Event): Promise<string> {
   const claims = session.data?.claims as SessionClaims | undefined
   const email = claims?.email ?? claims?.sub
   if (!email) throw createProblemError({ status: 401, title: 'Sign in to use your vault' })
+  if (!vaultOwnerAllowed(email)) throw createProblemError({ status: 404, title: 'Not found' })
   if (normalizeActClaim(claims?.act) !== 'human') {
     throw createProblemError({ status: 403, title: 'Only a person can use a vault', detail: 'Agents request secrets; they never manage a vault.' })
   }
