@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
+import { VAULT_TABLES } from '../database/vault-tables'
 
 export default defineNitroPlugin(async () => {
   try {
@@ -34,6 +35,8 @@ export default defineNitroPlugin(async () => {
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_requests_owner ON secret_requests(owner_email)`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_requests_consumer ON secret_requests(consumer_id)`)
+
+    for (const statement of VAULT_TABLES) await db.run(sql.raw(statement))
   }
   catch (err) {
     console.error('[database] Table creation failed (tables may already exist):', err)
