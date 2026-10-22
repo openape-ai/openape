@@ -22,6 +22,8 @@ export default defineEventHandler(async (event) => {
   const [view] = await ownerRequestViews([row])
   return {
     ...view,
+    // The owner may ask for their own machine; `ape-secrets wait` reads the same field either way.
+    ...(approval ? { approval_id: approval.id } : {}),
     approval: approval
       ? { id: approval.id, status: approval.status, mode: approval.mode, expires_at: approval.expiresAt, created_at: approval.createdAt, decided_at: row.decidedAt, collect_count: approval.collectCount, last_collected_at: approval.lastCollectedAt }
       : null,
