@@ -222,6 +222,17 @@ describe('approving a handover', () => {
   })
 })
 
+describe('the owner asking for their own machine', () => {
+  it('gets the approval id like any requester, so `ape-secrets wait` can finish', async () => {
+    const w = await world()
+    await saveSecret(w, 'A', 'x')
+    const req = await call<RequestView>(createRequest, w.me, { consumerId: w.machine.id, secret: 'A' })
+    const { opts, commit } = await approve(w, req.id)
+    await commit()
+    expect(await call<{ status: string, approval_id?: string }>(readRequest, w.me, undefined, 'GET', { id: req.id })).toMatchObject({ status: 'approved', approval_id: opts.approvalId })
+  })
+})
+
 describe('saying no and taking back', () => {
   it('a denied request cannot be approved anymore', async () => {
     const w = await world()
