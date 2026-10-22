@@ -1,11 +1,10 @@
 import { eq } from 'drizzle-orm'
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
-import { useDb } from '../../../../database/drizzle'
 import { vaultRecovery, vaults } from '../../../../database/schema'
 import { isP256PublicJwk } from '../../../consumers/index.post'
 import { createProblemError } from '../../../../utils/problem'
 import { requireVaultOwner } from '../../../../utils/vault-owner'
-import { audit, b64uField, consumeChallenge, insertCredential, nowSec, sealedField, verifyNewPasskey, wrappedCredentialFields } from '../../../../utils/vault-passkeys'
+import { audit, b64uField, consumeChallenge, insertCredential, nowSec, sealedField, vaultTransaction, verifyNewPasskey, wrappedCredentialFields } from '../../../../utils/vault-passkeys'
 
 /**
  * POST /api/v2/vault/setup/commit — create the vault, its first passkey and its
@@ -26,7 +25,7 @@ export default defineEventHandler(async (event) => {
   if (!isP256PublicJwk(recoveryRow.proofPublicJwk)) throw createProblemError({ status: 400, title: 'recovery.proofPublicJwk must be a public P-256 JWK' })
   const { kty, crv, x, y } = recoveryRow.proofPublicJwk
 
-  const result = await useDb().transaction(async (tx) => {
+  const result = await vaultTransaction(async (tx) => {
     const challenge = await consumeChallenge(tx, body.challengeId, owner, 'vault.setup')
     const existing = await tx.select({ id: vaults.id }).from(vaults).where(eq(vaults.ownerEmail, owner)).get()
     if (existing) throw createProblemError({ status: 409, title: 'You already have a vault' })

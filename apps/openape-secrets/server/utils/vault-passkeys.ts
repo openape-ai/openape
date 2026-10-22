@@ -1,5 +1,6 @@
 import type { AuthenticationResponseJSON, AuthenticatorTransportFuture, PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON, RegistrationResponseJSON } from '@simplewebauthn/server'
 import type { Sealed } from '#shared/vault-crypto'
+import { withBusyRetry } from '@openape/sp-tasks'
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server'
 import { and, eq, gt, isNull } from 'drizzle-orm'
 import { ulid } from 'ulid'
@@ -19,6 +20,15 @@ const encoder = new TextEncoder()
 
 export const nowSec = () => Math.floor(Date.now() / 1000)
 
+/**
+ * A vault write transaction, retried on SQLite lock contention. libsql gives
+ * each transaction its own connection and sets no busy timeout, so a second
+ * writer would otherwise fail at once instead of waiting its turn.
+ */
+export function vaultTransaction<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return withBusyRetry(() => useDb().transaction(fn))
+}
+
 function rp() {
   const config = useRuntimeConfig()
   return { rpID: String(config.vaultRpId), origin: String(config.vaultOrigin) }
@@ -30,7 +40,7 @@ async function sha256Hex(value: string): Promise<string> {
 }
 
 /** A fresh single-use challenge for one owner and one operation; only its hash is stored. */
-export async function issueChallenge(owner: string, operation: string, vaultId: string): Promise<{ challengeId: string, challenge: string }> {
+export async function issueChallenge(owner: string, operation: string, vaultId: string, descriptor?: Record<string, unknown>): Promise<{ challengeId: string, challenge: string }> {
   const challenge = b64u(crypto.getRandomValues(new Uint8Array(new ArrayBuffer(32))))
   const challengeId = ulid()
   await useDb().insert(webauthnChallenges).values({
@@ -39,6 +49,7 @@ export async function issueChallenge(owner: string, operation: string, vaultId: 
     ownerEmail: owner,
     operation,
     vaultId,
+    descriptor: descriptor ? JSON.stringify(descriptor) : null,
     expiresAt: nowSec() + (CHALLENGE_TTL_SEC[operation] ?? DEFAULT_CHALLENGE_TTL_SEC),
     createdAt: nowSec(),
   })
@@ -67,6 +78,7 @@ export async function consumeChallenge(tx: Tx, challengeId: unknown, owner: stri
   if (!row) throw createProblemError({ status: 400, title: 'This confirmation expired or was already used', detail: 'Start again.' })
   return {
     vaultId: row.vaultId,
+    descriptor: row.descriptor ? JSON.parse(row.descriptor) as Record<string, unknown> : {},
     matches: async (challenge: string) => (await sha256Hex(challenge)) === row.challengeHash,
   }
 }

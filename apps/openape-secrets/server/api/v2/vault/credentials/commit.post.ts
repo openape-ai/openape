@@ -1,7 +1,6 @@
 import { defineEventHandler, readBody, setResponseStatus } from 'h3'
-import { useDb } from '../../../../database/drizzle'
 import { requireVaultOwner } from '../../../../utils/vault-owner'
-import { audit, consumeChallenge, insertCredential, verifyNewPasskey, verifyVaultPasskey, wrappedCredentialFields } from '../../../../utils/vault-passkeys'
+import { audit, consumeChallenge, insertCredential, vaultTransaction, verifyNewPasskey, verifyVaultPasskey, wrappedCredentialFields } from '../../../../utils/vault-passkeys'
 
 /**
  * POST /api/v2/vault/credentials/commit — store a new passkey's VMK wrapper.
@@ -13,7 +12,7 @@ export default defineEventHandler(async (event) => {
   const body = (await readBody<Record<string, unknown>>(event)) ?? {}
   const fields = wrappedCredentialFields(body)
 
-  const result = await useDb().transaction(async (tx) => {
+  const result = await vaultTransaction(async (tx) => {
     const challenge = await consumeChallenge(tx, body.challengeId, owner, 'credential.add')
     const confirmedBy = await verifyVaultPasskey(tx, challenge.vaultId, body.assertion, challenge.matches)
     const passkey = await verifyNewPasskey(body.credential, challenge.matches)
