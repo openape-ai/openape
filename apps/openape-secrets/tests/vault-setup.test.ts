@@ -21,7 +21,8 @@ vi.mock('../server/database/drizzle', async () => {
 vi.mock('h3', async () => (await import('./support/vault')).h3Mock())
 
 let enabled = true
-vi.stubGlobal('useRuntimeConfig', () => ({ vaultEnabled: enabled, vaultRpId: RP_ID, vaultOrigin: ORIGIN }))
+let owners = ''
+vi.stubGlobal('useRuntimeConfig', () => ({ vaultEnabled: enabled, vaultOwners: owners, vaultRpId: RP_ID, vaultOrigin: ORIGIN }))
 vi.stubGlobal('getSpSession', async (e: { __session?: unknown }) => ({ data: e.__session ?? {} }))
 
 const getVault = (await import('../server/api/v2/vault/index.get')).default
@@ -31,6 +32,8 @@ const credentialOptions = (await import('../server/api/v2/vault/credentials/opti
 const credentialCommit = (await import('../server/api/v2/vault/credentials/commit.post')).default
 const recoveryOptions = (await import('../server/api/v2/vault/recovery/options.post')).default
 const recoveryCommit = (await import('../server/api/v2/vault/recovery/commit.post')).default
+const actionOptions = (await import('../server/api/v2/vault/actions/options.post')).default
+const actionCommit = (await import('../server/api/v2/vault/actions/commit.post')).default
 const { useDb } = await import('../server/database/drizzle')
 
 let me: Caller = {}
@@ -46,6 +49,7 @@ async function setUpVault() {
 
 beforeEach(async () => {
   enabled = true
+  owners = ''
   me = caller()
   // Fresh tables per test: tests share one in-memory database.
   for (const table of VAULT_TABLE_NAMES) await useDb().run(`DELETE FROM ${table}` as never)
@@ -203,5 +207,81 @@ describe('recovery', () => {
     expect(await status(recover(vault, newRecoverySecret()))).toBe(400)
     const view = await call<{ credentials: unknown[] }>(getVault, undefined, 'GET')
     expect(view.credentials).toHaveLength(1)
+  })
+})
+
+describe('only owners on the allowlist', () => {
+  it('see no vault routes while the allowlist names someone else', async () => {
+    owners = 'someone-else@example.com'
+    expect(await status(call(setupOptions))).toBe(404)
+  })
+
+  it('may use the vault when listed', async () => {
+    owners = `someone-else@example.com, ${me.email}`
+    expect(await status(call(setupOptions))).toBe(200)
+  })
+})
+
+describe('removing a lost passkey', () => {
+  let counter = 100
+  type Passkey = ReturnType<typeof createTestAuthenticator>
+
+  /** A vault with two passkeys: the first from setup, a second added with the first's confirmation. */
+  async function twoPasskeys() {
+    const vault = await setUpVault()
+    await call(setupCommit, vault.body)
+    const opts = await call<{ challengeId: string, vaultId: string, publicKey: { challenge: string } }>(credentialOptions)
+    const second = createTestAuthenticator()
+    const kdfSalt = rnd(32)
+    await call(credentialCommit, {
+      challengeId: opts.challengeId,
+      assertion: vault.passkey.createAuthenticationResponse({ challenge: opts.publicKey.challenge, origin: ORIGIN, rpId: RP_ID, counter: ++counter }),
+      credential: second.createRegistrationResponse({ challenge: opts.publicKey.challenge, origin: ORIGIN, rpId: RP_ID }),
+      label: 'Second passkey',
+      prfInput: b64u(rnd(32)),
+      kdfSalt: b64u(kdfSalt),
+      vmkWrap: await wrapVmk(await credentialKek(rnd(32), kdfSalt, opts.vaultId, second.credentialId), vault.vmk, opts.vaultId, second.credentialId),
+    })
+    return { first: vault.passkey, second }
+  }
+
+  async function disable(target: Passkey, confirmWith: Passkey) {
+    const opts = await call<{ challengeId: string, assertion: { challenge: string } }>(actionOptions, { action: 'credential.disable', credentialId: target.credentialId })
+    return call(actionCommit, { challengeId: opts.challengeId, assertion: confirmWith.createAuthenticationResponse({ challenge: opts.assertion.challenge, origin: ORIGIN, rpId: RP_ID, counter: ++counter }) })
+  }
+
+  it('works with a confirmation from a passkey that stays', async () => {
+    const { first, second } = await twoPasskeys()
+    await disable(first, second)
+    const view = await call<{ credentials: Array<{ id: string }> }>(getVault, undefined, 'GET')
+    expect(view.credentials.map(c => c.id)).toEqual([second.credentialId])
+  })
+
+  it('makes the removed passkey useless for confirmations', async () => {
+    const { first, second } = await twoPasskeys()
+    await disable(first, second)
+    const opts = await call<{ challengeId: string, publicKey: { challenge: string } }>(credentialOptions)
+    const third = createTestAuthenticator()
+    expect(await status(call(credentialCommit, {
+      challengeId: opts.challengeId,
+      assertion: first.createAuthenticationResponse({ challenge: opts.publicKey.challenge, origin: ORIGIN, rpId: RP_ID, counter: ++counter }),
+      credential: third.createRegistrationResponse({ challenge: opts.publicKey.challenge, origin: ORIGIN, rpId: RP_ID }),
+      prfInput: b64u(rnd(32)),
+      kdfSalt: b64u(rnd(32)),
+      vmkWrap: { iv: b64u(rnd(12)), ct: b64u(rnd(48)) },
+    }))).toBe(400)
+  })
+
+  it('cannot be confirmed by the passkey being removed', async () => {
+    const { first } = await twoPasskeys()
+    expect(await status(disable(first, first))).toBe(400)
+    const view = await call<{ credentials: unknown[] }>(getVault, undefined, 'GET')
+    expect(view.credentials).toHaveLength(2)
+  })
+
+  it('never removes the last passkey', async () => {
+    const vault = await setUpVault()
+    await call(setupCommit, vault.body)
+    expect(await status(call(actionOptions, { action: 'credential.disable', credentialId: vault.passkey.credentialId }))).toBe(409)
   })
 })

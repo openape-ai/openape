@@ -138,6 +138,14 @@ describe('deleting a secret', () => {
     expect(await call<unknown[]>(listSecrets, vault.me, undefined, 'GET')).toHaveLength(0)
     expect(await status(call(readSecret, vault.me, undefined, 'GET', { id: secret_id }))).toBe(404)
   })
+
+  it('removes every stored version, not only the name', async () => {
+    const vault = await newVault()
+    const { secret_id } = await saveNew(vault, 'OLD_KEY', 'x')
+    await (await prepare(vault, { action: 'secret.delete', secretId: secret_id })).commit()
+    const left = (await useDb().run(`SELECT count(*) AS n FROM vault_secret_versions WHERE secret_id = '${secret_id}'` as never)) as unknown as { rows: Array<{ n: number }> }
+    expect(Number(left.rows[0]!.n)).toBe(0)
+  })
 })
 
 describe('isolation', () => {
