@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import VaultPanel from '../app/components/VaultPanel.vue'
 
 const mocks = vi.hoisted(() => ({ fetch: vi.fn(), authenticate: vi.fn(), register: vi.fn(), call: vi.fn(), dispose: vi.fn() }))
-vi.mock('../app/utils/vault-browser', () => ({ authenticate: mocks.authenticate, register: mocks.register, vaultWorker: () => ({ call: mocks.call, dispose: mocks.dispose }) }))
+vi.mock('../app/utils/vault-browser', () => ({ authenticate: mocks.authenticate, register: mocks.register, vaultWorker: () => ({ call: (command: unknown) => { structuredClone(command); return mocks.call(command) }, dispose: mocks.dispose }) }))
 const view = () => ({ owner: 'human@example.org', vault: {}, credentials: [{ id: 'credential' }], secrets: [], consumers: [{ id: 'machine', publicKey: {}, fingerprint: 'fingerprint', collector: 'agent@example.org' }], registeredConsumers: [], requests: [{ id: 'request', status: 'pending', expiresAt: Date.now() + 60000, requester: 'agent@example.org', consumerId: 'machine', fingerprint: 'fingerprint', secretId: 'new:API_TOKEN', version: 0, purpose: '<script>untrusted reason</script>' }], approvals: [] })
 beforeEach(() => {
   vi.resetAllMocks()
@@ -48,6 +48,20 @@ describe('vault interactions', () => {
     expect(JSON.stringify(mocks.fetch.mock.calls)).not.toContain('locally-revealed-secret')
     await wrapper.findAll('button').find(b => b.text() === 'Hide value')!.trigger('click')
     expect(wrapper.find('pre').exists()).toBe(false)
+    wrapper.unmount()
+  })
+  it('passes stored ciphertext and the recipient key across the worker clone boundary before committing approval', async () => {
+    const v = view()
+    const payload = { value: { ct: 'encrypted-value' }, key: { ct: 'wrapped-key' } }
+    const publicKey = { kty: 'EC', crv: 'P-256', x: 'public-x', y: 'public-y' }
+    const stored = { ...v, secrets: [{ id: 'stored', alias: 'TOKEN', version: 1, payload }], consumers: [{ ...v.consumers[0], publicKey }], requests: [{ ...v.requests[0], secretId: 'stored', version: 1 }] }
+    mocks.fetch.mockImplementation(async (path: string) => path === '/api/v2/vault' ? stored : path.endsWith('/options') ? { challengeId: 'challenge', credentialId: 'credential', wrapper: {}, action: { descriptor: { secretId: 'stored', version: 1 } } } : {})
+    const wrapper = mount(VaultPanel); await flushPromises()
+    await wrapper.findAll('button').find(b => b.text() === 'Release with passkey')!.trigger('click'); await flushPromises()
+    expect(wrapper.find('[role="alert"]').exists()).toBe(false)
+    expect(mocks.call).toHaveBeenCalledWith(expect.objectContaining({ type: 'seal', key: publicKey, payload }))
+    expect(mocks.fetch.mock.calls.find(c => c[0] === '/api/v2/actions/commit')?.[1].body.envelope).toEqual({ format: 'encrypted-envelope' })
+    expect(mocks.dispose).toHaveBeenCalledOnce()
     wrapper.unmount()
   })
   it('does not approve when the user cancels a passkey prompt', async () => {
