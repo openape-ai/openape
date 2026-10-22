@@ -6,6 +6,7 @@ defineProps<{ email?: string, nav?: boolean }>()
 const route = useRoute()
 const links = [
   { to: '/vault', label: 'Vault' },
+  { to: '/vault/approvals', label: 'Approvals' },
   { to: '/vault/passkeys', label: 'Passkeys' },
 ]
 </script>
@@ -25,19 +26,19 @@ const links = [
         </svg>
         Secrets
       </NuxtLink>
-      <nav v-if="nav" aria-label="Main" class="flex flex-1 flex-wrap gap-1">
+      <nav v-if="nav" aria-label="Main" class="order-last flex w-full gap-1 overflow-x-auto sm:order-none sm:w-auto sm:flex-1">
         <NuxtLink
           v-for="link in links"
           :key="link.to"
           :to="link.to"
           :aria-current="route.path === link.to ? 'page' : undefined"
-          class="rounded-[10px] px-3.5 py-2"
+          class="shrink-0 rounded-[10px] px-3.5 py-2"
           :class="route.path === link.to ? 'bg-elevated font-medium text-default' : 'text-muted hover:text-default'"
         >
           {{ link.label }}
         </NuxtLink>
       </nav>
-      <span v-if="email" class="ml-auto text-sm text-dimmed">{{ email }}</span>
+      <span v-if="email" class="ml-auto min-w-0 truncate text-sm text-dimmed">{{ email }}</span>
     </div>
   </header>
 </template>

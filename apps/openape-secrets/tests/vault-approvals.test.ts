@@ -233,3 +233,14 @@ describe('saying no and taking back', () => {
     expect(await call<Array<{ status: string }>>(listApprovals, w.me, undefined, 'GET')).toMatchObject([{ status: 'revoked' }])
   })
 })
+
+describe('the owner\'s notification', () => {
+  it('always names who asks, and quotes the reason without links or line breaks', async () => {
+    const { formatApprovalMessage } = await import('../server/utils/vault-requests')
+    const text = formatApprovalMessage({ fieldName: 'TELEGRAM_BOT_TOKEN', requester: 'bot@agents.example', requesterAct: 'agent', purpose: 'Urgent!\nOpen https://evil.example/login now' }, 'Mac mini', 'https://secrets.test/approve/r1')
+    expect(text).toContain('Asked by bot@agents.example (agent)')
+    expect(text).toContain('Reason given: “Urgent! Open [link removed] now”')
+    expect(text).not.toContain('evil.example')
+    expect(text.trim().split('\n').at(-1)).toBe('https://secrets.test/approve/r1')
+  })
+})

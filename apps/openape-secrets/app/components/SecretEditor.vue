@@ -7,7 +7,7 @@ import { SECRET_TYPE_LABELS } from '~/utils/vault-client'
  * Add a secret, or save a new version of one. The value is typed here and
  * sealed in this browser; the parent does the passkey flow on `save`.
  */
-const props = defineProps<{ secret?: { alias: string, type: SecretType, version: number } | null, busy: boolean, error: string }>()
+const props = defineProps<{ secret?: { alias: string, type: SecretType, version: number } | null, presetAlias?: string, busy: boolean, error: string }>()
 const emit = defineEmits<{ save: [input: { alias: string, type: SecretType, value: string }] }>()
 const open = defineModel<boolean>('open', { required: true })
 
@@ -22,7 +22,7 @@ const canSave = computed(() => !!value.value && (!isNew.value || /^[\w.-]{1,80}$
 
 watch(open, (isOpen) => {
   if (!isOpen) return
-  alias.value = props.secret?.alias ?? ''
+  alias.value = props.secret?.alias ?? props.presetAlias ?? ''
   type.value = props.secret?.type ?? 'token'
   value.value = ''
   reveal.value = false

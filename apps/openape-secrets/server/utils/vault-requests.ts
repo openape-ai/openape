@@ -1,6 +1,4 @@
-import type { H3Event } from 'h3'
 import { and, eq, inArray, isNull } from 'drizzle-orm'
-import { getRequestURL } from 'h3'
 import { keyFingerprint } from '#shared/vault-crypto'
 import { useDb } from '../database/drizzle'
 import type { secretApprovals } from '../database/schema'
@@ -33,8 +31,9 @@ export function approvalStatus(row: ApprovalRow, currentVersion: number | null, 
   return 'active'
 }
 
-export function publicBase(event: H3Event): string {
-  return String(useRuntimeConfig().publicUrl || getRequestURL(event).origin).replace(/\/$/, '')
+/** Links to the vault always use its configured origin, never one taken from request headers. */
+export function publicBase(): string {
+  return String(useRuntimeConfig().vaultOrigin).replace(/\/$/, '')
 }
 
 export function fingerprintOf(publicKeyJwk: string): Promise<string> {
@@ -90,11 +89,29 @@ export function requesterView(row: AccessRequestRow, approvalId?: string) {
 export function announce(row: AccessRequestRow, consumerName: string, approveUrl: string) {
   const { telegramBotToken, telegramChatId, telegramApprover } = useRuntimeConfig()
   if (!telegramBotToken || !telegramChatId || !telegramApprover) return
-  const text = ['Approval needed', '', `${row.fieldName} for ${consumerName}`, row.purpose || `asked by ${row.requester}`, '', approveUrl].join('\n')
+  const text = formatApprovalMessage(row, consumerName, approveUrl)
   void notifyOwner(row.ownerEmail, text, {
     publicUrl: approveUrl,
     approver: String(telegramApprover),
     chatId: String(telegramChatId),
     send: (chatId, message) => sendTelegramMessage(String(telegramBotToken), chatId, message),
   }).catch(err => console.error('[notify] telegram', err))
+}
+
+/**
+ * The owner's chat message. Who asks is always named with its kind; the reason
+ * is the requester's own words, shown as a quote with links and line breaks
+ * removed, so it cannot pose as instructions or as a second link to follow.
+ */
+export function formatApprovalMessage(row: Pick<AccessRequestRow, 'fieldName' | 'purpose' | 'requester' | 'requesterAct'>, consumerName: string, approveUrl: string): string {
+  const reason = row.purpose.replace(/\b[a-z][\w+.-]*:\/\/\S+/gi, '[link removed]').replace(/\s+/g, ' ').trim().slice(0, 200)
+  return [
+    'Approval needed',
+    '',
+    `${row.fieldName} for ${consumerName}`,
+    `Asked by ${row.requester} (${row.requesterAct === 'human' ? 'person' : 'agent'})`,
+    ...(reason ? [`Reason given: “${reason}”`] : []),
+    '',
+    approveUrl,
+  ].join('\n')
 }
