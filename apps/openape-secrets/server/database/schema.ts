@@ -69,6 +69,10 @@ export const vaults = sqliteTable('vaults', {
   id: text('id').primaryKey(),
   ownerEmail: text('owner_email').notNull().unique(),
   format: text('format').notNull().default('v2'),
+  /** Public half of the key that signs every package; the private half is wrapped under the VMK. */
+  signingPublicJwk: text('signing_public_jwk'),
+  signingKeyIv: text('signing_key_iv'),
+  signingKeyCt: text('signing_key_ct'),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 })
@@ -188,6 +192,10 @@ export const secretApprovals = sqliteTable('secret_approvals', {
   packageEpk: text('package_epk').notNull(),
   packageIv: text('package_iv').notNull(),
   packageCt: text('package_ct').notNull(),
+  /** The vault's signature over package and context. Package fields are emptied once nothing can collect them. */
+  packageSig: text('package_sig').notNull().default(''),
+  collectCount: integer('collect_count').notNull().default(0),
+  lastCollectedAt: integer('last_collected_at'),
   credentialId: text('credential_id').notNull(),
   createdAt: integer('created_at').notNull(),
   consumedAt: integer('consumed_at'),

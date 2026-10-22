@@ -24,6 +24,8 @@ export default defineEventHandler(async (event) => {
       expires_at: row.expiresAt,
       created_at: row.createdAt,
       consumed_at: row.consumedAt,
+      collect_count: row.collectCount,
+      last_collected_at: row.lastCollectedAt,
       revoked_at: row.revokedAt,
       requester: row.requester,
       consumer: { id: row.consumerId, name: machines.find(m => m.id === row.consumerId)?.name ?? 'Unknown machine', fingerprint: row.consumerFingerprint },
