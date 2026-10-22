@@ -1,7 +1,7 @@
 import type { Caller, SetupOptions } from './support/vault'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createTestAuthenticator } from '../../../packages/auth/src/__tests__/webauthn-test-authenticator'
-import { keyFingerprint, openDelivery, openSecret, sealDelivery, sealSecret } from '../shared/vault-crypto'
+import { createSigningKey, keyFingerprint, openDelivery, openSecret, openSigningKey, sealDelivery, sealSecret, signDelivery, verifyDelivery } from '../shared/vault-crypto'
 import { call, caller, ORIGIN, RP_ID, status, VAULT_TABLE_NAMES, vaultSetupBody } from './support/vault'
 
 // Agents ask for a vault secret for one of the owner's machines; the owner
@@ -40,8 +40,11 @@ const approvalCommit = (await import('../server/api/v2/requests/[id]/approval/co
 const denyRequest = (await import('../server/api/v2/requests/[id]/deny.post')).default
 const listApprovals = (await import('../server/api/v2/approvals/index.get')).default
 const revokeApproval = (await import('../server/api/v2/approvals/[id]/revoke.post')).default
+const collectApproval = (await import('../server/api/v2/approvals/[id]/collect.post')).default
+const { sweepApprovalPackages } = await import('../server/utils/vault-requests')
 const { useDb } = await import('../server/database/drizzle')
-const { consumers } = await import('../server/database/schema')
+const { consumers, secretApprovals, vaults } = await import('../server/database/schema')
+const { eq } = await import('drizzle-orm')
 
 let signCount = 0
 const AGENT: Caller = { email: 'mail-triage@agents.example', act: 'agent' }
@@ -81,19 +84,24 @@ interface ApprovalOptions {
   descriptor: { secretId: string, version: number, consumerKeyFingerprint: string, mode: string, expiresAt: number | null }
   consumer: { publicKeyJwk: JsonWebKey }
   sealed: Parameters<typeof openSecret>[1] | null
+  signing: { keyWrap: { iv: string, ct: string } } | null
   assertion: { challenge: string }
 }
 
 /** The owner's browser: open the secret, seal it for the machine, confirm with a passkey; `commit` sends it. */
-async function approve(w: World, requestId: string, mode = { mode: 'once' } as Record<string, unknown>, options: { who?: Caller, signer?: ReturnType<typeof createTestAuthenticator>, before?: () => Promise<unknown> } = {}) {
+async function approve(w: World, requestId: string, mode = { mode: 'once' } as Record<string, unknown>, options: { who?: Caller, signer?: ReturnType<typeof createTestAuthenticator>, before?: () => Promise<unknown>, signature?: string } = {}) {
   const who = options.who ?? w.me
   const opts = await call<ApprovalOptions>(approvalOptions, who, mode, 'POST', { id: requestId })
   const d = opts.descriptor
   const value = await openSecret(w.vault.vmk, opts.sealed!, { vaultId: w.vault.id, secretId: d.secretId, version: d.version })
-  const pkg = await sealDelivery(opts.consumer.publicKeyJwk, value, { approvalId: opts.approvalId, consumerKeyFingerprint: d.consumerKeyFingerprint, secretId: d.secretId, version: d.version })
+  const context = { vaultId: w.vault.id, approvalId: opts.approvalId, consumerKeyFingerprint: d.consumerKeyFingerprint, secretId: d.secretId, version: d.version }
+  const pkg = await sealDelivery(opts.consumer.publicKeyJwk, value, context)
+  // A vault without a signing key gets one now, wrapped under the VMK this approval unlocked.
+  const signingKey = opts.signing ? undefined : await createSigningKey(w.vault.vmk, w.vault.id)
+  const signature = await signDelivery(await openSigningKey(w.vault.vmk, opts.signing ?? signingKey!, w.vault.id), pkg, context)
   await options.before?.()
   const assertion = w.vault.passkey.createAuthenticationResponse({ challenge: opts.assertion.challenge, origin: ORIGIN, rpId: RP_ID, counter: ++signCount, signingKey: options.signer?.privateKey })
-  const body = { challengeId: opts.challengeId, assertion, package: pkg }
+  const body = { challengeId: opts.challengeId, assertion, package: pkg, signature: options.signature ?? signature, signingKey }
   return { opts, body, commit: () => call<{ id: string, status: string, mode: string }>(approvalCommit, who, body, 'POST', { id: requestId }) }
 }
 
@@ -243,5 +251,139 @@ describe('the owner\'s notification', () => {
     expect(text).not.toContain('evil')
     expect(text).not.toContain('Urgent')
     expect(text.trim().split('\n').at(-1)).toBe('https://secrets.test/approve/r1')
+  })
+})
+
+describe('package signatures', () => {
+  it('an approval with a signature that does not match the package is refused', async () => {
+    const w = await world()
+    await saveSecret(w, 'A', 'x')
+    const req = await asAgent<RequestView>(createRequest, { consumerId: w.machine.id, secret: 'A' })
+    const { commit } = await approve(w, req.id, { mode: 'once' }, { signature: 'A'.repeat(86) })
+    expect(await status(commit())).toBe(400)
+  })
+})
+
+describe('collecting', () => {
+  interface Collected {
+    approval_id: string
+    vault_id: string
+    consumer_key_fingerprint: string
+    secret: { id: string, version: number }
+    package: { epk: string, iv: string, ct: string }
+    signature: string
+    vault_signing_key: JsonWebKey
+  }
+
+  async function approved(mode: Record<string, unknown> = { mode: 'once' }) {
+    const w = await world()
+    const { secret_id } = await saveSecret(w, 'TELEGRAM_BOT_TOKEN', 'tg-123')
+    const req = await asAgent<RequestView>(createRequest, { consumerId: w.machine.id, secret: 'TELEGRAM_BOT_TOKEN' })
+    const { opts, commit } = await approve(w, req.id, mode)
+    await commit()
+    return { w, approvalId: opts.approvalId, secretId: secret_id }
+  }
+
+  const collect = (approvalId: string, agent = AGENT) => asAgent<Collected>(collectApproval, undefined, 'POST', { id: approvalId }, agent)
+
+  /** What the machine does: check the vault signature, then open with its own key. */
+  async function machineOpens(w: World, c: Collected) {
+    const context = { vaultId: c.vault_id, approvalId: c.approval_id, consumerKeyFingerprint: c.consumer_key_fingerprint, secretId: c.secret.id, version: c.secret.version }
+    expect(await verifyDelivery(c.vault_signing_key, c.package, context, c.signature)).toBe(true)
+    return openDelivery(w.machine.privateJwk, c.package, context)
+  }
+
+  it('hands a once approval to the requester exactly one time, then forgets the package', async () => {
+    const { w, approvalId } = await approved()
+    expect(await machineOpens(w, await collect(approvalId))).toBe('tg-123')
+    expect(await status(collect(approvalId))).toBe(410)
+    const row = await useDb().select().from(secretApprovals).where(eq(secretApprovals.id, approvalId)).get()
+    expect(row).toMatchObject({ status: 'consumed', packageCt: '' })
+  })
+
+  it('gives at most one of two simultaneous once collections a package', async () => {
+    const { approvalId } = await approved()
+    const results = await Promise.all([status(collect(approvalId)), status(collect(approvalId)), status(collect(approvalId))])
+    expect(results.filter(r => r === 200)).toHaveLength(1)
+  })
+
+  it('refuses anyone but the identity that asked', async () => {
+    const { w, approvalId } = await approved()
+    expect(await status(collect(approvalId, { email: 'other@agents.example', act: 'agent' }))).toBe(404)
+    expect(await status(collect(approvalId, { email: w.me.email, act: 'human' }))).toBe(404)
+  })
+
+  it('lets a timed approval collect repeatedly, and not at or after its end', async () => {
+    const { w, approvalId } = await approved({ mode: 'timed', durationSec: 900 })
+    await collect(approvalId)
+    await collect(approvalId)
+    await useDb().update(secretApprovals).set({ expiresAt: Math.floor(Date.now() / 1000) }).where(eq(secretApprovals.id, approvalId))
+    expect(await status(collect(approvalId))).toBe(410)
+    expect(await call<Array<{ status: string, collect_count: number }>>(listApprovals, w.me, undefined, 'GET')).toMatchObject([{ status: 'expired', collect_count: 2 }])
+  })
+
+  it('stops a standing approval when the secret gets a new version', async () => {
+    const { w, approvalId, secretId } = await approved({ mode: 'standing' })
+    await collect(approvalId)
+    await saveSecret(w, 'TELEGRAM_BOT_TOKEN', 'tg-456', secretId)
+    expect(await status(collect(approvalId))).toBe(409)
+  })
+
+  it('stops after revoking', async () => {
+    const { w, approvalId } = await approved({ mode: 'standing' })
+    await call(revokeApproval, w.me, undefined, 'POST', { id: approvalId })
+    expect(await status(collect(approvalId))).toBe(410)
+  })
+
+  it('stops when the machine key changed', async () => {
+    const { w, approvalId } = await approved({ mode: 'standing' })
+    const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])
+    const { kty, crv, x, y } = await crypto.subtle.exportKey('jwk', pair.publicKey)
+    await useDb().update(consumers).set({ publicKeyJwk: JSON.stringify({ kty, crv, x, y }) }).where(eq(consumers.id, w.machine.id))
+    expect(await status(collect(approvalId))).toBe(409)
+  })
+
+  it('records refused collections in the audit log', async () => {
+    const { approvalId } = await approved()
+    await status(collect(approvalId, { email: 'other@agents.example', act: 'agent' }))
+    const audit = (await useDb().run('SELECT event, result FROM secret_audit_events' as never)) as unknown as { rows: Array<{ event: string, result: string }> }
+    expect(audit.rows).toContainEqual({ event: 'approval.collect', result: 'refused' })
+  })
+
+  it('removes packages that can no longer be collected', async () => {
+    // Revoked before revoking emptied packages itself (rows from before this change).
+    const { approvalId } = await approved({ mode: 'standing' })
+    await useDb().update(secretApprovals).set({ status: 'revoked' }).where(eq(secretApprovals.id, approvalId))
+    const timed = await approved({ mode: 'timed', durationSec: 900 })
+    await useDb().update(secretApprovals).set({ expiresAt: Math.floor(Date.now() / 1000) - 1 }).where(eq(secretApprovals.id, timed.approvalId))
+    await sweepApprovalPackages()
+    const rows = await useDb().select({ ct: secretApprovals.packageCt }).from(secretApprovals).all()
+    expect(rows.every(r => r.ct === '')).toBe(true)
+  })
+
+  it('creates a missing vault signing key during the next approval', async () => {
+    const w = await world()
+    await useDb().update(vaults).set({ signingPublicJwk: null, signingKeyIv: null, signingKeyCt: null }).where(eq(vaults.id, w.vault.id))
+    await saveSecret(w, 'A', 'x')
+    const req = await asAgent<RequestView>(createRequest, { consumerId: w.machine.id, secret: 'A' })
+    const { opts, commit } = await approve(w, req.id)
+    expect(opts.signing).toBeNull()
+    await commit()
+    const vault = await useDb().select().from(vaults).where(eq(vaults.id, w.vault.id)).get()
+    expect(vault?.signingPublicJwk).toBeTruthy()
+    const c = await collect(opts.approvalId)
+    expect(c.vault_signing_key).toEqual(JSON.parse(vault!.signingPublicJwk!))
+    expect(await machineOpens(w, c)).toBe('x')
+  })
+})
+
+describe('limits', () => {
+  it('slows down a caller that asks too often', async () => {
+    const w = await world()
+    const noisy = { email: 'noisy@agents.example', act: 'agent' }
+    const results: number[] = []
+    for (let i = 0; i < 61; i++) results.push(await status(asAgent(createRequest, { consumerId: w.machine.id, secret: 'X' }, 'POST', {}, noisy)))
+    expect(results.slice(0, 60).every(r => r === 404)).toBe(true)
+    expect(results[60]).toBe(429)
   })
 })

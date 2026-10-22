@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { defineEventHandler } from 'h3'
+import { keyFingerprint } from '#shared/vault-crypto'
 import { useDb } from '../../../database/drizzle'
 import { vaultRecovery, vaults } from '../../../database/schema'
 import { requireVaultOwner } from '../../../utils/vault-owner'
@@ -24,6 +25,8 @@ export default defineEventHandler(async (event) => {
     id: vault.id,
     created_at: vault.createdAt,
     has_recovery: !!recovery,
+    /** Machines pin this key to tell vault-made packages from injected ones. */
+    signing_key_fingerprint: vault.signingPublicJwk ? await keyFingerprint(JSON.parse(vault.signingPublicJwk) as JsonWebKey) : null,
     credentials: credentials.map(c => ({
       id: c.id,
       label: c.label,

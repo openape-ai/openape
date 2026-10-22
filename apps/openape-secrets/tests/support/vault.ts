@@ -1,5 +1,5 @@
 import { createTestAuthenticator } from '../../../../packages/auth/src/__tests__/webauthn-test-authenticator'
-import { b64u, createRecovery, credentialKek, newRecoverySecret, newVmk, wrapVmk } from '../../shared/vault-crypto'
+import { b64u, createRecovery, createSigningKey, credentialKek, newRecoverySecret, newVmk, wrapVmk } from '../../shared/vault-crypto'
 
 // Shared plumbing for the vault route tests. WebAuthn responses come from the
 // repository's software authenticator and go through real verification; only
@@ -67,6 +67,7 @@ export async function vaultSetupBody(opts: SetupOptions) {
     kdfSalt: b64u(kdfSalt),
     vmkWrap: await wrapVmk(kek, vmk, opts.vaultId, passkey.credentialId),
     recovery: await createRecovery(vmk, recoverySecret, opts.vaultId),
+    signingKey: await createSigningKey(vmk, opts.vaultId),
   }
   return { passkey, prf, kdfSalt, vmk, recoverySecret, body }
 }

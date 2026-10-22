@@ -123,6 +123,12 @@ export const VAULT_TABLES = [
 /** Columns added after a table first shipped. Re-running one is a no-op. */
 const VAULT_COLUMNS = [
   `ALTER TABLE webauthn_challenges ADD COLUMN descriptor TEXT`,
+  `ALTER TABLE vaults ADD COLUMN signing_public_jwk TEXT`,
+  `ALTER TABLE vaults ADD COLUMN signing_key_iv TEXT`,
+  `ALTER TABLE vaults ADD COLUMN signing_key_ct TEXT`,
+  `ALTER TABLE secret_approvals ADD COLUMN package_sig TEXT NOT NULL DEFAULT ''`,
+  `ALTER TABLE secret_approvals ADD COLUMN collect_count INTEGER NOT NULL DEFAULT 0`,
+  `ALTER TABLE secret_approvals ADD COLUMN last_collected_at INTEGER`,
 ]
 
 /** Create every vault table, then add later columns to tables that predate them. */
