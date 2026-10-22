@@ -19,6 +19,8 @@ export default defineNuxtConfig({
     // DB — overridden at runtime by NUXT_TURSO_URL. Local dev file default so
     // `pnpm dev` works without env setup. Production MUST set NUXT_TURSO_URL
     // (path under shared/ so it survives deploy rotation).
+    secretsVaultEnabled: false,
+    secretsVaultOrigin: 'https://secrets.openape.ai',
     tursoUrl: 'file:./dev.db',
     tursoAuthToken: '',
     // Telegram leg of the request notification. All three empty by default:
@@ -34,6 +36,12 @@ export default defineNuxtConfig({
     public: {
       siteName: 'OpenApe Secrets',
     },
+  },
+
+  routeRules: {
+    '/vault': { headers: { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY', 'Cross-Origin-Opener-Policy': 'same-origin' } },
+    '/prf-check': { headers: { 'Cache-Control': 'no-store', 'Referrer-Policy': 'no-referrer', 'X-Frame-Options': 'DENY' } },
+    '/api/v2/**': { headers: { 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' } },
   },
 
   colorMode: {
@@ -53,7 +61,7 @@ export default defineNuxtConfig({
         {
           id: 'secrets:request',
           description: 'Ask you to supply a secret for one of your machines. Never grants access to any value.',
-          grants: ['POST /api/requests', 'GET /api/requests', 'GET /api/requests/:id'],
+          grants: ['POST /api/requests', 'GET /api/requests', 'GET /api/requests/:id', 'POST /api/v2/requests', 'POST /api/v2/requests/:id/cancel', 'GET /api/v2/requests/:id', 'POST /api/v2/approvals/:id/collect'],
         },
         {
           id: 'secrets:manage',

@@ -17,6 +17,7 @@ export interface ConsumerKey {
 }
 
 export function keyPath(consumerId: string): string {
+  if (!/^[\w-]{1,128}$/.test(consumerId)) throw new Error('Invalid consumer ID')
   return join(KEY_DIR, `${consumerId}.json`)
 }
 
@@ -43,7 +44,12 @@ export function loadKey(consumerId: string): ConsumerKey {
   if (!existsSync(path)) {
     throw new Error(`No private key for consumer ${consumerId} on this machine (${path}). Run \`ape-secrets keygen\` here, or collect on the machine that owns the key.`)
   }
-  return JSON.parse(readFileSync(path, 'utf8')) as ConsumerKey
+  try {
+    const key = JSON.parse(readFileSync(path, 'utf8')) as ConsumerKey
+    if (key.consumerId !== consumerId || !key.privateJwk?.d) throw new Error('Invalid key')
+    return key
+  }
+  catch { throw new Error('Invalid local consumer key file') }
 }
 
 export interface SealedBox { epk: string, salt: string, iv: string, ct: string }

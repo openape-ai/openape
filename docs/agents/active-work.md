@@ -1,3 +1,10 @@
+# PRF Secrets vault — issue 1533
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1533. Branch `feat/issue-1533-secrets-prf-vault`, checkout `Documents/Codex/2026-10-22/pass/work/openape-reference`, canonical base `a08ca73c76d5c4d5e662f5330cc9071b53ef143a`. PR and final check receipts pending.
+- Implements browser PRF/VMK/DEK encryption, independent recovery, fresh human passkey approval, Secrets-local once/timed/standing releases, and silent direct CLI delivery. Existing DDISA and grants remain unchanged; no MITM/proxy is introduced. V2 is disabled by default.
+- Focused real-signature WebAuthn, crypto, component, concurrency and CLI tests are being verified; app build passed. Physical PRF/provider and authenticated browser acceptance are pending and must not be inferred from software authenticator tests. See `apps/openape-secrets/docs/prf-vault.md` for boundaries and rollout.
+- Next: finish repository gate, review/push the native PR, publish exact test evidence, and complete the interactive PRF/real-login pilot before enabling production. Deployment requires the full gate and tested-image procedure.
+
 # Model API settings and latest family versions — issue 1532
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1532. Native PR: https://repos.openape.ai/patrick/monorepo/pulls/495, with an explicit issue relation. Approved revision 4: https://report.openape.ai/d/01M5DAMFMDW26PAF781Z9T2A26?v=10.
