@@ -41,7 +41,7 @@ not recall a value a machine already collected.
 
 ## Owner flows
 
-`/vault/setup` creates the first passkey (PRF checked in a second ceremony),
+`/vault/setup` creates the first passkey (one confirmation when the authenticator returns PRF output at creation; otherwise two local ceremonies whose PRF output must match),
 the recovery kit and the signing key. `/vault` stores, shows, versions and
 deletes secrets; every change needs a fresh passkey. `/approve/:id` approves
 one request (once, for a while, until revoked). `/vault/approvals` lists and

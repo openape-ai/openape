@@ -1,10 +1,10 @@
-# Secrets PRF vault, milestone M5 — issue 1535
+# Secrets PRF vault, single-confirmation setup — issue 1535
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Approved plan revision 2: https://report.openape.ai/d/01M5JEGAHN8GK0VWGQ4HAYH0VM. M4 merged as `adb162273d42103b6b5fc2b4760b774fe5fadded` (PR 501, receipt on the PR and issue).
-- Branch `feature/issue-1535-secrets-rollout`, worktree `openape-monorepo.worktrees/secrets-vault`, canonical base `adb162273d42103b6b5fc2b4760b774fe5fadded`.
-- Code part of M5: remove lost passkeys (confirmed by a passkey that stays, never the last one), `NUXT_VAULT_OWNERS` rollout allowlist, deleting a secret removes its ciphertext, PRF inputs limited to allowed passkeys (browser bug found end to end), and `docs/operations/secrets-vault.md` (configuration, stored data, retention, rollout, rollback).
-- Verification at `499de18a`: 99 app tests including 7 new, 4 safeguard mutations caught, lint/typecheck/build, pre-push gate, 46 of 46 end-to-end checks. Test Run: https://report.openape.ai/d/01M5JP0YH599Y2SC8KMQXK7P6Z
-- Next: owner review and merge; then, with the owner's go-ahead, `pnpm check:ci`, deploy with the vault disabled, enable it for `patrick@hofmann.eco`, and the owner's hardware acceptance. Open: VMK rotation after a suspected exposure.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Live since 2026-10-22 as `prod-db2ad6ba5`, enabled for patrick@hofmann.eco only (receipts on PR 502 and 503).
+- Branch `feature/issue-1535-single-confirm-setup`, worktree `openape-monorepo.worktrees/secrets-vault`, canonical base `db2ad6ba59786a6ac127bb4cad90ed247b8d7915`.
+- Owner decision after setting up the vault: when the authenticator returns PRF output while creating a passkey, creation needs no second confirmation; authenticators without PRF at creation keep the two-ceremony stability check. Applies to setup, adding a passkey and recovery.
+- Verification: lint/typecheck, 47 of 47 end-to-end checks; setup counted one creation, PRF at creation and no extra confirmation. The fallback path is not exercised by the virtual authenticator.
+- Next: owner review, merge and deploy; then the remaining hardware acceptance.
 
 # Model API settings and latest family versions — issue 1532
 
