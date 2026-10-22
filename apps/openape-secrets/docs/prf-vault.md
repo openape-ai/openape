@@ -9,7 +9,8 @@ protocol are unchanged. There is no proxy, credential-injecting gateway or MITM.
 ## Milestones and acceptance
 
 - M0: canonical source/auth boundary inspected; interactive `/prf-check` diagnostic
-  added. Physical passkey/browser compatibility remains an explicit manual gate.
+  added. User-reported Arc + Apple Passwords/iCloud Keychain passed on localhost;
+  production-origin and additional-device compatibility remain manual gates.
 - M1: browser/Node WebCrypto format, per-passkey wrapping with a local wrap/unwrap self-check, separate offline recovery
   proof, additional-passkey enrollment and encrypted immutable versions implemented.
 - M2: `/vault` supports setup, encrypted storage/replacement, consumer binding,
@@ -21,6 +22,19 @@ protocol are unchanged. There is no proxy, credential-injecting gateway or MITM.
 - M5: unit, component, real-signature WebAuthn and database contention tests; deployment
   remains disabled until the repository gate, physical PRF and authenticated browser
   acceptance have passed. Software authenticator tests do not prove hardware PRF.
+
+### Physical diagnostic receipt (2026-10-22)
+
+Patrick reported a successful interactive run in Arc using Apple Passwords/iCloud
+Keychain at `http://localhost:3025`, timestamp `2026-10-22T09:56:15.058Z`.
+The diagnostic returned `status: passed`, `userVerification: true`,
+`stablePrf: true`, and `distinctInputs: true`; its user agent reported
+`Chrome/153.0.0.0`. This is user-supplied device evidence, not an agent-observed
+authenticated vault flow. The reduced user-agent string does not establish the
+actual OS version or CPU. A Bluetooth attempt in the ChatGPT in-app browser failed
+according to the same report; its cause has not been isolated. Use Arc for the next
+pilot. Production RP/origin, a second device, cancellation, recovery and the full
+DDISA/browser/CLI flow still require acceptance. No PRF output was recorded.
 
 ## Identity and key boundaries
 
