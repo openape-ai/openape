@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createRecovery,
+  createSigningKey,
   credentialKek,
   ctx,
   formatRecoveryCode,
@@ -9,10 +10,13 @@ import {
   openDelivery,
   openRecovery,
   openSecret,
+  openSigningKey,
   parseRecoveryCode,
   sealDelivery,
   sealSecret,
+  signDelivery,
   unwrapVmk,
+  verifyDelivery,
   verifyRecoveryProof,
   wrapVmk,
 } from '../shared/vault-crypto'
@@ -198,5 +202,40 @@ describe('delivery package', () => {
     const machine = await machineKey()
     const swapped = await machineKey()
     await expect(sealDelivery(swapped.publicJwk, 'x', delivery(machine.fingerprint))).rejects.toThrow()
+  })
+})
+
+describe('vault-signed packages', () => {
+  async function signed() {
+    const vmk = rnd(32)
+    const record = await createSigningKey(vmk, 'v1')
+    const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])
+    const { kty, crv, x, y } = await crypto.subtle.exportKey('jwk', pair.publicKey)
+    const machine = { kty, crv, x, y }
+    const context = { vaultId: 'v1', approvalId: 'a1', consumerKeyFingerprint: await keyFingerprint(machine), secretId: 's1', version: 2 }
+    const pkg = await sealDelivery(machine, 'value', context)
+    const signature = await signDelivery(await openSigningKey(vmk, record, 'v1'), pkg, context)
+    return { vmk, record, pkg, context, signature }
+  }
+
+  it('verifies with the vault\'s public signing key', async () => {
+    const { record, pkg, context, signature } = await signed()
+    expect(await verifyDelivery(record.publicJwk, pkg, context, signature)).toBe(true)
+  })
+
+  it('fails for a changed package, context or vault, or another vault\'s key', async () => {
+    const { record, pkg, context, signature } = await signed()
+    const other = await createSigningKey(rnd(32), 'v2')
+    const ct = pkg.ct.slice(0, -2) + (pkg.ct.endsWith('AA') ? 'AB' : 'AA')
+    expect(await verifyDelivery(record.publicJwk, { ...pkg, ct }, context, signature)).toBe(false)
+    expect(await verifyDelivery(record.publicJwk, pkg, { ...context, approvalId: 'a2' }, signature)).toBe(false)
+    expect(await verifyDelivery(record.publicJwk, pkg, { ...context, vaultId: 'v2' }, signature)).toBe(false)
+    expect(await verifyDelivery(other.publicJwk, pkg, context, signature)).toBe(false)
+  })
+
+  it('keeps the private signing key locked under the vault key', async () => {
+    const { record } = await signed()
+    expect(JSON.stringify(record)).not.toContain('"d"')
+    await expect(openSigningKey(rnd(32), record, 'v1')).rejects.toThrow()
   })
 })
