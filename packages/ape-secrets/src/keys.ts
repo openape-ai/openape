@@ -1,14 +1,13 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
-import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { webcrypto } from 'node:crypto'
+import { getConfigDir } from '@openape/cli-auth'
 
 /**
  * The private key never leaves this machine — that is the whole arrangement.
  * It is generated here, only the public half is registered, and the file is
  * written 0600. Whoever compromises the service gets envelopes and no keys.
  */
-const KEY_DIR = join(homedir(), '.config', 'apes', 'secrets')
 
 export interface ConsumerKey {
   consumerId: string
@@ -18,7 +17,7 @@ export interface ConsumerKey {
 
 export function keyPath(consumerId: string): string {
   if (!/^[\w-]{1,128}$/.test(consumerId)) throw new Error('Invalid consumer ID')
-  return join(KEY_DIR, `${consumerId}.json`)
+  return join(getConfigDir(), 'secrets', `${consumerId}.json`)
 }
 
 export async function generateKeyPair(): Promise<{ publicJwk: JsonWebKey, privateJwk: JsonWebKey }> {
