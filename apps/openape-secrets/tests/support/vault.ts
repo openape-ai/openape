@@ -71,4 +71,4 @@ export async function vaultSetupBody(opts: SetupOptions) {
   return { passkey, prf, kdfSalt, vmk, recoverySecret, body }
 }
 
-export const VAULT_TABLE_NAMES = ['secret_audit_events', 'webauthn_challenges', 'vault_secret_versions', 'vault_secrets', 'vault_recovery', 'vault_credentials', 'vaults']
+export const VAULT_TABLE_NAMES = ['secret_approvals', 'secret_access_requests', 'secret_audit_events', 'webauthn_challenges', 'vault_secret_versions', 'vault_secrets', 'vault_recovery', 'vault_credentials', 'vaults']
