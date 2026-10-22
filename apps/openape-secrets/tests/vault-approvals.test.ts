@@ -41,6 +41,7 @@ const denyRequest = (await import('../server/api/v2/requests/[id]/deny.post')).d
 const listApprovals = (await import('../server/api/v2/approvals/index.get')).default
 const revokeApproval = (await import('../server/api/v2/approvals/[id]/revoke.post')).default
 const collectApproval = (await import('../server/api/v2/approvals/[id]/collect.post')).default
+const readApproval = (await import('../server/api/v2/approvals/[id].get')).default
 const { sweepApprovalPackages } = await import('../server/utils/vault-requests')
 const { useDb } = await import('../server/database/drizzle')
 const { consumers, secretApprovals, vaults } = await import('../server/database/schema')
@@ -341,6 +342,15 @@ describe('collecting', () => {
     const { kty, crv, x, y } = await crypto.subtle.exportKey('jwk', pair.publicKey)
     await useDb().update(consumers).set({ publicKeyJwk: JSON.stringify({ kty, crv, x, y }) }).where(eq(consumers.id, w.machine.id))
     expect(await status(collect(approvalId))).toBe(409)
+  })
+
+  it('tells the requester which machine an approval is for, before anything is collected', async () => {
+    const { w, approvalId } = await approved()
+    const meta = await asAgent<Record<string, unknown>>(readApproval, undefined, 'GET', { id: approvalId })
+    expect(meta).toMatchObject({ id: approvalId, status: 'active', mode: 'once', consumer_id: w.machine.id, consumer_key_fingerprint: await keyFingerprint(w.machine.publicJwk) })
+    expect(JSON.stringify(meta)).not.toMatch(/package|signature|epk/)
+    expect(await status(asAgent(readApproval, undefined, 'GET', { id: approvalId }, { email: 'other@agents.example', act: 'agent' }))).toBe(404)
+    expect(await asAgent<{ status: string }>(readApproval, undefined, 'GET', { id: approvalId })).toMatchObject({ status: 'active' })
   })
 
   it('records refused collections in the audit log', async () => {
