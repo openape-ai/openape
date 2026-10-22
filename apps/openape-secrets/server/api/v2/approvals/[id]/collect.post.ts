@@ -4,6 +4,7 @@ import { useDb } from '../../../../database/drizzle'
 import { consumers, secretApprovals, vaults } from '../../../../database/schema'
 import { createProblemError } from '../../../../utils/problem'
 import { rateLimit } from '../../../../utils/rate-limit'
+import { vaultOwnerAllowed } from '../../../../utils/vault-owner'
 import { audit, nowSec } from '../../../../utils/vault-passkeys'
 import { approvalStatus, auditRefusal, currentVersionOf, EMPTY_PACKAGE, fingerprintOf } from '../../../../utils/vault-requests'
 
@@ -27,7 +28,7 @@ export default defineEventHandler(async (event) => {
 
   const approval = await db.select().from(secretApprovals).where(eq(secretApprovals.id, id)).get()
   // Only the identity the owner approved for may collect; everyone else sees no approval at all.
-  if (!approval || approval.requester !== caller.email) {
+  if (!approval || approval.requester !== caller.email || !vaultOwnerAllowed(approval.ownerEmail)) {
     await auditRefusal({ actor: caller.email, event: 'approval.collect', vaultId: approval?.vaultId })
     throw createProblemError({ status: 404, title: 'Approval not found' })
   }

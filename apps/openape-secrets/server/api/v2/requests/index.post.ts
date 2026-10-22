@@ -6,6 +6,7 @@ import { secretAccessRequests, vaults, vaultSecrets } from '../../../database/sc
 import { loadConsumer } from '../../../utils/access'
 import { createProblemError } from '../../../utils/problem'
 import { rateLimit } from '../../../utils/rate-limit'
+import { vaultOwnerAllowed } from '../../../utils/vault-owner'
 import { nowSec } from '../../../utils/vault-passkeys'
 import { announce, DEFAULT_REQUEST_TTL_SEC, fingerprintOf, MAX_REQUEST_TTL_SEC, publicBase, requesterView } from '../../../utils/vault-requests'
 import { aliasField } from '../../../utils/vault-secrets'
@@ -26,6 +27,7 @@ export default defineEventHandler(async (event) => {
   const consumerId = typeof body.consumerId === 'string' ? body.consumerId : ''
   const fieldName = aliasField(body.secret)
   const consumer = await loadConsumer(consumerId, caller.email)
+  if (!vaultOwnerAllowed(consumer.ownerEmail)) throw createProblemError({ status: 404, title: 'Not found' })
 
   const db = useDb()
   const vault = await db.select({ id: vaults.id }).from(vaults).where(eq(vaults.ownerEmail, consumer.ownerEmail)).get()
