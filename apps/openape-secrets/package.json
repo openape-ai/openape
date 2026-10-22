@@ -18,6 +18,7 @@
     "@nuxt/ui": "catalog:",
     "@openape/core": "workspace:*",
     "@openape/nuxt-auth-sp": "workspace:*",
+    "@openape/sp-tasks": "workspace:*",
     "@simplewebauthn/server": "^13.3.2",
     "drizzle-orm": "catalog:",
     "h3": "catalog:",
