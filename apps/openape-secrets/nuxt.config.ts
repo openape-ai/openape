@@ -44,6 +44,8 @@ export default defineNuxtConfig({
     // are bound to this WebAuthn RP ID and origin; production sets
     // NUXT_VAULT_RP_ID=secrets.openape.ai and NUXT_VAULT_ORIGIN=https://secrets.openape.ai.
     vaultEnabled: false,
+    // Rollout allowlist (NUXT_VAULT_OWNERS, comma-separated emails). Empty: every owner.
+    vaultOwners: '',
     vaultRpId: 'localhost',
     vaultOrigin: 'http://localhost:3025',
     public: {
