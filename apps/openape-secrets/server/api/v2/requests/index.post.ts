@@ -51,7 +51,7 @@ export default defineEventHandler(async (event) => {
   }
   await db.insert(secretAccessRequests).values(row)
 
-  const approveUrl = `${publicBase(event)}/approve/${row.id}`
+  const approveUrl = `${publicBase()}/approve/${row.id}`
   announce(row, consumer.name, approveUrl)
   setResponseStatus(event, 201)
   return { ...requesterView(row), approve_url: approveUrl }
