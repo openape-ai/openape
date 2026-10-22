@@ -2,7 +2,7 @@
 import type { VaultView } from '~/utils/vault-client'
 import { onMounted, ref } from 'vue'
 import { useOpenApeAuth } from '#imports'
-import { addPasskey, flowError, loadVault, testUnlock } from '~/utils/vault-client'
+import { addPasskey, flowError, loadVault, shortFingerprint, testUnlock } from '~/utils/vault-client'
 
 const { user, fetchUser } = useOpenApeAuth()
 const ready = ref(false)
@@ -129,6 +129,18 @@ onMounted(async () => {
               <UButton icon="i-lucide-key-round" :loading="busy === 'unlock'" :disabled="!!busy" class="self-start" @click="unlock">
                 Test unlock
               </UButton>
+            </div>
+            <div v-if="vault.signing_key_fingerprint" class="flex flex-col gap-2 rounded-[20px] border border-default p-5">
+              <h2 class="text-[15px] font-semibold">
+                Vault key
+              </h2>
+              <div class="flex items-center gap-3">
+                <KeySeal :fingerprint="vault.signing_key_fingerprint" :size="34" tone="brass" />
+                <span class="font-mono text-[13px] tracking-[0.04em]">{{ shortFingerprint(vault.signing_key_fingerprint) }}</span>
+              </div>
+              <p class="text-sm text-muted">
+                Every handover is signed with this key. Your machines check the signature before they open a value.
+              </p>
             </div>
             <div class="flex flex-col gap-2 rounded-[20px] border border-default p-5">
               <h2 class="text-[15px] font-semibold">

@@ -112,6 +112,9 @@ onMounted(async () => {
               </div>
               <div class="flex-[0_0_170px] text-sm">
                 {{ ends(a) }}
+                <div class="text-[13px] text-dimmed">
+                  {{ a.collect_count ? `Collected ${a.collect_count === 1 ? 'once' : `${a.collect_count} times`}` : 'Not collected yet' }}
+                </div>
               </div>
               <UButton color="error" variant="outline" :loading="busy === a.id" :disabled="!!busy" @click="revoke(a)">
                 Revoke

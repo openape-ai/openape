@@ -1,6 +1,6 @@
 import type { PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/server'
 import type { RecoveryRecord, Sealed, SealedSecret } from '#shared/vault-crypto'
-import { b64u, createRecovery, credentialKek, formatRecoveryCode, fromB64u, newRecoverySecret, newVmk, openRecovery, openSecret, parseRecoveryCode, sealDelivery, sealSecret, unwrapVmk, wrapVmk } from '#shared/vault-crypto'
+import { b64u, createRecovery, createSigningKey, credentialKek, formatRecoveryCode, fromB64u, newRecoverySecret, newVmk, openRecovery, openSecret, openSigningKey, parseRecoveryCode, sealDelivery, sealSecret, signDelivery, unwrapVmk, wrapVmk } from '#shared/vault-crypto'
 import { confirmWithPasskey, createVaultPasskey, PasskeyError, passkeyLabel } from './passkeys'
 
 /**
@@ -25,6 +25,7 @@ export interface VaultView {
   id: string | null
   created_at?: number
   has_recovery: boolean
+  signing_key_fingerprint?: string | null
   credentials: VaultCredential[]
 }
 
@@ -66,6 +67,7 @@ export async function prepareVault() {
   const recoverySecret = newRecoverySecret()
   const wrapped = await wrapForPasskey(vmk, options.vaultId, passkey.response.id, passkey.prf)
   const recovery: RecoveryRecord = await createRecovery(vmk, recoverySecret, options.vaultId)
+  const signingKey = await createSigningKey(vmk, options.vaultId)
   const code = formatRecoveryCode(recoverySecret)
   vmk.fill(0)
   recoverySecret.fill(0)
@@ -75,7 +77,7 @@ export async function prepareVault() {
     label: passkeyLabel(passkey.response.authenticatorAttachment),
     commit: () => $fetch('/api/v2/vault/setup/commit', {
       method: 'POST',
-      body: { challengeId: options.challengeId, credential: passkey.response, label: passkeyLabel(passkey.response.authenticatorAttachment), prfInput: b64u(prfInput), recovery, ...wrapped },
+      body: { challengeId: options.challengeId, credential: passkey.response, label: passkeyLabel(passkey.response.authenticatorAttachment), prfInput: b64u(prfInput), recovery, signingKey, ...wrapped },
     }),
   }
 }
@@ -236,7 +238,7 @@ export interface OwnerRequest {
   expires_at: number
   consumer: { id: string, name: string, fingerprint: string, key_changed: boolean }
   secret: { id: string, alias: string, type: SecretType, version: number } | null
-  approval?: { id: string, mode: ApprovalMode, expires_at: number | null, created_at: number, decided_at: number | null } | null
+  approval?: { id: string, status: string, mode: ApprovalMode, expires_at: number | null, created_at: number, decided_at: number | null, collect_count: number, last_collected_at: number | null } | null
 }
 
 export interface ApprovalView {
@@ -247,6 +249,8 @@ export interface ApprovalView {
   created_at: number
   consumed_at: number | null
   revoked_at: number | null
+  collect_count: number
+  last_collected_at: number | null
   requester: string
   consumer: { id: string, name: string, fingerprint: string }
   secret: { id: string, alias: string, version: number }
@@ -258,6 +262,7 @@ interface ApprovalOptions {
   descriptor: { secretId: string, version: number, consumerKeyFingerprint: string }
   consumer: { publicKeyJwk: JsonWebKey }
   sealed: SealedSecret | null
+  signing: { keyWrap: Sealed } | null
   assertion: PublicKeyCredentialRequestOptionsJSON
 }
 
@@ -278,17 +283,23 @@ export async function approveRequest(vault: VaultView, requestId: string, mode: 
   const confirmation = await confirmWithPasskey(options.assertion, prfInputs(vault))
   const vmk = await vmkFromConfirmation(vault, confirmation)
   const d = options.descriptor
+  const context = { vaultId: vault.id!, approvalId: options.approvalId, consumerKeyFingerprint: d.consumerKeyFingerprint, secretId: d.secretId, version: d.version }
   let pkg: Awaited<ReturnType<typeof sealDelivery>>
+  let signature: string
+  // A vault from before signing keys gets one now, under the VMK this approval unlocked.
+  let signingKey: Awaited<ReturnType<typeof createSigningKey>> | undefined
   try {
     const value = await openSecret(vmk, options.sealed, { vaultId: vault.id!, secretId: d.secretId, version: d.version })
-    pkg = await sealDelivery(options.consumer.publicKeyJwk, value, { approvalId: options.approvalId, consumerKeyFingerprint: d.consumerKeyFingerprint, secretId: d.secretId, version: d.version })
+    pkg = await sealDelivery(options.consumer.publicKeyJwk, value, context)
+    signingKey = options.signing ? undefined : await createSigningKey(vmk, vault.id!)
+    signature = await signDelivery(await openSigningKey(vmk, options.signing ?? signingKey!, vault.id!), pkg, context)
   }
   finally {
     vmk.fill(0)
   }
   return $fetch<{ id: string, status: string, mode: ApprovalMode, expires_at: number | null, created_at: number }>(`/api/v2/requests/${requestId}/approval/commit`, {
     method: 'POST',
-    body: { challengeId: options.challengeId, assertion: confirmation.response, package: pkg },
+    body: { challengeId: options.challengeId, assertion: confirmation.response, package: pkg, signature, signingKey },
   })
 }
 
