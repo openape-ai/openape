@@ -1,0 +1,30 @@
+{
+  "name": "@openape/secrets-crypto",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Vault cryptography for OpenApe Secrets (format v2), shared by the web app and the ape-secrets CLI. WebCrypto only.",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
