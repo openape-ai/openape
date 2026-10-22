@@ -1,8 +1,7 @@
-import { and, eq, inArray, isNull } from 'drizzle-orm'
+import { and, eq, inArray, isNull, lte, ne, or, sql } from 'drizzle-orm'
 import { keyFingerprint } from '#shared/vault-crypto'
 import { useDb } from '../database/drizzle'
-import type { secretApprovals } from '../database/schema'
-import { consumers, secretAccessRequests, vaultSecrets } from '../database/schema'
+import { consumers, secretAccessRequests, secretApprovals, secretAuditEvents, vaultSecrets } from '../database/schema'
 import { notifyOwner } from './notify'
 import { createProblemError } from './problem'
 import { nowSec } from './vault-passkeys'
@@ -16,6 +15,29 @@ export const MAX_REQUEST_TTL_SEC = 7 * 24 * 60 * 60
 /** A one-time approval can be collected for this long. */
 export const ONCE_COLLECT_WINDOW_SEC = 24 * 60 * 60
 export const MAX_TIMED_SEC = 7 * 24 * 60 * 60
+
+/** What a package's columns hold once nothing can collect it any more. */
+export const EMPTY_PACKAGE = { packageEpk: '', packageIv: '', packageCt: '', packageSig: '' }
+
+/** The secret's current version, or NULL when it was deleted: compared inside single statements. */
+export const currentVersionOf = sql`(SELECT current_version FROM vault_secrets WHERE vault_secrets.id = ${secretApprovals.secretId} AND vault_secrets.deleted_at IS NULL)`
+
+/**
+ * Empty every package that can no longer be collected: ended, revoked,
+ * expired, or replaced by a newer secret version. Ciphertext nobody may fetch
+ * is ciphertext nobody needs to keep.
+ */
+export async function sweepApprovalPackages(now = nowSec()) {
+  await useDb().update(secretApprovals).set(EMPTY_PACKAGE).where(and(
+    ne(secretApprovals.packageCt, ''),
+    or(ne(secretApprovals.status, 'active'), lte(secretApprovals.expiresAt, now), sql`${secretApprovals.secretVersion} IS NOT ${currentVersionOf}`),
+  ))
+}
+
+/** A refused attempt, by IDs only, written outside any failed transaction. */
+export async function auditRefusal(entry: { actor: string, event: string, vaultId?: string | null }) {
+  await useDb().insert(secretAuditEvents).values({ id: crypto.randomUUID(), actor: entry.actor, event: entry.event, vaultId: entry.vaultId ?? null, credentialId: null, result: 'refused', createdAt: nowSec() })
+}
 
 /** Status as callers see it: a pending request past its deadline has expired. */
 export function requestStatus(row: AccessRequestRow, now = nowSec()): string {

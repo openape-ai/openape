@@ -191,6 +191,16 @@ export function wrappedCredentialFields(body: Record<string, unknown>) {
   }
 }
 
+/** A vault signing key as the browser sends it: a public P-256 JWK and the private key wrapped under the VMK. */
+export function signingKeyField(value: unknown, name = 'signingKey') {
+  const v = value as { publicJwk?: Record<string, unknown>, keyWrap?: unknown } | undefined
+  const jwk = v?.publicJwk
+  if (!jwk || jwk.kty !== 'EC' || jwk.crv !== 'P-256' || typeof jwk.x !== 'string' || typeof jwk.y !== 'string' || 'd' in jwk) {
+    throw refused(`${name}.publicJwk must be a public P-256 JWK`)
+  }
+  return { publicJwk: JSON.stringify({ kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y }), keyWrap: sealedField(v?.keyWrap, `${name}.keyWrap`, 256) }
+}
+
 export async function insertCredential(tx: Tx, vaultId: string, passkey: Awaited<ReturnType<typeof verifyNewPasskey>>, fields: ReturnType<typeof wrappedCredentialFields>) {
   await tx.insert(vaultCredentials).values({
     ...passkey,

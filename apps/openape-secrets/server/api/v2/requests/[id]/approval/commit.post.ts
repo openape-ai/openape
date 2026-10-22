@@ -1,9 +1,10 @@
 import { and, eq, isNull } from 'drizzle-orm'
 import { defineEventHandler, getRouterParam, readBody, setResponseStatus } from 'h3'
-import { consumers, secretAccessRequests, secretApprovals, vaultSecrets } from '../../../../../database/schema'
+import { verifyDelivery } from '#shared/vault-crypto'
+import { consumers, secretAccessRequests, secretApprovals, vaults, vaultSecrets } from '../../../../../database/schema'
 import { createProblemError } from '../../../../../utils/problem'
 import { requireVaultOwner } from '../../../../../utils/vault-owner'
-import { audit, b64uField, consumeChallenge, nowSec, sealedField, vaultTransaction, verifyVaultPasskey } from '../../../../../utils/vault-passkeys'
+import { audit, b64uField, consumeChallenge, nowSec, sealedField, signingKeyField, vaultTransaction, verifyVaultPasskey } from '../../../../../utils/vault-passkeys'
 import { fingerprintOf, requestStatus } from '../../../../../utils/vault-requests'
 
 const MAX_VALUE_BYTES = 64 * 1024
@@ -24,6 +25,7 @@ export default defineEventHandler(async (event) => {
   const pkg = body.package as Record<string, unknown> | undefined
   const sealed = sealedField(pkg, 'package', MAX_VALUE_BYTES + 16)
   const epk = b64uField(pkg?.epk, 'package.epk', { exact: 65 })
+  const signature = b64uField(body.signature, 'signature', { exact: 64 })
 
   const result = await vaultTransaction(async (tx) => {
     const challenge = await consumeChallenge(tx, body.challengeId, owner, 'request.approve')
@@ -38,6 +40,19 @@ export default defineEventHandler(async (event) => {
     if (!secret || secret.currentVersion !== d.version) throw createProblemError({ status: 409, title: 'The secret changed while you were approving', detail: 'Open the request again to approve the current version.' })
     const machine = await tx.select().from(consumers).where(eq(consumers.id, d.consumerId)).get()
     if (!machine || await fingerprintOf(machine.publicKeyJwk) !== d.consumerKeyFingerprint) throw createProblemError({ status: 409, title: 'The machine key changed while you were approving' })
+
+    // The vault signs what it hands out. A vault created before signing keys
+    // existed gets its key now, from the browser that just unlocked the VMK.
+    const vault = await tx.select().from(vaults).where(eq(vaults.id, challenge.vaultId)).get()
+    let signingPublicJwk = vault?.signingPublicJwk
+    if (!signingPublicJwk) {
+      const created = signingKeyField(body.signingKey)
+      signingPublicJwk = created.publicJwk
+      await tx.update(vaults).set({ signingPublicJwk, signingKeyIv: created.keyWrap.iv, signingKeyCt: created.keyWrap.ct, updatedAt: nowSec() }).where(eq(vaults.id, challenge.vaultId))
+    }
+    const context = { vaultId: challenge.vaultId, approvalId: d.approvalId, consumerKeyFingerprint: d.consumerKeyFingerprint, secretId: d.secretId, version: d.version }
+    const signed = await verifyDelivery(JSON.parse(signingPublicJwk) as JsonWebKey, { epk, ...sealed }, context, signature).catch(() => false)
+    if (!signed) throw createProblemError({ status: 400, title: 'The package signature does not match this approval' })
 
     const now = nowSec()
     await tx.insert(secretApprovals).values({
@@ -56,6 +71,7 @@ export default defineEventHandler(async (event) => {
       packageEpk: epk,
       packageIv: sealed.iv,
       packageCt: sealed.ct,
+      packageSig: signature,
       credentialId: confirmedBy.id,
       createdAt: now,
     })
