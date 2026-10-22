@@ -6,9 +6,11 @@ import {
   formatRecoveryCode,
   keyFingerprint,
   newRecoverySecret,
+  openDelivery,
   openRecovery,
   openSecret,
   parseRecoveryCode,
+  sealDelivery,
   sealSecret,
   unwrapVmk,
   verifyRecoveryProof,
@@ -157,5 +159,44 @@ describe('key fingerprint', () => {
     // canonical member ordering {"crv","kty","x","y"}.
     const jwk = { kty: 'EC', crv: 'P-256', x: 'f83OJ3D2xF1Bg8vub9tLe1gHMzV76e8Tus9uPHvRVEU', y: 'x_FEzRu9m36HLN_tue659LNpXW6pCyStikYjKIWI5a0', ext: true }
     expect(await keyFingerprint(jwk)).toBe('A0A232C2F194A53553CB1310DDBC0821E414B9D7EBFC290B323084D7D1020FE5')
+  })
+})
+
+describe('delivery package', () => {
+  async function machineKey() {
+    const pair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits'])
+    const { kty, crv, x, y } = await crypto.subtle.exportKey('jwk', pair.publicKey)
+    const publicJwk = { kty, crv, x, y }
+    return { publicJwk, privateJwk: await crypto.subtle.exportKey('jwk', pair.privateKey), fingerprint: await keyFingerprint(publicJwk) }
+  }
+  const delivery = (fingerprint: string) => ({ approvalId: 'a1', consumerKeyFingerprint: fingerprint, secretId: 's1', version: 3 })
+
+  it('opens only on the machine it was sealed for, in its own context', async () => {
+    const machine = await machineKey()
+    const pkg = await sealDelivery(machine.publicJwk, 'tg-token-123', delivery(machine.fingerprint))
+    expect(JSON.stringify(pkg)).not.toContain('tg-token-123')
+    expect(await openDelivery(machine.privateJwk, pkg, delivery(machine.fingerprint))).toBe('tg-token-123')
+  })
+
+  it('refuses another machine\'s key', async () => {
+    const machine = await machineKey()
+    const other = await machineKey()
+    const pkg = await sealDelivery(machine.publicJwk, 'x', delivery(machine.fingerprint))
+    await expect(openDelivery(other.privateJwk, pkg, delivery(machine.fingerprint))).rejects.toThrow()
+  })
+
+  it('refuses a package moved to another approval, version or secret', async () => {
+    const machine = await machineKey()
+    const ctx = delivery(machine.fingerprint)
+    const pkg = await sealDelivery(machine.publicJwk, 'x', ctx)
+    await expect(openDelivery(machine.privateJwk, pkg, { ...ctx, approvalId: 'a2' })).rejects.toThrow()
+    await expect(openDelivery(machine.privateJwk, pkg, { ...ctx, version: 4 })).rejects.toThrow()
+    await expect(openDelivery(machine.privateJwk, pkg, { ...ctx, secretId: 's2' })).rejects.toThrow()
+  })
+
+  it('will not seal for a key whose fingerprint differs from the approved one', async () => {
+    const machine = await machineKey()
+    const swapped = await machineKey()
+    await expect(sealDelivery(swapped.publicJwk, 'x', delivery(machine.fingerprint))).rejects.toThrow()
   })
 })

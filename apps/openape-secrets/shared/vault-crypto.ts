@@ -24,6 +24,20 @@ export interface SealedSecret {
   dek: Sealed
 }
 
+export interface DeliveryContext {
+  approvalId: string
+  consumerKeyFingerprint: string
+  secretId: string
+  version: number
+}
+
+/** A value sealed for one machine: the sender's ephemeral ECDH public key, IV and ciphertext. */
+export interface DeliveryPackage {
+  epk: string
+  iv: string
+  ct: string
+}
+
 export interface RecoveryRecord {
   recoverySalt: string
   vmkWrap: Sealed
@@ -38,6 +52,7 @@ const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ'
 const RECOVERY_BYTES = 32
 const RECOVERY_CHARS = Math.ceil((RECOVERY_BYTES * 8) / 5)
 const ECDSA = { name: 'ECDSA', namedCurve: 'P-256' } as const
+const ECDH = { name: 'ECDH', namedCurve: 'P-256' } as const
 const SIGN = { name: 'ECDSA', hash: 'SHA-256' } as const
 
 const encoder = new TextEncoder()
@@ -220,4 +235,33 @@ export async function keyFingerprint(jwk: JsonWebKey): Promise<string> {
   const canonical = JSON.stringify({ crv: jwk.crv, kty: jwk.kty, x: jwk.x, y: jwk.y })
   const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', encoder.encode(canonical)))
   return Array.from(digest, b => b.toString(16).padStart(2, '0')).join('').toUpperCase()
+}
+
+function deliveryCtx(c: DeliveryContext): Bytes {
+  return ctx('delivery', c.approvalId, c.consumerKeyFingerprint, c.secretId, String(c.version))
+}
+
+async function deliveryKey(privateKey: CryptoKey, publicKey: CryptoKey, c: DeliveryContext): Promise<CryptoKey> {
+  const shared = await crypto.subtle.deriveBits({ name: 'ECDH', public: publicKey }, privateKey, 256)
+  return hkdfAesKey(shared, new Uint8Array(new ArrayBuffer(0)), deliveryCtx(c))
+}
+
+/**
+ * Seal a value for exactly the machine an approval names. Refuses any key whose
+ * fingerprint is not the approved one, so a swapped key cannot receive it.
+ */
+export async function sealDelivery(consumerPublicJwk: JsonWebKey, plaintext: string, c: DeliveryContext): Promise<DeliveryPackage> {
+  if (await keyFingerprint(consumerPublicJwk) !== c.consumerKeyFingerprint) throw new Error('Machine key does not match the approved fingerprint')
+  const recipient = await crypto.subtle.importKey('jwk', consumerPublicJwk, ECDH, false, [])
+  const ephemeral = await crypto.subtle.generateKey(ECDH, true, ['deriveBits'])
+  const sealed = await encrypt(await deliveryKey(ephemeral.privateKey, recipient, c), encoder.encode(plaintext), deliveryCtx(c))
+  return { epk: b64u(await crypto.subtle.exportKey('raw', ephemeral.publicKey)), ...sealed }
+}
+
+/** Open a delivery package with the machine's private key, in the exact approval context. */
+export async function openDelivery(consumerPrivateJwk: JsonWebKey, pkg: DeliveryPackage, c: DeliveryContext): Promise<string> {
+  const priv = await crypto.subtle.importKey('jwk', consumerPrivateJwk, ECDH, false, ['deriveBits'])
+  const epk = await crypto.subtle.importKey('raw', fromB64u(pkg.epk), ECDH, false, [])
+  const value = await decrypt(await deliveryKey(priv, epk, c), pkg, deliveryCtx(c))
+  return new TextDecoder().decode(value)
 }
