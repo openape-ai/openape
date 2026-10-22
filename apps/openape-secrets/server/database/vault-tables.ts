@@ -135,8 +135,16 @@ const VAULT_COLUMNS = [
 export async function applyVaultSchema(run: (statement: string) => Promise<unknown>) {
   for (const statement of VAULT_TABLES) await run(statement)
   for (const statement of VAULT_COLUMNS) {
-    await run(statement).catch((err: Error) => {
-      if (!/duplicate column/i.test(err.message)) throw err
+    await run(statement).catch((err: unknown) => {
+      if (!isDuplicateColumn(err)) throw err
     })
   }
+}
+
+/** drizzle wraps the driver error, so the reason may sit anywhere in the cause chain. */
+function isDuplicateColumn(err: unknown): boolean {
+  for (let e = err as { message?: unknown, cause?: unknown } | undefined; e; e = e.cause as typeof e) {
+    if (/duplicate column/i.test(String(e.message))) return true
+  }
+  return false
 }
