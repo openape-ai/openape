@@ -99,18 +99,17 @@ export function announce(row: AccessRequestRow, consumerName: string, approveUrl
 }
 
 /**
- * The owner's chat message. Who asks is always named with its kind; the reason
- * is the requester's own words, shown as a quote with links and line breaks
- * removed, so it cannot pose as instructions or as a second link to follow.
+ * The owner's chat message: only facts the service controls. The requester's
+ * free-text reason stays on the approval page; in a chat client any domain-like
+ * text in it could turn into a link that looks like it came from this service.
  */
-export function formatApprovalMessage(row: Pick<AccessRequestRow, 'fieldName' | 'purpose' | 'requester' | 'requesterAct'>, consumerName: string, approveUrl: string): string {
-  const reason = row.purpose.replace(/\b[a-z][\w+.-]*:\/\/\S+/gi, '[link removed]').replace(/\s+/g, ' ').trim().slice(0, 200)
+export function formatApprovalMessage(row: Pick<AccessRequestRow, 'fieldName' | 'requester' | 'requesterAct'>, consumerName: string, approveUrl: string): string {
   return [
     'Approval needed',
     '',
     `${row.fieldName} for ${consumerName}`,
     `Asked by ${row.requester} (${row.requesterAct === 'human' ? 'person' : 'agent'})`,
-    ...(reason ? [`Reason given: “${reason}”`] : []),
+    'Open the link to see the reason and decide.',
     '',
     approveUrl,
   ].join('\n')
