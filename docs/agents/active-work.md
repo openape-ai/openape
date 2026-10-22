@@ -1,3 +1,11 @@
+# Secrets PRF vault, milestone M1 — issue 1535
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Approved plan revision 2: https://report.openape.ai/d/01M5JEGAHN8GK0VWGQ4HAYH0VM (M0 closed, cryptographic contract v2 in section 11, interface design in section 10).
+- Branch `feature/issue-1535-secrets-vault-crypto`, worktree `openape-monorepo.worktrees/secrets-vault`, canonical base `a08ca73c76d5c4d5e662f5330cc9071b53ef143a`. The shared checkout and other worktrees remain untouched.
+- Adds the v2 vault behind `NUXT_VAULT_ENABLED` (default off): WebCrypto format-v2 core in `shared/vault-crypto.ts`, additive tables, `/api/v2/vault` setup, second-passkey and recovery routes that accept only the human SP session from the vault origin, and the setup, vault and recovery screens in the approved design with self-hosted fonts. v1 routes and pages are unchanged.
+- Verification at `6d489a08`: 72 app tests including 18 crypto and 14 route tests against real `@simplewebauthn/server` verification, 8 safeguard mutations each caught, lint/typecheck/build, the pre-push affected gate, and 9 of 9 real-Chromium checks with PRF virtual passkeys. Test Run with inspected screenshots: https://report.openape.ai/d/01M5JGSRTWGCWFR6GWM653NZ38. Limits: virtual passkeys and a fixture session; phone UI and hardware acceptance follow in M5.
+- Next: owner review and merge of the M1 PR; then M2 (vault secrets and approval UI). No deployment until the plan's single-owner rollout.
+
 # Model API settings and latest family versions — issue 1532
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1532. Native PR: https://repos.openape.ai/patrick/monorepo/pulls/495, with an explicit issue relation. Approved revision 4: https://report.openape.ai/d/01M5DAMFMDW26PAF781Z9T2A26?v=10.

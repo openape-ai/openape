@@ -61,3 +61,71 @@ export const secretRequests = sqliteTable('secret_requests', {
   index('idx_requests_owner').on(t.ownerEmail),
   index('idx_requests_consumer').on(t.consumerId),
 ])
+
+// ---- v2 vault (DDL in vault-tables.ts) -------------------------------------
+
+/** One vault per human owner. Its keys exist only in the owner's browser. */
+export const vaults = sqliteTable('vaults', {
+  id: text('id').primaryKey(),
+  ownerEmail: text('owner_email').notNull().unique(),
+  format: text('format').notNull().default('v2'),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+})
+
+/**
+ * A passkey that can unlock the vault: its WebAuthn public key plus the VMK
+ * wrapped under a key derived from its PRF output. `prf_input` and `kdf_salt`
+ * are not secret; the PRF output they lead to never reaches this service.
+ */
+export const vaultCredentials = sqliteTable('vault_credentials', {
+  id: text('id').primaryKey(),
+  vaultId: text('vault_id').notNull(),
+  publicKey: text('public_key').notNull(),
+  counter: integer('counter').notNull().default(0),
+  transports: text('transports').notNull().default('[]'),
+  backedUp: integer('backed_up').notNull().default(0),
+  deviceType: text('device_type').notNull().default(''),
+  label: text('label').notNull().default(''),
+  prfInput: text('prf_input').notNull(),
+  kdfSalt: text('kdf_salt').notNull(),
+  vmkIv: text('vmk_iv').notNull(),
+  vmkCt: text('vmk_ct').notNull(),
+  createdAt: integer('created_at').notNull(),
+  disabledAt: integer('disabled_at'),
+}, t => [index('idx_vault_credentials_vault').on(t.vaultId)])
+
+/** The VMK wrapped for the recovery secret, and the public half of the key that proves its possession. */
+export const vaultRecovery = sqliteTable('vault_recovery', {
+  vaultId: text('vault_id').primaryKey(),
+  recoverySalt: text('recovery_salt').notNull(),
+  vmkIv: text('vmk_iv').notNull(),
+  vmkCt: text('vmk_ct').notNull(),
+  proofKeyIv: text('proof_key_iv').notNull(),
+  proofKeyCt: text('proof_key_ct').notNull(),
+  proofPublicJwk: text('proof_public_jwk').notNull(),
+  createdAt: integer('created_at').notNull(),
+})
+
+/** Single-use WebAuthn and recovery challenges, stored as hashes and bound to owner and operation. */
+export const webauthnChallenges = sqliteTable('webauthn_challenges', {
+  id: text('id').primaryKey(),
+  challengeHash: text('challenge_hash').notNull(),
+  ownerEmail: text('owner_email').notNull(),
+  operation: text('operation').notNull(),
+  vaultId: text('vault_id').notNull(),
+  expiresAt: integer('expires_at').notNull(),
+  consumedAt: integer('consumed_at'),
+  createdAt: integer('created_at').notNull(),
+})
+
+/** What happened, by IDs only: never values, keys or packages. */
+export const secretAuditEvents = sqliteTable('secret_audit_events', {
+  id: text('id').primaryKey(),
+  actor: text('actor').notNull(),
+  event: text('event').notNull(),
+  vaultId: text('vault_id'),
+  credentialId: text('credential_id'),
+  result: text('result').notNull(),
+  createdAt: integer('created_at').notNull(),
+})
