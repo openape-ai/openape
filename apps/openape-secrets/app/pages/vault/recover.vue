@@ -78,11 +78,16 @@ onMounted(async () => {
             Your new passkey opens the vault
           </p>
           <p class="text-muted">
-            Your recovery code still works. Keep it where it was.
+            Your recovery code still works. Keep it where it was. If a passkey was lost or stolen, remove it now so it can no longer open your vault.
           </p>
-          <UButton to="/vault" size="lg">
-            Open vault
-          </UButton>
+          <div class="flex flex-wrap gap-2">
+            <UButton to="/vault/passkeys" size="lg">
+              Review passkeys
+            </UButton>
+            <UButton to="/vault" size="lg" color="neutral" variant="subtle">
+              Open vault
+            </UButton>
+          </div>
         </section>
       </template>
     </main>
