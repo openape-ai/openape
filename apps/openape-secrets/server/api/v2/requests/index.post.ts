@@ -5,6 +5,7 @@ import { useDb } from '../../../database/drizzle'
 import { secretAccessRequests, vaults, vaultSecrets } from '../../../database/schema'
 import { loadConsumer } from '../../../utils/access'
 import { createProblemError } from '../../../utils/problem'
+import { rateLimit } from '../../../utils/rate-limit'
 import { nowSec } from '../../../utils/vault-passkeys'
 import { announce, DEFAULT_REQUEST_TTL_SEC, fingerprintOf, MAX_REQUEST_TTL_SEC, publicBase, requesterView } from '../../../utils/vault-requests'
 import { aliasField } from '../../../utils/vault-secrets'
@@ -20,6 +21,7 @@ import { aliasField } from '../../../utils/vault-secrets'
 export default defineEventHandler(async (event) => {
   if (!useRuntimeConfig().vaultEnabled) throw createProblemError({ status: 404, title: 'Not found' })
   const caller = await requireCaller(event)
+  rateLimit(event, `request:${caller.email}`)
   const body = (await readBody<Record<string, unknown>>(event)) ?? {}
   const consumerId = typeof body.consumerId === 'string' ? body.consumerId : ''
   const fieldName = aliasField(body.secret)

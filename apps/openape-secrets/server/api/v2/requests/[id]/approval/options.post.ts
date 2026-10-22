@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import { defineEventHandler, getRouterParam, readBody } from 'h3'
 import { ulid } from 'ulid'
 import { useDb } from '../../../../../database/drizzle'
-import { consumers, vaultSecretVersions } from '../../../../../database/schema'
+import { consumers, vaults, vaultSecretVersions } from '../../../../../database/schema'
 import { createProblemError } from '../../../../../utils/problem'
 import { requireVaultOwner } from '../../../../../utils/vault-owner'
 import { activeCredentials, authenticationOptions, issueChallenge, nowSec } from '../../../../../utils/vault-passkeys'
@@ -49,6 +49,7 @@ export default defineEventHandler(async (event) => {
   }
   const version = await db.select().from(vaultSecretVersions).where(and(eq(vaultSecretVersions.secretId, secret.id), eq(vaultSecretVersions.version, secret.currentVersion))).get()
 
+  const vault = await db.select().from(vaults).where(eq(vaults.id, request.vaultId)).get()
   const approvalId = ulid()
   const descriptor = {
     requestId: request.id,
@@ -66,6 +67,8 @@ export default defineEventHandler(async (event) => {
     approvalId,
     descriptor,
     consumer: { id: machine.id, name: machine.name, publicKeyJwk: JSON.parse(machine.publicKeyJwk) as JsonWebKey },
+    // null: this vault predates signing keys; the browser creates one with this approval.
+    signing: vault?.signingKeyIv && vault.signingKeyCt ? { keyWrap: { iv: vault.signingKeyIv, ct: vault.signingKeyCt } } : null,
     sealed: version ? { value: { iv: version.valueIv, ct: version.valueCt }, dek: { iv: version.dekIv, ct: version.dekCt } } : null,
     assertion: await authenticationOptions(challenge, await activeCredentials(db, request.vaultId)),
   }

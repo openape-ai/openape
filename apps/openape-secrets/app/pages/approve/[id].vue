@@ -46,6 +46,7 @@ const terms = computed(() => {
   return `${machine.value} can collect ${version} until you revoke it. A new version needs a new approval.`
 })
 
+const collected = computed(() => (request.value?.approval?.collect_count ?? 0) > 0)
 const canApprove = computed(() => !!request.value?.secret && !request.value.consumer.key_changed)
 const approved = computed(() => request.value?.status === 'approved' && request.value.approval)
 const receipt = computed(() => {
@@ -172,18 +173,23 @@ onMounted(async () => {
             <span>You approved with your passkey</span>
             <span class="text-sm text-dimmed">{{ time(request.approval!.created_at) }}</span>
           </li>
-          <li class="grid grid-cols-[22px_minmax(0,1fr)_auto] items-start gap-3">
+          <li v-if="collected" class="grid grid-cols-[22px_minmax(0,1fr)_auto] items-start gap-3">
+            <span class="m-[5px] size-3 rounded-full bg-brass" aria-hidden="true" />
+            <span>{{ machine }} collected it{{ request.approval!.collect_count > 1 ? ` (${request.approval!.collect_count} times)` : '' }}</span>
+            <span class="text-sm text-dimmed">{{ time(request.approval!.last_collected_at!) }}</span>
+          </li>
+          <li v-else class="grid grid-cols-[22px_minmax(0,1fr)_auto] items-start gap-3">
             <span class="m-[5px] size-3 rounded-full border-2 border-[#8492A4]" aria-hidden="true" />
             <span class="text-muted">{{ revoked ? 'Revoked before collection' : `Waiting for ${machine} to collect` }}</span>
           </li>
         </ol>
-        <p v-if="!revoked" class="text-center text-sm text-dimmed">
+        <p v-if="!revoked && !collected" class="text-center text-sm text-dimmed">
           You can close this page. {{ machine }} collects without you.
         </p>
 
         <UAlert v-if="error" color="error" variant="subtle" :title="error" />
         <div class="mt-auto flex flex-col gap-2">
-          <UButton v-if="!revoked" color="error" variant="outline" size="xl" block :loading="busy === 'revoke'" @click="revoke">
+          <UButton v-if="!revoked && request.approval!.status === 'active'" color="error" variant="outline" size="xl" block :loading="busy === 'revoke'" @click="revoke">
             Revoke approval
           </UButton>
           <UButton color="neutral" variant="ghost" size="xl" block to="/vault">

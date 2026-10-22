@@ -17,11 +17,13 @@ export default defineEventHandler(async (event) => {
   const row = await db.select().from(secretAccessRequests).where(eq(secretAccessRequests.id, id)).get()
   if (!row || (caller.email !== row.ownerEmail && caller.email !== row.requester)) throw createProblemError({ status: 404, title: 'Request not found' })
 
-  const approval = await db.select({ id: secretApprovals.id, mode: secretApprovals.mode, expiresAt: secretApprovals.expiresAt, createdAt: secretApprovals.createdAt })
-    .from(secretApprovals)
-    .where(eq(secretApprovals.requestId, row.id))
-    .get()
+  const approval = await db.select().from(secretApprovals).where(eq(secretApprovals.requestId, row.id)).get()
   if (caller.email !== row.ownerEmail) return requesterView(row, approval?.id)
   const [view] = await ownerRequestViews([row])
-  return { ...view, approval: approval ? { id: approval.id, mode: approval.mode, expires_at: approval.expiresAt, created_at: approval.createdAt, decided_at: row.decidedAt } : null }
+  return {
+    ...view,
+    approval: approval
+      ? { id: approval.id, status: approval.status, mode: approval.mode, expires_at: approval.expiresAt, created_at: approval.createdAt, decided_at: row.decidedAt, collect_count: approval.collectCount, last_collected_at: approval.lastCollectedAt }
+      : null,
+  }
 })

@@ -265,3 +265,46 @@ export async function openDelivery(consumerPrivateJwk: JsonWebKey, pkg: Delivery
   const value = await decrypt(await deliveryKey(priv, epk, c), pkg, deliveryCtx(c))
   return new TextDecoder().decode(value)
 }
+
+/** The vault's signing key: public half in the clear, private half wrapped under the VMK. */
+export interface SigningKeyRecord {
+  publicJwk: JsonWebKey
+  keyWrap: Sealed
+}
+
+/** Where a package was made: its delivery context plus the vault that signs it. */
+export type SignedDeliveryContext = DeliveryContext & { vaultId: string }
+
+function deliverySignatureInput(pkg: DeliveryPackage, c: SignedDeliveryContext): Bytes {
+  return ctx('delivery-signature', c.vaultId, c.approvalId, c.consumerKeyFingerprint, c.secretId, String(c.version), pkg.epk, pkg.iv, pkg.ct)
+}
+
+/**
+ * Create the key that signs every package this vault hands out, so a machine
+ * can tell a vault-made package from one a compromised server slipped in.
+ */
+export async function createSigningKey(vmk: Bytes, vaultId: string): Promise<SigningKeyRecord> {
+  const pair = await crypto.subtle.generateKey(ECDSA, true, ['sign', 'verify'])
+  const pkcs8 = new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey))
+  const { kty, crv, x, y } = await crypto.subtle.exportKey('jwk', pair.publicKey)
+  const keyWrap = await encrypt(await aesKey(vmk), pkcs8, ctx('vault-signing-key', vaultId))
+  pkcs8.fill(0)
+  return { publicJwk: { kty, crv, x, y }, keyWrap }
+}
+
+/** Unwrap the signing key for one approval; the result can only sign. */
+export async function openSigningKey(vmk: Bytes, record: Pick<SigningKeyRecord, 'keyWrap'>, vaultId: string): Promise<CryptoKey> {
+  const pkcs8 = await decrypt(await aesKey(vmk), record.keyWrap, ctx('vault-signing-key', vaultId))
+  const key = await crypto.subtle.importKey('pkcs8', pkcs8, ECDSA, false, ['sign'])
+  pkcs8.fill(0)
+  return key
+}
+
+export async function signDelivery(signingKey: CryptoKey, pkg: DeliveryPackage, c: SignedDeliveryContext): Promise<string> {
+  return b64u(await crypto.subtle.sign(SIGN, signingKey, deliverySignatureInput(pkg, c)))
+}
+
+export async function verifyDelivery(publicJwk: JsonWebKey, pkg: DeliveryPackage, c: SignedDeliveryContext, signature: string): Promise<boolean> {
+  const key = await crypto.subtle.importKey('jwk', publicJwk, ECDSA, false, ['verify'])
+  return crypto.subtle.verify(SIGN, key, fromB64u(signature), deliverySignatureInput(pkg, c))
+}

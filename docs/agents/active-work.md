@@ -1,10 +1,10 @@
-# Secrets PRF vault, milestone M2b — issue 1535
+# Secrets PRF vault, milestone M3 — issue 1535
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Approved plan revision 2: https://report.openape.ai/d/01M5JEGAHN8GK0VWGQ4HAYH0VM. M2a merged as `b0121997f784ba9e5a86a204353aaac3ea3ce22c` (PR 498, receipt on the PR and issue).
-- Branch `feature/issue-1535-secrets-approvals`, worktree `openape-monorepo.worktrees/secrets-vault`, canonical base `b0121997f784ba9e5a86a204353aaac3ea3ce22c`.
-- Second M2 PR: delivery package v2 (sealed for one machine key, bound to approval, fingerprint, secret and version), `/api/v2/requests` (unknown names answer like known ones), approval options/commit with a fresh passkey over a server-fixed descriptor, deny, approvals list and revoke; the phone approval, receipt, approvals page, key seal and waiting list in the approved design. Notifications always name the requester and quote the reason without links; approval links use the configured vault origin.
-- Verification at `0cbcc9f2`: 101 app tests including 16 approval and 4 delivery tests, 8 safeguard mutations caught, lint/typecheck/build, pre-push gate, and 28 of 28 real-Chromium checks including a machine opening the stored package. Test Run: https://report.openape.ai/d/01M5JKB0ZHB5S7PA5PXSHY6F8V
-- Next: owner review and merge; then M3 (collection rules, consumer identity binding, vault-signed packages). No deployment.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Approved plan revision 2: https://report.openape.ai/d/01M5JEGAHN8GK0VWGQ4HAYH0VM. M2b merged as `ae3ca112418b9d533d691845bfd722ec1f204858` (PR 499, receipt on the PR and issue).
+- Branch `feature/issue-1535-secrets-collect`, worktree `openape-monorepo.worktrees/secrets-vault`, canonical base `ae3ca112418b9d533d691845bfd722ec1f204858`.
+- Adds the vault signing key (wrapped under the VMK, created at setup or by the next approval for older vaults), package signatures checked at approval, `POST /api/v2/approvals/:id/collect` for the requesting identity with once/timed/standing enforced in one UPDATE, an hourly sweep that empties uncollectable packages, per-caller rate limits and refusal audits; the receipt, approvals page and passkeys page show collection state and the vault key.
+- Verification at `f7f573b9`: 116 app tests including 15 new, 8 safeguard mutations caught, lint/typecheck/build, pre-push gate, and 34 of 34 real-Chromium checks including API collection with signature verification. Test Run: https://report.openape.ai/d/01M5JMMAA1041DYER3SZA5RK2T
+- Next: owner review and merge; then M4 (CLI request/wait/deliver with vault key pinning). Open outside M3: deactivating lost passkeys after recovery. No deployment.
 
 # Model API settings and latest family versions — issue 1532
 
