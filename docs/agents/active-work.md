@@ -1,10 +1,10 @@
-# Secrets PRF vault, milestone M4 — issue 1535
+# Secrets PRF vault, milestone M5 — issue 1535
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Approved plan revision 2: https://report.openape.ai/d/01M5JEGAHN8GK0VWGQ4HAYH0VM. M3 merged as `b0211a924b31eeaa14ac3090e0e1108a6a1376e5` (PR 500, receipt on the PR and issue).
-- Branch `feature/issue-1535-secrets-cli`, worktree `openape-monorepo.worktrees/secrets-vault`, canonical base `b0211a924b31eeaa14ac3090e0e1108a6a1376e5`.
-- Moves the vault crypto into the private package `@openape/secrets-crypto` (app dependency, bundled into the CLI), adds `GET /api/v2/approvals/:id` for the requester, and adds `ape-secrets request --secret`, `wait` and `deliver` (`--stdin`, `--env`, `--out`, `--overwrite`) with vault key pinning on first use and signature checks before decrypting. Legacy `--field` and `fetch` stay.
-- Verification at `01e57d74`: 13 CLI tests (5 of 6 safeguard mutations caught; the sixth is masked by a second safeguard), 25 crypto and 92 app tests, lint/typecheck/build, pre-push gate, and 43 of 43 end-to-end checks with the built CLI. Test Run: https://report.openape.ai/d/01M5JNF3KX08J3Z5RFKTW70A44
-- Next: owner review and merge; then M5 (lost-passkey deactivation, hardware acceptance, documentation, single-owner rollout). No deployment.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Approved plan revision 2: https://report.openape.ai/d/01M5JEGAHN8GK0VWGQ4HAYH0VM. M4 merged as `adb162273d42103b6b5fc2b4760b774fe5fadded` (PR 501, receipt on the PR and issue).
+- Branch `feature/issue-1535-secrets-rollout`, worktree `openape-monorepo.worktrees/secrets-vault`, canonical base `adb162273d42103b6b5fc2b4760b774fe5fadded`.
+- Code part of M5: remove lost passkeys (confirmed by a passkey that stays, never the last one), `NUXT_VAULT_OWNERS` rollout allowlist, deleting a secret removes its ciphertext, PRF inputs limited to allowed passkeys (browser bug found end to end), and `docs/operations/secrets-vault.md` (configuration, stored data, retention, rollout, rollback).
+- Verification at `499de18a`: 99 app tests including 7 new, 4 safeguard mutations caught, lint/typecheck/build, pre-push gate, 46 of 46 end-to-end checks. Test Run: https://report.openape.ai/d/01M5JP0YH599Y2SC8KMQXK7P6Z
+- Next: owner review and merge; then, with the owner's go-ahead, `pnpm check:ci`, deploy with the vault disabled, enable it for `patrick@hofmann.eco`, and the owner's hardware acceptance. Open: VMK rotation after a suspected exposure.
 
 # Model API settings and latest family versions — issue 1532
 
