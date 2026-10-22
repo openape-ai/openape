@@ -12,7 +12,9 @@ export type Db = ReturnType<typeof useDb>
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0]
 export type CredentialRow = typeof vaultCredentials.$inferSelect
 
-const CHALLENGE_TTL_SEC = 5 * 60
+// Setup leaves time to write down the recovery code before the vault is created.
+const CHALLENGE_TTL_SEC: Record<string, number> = { 'vault.setup': 30 * 60 }
+const DEFAULT_CHALLENGE_TTL_SEC = 5 * 60
 const encoder = new TextEncoder()
 
 export const nowSec = () => Math.floor(Date.now() / 1000)
@@ -37,7 +39,7 @@ export async function issueChallenge(owner: string, operation: string, vaultId: 
     ownerEmail: owner,
     operation,
     vaultId,
-    expiresAt: nowSec() + CHALLENGE_TTL_SEC,
+    expiresAt: nowSec() + (CHALLENGE_TTL_SEC[operation] ?? DEFAULT_CHALLENGE_TTL_SEC),
     createdAt: nowSec(),
   })
   return { challengeId, challenge }

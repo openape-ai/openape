@@ -10,3 +10,27 @@
 .pb-safe { padding-bottom: calc(1.5rem + var(--safe-bottom)); }
 .pt-safe { padding-top: calc(1rem + var(--safe-top)); }
 .bottom-safe { bottom: calc(1.5rem + var(--safe-bottom)); }
+
+/* Vault design tokens (plan section 10): dark vault blue, sky for actions,
+   brass for approved. Nuxt UI's semantic variables carry them into components. */
+@theme {
+  --font-sans: 'Schibsted Grotesk', system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --color-brass: #D9B56E;
+  --color-danger: #F2937A;
+}
+
+.dark {
+  --ui-bg: #121923;
+  --ui-bg-muted: #19222E;
+  --ui-bg-elevated: #212C3A;
+  --ui-bg-accented: #2B3747;
+  --ui-border: #2B3747;
+  --ui-border-muted: #212C3A;
+  --ui-border-accented: #3A4A5E;
+  --ui-text: #E8EDF3;
+  --ui-text-highlighted: #F4F7FA;
+  --ui-text-toned: #A3B0C0;
+  --ui-text-muted: #A3B0C0;
+  --ui-text-dimmed: #8492A4;
+}
