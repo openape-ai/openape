@@ -21,6 +21,9 @@ const { user } = useOpenApeAuth()
         against that machine's key — this service only ever holds an envelope it
         cannot open.
       </p>
+      <NuxtLink to="/vault" class="block underline">
+        Open passkey vault
+      </NuxtLink>
       <p v-if="user" class="text-xs text-zinc-600">
         Signed in as {{ user.sub }}
       </p>

@@ -22,10 +22,15 @@
     "h3": "catalog:",
     "nuxt": "catalog:",
     "tailwindcss": "catalog:",
-    "ulid": "catalog:"
+    "ulid": "catalog:",
+    "@openape/ape-secrets": "workspace:*",
+    "@openape/auth": "workspace:*"
   },
   "devDependencies": {
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "@vue/test-utils": "catalog:",
+    "@vitejs/plugin-vue": "catalog:",
+    "happy-dom": "catalog:"
   }
 }

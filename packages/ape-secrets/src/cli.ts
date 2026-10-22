@@ -1,5 +1,6 @@
 import { defineCommand } from 'citty'
 import { makeLoginCommand, makeLogoutCommand, makeWhoamiCommand, runProofCli } from '@openape/proof-cli'
+import { vaultCommand } from './vault-commands'
 import { secretsClient } from './client.ts'
 import {
   consumersCommand,
@@ -38,6 +39,7 @@ const main = defineCommand({
     login: makeLoginCommand(DESCRIPTOR),
     logout: makeLogoutCommand(DESCRIPTOR, secretsClient),
     whoami: makeWhoamiCommand(DESCRIPTOR, secretsClient),
+    vault: vaultCommand,
     keygen: keygenCommand,
     consumers: consumersCommand,
     request: requestCommand,

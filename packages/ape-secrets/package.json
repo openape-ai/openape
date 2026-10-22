@@ -18,7 +18,8 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@openape/cli-auth": "workspace:*",
@@ -28,6 +29,13 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "tsup": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "exports": {
+    "./vault": {
+      "types": "./dist/vault-crypto.d.ts",
+      "import": "./dist/vault-crypto.mjs"
+    }
   }
 }
