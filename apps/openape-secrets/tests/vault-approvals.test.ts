@@ -235,12 +235,13 @@ describe('saying no and taking back', () => {
 })
 
 describe('the owner\'s notification', () => {
-  it('always names who asks, and quotes the reason without links or line breaks', async () => {
+  it('names who asks and never carries the requester\'s own text', async () => {
     const { formatApprovalMessage } = await import('../server/utils/vault-requests')
-    const text = formatApprovalMessage({ fieldName: 'TELEGRAM_BOT_TOKEN', requester: 'bot@agents.example', requesterAct: 'agent', purpose: 'Urgent!\nOpen https://evil.example/login now' }, 'Mac mini', 'https://secrets.test/approve/r1')
+    const row = { fieldName: 'TELEGRAM_BOT_TOKEN', requester: 'bot@agents.example', requesterAct: 'agent', purpose: 'Urgent! Log in at evil.example/login now' }
+    const text = formatApprovalMessage(row, 'Mac mini', 'https://secrets.test/approve/r1')
     expect(text).toContain('Asked by bot@agents.example (agent)')
-    expect(text).toContain('Reason given: “Urgent! Open [link removed] now”')
-    expect(text).not.toContain('evil.example')
+    expect(text).not.toContain('evil')
+    expect(text).not.toContain('Urgent')
     expect(text.trim().split('\n').at(-1)).toBe('https://secrets.test/approve/r1')
   })
 })
