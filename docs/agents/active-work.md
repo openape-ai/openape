@@ -1,10 +1,10 @@
-# Secrets PRF vault, milestone M1 — issue 1535
+# Secrets PRF vault, milestone M2a — issue 1535
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Approved plan revision 2: https://report.openape.ai/d/01M5JEGAHN8GK0VWGQ4HAYH0VM (M0 closed, cryptographic contract v2 in section 11, interface design in section 10).
-- Branch `feature/issue-1535-secrets-vault-crypto`, worktree `openape-monorepo.worktrees/secrets-vault`, canonical base `a08ca73c76d5c4d5e662f5330cc9071b53ef143a`. The shared checkout and other worktrees remain untouched.
-- Adds the v2 vault behind `NUXT_VAULT_ENABLED` (default off): WebCrypto format-v2 core in `shared/vault-crypto.ts`, additive tables, `/api/v2/vault` setup, second-passkey and recovery routes that accept only the human SP session from the vault origin, and the setup, vault and recovery screens in the approved design with self-hosted fonts. v1 routes and pages are unchanged.
-- Verification at `6d489a08`: 72 app tests including 18 crypto and 14 route tests against real `@simplewebauthn/server` verification, 8 safeguard mutations each caught, lint/typecheck/build, the pre-push affected gate, and 9 of 9 real-Chromium checks with PRF virtual passkeys. Test Run with inspected screenshots: https://report.openape.ai/d/01M5JGSRTWGCWFR6GWM653NZ38. Limits: virtual passkeys and a fixture session; phone UI and hardware acceptance follow in M5.
-- Next: owner review and merge of the M1 PR; then M2 (vault secrets and approval UI). No deployment until the plan's single-owner rollout.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Approved plan revision 2: https://report.openape.ai/d/01M5JEGAHN8GK0VWGQ4HAYH0VM. M1 merged as `2da871d98569f1c991a61d2cfb02b1ad1c0e828d` (PR 497, receipt on the PR and issue).
+- Branch `feature/issue-1535-secrets-vault-entries`, worktree `openape-monorepo.worktrees/secrets-vault`, canonical base `2da871d98569f1c991a61d2cfb02b1ad1c0e828d`.
+- First of two M2 PRs: vault secrets with append-only versions and deletion, each change confirmed by a fresh passkey assertion bound to a server-fixed descriptor; the vault screen in the approved design; passkey management moved to `/vault/passkeys`; vault write transactions retry SQLite lock contention through `@openape/sp-tasks` `withBusyRetry`, and file databases switch to WAL.
+- Verification at `f505eb80` (browser run at `b1b95e10`): 81 app tests including 9 new route tests, 4 safeguard mutations caught, lint/typecheck/build, the pre-push gate after regenerating the dependency graph, and 16 of 16 real-Chromium checks. Test Run: https://report.openape.ai/d/01M5JJ3T46XZQA0043A38405YE
+- Next: owner review and merge; then M2b (requests, phone approval, receipt, approvals page, key seal). No deployment.
 
 # Model API settings and latest family versions — issue 1532
 
