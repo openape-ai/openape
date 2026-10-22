@@ -1,10 +1,10 @@
-# Secrets PRF vault, milestone M3 — issue 1535
+# Secrets PRF vault, milestone M4 — issue 1535
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Approved plan revision 2: https://report.openape.ai/d/01M5JEGAHN8GK0VWGQ4HAYH0VM. M2b merged as `ae3ca112418b9d533d691845bfd722ec1f204858` (PR 499, receipt on the PR and issue).
-- Branch `feature/issue-1535-secrets-collect`, worktree `openape-monorepo.worktrees/secrets-vault`, canonical base `ae3ca112418b9d533d691845bfd722ec1f204858`.
-- Adds the vault signing key (wrapped under the VMK, created at setup or by the next approval for older vaults), package signatures checked at approval, `POST /api/v2/approvals/:id/collect` for the requesting identity with once/timed/standing enforced in one UPDATE, an hourly sweep that empties uncollectable packages, per-caller rate limits and refusal audits; the receipt, approvals page and passkeys page show collection state and the vault key.
-- Verification at `f7f573b9`: 116 app tests including 15 new, 8 safeguard mutations caught, lint/typecheck/build, pre-push gate, and 34 of 34 real-Chromium checks including API collection with signature verification. Test Run: https://report.openape.ai/d/01M5JMMAA1041DYER3SZA5RK2T
-- Next: owner review and merge; then M4 (CLI request/wait/deliver with vault key pinning). Open outside M3: deactivating lost passkeys after recovery. No deployment.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Approved plan revision 2: https://report.openape.ai/d/01M5JEGAHN8GK0VWGQ4HAYH0VM. M3 merged as `b0211a924b31eeaa14ac3090e0e1108a6a1376e5` (PR 500, receipt on the PR and issue).
+- Branch `feature/issue-1535-secrets-cli`, worktree `openape-monorepo.worktrees/secrets-vault`, canonical base `b0211a924b31eeaa14ac3090e0e1108a6a1376e5`.
+- Moves the vault crypto into the private package `@openape/secrets-crypto` (app dependency, bundled into the CLI), adds `GET /api/v2/approvals/:id` for the requester, and adds `ape-secrets request --secret`, `wait` and `deliver` (`--stdin`, `--env`, `--out`, `--overwrite`) with vault key pinning on first use and signature checks before decrypting. Legacy `--field` and `fetch` stay.
+- Verification at `01e57d74`: 13 CLI tests (5 of 6 safeguard mutations caught; the sixth is masked by a second safeguard), 25 crypto and 92 app tests, lint/typecheck/build, pre-push gate, and 43 of 43 end-to-end checks with the built CLI. Test Run: https://report.openape.ai/d/01M5JNF3KX08J3Z5RFKTW70A44
+- Next: owner review and merge; then M5 (lost-passkey deactivation, hardware acceptance, documentation, single-owner rollout). No deployment.
 
 # Model API settings and latest family versions — issue 1532
 
