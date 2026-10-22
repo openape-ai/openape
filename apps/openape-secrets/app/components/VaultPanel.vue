@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { onBeforeUnmount, onMounted, reactive, ref, shallowRef } from 'vue'
 import type { DeliveryContext, Envelope, SecretPayload, WrappedKey } from '@openape/ape-secrets/vault'
 import type { Approval, Consumer, Request, Secret, Vault } from '../../shared/vault-types'
 import type { Ceremony } from '../utils/vault-browser'
@@ -20,7 +20,9 @@ interface ActionCeremony extends Ceremony {
   wrapper: WrappedKey
   action: { type: string, secretId: string, version: number, descriptor: DeliveryContext }
 }
-const state = ref<View>()
+// Replace API snapshots as a whole. Nested ciphertext/key objects must remain
+// plain data because Worker.postMessage cannot clone Vue's reactive proxies.
+const state = shallowRef<View>()
 const busy = ref(false)
 const error = ref('')
 const message = ref('')
