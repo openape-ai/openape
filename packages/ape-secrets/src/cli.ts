@@ -3,11 +3,13 @@ import { makeLoginCommand, makeLogoutCommand, makeWhoamiCommand, runProofCli } f
 import { secretsClient } from './client.ts'
 import {
   consumersCommand,
+  deliverCommand,
   fetchCommand,
   keygenCommand,
   listCommand,
   requestCommand,
   statusCommand,
+  waitCommand,
 } from './commands.ts'
 
 const DESCRIPTOR = {
@@ -26,10 +28,11 @@ const main = defineCommand({
       'Hand a secret to a machine without it passing through a chat, a ticket',
       'or anyone\'s scrollback.',
       '',
-      'The machine generates a key pair and keeps the private half. A request',
-      'asks a human for one value; they fill it in their browser, where it is',
-      'sealed against that key. The service in between stores an envelope it',
-      'cannot open, and hands it over exactly once.',
+      'The machine generates a key pair and keeps the private half (`keygen`).',
+      'Ask the owner\'s vault for a secret with `request --secret NAME`; the',
+      'owner approves it with a passkey, `wait` reports the approval, and',
+      '`deliver` writes the value to a file or hands it to a command. The value',
+      'is sealed for this machine and signed by the vault; it is never printed.',
       '',
       'First time? `apes login <email>` once on this device.',
     ].join('\n'),
@@ -44,6 +47,8 @@ const main = defineCommand({
     list: listCommand,
     status: statusCommand,
     fetch: fetchCommand,
+    wait: waitCommand,
+    deliver: deliverCommand,
   },
 })
 

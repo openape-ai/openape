@@ -1,7 +1,7 @@
 {
   "name": "@openape/ape-secrets",
   "version": "0.1.1",
-  "description": "CLI for secrets.openape.ai — hand a secret to a machine without it passing through a chat",
+  "description": "CLI for secrets.openape.ai \u2014 hand a secret to a machine without it passing through a chat",
   "type": "module",
   "license": "MIT",
   "bin": {
@@ -18,7 +18,8 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@openape/cli-auth": "workspace:*",
@@ -26,8 +27,10 @@
     "citty": "^0.1.6"
   },
   "devDependencies": {
+    "@openape/secrets-crypto": "workspace:*",
     "@types/node": "catalog:",
     "tsup": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vitest": "catalog:"
   }
 }

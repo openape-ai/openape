@@ -28,9 +28,10 @@ graph LR
     w32["@openape/protocol-conformance"]
     w33["@openape/proxy"]
     w34["@openape/report-contracts"]
-    w35["@openape/shapes"]
-    w36["@openape/sp-tasks"]
-    w37["@openape/unstorage-s3-driver"]
+    w35["@openape/secrets-crypto"]
+    w36["@openape/shapes"]
+    w37["@openape/sp-tasks"]
+    w38["@openape/unstorage-s3-driver"]
   end
   subgraph modules
     w26["@openape/nuxt-auth-idp"]
@@ -48,40 +49,41 @@ graph LR
     w8["@openape-testrun/app"]
     w9["@openape-timetrack/app"]
     w28["@openape/pods"]
-    w38["docs"]
-    w40["openape-free-idp"]
+    w39["docs"]
+    w41["openape-free-idp"]
   end
   subgraph examples
-    w39["openape-e2e"]
-    w41["openape-idp-example"]
-    w42["openape-sp-example"]
+    w40["openape-e2e"]
+    w42["openape-idp-example"]
+    w43["openape-sp-example"]
   end
   w0 --> w27
   w1 --> w24
   w1 --> w25
   w1 --> w27
-  w1 --> w39
+  w1 --> w40
   w2 --> w24
   w2 --> w27
   w3 --> w13
   w3 --> w27
   w3 --> w34
-  w3 --> w39
+  w3 --> w40
   w4 --> w21
   w4 --> w24
   w4 --> w27
   w4 --> w28
   w4 --> w29
-  w4 --> w39
+  w4 --> w40
   w5 --> w27
-  w5 --> w39
+  w5 --> w40
   w6 --> w24
   w6 --> w27
-  w6 --> w36
+  w6 --> w35
+  w6 --> w37
   w7 --> w27
   w8 --> w27
   w8 --> w34
-  w8 --> w39
+  w8 --> w40
   w9 --> w27
   w10 --> w22
   w10 --> w24
@@ -95,6 +97,7 @@ graph LR
   w14 --> w31
   w15 --> w22
   w15 --> w31
+  w15 --> w35
   w16 --> w22
   w16 --> w31
   w17 --> w22
@@ -107,14 +110,14 @@ graph LR
   w19 --> w24
   w19 --> w25
   w19 --> w33
-  w19 --> w35
-  w19 --> w39
+  w19 --> w36
+  w19 --> w40
   w21 --> w24
   w25 --> w24
   w26 --> w21
   w26 --> w24
   w26 --> w25
-  w26 --> w35
+  w26 --> w36
   w27 --> w21
   w27 --> w24
   w28 --> w19
@@ -126,20 +129,20 @@ graph LR
   w32 --> w24
   w32 --> w25
   w33 --> w24
-  w35 --> w24
-  w35 --> w25
-  w39 --> w26
-  w39 --> w27
-  w40 --> w21
-  w40 --> w24
-  w40 --> w25
+  w36 --> w24
+  w36 --> w25
   w40 --> w26
-  w40 --> w39
+  w40 --> w27
+  w41 --> w21
+  w41 --> w24
+  w41 --> w25
   w41 --> w26
-  w41 --> w37
-  w41 --> w39
-  w42 --> w21
-  w42 --> w24
-  w42 --> w25
-  w42 --> w27
+  w41 --> w40
+  w42 --> w26
+  w42 --> w38
+  w42 --> w40
+  w43 --> w21
+  w43 --> w24
+  w43 --> w25
+  w43 --> w27
 ```
