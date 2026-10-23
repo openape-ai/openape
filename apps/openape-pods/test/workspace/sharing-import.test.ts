@@ -21,8 +21,10 @@ import { WorkspaceDetails } from '../../src/worker/workspace/details'
 import { ItemTagStore } from '../../src/worker/workspace/item-tags'
 import { capturePortableSource } from '../../src/worker/sharing/source'
 import { mapPortableSource } from '../../src/worker/sharing/mapping'
+import { useVolumeHelperFixture } from '../volume-helper-fixture'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
+useVolumeHelperFixture()
 const bytes = (value: string) => new TextEncoder().encode(value)
 const owner = { issuer: 'https://id.example.test', subject: 'recipient' }
 const roots: string[] = []; const stores: PodDatabase[] = []

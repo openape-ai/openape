@@ -1,6 +1,7 @@
 import type { MessageKey } from './index'
 
 export const diagnosticPatterns = [
+  'Directory volume inspection failed: {p0}',
   'Pod execution permission is {p0}; review the Pod permissions before retrying',
   'Script validation failed; previous active script is unchanged (Pod {p0})',
   'Run {p0} is missing; inspect before retrying',
