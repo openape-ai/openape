@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { lstat, mkdir, realpath } from 'node:fs/promises'
-import { homedir } from 'node:os'
+import { userInfo } from 'node:os'
 import { dirname, isAbsolute, join, normalize, relative, sep } from 'node:path'
 import { promisify } from 'node:util'
 import type { DirectoryAccess, DirectoryAssignment, PodResource } from '../contracts/resources'
@@ -17,9 +17,10 @@ export function setVolumeIdentityHelper(path: string | undefined): void { helper
 
 /**
  * The standard place for data that Pods produce. Being below it grants nothing: each folder is still assigned per Pod,
- * and neither the root nor a folder containing it can be assigned.
+ * and neither the root nor a folder containing it can be assigned. It uses the account's home directory, because the
+ * runtime worker runs with HOME set to the Pods profile.
  */
-export function managedRoot(): string { return join(homedir(), '.openape', 'pods') }
+export function managedRoot(): string { return join(userInfo().homedir, '.openape', 'pods') }
 
 /**
  * st_dev is a mount-instance number that changes on remount; the volume UUID does not. Undefined only when the volume
