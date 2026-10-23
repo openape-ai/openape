@@ -258,6 +258,21 @@ describe('grant batch approval', () => {
     expect(calls.find(call => call.url === '/api/grants/batch')?.opts?.body).toEqual({ operations: [{ id: 'g-2', action: 'approve' }, { id: 'g-5', action: 'approve' }] })
   })
 
+  it('drops a request its requester withdrew from both the open members and the history (issue 1536)', async () => {
+    const { wrapper, calls } = await mountBatch([
+      member('g-1', 1),
+      member('g-2', 2, { status: 'withdrawn', decided_at: 1_710_000_100, withdraw_reason: 'Mail left the Inbox' }),
+      member('g-3', 3, { status: 'denied', decided_at: 1_710_000_300 }),
+    ])
+
+    expect(wrapper.findAll('[data-batch-rows] [data-batch-row]').map(row => row.attributes('data-batch-row'))).toEqual(['g-1'])
+    expect(wrapper.find('[data-batch-history] summary').text()).toBe('Already decided (1)')
+    expect(wrapper.find('[data-batch-row="g-2"]').exists()).toBe(false)
+    await button(wrapper, 'Approve 1').trigger('click')
+    await flushPromises()
+    expect(calls.find(call => call.url === '/api/grants/batch')?.opts?.body).toEqual({ operations: [{ id: 'g-1', action: 'approve' }] })
+  })
+
   it('says that nothing is open and still offers the history in German', async () => {
     vi.spyOn(navigator, 'language', 'get').mockReturnValue('de-AT')
     const { wrapper } = await mountBatch([member('g-1', 1, { status: 'approved', decided_at: 1_710_000_100 }), member('g-2', 2, { status: 'revoked', decided_at: 1_710_000_200 })])

@@ -45,6 +45,7 @@ export type BrokerRequest = BrokerRequestBase & (
   | { operation: 'authorize', sub: string, key_id: string, requester_name?: string, request: OpenApeProgramAuthorizeRequest }
   | { operation: 'get', sub: string, key_id: string, requester_name?: string, reference: string }
   | { operation: 'get' | 'token', sub: string, key_id: string, requester_name?: string, grant_id: string }
+  | { operation: 'withdraw', sub: string, key_id: string, requester_name?: string, reference: string, reason?: string }
 )
 
 /**
@@ -70,4 +71,10 @@ export interface OpenApeProgramAuthorizeRequest {
 export type OpenApeProgramAuthorizeResponse =
   | { state: 'approved', grant_id: string, authz_jwt: string, expires_at: number }
   | { state: 'pending', grant_id: string, approval_url: string }
-  | { state: 'denied' | 'revoked' | 'expired' | 'used', grant_id: string }
+  | { state: 'denied' | 'revoked' | 'expired' | 'used' | 'withdrawn', grant_id: string }
+
+/** Answer of `POST /api/grants/withdraw` and of the `withdraw` broker operation (grants.md §4.11). */
+export type OpenApeGrantWithdrawResult =
+  | { outcome: 'withdrawn', grant_id: string, previous_status: 'pending' | 'approved' | 'withdrawn' }
+  | { outcome: 'already_decided', grant_id: string, status: 'denied' | 'revoked' | 'expired' | 'used' }
+  | { outcome: 'unknown' }

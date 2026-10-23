@@ -24,7 +24,7 @@ Core type definitions for the DDISA protocol and grant system.
 - `OpenApeGrantRequest` — Grant creation request
 - `OpenApeAuthZClaims` — Authorization JWT payload
 - `GrantType` — `'once' | 'timed' | 'always'`
-- `GrantStatus` — `'pending' | 'approved' | 'denied' | 'revoked' | 'expired' | 'used'`
+- `GrantStatus` — `'pending' | 'approved' | 'denied' | 'revoked' | 'expired' | 'used' | 'withdrawn'`
 - `PolicyMode` — `'open' | 'allowlist-admin' | 'allowlist-user' | 'deny'`
 - `ActorType` — `'human' | 'agent'`
 - `ResolverOptions` — DNS resolver configuration (cache TTL, DoH provider, mocks)

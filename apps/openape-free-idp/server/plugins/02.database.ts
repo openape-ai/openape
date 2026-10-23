@@ -272,6 +272,11 @@ export default defineNitroPlugin(async () => {
   catch (error) {
     if (!isDuplicateColumn(error)) throw error
   }
+  // The requester's reason when it withdrew its own referenced request (issue 1536).
+  try { await db.run(sql`ALTER TABLE grants ADD COLUMN withdraw_reason TEXT`) }
+  catch (error) {
+    if (!isDuplicateColumn(error)) throw error
+  }
 
   // Issue 1473: summary.text became title/description; requests carrying
   // text are refused, so stored grants must not keep it either.

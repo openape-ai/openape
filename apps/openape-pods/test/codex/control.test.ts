@@ -206,8 +206,10 @@ it('journals a local private Jev import without accepting a raw key or unselecte
 
 it('describes files and external services for data exchange and offers no network, workflow or gate actions', async () => {
   const { send } = fixture()
-  const reference = await send({ action: 'runtime' }) as { contractVersion: number, dataExchange: Record<string, string>, approvalHistory: unknown, actions: Record<string, unknown> }
-  expect(reference.contractVersion).toBe(7)
+  const reference = await send({ action: 'runtime' }) as { contractVersion: number, dataExchange: Record<string, string>, approvalHistory: unknown, actions: Record<string, unknown>, script: { tools: string } }
+  expect(reference.contractVersion).toBe(8)
+  // Contract 8 adds the script's own withdrawal of a referenced request (issue 1536).
+  expect(reference.script.tools).toContain('context.tools.withdraw({reference,reason?})')
   expect(reference.dataExchange.purpose).toContain('files')
   expect(reference).not.toHaveProperty('sharedData')
   expect(reference).not.toHaveProperty('networks')

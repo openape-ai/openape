@@ -92,7 +92,7 @@ export interface DDISAAssertionClaims {
 export type GrantType = 'once' | 'timed' | 'always'
 
 /** OpenApe grant status */
-export type GrantStatus = 'pending' | 'approved' | 'denied' | 'revoked' | 'expired' | 'used'
+export type GrantStatus = 'pending' | 'approved' | 'denied' | 'revoked' | 'expired' | 'used' | 'withdrawn'
 
 /** Selector values for a CLI resource reference */
 export interface OpenApeCliSelector {
@@ -295,6 +295,8 @@ export interface OpenApeGrant {
   expires_at?: number
   /** When the grant was used (for 'once' grants) */
   used_at?: number
+  /** The requester's reason when it withdrew its own referenced request (status `withdrawn`). */
+  withdraw_reason?: string
   /**
    * Audit-trail marker when this grant was auto-approved by matching a
    * standing grant (Phase 1 policy-shift). Holds the standing grant's id.

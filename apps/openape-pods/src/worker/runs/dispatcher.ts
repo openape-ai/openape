@@ -1,6 +1,7 @@
 import { assertCurrentScript } from '../../contracts/retired-storage'
 import { scriptFrameBytes } from './response'
-import type { OpenApeGrantBatch } from '@openape/core'
+import type { OpenApeGrantBatch, OpenApeGrantWithdrawResult } from '@openape/core'
+import { parseGrantWithdrawRequest } from '@openape/grants'
 import type { SandboxReach } from '../../contracts/sandbox'
 import { ApprovalHistory } from '../data/approval-history'
 import { isProgramCall } from '../../contracts/program-execution'
@@ -22,7 +23,7 @@ import { DependencyStore } from '../dependencies/store'
 import { assignedDirectories } from '../../runtime/directories'
 import { podDirectories } from '../../runtime/environment'
 import { parseHttpRequest } from '../../contracts/http'
-import { splitScriptSummary } from '../../contracts/grant-summary'
+import { scriptWithdrawResult, splitScriptSummary } from '../../contracts/grant-summary'
 import type { ScriptSummary } from '../../contracts/grant-summary'
 import type { HttpRequest, HttpReply } from '../../contracts/http'
 import { assignedHttp } from '../../main/programs/http-service'
@@ -71,6 +72,8 @@ export interface RunServices {
   proxy?: ProxyAgentCall
   /** `summary` is the script's own account of the call; the IdP shows it only if the call needs a new grant. */
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary, batch?: OpenApeGrantBatch, reference?: string) => Promise<unknown>
+  /** Withdraws this Pod identity's own referenced single-use request (issue 1536). */
+  withdraw?: (request: { reference: string, reason?: string }, signal: AbortSignal, scope: RunServiceScope) => Promise<OpenApeGrantWithdrawResult>
 }
 
 const maxAgentCallsPerRun = 50
@@ -335,6 +338,14 @@ export class RunDispatcher {
             finally { pendingAgents.delete(request) }
           }
           if (operation === 'tools.invoke') return scriptTool(payload, operationSignal, summary, batch, reference)
+          if (operation === 'tools.withdraw') {
+            const request = parseGrantWithdrawRequest(payload)
+            if (!this.services?.withdraw) throw new Error('Grant withdrawal is unavailable')
+            const result = scriptWithdrawResult(await this.services.withdraw(request, operationSignal, scope))
+            assertCurrent()
+            // The receipt in the run history; repeating a lost withdrawal is safe, so no effect journal entry.
+            appendEvent('grant-withdraw', { ...request, ...result }); return result
+          }
           throw new Error('Unsupported script operation')
         },
       }

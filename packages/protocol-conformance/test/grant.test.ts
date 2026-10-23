@@ -1,5 +1,5 @@
 import type { OpenApeGrant } from '@openape/core'
-import { approveGrant, createGrant, InMemoryGrantStore, parseGrantSummary } from '@openape/grants'
+import { approveGrant, createGrant, grantReferenceKey, InMemoryGrantStore, parseGrantSummary, withdrawReferencedGrant } from '@openape/grants'
 import { describe, expect, it } from 'vitest'
 import { getValidator } from './harness.js'
 
@@ -21,6 +21,18 @@ describe('grant object — grant.json', () => {
     const approved = await approveGrant(grant.id, 'admin@example.com', store)
     const { valid, errors } = validate(approved)
     expect(valid, `Schema errors:\n${errors}`).toBe(true)
+  })
+
+  it('withdrawn referenced grant validates against schema (issue 1536)', async () => {
+    const store = new InMemoryGrantStore()
+    const request = { requester: 'agent@example.com', target_host: 'macmini.local', audience: 'shapes', grant_type: 'once' as const, command: ['o365-cli', 'workflow', 'archive'], reference: 'archive-v2:abc' }
+    const { grant } = await store.createReferenced({ id: crypto.randomUUID(), type: 'command', request, status: 'pending', created_at: Math.floor(Date.now() / 1000) })
+    await withdrawReferencedGrant(grantReferenceKey(request.requester, request.reference), 'Mail left the Inbox', store)
+    const withdrawn = await store.findById(grant.id)
+    expect(withdrawn).toMatchObject({ status: 'withdrawn', withdraw_reason: 'Mail left the Inbox' })
+    const { valid, errors } = validate(withdrawn)
+    expect(valid, `Schema errors:\n${errors}`).toBe(true)
+    expect(validate({ ...withdrawn, withdraw_reason: 'line\nbreak' }).valid).toBe(false)
   })
 
   it('pending grant (no type field) validates against schema', async () => {

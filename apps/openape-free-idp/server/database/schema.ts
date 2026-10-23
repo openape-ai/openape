@@ -19,6 +19,8 @@ export const grants = sqliteTable('grants', {
   usedAt: integer('used_at'),
   // jti of the command token whose /consume confirmed a single-use grant spent at issuance (issue 1473)
   consumedJti: text('consumed_jti'),
+  // The requester's reason when it withdrew its own referenced request (issue 1536)
+  withdrawReason: text('withdraw_reason'),
   // When this grant was auto-approved by matching a standing grant, this
   // column records the standing grant's id for audit-trail purposes.
   // Null for grants decided via the normal manual approval path.

@@ -1,3 +1,11 @@
+# Pods withdraw their own single-use grant requests — issue 1536
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1536. Approved Plan revision 1: https://report.openape.ai/d/01M5M346FHXZQS84VC0GPWJ2ZE?v=2. Protocol PR: https://repos.openape.ai/patrick/protocol/pulls/9.
+- Branch `feature/pods-withdraw-grant-request`, worktree `openape-monorepo.worktrees/pods-withdraw-grant-request-1536`, canonical base `2ab279bc67df9440fc43b5250f697b1836a6ce4c`.
+- IdP: terminal status `withdrawn`, requester-only `POST /api/grants/withdraw` by reference, broker operation `withdraw`, discovery `openape_grant_withdraw_supported`, atomic store transition with broker audit, batch page and consume refusal. Pods: `context.tools.withdraw`, `grant-withdraw` run event, runtime contract 8. apes maps 403 `withdrawn` to a refusal.
+- PR: https://repos.openape.ai/patrick/monorepo/pulls/506, explicitly related to issue 1536 (as is protocol PR 9). Affected unit gate and `pnpm check:ci` pass on `65e46149ae8ce725d542557593a18013bc1d2631`. Test Run: https://report.openape.ai/d/01M5M52S9ZX9Z576YY0QG4X3MZ?v=2.
+- Next: owner review and merge; IdP deploy (decision and agent provider) before a Pods release, each with owner OK; then the archive Pods withdraw references whose mail left the Inbox.
+
 # Secrets PRF vault, single-confirmation setup — issue 1535
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Live since 2026-10-22 as `prod-db2ad6ba5`, enabled for patrick@hofmann.eco only (receipts on PR 502 and 503).

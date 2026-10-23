@@ -9,7 +9,7 @@ describe('not-started failure classification', () => {
     expect(failure).toEqual({ kind: 'infrastructure', phase: 'authorization', status, retryAfterMs: 60000, detail: `HTTP ${status}` })
   })
 
-  it.each(['missing', 'pending', 'denied', 'revoked', 'expired', 'used'])('preserves permission state %s without turning refusal into infrastructure', (state) => {
+  it.each(['missing', 'pending', 'denied', 'revoked', 'expired', 'used', 'withdrawn'])('preserves permission state %s without turning refusal into infrastructure', (state) => {
     expect(executionFailure(new AuthorizationRefusedError(state, 'grant-fixture'))).toEqual({ kind: 'permission', state, grantId: 'grant-fixture' })
   })
 

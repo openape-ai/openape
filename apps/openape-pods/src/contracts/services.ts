@@ -4,7 +4,7 @@ import { parseScriptCapabilities } from './credentials'
 
 export interface ServiceScope { podId: string, runId: string, epoch: number, assignmentRevision: number, capabilities: string[] }
 /** The services a run asks the desktop for; a request without a kind is a tool call. */
-export const serviceKinds = ['credential', 'jev', 'http', 'shell', 'shellClose', 'scriptGrant'] as const
+export const serviceKinds = ['credential', 'jev', 'http', 'shell', 'shellClose', 'scriptGrant', 'grantWithdraw'] as const
 export type ServiceKind = typeof serviceKinds[number]
 /** `summary` is a script's own account of a tool or HTTP call, shown by the IdP only if the call needs a new grant. */
 export interface ServiceRequest { id: string, scope: ServiceScope, body: unknown, kind?: ServiceKind, summary?: unknown, batch?: unknown, reference?: unknown }

@@ -1,5 +1,6 @@
 import type { CliRequest } from '../contracts/cli'
-import { parseGrantReference, parseGrantBatch } from '@openape/grants'
+import { parseGrantReference, parseGrantBatch, parseGrantWithdrawRequest } from '@openape/grants'
+import { withdrawGrantRequest } from './grants/withdraw'
 import type { ProgramCall, GrantPresentation  } from './broker/authorization'
 import { executeRecordedProgram } from './programs/effect-execution'
 import type { ProgramExecutionCheck } from '../contracts/program-execution'
@@ -1118,6 +1119,12 @@ export class RuntimeWorker {
         throw error instanceof AuthorityError ? error : new AuthorityError('Pod execution permission is no longer active; review the Pod permissions before retrying')
       }
       const tokens = this.grantTokens(scope.runId)
+      if (request.kind === 'grantWithdraw') {
+        if (!this.connections) throw new Error('Connection service unavailable')
+        const body = parseGrantWithdrawRequest(request.body)
+        const result = await withdrawGrantRequest(await this.connections.podConnection(scope.podId), body, controller.signal)
+        await check(); controller.signal.throwIfAborted(); return result
+      }
       if (request.kind === 'credential') {
         const alias = parseCredentialRead(request.body)
         if (!this.credentials) throw new Error('Credential store is unavailable')
