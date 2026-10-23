@@ -21,6 +21,7 @@ import { recoverAuthDomains } from './ledger'
 import { verifyExecutable } from '../../worker/runtime/sandbox'
 import type { AccountCleanup } from '../../worker/onboarding/reconcile'
 import { summaryLine } from '../../contracts/grant-summary'
+import { safeSystemCause } from '../../contracts/agent-errors'
 
 // The subject an OpenApe service will see; the service verifies the signature itself.
 function tokenSubject(token: string): unknown {
@@ -30,8 +31,17 @@ function tokenSubject(token: string): unknown {
 
 interface SetupState { connections: ConnectionView[], owner: string | null, complete: boolean }
 interface PodEntry { connectionId: string, prepared: boolean, broker?: PodBrokerConnection, identity?: PodIdentityReference, registeredName?: string }
+/** The error text with its system cause (for example ENOTFOUND), which a bare `fetch failed` would otherwise hide. */
+function describe(error: unknown, fallback: string): string {
+  const message = error instanceof Error ? error.message : fallback
+  const cause = safeSystemCause(error)
+  return cause && !message.includes(cause) ? `${message} (${cause})` : message
+}
 async function discoverIssuer(account: string): Promise<string> {
-  const idp = await resolveIdP(extractDomain(account))
+  const domain = extractDomain(account)
+  let idp: string | null
+  try { idp = await resolveIdP(domain) }
+  catch (error) { throw new Error(`Could not look up the DDISA identity provider of ${domain}: ${describe(error, 'lookup failed')}`) }
   if (!idp) throw new Error('No DDISA identity provider is published for this email domain')
   const url = new URL(idp)
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/') throw new Error('The published DDISA identity provider must be an HTTPS origin')
@@ -40,6 +50,8 @@ async function discoverIssuer(account: string): Promise<string> {
 export class ConnectionManager {
   private jobs = new Map<string, { controller: AbortController, work: Promise<void>, login: ConnectionView['login'] }>()
   private runtimeState = { ready: false, error: null as string | null }
+  // Credential recovery finished; set before the bundled tools are inspected.
+  private accountsReady = false
   private assigning = false
   private identityTurn: Promise<void> = Promise.resolve()
   private typesafeSession = new AbortController()
@@ -56,6 +68,7 @@ export class ConnectionManager {
   }
 
   async initialize(inspectCredentials: () => Promise<void>, maintenance = true): Promise<void> {
+    this.accountsReady = false
     try {
       await recoverAuthDomains(join(this.root, 'authentication'), this.runtime.helper)
       await inspectCredentials()
@@ -75,6 +88,7 @@ export class ConnectionManager {
         }
         await rm(join(this.root, 'credentials/temporary'), { recursive: true, force: true })
       }
+      this.accountsReady = true
       try {
         const manifest = JSON.parse(await readFile(this.runtime.manifest, 'utf8')) as { binaryHash: string, cli: string }
         if (manifest.cli !== `0.153.4-${process.platform}-${process.arch}`) throw new Error('Bundled Codex architecture does not match this Mac')
@@ -198,9 +212,11 @@ export class ConnectionManager {
       return this.view()
     }
     if (command.type === 'enableBroker' || command.type === 'revokeBroker') { await this.configureBroker(command); return this.view() }
-    if (!this.runtimeState.ready) throw new Error(this.runtimeState.error ?? 'Bundled runtime is not ready')
     if (command.type === 'connect') {
       if (command.provider === 'typesafe') throw new Error('Connect TypeSafe through the protected API key form')
+      // The owner's DDISA sign-in needs only storage and the network; the bundled Codex tools serve the ChatGPT account.
+      if (!this.accountsReady && command.provider === 'openape') throw new Error(this.runtimeState.error ?? 'Account storage is not ready')
+      if (!this.runtimeState.ready && command.provider !== 'openape') throw new Error(this.runtimeState.error ?? 'Bundled runtime is not ready')
       const existing = (await this.state()).connections.find(item => item.provider === command.provider)
       if (this.assigning) throw new Error('Another permission review is in progress')
       if (command.provider === 'chatgpt') return this.startLogin(existing ?? { id: randomUUID(), provider: 'chatgpt', account: '', state: 'connecting', error: null, login: null }, existing ? await this.metadata(existing.id) : {}, !existing)
@@ -212,6 +228,7 @@ export class ConnectionManager {
       const metadata = switching ? {} : current
       return this.startLogin(existing ?? { id: randomUUID(), provider: 'openape', account, state: 'connecting', error: null, login: null }, { ...metadata, issuer }, !existing, account)
     }
+    if (!this.runtimeState.ready) throw new Error(this.runtimeState.error ?? 'Bundled runtime is not ready')
     if (command.type === 'finish') await this.dispatch({ type: 'finish' })
     return this.view()
   }
@@ -262,7 +279,7 @@ export class ConnectionManager {
         await this.availability()
       }
       catch (error) {
-        const message = error instanceof Error ? error.message : 'Sign-in failed'
+        const message = describe(error, 'Sign-in failed')
         await this.save({ ...previous, state: fresh || previous.state === 'connecting' ? 'failed' : previous.state, error: message }, await this.metadata(previous.id))
       }
       finally { clearTimeout(timer); this.jobs.delete(connection.id) }

@@ -20,14 +20,17 @@ import type { WorkspaceCommand, WorkspaceState } from './control'
 import type { SecretsCommand, SecretsView } from './secrets'
 import type { InboxMessagePage, InboxMessagesCommand } from './inbox'
 
-export const channels = { storage: 'pods:storage', updates: 'pods:updates', mcpSession: 'pods:mcp-session', central: 'pods:central', codex: 'pods:codex', approvalHistory: 'pods:approvalHistory', definitions: 'pods:definitions', packages: 'pods:packages', programs: 'pods:programs', language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling', sharing: 'pods:sharing', secrets: 'pods:secrets', messages: 'pods:messages' } as const
+export const channels = { storage: 'pods:storage', updates: 'pods:updates', mcpSession: 'pods:mcp-session', central: 'pods:central', codex: 'pods:codex', approvalHistory: 'pods:approvalHistory', definitions: 'pods:definitions', packages: 'pods:packages', programs: 'pods:programs', language: 'pods:language', scripts: 'pods:scripts', data: 'pods:data', onboarding: 'pods:onboarding', master: 'pods:master', details: 'pods:details', status: 'pods:status', restart: 'pods:restart', changed: 'pods:status-changed', workspace: 'pods:workspace', resources: 'pods:resources', runs: 'pods:runs', scheduling: 'pods:scheduling', sharing: 'pods:sharing', secrets: 'pods:secrets', messages: 'pods:messages' } as const
 export type WorkerState = 'starting' | 'ready' | 'recovery' | 'error' | 'stopped'
 /** `recovery`: storage is not ready (`storage` says why); the window, diagnostics and recovery stay usable, nothing runs. */
 export interface WorkerStatus { state: WorkerState, pid: number | null, error: string | null, storage?: StorageFailure }
+/** Whether this Mac may start Pod processes; sign-in, diagnosis and updates work either way (src/main/support.ts). */
+export interface ExecutionStatus { supported: boolean, compatibility: 'verified' | 'unverified' | 'incompatible', kernel: string, architecture: string, system: string | null, verified: string[], reason: string | null }
 export interface PodStatus {
   version: 1
   mode: 'fixture' | 'local'
   executionEnabled: true
+  execution: ExecutionStatus
   worker: WorkerStatus
   runtime: { electron: string, node: string }
 }
@@ -64,6 +67,8 @@ export interface PodsBridge {
   resources: (command: ResourceCommand) => Promise<ResourceState>
   workspace: (command: WorkspaceCommand) => Promise<WorkspaceState>
   getStatus: () => Promise<PodStatus>
+  /** Starts the local service again after it exited or its account setup failed; optional for older fixtures. */
+  restart?: () => Promise<PodStatus>
   onStatus: (listener: (status: PodStatus) => void) => () => void
 }
 export function isPodStatus(value: unknown): value is PodStatus {
@@ -76,4 +81,11 @@ export function isPodStatus(value: unknown): value is PodStatus {
     && (worker.pid === null || (Number.isSafeInteger(worker.pid) && worker.pid > 0))
     && (worker.error === null || typeof worker.error === 'string')
     && typeof status.runtime?.electron === 'string' && typeof status.runtime.node === 'string'
+    && isExecutionStatus(status.execution)
+}
+function isExecutionStatus(value: unknown): value is ExecutionStatus {
+  const execution = value as Partial<ExecutionStatus> | undefined
+  return !!execution && typeof execution.supported === 'boolean' && execution.compatibility === (execution.supported ? 'verified' : execution.compatibility === 'incompatible' ? 'incompatible' : 'unverified') && typeof execution.kernel === 'string' && typeof execution.architecture === 'string'
+    && (execution.system === null || typeof execution.system === 'string') && Array.isArray(execution.verified) && execution.verified.every(item => typeof item === 'string')
+    && (execution.supported ? execution.reason === null : typeof execution.reason === 'string')
 }

@@ -70,7 +70,7 @@ import { DdisaAgentTokens } from './programs/ddisa-agent'
 import { parseCredentialRead } from '../contracts/credentials'
 import { parseScriptView } from '../contracts/scripts'
 import type { ScriptCommand, ScriptView } from '../contracts/scripts'
-import { assertPilotRuntime } from './support'
+import { assertExecutionSupported } from './support'
 import { parseDataView } from '../contracts/data'
 import type { DataView } from '../contracts/data'
 import type { DataInternal } from '../worker/data/control'
@@ -114,6 +114,23 @@ const secretsOrigin = 'https://secrets.openape.ai'
 // Waiting calls are parked outside the service limit, but bounded per run and in total.
 const parkedPerRun = 4
 const parkedTotal = 64
+const setupAttempts = 3
+// One attempt covers credential recovery of a large profile; a hang beyond it is reported with its phase.
+const setupAttemptMs = 90_000
+const cleanupMs = 10_000
+class SetupTimeout extends Error {}
+interface AccountServices {
+  agentBackends?: AgentBackendManager
+  connections?: ConnectionManager
+  providerGateway?: Awaited<ReturnType<typeof startAgentGateway>>
+  programs?: ProgramManager
+  secretsGate?: SecretsGate
+  released?: Promise<void>
+}
+function stopService(service: AccountServices[Exclude<keyof AccountServices, 'released'>]): Promise<unknown> | undefined {
+  if (service instanceof AgentBackendManager) return service.drain()
+  return service && ('close' in service ? service.close() : service.stop())
+}
 // A fixed record id in the encrypted store for this Mac's consumer key at OpenApe Secrets.
 const secretsConsumerRecord = '6f0c2d2e-5b1a-4f0e-9c7d-3a2b1c0d9e8f'
 
@@ -155,6 +172,15 @@ export class RuntimeWorker {
   private agentBackends: AgentBackendManager | null = null
   private jevAttempts = new Map<string, number>()
   private setupReady: Promise<void> | null = null
+  private restarting: Promise<void> | null = null
+  // Each setup attempt has its own epoch; a superseded attempt fails at its next step instead of changing shared state.
+  private setupEpoch = 0
+  private setupPhase = 'not started'
+  // The services of the lifetime that last became shared; restart releases exactly these.
+  private account: AccountServices | null = null
+  // Set when a release failed or timed out; services may still run, so nothing restarts beside them.
+  private releaseFailure: string | null = null
+  private releases = new Set<Promise<void>>()
   private child: RuntimeChild | null = null
   private stopping = false
   private root = ''
@@ -178,8 +204,7 @@ export class RuntimeWorker {
   start(root: string, profileBase: string): void {
     this.providerAbort = new AbortController()
     this.stopping = false
-    try { assertPilotRuntime() }
-    catch (error) { this.state = { state: 'error', pid: null, error: error instanceof Error ? error.message : 'Unsupported Mac' }; this.publish(this.state); return }
+    // Storage and accounts start on every Mac; Pod execution checks the verified kernel where it actually starts processes.
     this.root = realpathSync(root)
     this.profileBase = profileBase
     this.credentials = this.host.credentials(join(this.root, 'credentials'))
@@ -191,7 +216,7 @@ export class RuntimeWorker {
     const child = this.child
     const reportError = (error: string) => { this.state = { state: 'error', pid: child.pid ?? null, error }; this.publish(this.state) }
     let storage: StorageFailure | undefined
-    this.state = { state: 'starting', pid: child.pid ?? null, error: null }
+    this.state = { state: 'starting', pid: child.pid ?? null, error: null }; this.publish(this.state)
     // The window never waits on the database: without a readiness report in time it shows recovery, nothing runs.
     const deadline = setTimeout(() => {
       if (this.child !== child || this.state.state !== 'starting') return
@@ -255,9 +280,11 @@ export class RuntimeWorker {
       }
       clearTimeout(deadline); storage = undefined
       this.state = { state: 'ready', pid: child.pid ?? null, error: null }
-      this.setupReady = (async () => { if (!this.host.oneShot) await this.initializeConnections(); this.publish(this.state) })().catch((error: unknown) => { reportError(error instanceof Error ? error.message : 'Connection setup failed') })
+      this.setupReady = this.setUp(child).catch((error: unknown) => { if (this.child === child) reportError(`Account service setup failed: ${error instanceof Error ? error.message : String(error)}`) })
     })
     child.on('exit', (code) => {
+      // A dead worker's pending setup must never resume into shared fields or dispatch to a later worker.
+      this.setupEpoch++
       this.providerAbort.abort(new Error('Owning worker stopped'))
       void this.agentBackends?.drain().catch((error: unknown) => { console.error('Proxy cleanup failed', error instanceof Error ? error.name : 'Error') })
       this.programs?.cancelAll()
@@ -272,41 +299,160 @@ export class RuntimeWorker {
     child.stderr?.on('data', (data: Buffer) => { console.error('[pods worker]', data.toString()) })
   }
 
-  private async initializeConnections(): Promise<void> {
-    this.agentBackends = new AgentBackendManager({ profileRoot: this.root })
-    await this.agentBackends.reload()
-    setMandatorySecretPaths(this.agentBackends.protectedPaths())
-    await this.dispatch({ secretPaths: this.agentBackends.protectedPaths() })
+  /**
+   * Account setup for one worker. An attempt that rejects releases what it created and is retried at most twice; an
+   * attempt that does not finish in time is final. Either way the window then shows the phase and cause. A superseded
+   * attempt can no longer dispatch or assign shared fields, so a late result never overwrites a newer worker's setup.
+   */
+  private async setUp(child: RuntimeChild): Promise<void> {
+    for (let attempt = 1; !this.host.oneShot; attempt++) {
+      const epoch = ++this.setupEpoch
+      const owned: AccountServices = {}
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const limit = new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(new SetupTimeout(`Account service setup did not finish within ${setupAttemptMs / 1000} seconds (phase: ${this.setupPhase})`)), setupAttemptMs) })
+      try { await Promise.race([this.initializeConnections(epoch, owned), limit]); break }
+      catch (error) {
+        if (epoch === this.setupEpoch) this.setupEpoch++
+        // Only this attempt's own services are released; a newer worker's services are never touched here.
+        try { await this.releaseServices(owned) }
+        catch (cleanup) { throw new Error(`${error instanceof Error ? error.message : String(error)}; release failed: ${cleanup instanceof Error ? cleanup.message : String(cleanup)}`) }
+        if (this.child !== child) return
+        if (attempt === setupAttempts || error instanceof SetupTimeout) throw error
+        console.error(`Account service setup attempt ${attempt} failed; retrying`, error)
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt))
+        if (this.child !== child) return
+      }
+      finally { clearTimeout(timer) }
+    }
+    if (this.child === child) this.publish(this.state)
+  }
+
+  /**
+   * Releases one lifetime's account services once (repeated calls share the result) and clears only the shared fields
+   * that still point to them. Every release stays tracked until it settles, so a restart waits for it.
+   */
+  private releaseServices(owned: AccountServices | null): Promise<void> {
+    if (!owned) return Promise.resolve()
+    owned.released ??= (() => {
+      const parts = (['secretsGate', 'programs', 'connections', 'agentBackends', 'providerGateway'] as const).map(key => stopService(owned[key]))
+      if (this.secretsGate === owned.secretsGate) this.secretsGate = null
+      if (this.programs === owned.programs) this.programs = null
+      if (this.connections === owned.connections) this.connections = null
+      if (this.agentBackends === owned.agentBackends) this.agentBackends = null
+      if (this.providerGateway === owned.providerGateway) this.providerGateway = null
+      if (this.account === owned) this.account = null
+      return this.settle(parts)
+    })()
+    return owned.released
+  }
+
+  /**
+   * Waits at most `cleanupMs` for releases. A failed or timed-out release latches: resources may still run, so no
+   * later restart may start new services beside them; the owner has to quit and reopen Pods.
+   */
+  private settle(parts: (Promise<unknown> | undefined)[]): Promise<void> {
+    const release = (async () => {
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const limit = new Promise<'timeout'>((resolve) => { timer = setTimeout(resolve, cleanupMs, 'timeout') })
+      const results = await Promise.race([Promise.allSettled(parts), limit]).finally(() => clearTimeout(timer))
+      const failures = results === 'timeout' ? [] : results.flatMap(result => result.status === 'rejected' ? [result.reason instanceof Error ? result.reason.message : String(result.reason)] : [])
+      if (results === 'timeout') this.releaseFailure ??= `Account service cleanup did not finish within ${cleanupMs / 1000} seconds; quit and reopen Pods`
+      else if (failures.length) this.releaseFailure ??= `Account service cleanup failed: ${failures.join('; ')}; quit and reopen Pods`
+      else return
+      throw new Error(this.releaseFailure)
+    })()
+    this.releases.add(release)
+    void release.catch(() => {}).finally(() => this.releases.delete(release))
+    return release
+  }
+
+  /**
+   * The owner's restart after a worker exit or failed account setup. Concurrent requests share one restart, and a ready
+   * or starting worker is left alone, so it never forks a second worker. A still pending setup is superseded first.
+   */
+  restart(): Promise<void> {
+    if (this.stopping || !['error', 'stopped'].includes(this.state.state)) return this.restarting ?? Promise.resolve()
+    if (this.releaseFailure) return Promise.reject(new Error(this.releaseFailure))
+    this.restarting ??= (async () => {
+      this.setupEpoch++
+      const child = this.child
+      // A second worker never starts beside one that has not exited; its exit cleanup belongs to the old lifetime.
+      if (child) {
+        let timer: ReturnType<typeof setTimeout> | undefined
+        const exited = await Promise.race([new Promise<boolean>((resolve) => { child.once('exit', () => resolve(true)); child.kill() }), new Promise<boolean>((resolve) => { timer = setTimeout(resolve, cleanupMs, false) })]).finally(() => clearTimeout(timer))
+        if (!exited) throw new Error(`The previous worker did not exit within ${cleanupMs / 1000} seconds; quit and reopen Pods`)
+      }
+      await this.releaseServices(this.account)
+      // Releases of superseded attempts may still run; each is bounded, and a failed one forbids the restart.
+      await Promise.allSettled([...this.releases])
+      if (this.releaseFailure) throw new Error(this.releaseFailure)
+      if (!this.stopping) this.start(this.root, this.profileBase)
+    })().finally(() => { this.restarting = null })
+    return this.restarting
+  }
+
+  /** Why the account service cannot answer, with the worker phase and its reported cause. */
+  private unavailable(): Error {
+    const { state, error } = this.state
+    return new Error(`Connection service unavailable (${state}): ${error ?? (state === 'error' || state === 'stopped' ? 'no cause was reported' : `account setup has not finished (phase: ${this.setupPhase})`)}`)
+  }
+
+  private async initializeConnections(epoch = this.setupEpoch, owned: AccountServices = {}): Promise<void> {
+    const live = () => { if (epoch !== this.setupEpoch) throw new Error('Superseded account service setup') }
+    // Every service is recorded as owned by this attempt before it becomes shared, so a superseded attempt releases it.
+    const own = <K extends Exclude<keyof AccountServices, 'released'>>(key: K, value: NonNullable<AccountServices[K]>): NonNullable<AccountServices[K]> => {
+      owned[key] = value
+      // Acquired after this attempt was already released (for example after its time limit): close it on its own.
+      if (owned.released) { void this.settle([stopService(value)]).catch(() => {}); live(); throw new Error('Superseded account service setup') }
+      live()
+      this.account = owned; (this as unknown as AccountServices)[key] = value
+      return value
+    }
+    const credentials = this.credentials!
+    this.setupPhase = 'agent backends'
+    const agentBackends = own('agentBackends', new AgentBackendManager({ profileRoot: this.root }))
+    await agentBackends.reload(); live()
+    setMandatorySecretPaths(agentBackends.protectedPaths())
+    this.setupPhase = 'protected paths'
+    await this.dispatch({ secretPaths: agentBackends.protectedPaths() }); live()
     const dist = this.directory
     const runtime = { helper: join(dist, 'native/pods-helper'), executable: process.execPath, entry: join(dist, 'runtime/script-entry.mjs'), runtimeDirectories: [dirname(dirname(process.execPath))], environment: { ELECTRON_RUN_AS_NODE: '1' }, binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs') }
-    this.connections = new ConnectionManager(this.root, runtime, this.credentials!, command => this.dispatch({ setup: command }), async () => {
-      const ready = await this.connections!.providerReady()
-      await this.dispatch({ provider: ready && this.providerGateway ? { port: this.providerGateway.port, capability: this.providerGateway.capability } : null })
-    }, podId => this.podName(podId), !!process.env.OPENAPE_PODS_FIXTURE_DIR && process.env.NODE_ENV === 'test', this.host.oneShot ? this.host.jevKey : undefined)
-    this.providerGateway = await startAgentGateway({ provider: (body, signal) => this.connections!.provider(body, signal), model: signal => this.connections!.model(signal), proxy: (request, signal, onMetadata) => this.agentBackends!.run(request, { signal, onMetadata }), proxyValidate: request => this.agentBackends!.validate(request), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
-    await this.publishProxyStatus()
-    const connections = this.connections
+    const connections: ConnectionManager = own('connections', new ConnectionManager(this.root, runtime, credentials, (command) => { live(); return this.dispatch({ setup: command }) }, async () => {
+      live()
+      const ready = await connections.providerReady(); live()
+      const gateway = owned.providerGateway
+      await this.dispatch({ provider: ready && gateway ? { port: gateway.port, capability: gateway.capability } : null })
+    }, podId => this.podName(podId), !!process.env.OPENAPE_PODS_FIXTURE_DIR && process.env.NODE_ENV === 'test', this.host.oneShot ? this.host.jevKey : undefined))
+    this.setupPhase = 'model gateway'
+    const gateway = await startAgentGateway({ provider: (body, signal) => connections.provider(body, signal), model: signal => connections.model(signal), proxy: (request, signal, onMetadata) => agentBackends.run(request, { signal, onMetadata }), proxyValidate: request => agentBackends.validate(request), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
+    own('providerGateway', gateway)
+    await this.publishProxyStatus(); live()
     const grants = this.podGrants()!
-    this.programs = new ProgramManager(join(this.root, 'authentication'), runtime.helper, this.credentials!, this.connections, podId => this.resources({ type: 'list', podId }), command => this.dispatch({ program: command }), podId => ({ connection: () => connections.podConnection(podId), ledger: grants.port(podId), reach: () => this.sandboxReach(podId), origin: () => this.podName(podId), runtime: { executable: process.execPath, cli: this.host.apesCli, environment: {} } }))
-    await this.connections.initialize(async () => {
-      await this.dispatch({ inspectCredentials: true })
+    own('programs', new ProgramManager(join(this.root, 'authentication'), runtime.helper, credentials, connections, podId => this.resources({ type: 'list', podId }), command => this.dispatch({ program: command }), podId => ({ connection: () => connections.podConnection(podId), ledger: grants.port(podId), reach: () => this.sandboxReach(podId), origin: () => this.podName(podId), runtime: { executable: process.execPath, cli: this.host.apesCli, environment: {} } })))
+    this.setupPhase = 'credential recovery'
+    await connections.initialize(async () => {
+      live()
+      await this.dispatch({ inspectCredentials: true }); live()
       if (this.host.oneShot) return
-      await this.credentials!.reconcileScriptSecrets(await this.dispatch({ credentialInventory: true }) as { id: string, podId: string }[])
-      await this.finishDeletions()
-      await this.migrateHttpCredentials()
+      const inventory = await this.dispatch({ credentialInventory: true }) as { id: string, podId: string }[]; live()
+      await credentials.reconcileScriptSecrets(inventory); live()
+      await this.finishDeletions(connections, live)
+      await this.migrateHttpCredentials(undefined, credentials, live)
     }, !this.host.oneShot)
+    live()
     if (this.host.oneShot) return
-    this.secretsGate = new SecretsGate({
+    this.setupPhase = 'OpenApe Secrets'
+    const secretsGate = own('secretsGate', new SecretsGate({
       origin: secretsOrigin,
       fetch: (input, init) => fetch(input, init),
-      ownerToken: signal => this.connections!.ownerBearer(signal, this.ownerApesLogin()),
+      ownerToken: signal => connections.ownerBearer(signal, this.ownerApesLogin()),
       consumer: {
         load: async () => {
-          try { return await this.credentials!.readConnection(secretsConsumerRecord) as unknown as ConsumerRecord }
+          try { return await credentials.readConnection(secretsConsumerRecord) as unknown as ConsumerRecord }
           catch (error) { if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null; throw error }
         },
-        save: record => this.credentials!.connect(secretsConsumerRecord, JSON.stringify(record)),
-        erase: () => this.credentials!.eraseConnection(secretsConsumerRecord),
+        save: record => credentials.connect(secretsConsumerRecord, JSON.stringify(record)),
+        erase: () => credentials.eraseConnection(secretsConsumerRecord),
       },
       rows: {
         list: () => this.secretRows({ type: 'list' }),
@@ -314,8 +460,9 @@ export class RuntimeWorker {
         update: async (id, patch) => { await this.secretRows({ type: 'update', id, patch }) },
       },
       store: async (podId, alias, value) => { await this.saveSecret(podId, alias, value) },
-    })
-    this.secretsGate.start()
+    }))
+    secretsGate.start()
+    this.setupPhase = 'finished'
   }
 
   private async secretRows(command: SecretRowCommand): Promise<SecretRequestRow[]> { return await this.dispatch({ secrets: command }) as SecretRequestRow[] }
@@ -339,9 +486,11 @@ export class RuntimeWorker {
     return this.secretsGate.view()
   }
 
-  private async finishDeletions(): Promise<void> {
+  /** `live` throws once the calling setup is superseded; every step after an await checks it first. */
+  private async finishDeletions(connections = this.connections!, live = () => {}): Promise<void> {
     const jobs = await this.dispatch({ data: { type: 'jobs' } }) as DeletionJob[]
-    for (const job of jobs) { await this.connections!.purgePodKeys(job.podId, job.keyIds); await this.dispatch({ data: { type: 'finishDeletion', podId: job.podId } }) }
+    for (const job of jobs) { live(); await connections.purgePodKeys(job.podId, job.keyIds); live(); await this.dispatch({ data: { type: 'finishDeletion', podId: job.podId } }) }
+    live()
   }
 
   private updateFrozen = false
@@ -395,6 +544,8 @@ export class RuntimeWorker {
     if (central) return central.local(() => this.program(command, definition, file))
     await this.setupReady
     if (!this.programs) throw new Error('Program service is not ready')
+    // The external terminal starts ape-shell outside superviseProcess, so every launch path checks the kernel first.
+    if (command.type === 'openShell' || command.type === 'launch' || command.type === 'prepare') assertExecutionSupported()
     if (command.type === 'launchStatus') return this.programs.launchStatus(command.podId)
     if (command.type === 'openFolder') throw new Error('The Pod folder opens from the owner window')
     if (command.type === 'openShell') {
@@ -468,7 +619,7 @@ export class RuntimeWorker {
 
   async onboarding(command: OnboardingCommand): Promise<OnboardingView> {
     await this.setupReady
-    if (!this.connections) throw new Error('Connection setup is not ready')
+    if (!this.connections) throw this.unavailable()
     if (command.type === 'proxyStatus' || command.type === 'reloadProxy' || command.type === 'disableProxy' || command.type === 'saveModelApis' || command.type === 'checkModelApi') {
       if (!this.agentBackends) throw new Error('Agent backend setup is not ready')
       if (command.type === 'saveModelApis') await this.agentBackends.save(command.settings)
@@ -527,19 +678,19 @@ export class RuntimeWorker {
   async remote(command: RemoteInternal): Promise<unknown> { return this.dispatch({ remote: command }) }
   async remoteOwner(): Promise<{ owner: Owner, email: string }> {
     await this.setupReady
-    if (!this.connections) throw new Error('Connection service unavailable')
+    if (!this.connections) throw this.unavailable()
     return this.connections.remoteOwner()
   }
 
   async mcpOwnerSession(endsAt: number, signal: AbortSignal, present: (value: { url: string }) => void): Promise<OwnerSession> {
     await this.setupReady
-    if (!this.connections) throw new Error('Connection service unavailable')
+    if (!this.connections) throw this.unavailable()
     return this.connections.ownerSession(endsAt, signal, present)
   }
 
   async mcpApesSession(endsAt: number, signal: AbortSignal): Promise<OwnerSession | null> {
     await this.setupReady
-    if (!this.connections) throw new Error('Connection service unavailable')
+    if (!this.connections) throw this.unavailable()
     return this.connections.apesOwnerSession(endsAt, signal, this.ownerApesLogin())
   }
 
@@ -557,7 +708,7 @@ export class RuntimeWorker {
 
   async indexRemotePods(owner: Owner): Promise<void> {
     await this.setupReady
-    if (!this.connections) throw new Error('Connection service unavailable')
+    if (!this.connections) throw this.unavailable()
     const bindings = await this.connections.existingRemotePods(owner)
     if (this.central) {
       const workspace = parseWorkspace(await this.dispatch({ type: 'list' }))
@@ -602,6 +753,7 @@ export class RuntimeWorker {
   }
 
   async executionReady(): Promise<void> {
+    assertExecutionSupported()
     await this.setupReady
     if (!this.connections) { this.setupReady = this.initializeConnections(); await this.setupReady }
   }
@@ -732,12 +884,14 @@ export class RuntimeWorker {
 
   async request(command: WorkspaceCommand): Promise<WorkspaceState> { const central = this.centralAction(command.type); if (central) return central.local(() => this.request(command)); return parseWorkspace(await this.dispatch(command)) }
 
-  private async migrateHttpCredentials(podId?: string): Promise<void> {
+  private async migrateHttpCredentials(podId?: string, credentials = this.credentials!, live = () => {}): Promise<void> {
     const assignments = await this.dispatch({ httpCredentialInventory: true }) as { id: string, podId: string, alias: string }[]
     for (const assignment of assignments) {
+      live()
       if (podId && assignment.podId !== podId) continue
-      await this.credentials!.migrateHttp(assignment.id, assignment.podId, assignment.alias)
+      await credentials.migrateHttp(assignment.id, assignment.podId, assignment.alias)
     }
+    live()
   }
 
   async resources(command: InternalResourceCommand): Promise<ResourceState> {
@@ -998,7 +1152,7 @@ export class RuntimeWorker {
   private dispatch(command: { secretPaths: string[] } | { proxy: { port: number, capability: string, status: AgentBackendStatus } } | { cliRun: Extract<RunCommand, { type: 'start' }> } | { programExecution: ProgramExecutionCheck } | { approvalRelease: { type: 'list' } | { type: 'released', keys: string[] } } | { definitions: DefinitionCommand } | { sharing: SharingCommand } | { definitionProvision: { requestId: string, error: string | null } } | { approvalHistory: ApprovalHistoryCommand } | { central: { type: 'snapshot', owner: Owner } | { type: 'assertCommand', command: CentralCommand } | { type: 'gate', until: number } | { type: 'version' } } | { codexAdministration: AdministrationJournal } | { grants: GrantLedgerCommand } | { codex: CodexRequest, ownerOperation?: boolean } | { remote: RemoteInternal } | { inboxOutbox: InboxOutboxCommand } | { program: ProgramInternal } | { scripts: ScriptCommand } | { data: DataInternal } | { setup: SetupInternal } | { inspectCredentials: true } | { credentialInventory: true } | { httpCredentialInventory: true } | { provider: { port: number, capability: string } | null } | { master: MasterCommand } | { credentialCheck: ServiceCheck & { alias: string } } | { serviceCheck: ServiceCheck } | { runContext: RunContextRequest } | WorkspaceCommand | { details: DetailsCommand } | { secrets: SecretRowCommand } | { resource: InternalResourceCommand } | { run: RunCommand } | { schedule: ScheduleCommand }): Promise<unknown> {
     if (this.updateFrozen && !('data' in command && ['prepareUpdate', 'releaseUpdate'].includes(command.data.type))) return Promise.reject(new Error('Pods is preparing an update; retry after restart'))
     const child = this.child
-    if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(new Error('Worker is not ready'))
+    if (!child || this.state.state !== 'ready' || this.stopping) return Promise.reject(this.state.error ? new Error(`Worker is not ready (${this.stopping ? 'stopping' : this.state.state}): ${this.state.error}`) : new Error('Worker is not ready'))
     const id = randomUUID()
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => { this.pending.delete(id); reject(new Error('Worker response timed out; reload state before retrying')) }, 'data' in command ? 15 * 60 * 1000 : 'sharing' in command ? 10 * 60 * 1000 : 'central' in command && command.central.type === 'snapshot' ? 60000 : 'codex' in command ? 180000 : 'scripts' in command && ['prepareDependencies', 'validate'].includes(command.scripts.type) ? 20 * 60 * 1000 : 'inspectCredentials' in command ? 30000 : 10000)
@@ -1120,7 +1274,7 @@ export class RuntimeWorker {
       }
       const tokens = this.grantTokens(scope.runId)
       if (request.kind === 'grantWithdraw') {
-        if (!this.connections) throw new Error('Connection service unavailable')
+        if (!this.connections) throw this.unavailable()
         const body = parseGrantWithdrawRequest(request.body)
         const result = await withdrawGrantRequest(await this.connections.podConnection(scope.podId), body, controller.signal)
         await check(); controller.signal.throwIfAborted(); return result
@@ -1139,7 +1293,7 @@ export class RuntimeWorker {
       }
       const state = await check()
       if (request.kind === 'jev') {
-        if (!this.credentials || !this.connections) throw new Error('Connection service unavailable')
+        if (!this.credentials || !this.connections) throw this.unavailable()
         const assignment = assignedJev(state.resources, scope.podId, scope.capabilities)
         const result = await executeJev(assignment, parseJevRequest(request.body), {
           credentials: this.credentials,

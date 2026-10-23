@@ -64,6 +64,11 @@ const bridge: PodsBridge = {
     if (!isPodStatus(value)) throw new Error('Invalid Pods status response')
     return value
   },
+  async restart() {
+    const value: unknown = await ipcRenderer.invoke(channels.restart)
+    if (!isPodStatus(value)) throw new Error('Invalid Pods status response')
+    return value
+  },
   onStatus(listener) {
     if (typeof listener !== 'function') throw new TypeError('Status listener must be a function')
     const receive = (_event: IpcRendererEvent, value: unknown) => {

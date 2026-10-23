@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { PodStatus } from '../src/contracts/ipc'
 import App from '../src/renderer/App.vue'
 
-const ready: PodStatus = { version: 1, mode: 'fixture', executionEnabled: true, worker: { state: 'ready', pid: 42, error: null }, runtime: { electron: '40.9.3', node: '24.14.1' } }
+const ready: PodStatus = { version: 1, mode: 'fixture', executionEnabled: true, execution: { supported: true, compatibility: 'verified', kernel: '25.6.0', architecture: 'arm64', system: '26.6.2', verified: ['Darwin 25.6.0 (macOS 26.6.2)'], reason: null }, worker: { state: 'ready', pid: 42, error: null }, runtime: { electron: '40.9.3', node: '24.14.1' } }
 afterEach(() => vi.unstubAllGlobals())
 describe('pod workspace shell', () => {
   it('shows actual worker updates, contextual navigation and manual execution navigation', async () => {
