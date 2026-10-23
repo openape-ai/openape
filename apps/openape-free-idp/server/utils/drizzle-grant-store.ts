@@ -192,6 +192,7 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
 
         if (extra?.request && rowToGrant(existing).request.reference) assertSameReferencedGrant(rowToGrant(existing), { ...rowToGrant(existing), request: extra.request })
         if ((existing.brokered || existing.referenceKey || existing.status === 'expired') && (status === 'approved' || status === 'denied') && existing.status !== 'pending') throw createError({ statusCode: 409, statusMessage: 'Grant was already decided' })
+        if (existing.status === 'withdrawn') throw createError({ statusCode: 409, statusMessage: 'Grant was withdrawn by its requester' })
         const updates: Record<string, unknown> = { status }
         if (extra?.decided_by !== undefined) updates.decidedBy = extra.decided_by
         if (extra?.decided_at !== undefined) updates.decidedAt = extra.decided_at
@@ -225,12 +226,14 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
 
     async withdraw(id, withdrawnAt, reason) {
       return await retryReferenceTransaction(() => db.transaction(async (tx) => {
-        const withdrawable = or(eq(grants.status, 'pending'), and(eq(grants.status, 'approved'), eq(grants.grantType, 'once')))
-        const withdrawn = await tx.update(grants).set({ status: 'withdrawn', decidedAt: withdrawnAt, withdrawReason: reason ?? null }).where(and(eq(grants.id, id), withdrawable)).returning()
+        // The immediate transaction holds the write lock, so the status read here is the one replaced.
+        const previous = await tx.select({ status: grants.status, grantType: grants.grantType }).from(grants).where(eq(grants.id, id)).get()
+        if (!previous || !(previous.status === 'pending' || (previous.status === 'approved' && previous.grantType === 'once'))) return null
+        const withdrawn = await tx.update(grants).set({ status: 'withdrawn', decidedAt: withdrawnAt, withdrawReason: reason ?? null }).where(and(eq(grants.id, id), eq(grants.status, previous.status))).returning()
         const row = withdrawn[0]
-        if (!row) return false
+        if (!row) return null
         if (row.brokered) await tx.insert(brokerAudit).values(brokerAuditRow(rowToGrant(row), 'withdrawn'))
-        return true
+        return previous.status as 'pending' | 'approved'
       }, { behavior: 'immediate' }))
     },
 

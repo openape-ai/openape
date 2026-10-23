@@ -35,9 +35,8 @@ export async function withdrawReferencedGrant(referenceKey: string, reason: stri
   const find = async () => (await store.listGrants({ referenceKey, limit: 1 })).data[0]
   let grant = await find()
   if (!grant) return { outcome: 'unknown' }
-  const previous = grant.status
-  if ((previous === 'pending' || previous === 'approved') && await store.withdraw(grant.id, Math.floor(Date.now() / 1000), reason))
-    return { outcome: 'withdrawn', grant_id: grant.id, previous_status: previous }
+  const previous = grant.status === 'pending' || grant.status === 'approved' ? await store.withdraw(grant.id, Math.floor(Date.now() / 1000), reason) : null
+  if (previous) return { outcome: 'withdrawn', grant_id: grant.id, previous_status: previous }
   // Another decision or the token issue may have landed first; report the state that won.
   grant = (await find())!
   if (grant.status === 'withdrawn') return { outcome: 'withdrawn', grant_id: grant.id, previous_status: 'withdrawn' }
