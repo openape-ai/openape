@@ -1,13 +1,14 @@
 <script lang="ts">
 import { useHostBridge } from './host-bridge'
-import { defineComponent } from 'vue'
+import { defineComponent, inject } from 'vue'
+import { accountReportKey } from './startup'
 import type { OnboardingView } from '../contracts/onboarding'
 import { t, diagnostic, label } from './i18n'
 
 export default defineComponent({
   props: { subject: { type: String, default: '' }, available: { type: Boolean, default: true } },
   emits: ['open'],
-  setup() { return { hostBridge: useHostBridge() } },
+  setup() { return { hostBridge: useHostBridge(), report: inject(accountReportKey, null) } },
   data() { return { view: null as OnboardingView | null, error: '', closed: false, timer: null as ReturnType<typeof setTimeout> | null } },
   computed: {
     account() { return this.view?.connections.find(item => item.id === this.view?.owner) },
@@ -25,7 +26,7 @@ export default defineComponent({
     t,
     diagnostic,
     async refresh() {
-      try { if (!this.available) return; this.view = await this.hostBridge.onboarding({ type: 'list' }); this.error = '' }
+      try { if (!this.available) return; this.view = await this.hostBridge.onboarding({ type: 'list' }); this.error = ''; this.report?.(this.view) }
       catch (error) { this.error = error instanceof Error ? error.message : 'Account status unavailable' }
       finally { if (!this.closed) this.timer = setTimeout(() => { void this.refresh() }, 1000) }
     },

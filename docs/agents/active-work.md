@@ -1,3 +1,11 @@
+# Pods sign-in and execution compatibility — native issue pending
+
+- Owner approved the startup mock and implementation on October 23, 2026. Plan: `.claude/plans/2026-10-23-pods-startup/plan.json`. Implementation delegated to Claude Opus 5.5, reviewed by the parent agent.
+- Worktree `openape-monorepo.worktrees/pods-startup-recovery`, provisional branch `feature/pods-startup-recovery`, cached canonical base `d49dfd7a67ffe78b1e4756097da6eb33e6761486`. Canonical forge DNS prevents fetch and issue creation; reconcile idempotency key `pods-startup-recovery-20261023` before retry, then rename to the issue-linked branch. No commit or PR yet.
+- One DDISA startup screen with explicit failures and retry; owner authentication is independent of execution support. Execution is checked before scheduling, manual/controlled runs and native/external program launch. Exact Darwin 27.0.0 acceptance uses isolated unsigned fixtures; the installed owner app and credentials remain untouched.
+- Verification artifacts and handoff: `/Users/patrickhofmann/.codex/tmp/pods-startup-implementation/`. The final full affected unit gate passes (Pods 1,972 tests); seven startup browser cases and 15 rebuilt native startup/recovery cases pass after lifecycle review. Full native acceptance passes 151 tests with one opt-in parser case skipped. The existing decisions-demo browser test also fails on the untouched base. Local Test Run: `verification.html`; exact changed-Pods file hashes: `verified-source.json` in the artifact directory.
+- Next: publish exact Test Run evidence when Reports is reachable, reconcile native issue, review and commit/push the issue-linked branch, then create the native PR with an explicit issue relation. Signing and owner installation are separate; no deployed acceptance is claimed.
+
 # Pods withdraw their own single-use grant requests — issue 1536
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1536. Approved Plan revision 1: https://report.openape.ai/d/01M5M346FHXZQS84VC0GPWJ2ZE?v=2. Protocol PR: https://repos.openape.ai/patrick/protocol/pulls/9.

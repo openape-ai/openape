@@ -48,6 +48,7 @@ import type { PodStatus } from '../contracts/ipc'
 import { fixtureDirectory, localDirectory } from './fixture'
 import { assertStatusRequest, assetPath, contentSecurityPolicy, rendererURL, rendererStyleNonce } from './security'
 import { FixtureWorker } from './worker'
+import { executionSupport } from './support'
 import { CodexControlServer } from './codex/server'
 import { refreshLauncher } from './codex/launcher'
 import { controlSocketPath } from './codex/socket-path'
@@ -83,7 +84,8 @@ let updateTimer: ReturnType<typeof setInterval> | undefined
 let preference: LanguagePreference
 let trayPreference: TrayPreference
 function t(key: MessageKey, parameters?: Parameters): string { return translate(preference.language, key, parameters) }
-const status: PodStatus = { version: 1, mode: fixture ? 'fixture' : 'local', executionEnabled: true, worker: { state: 'starting', pid: null, error: null }, runtime: { electron: process.versions.electron, node: process.versions.node } }
+const { platform: _platform, ...support } = executionSupport()
+const status: PodStatus = { version: 1, mode: fixture ? 'fixture' : 'local', executionEnabled: true, execution: { ...support, system: process.getSystemVersion?.() || null }, worker: { state: 'starting', pid: null, error: null }, runtime: { electron: process.versions.electron, node: process.versions.node } }
 let central: CentralController | null = null
 const worker = new FixtureWorker((next) => {
   status.worker = next
@@ -238,6 +240,11 @@ async function start(): Promise<void> {
   })
   ipcMain.handle(channels.status, (event, ...args: unknown[]) => {
     assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, args)
+    return status
+  })
+  ipcMain.handle(channels.restart, async (event, ...args: unknown[]) => {
+    assertStatusRequest(!!window && event.sender === window.webContents && event.senderFrame === window.webContents.mainFrame && event.senderFrame.url === rendererURL, args)
+    await worker.restart()
     return status
   })
   ipcMain.handle(channels.storage, async (event, value: unknown, ...extra: unknown[]) => {
