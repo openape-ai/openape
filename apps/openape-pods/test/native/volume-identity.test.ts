@@ -4,7 +4,7 @@ import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { assignedDirectories, setVolumeIdentityHelper } from '../../src/runtime/directories'
+import { assignedDirectories, inspectDirectory, setVolumeIdentityHelper } from '../../src/runtime/directories'
 import { PodDatabase } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 
@@ -43,5 +43,8 @@ it.runIf(process.platform === 'darwin' && process.env.PODS_NATIVE_VOLUME_TEST ==
   expect([remounted!.volume, remounted!.inode]).toEqual([saved.volume, saved.inode])
   detach(stable); detach(spare)
   attach(join(base, 'b.dmg'), stable)
+  const foreign = await inspectDirectory(store.root, join(stable, 'staging'), 'readWrite')
+  expect(foreign.inode).toBe(saved.inode)
+  expect(foreign.volume).not.toBe(saved.volume)
   await expect(assignedDirectories(store.root, pod.id, registry.list(pod.id))).rejects.toThrow('Assigned directory changed')
 }, 120000)
