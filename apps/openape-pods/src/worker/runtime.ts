@@ -60,6 +60,7 @@ import { endpointModel } from './agent/model'
 import { proxyAgentCall, proxyAgentValidation, assertProxyEndpoint } from './agent/proxy-client'
 import type { ProxyEndpoint } from './agent/proxy-client'
 import { setMandatorySecretPaths } from '../runtime/secret-paths'
+import { setVolumeIdentityHelper } from '../runtime/directories'
 import { authorizeRunService, authorizeCredentialService, readRunContext } from './runtime/service-authorization'
 import { ServiceBridge } from './runtime/service-bridge'
 import { parseDetailsCommand } from '../contracts/details'
@@ -87,6 +88,7 @@ let dispatcher: RunDispatcher
 store.onActivated = podId => port.postMessage({ programCancel: podId })
 const registry = new ResourceRegistry(store, (podId) => { dispatcher.cancelPod(podId, 'Resource permissions changed', 'authority'); port.postMessage({ programCancel: podId }) })
 const dist = join(__dirname, '..').replace('/app.asar/', '/app.asar.unpacked/')
+setVolumeIdentityHelper(join(dist, 'native/pods-helper'))
 const executable = process.env.PODS_RUNTIME_EXECUTABLE
 if (!executable) throw new Error('Trusted runtime executable is missing')
 const runtime: AgentRuntime = {
@@ -507,7 +509,7 @@ port.on('message', async (event) => {
       if (resource.type === 'saveVariable') variables.save(resource.podId, resource.name, resource.value, resource.revision)
       if (resource.type === 'removeVariable') variables.remove(resource.podId, resource.name, resource.revision)
       if (resource.type === 'assignCredential') registry.assignCredential(resource.podId, resource.alias, resource.credentialId, resource.epoch)
-      if (resource.type === 'assignDirectory') await registry.assignDirectory(resource.podId, resource.path, resource.access, resource.epoch)
+      if (resource.type === 'assignDirectory') await registry.assignDirectory(resource.podId, resource.path, resource.access, resource.epoch, resource.alias)
       if (resource.type === 'pickDirectory' || resource.type === 'changeDirectory') throw new Error('Directory selection requires owner approval')
       if (resource.type === 'assignReference') registry.assignReference(resource.podId, resource.name, resource.path)
       if (resource.type === 'revoke') registry.revoke(resource.podId, resource.id, resource.revision)

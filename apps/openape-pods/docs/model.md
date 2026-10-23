@@ -23,6 +23,22 @@ Pods exchange data through files in assigned directories or through external ser
 Each script owns its input identity, idempotency and completion criteria. Private
 checkpoints, progress, evidence and workspace files remain available.
 
+Data that Pods produce lives below the standard root `~/.openape/pods`, reported as
+`directories.managedRoot` by the runtime contract (version 9, issue 1538). Assigning a
+path below it creates missing folders owner-only (`0700`); every existing component must
+be a real folder owned by the user, names are lowercase, and the root or a folder
+containing it cannot be assigned. Being below the root grants nothing: each Pod still
+receives each folder by its own assignment, so owner and isolated sandbox reach are
+unchanged. An optional `alias` (portable key such as `abgaben-staging`) is exposed to
+the script as `context.aliases.directories[alias]`. Absolute paths elsewhere remain for
+genuine user sources and sinks such as Desktop, Downloads or cloud storage.
+
+Assignments are bound to the volume UUID (read by `pods-helper volume-identity`) and the
+inode, because `st_dev` changes when macOS remounts a volume. A record from before the
+volume UUID passes only on the device it was assigned on. A changed folder is refused
+before any process starts; assigning the same path again refreshes it through the
+ordinary resource change (epoch advance, pause, validation).
+
 The shared datastore, namespaces, declared work, owner questions and `domain` MCP
 action were retired in issue 1529. Schema 54 removes their tables after a verified
 private pre-upgrade backup. Historical approvals, effects, runs and identities stay.
