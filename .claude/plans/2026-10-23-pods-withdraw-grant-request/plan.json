@@ -58,7 +58,7 @@
       "id": "protocol",
       "title": "Specify withdraw in the protocol",
       "goal": "Define the additive protocol extension before implementing it, as with grant references.",
-      "status": "planned",
+      "status": "done",
       "steps": [
         "In patrick/protocol (branch feature/issue-1536-grant-withdraw), add status withdrawn to grants.md §3.3 (terminal, from pending or from an approved unused once-grant) and a requester-only \"Withdraw Grant by reference\" operation with discovery flag openape_grant_withdraw_supported.",
         "In grant-brokering.md §5, add operation withdraw with signed reference and optional reason; only the original binding may withdraw; brokers must not decide or withdraw for other agents. Extend the claim schema enum."
@@ -72,7 +72,7 @@
       "id": "idp",
       "title": "Terminal withdrawn state at the IdP",
       "goal": "The requester can withdraw its referenced once-grant directly or through the broker, atomically and idempotently.",
-      "status": "planned",
+      "status": "done",
       "steps": [
         "Add withdrawn to GrantStatus, the program-authorize 403 states, readForwardedAuthorize, the broker type unions and the Pods/apes state lists.",
         "Add a store method that sets withdrawn only WHERE status is pending, or approved for an unused once-grant, in one statement, like claimOnce. Approve, deny, consume and token issue keep their existing pending/approved checks, so a withdrawn grant cannot be approved or consumed.",
@@ -92,7 +92,7 @@
       "id": "pods",
       "title": "context.tools.withdraw in the Pods runtime",
       "goal": "Scripts withdraw their own requests through the Pod identity and get a receipt in the run history.",
-      "status": "planned",
+      "status": "done",
       "steps": [
         "Expose withdraw in script-context, allow tools.withdraw in scriptOperations, parse {reference, reason} next to splitScriptSummary, and route it through the service bridge as a new kind grantWithdraw to the main process.",
         "In the main process call POST {connection.issuer}/api/grants/withdraw with the Pod access token and validate the reply strictly; append the grant-withdraw run event in the dispatcher.",
@@ -108,7 +108,7 @@
       "id": "verify",
       "title": "Verify, open the PR and publish the Test Run",
       "goal": "Show the acceptance list with actual results.",
-      "status": "planned",
+      "status": "done",
       "steps": [
         "Run focused Vitest suites for packages/grants, modules/nuxt-auth-idp, apps/openape-free-idp, packages/apes and apps/openape-pods, then pnpm check:affected and pnpm check:ci.",
         "Open the native PR with an explicit relation to issue 1536, update docs/agents/active-work.md, publish the Test Run under Test Runs and link it."
@@ -174,8 +174,12 @@
     "Broker path with two IdP roles in the existing grant-brokering tests: forwarded withdraw, audit row, missing discovery flag.",
     "Pods dispatcher, validation and control tests; pnpm check:ci on the PR head."
   ],
-  "handoff": "Revision 1 approved on 2026-10-23; implementation in progress. Open question: what exactly blocked the o365 Shapes seed? No code check was found; the plan covers pending listings, the broker pending limit and refusing repeats of withdrawn references. If the seed procedure is a manual or scripted check elsewhere, name it and I will include it.",
+  "handoff": "Revision 1 approved on 2026-10-23 and implemented in PR 506 (https://repos.openape.ai/patrick/monorepo/pulls/506) with protocol PR 9; pnpm check:ci passes on 65e46149; Test Run https://report.openape.ai/d/01M5M52S9ZX9Z576YY0QG4X3MZ?v=2. Next: owner review and merge, then IdP deploy before a Pods release, each with owner OK. Open question: what exactly blocked the o365 Shapes seed? No code check was found; the plan covers pending listings, the broker pending limit and refusing repeats of withdrawn references. If the seed procedure is a manual or scripted check elsewhere, name it and I will include it.",
   "changelog": [
+    {
+      "date": "2026-10-23",
+      "text": "Implemented in PR 506 and protocol PR 9. Independent review found that a concurrent consume through the legacy token path could overwrite a withdrawal; fixed with conditional single-use consumption and a terminal guard. Gate and check:ci pass on 65e46149; Test Run v2 published."
+    },
     {
       "date": "2026-10-23",
       "text": "Owner approved revision 1 including the protocol PR."
@@ -575,16 +579,21 @@
       },
       {
         "path": "handoff",
-        "source": "Revision 1 approved on 2026-10-23; implementation in progress. Open question: what exactly blocked the o365 Shapes seed? No code check was found; the plan covers pending listings, the broker pending limit and refusing repeats of withdrawn references. If the seed procedure is a manual or scripted check elsewhere, name it and I will include it.",
-        "text": "Revision 1 am 2026-10-23 freigegeben; Umsetzung läuft. Offene Frage: Was genau hat den o365-Shapes-Seed blockiert? Ich habe keine Prüfung im Code gefunden; der Plan deckt offene Listen, das Broker-Limit und die Ablehnung wiederholter zurückgezogener Referenzen ab. Falls der Seed-Ablauf woanders manuell oder per Skript prüft, bitte nennen, dann nehme ich ihn auf."
+        "source": "Revision 1 approved on 2026-10-23 and implemented in PR 506 (https://repos.openape.ai/patrick/monorepo/pulls/506) with protocol PR 9; pnpm check:ci passes on 65e46149; Test Run https://report.openape.ai/d/01M5M52S9ZX9Z576YY0QG4X3MZ?v=2. Next: owner review and merge, then IdP deploy before a Pods release, each with owner OK. Open question: what exactly blocked the o365 Shapes seed? No code check was found; the plan covers pending listings, the broker pending limit and refusing repeats of withdrawn references. If the seed procedure is a manual or scripted check elsewhere, name it and I will include it.",
+        "text": "Revision 1 am 2026-10-23 freigegeben und in PR 506 (https://repos.openape.ai/patrick/monorepo/pulls/506) mit Protokoll-PR 9 umgesetzt; pnpm check:ci ist auf 65e46149 grün; Test Run https://report.openape.ai/d/01M5M52S9ZX9Z576YY0QG4X3MZ?v=2. Nächster Schritt: Review und Merge durch den Owner, dann IdP-Deploy vor einem Pods-Release, jeweils mit OK des Owners. Offene Frage: Was genau hat den o365-Shapes-Seed blockiert? Ich habe keine Prüfung im Code gefunden; der Plan deckt offene Listen, das Broker-Limit und die Ablehnung wiederholter zurückgezogener Referenzen ab. Falls der Seed-Ablauf woanders manuell oder per Skript prüft, bitte nennen, dann nehme ich ihn auf."
       },
       {
         "path": "changelog.0.text",
+        "source": "Implemented in PR 506 and protocol PR 9. Independent review found that a concurrent consume through the legacy token path could overwrite a withdrawal; fixed with conditional single-use consumption and a terminal guard. Gate and check:ci pass on 65e46149; Test Run v2 published.",
+        "text": "In PR 506 und Protokoll-PR 9 umgesetzt. Ein unabhängiges Review fand, dass ein gleichzeitiges Consume über den älteren Token-Pfad einen Rückzug überschreiben konnte; behoben durch bedingten Einmal-Verbrauch und eine Endzustands-Sperre. Gate und check:ci sind auf 65e46149 grün; Test Run v2 veröffentlicht."
+      },
+      {
+        "path": "changelog.1.text",
         "source": "Owner approved revision 1 including the protocol PR.",
         "text": "Owner hat Revision 1 inklusive Protokoll-PR freigegeben."
       },
       {
-        "path": "changelog.1.text",
+        "path": "changelog.2.text",
         "source": "Revision 1 drafted from issue 1536 and code inspection at main 2ab279bc6.",
         "text": "Revision 1 aus Issue 1536 und Code-Analyse auf main 2ab279bc6 entworfen."
       }
