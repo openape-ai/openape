@@ -91,7 +91,7 @@ onUnmounted(() => { clearInterval(clock); document.removeEventListener('visibili
       <UAlert v-if="error" color="error" :title="error" />
       <template v-if="grant && !authLoading">
         <UAlert v-if="grant.status !== 'pending'" :color="grant.status === 'approved' ? 'success' : grant.status === 'denied' ? 'error' : 'neutral'" :title="grant.status === 'withdrawn' ? (german ? 'Vom Anfragenden zurückgezogen' : 'Withdrawn by the requester') : `Grant ${grant.status}`" :description="grant.status === 'withdrawn' ? grant.withdraw_reason : undefined">
-          <template v-if="grant.decided_by" #description>
+          <template v-if="grant.decided_by && grant.status !== 'withdrawn'" #description>
             {{ german ? 'Entschieden von' : 'Decided by' }} {{ grant.decided_by }}
           </template>
         </UAlert>
