@@ -38,7 +38,8 @@ const text = computed(() => german.value
 
 async function loadHistory(reset = false) {
   const page = await $fetch<GrantPage>('/api/grants', { query: { requester: props.requester, batch: props.batchId, section: 'history', limit: 100, ...(reset ? {} : { cursor: historyCursor.value }) } })
-  const history = page.data.filter(grant => grant.status !== 'pending')
+  // A request its requester withdrew is no longer part of this batch (grants.md §4.11).
+  const history = page.data.filter(grant => grant.status !== 'pending' && grant.status !== 'withdrawn')
   const combined = new Map(members.value.filter(grant => !reset || grant.status === 'pending').map(grant => [grant.id, grant]))
   for (const grant of history) combined.set(grant.id, grant)
   members.value = [...combined.values()]

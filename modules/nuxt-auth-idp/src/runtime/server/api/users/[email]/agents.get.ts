@@ -58,6 +58,7 @@ export default defineEventHandler(async (event) => {
       revoked: 0,
       expired: 0,
       used: 0,
+      withdrawn: 0,
     }
     for (const g of nonStanding) {
       counts[g.status] = (counts[g.status] ?? 0) + 1

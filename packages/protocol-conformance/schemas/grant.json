@@ -22,7 +22,7 @@
     },
     "status": {
       "type": "string",
-      "enum": ["pending", "approved", "denied", "revoked", "expired", "used"],
+      "enum": ["pending", "approved", "denied", "revoked", "expired", "used", "withdrawn"],
       "description": "Current grant status."
     },
     "decided_by": {
@@ -40,6 +40,16 @@
     "expires_at": {
       "type": "number",
       "description": "Unix timestamp (seconds) when the grant expires."
+    },
+    "withdraw_reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500,
+      "allOf": [
+        { "pattern": "\\S" },
+        { "not": { "pattern": "[\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}]" } }
+      ],
+      "description": "Requester's optional reason when it withdrew its own referenced request (status withdrawn)."
     },
     "used_at": {
       "type": "number",

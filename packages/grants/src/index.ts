@@ -106,6 +106,7 @@ export {
   type StandingGrantRequest,
 } from './standing-grants.js'
 export { type GrantListParams, type GrantStore, InMemoryGrantStore } from './stores.js'
+export { InvalidGrantWithdrawError, parseGrantWithdrawReason, parseGrantWithdrawRequest, parseGrantWithdrawResult, withdrawReferencedGrant } from './grant-withdraw.js'
 export {
   buildWideningSuggestionsForGrant,
   suggestWideningsForDetail,

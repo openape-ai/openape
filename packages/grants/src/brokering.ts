@@ -1,4 +1,5 @@
 import { parseGrantReference } from './grant-reference.js'
+import { parseGrantWithdrawReason } from './grant-withdraw.js'
 import type { BrokeredGrant, BrokerReceipt, BrokerRequest } from '@openape/core'
 import type { JWTVerifyGetKey, KeyLike } from 'jose'
 import { jwtVerify, SignJWT } from 'jose'
@@ -78,6 +79,11 @@ export function parseBrokerRequest(input: unknown): BrokerRequest {
   else if (value.operation === 'get' && value.reference !== undefined) {
     fields(value, [...common, 'sub', 'key_id', 'requester_name', 'reference'])
     parseGrantReference(value.reference)
+  }
+  else if (value.operation === 'withdraw') {
+    fields(value, [...common, 'sub', 'key_id', 'requester_name', 'reference', 'reason'])
+    if (parseGrantReference(value.reference) === undefined) throw new Error('A reference is required')
+    parseGrantWithdrawReason(value.reason)
   }
   else if (value.operation === 'get' || value.operation === 'token') {
     fields(value, [...common, 'sub', 'key_id', 'requester_name', 'grant_id'])

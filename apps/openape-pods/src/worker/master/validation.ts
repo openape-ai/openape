@@ -9,6 +9,7 @@ import { verifyProgram } from '../../main/programs/session'
 import { programRequest } from '../../main/programs/invoke'
 import { parseHttpRequest, isHttpEffect } from '../../contracts/http'
 import { splitScriptSummary } from '../../contracts/grant-summary'
+import { parseGrantWithdrawRequest } from '@openape/grants'
 import { assignedHttp } from '../../main/programs/http-service'
 import { PodVariables } from '../resources/variables'
 import { parseCredentialRead } from '../../contracts/credentials'
@@ -115,6 +116,8 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
         await verifyProgram(assignment)
         throw new Error('Synthetic validation has no application observations; handle context.input.validation before invoking tools')
       }
+      // Synthetic validation has no IdP requests, so no reference is known.
+      if (operation === 'tools.withdraw') { parseGrantWithdrawRequest(payload); return { outcome: 'unknown' } }
       throw new Error('Validation rejected an undeclared service request')
     }
     let executing = !preparation

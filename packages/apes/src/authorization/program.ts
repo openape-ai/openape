@@ -47,7 +47,7 @@ export interface AuthorizationRequest {
 export type AuthorizeAnswer =
   | { state: 'approved', grantId: string, token: string, expiresAt: number }
   | { state: 'pending', grantId: string, approvalUrl: string }
-  | { state: 'denied' | 'revoked' | 'expired' | 'used', grantId: string }
+  | { state: 'denied' | 'revoked' | 'expired' | 'used' | 'withdrawn', grantId: string }
 
 export interface ProgramTokenClaims extends OpenApeAuthZClaims {
   argv_hash: string
@@ -120,7 +120,7 @@ export async function requestAuthorization(call: ProgramCall, request: Authoriza
   }
   catch (error) {
     const refusal = error instanceof ApiError && error.statusCode === 403 ? error.problemDetails : undefined
-    if (refusal && (refusal.state === 'denied' || refusal.state === 'revoked' || refusal.state === 'expired' || refusal.state === 'used') && typeof refusal.grant_id === 'string')
+    if (refusal && (refusal.state === 'denied' || refusal.state === 'revoked' || refusal.state === 'expired' || refusal.state === 'used' || refusal.state === 'withdrawn') && typeof refusal.grant_id === 'string')
       return { state: refusal.state, grantId: refusal.grant_id }
     throw error
   }
@@ -152,8 +152,8 @@ export async function verifyProgramToken(
   return claims
 }
 
-type Decision = 'approved' | 'denied' | 'revoked' | 'used' | 'expired'
-const DECISIONS = new Set<string>(['approved', 'denied', 'revoked', 'used', 'expired'])
+type Decision = 'approved' | 'denied' | 'revoked' | 'used' | 'expired' | 'withdrawn'
+const DECISIONS = new Set<string>(['approved', 'denied', 'revoked', 'used', 'expired', 'withdrawn'])
 
 /** Polls `GET /api/grants/{id}` until the grant is decided; running out of time throws. */
 export async function waitForDecision(idp: string, grantId: string, waitMs: number, intervalMs: number): Promise<Decision> {

@@ -39,6 +39,7 @@ export function grantToRow(grant: OpenApeGrant) {
     decidedBy: grant.decided_by ?? null,
     expiresAt: grant.expires_at ?? null,
     usedAt: grant.used_at ?? null,
+    withdrawReason: grant.withdraw_reason ?? null,
     decidedByStandingGrant: grant.decided_by_standing_grant ?? null,
     autoApprovalKind: grant.auto_approval_kind ?? null,
   }
@@ -63,6 +64,7 @@ export function rowToGrant(row: GrantRow): OpenApeGrant {
     decided_by: row.decidedBy ?? undefined,
     expires_at: row.expiresAt ?? undefined,
     used_at: row.usedAt ?? undefined,
+    ...(row.withdrawReason ? { withdraw_reason: row.withdrawReason } : {}),
     decided_by_standing_grant: row.decidedByStandingGrant ?? undefined,
     auto_approval_kind: (row.autoApprovalKind as OpenApeGrant['auto_approval_kind']) ?? undefined,
   }
@@ -219,6 +221,17 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
         if (row.brokered) await tx.insert(brokerAudit).values(brokerAuditRow(rowToGrant(row), 'used'))
         return true
       }, { behavior: 'immediate' })
+    },
+
+    async withdraw(id, withdrawnAt, reason) {
+      return await retryReferenceTransaction(() => db.transaction(async (tx) => {
+        const withdrawable = or(eq(grants.status, 'pending'), and(eq(grants.status, 'approved'), eq(grants.grantType, 'once')))
+        const withdrawn = await tx.update(grants).set({ status: 'withdrawn', decidedAt: withdrawnAt, withdrawReason: reason ?? null }).where(and(eq(grants.id, id), withdrawable)).returning()
+        const row = withdrawn[0]
+        if (!row) return false
+        if (row.brokered) await tx.insert(brokerAudit).values(brokerAuditRow(rowToGrant(row), 'withdrawn'))
+        return true
+      }, { behavior: 'immediate' }))
     },
 
     async markConsumed(id, jti) {

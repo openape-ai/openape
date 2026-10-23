@@ -41,7 +41,7 @@ function writeProgram(body = 'printf \'%s\\n\' "$@" > "$APES_TEST_MARKER"\n'): s
 interface FakeGrant {
   files?: { path: string, sha256: string }[]
   id: string
-  status: 'pending' | 'approved' | 'denied' | 'revoked' | 'used'
+  status: 'pending' | 'approved' | 'denied' | 'revoked' | 'used' | 'withdrawn'
   grantType: 'once' | 'always'
   argvHash: string
   executionArgv: string[]
@@ -180,7 +180,7 @@ class FakeIdp {
       return this.send(response, 200, { state: 'approved', grant_id: covering.id, authz_jwt: authzJwt, expires_at: claims.exp })
     }
     const latest = mine.at(-1)
-    if (latest?.status === 'denied' || latest?.status === 'revoked')
+    if (latest?.status === 'denied' || latest?.status === 'revoked' || latest?.status === 'withdrawn')
       return this.send(response, 403, { type: `https://openape.org/errors/grant_${latest.status}`, title: `Grant ${latest.status}`, status: 403, state: latest.status, grant_id: latest.id })
     const pending = latest?.status === 'pending' ? latest : await this.add(executionArgv, program.sha256, 'pending', (body.grant_type as 'once' | 'always' | undefined) ?? 'always')
     pending.files = body.files as FakeGrant['files']
@@ -451,6 +451,17 @@ describe('apes run with per-call IdP authorization', () => {
 
     expect(idp.grants).toMatchObject([{ status: 'pending' }])
     expect(idp.authorizeBodies).toHaveLength(1)
+  })
+
+  it('refuses a withdrawn command and one withdrawn while waiting (issue 1536)', async () => {
+    const sha256 = writeProgram()
+    await idp.add(['fakegit', 'reset', '--hard'], sha256, 'withdrawn')
+    await expect(apesRun(['fakegit', 'reset', '--hard'], { wait: true })).rejects.toThrow('Grant grant-1 withdrawn')
+
+    idp.onPoll = (grant) => { grant.status = 'withdrawn' }
+    await expect(apesRun(['fakegit', 'clean', '-fdx'], { wait: true })).rejects.toThrow('Grant grant-2 withdrawn')
+
+    expect(ran()).toBeNull()
   })
 
   it('refuses a denied command and one denied while waiting', async () => {
