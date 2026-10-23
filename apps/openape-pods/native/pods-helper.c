@@ -14,6 +14,8 @@
 #include <limits.h>
 #include <time.h>
 #include <libproc.h>
+#include <sys/attr.h>
+#include <uuid/uuid.h>
 
 static void fail(const char *message) { perror(message); exit(1); }
 static void close_descriptors(int first) {
@@ -279,6 +281,15 @@ static int supervise(char **command, const char *record_path, int interactive, i
   close(4);
   return WIFEXITED(status) ? WEXITSTATUS(status) : 128 + WTERMSIG(status);
 }
+/* The volume UUID survives remounts, unlike st_dev; an all-zero UUID means the volume has none. */
+static int volume_identity(const char *path) {
+  struct attrlist request = { .bitmapcount = ATTR_BIT_MAP_COUNT, .volattr = ATTR_VOL_INFO | ATTR_VOL_UUID };
+  struct { uint32_t length; uuid_t uuid; } __attribute__((packed)) reply;
+  if (getattrlist(path, &request, &reply, sizeof(reply), FSOPT_NOFOLLOW)) fail("Read volume identity");
+  uuid_string_t text; uuid_unparse_upper(reply.uuid, text);
+  printf("{\"volume\":\"%s\"}\n", uuid_is_null(reply.uuid) ? "" : text);
+  return 0;
+}
 int main(int argc, char **argv) {
   if (argc == 5 && !strcmp(argv[1], "capture-managed")) { close_descriptors(3); capture(argv[2], argv[3], argv[4], 1); return 0; }
   if (argc == 5 && !strcmp(argv[1], "capture")) { close_descriptors(3); capture(argv[2], argv[3], argv[4], 0); return 0; }
@@ -287,6 +298,7 @@ int main(int argc, char **argv) {
   if (argc >= 4 && !strcmp(argv[1], "supervise-terminal-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2], 1, 0);
   if (argc >= 4 && !strcmp(argv[1], "supervise-machine-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2], 0, 1);
   if (argc >= 4 && !strcmp(argv[1], "supervise-machine-terminal-record") && argv[2][0] == '/' && argv[3][0] == '/') return supervise(argv + 3, argv[2], 1, 1);
+  if (argc == 3 && !strcmp(argv[1], "volume-identity") && argv[2][0] == '/') { close_descriptors(3); return volume_identity(argv[2]); }
   if (argc == 3 && !strcmp(argv[1], "inspect-domain") && argv[2][0] == '/') { close_descriptors(3); return inspect_domain(argv[2]); }
   fprintf(stderr, "Expected capture SOURCE STAGING LIMIT or supervise ABSOLUTE_EXECUTABLE ARGS\n"); return 2;
 }

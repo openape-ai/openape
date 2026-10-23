@@ -213,3 +213,18 @@ it('revokes a renewal that races with the close and both tokens when the renewed
   expect(revoked.sort()).toEqual(['FOREIGN', 'REFRESH'])
   expect(changed.active).toBe(false)
 })
+
+it.runIf(process.platform === 'darwin')('keeps an isolated Pod to its assigned folder below the Pods data root under the real macOS sandbox', async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), 'pods-data-root-'))); roots.push(root)
+  const assigned = join(root, 'pods/briefing/editions'); const sibling = join(root, 'pods/abgaben/staging'); const workspace = join(root, 'workspace')
+  for (const folder of [assigned, sibling, workspace]) mkdirSync(folder, { recursive: true })
+  writeFileSync(join(assigned, 'edition.json'), 'assigned'); writeFileSync(join(sibling, 'invoice.json'), 'other Pod')
+  const profile = join(root, 'isolated.sb')
+  writeFileSync(profile, sandboxPolicy({ executable: process.execPath, workspace, readFiles: [], readDirectories: [assigned], writeDirectories: [], runtimeDirectories: [], reach: { level: 'isolated', protectedPaths: [] } }))
+  const read = 'try{console.log(require("fs").readFileSync(process.argv[1],"utf8"))}catch(e){console.log(e.code)}'
+  expect(await sandboxed(profile, [process.execPath, '-e', read, join(assigned, 'edition.json')])).toEqual({ code: 0, output: 'assigned\n' })
+  expect(await sandboxed(profile, [process.execPath, '-e', read, join(sibling, 'invoice.json')])).toEqual({ code: 0, output: 'EPERM\n' })
+  const create = 'try{require("fs").writeFileSync(process.argv[1],"planted");console.log("written")}catch(e){console.log(e.code)}'
+  expect(await sandboxed(profile, [process.execPath, '-e', create, join(assigned, 'planted')])).toEqual({ code: 0, output: 'EPERM\n' })
+  expect(existsSync(join(assigned, 'planted'))).toBe(false)
+}, 20000)
