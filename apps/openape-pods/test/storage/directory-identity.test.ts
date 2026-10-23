@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { chmodSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
+import { chmodSync, existsSync, lstatSync, mkdirSync, mkdtempSync, realpathSync, renameSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
@@ -52,7 +52,7 @@ it('keeps a folder valid across a remount and refuses another volume, a replacem
   await expect(assignedDirectories(root, pod.id, [resource])).rejects.toThrow()
   setVolume('not-a-uuid')
   renameSync(join(base, 'original'), folder)
-  await expect(assignedDirectories(root, pod.id, [resource])).rejects.toThrow('Invalid volume identity')
+  await expect(assignedDirectories(root, pod.id, [resource])).rejects.toThrow('Directory volume inspection failed: invalid volume identity')
 })
 
 it('passes a legacy record only on its original device and fails closed without a readable volume', async () => {
@@ -63,7 +63,11 @@ it('passes a legacy record only on its original device and fails closed without 
   expect(await assignedDirectories(root, pod.id, [legacy])).toHaveLength(1)
   await expect(assignedDirectories(root, pod.id, [withConfiguration(legacy, { device: '1' })])).rejects.toThrow('Assigned directory changed')
   setVolumeIdentityHelper(join(base, 'missing-helper'))
-  await expect(assignedDirectories(root, pod.id, [saved(registry, pod.id)])).rejects.toThrow('volume identity')
+  await expect(assignedDirectories(root, pod.id, [saved(registry, pod.id)])).rejects.toThrow('Directory volume inspection failed: helper ENOENT')
+  setVolumeIdentityHelper(undefined)
+  await expect(assignedDirectories(root, pod.id, [legacy])).rejects.toThrow('the native helper is not configured')
+  await expect(registry.assignDirectory(pod.id, folder, 'read', 1)).rejects.toThrow('the native helper is not configured')
+  expect(registry.epoch(pod.id)).toBe(1)
 })
 
 it('refreshes a changed identity only through reassignment, which advances the epoch, pauses the Pod and stops runs', async () => {
@@ -111,4 +115,16 @@ it('refuses a changed folder in the application session path before reserving or
   setVolume(volumeB); dispatch.mockClear()
   await expect(start()).rejects.toThrow('Assigned directory changed')
   expect(dispatch).not.toHaveBeenCalled()
+})
+
+it('creates no folder and changes nothing for a stale, archived or invalid request', async () => {
+  const { pod, store, registry } = fixture()
+  const target = join(managedRoot(), 'briefing', 'editions')
+  await expect(registry.assignDirectory(pod.id, target, 'read', 5)).rejects.toThrow('changed')
+  await expect(registry.assignDirectory(pod.id, target, 'write' as never, 0)).rejects.toThrow('Invalid directory permission')
+  await expect(registry.assignDirectory('00000000-0000-4000-8000-00000000dead', target, 'read', 0)).rejects.toThrow()
+  store.db.prepare('UPDATE pods SET lifecycle=\'archived\' WHERE id=?').run(pod.id)
+  await expect(registry.assignDirectory(pod.id, target, 'read', 0)).rejects.toThrow('changed')
+  expect(existsSync(managedRoot())).toBe(false)
+  expect(registry.list(pod.id)).toEqual([]); expect(registry.epoch(pod.id)).toBe(0); expect(store.getPod(pod.id).lifecycle).toBe('archived')
 })

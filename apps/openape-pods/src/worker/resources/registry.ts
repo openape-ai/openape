@@ -47,17 +47,24 @@ export class ResourceRegistry {
 
   // Reassigning the same path refreshes its identity like any change: the epoch advances, the Pod pauses and runs stop.
   async assignDirectory(podId: string, path: string, access: DirectoryAccess, expectedEpoch: number, alias?: string): Promise<void> {
+    if (!['read', 'readWrite'].includes(access)) throw new Error('Invalid directory permission')
     if (alias !== undefined) {
       try { portableKey(alias) }
       catch { throw new Error('Invalid directory alias; use a portable key such as abgaben-staging') }
     }
-    await prepareManagedDirectory(path)
-    const configuration = await inspectDirectory(this.store.root, path, access)
-    this.store.transaction(() => {
+    // Checked before creating any folder and again inside the transaction, after the filesystem inspection.
+    const admissible = () => {
       if (this.store.getPod(podId).lifecycle === 'archived' || this.epoch(podId) !== expectedEpoch) throw new Error('Pod or directory permissions changed; reload before assigning access')
       const current = this.list(podId).filter(item => item.kind === 'directory' && item.state !== 'revoked')
       const existing = current.find(item => item.configuration.path === path)
       if (!existing && current.length >= 32) throw new Error('This pod already has 32 directories')
+      return existing
+    }
+    admissible()
+    await prepareManagedDirectory(path)
+    const configuration = await inspectDirectory(this.store.root, path, access)
+    this.store.transaction(() => {
+      const existing = admissible()
       const id = existing?.id ?? randomUUID()
       if (existing) this.store.db.prepare('UPDATE resources SET configuration=?,revision=revision+1,state=\'ready\' WHERE id=?').run(JSON.stringify(configuration), id)
       else this.store.db.prepare('INSERT INTO resources VALUES(?,?,1,?,?,?,?)').run(id, podId, 'directory', 'ready', basename(path), JSON.stringify(configuration))

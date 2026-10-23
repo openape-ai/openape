@@ -8,7 +8,9 @@ import { assignedDirectories } from '../../src/runtime/directories'
 import { parseResourceCommand } from '../../src/contracts/resources'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { setMandatorySecretPaths } from '../../src/runtime/secret-paths'
+import { useVolumeHelperFixture } from '../volume-helper-fixture'
 
+useVolumeHelperFixture()
 const roots: string[] = []; const stores: PodDatabase[] = []
 afterEach(() => { setMandatorySecretPaths([]); for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 describe('pod resource registry', () => {

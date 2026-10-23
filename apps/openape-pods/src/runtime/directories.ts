@@ -13,7 +13,7 @@ function contains(parent: string, child: string): boolean {
 
 let helper: string | undefined
 /** The native pods-helper reads volume identities; each process that checks assigned folders sets it at startup. */
-export function setVolumeIdentityHelper(path: string): void { helper = path }
+export function setVolumeIdentityHelper(path: string | undefined): void { helper = path }
 
 /**
  * The standard place for data that Pods produce. Being below it grants nothing: each folder is still assigned per Pod,
@@ -21,14 +21,23 @@ export function setVolumeIdentityHelper(path: string): void { helper = path }
  */
 export function managedRoot(): string { return join(homedir(), '.openape', 'pods') }
 
-/** st_dev is a mount-instance number that changes on remount; the volume UUID does not. Undefined when the volume has none. */
+/**
+ * st_dev is a mount-instance number that changes on remount; the volume UUID does not. Undefined only when the volume
+ * has none. Without a configured helper nothing is inspected, so no record silently falls back to the device.
+ */
 async function volumeOf(path: string): Promise<string | undefined> {
-  if (!helper) return undefined
-  let reply: unknown
-  try { reply = JSON.parse((await promisify(execFile)(helper, ['volume-identity', path], { timeout: 10_000 })).stdout) }
-  catch { throw new Error('The volume identity of this directory is unavailable') }
-  const volume = (reply as { volume?: unknown } | null)?.volume
-  if (typeof volume !== 'string' || (volume !== '' && !/^[0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12}$/.test(volume))) throw new Error('Invalid volume identity')
+  if (!helper) throw new Error('Directory volume inspection failed: the native helper is not configured')
+  let stdout: string
+  try { stdout = (await promisify(execFile)(helper, ['volume-identity', path], { timeout: 10_000 })).stdout }
+  catch (error) {
+    const failure = error as NodeJS.ErrnoException & { killed?: boolean, stderr?: string, code?: string | number }
+    const cause = failure.killed ? 'timed out after 10 s' : typeof failure.code === 'string' ? `helper ${failure.code}` : (failure.stderr ?? '').trim().split('\n')[0]!.slice(0, 200) || `helper exit ${failure.code ?? 'unknown'}`
+    throw new Error(`Directory volume inspection failed: ${cause}`)
+  }
+  let volume: unknown
+  try { volume = (JSON.parse(stdout) as { volume?: unknown } | null)?.volume }
+  catch { throw new Error('Directory volume inspection failed: malformed helper response') }
+  if (typeof volume !== 'string' || (volume !== '' && !/^[0-9A-F]{8}(?:-[0-9A-F]{4}){3}-[0-9A-F]{12}$/.test(volume))) throw new Error('Directory volume inspection failed: invalid volume identity')
   return volume || undefined
 }
 
