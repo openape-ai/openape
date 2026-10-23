@@ -1,10 +1,10 @@
-# Pods sign-in and execution compatibility — native issue pending
+# Pods sign-in and execution compatibility — issue 1537
 
 - Owner approved the startup mock and implementation on October 23, 2026. Plan: `.claude/plans/2026-10-23-pods-startup/plan.json`. Implementation delegated to Claude Opus 5.5, reviewed by the parent agent.
-- Worktree `openape-monorepo.worktrees/pods-startup-recovery`, provisional branch `feature/pods-startup-recovery`, cached canonical base `d49dfd7a67ffe78b1e4756097da6eb33e6761486`. Canonical forge DNS prevents fetch and issue creation; reconcile idempotency key `pods-startup-recovery-20261023` before retry, then rename to the issue-linked branch. No commit or PR yet.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1537. Worktree `openape-monorepo.worktrees/pods-startup-recovery`, branch `feature/issue-1537-pods-startup-recovery`, canonical base `d49dfd7a67ffe78b1e4756097da6eb33e6761486`. `pnpm check:ci` passes on `74789fa83`. Test Run: https://report.openape.ai/d/01M5MVCQ65A4CKQGZ38WTZN60V?v=1.
 - One DDISA startup screen with explicit failures and retry; owner authentication is independent of execution support. Execution is checked before scheduling, manual/controlled runs and native/external program launch. Exact Darwin 27.0.0 acceptance uses isolated unsigned fixtures; the installed owner app and credentials remain untouched.
 - Verification artifacts and handoff: `/Users/patrickhofmann/.codex/tmp/pods-startup-implementation/`. The final full affected unit gate passes (Pods 1,972 tests); seven startup browser cases and 15 rebuilt native startup/recovery cases pass after lifecycle review. Full native acceptance passes 151 tests with one opt-in parser case skipped. The existing decisions-demo browser test also fails on the untouched base. Local Test Run: `verification.html`; exact changed-Pods file hashes: `verified-source.json` in the artifact directory.
-- Next: publish exact Test Run evidence when Reports is reachable, reconcile native issue, review and commit/push the issue-linked branch, then create the native PR with an explicit issue relation. Signing and owner installation are separate; no deployed acceptance is claimed.
+- Next (owner authorized installation and publication on October 23): native PR with explicit issue relation, guarded merge after local checks, then keychain-free owner installation (`build`, `package:owner`, `install:owner`) from clean merged main with paired rollback and live acceptance; receipts go to the merged PR and the issue.
 
 # Pods withdraw their own single-use grant requests — issue 1536
 
