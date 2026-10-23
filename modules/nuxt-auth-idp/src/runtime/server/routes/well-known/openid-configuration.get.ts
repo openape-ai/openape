@@ -44,5 +44,6 @@ export default defineEventHandler(() => {
     openape_grant_categories_supported: ['command', 'delegation'],
     openape_grant_batch_supported: true,
     openape_grant_reference_supported: typeof useGrantStores().grantStore.createReferenced === 'function',
+    openape_grant_withdraw_supported: typeof useGrantStores().grantStore.createReferenced === 'function' && typeof useGrantStores().grantStore.withdraw === 'function',
   }
 })

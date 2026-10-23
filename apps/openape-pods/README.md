@@ -402,7 +402,8 @@ including keyboard tabs, horizontal overflow and a reachable fixed footer.
 Mail ingestion, classification, extraction and protected archival live in the
 independently delivered o365-cli repository and its `automation/` package. Pods
 contains no mail port or bundled mail parser. Assign exact program/runtime files
-and use `tools.invoke`, generic model calls, data and progress. All controlled
+and use `tools.invoke` (and `tools.withdraw` for referenced requests a script no
+longer needs), generic model calls, data and progress. All controlled
 programs execute through ape-shell with the actual target and content bindings.
 The activated top-level Pod script uses `--run-script`; inner tools, parsers,
 dependencies, terminals and applications keep their existing grant-mediated

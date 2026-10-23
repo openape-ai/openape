@@ -391,6 +391,8 @@ export default defineNuxtModule<ModuleOptions>({
       addServerHandler({ route: '/api/grants/verify', method: 'post', handler: resolve('./runtime/server/api/grants/verify.post') })
       // Per-call program authorization (issue 1473). Static segment, distinct from :id.
       addServerHandler({ route: '/api/grants/authorize', method: 'post', handler: resolve('./runtime/server/api/grants/authorize.post') })
+      // Requester withdrawal by reference (issue 1536). Static segment, distinct from :id.
+      addServerHandler({ route: '/api/grants/withdraw', method: 'post', handler: resolve('./runtime/server/api/grants/withdraw.post') })
       addServerHandler({ route: '/api/grants/:id', handler: resolve('./runtime/server/api/grants/[id].get') })
       addServerHandler({ route: '/api/grants/:id/approve', method: 'post', handler: resolve('./runtime/server/api/grants/[id]/approve.post') })
       addServerHandler({ route: '/api/grants/:id/deny', method: 'post', handler: resolve('./runtime/server/api/grants/[id]/deny.post') })

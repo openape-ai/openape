@@ -28,9 +28,49 @@ function fixture() {
   store.db.prepare('UPDATE scripts SET manifest=? WHERE pod_id=? AND hash=?').run(JSON.stringify(manifest), pod.id, hash)
   vi.spyOn(resources, 'list').mockReturnValue([{ kind: 'tool', state: 'ready', configuration: { capability: 'tool.app_fixture.invoke' } }] as never)
   const tool = vi.fn(async () => { throw new PermissionUnavailableError('A synthetic inner permission is missing') })
-  const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime, { tool })
-  return { store, resources, pod, dispatcher, tool }
+  const withdraw = vi.fn(async () => ({ outcome: 'withdrawn' as const, grant_id: 'grant-1', previous_status: 'pending' as const }))
+  const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime, { tool, withdraw })
+  return { store, resources, pod, dispatcher, tool, withdraw }
 }
+const runEvents = (store: PodDatabase, runId: string, type: string) => store.db.prepare('SELECT data FROM run_events WHERE run_id=? AND type=? ORDER BY sequence').all(runId, type).map(row => JSON.parse(String(row.data)))
+
+it('withdraws a referenced request through the Pod identity and records one receipt (issue 1536)', async () => {
+  const f = fixture()
+  const answers: unknown[] = []
+  vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
+    answers.push(await hooks.request('tools.withdraw', { reference: 'archive-v2:abc', reason: 'Mail left the Inbox' }, signal))
+    f.withdraw.mockResolvedValueOnce({ outcome: 'already_decided', grant_id: 'grant-2', status: 'used' } as never)
+    answers.push(await hooks.request('tools.withdraw', { reference: 'archive-v2:def' }, signal))
+    f.withdraw.mockResolvedValueOnce({ outcome: 'unknown' } as never)
+    answers.push(await hooks.request('tools.withdraw', { reference: 'archive-v2:ghi' }, signal))
+    return { status: 'completed', summary: 'Withdrew stale requests', completedInputIds: input.eventIds, gapIds: [] }
+  })
+  const id = f.dispatcher.start(f.pod.id)
+  await expect.poll(() => f.dispatcher.runs.get(id).state).toBe('completed')
+  expect(answers).toEqual([{ outcome: 'withdrawn', grantId: 'grant-1', previous: 'pending' }, { outcome: 'alreadyDecided', grantId: 'grant-2', state: 'used' }, { outcome: 'unknown' }])
+  expect(f.withdraw).toHaveBeenNthCalledWith(1, { reference: 'archive-v2:abc', reason: 'Mail left the Inbox' }, expect.any(AbortSignal), expect.objectContaining({ podId: f.pod.id, runId: id }))
+  expect(runEvents(f.store, id, 'grant-withdraw')).toEqual([
+    { reference: 'archive-v2:abc', reason: 'Mail left the Inbox', outcome: 'withdrawn', grantId: 'grant-1', previous: 'pending' },
+    { reference: 'archive-v2:def', outcome: 'alreadyDecided', grantId: 'grant-2', state: 'used' },
+    { reference: 'archive-v2:ghi', outcome: 'unknown' },
+  ])
+  // Withdrawal removes authority only; it never enters the effect journal or holds the Pod.
+  expect(f.store.db.prepare('SELECT COUNT(*) AS count FROM effect_ledger WHERE pod_id=?').get(f.pod.id)).toMatchObject({ count: 0 })
+  expect(f.tool).not.toHaveBeenCalled()
+})
+
+it('refuses malformed withdrawals before contacting the IdP', async () => {
+  const f = fixture()
+  vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
+    for (const payload of [{}, { reference: '' }, { reference: 'x', grantId: 'grant-1' }, { reference: 'x', reason: 'a\u0000b' }, { reference: 'x'.repeat(513) }, 'archive-v2:abc'])
+      await expect(hooks.request('tools.withdraw', payload, signal)).rejects.toThrow()
+    return { status: 'completed', summary: 'Refused malformed withdrawals', completedInputIds: input.eventIds, gapIds: [] }
+  })
+  const id = f.dispatcher.start(f.pod.id)
+  await expect.poll(() => f.dispatcher.runs.get(id).state).toBe('completed')
+  expect(f.withdraw).not.toHaveBeenCalled()
+  expect(runEvents(f.store, id, 'grant-withdraw')).toEqual([])
+})
 
 it.each([
   { batch: undefined, reference: undefined },

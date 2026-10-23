@@ -1,0 +1,593 @@
+{
+  "schema": "openape.plan/2",
+  "language": "en",
+  "project": "OpenApe",
+  "owner": "Patrick Hofmann",
+  "date": "2026-10-23",
+  "status": "active",
+  "revision": 1,
+  "approval": {
+    "by": "Patrick Hofmann",
+    "date": "2026-10-23",
+    "reference": "Revision 1 ist freigegeben, bitte umsetzen (inkl. Protokoll-PR).",
+    "target": {
+      "revision": 1
+    },
+    "scope": "Implement revision 1 including the protocol PR; release, deploy and archive Pod changes still need a separate OK. / Revision 1 inklusive Protokoll-PR umsetzen; Release, Deploy und Archiv-Pod-Änderungen brauchen weiterhin ein eigenes OK."
+  },
+  "title": "Let a Pod withdraw its own single-use grant request",
+  "goal": "A Pod can withdraw its own pending or approved-but-unused single-use request by reference. The IdP records the terminal state withdrawn, which can no longer be approved, leaves the batch page and stops counting as pending.",
+  "summary": "Add context.tools.withdraw({reference, reason}) to the Pods script runtime and a generic requester-only withdraw operation with a terminal withdrawn state to the IdP, including the broker path through pods.openape.ai. The result is withdrawn, alreadyDecided or unknown; repeats are no-ops and other Pods cannot touch the request.",
+  "problem": {
+    "statement": "A Pod cannot cancel a single-use request it no longer needs; only the owner can approve, deny or revoke it.",
+    "impact": "Mails archived by hand leave dead requests in the archive batch: approving them does nothing, they clutter the batch page and hold up o365 Shapes seeds.",
+    "approach": "Add a requester-only, idempotent withdraw by reference at the IdP (direct and brokered) and expose it to scripts as context.tools.withdraw with a run-history receipt.",
+    "outcome": "Each archive run can withdraw requests for mails that left the Inbox; the batch page shows only decisions that still matter."
+  },
+  "context": "Issue https://repos.openape.ai/patrick/monorepo/issues/1536. The Delta Mind archive Pods (Archivfreigabe c73c87de, Rechnungs-Archiv 90f456e0, Abgaben-Archiv abc817bb) call context.tools.invoke({application, argv, approvalWaitMs: 0, summary, batch, reference}) once per mail and collect the single-use grants in one IdP batch. Runtime contract 7 says terminal references are never renewed and offers no cancel. At the IdP, brokered grants can be revoked only by the human owner (requireBrokerGrantOwner); the broker protocol has the operations connection, create, authorize, get and token, but no withdraw. Code was inspected at main 2ab279bc67df9440fc43b5250f697b1836a6ce4c; the protocol at repos.openape.ai/patrick/protocol main 4287716.",
+  "scope": [
+    "Protocol: terminal grant status withdrawn, requester withdraw by reference, broker operation withdraw and discovery flag openape_grant_withdraw_supported (native PR in patrick/protocol).",
+    "IdP (packages/core, packages/grants, modules/nuxt-auth-idp, apps/openape-free-idp): status, atomic transition, POST /api/grants/withdraw, broker forwarding and receiving, audit row, batch page, labels and refusal mapping.",
+    "apes CLI (packages/apes): treat HTTP 403 state withdrawn like the other terminal refusals.",
+    "Pods (apps/openape-pods): context.tools.withdraw, main-process call with the Pod identity, run-history receipt, synthetic validation, runtime reference contract 8, handbook and README.",
+    "Tests for every acceptance item of issue 1536, including the refusal paths, and one published Test Run with the actual results."
+  ],
+  "nonGoals": [
+    "No change to the archive Pod scripts in this work. They follow after a Pods release and an IdP deploy, each only with the owner's OK.",
+    "No release, deployment, reseed or production data change in this session.",
+    "No withdraw of standing or unreferenced grants, no withdraw by grant ID and no withdraw by the owner or by other Pods; owner revoke stays as it is.",
+    "No renewal: a withdrawn reference stays terminal; a new operation needs a new reference.",
+    "No new Pods storage table or schema migration; the receipt is a run event."
+  ],
+  "sections": [
+    {
+      "id": "paths",
+      "placement": "before-details",
+      "title": "Code paths found",
+      "body": "**Pods call path today:** `src/worker/runs/script-context.ts:28` (`tools.invoke`) → frame allowlist `scriptOperations` in `src/contracts/runs.ts:101` → dispatcher `src/worker/runs/dispatcher.ts:246-339` → `src/worker/runtime.ts` `runServices.tool` → service bridge (`src/contracts/services.ts:7` `serviceKinds`) → main `src/main/runtime-worker.ts` `executeService` (:1030) → `PodToolBroker` → ape-shell/apes with the Pod identity file → `POST /api/grants/authorize` with `reference`. Synthetic validation: `src/worker/master/validation.ts:77-117`. Runtime reference: `src/worker/master/reference.ts` (`contractVersion: 7`, pinned in `test/codex/control.test.ts:209` and `e2e/codex-acceptance.test.ts:103`). Pod access token in main: `connection.accessToken()` (`src/main/connections/agent.ts:100`). Pods grant-state validator: `src/contracts/grants.ts:11,129`.\n\n**IdP:** `GrantStatus` in `packages/core/src/types/index.ts:95`; transitions in `packages/grants/src/grants.ts` (approve/deny need `pending`, revoke :118); stores `packages/grants/src/stores.ts` (`claimOnce` :81) and `apps/openape-free-idp/server/utils/drizzle-grant-store.ts` (`claimOnce` :214, broker pending limit counts `pending` :128/:145; `status` column has no CHECK, so no migration). Reference key `grantReferenceKey(requester, reference, brokered)` in `packages/grants/src/grant-reference.ts:23`. Program authorize refusals `modules/nuxt-auth-idp/src/runtime/server/utils/program-authorize.ts:88,188-193`. Broker forward `utils/broker-forward.ts:11` (`connection|create|authorize|get|token`); receiver `server/api/brokered-grants.post.ts`; parser `packages/grants/src/brokering.ts:62-90`; claim schema `packages/protocol-conformance/schemas/broker-request-claims.json`. Batch page `runtime/pages/grant-approval.vue` + `components/GrantBatchDecision.vue` (pending members `status:pending`, history = everything else) and `runtime/utils/grant-batch.ts`. apes refusal mapping `packages/apes/src/authorization/program.ts:94-127`.\n\n**Shapes seed:** no code path makes `pnpm seed:shapes` (`scripts/seed-shapes.ts`) check pending grants. The plausible link is that a reseed changes the semantic adapter digest that a referenced binding contains, and a pending reference also counts against the broker pending limit. See the open question in the handoff."
+    },
+    {
+      "id": "contract",
+      "placement": "before-details",
+      "title": "Proposed script contract",
+      "body": "```js\nconst r = await context.tools.withdraw({ reference, reason: 'mail left the Inbox' })\n// { outcome: 'withdrawn', grantId, previous: 'pending' | 'approved' | 'withdrawn' }\n// { outcome: 'alreadyDecided', grantId, state: 'denied' | 'revoked' | 'expired' | 'used' }\n// { outcome: 'unknown' }   // no request of this Pod identity has this reference\n```\n\n- `reference`: same rules as for `tools.invoke` (1–512 UTF-8 bytes, no hidden characters). `reason`: optional, at most 500 characters, shown to the owner in grant history and stored in the receipt.\n- Scope is the authenticated Pod identity and its broker binding, exactly the reference key the IdP already uses. Another Pod gets `unknown` and the request stays unchanged.\n- A repeat returns `withdrawn` with `previous: 'withdrawn'` and changes nothing. `approved` but unused once-grants become `withdrawn`; their token can no longer be consumed.\n- Every call appends a `grant-withdraw` run event `{reference, reason, outcome, state, grantId}`. Transport or IdP errors throw like other context calls; the script may simply retry in a later run because the operation is idempotent.\n- Synthetic validation checks the payload and returns `{ outcome: 'unknown' }` without contacting the IdP."
+    }
+  ],
+  "milestones": [
+    {
+      "id": "protocol",
+      "title": "Specify withdraw in the protocol",
+      "goal": "Define the additive protocol extension before implementing it, as with grant references.",
+      "status": "planned",
+      "steps": [
+        "In patrick/protocol (branch feature/issue-1536-grant-withdraw), add status withdrawn to grants.md §3.3 (terminal, from pending or from an approved unused once-grant) and a requester-only \"Withdraw Grant by reference\" operation with discovery flag openape_grant_withdraw_supported.",
+        "In grant-brokering.md §5, add operation withdraw with signed reference and optional reason; only the original binding may withdraw; brokers must not decide or withdraw for other agents. Extend the claim schema enum."
+      ],
+      "acceptance": [
+        "A native protocol PR describes the state, the operation, its results and the refusal cases; the monorepo PR links it."
+      ],
+      "rollback": "Close the protocol PR; nothing is deployed."
+    },
+    {
+      "id": "idp",
+      "title": "Terminal withdrawn state at the IdP",
+      "goal": "The requester can withdraw its referenced once-grant directly or through the broker, atomically and idempotently.",
+      "status": "planned",
+      "steps": [
+        "Add withdrawn to GrantStatus, the program-authorize 403 states, readForwardedAuthorize, the broker type unions and the Pods/apes state lists.",
+        "Add a store method that sets withdrawn only WHERE status is pending, or approved for an unused once-grant, in one statement, like claimOnce. Approve, deny, consume and token issue keep their existing pending/approved checks, so a withdrawn grant cannot be approved or consumed.",
+        "Add POST /api/grants/withdraw {reference, reason?}: an authenticated agent requester looks up its own reference key; a brokered agent at the agent provider is forwarded with broker operation withdraw; brokered-grants.post.ts resolves the key from the verified provenance, withdraws and writes a broker audit row withdrawn with the reason. Advertise openape_grant_withdraw_supported; the agent provider refuses clearly when the decision IdP lacks it.",
+        "Batch page: exclude withdrawn from both pending and history sections; grant detail and grants list label it \"Withdrawn by requester\" without decision buttons."
+      ],
+      "acceptance": [
+        "Withdrawing a pending referenced request sets withdrawn; a later approve (single or batch operation) is refused and the request is absent from the batch page data.",
+        "Repeating the withdraw returns withdrawn with previous withdrawn and writes no second audit row.",
+        "Another requester, or the same subject under another broker binding, gets unknown and the original grant stays pending.",
+        "An approved unused once-grant becomes withdrawn and consume is refused; used, denied, revoked and expired return alreadyDecided with their state.",
+        "A withdrawn request no longer counts as pending: owner pending listing and the broker pending limit exclude it, and a repeated authorize with the same reference returns 403 state withdrawn."
+      ],
+      "rollback": "Revert the IdP commits before deployment. After deployment, existing withdrawn rows stay terminal; an older IdP image would treat them as an unknown non-pending status and refuse them."
+    },
+    {
+      "id": "pods",
+      "title": "context.tools.withdraw in the Pods runtime",
+      "goal": "Scripts withdraw their own requests through the Pod identity and get a receipt in the run history.",
+      "status": "planned",
+      "steps": [
+        "Expose withdraw in script-context, allow tools.withdraw in scriptOperations, parse {reference, reason} next to splitScriptSummary, and route it through the service bridge as a new kind grantWithdraw to the main process.",
+        "In the main process call POST {connection.issuer}/api/grants/withdraw with the Pod access token and validate the reply strictly; append the grant-withdraw run event in the dispatcher.",
+        "Synthetic validation returns unknown; renderer labels the event; runtime reference documents withdraw and moves to contractVersion 8; update the pinned tests, handbook (EN/DE/JSON) and README; add a changeset."
+      ],
+      "acceptance": [
+        "A script run that withdraws a reference returns the IdP outcome and leaves exactly one grant-withdraw event; invalid payloads are refused before any network call.",
+        "pods_control runtime reports contractVersion 8 and documents tools.withdraw."
+      ],
+      "rollback": "Revert the Pods commits; scripts that call withdraw then fail with Unsupported script operation and keep their requests pending."
+    },
+    {
+      "id": "verify",
+      "title": "Verify, open the PR and publish the Test Run",
+      "goal": "Show the acceptance list with actual results.",
+      "status": "planned",
+      "steps": [
+        "Run focused Vitest suites for packages/grants, modules/nuxt-auth-idp, apps/openape-free-idp, packages/apes and apps/openape-pods, then pnpm check:affected and pnpm check:ci.",
+        "Open the native PR with an explicit relation to issue 1536, update docs/agents/active-work.md, publish the Test Run under Test Runs and link it."
+      ],
+      "acceptance": [
+        "pnpm check:ci passes on the PR head SHA and the Test Run lists every acceptance item with its test and result."
+      ],
+      "rollback": "Close the PR."
+    },
+    {
+      "id": "followup",
+      "title": "Follow-up: archive Pods withdraw stale requests",
+      "goal": "After an IdP deploy and a Pods release, each archive run withdraws references whose mail left the Inbox or changed its content version.",
+      "status": "blocked",
+      "blocker": "Needs the owner's OK for the IdP deploy (both instances) and the Pods release; not part of this session.",
+      "steps": [
+        "Change dm-archivfreigabe.js, dm-rechnungs-archiv.js and dm-abgaben-archiv.js (sources under ~/Companies/private/repos/openape/.claude/plans/2026-10-2*/pods/): persist each pending reference with its mail id and content version in the checkpoint; each run re-checks them and withdraws those whose mail is gone from the Inbox or changed."
+      ],
+      "acceptance": [
+        "A mail archived by hand disappears from the archive batch page after the next run."
+      ],
+      "rollback": "Restore the previous script versions."
+    }
+  ],
+  "decisions": [
+    {
+      "title": "Withdraw by reference only",
+      "description": "The reference key already binds requester and broker authority, so a Pod can only address its own requests and no grant ID needs to be trusted from a script.",
+      "status": "proposed"
+    },
+    {
+      "title": "Another Pod sees unknown",
+      "description": "Requests of other identities are not addressable, so the refusal is unknown rather than forbidden; this reveals nothing about other Pods and leaves their request unchanged.",
+      "status": "proposed"
+    },
+    {
+      "title": "Receipt as run event, not effect ledger",
+      "description": "Withdraw is idempotent and only removes authority. An effect-ledger entry with an unknown outcome would create a recovery hold for no benefit; a run event records the result and a lost result is safe to repeat.",
+      "status": "proposed"
+    },
+    {
+      "title": "Generic IdP, no Pod or mail logic",
+      "description": "The IdP knows only requester, reference and state; deciding when to withdraw stays in the Pod script, matching the owner direction from the reference plan of 20 October.",
+      "status": "proposed"
+    }
+  ],
+  "risks": [
+    {
+      "title": "Race between owner approval and withdraw",
+      "mitigation": "Single conditional UPDATE for withdraw and the existing pending check for approve; whichever lands first wins, and a test covers approve-after-withdraw and withdraw-after-use."
+    },
+    {
+      "title": "Mixed versions during rollout",
+      "mitigation": "Deploy the IdP (decision and agent provider) before the Pods release; the agent provider refuses withdraw when the decision IdP lacks the discovery flag, and old Pods never produce withdrawn states."
+    },
+    {
+      "title": "Protocol drift",
+      "mitigation": "Specify the extension in a protocol PR first and keep the conformance claim schema in the monorepo in sync."
+    }
+  ],
+  "verification": [
+    "Refusal paths first: approve after withdraw, consume after withdraw, other Pod withdraw, other broker binding withdraw, invalid payload.",
+    "Broker path with two IdP roles in the existing grant-brokering tests: forwarded withdraw, audit row, missing discovery flag.",
+    "Pods dispatcher, validation and control tests; pnpm check:ci on the PR head."
+  ],
+  "handoff": "Revision 1 approved on 2026-10-23; implementation in progress. Open question: what exactly blocked the o365 Shapes seed? No code check was found; the plan covers pending listings, the broker pending limit and refusing repeats of withdrawn references. If the seed procedure is a manual or scripted check elsewhere, name it and I will include it.",
+  "changelog": [
+    {
+      "date": "2026-10-23",
+      "text": "Owner approved revision 1 including the protocol PR."
+    },
+    {
+      "date": "2026-10-23",
+      "text": "Revision 1 drafted from issue 1536 and code inspection at main 2ab279bc6."
+    }
+  ],
+  "translations": {
+    "defaultLanguage": "de",
+    "entries": [
+      {
+        "path": "title",
+        "source": "Let a Pod withdraw its own single-use grant request",
+        "text": "Ein Pod zieht seine eigene Einmal-Freigabeanfrage zurück"
+      },
+      {
+        "path": "goal",
+        "source": "A Pod can withdraw its own pending or approved-but-unused single-use request by reference. The IdP records the terminal state withdrawn, which can no longer be approved, leaves the batch page and stops counting as pending.",
+        "text": "Ein Pod kann seine eigene offene oder genehmigte, aber ungenutzte Einmal-Anfrage per Referenz zurückziehen. Der IdP speichert den Endzustand withdrawn; er ist nicht mehr genehmigbar, verschwindet von der Batch-Seite und zählt nicht mehr als offen."
+      },
+      {
+        "path": "summary",
+        "source": "Add context.tools.withdraw({reference, reason}) to the Pods script runtime and a generic requester-only withdraw operation with a terminal withdrawn state to the IdP, including the broker path through pods.openape.ai. The result is withdrawn, alreadyDecided or unknown; repeats are no-ops and other Pods cannot touch the request.",
+        "text": "Die Pods-Skript-Runtime erhält context.tools.withdraw({reference, reason}); der IdP erhält eine generische Rückzugs-Operation nur für den Anfragenden mit dem Endzustand withdrawn, auch über den Broker pods.openape.ai. Ergebnis ist withdrawn, alreadyDecided oder unknown; Wiederholungen ändern nichts, andere Pods können die Anfrage nicht berühren."
+      },
+      {
+        "path": "problem.statement",
+        "source": "A Pod cannot cancel a single-use request it no longer needs; only the owner can approve, deny or revoke it.",
+        "text": "Ein Pod kann eine Einmal-Anfrage, die er nicht mehr braucht, nicht zurücknehmen; nur der Owner kann genehmigen, ablehnen oder widerrufen."
+      },
+      {
+        "path": "problem.impact",
+        "source": "Mails archived by hand leave dead requests in the archive batch: approving them does nothing, they clutter the batch page and hold up o365 Shapes seeds.",
+        "text": "Von Hand archivierte Mails hinterlassen tote Anfragen im Archiv-Batch: Genehmigen bewirkt nichts, sie überladen die Batch-Seite und halten o365-Shapes-Seeds auf."
+      },
+      {
+        "path": "problem.approach",
+        "source": "Add a requester-only, idempotent withdraw by reference at the IdP (direct and brokered) and expose it to scripts as context.tools.withdraw with a run-history receipt.",
+        "text": "Einen idempotenten Rückzug per Referenz nur für den Anfragenden am IdP ergänzen (direkt und über den Broker) und Skripten als context.tools.withdraw mit Beleg in der Run-Historie anbieten."
+      },
+      {
+        "path": "problem.outcome",
+        "source": "Each archive run can withdraw requests for mails that left the Inbox; the batch page shows only decisions that still matter.",
+        "text": "Jeder Archiv-Lauf kann Anfragen für Mails zurückziehen, die die Inbox verlassen haben; die Batch-Seite zeigt nur noch Entscheidungen, die noch zählen."
+      },
+      {
+        "path": "context",
+        "source": "Issue https://repos.openape.ai/patrick/monorepo/issues/1536. The Delta Mind archive Pods (Archivfreigabe c73c87de, Rechnungs-Archiv 90f456e0, Abgaben-Archiv abc817bb) call context.tools.invoke({application, argv, approvalWaitMs: 0, summary, batch, reference}) once per mail and collect the single-use grants in one IdP batch. Runtime contract 7 says terminal references are never renewed and offers no cancel. At the IdP, brokered grants can be revoked only by the human owner (requireBrokerGrantOwner); the broker protocol has the operations connection, create, authorize, get and token, but no withdraw. Code was inspected at main 2ab279bc67df9440fc43b5250f697b1836a6ce4c; the protocol at repos.openape.ai/patrick/protocol main 4287716.",
+        "text": "Issue https://repos.openape.ai/patrick/monorepo/issues/1536. Die Delta-Mind-Archiv-Pods (Archivfreigabe c73c87de, Rechnungs-Archiv 90f456e0, Abgaben-Archiv abc817bb) rufen pro Mail einmal context.tools.invoke({application, argv, approvalWaitMs: 0, summary, batch, reference}) auf und sammeln die Einmal-Freigaben in einem IdP-Batch. Runtime-Vertrag 7 sagt, dass abgeschlossene Referenzen nie erneuert werden, und bietet keinen Abbruch. Am IdP kann nur der menschliche Owner gebrokerte Grants widerrufen (requireBrokerGrantOwner); das Broker-Protokoll kennt connection, create, authorize, get und token, aber kein withdraw. Code geprüft auf main 2ab279bc67df9440fc43b5250f697b1836a6ce4c, Protokoll auf repos.openape.ai/patrick/protocol main 4287716."
+      },
+      {
+        "path": "scope.0",
+        "source": "Protocol: terminal grant status withdrawn, requester withdraw by reference, broker operation withdraw and discovery flag openape_grant_withdraw_supported (native PR in patrick/protocol).",
+        "text": "Protokoll: Endstatus withdrawn, Rückzug per Referenz durch den Anfragenden, Broker-Operation withdraw und Discovery-Flag openape_grant_withdraw_supported (nativer PR in patrick/protocol)."
+      },
+      {
+        "path": "scope.1",
+        "source": "IdP (packages/core, packages/grants, modules/nuxt-auth-idp, apps/openape-free-idp): status, atomic transition, POST /api/grants/withdraw, broker forwarding and receiving, audit row, batch page, labels and refusal mapping.",
+        "text": "IdP (packages/core, packages/grants, modules/nuxt-auth-idp, apps/openape-free-idp): Status, atomarer Übergang, POST /api/grants/withdraw, Broker-Weiterleitung und -Empfang, Audit-Eintrag, Batch-Seite, Beschriftungen und Ablehnungs-Zuordnung."
+      },
+      {
+        "path": "scope.2",
+        "source": "apes CLI (packages/apes): treat HTTP 403 state withdrawn like the other terminal refusals.",
+        "text": "apes CLI (packages/apes): HTTP 403 mit Zustand withdrawn wie die anderen endgültigen Ablehnungen behandeln."
+      },
+      {
+        "path": "scope.3",
+        "source": "Pods (apps/openape-pods): context.tools.withdraw, main-process call with the Pod identity, run-history receipt, synthetic validation, runtime reference contract 8, handbook and README.",
+        "text": "Pods (apps/openape-pods): context.tools.withdraw, Aufruf im Hauptprozess mit der Pod-Identität, Beleg in der Run-Historie, synthetische Validierung, Runtime-Referenz Vertrag 8, Handbuch und README."
+      },
+      {
+        "path": "scope.4",
+        "source": "Tests for every acceptance item of issue 1536, including the refusal paths, and one published Test Run with the actual results.",
+        "text": "Tests für jeden Abnahmepunkt aus Issue 1536 inklusive der Ablehnungspfade sowie ein veröffentlichter Test Run mit den tatsächlichen Ergebnissen."
+      },
+      {
+        "path": "nonGoals.0",
+        "source": "No change to the archive Pod scripts in this work. They follow after a Pods release and an IdP deploy, each only with the owner's OK.",
+        "text": "Keine Änderung an den Archiv-Pod-Skripten in dieser Arbeit. Sie folgen nach einem Pods-Release und einem IdP-Deploy, beides nur mit OK des Owners."
+      },
+      {
+        "path": "nonGoals.1",
+        "source": "No release, deployment, reseed or production data change in this session.",
+        "text": "Kein Release, Deploy, Reseed und keine Änderung an Produktionsdaten in dieser Session."
+      },
+      {
+        "path": "nonGoals.2",
+        "source": "No withdraw of standing or unreferenced grants, no withdraw by grant ID and no withdraw by the owner or by other Pods; owner revoke stays as it is.",
+        "text": "Kein Rückzug von Dauer- oder unreferenzierten Grants, kein Rückzug per Grant-ID und kein Rückzug durch den Owner oder andere Pods; der Owner-Widerruf bleibt unverändert."
+      },
+      {
+        "path": "nonGoals.3",
+        "source": "No renewal: a withdrawn reference stays terminal; a new operation needs a new reference.",
+        "text": "Keine Erneuerung: Eine zurückgezogene Referenz bleibt endgültig; eine neue Operation braucht eine neue Referenz."
+      },
+      {
+        "path": "nonGoals.4",
+        "source": "No new Pods storage table or schema migration; the receipt is a run event.",
+        "text": "Keine neue Pods-Speichertabelle und keine Schema-Migration; der Beleg ist ein Run-Event."
+      },
+      {
+        "path": "sections.0.title",
+        "source": "Code paths found",
+        "text": "Gefundene Code-Pfade"
+      },
+      {
+        "path": "sections.0.body",
+        "source": "**Pods call path today:** `src/worker/runs/script-context.ts:28` (`tools.invoke`) → frame allowlist `scriptOperations` in `src/contracts/runs.ts:101` → dispatcher `src/worker/runs/dispatcher.ts:246-339` → `src/worker/runtime.ts` `runServices.tool` → service bridge (`src/contracts/services.ts:7` `serviceKinds`) → main `src/main/runtime-worker.ts` `executeService` (:1030) → `PodToolBroker` → ape-shell/apes with the Pod identity file → `POST /api/grants/authorize` with `reference`. Synthetic validation: `src/worker/master/validation.ts:77-117`. Runtime reference: `src/worker/master/reference.ts` (`contractVersion: 7`, pinned in `test/codex/control.test.ts:209` and `e2e/codex-acceptance.test.ts:103`). Pod access token in main: `connection.accessToken()` (`src/main/connections/agent.ts:100`). Pods grant-state validator: `src/contracts/grants.ts:11,129`.\n\n**IdP:** `GrantStatus` in `packages/core/src/types/index.ts:95`; transitions in `packages/grants/src/grants.ts` (approve/deny need `pending`, revoke :118); stores `packages/grants/src/stores.ts` (`claimOnce` :81) and `apps/openape-free-idp/server/utils/drizzle-grant-store.ts` (`claimOnce` :214, broker pending limit counts `pending` :128/:145; `status` column has no CHECK, so no migration). Reference key `grantReferenceKey(requester, reference, brokered)` in `packages/grants/src/grant-reference.ts:23`. Program authorize refusals `modules/nuxt-auth-idp/src/runtime/server/utils/program-authorize.ts:88,188-193`. Broker forward `utils/broker-forward.ts:11` (`connection|create|authorize|get|token`); receiver `server/api/brokered-grants.post.ts`; parser `packages/grants/src/brokering.ts:62-90`; claim schema `packages/protocol-conformance/schemas/broker-request-claims.json`. Batch page `runtime/pages/grant-approval.vue` + `components/GrantBatchDecision.vue` (pending members `status:pending`, history = everything else) and `runtime/utils/grant-batch.ts`. apes refusal mapping `packages/apes/src/authorization/program.ts:94-127`.\n\n**Shapes seed:** no code path makes `pnpm seed:shapes` (`scripts/seed-shapes.ts`) check pending grants. The plausible link is that a reseed changes the semantic adapter digest that a referenced binding contains, and a pending reference also counts against the broker pending limit. See the open question in the handoff.",
+        "text": "**Pods-Aufrufpfad heute:** `src/worker/runs/script-context.ts:28` (`tools.invoke`) → Frame-Allowlist `scriptOperations` in `src/contracts/runs.ts:101` → Dispatcher `src/worker/runs/dispatcher.ts:246-339` → `src/worker/runtime.ts` `runServices.tool` → Service-Bridge (`src/contracts/services.ts:7` `serviceKinds`) → Hauptprozess `src/main/runtime-worker.ts` `executeService` (:1030) → `PodToolBroker` → ape-shell/apes mit der Pod-Identitätsdatei → `POST /api/grants/authorize` mit `reference`. Synthetische Validierung: `src/worker/master/validation.ts:77-117`. Runtime-Referenz: `src/worker/master/reference.ts` (`contractVersion: 7`, festgeschrieben in `test/codex/control.test.ts:209` und `e2e/codex-acceptance.test.ts:103`). Pod-Access-Token im Hauptprozess: `connection.accessToken()` (`src/main/connections/agent.ts:100`). Grant-Zustands-Prüfung in Pods: `src/contracts/grants.ts:11,129`.\n\n**IdP:** `GrantStatus` in `packages/core/src/types/index.ts:95`; Übergänge in `packages/grants/src/grants.ts` (approve/deny brauchen `pending`, revoke :118); Stores `packages/grants/src/stores.ts` (`claimOnce` :81) und `apps/openape-free-idp/server/utils/drizzle-grant-store.ts` (`claimOnce` :214, Broker-Limit zählt `pending` :128/:145; die Spalte `status` hat kein CHECK, also keine Migration). Referenzschlüssel `grantReferenceKey(requester, reference, brokered)` in `packages/grants/src/grant-reference.ts:23`. Ablehnungen bei Program-Authorize `modules/nuxt-auth-idp/src/runtime/server/utils/program-authorize.ts:88,188-193`. Broker-Weiterleitung `utils/broker-forward.ts:11` (`connection|create|authorize|get|token`); Empfänger `server/api/brokered-grants.post.ts`; Parser `packages/grants/src/brokering.ts:62-90`; Claim-Schema `packages/protocol-conformance/schemas/broker-request-claims.json`. Batch-Seite `runtime/pages/grant-approval.vue` + `components/GrantBatchDecision.vue` (offene Einträge `status:pending`, Verlauf = alles andere) und `runtime/utils/grant-batch.ts`. Ablehnungs-Zuordnung in apes `packages/apes/src/authorization/program.ts:94-127`.\n\n**Shapes-Seed:** Kein Code-Pfad lässt `pnpm seed:shapes` (`scripts/seed-shapes.ts`) offene Grants prüfen. Plausibler Zusammenhang: Ein Reseed ändert den semantischen Adapter-Digest, der Teil einer referenzierten Bindung ist, und eine offene Referenz zählt zum Broker-Limit für offene Anfragen. Siehe offene Frage in der Übergabe."
+      },
+      {
+        "path": "sections.1.title",
+        "source": "Proposed script contract",
+        "text": "Vorgeschlagener Skript-Vertrag"
+      },
+      {
+        "path": "sections.1.body",
+        "source": "```js\nconst r = await context.tools.withdraw({ reference, reason: 'mail left the Inbox' })\n// { outcome: 'withdrawn', grantId, previous: 'pending' | 'approved' | 'withdrawn' }\n// { outcome: 'alreadyDecided', grantId, state: 'denied' | 'revoked' | 'expired' | 'used' }\n// { outcome: 'unknown' }   // no request of this Pod identity has this reference\n```\n\n- `reference`: same rules as for `tools.invoke` (1–512 UTF-8 bytes, no hidden characters). `reason`: optional, at most 500 characters, shown to the owner in grant history and stored in the receipt.\n- Scope is the authenticated Pod identity and its broker binding, exactly the reference key the IdP already uses. Another Pod gets `unknown` and the request stays unchanged.\n- A repeat returns `withdrawn` with `previous: 'withdrawn'` and changes nothing. `approved` but unused once-grants become `withdrawn`; their token can no longer be consumed.\n- Every call appends a `grant-withdraw` run event `{reference, reason, outcome, state, grantId}`. Transport or IdP errors throw like other context calls; the script may simply retry in a later run because the operation is idempotent.\n- Synthetic validation checks the payload and returns `{ outcome: 'unknown' }` without contacting the IdP.",
+        "text": "```js\nconst r = await context.tools.withdraw({ reference, reason: 'mail left the Inbox' })\n// { outcome: 'withdrawn', grantId, previous: 'pending' | 'approved' | 'withdrawn' }\n// { outcome: 'alreadyDecided', grantId, state: 'denied' | 'revoked' | 'expired' | 'used' }\n// { outcome: 'unknown' }   // no request of this Pod identity has this reference\n```\n\n- `reference`: gleiche Regeln wie bei `tools.invoke` (1–512 UTF-8-Bytes, keine versteckten Zeichen). `reason`: optional, höchstens 500 Zeichen, für den Owner im Grant-Verlauf sichtbar und im Beleg gespeichert.\n- Geltungsbereich ist die angemeldete Pod-Identität mit ihrer Broker-Bindung, genau der Referenzschlüssel, den der IdP schon verwendet. Ein anderer Pod erhält `unknown`, die Anfrage bleibt unverändert.\n- Eine Wiederholung liefert `withdrawn` mit `previous: 'withdrawn'` und ändert nichts. Genehmigte, aber ungenutzte Einmal-Grants werden `withdrawn`; ihr Token lässt sich nicht mehr einlösen.\n- Jeder Aufruf schreibt ein Run-Event `grant-withdraw` `{reference, reason, outcome, state, grantId}`. Transport- oder IdP-Fehler werfen wie andere Context-Aufrufe; das Skript kann es in einem späteren Lauf einfach wiederholen, weil die Operation idempotent ist.\n- Die synthetische Validierung prüft die Nutzlast und liefert `{ outcome: 'unknown' }`, ohne den IdP zu kontaktieren."
+      },
+      {
+        "path": "milestones.0.title",
+        "source": "Specify withdraw in the protocol",
+        "text": "Rückzug im Protokoll festlegen"
+      },
+      {
+        "path": "milestones.0.goal",
+        "source": "Define the additive protocol extension before implementing it, as with grant references.",
+        "text": "Die additive Protokoll-Erweiterung vor der Umsetzung festlegen, wie bei den Grant-Referenzen."
+      },
+      {
+        "path": "milestones.0.steps.0",
+        "source": "In patrick/protocol (branch feature/issue-1536-grant-withdraw), add status withdrawn to grants.md §3.3 (terminal, from pending or from an approved unused once-grant) and a requester-only \"Withdraw Grant by reference\" operation with discovery flag openape_grant_withdraw_supported.",
+        "text": "In patrick/protocol (Branch feature/issue-1536-grant-withdraw) den Status withdrawn in grants.md §3.3 ergänzen (endgültig, aus pending oder aus einem genehmigten, ungenutzten Einmal-Grant) sowie eine Operation „Grant per Referenz zurückziehen“ nur für den Anfragenden mit Discovery-Flag openape_grant_withdraw_supported."
+      },
+      {
+        "path": "milestones.0.steps.1",
+        "source": "In grant-brokering.md §5, add operation withdraw with signed reference and optional reason; only the original binding may withdraw; brokers must not decide or withdraw for other agents. Extend the claim schema enum.",
+        "text": "In grant-brokering.md §5 die Operation withdraw mit signierter Referenz und optionalem Grund ergänzen; nur die ursprüngliche Bindung darf zurückziehen; Broker dürfen weder entscheiden noch für andere Agents zurückziehen. Das Enum im Claim-Schema erweitern."
+      },
+      {
+        "path": "milestones.0.acceptance.0",
+        "source": "A native protocol PR describes the state, the operation, its results and the refusal cases; the monorepo PR links it.",
+        "text": "Ein nativer Protokoll-PR beschreibt Zustand, Operation, Ergebnisse und Ablehnungsfälle; der Monorepo-PR verweist darauf."
+      },
+      {
+        "path": "milestones.0.rollback",
+        "source": "Close the protocol PR; nothing is deployed.",
+        "text": "Protokoll-PR schließen; nichts ist ausgerollt."
+      },
+      {
+        "path": "milestones.1.title",
+        "source": "Terminal withdrawn state at the IdP",
+        "text": "Endzustand withdrawn am IdP"
+      },
+      {
+        "path": "milestones.1.goal",
+        "source": "The requester can withdraw its referenced once-grant directly or through the broker, atomically and idempotently.",
+        "text": "Der Anfragende kann seinen referenzierten Einmal-Grant direkt oder über den Broker atomar und idempotent zurückziehen."
+      },
+      {
+        "path": "milestones.1.steps.0",
+        "source": "Add withdrawn to GrantStatus, the program-authorize 403 states, readForwardedAuthorize, the broker type unions and the Pods/apes state lists.",
+        "text": "withdrawn zu GrantStatus, den 403-Zuständen von Program-Authorize, readForwardedAuthorize, den Broker-Typen und den Zustandslisten in Pods und apes hinzufügen."
+      },
+      {
+        "path": "milestones.1.steps.1",
+        "source": "Add a store method that sets withdrawn only WHERE status is pending, or approved for an unused once-grant, in one statement, like claimOnce. Approve, deny, consume and token issue keep their existing pending/approved checks, so a withdrawn grant cannot be approved or consumed.",
+        "text": "Eine Store-Methode ergänzen, die withdrawn in einer einzigen Anweisung nur setzt, wenn der Status pending ist oder ein ungenutzter Einmal-Grant approved ist, wie claimOnce. Approve, Deny, Consume und Token-Ausgabe behalten ihre bestehenden pending/approved-Prüfungen, daher kann ein zurückgezogener Grant weder genehmigt noch eingelöst werden."
+      },
+      {
+        "path": "milestones.1.steps.2",
+        "source": "Add POST /api/grants/withdraw {reference, reason?}: an authenticated agent requester looks up its own reference key; a brokered agent at the agent provider is forwarded with broker operation withdraw; brokered-grants.post.ts resolves the key from the verified provenance, withdraws and writes a broker audit row withdrawn with the reason. Advertise openape_grant_withdraw_supported; the agent provider refuses clearly when the decision IdP lacks it.",
+        "text": "POST /api/grants/withdraw {reference, reason?} ergänzen: Ein angemeldeter Agent sucht seinen eigenen Referenzschlüssel; ein gebrokerter Agent wird beim Agent-Provider mit der Broker-Operation withdraw weitergeleitet; brokered-grants.post.ts ermittelt den Schlüssel aus der geprüften Herkunft, zieht zurück und schreibt einen Broker-Audit-Eintrag withdrawn mit Grund. openape_grant_withdraw_supported veröffentlichen; der Agent-Provider lehnt klar ab, wenn der Entscheidungs-IdP es nicht kann."
+      },
+      {
+        "path": "milestones.1.steps.3",
+        "source": "Batch page: exclude withdrawn from both pending and history sections; grant detail and grants list label it \"Withdrawn by requester\" without decision buttons.",
+        "text": "Batch-Seite: withdrawn aus offenen Einträgen und Verlauf ausblenden; Grant-Detail und Grant-Liste zeigen „Vom Anfragenden zurückgezogen“ ohne Entscheidungs-Buttons."
+      },
+      {
+        "path": "milestones.1.acceptance.0",
+        "source": "Withdrawing a pending referenced request sets withdrawn; a later approve (single or batch operation) is refused and the request is absent from the batch page data.",
+        "text": "Rückzug einer offenen referenzierten Anfrage setzt withdrawn; ein späteres Genehmigen (einzeln oder per Batch-Operation) wird abgelehnt und die Anfrage fehlt in den Daten der Batch-Seite."
+      },
+      {
+        "path": "milestones.1.acceptance.1",
+        "source": "Repeating the withdraw returns withdrawn with previous withdrawn and writes no second audit row.",
+        "text": "Ein wiederholter Rückzug liefert withdrawn mit previous withdrawn und schreibt keinen zweiten Audit-Eintrag."
+      },
+      {
+        "path": "milestones.1.acceptance.2",
+        "source": "Another requester, or the same subject under another broker binding, gets unknown and the original grant stays pending.",
+        "text": "Ein anderer Anfragender oder dasselbe Subjekt unter einer anderen Broker-Bindung erhält unknown; der ursprüngliche Grant bleibt pending."
+      },
+      {
+        "path": "milestones.1.acceptance.3",
+        "source": "An approved unused once-grant becomes withdrawn and consume is refused; used, denied, revoked and expired return alreadyDecided with their state.",
+        "text": "Ein genehmigter, ungenutzter Einmal-Grant wird withdrawn und Consume wird abgelehnt; used, denied, revoked und expired liefern alreadyDecided mit ihrem Zustand."
+      },
+      {
+        "path": "milestones.1.acceptance.4",
+        "source": "A withdrawn request no longer counts as pending: owner pending listing and the broker pending limit exclude it, and a repeated authorize with the same reference returns 403 state withdrawn.",
+        "text": "Eine zurückgezogene Anfrage zählt nicht mehr als offen: Die offene Owner-Liste und das Broker-Limit schließen sie aus, und ein wiederholtes Authorize mit derselben Referenz liefert 403 mit Zustand withdrawn."
+      },
+      {
+        "path": "milestones.1.rollback",
+        "source": "Revert the IdP commits before deployment. After deployment, existing withdrawn rows stay terminal; an older IdP image would treat them as an unknown non-pending status and refuse them.",
+        "text": "IdP-Commits vor dem Deploy zurücknehmen. Nach einem Deploy bleiben vorhandene withdrawn-Zeilen endgültig; ein älteres IdP-Image behandelt sie als unbekannten, nicht offenen Status und lehnt sie ab."
+      },
+      {
+        "path": "milestones.2.title",
+        "source": "context.tools.withdraw in the Pods runtime",
+        "text": "context.tools.withdraw in der Pods-Runtime"
+      },
+      {
+        "path": "milestones.2.goal",
+        "source": "Scripts withdraw their own requests through the Pod identity and get a receipt in the run history.",
+        "text": "Skripte ziehen ihre eigenen Anfragen über die Pod-Identität zurück und erhalten einen Beleg in der Run-Historie."
+      },
+      {
+        "path": "milestones.2.steps.0",
+        "source": "Expose withdraw in script-context, allow tools.withdraw in scriptOperations, parse {reference, reason} next to splitScriptSummary, and route it through the service bridge as a new kind grantWithdraw to the main process.",
+        "text": "withdraw im Script-Context anbieten, tools.withdraw in scriptOperations erlauben, {reference, reason} neben splitScriptSummary prüfen und als neue Art grantWithdraw über die Service-Bridge in den Hauptprozess leiten."
+      },
+      {
+        "path": "milestones.2.steps.1",
+        "source": "In the main process call POST {connection.issuer}/api/grants/withdraw with the Pod access token and validate the reply strictly; append the grant-withdraw run event in the dispatcher.",
+        "text": "Im Hauptprozess POST {connection.issuer}/api/grants/withdraw mit dem Pod-Access-Token aufrufen und die Antwort streng prüfen; im Dispatcher das Run-Event grant-withdraw anhängen."
+      },
+      {
+        "path": "milestones.2.steps.2",
+        "source": "Synthetic validation returns unknown; renderer labels the event; runtime reference documents withdraw and moves to contractVersion 8; update the pinned tests, handbook (EN/DE/JSON) and README; add a changeset.",
+        "text": "Synthetische Validierung liefert unknown; der Renderer beschriftet das Event; die Runtime-Referenz dokumentiert withdraw und steigt auf contractVersion 8; festgeschriebene Tests, Handbuch (EN/DE/JSON) und README anpassen; Changeset ergänzen."
+      },
+      {
+        "path": "milestones.2.acceptance.0",
+        "source": "A script run that withdraws a reference returns the IdP outcome and leaves exactly one grant-withdraw event; invalid payloads are refused before any network call.",
+        "text": "Ein Skriptlauf, der eine Referenz zurückzieht, liefert das IdP-Ergebnis und hinterlässt genau ein grant-withdraw-Event; ungültige Nutzlasten werden vor jedem Netzwerkaufruf abgelehnt."
+      },
+      {
+        "path": "milestones.2.acceptance.1",
+        "source": "pods_control runtime reports contractVersion 8 and documents tools.withdraw.",
+        "text": "pods_control runtime meldet contractVersion 8 und dokumentiert tools.withdraw."
+      },
+      {
+        "path": "milestones.2.rollback",
+        "source": "Revert the Pods commits; scripts that call withdraw then fail with Unsupported script operation and keep their requests pending.",
+        "text": "Pods-Commits zurücknehmen; Skripte, die withdraw aufrufen, scheitern dann mit Unsupported script operation und ihre Anfragen bleiben offen."
+      },
+      {
+        "path": "milestones.3.title",
+        "source": "Verify, open the PR and publish the Test Run",
+        "text": "Prüfen, PR öffnen und Test Run veröffentlichen"
+      },
+      {
+        "path": "milestones.3.goal",
+        "source": "Show the acceptance list with actual results.",
+        "text": "Die Abnahmeliste mit tatsächlichen Ergebnissen belegen."
+      },
+      {
+        "path": "milestones.3.steps.0",
+        "source": "Run focused Vitest suites for packages/grants, modules/nuxt-auth-idp, apps/openape-free-idp, packages/apes and apps/openape-pods, then pnpm check:affected and pnpm check:ci.",
+        "text": "Gezielte Vitest-Suites für packages/grants, modules/nuxt-auth-idp, apps/openape-free-idp, packages/apes und apps/openape-pods ausführen, danach pnpm check:affected und pnpm check:ci."
+      },
+      {
+        "path": "milestones.3.steps.1",
+        "source": "Open the native PR with an explicit relation to issue 1536, update docs/agents/active-work.md, publish the Test Run under Test Runs and link it.",
+        "text": "Nativen PR mit expliziter Beziehung zu Issue 1536 öffnen, docs/agents/active-work.md aktualisieren, Test Run unter Test Runs veröffentlichen und verlinken."
+      },
+      {
+        "path": "milestones.3.acceptance.0",
+        "source": "pnpm check:ci passes on the PR head SHA and the Test Run lists every acceptance item with its test and result.",
+        "text": "pnpm check:ci ist auf dem PR-Head-SHA grün und der Test Run listet jeden Abnahmepunkt mit Test und Ergebnis."
+      },
+      {
+        "path": "milestones.3.rollback",
+        "source": "Close the PR.",
+        "text": "PR schließen."
+      },
+      {
+        "path": "milestones.4.title",
+        "source": "Follow-up: archive Pods withdraw stale requests",
+        "text": "Folgeschritt: Archiv-Pods ziehen veraltete Anfragen zurück"
+      },
+      {
+        "path": "milestones.4.goal",
+        "source": "After an IdP deploy and a Pods release, each archive run withdraws references whose mail left the Inbox or changed its content version.",
+        "text": "Nach IdP-Deploy und Pods-Release zieht jeder Archiv-Lauf Referenzen zurück, deren Mail die Inbox verlassen oder ihre Inhaltsversion geändert hat."
+      },
+      {
+        "path": "milestones.4.blocker",
+        "source": "Needs the owner's OK for the IdP deploy (both instances) and the Pods release; not part of this session.",
+        "text": "Braucht das OK des Owners für den IdP-Deploy (beide Instanzen) und das Pods-Release; nicht Teil dieser Session."
+      },
+      {
+        "path": "milestones.4.steps.0",
+        "source": "Change dm-archivfreigabe.js, dm-rechnungs-archiv.js and dm-abgaben-archiv.js (sources under ~/Companies/private/repos/openape/.claude/plans/2026-10-2*/pods/): persist each pending reference with its mail id and content version in the checkpoint; each run re-checks them and withdraws those whose mail is gone from the Inbox or changed.",
+        "text": "dm-archivfreigabe.js, dm-rechnungs-archiv.js und dm-abgaben-archiv.js ändern (Quellen unter ~/Companies/private/repos/openape/.claude/plans/2026-10-2*/pods/): jede offene Referenz mit Mail-ID und Inhaltsversion im Checkpoint speichern; jeder Lauf prüft sie erneut und zieht jene zurück, deren Mail nicht mehr in der Inbox ist oder sich geändert hat."
+      },
+      {
+        "path": "milestones.4.acceptance.0",
+        "source": "A mail archived by hand disappears from the archive batch page after the next run.",
+        "text": "Eine von Hand archivierte Mail verschwindet nach dem nächsten Lauf von der Archiv-Batch-Seite."
+      },
+      {
+        "path": "milestones.4.rollback",
+        "source": "Restore the previous script versions.",
+        "text": "Vorherige Skript-Versionen wiederherstellen."
+      },
+      {
+        "path": "decisions.0.title",
+        "source": "Withdraw by reference only",
+        "text": "Rückzug nur per Referenz"
+      },
+      {
+        "path": "decisions.0.description",
+        "source": "The reference key already binds requester and broker authority, so a Pod can only address its own requests and no grant ID needs to be trusted from a script.",
+        "text": "Der Referenzschlüssel bindet Anfragenden und Broker-Berechtigung bereits; ein Pod kann so nur seine eigenen Anfragen ansprechen und keine Grant-ID aus einem Skript muss vertraut werden."
+      },
+      {
+        "path": "decisions.1.title",
+        "source": "Another Pod sees unknown",
+        "text": "Ein anderer Pod sieht unknown"
+      },
+      {
+        "path": "decisions.1.description",
+        "source": "Requests of other identities are not addressable, so the refusal is unknown rather than forbidden; this reveals nothing about other Pods and leaves their request unchanged.",
+        "text": "Anfragen anderer Identitäten sind nicht adressierbar; die Ablehnung lautet daher unknown statt forbidden. Das verrät nichts über andere Pods und lässt deren Anfrage unverändert."
+      },
+      {
+        "path": "decisions.2.title",
+        "source": "Receipt as run event, not effect ledger",
+        "text": "Beleg als Run-Event, nicht im Effekt-Journal"
+      },
+      {
+        "path": "decisions.2.description",
+        "source": "Withdraw is idempotent and only removes authority. An effect-ledger entry with an unknown outcome would create a recovery hold for no benefit; a run event records the result and a lost result is safe to repeat.",
+        "text": "Rückzug ist idempotent und entfernt nur Berechtigung. Ein Effekt-Journal-Eintrag mit unbekanntem Ausgang würde ohne Nutzen eine Recovery-Sperre auslösen; ein Run-Event hält das Ergebnis fest, und ein verlorenes Ergebnis darf wiederholt werden."
+      },
+      {
+        "path": "decisions.3.title",
+        "source": "Generic IdP, no Pod or mail logic",
+        "text": "Generischer IdP ohne Pod- oder Mail-Logik"
+      },
+      {
+        "path": "decisions.3.description",
+        "source": "The IdP knows only requester, reference and state; deciding when to withdraw stays in the Pod script, matching the owner direction from the reference plan of 20 October.",
+        "text": "Der IdP kennt nur Anfragenden, Referenz und Zustand; wann zurückgezogen wird, entscheidet das Pod-Skript, passend zur Owner-Vorgabe aus dem Referenz-Plan vom 20. Oktober."
+      },
+      {
+        "path": "risks.0.title",
+        "source": "Race between owner approval and withdraw",
+        "text": "Wettlauf zwischen Owner-Genehmigung und Rückzug"
+      },
+      {
+        "path": "risks.0.mitigation",
+        "source": "Single conditional UPDATE for withdraw and the existing pending check for approve; whichever lands first wins, and a test covers approve-after-withdraw and withdraw-after-use.",
+        "text": "Ein einziges bedingtes UPDATE für den Rückzug und die bestehende pending-Prüfung für Approve; was zuerst ankommt, gewinnt. Tests decken Approve nach Rückzug und Rückzug nach Nutzung ab."
+      },
+      {
+        "path": "risks.1.title",
+        "source": "Mixed versions during rollout",
+        "text": "Gemischte Versionen während des Rollouts"
+      },
+      {
+        "path": "risks.1.mitigation",
+        "source": "Deploy the IdP (decision and agent provider) before the Pods release; the agent provider refuses withdraw when the decision IdP lacks the discovery flag, and old Pods never produce withdrawn states.",
+        "text": "IdP (Entscheidungs- und Agent-Provider) vor dem Pods-Release ausrollen; der Agent-Provider lehnt withdraw ab, wenn dem Entscheidungs-IdP das Discovery-Flag fehlt, und alte Pods erzeugen nie withdrawn."
+      },
+      {
+        "path": "risks.2.title",
+        "source": "Protocol drift",
+        "text": "Abweichung vom Protokoll"
+      },
+      {
+        "path": "risks.2.mitigation",
+        "source": "Specify the extension in a protocol PR first and keep the conformance claim schema in the monorepo in sync.",
+        "text": "Die Erweiterung zuerst in einem Protokoll-PR festlegen und das Conformance-Claim-Schema im Monorepo synchron halten."
+      },
+      {
+        "path": "verification.0",
+        "source": "Refusal paths first: approve after withdraw, consume after withdraw, other Pod withdraw, other broker binding withdraw, invalid payload.",
+        "text": "Zuerst die Ablehnungspfade: Genehmigen nach Rückzug, Einlösen nach Rückzug, Rückzug durch anderen Pod, Rückzug unter anderer Broker-Bindung, ungültige Nutzlast."
+      },
+      {
+        "path": "verification.1",
+        "source": "Broker path with two IdP roles in the existing grant-brokering tests: forwarded withdraw, audit row, missing discovery flag.",
+        "text": "Broker-Pfad mit zwei IdP-Rollen in den bestehenden Grant-Brokering-Tests: weitergeleiteter Rückzug, Audit-Eintrag, fehlendes Discovery-Flag."
+      },
+      {
+        "path": "verification.2",
+        "source": "Pods dispatcher, validation and control tests; pnpm check:ci on the PR head.",
+        "text": "Pods-Dispatcher-, Validierungs- und Control-Tests; pnpm check:ci auf dem PR-Head."
+      },
+      {
+        "path": "handoff",
+        "source": "Revision 1 approved on 2026-10-23; implementation in progress. Open question: what exactly blocked the o365 Shapes seed? No code check was found; the plan covers pending listings, the broker pending limit and refusing repeats of withdrawn references. If the seed procedure is a manual or scripted check elsewhere, name it and I will include it.",
+        "text": "Revision 1 am 2026-10-23 freigegeben; Umsetzung läuft. Offene Frage: Was genau hat den o365-Shapes-Seed blockiert? Ich habe keine Prüfung im Code gefunden; der Plan deckt offene Listen, das Broker-Limit und die Ablehnung wiederholter zurückgezogener Referenzen ab. Falls der Seed-Ablauf woanders manuell oder per Skript prüft, bitte nennen, dann nehme ich ihn auf."
+      },
+      {
+        "path": "changelog.0.text",
+        "source": "Owner approved revision 1 including the protocol PR.",
+        "text": "Owner hat Revision 1 inklusive Protokoll-PR freigegeben."
+      },
+      {
+        "path": "changelog.1.text",
+        "source": "Revision 1 drafted from issue 1536 and code inspection at main 2ab279bc6.",
+        "text": "Revision 1 aus Issue 1536 und Code-Analyse auf main 2ab279bc6 entworfen."
+      }
+    ]
+  }
+}
