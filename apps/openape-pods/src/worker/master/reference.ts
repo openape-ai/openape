@@ -1,3 +1,4 @@
+import { managedRoot } from '../../runtime/directories'
 import { agentBackends, agentProviders, agentModelSizes, agentModelSizeLabels, agentThinkingLevels, agentThinkingLabels } from '../../contracts/agent'
 
 export const serviceQueueExample = `// Serves an @openape/sp-tasks queue. Variable tasks_url, e.g. https://service.example/api/agent/tasks.
@@ -43,7 +44,13 @@ export async function run(context) {
 }`
 
 export const runtimeReference = {
-  contractVersion: 8,
+  contractVersion: 9,
+  directories: {
+    managedRoot: managedRoot(),
+    assign: 'Data that Pods produce (staging, exchange between Pods, task folders that a Pod\'s programs must reach) belongs below managedRoot. resources {type:assignDirectory,podId,path:"<managedRoot>/<lowercase/path>",access,epoch,alias?} with the outer current Pod revision creates missing folders owner-only and assigns the folder. alias is a portable key matching [a-z][a-z0-9_-]* (for example abgaben-staging); the script reads context.aliases.directories[alias] instead of an absolute path. Being below the root grants nothing: assign each folder to each Pod that needs it, read for consumers and readWrite for the producer. The root itself or a folder containing it is refused. Script-only state belongs in context.workspace.',
+    external: 'Assign an absolute path outside managedRoot only for a genuine user source or sink, such as Desktop, Downloads or a cloud-storage target, and keep it where the user keeps it. Never use ~/Documents, ~/Desktop, ~/Downloads or ~/Library/CloudStorage for exchange between Pods: macOS privacy prompts can stall unattended runs.',
+    identity: 'Assigned folders are bound to volume UUID and inode. When a run fails with "Assigned directory changed", inspect the path; only if it is still the intended folder, assign the same path again with the current epoch, which pauses the Pod and needs validate, activate and resume. Never reassign a replaced, linked or missing folder without the owner. Before reactivating an archived or long-paused Pod, check every assigned path and refresh or revoke legacy ones.',
+  },
   agentSelection: { backends: agentBackends, providers: agentProviders, modelSizes: agentModelSizes, modelSizeLabels: agentModelSizeLabels, thinkingLevels: agentThinkingLevels, thinkingLabels: agentThinkingLabels },
   dataExchange: {
     purpose: 'Pods are independent tasks. Exchange data through files in assigned directories or external services. The shared datastore, context.data, context.work, context.decisions and work/polls declarations are retired. Private progress, checkpoints and workspace files remain available.',
@@ -87,7 +94,7 @@ export const runtimeReference = {
   },
   script: {
     entrypoint: 'export async function run(context) { ... }',
-    files: 'Node built-ins such as node:fs/promises and node:path are available. Use context.home and context.workspace for persistent writable pod files. context.directories lists owner-assigned original folders as {path,access}, where access is read or readWrite; use ordinary filesystem APIs on these paths. Only the owner can assign/change directory access in Permissions. context.references contains {id,hash,path} immutable snapshots; read only those assigned paths. Native sandbox denies access outside assigned boundaries, raw network and child processes. Do not spawn, install npm packages, use eval to run generated code, or bypass the context services.',
+    files: 'Node built-ins such as node:fs/promises and node:path are available. Use context.home and context.workspace for persistent writable pod files. context.directories lists owner-assigned original folders as {path,access}, where access is read or readWrite; use ordinary filesystem APIs on these paths. Only the owner can assign/change directory access in Permissions; see directories for where Pod data belongs. context.references contains {id,hash,path} immutable snapshots; read only those assigned paths. Native sandbox denies access outside assigned boundaries, raw network and child processes. Do not spawn, install npm packages, use eval to run generated code, or bypass the context services.',
     input: 'context.input contains version=1, runId, podId, scriptHash, assignmentRevision, reason (manual/schedule/event), eventIds, checkpointRevision, checkpoint, resourceEpoch, workspace, references and limits={timeMs,frameBytes}. It is an immutable snapshot; local variables must track later commits.',
     variables: 'context.variables is a frozen map of ordinary string values. Parse numbers/JSON explicitly. Variables must never contain secrets.',
     aliases: 'context.aliases maps portable aliases to ready local assignments: applications[alias] is the assigned application name for context.tools.invoke, http[alias] the approved origin for context.http.request URLs, directories[alias] the assigned folder path and references[alias] the {id,hash,path} snapshot of an imported or shared file. Maps are empty without aliases. A script meant for sharing uses aliases and variables instead of local identities, paths or origins; an alias grants no access by itself.',
