@@ -25,6 +25,7 @@ const podAgent = 'pod@pods.provider.test'
 const inactive = 'inactive@owner.test'
 const activeAccounts = new Set([direct, other, yolo, podAgent])
 let brokerBusy = false
+let withdrawSupported = true
 const tested = 'a'.repeat(64)
 const untested = 'b'.repeat(64)
 
@@ -108,13 +109,13 @@ vi.mock('../src/runtime/server/utils/broker-store', () => ({
 }))
 // The HTTPS transport is covered in broker-network.test.ts; here it is a plain loopback fetch with the same refusal relay.
 vi.mock('../src/runtime/server/utils/broker-network', () => ({
-  discoverBroker: async (decisionIssuer: string) => ({ issuer: decisionIssuer === issuer ? issuer : broker, openape_grant_reference_supported: true }),
+  discoverBroker: async (decisionIssuer: string) => ({ issuer: decisionIssuer === issuer ? issuer : broker, openape_grant_reference_supported: true, openape_grant_withdraw_supported: withdrawSupported }),
   brokerEndpoint: () => `${base}/brokered`,
   brokerVerificationKey: async () => brokerKeys.publicKey,
   brokerFetch: async (url: string, init: { method: string, headers: Record<string, string>, body: string, relayRefusal?: boolean }) => {
     const response = await fetch(url, init)
     const body = await response.json() as Record<string, unknown>
-    if (response.ok || (response.status === 403 && init.relayRefusal && ['denied', 'revoked', 'expired', 'used'].includes(String(body.state)))) return body
+    if (response.ok || (response.status === 403 && init.relayRefusal && ['denied', 'revoked', 'expired', 'used', 'withdrawn'].includes(String(body.state)))) return body
     throw createError({ statusCode: response.status, data: { retry_after: Number(response.headers.get('retry-after')) || undefined } })
   },
 }))
@@ -128,6 +129,7 @@ const authorize = (await import('../src/runtime/server/api/grants/authorize.post
 const brokered = (await import('../src/runtime/server/api/brokered-grants.post')).default
 const create = (await import('../src/runtime/server/api/grants/index.post')).default
 const list = (await import('../src/runtime/server/api/grants/index.get')).default
+const withdraw = (await import('../src/runtime/server/api/grants/withdraw.post')).default
 
 interface CallInput { argv?: string[], sha256?: string, name?: string, grant_type?: string, [key: string]: unknown }
 function body({ argv = ['status'], sha256 = tested, name = 'git', ...rest }: CallInput = {}) {
@@ -149,10 +151,11 @@ beforeEach(async () => {
   grantStore = new InMemoryGrantStore(); shapeStore = createInMemoryShapeStore([gitShape, toolShape, podRuntimeShape])
   notified.mockClear(); tokensRecorded.mockClear(); resetAuthorizeRateLimit(); ipLimiter.reset()
   brokerBusy = false
+  withdrawSupported = true
   delete process.env.OPENAPE_RATE_LIMIT_MAX_AUTHORIZE
   delete process.env.OPENAPE_RATE_LIMIT_MAX_AGENT
   connection = { id: randomUUID(), owner: { issuer, subject: owner }, broker_issuer: broker, agent_domain: 'pods.provider.test', status: 'active', created_at: 1 }
-  const router = createRouter().get('/grants', list).get('/pods/grants', list).post('/grants/authorize', authorize).post('/grants', create).post('/brokered', brokered).post('/pods/grants/authorize', authorize).post('/grants/:id/consume', consume)
+  const router = createRouter().get('/grants', list).get('/pods/grants', list).post('/grants/authorize', authorize).post('/grants', create).post('/brokered', brokered).post('/pods/grants/authorize', authorize).post('/grants/:id/consume', consume).post('/grants/withdraw', withdraw).post('/pods/grants/withdraw', withdraw)
   const listener = toNodeListener(createApp().use(router))
   server = createServer((req, res) => role.run(req.url?.startsWith('/pods/') ? 'broker' : 'decision', () => listener(req, res)))
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -632,5 +635,97 @@ describe('opaque operation references', () => {
     const second = await call(other, request)
     expect(second.status).toBe(202)
     expect(second.json.grant_id).not.toBe(first.json.grant_id)
+  })
+})
+
+describe('requester withdrawal by reference (issue 1536)', () => {
+  const archive = body({ name: 'document-export', argv: ['render', 'report-7'], grant_type: 'once', reference: 'report-7:v1', batch: { id: 'reports' } })
+  const viaPath = (federated: boolean) => ({
+    submit: federated ? viaBroker : (input: unknown) => call(direct, input),
+    withdraw: (input: unknown) => federated ? call(podAgent, input, '/pods/grants/withdraw') : call(direct, input, '/grants/withdraw'),
+  })
+
+  it.each([false, true])('withdraws a pending request, refuses its approval and execution, and repeats as a no-op (brokered: %s)', async (federated) => {
+    const { submit, withdraw } = viaPath(federated)
+    const pending = await submit(archive)
+    expect(pending.status).toBe(202)
+    const id = pending.json.grant_id
+
+    const answer = await withdraw({ reference: 'report-7:v1', reason: 'Mail left the Inbox' })
+    expect(answer).toMatchObject({ status: 200, json: { outcome: 'withdrawn', grant_id: id, previous_status: 'pending' } })
+    expect(await grantStore.findById(id)).toMatchObject({ status: 'withdrawn', withdraw_reason: 'Mail left the Inbox' })
+    await expect(approveGrant(id, owner, grantStore)).rejects.toThrow('not pending')
+    expect(await grantStore.findPending()).toEqual([])
+    // The same reference never comes back: execution is refused with the terminal state.
+    expect(await submit(archive)).toMatchObject({ status: 403, json: { state: 'withdrawn', grant_id: id } })
+
+    expect((await withdraw({ reference: 'report-7:v1' })).json).toEqual({ outcome: 'withdrawn', grant_id: id, previous_status: 'withdrawn' })
+    expect((await grantStore.findById(id))?.withdraw_reason).toBe('Mail left the Inbox')
+    expect(await grantStore.findByRequester(federated ? podAgent : direct)).toHaveLength(1)
+  })
+
+  it('removes the request from the batch\'s pending members', async () => {
+    const pending = await call(direct, archive)
+    const other = await call(direct, { ...archive, argv: ['render', 'report-8'], reference: 'report-8:v1' })
+    await call(direct, { reference: 'report-7:v1' }, '/grants/withdraw')
+    const members = await fetch(`${base}/grants?${new URLSearchParams({ requester: direct, batch: 'reports', status: 'pending' })}`, { headers: { Authorization: `Bearer ${direct}` } })
+    expect((await members.json() as { data: { id: string }[] }).data.map(grant => grant.id)).toEqual([other.json.grant_id])
+    expect(pending.json.grant_id).not.toBe(other.json.grant_id)
+  })
+
+  it.each([false, true])('withdraws an approved but unused single-use grant (brokered: %s)', async (federated) => {
+    const { submit, withdraw } = viaPath(federated)
+    const pending = await submit(archive)
+    await approveGrant(pending.json.grant_id, owner, grantStore)
+    expect((await withdraw({ reference: 'report-7:v1' })).json).toEqual({ outcome: 'withdrawn', grant_id: pending.json.grant_id, previous_status: 'approved' })
+    expect(await submit(archive)).toMatchObject({ status: 403, json: { state: 'withdrawn' } })
+    expect(tokensRecorded).not.toHaveBeenCalled()
+  })
+
+  it('refuses to redeem a token of a grant withdrawn after it was issued', async () => {
+    const created = await call(direct, { requester: direct, target_host: 'fixture', audience: 'shapes', command: ['export', 'document-42'], grant_type: 'once', reference: 'document-42:v1' }, '/grants')
+    const approved = await approveGrant(created.json.id, owner, grantStore)
+    const { issueAuthzJWT } = await import('@openape/grants')
+    const token = await issueAuthzJWT(approved, issuer, keys.privateKey)
+    await call(direct, { reference: 'document-42:v1' }, '/grants/withdraw')
+    const redeemed = await fetch(`${base}/grants/${created.json.id}/consume`, { method: 'POST', headers: { Authorization: `Bearer ${token}` } })
+    expect(await redeemed.json()).toMatchObject({ error: 'withdrawn', status: 'withdrawn' })
+    expect((await grantStore.findById(created.json.id))?.status).toBe('withdrawn')
+  })
+
+  it('reports a used request as already decided and changes nothing', async () => {
+    const pending = await call(direct, archive)
+    await approveGrant(pending.json.grant_id, owner, grantStore)
+    expect((await call(direct, archive)).status).toBe(200)
+    expect((await call(direct, { reference: 'report-7:v1' }, '/grants/withdraw')).json).toEqual({ outcome: 'already_decided', grant_id: pending.json.grant_id, status: 'used' })
+    expect((await grantStore.findById(pending.json.grant_id))?.status).toBe('used')
+  })
+
+  it('never reaches another requester\'s or another binding\'s request', async () => {
+    const mine = await call(direct, archive)
+    const brokeredRequest = await viaBroker(archive)
+    // Another subject, the same subject without its broker binding, and an unknown reference all answer unknown.
+    expect((await call(other, { reference: 'report-7:v1' }, '/grants/withdraw')).json).toEqual({ outcome: 'unknown' })
+    expect((await call(podAgent, { reference: 'report-7:v1' }, '/grants/withdraw')).json).toEqual({ outcome: 'unknown' })
+    expect((await call(direct, { reference: 'report-9:v1' }, '/grants/withdraw')).json).toEqual({ outcome: 'unknown' })
+    expect((await grantStore.findById(mine.json.grant_id))?.status).toBe('pending')
+    expect((await grantStore.findById(brokeredRequest.json.grant_id))?.status).toBe('pending')
+  })
+
+  it('refuses unauthenticated, delegated-shape and malformed withdrawals before touching a request', async () => {
+    const pending = await call(direct, archive)
+    expect((await call(null, { reference: 'report-7:v1' }, '/grants/withdraw')).status).toBe(401)
+    for (const input of [{}, { reference: '' }, { reference: 'report-7:v1', grant_id: pending.json.grant_id }, { reference: 'report-7:v1', reason: 'a\u0000b' }, 'not json'])
+      expect((await call(direct, input, '/grants/withdraw')).status, JSON.stringify(input)).toBe(400)
+    expect((await call(inactive, { reference: 'report-7:v1' }, '/grants/withdraw')).status).toBe(403)
+    expect((await grantStore.findById(pending.json.grant_id))?.status).toBe('pending')
+  })
+
+  it('refuses at the broker when the decision IdP does not support withdrawal, without any fallback', async () => {
+    const pending = await viaBroker(archive)
+    withdrawSupported = false
+    const refused = await call(podAgent, { reference: 'report-7:v1' }, '/pods/grants/withdraw')
+    expect(refused.status).toBe(501)
+    expect((await grantStore.findById(pending.json.grant_id))?.status).toBe('pending')
   })
 })

@@ -256,7 +256,13 @@ export async function useGrant(
 
   if (grant.request.grant_type === 'once') {
     const now = Math.floor(Date.now() / 1000)
-    await store.updateStatus(grantId, 'used', { used_at: now })
+    // Conditional on `approved`, so a concurrent withdrawal, revocation or redemption wins (grants.md §4.11).
+    if (store.claimOnce) {
+      if (!await store.claimOnce(grantId, now)) throw new Error('Grant is not approved: it changed while it was being used')
+    }
+    else {
+      await store.updateStatus(grantId, 'used', { used_at: now })
+    }
     const updated = await store.findById(grantId)
     return updated!
   }

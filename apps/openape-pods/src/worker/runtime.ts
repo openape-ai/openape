@@ -4,6 +4,7 @@ import { releaseProfileLease } from './profile-lease'
 import { runtimeParentPort } from './parent-port'
 import { ExecutionIdentityBridge } from './runtime/execution-identity'
 import { recordProgramExecution } from './runs/program-execution'
+import type { OpenApeGrantWithdrawResult } from '@openape/core'
 import type { ProgramExecutionCheck } from '../contracts/program-execution'
 import { occupiedRunSlots } from './runs/slots'
 import { assertDataIdle } from './data/backup'
@@ -131,6 +132,7 @@ const runServices: RunServices = {
     }
     throw new Error('Unsupported tool request; use an assigned application through ape-shell')
   },
+  withdraw: async (request, signal, scope) => await serviceBridge.execute({ podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities }, request, signal, 'grantWithdraw') as OpenApeGrantWithdrawResult,
 }
 dispatcher = new RunDispatcher(store, registry, runtime, runServices)
 const data = new DataControl(store, runtime.helper)

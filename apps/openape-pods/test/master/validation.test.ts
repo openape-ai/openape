@@ -72,6 +72,16 @@ it('provides only local elapsed timing during synthetic validation', async () =>
   await expect(validate()).resolves.toMatchObject({ status: 'completed' })
 })
 
+it('answers a withdrawal with unknown and still checks its payload during synthetic validation (issue 1536)', async () => {
+  const { validate } = await drafted()
+  vi.mocked(executeScript).mockImplementation(async (_runtime, _root, _artifact, _input, signal, services) => {
+    expect(await services.request('tools.withdraw', { reference: 'archive-v2:abc', reason: 'Mail left the Inbox' }, signal)).toEqual({ outcome: 'unknown' })
+    await expect(services.request('tools.withdraw', { reference: 'archive-v2:abc', grantId: 'grant-1' }, signal)).rejects.toThrow('Only reference and reason')
+    return { status: 'completed', summary: 'Synthetic withdrawal checked', completedInputIds: [], gapIds: [] }
+  })
+  await expect(validate()).resolves.toMatchObject({ status: 'completed' })
+})
+
 it('resolves proxy configuration without performing inference and preserves synthetic output', async () => {
   const validateProxyAgent = vi.fn(async () => undefined)
   const { validate } = await drafted({ validateProxyAgent })

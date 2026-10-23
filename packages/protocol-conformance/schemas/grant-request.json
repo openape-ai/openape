@@ -164,6 +164,12 @@
           "maxLength": 200,
           "description": "The requester's own title for the batch."
         },
+        "description": {
+          "type": "string",
+          "maxLength": 2000,
+          "pattern": "^(?:\\n|[^\\p{Cc}\\p{Cf}\\p{Zl}\\p{Zp}])*$",
+          "description": "The requester's own description of the batch. At most 2000 Unicode code points; LF is significant. Identical across members, including whether it is present. Presentation only."
+        },
         "size": {
           "type": "integer",
           "minimum": 1,
@@ -206,6 +212,13 @@
       "required": ["delegate", "delegation_grant"],
       "additionalProperties": false
     },
+    "reference": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512,
+      "pattern": "\\S",
+      "description": "Opaque identity; runtime must enforce at most 512 UTF-8 bytes and reject Unicode Cc, Cf and Cs. See grants.md request references."
+    },
     "scopes": {
       "type": "array",
       "items": { "type": "string" },
@@ -219,5 +232,56 @@
   "then": {
     "required": ["requester", "target_host", "audience", "grant_type", "duration"]
   },
+  "allOf": [
+    {
+      "if": {
+        "required": [
+          "reference"
+        ]
+      },
+      "then": {
+        "properties": {
+          "grant_type": {
+            "const": "once"
+          },
+          "command": {
+            "minItems": 1
+          }
+        },
+        "required": [
+          "command"
+        ],
+        "not": {
+          "anyOf": [
+            {
+              "required": [
+                "duration"
+              ]
+            },
+            {
+              "required": [
+                "run_as"
+              ]
+            },
+            {
+              "required": [
+                "delegator"
+              ]
+            },
+            {
+              "required": [
+                "delegate"
+              ]
+            },
+            {
+              "required": [
+                "scopes"
+              ]
+            }
+          ]
+        }
+      }
+    }
+  ],
   "additionalProperties": false
 }

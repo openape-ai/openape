@@ -1,4 +1,4 @@
-import type { OpenApeGrantBatch, OpenApeGrantSummary } from '@openape/core'
+import type { OpenApeGrantBatch, OpenApeGrantSummary, OpenApeGrantWithdrawResult } from '@openape/core'
 import { parseGrantBatch, parseGrantReference, parseGrantSummary } from '@openape/grants'
 import type { RunContext } from './services'
 
@@ -77,4 +77,16 @@ export function splitScriptSummary(payload: unknown): { payload: unknown, summar
   if (!payload || typeof payload !== 'object' || Array.isArray(payload) || !['summary', 'batch', 'reference'].some(key => Object.hasOwn(payload, key))) return { payload }
   const { summary, batch, reference, ...call } = payload as Record<string, unknown>
   return { payload: call, ...(Object.hasOwn(payload, 'summary') ? { summary: parseScriptSummary(summary) } : {}), ...(batch === undefined ? {} : { batch: parseGrantBatch(batch) }), ...(reference === undefined ? {} : { reference: parseGrantReference(reference) }) }
+}
+
+/** What `context.tools.withdraw` returns to a script (grants.md §4.11, issue 1536). */
+export type ScriptWithdrawResult =
+  | { outcome: 'withdrawn', grantId: string, previous: 'pending' | 'approved' | 'withdrawn' }
+  | { outcome: 'alreadyDecided', grantId: string, state: 'denied' | 'revoked' | 'expired' | 'used' }
+  | { outcome: 'unknown' }
+
+export function scriptWithdrawResult(result: OpenApeGrantWithdrawResult): ScriptWithdrawResult {
+  if (result.outcome === 'withdrawn') return { outcome: 'withdrawn', grantId: result.grant_id, previous: result.previous_status }
+  if (result.outcome === 'already_decided') return { outcome: 'alreadyDecided', grantId: result.grant_id, state: result.status }
+  return { outcome: 'unknown' }
 }

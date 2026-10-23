@@ -85,7 +85,7 @@ export function readForwardedAuthorize(value: unknown): ProgramAuthorizeResult {
     if (!text(answer.approval_url) || !answer.approval_url.startsWith('https://')) throw invalid()
     return { status: 202, body: { state: 'pending', grant_id: answer.grant_id, approval_url: answer.approval_url } }
   }
-  if (answer.state === 'denied' || answer.state === 'revoked' || answer.state === 'expired' || answer.state === 'used') return { status: 403, body: { state: answer.state, grant_id: answer.grant_id } }
+  if (answer.state === 'denied' || answer.state === 'revoked' || answer.state === 'expired' || answer.state === 'used' || answer.state === 'withdrawn') return { status: 403, body: { state: answer.state, grant_id: answer.grant_id } }
   throw invalid()
 }
 

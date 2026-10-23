@@ -1,5 +1,5 @@
 import type { BrokerConnection, BrokeredGrant, BrokerRequest, OpenApeAuthZClaims, OpenApeGrant } from '@openape/core'
-import { approveGrant } from '@openape/grants'
+import { approveGrant, grantReferenceKey, useGrant, withdrawReferencedGrant } from '@openape/grants'
 import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -56,7 +56,7 @@ beforeEach(async () => {
   await client.executeMultiple(`
     CREATE TABLE users(email TEXT PRIMARY KEY, id TEXT, name TEXT NOT NULL, owner TEXT, approver TEXT, type TEXT, public_key TEXT, is_active INTEGER NOT NULL, created_at INTEGER NOT NULL, last_login_at INTEGER, recovery_vacation_mode INTEGER NOT NULL DEFAULT 0, recovery_vacation_days INTEGER);
     CREATE TABLE ssh_keys(key_id TEXT PRIMARY KEY, user_email TEXT NOT NULL, public_key TEXT NOT NULL, name TEXT NOT NULL, created_at INTEGER NOT NULL);
-    CREATE TABLE grants(id TEXT PRIMARY KEY, status TEXT NOT NULL, type TEXT, requester TEXT NOT NULL, reference_key TEXT UNIQUE, brokered TEXT, broker_owner TEXT, target_host TEXT NOT NULL, audience TEXT NOT NULL, grant_type TEXT NOT NULL, request TEXT NOT NULL, created_at INTEGER NOT NULL, decided_at INTEGER, decided_by TEXT, expires_at INTEGER, used_at INTEGER, decided_by_standing_grant TEXT, auto_approval_kind TEXT, consumed_jti TEXT);
+    CREATE TABLE grants(id TEXT PRIMARY KEY, status TEXT NOT NULL, type TEXT, requester TEXT NOT NULL, reference_key TEXT UNIQUE, brokered TEXT, broker_owner TEXT, target_host TEXT NOT NULL, audience TEXT NOT NULL, grant_type TEXT NOT NULL, request TEXT NOT NULL, created_at INTEGER NOT NULL, decided_at INTEGER, decided_by TEXT, expires_at INTEGER, used_at INTEGER, decided_by_standing_grant TEXT, auto_approval_kind TEXT, consumed_jti TEXT, withdraw_reason TEXT);
     CREATE TABLE broker_connections(id TEXT PRIMARY KEY, owner TEXT NOT NULL, owner_issuer TEXT NOT NULL, broker_issuer TEXT NOT NULL, agent_domain TEXT NOT NULL, status TEXT NOT NULL, created_at INTEGER NOT NULL);
     CREATE TABLE broker_requests(connection_id TEXT NOT NULL, jti TEXT NOT NULL, expires_at INTEGER NOT NULL, subject TEXT, PRIMARY KEY(connection_id,jti));
     CREATE TABLE broker_audit(id INTEGER PRIMARY KEY AUTOINCREMENT, grant_id TEXT NOT NULL, owner TEXT NOT NULL, agent TEXT NOT NULL, broker_issuer TEXT NOT NULL, connection_id TEXT NOT NULL, event TEXT NOT NULL, created_at INTEGER NOT NULL);
@@ -216,6 +216,10 @@ describe('durable grant brokering', () => {
     for (const value of values) await grantStore.save(value)
     await expect(grantStore.save({ ...grant(), status: 'pending' })).rejects.toMatchObject({ statusCode: 429 })
     await grantStore.updateStatus(values[0]!.id, 'denied', { decided_by: owner, decided_at: 2 })
+    await grantStore.save({ ...grant(), status: 'pending' })
+    await expect(grantStore.save({ ...grant(), status: 'pending' })).rejects.toMatchObject({ statusCode: 429 })
+    // A requester's withdrawal frees its slot like a decision does (issue 1536).
+    expect(await grantStore.withdraw!(values[1]!.id, 3)).toBe('pending')
     await grantStore.save({ ...grant(), status: 'pending' })
     const audit = await database.select().from(schema.brokerAudit).where(eq(schema.brokerAudit.grantId, values[0]!.id))
     expect(audit.map(row => row.event)).toEqual(['created', 'denied'])
@@ -570,6 +574,56 @@ describe('durable generic grant references', () => {
     for (const variant of variants) expect((await grantStore.createReferenced!(variant)).created).toBe(true)
     expect((await grantStore.createReferenced!({ ...value, id: randomUUID(), brokered: { ...value.brokered!, requester_name: 'Renamed client' } })).created).toBe(false)
     expect(await grantStore.findAll()).toHaveLength(4)
+  })
+
+  it('withdraws a referenced request in one conditional update, audits it once and frees inbox capacity (issue 1536)', async () => {
+    await client.execute('PRAGMA journal_mode = WAL')
+    const value = referenced()
+    await grantStore.createReferenced!(value)
+    const key = grantReferenceKey(subject, value.request.reference!, value.brokered)
+    const answers = await Promise.all(Array.from({ length: 3 }, () => withdrawReferencedGrant(key, 'Mail left the Inbox', createDrizzleGrantStore())))
+    expect(answers.filter(answer => answer.outcome === 'withdrawn' && answer.previous_status === 'pending')).toHaveLength(1)
+    expect(answers.every(answer => answer.outcome === 'withdrawn')).toBe(true)
+    expect(await grantStore.findById(value.id)).toMatchObject({ status: 'withdrawn', withdraw_reason: 'Mail left the Inbox', decided_at: expect.any(Number) })
+    const audit = await database.select().from(schema.brokerAudit).where(eq(schema.brokerAudit.grantId, value.id))
+    expect(audit.map(row => row.event)).toEqual(['created', 'withdrawn'])
+    await expect(approveGrant(value.id, owner, grantStore)).rejects.toThrow('not pending')
+    await expect(grantStore.updateStatus(value.id, 'approved')).rejects.toMatchObject({ statusCode: 409 })
+    expect(await grantStore.claimOnce(value.id, 1)).toBe(false)
+    expect(await grantStore.findPending()).toEqual([])
+    // The reference stays bound to the withdrawn request.
+    expect((await grantStore.createReferenced!({ ...value, id: randomUUID() })).grant).toMatchObject({ id: value.id, status: 'withdrawn' })
+  })
+
+  it('withdraws only pending or approved single-use grants and never a spent one', async () => {
+    const value = referenced()
+    await grantStore.createReferenced!(value)
+    await approveGrant(value.id, owner, grantStore)
+    expect(await grantStore.claimOnce(value.id, 1)).toBe(true)
+    expect(await grantStore.withdraw!(value.id, 2)).toBeNull()
+    expect((await grantStore.findById(value.id))?.status).toBe('used')
+    const continuing = { ...grant('always'), id: randomUUID() }
+    await grantStore.save(continuing)
+    expect(await grantStore.withdraw!(continuing.id, 2)).toBeNull()
+    expect((await grantStore.findById(continuing.id))?.status).toBe('approved')
+  })
+
+  it('keeps a withdrawal against a redemption or revocation that read the grant before it', async () => {
+    const value = referenced()
+    await grantStore.createReferenced!(value)
+    await approveGrant(value.id, owner, grantStore)
+    // Both callers read `approved` first; the withdrawal lands in between.
+    const before = await grantStore.findById(value.id)
+    expect(before?.status).toBe('approved')
+    expect(await grantStore.withdraw!(value.id, 2, 'Mail left the Inbox')).toBe('approved')
+    // A redemption that still holds the stale `approved` read must not spend the withdrawn grant.
+    const staleRead = { ...grantStore, findById: async () => before }
+    await expect(useGrant(value.id, staleRead)).rejects.toThrow('not approved')
+    await expect(grantStore.updateStatus(value.id, 'used', { used_at: 3 })).rejects.toMatchObject({ statusCode: 409 })
+    await expect(grantStore.updateStatus(value.id, 'revoked')).rejects.toMatchObject({ statusCode: 409 })
+    expect(await grantStore.findById(value.id)).toMatchObject({ status: 'withdrawn', withdraw_reason: 'Mail left the Inbox' })
+    const audit = await database.select().from(schema.brokerAudit).where(eq(schema.brokerAudit.grantId, value.id))
+    expect(audit.map(row => row.event)).toEqual(['created', 'approved', 'withdrawn'])
   })
 
   it('keeps expired references after the pending TTL and refuses a revoked connection', async () => {

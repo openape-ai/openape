@@ -2,7 +2,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 
 export class AuthorityError extends Error {}
 export interface PermissionRefusal {
-  state: 'missing' | 'pending' | 'denied' | 'revoked' | 'expired' | 'used'
+  state: 'missing' | 'pending' | 'denied' | 'revoked' | 'expired' | 'used' | 'withdrawn'
   grantId?: string
 }
 export class PermissionUnavailableError extends AuthorityError {

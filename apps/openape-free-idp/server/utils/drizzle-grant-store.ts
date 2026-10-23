@@ -39,6 +39,7 @@ export function grantToRow(grant: OpenApeGrant) {
     decidedBy: grant.decided_by ?? null,
     expiresAt: grant.expires_at ?? null,
     usedAt: grant.used_at ?? null,
+    withdrawReason: grant.withdraw_reason ?? null,
     decidedByStandingGrant: grant.decided_by_standing_grant ?? null,
     autoApprovalKind: grant.auto_approval_kind ?? null,
   }
@@ -63,6 +64,7 @@ export function rowToGrant(row: GrantRow): OpenApeGrant {
     decided_by: row.decidedBy ?? undefined,
     expires_at: row.expiresAt ?? undefined,
     used_at: row.usedAt ?? undefined,
+    ...(row.withdrawReason ? { withdraw_reason: row.withdrawReason } : {}),
     decided_by_standing_grant: row.decidedByStandingGrant ?? undefined,
     auto_approval_kind: (row.autoApprovalKind as OpenApeGrant['auto_approval_kind']) ?? undefined,
   }
@@ -190,6 +192,7 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
 
         if (extra?.request && rowToGrant(existing).request.reference) assertSameReferencedGrant(rowToGrant(existing), { ...rowToGrant(existing), request: extra.request })
         if ((existing.brokered || existing.referenceKey || existing.status === 'expired') && (status === 'approved' || status === 'denied') && existing.status !== 'pending') throw createError({ statusCode: 409, statusMessage: 'Grant was already decided' })
+        if (existing.status === 'withdrawn') throw createError({ statusCode: 409, statusMessage: 'Grant was withdrawn by its requester' })
         const updates: Record<string, unknown> = { status }
         if (extra?.decided_by !== undefined) updates.decidedBy = extra.decided_by
         if (extra?.decided_at !== undefined) updates.decidedAt = extra.decided_at
@@ -219,6 +222,19 @@ export function createDrizzleGrantStore(): ExtendedGrantStore {
         if (row.brokered) await tx.insert(brokerAudit).values(brokerAuditRow(rowToGrant(row), 'used'))
         return true
       }, { behavior: 'immediate' })
+    },
+
+    async withdraw(id, withdrawnAt, reason) {
+      return await retryReferenceTransaction(() => db.transaction(async (tx) => {
+        // The immediate transaction holds the write lock, so the status read here is the one replaced.
+        const previous = await tx.select({ status: grants.status, grantType: grants.grantType }).from(grants).where(eq(grants.id, id)).get()
+        if (!previous || !(previous.status === 'pending' || (previous.status === 'approved' && previous.grantType === 'once'))) return null
+        const withdrawn = await tx.update(grants).set({ status: 'withdrawn', decidedAt: withdrawnAt, withdrawReason: reason ?? null }).where(and(eq(grants.id, id), eq(grants.status, previous.status))).returning()
+        const row = withdrawn[0]
+        if (!row) return null
+        if (row.brokered) await tx.insert(brokerAudit).values(brokerAuditRow(rowToGrant(row), 'withdrawn'))
+        return previous.status as 'pending' | 'approved'
+      }, { behavior: 'immediate' }))
     },
 
     async markConsumed(id, jti) {

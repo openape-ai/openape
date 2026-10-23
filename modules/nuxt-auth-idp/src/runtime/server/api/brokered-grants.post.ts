@@ -3,7 +3,7 @@ import { brokerInput } from '../utils/broker-input'
 import type { BrokeredGrant } from '@openape/core'
 import { defineEventHandler, readBody, setHeader, setResponseStatus } from 'h3'
 import { decodeJwt } from 'jose'
-import { grantReferenceKey, assertGrantBatchMember, BROKER_REQUEST_TYPE, InvalidGrantBatchError, brokerObject, introspectGrant, issueAuthzJWT, parseBrokerRequest, parseProgramAuthorizeRequest, sameBrokeredGrant, verifyBrokerToken } from '@openape/grants'
+import { grantReferenceKey, withdrawReferencedGrant, assertGrantBatchMember, BROKER_REQUEST_TYPE, InvalidGrantBatchError, brokerObject, introspectGrant, issueAuthzJWT, parseBrokerRequest, parseProgramAuthorizeRequest, sameBrokeredGrant, verifyBrokerToken } from '@openape/grants'
 import { enforceAuthorizeRateLimit } from '../utils/authorize-rate-limit'
 import { authorizeProgramCall, sendProgramAuthorizeResult } from '../utils/program-authorize'
 import { brokerVerificationKey, discoverBroker } from '../utils/broker-network'
@@ -69,6 +69,11 @@ export default defineEventHandler(async (event) => {
     await runGrantPendingHooks(grant)
     setResponseStatus(event, 201)
     return grant
+  }
+  if (request.operation === 'withdraw') {
+    await store.assertConnection(provenance)
+    if (!grantStore.withdraw) throw createProblemError({ status: 501, title: 'This store does not support withdrawing grant requests' })
+    return await withdrawReferencedGrant(grantReferenceKey(request.sub, request.reference, provenance), request.reason, grantStore)
   }
   if (request.operation === 'get' && 'reference' in request) {
     await store.assertConnection(provenance)

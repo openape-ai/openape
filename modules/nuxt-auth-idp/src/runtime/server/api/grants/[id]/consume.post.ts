@@ -77,6 +77,8 @@ export default defineEventHandler(async (event) => {
       return { error: 'denied', status: grant.status }
     case 'expired':
       return { error: 'expired', status: grant.status }
+    case 'withdrawn':
+      return { error: 'withdrawn', status: grant.status }
     case 'pending':
       return { error: 'not_approved', status: grant.status }
   }

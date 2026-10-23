@@ -36,6 +36,12 @@ export interface GrantStore {
    * its command token: true for the first call only, whatever the `jti`.
    */
   markConsumed?: (id: string, jti: string) => Promise<boolean>
+  /**
+   * Marks a pending grant, or an approved single-use grant whose token was
+   * not issued yet, `withdrawn` in one step (grants.md §4.11) and returns the
+   * status it replaced; null when it is in any other state.
+   */
+  withdraw?: (id: string, withdrawnAt: number, reason?: string) => Promise<'pending' | 'approved' | null>
 }
 
 export class InMemoryGrantStore implements GrantStore {
@@ -83,6 +89,13 @@ export class InMemoryGrantStore implements GrantStore {
     if (grant?.status !== 'approved') return false
     this.grants.set(id, { ...grant, status: 'used', used_at: usedAt })
     return true
+  }
+
+  async withdraw(id: string, withdrawnAt: number, reason?: string): Promise<'pending' | 'approved' | null> {
+    const grant = this.grants.get(id)
+    if (!grant || !(grant.status === 'pending' || (grant.status === 'approved' && grant.request.grant_type === 'once'))) return null
+    this.grants.set(id, { ...grant, status: 'withdrawn', decided_at: withdrawnAt, ...(reason !== undefined ? { withdraw_reason: reason } : {}) })
+    return grant.status
   }
 
   async markConsumed(id: string, jti: string): Promise<boolean> {

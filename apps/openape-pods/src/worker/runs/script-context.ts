@@ -25,7 +25,7 @@ export async function scriptContext(script: ScriptModule, input: RunInput, reque
     signal,
     http: Object.freeze({ request: (payload: unknown) => request('http.request', payload) }),
     credentials: Object.freeze({ get: (alias: string) => request('credentials.get', { alias }) }),
-    tools: Object.freeze({ invoke: (payload: unknown) => request('tools.invoke', payload) }),
+    tools: Object.freeze({ invoke: (payload: unknown) => request('tools.invoke', payload), withdraw: (payload: unknown) => request('tools.withdraw', payload) }),
     agent: Object.freeze({ run: (payload: unknown) => request('agent.run', payload) }),
     progress: Object.freeze({ commit: (payload: unknown) => request('progress.commit', payload) }),
     notify: (payload: unknown) => request('notify', payload),
