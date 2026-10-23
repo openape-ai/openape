@@ -1,3 +1,11 @@
+# Pods volume-stable directory identity and standard data root — issue 1538
+
+- Owner approved plan revision 2 on October 23, 2026 ("Freigabe erteilt"): https://report.openape.ai/d/01M5MXRKJ4CV34MDX6MHJRJ0GZ?v=3. Implementation by Claude Opus 5.5, reviewed by the parent agent.
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1538. Worktree `openape-monorepo.worktrees/pods-managed-directories`, branch `bugfix/issue-1538-pods-managed-directories`, canonical base `381e3b54ecbc46070eb1704a9a9a8106d709d4fc`.
+- Assigned folders are verified by volume UUID (`pods-helper volume-identity`) plus inode in the script dispatcher and the application/shell sessions; legacy records pass only on their original device. Runtime contract 9 reports `directories.managedRoot` (`~/.openape/pods`); `assignDirectory` creates missing owner-only folders below it, refuses the root and its ancestors and accepts an optional portable `alias`. Sandbox levels and grants are unchanged.
+- Verification: focused identity, dispatcher, session, alias and refusal tests; real isolated sandbox regression; opt-in native APFS remount test (`PODS_NATIVE_VOLUME_TEST=1`); full Pods unit suite 1,979 passed.
+- Next: parent code review, native PR, merge, `pnpm check:ci`, keychain-free owner installation, grouped live migration of the 15 non-archived Pods with folders and acceptance.
+
 # Pods sign-in and execution compatibility — issue 1537
 
 - Owner approved the startup mock and implementation on October 23, 2026. Plan: `.claude/plans/2026-10-23-pods-startup/plan.json`. Implementation delegated to Claude Opus 5.5, reviewed by the parent agent.

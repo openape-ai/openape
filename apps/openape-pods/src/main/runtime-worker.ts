@@ -42,7 +42,7 @@ import type { ApprovalHistoryCommand, ApprovalHistoryView } from '../contracts/a
 import type { RunContextRequest, ServiceCheck, ServiceRequest  } from '../contracts/services'
 import { approvalURL } from '../contracts/activity'
 import type { RunApproval } from '../contracts/activity'
-import { assignedDirectories, directoryPolicy } from '../runtime/directories'
+import { assignedDirectories, directoryPolicy, setVolumeIdentityHelper } from '../runtime/directories'
 import { podEnvironment, podEnvironmentValues, visibleEnvironment } from '../runtime/environment'
 import { podWorkspace } from './programs/console'
 import { invokeProgram, programRequest } from './programs/invoke'
@@ -416,6 +416,7 @@ export class RuntimeWorker {
     this.setupPhase = 'protected paths'
     await this.dispatch({ secretPaths: agentBackends.protectedPaths() }); live()
     const dist = this.directory
+    setVolumeIdentityHelper(join(dist, 'native/pods-helper'))
     const runtime = { helper: join(dist, 'native/pods-helper'), executable: process.execPath, entry: join(dist, 'runtime/script-entry.mjs'), runtimeDirectories: [dirname(dirname(process.execPath))], environment: { ELECTRON_RUN_AS_NODE: '1' }, binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs') }
     const connections: ConnectionManager = own('connections', new ConnectionManager(this.root, runtime, credentials, (command) => { live(); return this.dispatch({ setup: command }) }, async () => {
       live()
