@@ -15,8 +15,18 @@ import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { SetupControl } from '../../src/worker/onboarding/control'
 
 const cleanups: (() => Promise<void>)[] = []
+const lookup = vi.hoisted(() => ({ failure: null as Error | null }))
+const kernel = vi.hoisted(() => ({ release: '25.6.0' }))
+vi.mock('../../src/main/support', async (original) => {
+  const actual = await original<typeof import('../../src/main/support')>()
+  return { ...actual, assertExecutionSupported: () => actual.assertExecutionSupported(actual.executionSupport('darwin', 'arm64', kernel.release)) }
+})
+vi.mock('@openape/core', async (original) => {
+  const actual = await original<typeof import('@openape/core')>()
+  return { ...actual, resolveIdP: async (...args: Parameters<typeof actual.resolveIdP>) => { if (lookup.failure) throw lookup.failure; return actual.resolveIdP(...args) } }
+})
 vi.mock('../../src/main/connections/broker', async original => ({ ...await original<typeof import('../../src/main/connections/broker')>(), podBrokerReceipt: vi.fn(async () => 'synthetic-receipt') }))
-afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
+afterEach(async () => { lookup.failure = null; kernel.release = '25.6.0'; for (const cleanup of cleanups.splice(0)) await cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
 async function fixture(architecture = process.arch, jevKey?: () => string | undefined, directAgents = false) {
   const root = await mkdtemp(join(tmpdir(), 'pods-connect-')); const vendor = join(root, 'vendor'); await mkdir(vendor)
   await writeFile(join(vendor, 'codex'), 'synthetic-codex')
@@ -260,6 +270,47 @@ it('switches the owner only after confirmation and releases pods bound to the pr
   expect((await manager.view()).connections).toEqual([expect.objectContaining({ id, state: 'ready', error: null })])
   expect(control.connections.metadata(id)).toEqual({ issuer: 'https://id.example.invalid', subject: 'second@example.invalid' })
   await expect(access(join(root, 'credentials', `${connectionId}.encrypted`))).rejects.toThrow('ENOENT')
+})
+
+it('lets the owner sign in with DDISA while the bundled Codex tools are unavailable, and keeps ChatGPT blocked', async () => {
+  vi.stubEnv('DDISA_MOCK_RECORDS', JSON.stringify({ 'published.invalid': { idp: 'https://idp.published.invalid' } }))
+  const { manager } = await fixture(process.arch === 'x64' ? 'arm64' : 'x64')
+  vi.spyOn(OwnerConnection.prototype, 'login').mockResolvedValue({ issuer: 'https://idp.published.invalid', subject: 'owner' })
+  expect((await manager.view()).runtime.ready).toBe(false)
+  await manager.execute({ type: 'connect', provider: 'openape', account: 'owner@published.invalid' })
+  await expect.poll(async () => (await manager.view()).connections[0]?.state).toBe('ready')
+  await expect(manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })).rejects.toThrow('architecture')
+})
+
+it('initializes and signs the DDISA owner in on an unverified kernel while the sandboxed ChatGPT sign-in stays blocked', async () => {
+  kernel.release = '99.0.0'
+  vi.stubEnv('DDISA_MOCK_RECORDS', JSON.stringify({ 'published.invalid': { idp: 'https://idp.published.invalid' } }))
+  const { manager } = await fixture()
+  expect((await manager.view()).runtime).toEqual({ ready: true, error: null })
+  vi.spyOn(OwnerConnection.prototype, 'login').mockResolvedValue({ issuer: 'https://idp.published.invalid', subject: 'owner' })
+  await manager.execute({ type: 'connect', provider: 'openape', account: 'owner@published.invalid' })
+  await expect.poll(async () => (await manager.view()).connections.find(item => item.provider === 'openape')?.state).toBe('ready')
+  await manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })
+  await expect.poll(async () => (await manager.view()).connections.find(item => item.provider === 'chatgpt')).toMatchObject({ state: 'failed', error: expect.stringContaining('Pod execution is blocked on darwin 99.0.0 (arm64)') })
+})
+
+it('keeps the owner sign-in closed while credential recovery failed', async () => {
+  const { manager } = await fixture()
+  await manager.initialize(async () => { throw new Error('Synthetic credential recovery failure') })
+  const login = vi.spyOn(OwnerConnection.prototype, 'login')
+  await expect(manager.execute({ type: 'connect', provider: 'openape', account: 'owner@published.invalid' })).rejects.toThrow('Synthetic credential recovery failure')
+  expect(login).not.toHaveBeenCalled()
+})
+
+it('keeps the system cause of a failed DDISA lookup and a failed browser sign-in', async () => {
+  const { manager } = await fixture()
+  lookup.failure = Object.assign(new TypeError('fetch failed'), { cause: Object.assign(new Error('getaddrinfo ENOTFOUND dns.example'), { code: 'ENOTFOUND' }) })
+  await expect(manager.execute({ type: 'connect', provider: 'openape', account: 'owner@published.invalid' })).rejects.toThrow('Could not look up the DDISA identity provider of published.invalid: fetch failed (ENOTFOUND)')
+  lookup.failure = null
+  vi.stubEnv('DDISA_MOCK_RECORDS', JSON.stringify({ 'published.invalid': { idp: 'https://idp.published.invalid' } }))
+  vi.spyOn(OwnerConnection.prototype, 'login').mockRejectedValue(Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } }))
+  await manager.execute({ type: 'connect', provider: 'openape', account: 'owner@published.invalid' })
+  await expect.poll(async () => (await manager.view()).connections[0]).toMatchObject({ state: 'failed', error: 'fetch failed (ECONNREFUSED)', login: null })
 })
 
 it('discovers the identity provider from the DDISA record of the email domain', async () => {

@@ -582,11 +582,19 @@ closure, pinned native build metadata and collected license notices. No package 
 uploaded. This local artifact is for evaluation, not a release. Its signed-manifest
 flag is false and the manual updater rejects it as an approved update.
 
-The current execution pilot is Apple silicon / Darwin 25.6.0 (verified locally on
-macOS 26.6.2, build 25G83). Other kernel/CPU combinations show an explicit startup
-error and cannot execute pods. The Electron packaging minimum of macOS 14 describes
-the shell, not a tested execution support promise. Expand `main/support.ts` only
-with recorded packaged boundary acceptance on the additional matrix entry.
+Pod execution is enabled only for the exact Apple silicon Darwin kernels listed in
+`src/main/support.ts`: Darwin 25.6.0 (verified on macOS 26.6.2, build 25G83) and
+Darwin 27.0.0 (verified on macOS 27.0.1, build 26A434, by the complete native suite
+of the unsigned fixture package on October 23, 2026). Any other kernel, including a
+newer patch or major release, or CPU keeps storage, DDISA sign-in, diagnosis and
+updates available, but fails closed where a sandboxed process would start
+(`superviseProcess`), in scheduling, manual and controlled starts and the CLI. The
+Electron packaging minimum of macOS 14 describes the shell, not a tested execution
+support promise. Add a kernel entry only with recorded packaged boundary acceptance
+on that exact kernel (`pnpm --filter @openape/pods test:e2e` plus `build:runtime` for
+`e2e/cli.test.ts`). The release manifest keeps its fixed `supportedKernel` and
+`verifiedSystemVersion` fields because installed updaters accept only those values;
+the runtime list above is authoritative.
 
 `package:signed-candidate` and `package:signed` are opt-in pipelines. Neither ran in
 this task. Both require explicit Developer ID identity and a preconfigured notary

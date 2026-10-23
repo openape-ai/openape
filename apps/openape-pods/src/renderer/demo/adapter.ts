@@ -57,7 +57,7 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
     const timer = setTimeout(() => { timers.delete(timer); finish(pod, run.id) }, 900)
     timers.add(timer); changed()
   }
-  const status: PodStatus = { version: 1, mode: 'fixture', executionEnabled: true, worker: { state: 'ready', pid: null, error: null }, runtime: { electron: 'demo', node: 'browser' } }
+  const status: PodStatus = { version: 1, mode: 'fixture', executionEnabled: true, execution: { supported: true, compatibility: 'verified', kernel: '25.6.0', architecture: 'arm64', system: '26.6.2', verified: ['Darwin 25.6.0 (macOS 26.6.2)'], reason: null }, worker: { state: 'ready', pid: null, error: null }, runtime: { electron: 'demo', node: 'browser' } }
   const bridge: PodsBridge = {
     getStatus: async () => structuredClone(status),
     onStatus: () => () => {},

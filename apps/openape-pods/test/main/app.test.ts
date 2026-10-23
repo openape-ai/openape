@@ -194,3 +194,13 @@ it('opens an MCP session only after the owner signs in and confirms natively, an
   expect(main.worker.codex).toHaveBeenCalledOnce()
   socket.destroy()
 })
+
+it('restarts the local service only for the owner window and returns the current status', async () => {
+  main = await startMain()
+  const status = await main.invoke(channels.restart) as { execution: { kernel: string }, worker: { state: string } }
+  expect(main.worker.restart).toHaveBeenCalledTimes(1)
+  expect(status.execution.kernel).toMatch(/^\d+\.\d+\.\d+$/)
+  await expect(main.invoke(channels.restart, undefined, true)).rejects.toThrow('Rejected Pods status request')
+  await expect(main.invoke(channels.restart, { force: true })).rejects.toThrow('Rejected Pods status request')
+  expect(main.worker.restart).toHaveBeenCalledTimes(1)
+})

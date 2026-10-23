@@ -3,7 +3,7 @@ import type { ElectronApplication } from 'playwright'
 import { spawn, execFileSync } from 'node:child_process'
 import type { ChildProcess } from 'node:child_process'
 import { mkdtemp, mkdir, writeFile, readFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
+import { release, tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -93,7 +93,7 @@ describe('foundation', () => {
   })
   it('boundary: denies renderer Node, external network/navigation, popups and foreign-frame IPC', async () => {
     const { app, page } = await launch()
-    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['approvalHistory', 'central', 'codex', 'data', 'definitions', 'details', 'getStatus', 'language', 'master', 'mcpSession', 'messages', 'modelApiSettings', 'onStatus', 'onboarding', 'packages', 'programs', 'resources', 'runs', 'scheduling', 'scripts', 'secrets', 'sharing', 'storage', 'updates', 'workspace'] })
+    expect(await page.evaluate(() => ({ node: typeof (globalThis as Record<string, unknown>).require, process: typeof (globalThis as Record<string, unknown>).process, bridge: Object.keys(window.pods).sort() }))).toEqual({ node: 'undefined', process: 'undefined', bridge: ['approvalHistory', 'central', 'codex', 'data', 'definitions', 'details', 'getStatus', 'language', 'master', 'mcpSession', 'messages', 'modelApiSettings', 'onStatus', 'onboarding', 'packages', 'programs', 'resources', 'restart', 'runs', 'scheduling', 'scripts', 'secrets', 'sharing', 'storage', 'updates', 'workspace'] })
     expect(await page.evaluate(async () => {
       try { await fetch('https://unassigned.invalid/'); return 'allowed' }
       catch { return 'denied' }
@@ -112,6 +112,7 @@ describe('foundation', () => {
     expect(result).toEqual(['denied', 'denied', 'denied', 'denied'])
     const status = await page.evaluate(() => window.pods.getStatus())
     expect(status.executionEnabled).toBe(true)
+    expect(status.execution).toMatchObject({ supported: true, kernel: release(), architecture: 'arm64', reason: null })
     expect(status.worker.pid).toBeGreaterThan(0)
     const environment = (pid: number) => execFileSync('/bin/ps', ['eww', '-p', String(pid), '-o', 'command='], { encoding: 'utf8' })
     expect(environment(app.process().pid as number)).toContain('PODS_UNASSIGNED_SECRET=synthetic-canary')

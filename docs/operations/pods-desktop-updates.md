@@ -13,9 +13,13 @@ refresh, physical sleep/wake and OS/CPU matrix evidence. Supplementary reviewed
 notices must exist with the matching hash. A signed-local build remains internal;
 its `releaseReady: false` cannot enter this channel.
 
-The verified pilot is Apple Silicon, Darwin 25.6.0 / macOS 26.6.2 (25G83).
-macOS 14 is the Electron bundle minimum, not a broader execution promise.
-Changing that matrix requires corresponding packaged boundary acceptance.
+Pod execution is verified on Apple Silicon for the exact kernels in
+`apps/openape-pods/src/main/support.ts`: Darwin 25.6.0 / macOS 26.6.2 (25G83) and
+Darwin 27.0.0 / macOS 27.0.1 (26A434). macOS 14 is the Electron bundle minimum, not
+a broader execution promise. On other kernels the app still signs in and installs
+updates, but starts no Pod. Changing that matrix requires corresponding packaged
+boundary acceptance. The release manifest's `supportedKernel: 25.6.0` and
+`verifiedSystemVersion: 26.6.2` stay fixed: installed updaters reject any other value.
 
 Version with the existing Changesets workflow, review/merge and build from clean
 canonical main. Do not reuse or overwrite a published version. Run the normal
