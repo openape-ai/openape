@@ -109,7 +109,8 @@ export async function startMain(env: Record<string, string> = {}, prepare: (root
       const handler = handlers.get(channel)
       if (!handler) throw new Error(`No IPC handler for ${channel}`)
       const { webContents } = windows[0]!
-      return handler({ sender: untrusted ? {} : webContents, senderFrame: webContents.mainFrame }, value)
+      // Argument-free channels (status, restart) receive no argument at all.
+      return (handler as (...args: unknown[]) => unknown)({ sender: untrusted ? {} : webContents, senderFrame: webContents.mainFrame }, ...(value === undefined ? [] : [value]))
     },
     dialog,
     worker,

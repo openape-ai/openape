@@ -77,6 +77,7 @@ import { GrantLedger } from './resources/grants'
 import type { GrantLedgerCommand } from './resources/grants'
 import { parseCommand } from '../contracts/control'
 import { openedStore } from './storage/readiness'
+import { assertExecutionSupported, executionSupport } from '../main/support'
 
 const port = runtimeParentPort()
 const store = openedStore()
@@ -158,6 +159,8 @@ function registeredOwner() {
 }
 const watcher = new ReferenceWatcher(store, registry, scheduler, join(dist, 'native/pods-helper'))
 const oneShot = process.env.PODS_ONESHOT === '1'
+// Storage, backups and owner commands keep working on an unverified kernel; nothing is scheduled or started there.
+const execution = executionSupport()
 let centralUntil = process.env.PODS_CENTRAL_ENABLED === '1' ? 0 : Infinity
 let scanAt = 0
 let storageAt = 0
@@ -189,6 +192,7 @@ function schedule(): void {
 }
 
 function startControlledRun(podId: string, operationId: string, accepted?: (runId: string) => void): string {
+  assertExecutionSupported(execution)
   const schedulingAllowed = !oneShot && Date.now() < centralUntil
   if (!startupReady || suspended || maintenance || (!schedulingAllowed && ownerOperations.getStore() !== true)) throw new Error('Controlled execution requires a ready local runtime')
   const maximum = Number(store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency)
@@ -230,7 +234,7 @@ const timer = setInterval(() => {
       if (error) { for (const pod of store.listPods()) dispatcher.cancelPod(pod.id, String(error)); await tickStep('master stop', 60000, () => master.stop()); return }
       if (Date.now() >= scanAt) { await tickStep('reference scan', 120000, () => watcher.scan()); scanAt = Date.now() + 15000 }
       tickPhase = 'scheduling'
-      if (!suspended && !maintenance && Date.now() < centralUntil) schedule()
+      if (!suspended && !maintenance && Date.now() < centralUntil && execution.supported) schedule()
     }
     catch (error) { console.error('Scheduler stopped', error); process.exit(1) }
   })().finally(() => { ticking = null; lastTickAt = Date.now(); tickPhase = '' })
@@ -481,6 +485,8 @@ port.on('message', async (event) => {
       const command = parseRunCommand(request.command.run)
       if (command.type === 'installExample') await dispatcher.install(command.podId, command.variant)
       if (command.type === 'start') {
+        // A queued request would start on its own once the kernel is verified; refuse it instead.
+        assertExecutionSupported(execution)
         scheduler.requestManual(command.podId, command.expectedScript)
         if (startupReady && !suspended && Date.now() < centralUntil) schedule()
       }

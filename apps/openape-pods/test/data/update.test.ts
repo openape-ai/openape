@@ -7,7 +7,7 @@ import { afterEach, expect, it } from 'vitest'
 import { assertUpdate, verifyUpdate } from '../../src/main/update'
 import type { DistributionManifest } from '../../src/main/update'
 import { selectProfile, selectedProfile } from '../../src/main/profile'
-import { assertPilotRuntime } from '../../src/main/support'
+import { assertExecutionSupported, executionSupport } from '../../src/main/support'
 import { CredentialCache } from '../../src/main/connections/cache'
 
 const roots: string[] = []
@@ -48,8 +48,15 @@ it('erases only the matching pod key, repeatedly', async () => {
   await cache.withCache(shared, async () => {})
 })
 
-it('blocks pod execution on unverified OS and CPU combinations', () => {
-  expect(() => assertPilotRuntime('darwin', 'arm64', '25.6.0')).not.toThrow()
-  expect(() => assertPilotRuntime('darwin', 'x64', '25.6.0')).toThrow('verified')
-  expect(() => assertPilotRuntime('darwin', 'arm64', '26.0.0')).toThrow('verified')
+it('blocks pod execution on unverified OS, CPU and kernel combinations, including newer kernels', () => {
+  expect(executionSupport('darwin', 'arm64', '25.6.0')).toMatchObject({ supported: true, reason: null, verified: expect.arrayContaining(['Darwin 25.6.0 (macOS 26.6.2)']) })
+  expect(() => assertExecutionSupported(executionSupport('darwin', 'arm64', '25.6.0'))).not.toThrow()
+  expect(executionSupport('darwin', 'arm64', '27.0.0')).toMatchObject({ supported: true, verified: expect.arrayContaining(['Darwin 27.0.0 (macOS 27.0.1)']) })
+  for (const [platform, architecture, kernel] of [['darwin', 'x64', '25.6.0'], ['linux', 'arm64', '25.6.0'], ['darwin', 'arm64', '25.6.1'], ['darwin', 'arm64', '26.0.0'], ['darwin', 'x64', '27.0.0'], ['darwin', 'arm64', '27.0.1'], ['darwin', 'arm64', '27.1.0'], ['darwin', 'arm64', '28.0.0'], ['darwin', 'arm64', '99.0.0'], ['darwin', 'arm64', '']]) {
+    const support = executionSupport(platform, architecture, kernel)
+    expect(support.supported, `${platform} ${architecture} ${kernel}`).toBe(false)
+    const incompatible = platform !== 'darwin' || architecture !== 'arm64'
+    expect(support.compatibility).toBe(incompatible ? 'incompatible' : 'unverified')
+    expect(() => assertExecutionSupported(support)).toThrow(incompatible ? `Pod execution is not available on ${platform} ${kernel} (${architecture})` : `Pod execution is blocked on ${platform} ${kernel} (${architecture})`)
+  }
 })

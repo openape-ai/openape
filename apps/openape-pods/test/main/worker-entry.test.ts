@@ -17,6 +17,11 @@ import { createPortablePackage } from '../../src/worker/sharing/package'
 import { DataRetention } from '../../src/worker/data/retention'
 import { mandatorySecretPaths } from '../../src/runtime/secret-paths'
 
+// Scheduling behaviour is host independent; the kernel policy has its own entry test (worker-entry-unsupported).
+vi.mock('../../src/main/support', async (original) => {
+  const actual = await original<typeof import('../../src/main/support')>()
+  return { ...actual, executionSupport: () => actual.executionSupport('darwin', 'arm64', '25.6.0') }
+})
 const captured = vi.hoisted(() => ({ services: undefined as RunServices | undefined, runs: undefined as RunDispatcher['runs'] | undefined, startControlled: undefined as ((podId: string, operationId: string) => string) | undefined }))
 vi.mock('../../src/worker/runs/dispatcher', async (importOriginal) => {
   const original = await importOriginal<typeof import('../../src/worker/runs/dispatcher')>()

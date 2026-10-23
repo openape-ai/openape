@@ -13,9 +13,9 @@ describe('renderer boundary', () => {
     expect(() => assertStatusRequest(true, [{ command: 'execute', path: '/private' }])).toThrow('Rejected')
   })
   it('rejects malformed process messages and unexpected execution flags', () => {
-    const status = { version: 1, mode: 'fixture', executionEnabled: true, worker: { state: 'ready', pid: 42, error: null }, runtime: { electron: '40.9.3', node: '24.14.1' } }
+    const status = { version: 1, mode: 'fixture', executionEnabled: true, execution: { supported: true, compatibility: 'verified', kernel: '25.6.0', architecture: 'arm64', system: '26.6.2', verified: ['Darwin 25.6.0 (macOS 26.6.2)'], reason: null }, worker: { state: 'ready', pid: 42, error: null }, runtime: { electron: '40.9.3', node: '24.14.1' } }
     expect(isPodStatus(status)).toBe(true)
-    for (const bad of [null, {}, { ...status, executionEnabled: false }, { ...status, mode: 'production' }, { ...status, worker: { state: 'ready', pid: -1, error: null } }]) expect(isPodStatus(bad)).toBe(false)
+    for (const bad of [null, {}, { ...status, executionEnabled: false }, { ...status, mode: 'production' }, { ...status, worker: { state: 'ready', pid: -1, error: null } }, { ...status, execution: undefined }, { ...status, execution: { ...status.execution, supported: false } }, { ...status, execution: { ...status.execution, reason: 'Blocked' } }]) expect(isPodStatus(bad)).toBe(false)
   })
 })
 

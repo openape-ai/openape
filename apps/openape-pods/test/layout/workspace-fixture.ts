@@ -61,7 +61,7 @@ const runs: RunView = {
   runs: [{ id: '00000000-0000-4000-8000-000000000020', podId, scriptHash, state: 'completed', startedAt: 1_790_000_000_000, finishedAt: 1_790_000_004_000, summary: 'Local example completed (1)', error: null, checkpointRevision: 2, recovery: null }],
   events: [],
 }
-const ready: PodStatus = { version: 1, mode: 'fixture', executionEnabled: true, worker: { state: 'ready', pid: 42, error: null }, runtime: { electron: '40.9.3', node: '24.14.1' } }
+const ready: PodStatus = { version: 1, mode: 'fixture', executionEnabled: true, execution: { supported: true, compatibility: 'verified', kernel: '25.6.0', architecture: 'arm64', system: '26.6.2', verified: ['Darwin 25.6.0 (macOS 26.6.2)'], reason: null }, worker: { state: 'ready', pid: 42, error: null }, runtime: { electron: '40.9.3', node: '24.14.1' } }
 
 export function installWorkspace(overrides: Partial<PodsBridge> = {}): PodsBridge {
   const bridge: Partial<PodsBridge> = {

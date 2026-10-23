@@ -8,6 +8,7 @@ import { readFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import type { Duplex, Readable, Writable } from 'node:stream'
 import { mandatorySecretPaths } from '../../runtime/secret-paths'
+import { assertExecutionSupported } from '../../main/support'
 
 export interface RuntimePolicy {
   /** `owner` keeps supervision but gives the program the owner's file and network reach except its protected paths; the Pod identity is unchanged. */
@@ -137,6 +138,9 @@ export interface ProcessDomain {
   cancel: () => void
 }
 export async function superviseProcess(helper: string, executable: string, args: string[], workspace: string, environment: Record<string, string>, privateDirectory: string, register?: (path: string, ownerPid: number) => void | Promise<void>, terminal = false, machine = false): Promise<ProcessDomain> {
+  // Every sandboxed Pod, program, SSH, model and ChatGPT sign-in host starts here; an unverified kernel never reaches the
+  // helper. The owner's DDISA sign-in uses no sandboxed process.
+  assertExecutionSupported()
   literal(executable); literal(workspace)
   const recordPath = join(privateDirectory, `domain-${randomUUID()}.record`)
   try { await register?.(recordPath, process.pid) }
