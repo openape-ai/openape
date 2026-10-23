@@ -10,6 +10,11 @@ import { runAliases } from '../../src/contracts/runs'
 import { ProgramManager } from '../../src/main/programs/manager'
 import type { DirectoryAssignment, PodResource } from '../../src/contracts/resources'
 
+// The account home comes from the user database, not HOME, which the worker sets to the Pods profile.
+vi.mock('node:os', async (original) => {
+  const os = await original<typeof import('node:os')>()
+  return { ...os, userInfo: () => ({ ...os.userInfo(), homedir: process.env.PODS_TEST_OWNER_HOME ?? os.userInfo().homedir }) }
+})
 const roots: string[] = []; const stores: PodDatabase[] = []
 afterEach(() => { vi.unstubAllEnvs(); for (const store of stores.splice(0)) store.close(); for (const root of roots.splice(0)) rmSync(root, { recursive: true, force: true }) })
 const volumeA = 'AAAAAAAA-1111-2222-3333-444444444444'; const volumeB = 'BBBBBBBB-1111-2222-3333-444444444444'
@@ -21,7 +26,7 @@ function fixture() {
   const helper = join(base, 'helper.sh')
   writeFileSync(helper, `#!/bin/sh\n[ "$1" = volume-identity ] && [ -d "$2" ] || exit 1\nprintf '{"volume":"%s"}' "$(cat '${volume}')"\n`); chmodSync(helper, 0o755)
   setVolumeIdentityHelper(helper)
-  vi.stubEnv('HOME', join(base, 'home')); mkdirSync(join(base, 'home'))
+  vi.stubEnv('PODS_TEST_OWNER_HOME', join(base, 'home')); vi.stubEnv('HOME', join(base, 'profile-home')); mkdirSync(join(base, 'home'))
   const root = join(base, 'profile'); mkdirSync(root)
   const store = new PodDatabase(root); stores.push(store)
   const pod = store.createPod({ name: 'Directories' })
