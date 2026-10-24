@@ -52,7 +52,7 @@
     "@vitest/browser-playwright": "catalog:",
     "@vue/test-utils": "catalog:",
     "acorn": "8.18.0",
-    "electron": "40.9.3",
+    "electron": "42.11.16",
     "electron-builder": "26.15.3",
     "eslint": "catalog:",
     "fflate": "0.8.3",
