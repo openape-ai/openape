@@ -19,6 +19,11 @@ auditConfig:
     - GHSA-g4wm-2vf7-vfgr
     - GHSA-858h-whjf-mvg5
     - GHSA-v5rq-49vh-5v5c
+    # zod 3.25.76 via apps/docs > @nuxt/content (build-time collection schemas
+    # over first-party docs sources). The fix exists only as zod >=4.6.6; every
+    # @nuxt/content 3.x release requires zod ^3.25.76, so no update resolves it.
+    # Owner decision 2026-10-24; rationale in the exceptions document above.
+    - GHSA-mrhx-c7xc-m3w5
 
 # Quarantine new npm releases for seven days. First-party packages are exempt.
 minimumReleaseAge: 10080
@@ -38,6 +43,16 @@ minimumReleaseAgeExclude:
   # source-map-js 1.2.2: GHSA-68fv-2mgg-jv7q. Exact override pin, see overrides.
   # Published 2026-09-30 14:08 UTC; eligible 2026-10-07 14:08 UTC.
   - source-map-js
+  # electron 42.11.16: clears the high advisories up to GHSA-jr5w-w6x2-84p9.
+  # Exact pin in apps/openape-pods prevents newer, unquarantined releases.
+  # Published 2026-10-20 02:53 UTC; eligible 2026-10-27 02:53 UTC.
+  - electron
+  # happy-dom 21.0.4: GHSA-834v-8h66-3h79. Exact catalog pin, see catalog.
+  # Published 2026-10-20 18:05 UTC; eligible 2026-10-27 18:05 UTC.
+  - happy-dom
+  # body-parser 2.4.0: GHSA-27r3-jxmh-p828. Exact override pin, see overrides.
+  # Published 2026-10-22 11:39 UTC; eligible 2026-10-29 11:39 UTC.
+  - body-parser
 
 catalog:
   '@antfu/eslint-config': ^7.7.3
@@ -62,7 +77,8 @@ catalog:
   'drizzle-orm': ^0.45.2
   'eslint': ^9.39.4
   'h3': ^1.15.11
-  'happy-dom': ^20.0.0
+  # GHSA-834v-8h66-3h79. Exact pin: 21.0.4 is still inside the seven-day quarantine.
+  'happy-dom': 21.0.4
   'jose': ^5.10.0
   'marked': ^18.0.5
   'nuxt': ^4.5.2
@@ -82,7 +98,8 @@ catalog:
   'web-push': ^3.6.7
   'ws': ^8.21.0
   'yaml': ^2.9.0
-  'zod': ^4.4.3
+  # GHSA-mrhx-c7xc-m3w5; 4.6.6 published 2026-10-11, quarantine already passed.
+  'zod': ^4.6.6
 
 onlyBuiltDependencies:
   - electron
@@ -105,7 +122,10 @@ overrides:
   'brace-expansion@1': 1.1.20
   'brace-expansion@2': 2.1.6
   'brace-expansion@5': 5.0.11
-  'undici@8': 8.10.2
+  # GHSA-xjj6-f33q-929c and GHSA-4qv8-2p9j-2685; both fixes published
+  # 2026-10-15, seven-day quarantine already passed.
+  'undici@6': '>=6.29.1'
+  'undici@8': '>=8.12.2'
   defu: '>=6.1.5'
   # GHSA-j22f-vq7h-c4qm, GHSA-mcm9-63f2-9j32 and GHSA-x5rw-q4pp-hg5g.
   # 5.9.3 published 2026-09-18 18:45 UTC; seven-day quarantine already passed.
@@ -118,6 +138,8 @@ overrides:
   hono: 4.12.34
   # Transitive apps/docs dependencies stay on their current majors;
   # the advisories do not require js-yaml 5 or nanoid 5.
+  # GHSA-5p4m-2wfm-xmqj and GHSA-2883-xcg3-v3hh; 3.15.2 published 2026-08-26.
+  'js-yaml@3': '>=3.15.2'
   'js-yaml@4': '>=4.3.1'
   'nanoid@3': '>=3.3.18'
   # A single Vue instance is required: Nuxt 4.5.2 accepts ^3.5.40.
@@ -128,6 +150,9 @@ overrides:
   # GHSA-22jm-h49p-29qw and GHSA-46jr-4wx8-v453; also covers devframe.
   # 1.32.0 published 2026-10-02; seven-day quarantine already passed.
   '@modelcontextprotocol/sdk@<1.32.0': 1.32.0
+  # GHSA-27r3-jxmh-p828 via @modelcontextprotocol/sdk > express.
+  # Exact pin: 2.4.0 is still inside the seven-day quarantine.
+  'body-parser@2': 2.4.0
   # GHSA-587h-7wmj-h5pm; both fixes published 2026-10-06 and passed quarantine.
   'vite@>=8.2.0 <8.2.4': 8.2.4
   'launch-editor@<2.14.2': 2.14.2
