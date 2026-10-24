@@ -109,6 +109,33 @@ Sources:
 - https://github.com/advisories/GHSA-858h-whjf-mvg5
 - https://repos.openape.ai/patrick/monorepo/issues/1428
 
+## GHSA-mrhx-c7xc-m3w5 (zod 3 via @nuxt/content)
+
+Patrick explicitly approved ignoring this advisory on October 24, 2026 so the
+high-severity audit gate can pass after the same-day dependency update round.
+The advisory reports memory exhaustion in `zod < 4.6.6` while validating
+oversized constrained collections; the only patched line is 4.6.6, and no
+patched zod 3.x release exists. All first-party packages resolve the catalog's
+`zod ^4.6.6` and are not affected.
+
+The only remaining path is `apps/docs > @nuxt/content > zod` (3.25.76). Every
+published `@nuxt/content` 3.x release, including the current 3.16.2, requires
+`zod ^3.25.76`, so no lockfile update or override resolves it without breaking
+module load. @nuxt/content uses zod for its collection schema definitions and
+validates the repository's own documentation sources at build time; it does not
+validate collections supplied by users or network peers, and Docs production
+packaging serves the built output.
+
+The entry suppresses exactly this advisory monorepo-wide; it does not lower the
+high-severity threshold or ignore other zod advisories. Reassess if any package
+starts validating untrusted input with zod 3, and remove the exception when
+@nuxt/content publishes a release depending on zod 4 (or a patched zod 3.x
+exists) and the lockfile resolves it for the affected path.
+
+Sources:
+
+- https://github.com/advisories/GHSA-mrhx-c7xc-m3w5
+
 The owner-approved exceptions change audit classification only. CI remains
 unit-only; E2E/layout stays manual. Production activation, live conversion and
 concrete external actions retain their separate approvals.

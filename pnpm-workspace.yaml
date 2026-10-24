@@ -19,6 +19,11 @@ auditConfig:
     - GHSA-g4wm-2vf7-vfgr
     - GHSA-858h-whjf-mvg5
     - GHSA-v5rq-49vh-5v5c
+    # zod 3.25.76 via apps/docs > @nuxt/content (build-time collection schemas
+    # over first-party docs sources). The fix exists only as zod >=4.6.6; every
+    # @nuxt/content 3.x release requires zod ^3.25.76, so no update resolves it.
+    # Owner decision 2026-10-24; rationale in the exceptions document above.
+    - GHSA-mrhx-c7xc-m3w5
 
 # Quarantine new npm releases for seven days. First-party packages are exempt.
 minimumReleaseAge: 10080
