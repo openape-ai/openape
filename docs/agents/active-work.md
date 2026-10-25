@@ -1,3 +1,11 @@
+# Remaining OpenApe dependency audit findings — issue 1539
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1539. Branch `bugfix/issue-1539-audit-findings`, worktree `openape-monorepo.worktrees/audit-dependencies-20261025`, canonical base `48ab24d93f801c131cd0ef08e3682ed85f37cec0`.
+- Pin transitive `http-cache-semantics` to 4.3.0, outside GHSA-ch52-4w7c-c8xp's affected range and past quarantine. Preserve all other locked versions.
+- Express the existing owner-approved CVE-2026-85393 exception by exact GHSA ID (GHSA-86w9-cpqp-85rv), so repository pnpm 10.29.3 and the standalone audit Pod's pnpm 11.5.2 apply the same policy. This adds no advisory exception and does not claim node-forge is patched.
+- Verification: frozen installation passes; full and production audits with both actual pnpm versions report no non-exempt high/critical advisories. The pnpm 11 check uses the collector's manifest-only snapshot format to avoid automatic switching to the repository's pinned pnpm 10.
+- Next: mandatory pre-push affected gate, native PR review and merge, then real OpenApe Pod audit against canonical main. Post-merge receipts belong on the PR and issue.
+
 # Pods volume-stable directory identity and standard data root — issue 1538
 
 - Owner approved plan revision 2 on October 23, 2026 ("Freigabe erteilt"): https://report.openape.ai/d/01M5MXRKJ4CV34MDX6MHJRJ0GZ?v=3. Implementation by Claude Opus 5.5, reviewed by the parent agent.

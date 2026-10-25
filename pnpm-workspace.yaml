@@ -8,9 +8,10 @@ packages:
 # docs/operations/dependency-audit-exceptions.md
 # Only the listed advisories are excluded; other audit thresholds remain unchanged.
 auditConfig:
-  ignoreCves:
-    - CVE-2026-85393
   ignoreGhsas:
+    # Existing owner-approved CVE-2026-85393 exception (issue 1418).
+    # Use its exact GHSA ID so pnpm 10 and the pnpm 11 audit collector agree.
+    - GHSA-86w9-cpqp-85rv
     - GHSA-vfj7-8cjw-p6xm
     # simple-git 3.x via nuxt > @nuxt/devtools (development tooling only).
     # Owner decision 2026-10-06, issue 1428: simple-git 4 drops the default export
@@ -136,6 +137,9 @@ overrides:
   ip-address: '>=10.3.1'
   flatted: '>=3.4.2'
   hono: 4.12.34
+  # GHSA-ch52-4w7c-c8xp via electron-builder > @electron/get > got.
+  # 4.3.0 published 2026-10-04; seven-day quarantine already passed.
+  http-cache-semantics: 4.3.0
   # Transitive apps/docs dependencies stay on their current majors;
   # the advisories do not require js-yaml 5 or nanoid 5.
   # GHSA-5p4m-2wfm-xmqj and GHSA-2883-xcg3-v3hh; 3.15.2 published 2026-08-26.
