@@ -22,7 +22,7 @@
     "h3": "catalog:",
     "marked": "catalog:",
     "nuxt": "catalog:",
-    "sanitize-html": "^2.14.0",
+    "sanitize-html": "^2.18.0",
     "tailwindcss": "catalog:",
     "ulid": "catalog:"
   },
