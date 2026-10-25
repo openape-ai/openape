@@ -20,7 +20,7 @@
     "postcss-value-parser": "4.2.0",
     "jose": "catalog:",
     "marked": "catalog:",
-    "sanitize-html": "^2.14.0"
+    "sanitize-html": "^2.18.0"
   },
   "devDependencies": {
     "@types/node": "catalog:",
