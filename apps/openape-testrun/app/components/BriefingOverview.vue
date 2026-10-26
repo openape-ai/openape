@@ -24,8 +24,8 @@ const statusLabels = { complete: 'Vollständig', partial: 'Auswahl', unknown: 'U
     <aside class="coverage-note" aria-label="Umfang dieser Ausgabe">
       <p v-for="coverage in report.sourceCoverage" :key="coverage.account">
         <strong>{{ coverage.account }}:</strong>
-        {{ coverage.considered === null ? 'Anzahl berücksichtigter Mailtexte unbekannt' : `${coverage.considered} Mailtexte berücksichtigt` }}<template v-if="coverage.available !== null">
-          von {{ coverage.available }} {{ coverage.population === 'inbox' ? 'Inbox-Nachrichten' : 'Nachrichten mit offenen Informationen' }}
+        {{ coverage.considered === null ? 'Anzahl berücksichtigter Mailtexte unbekannt' : `${coverage.considered} ${coverage.considered === 1 ? 'Mailtext' : 'Mailtexte'} berücksichtigt` }}<template v-if="coverage.available !== null">
+          von {{ coverage.available }} {{ coverage.population === 'inbox' ? (coverage.available === 1 ? 'Inbox-Nachricht' : 'Inbox-Nachrichten') : (coverage.available === 1 ? 'Nachricht mit offenen Informationen' : 'Nachrichten mit offenen Informationen') }}
         </template>.
         <span v-if="coverage.status === 'unknown'"> Gesamtumfang unbekannt.</span>
         <span v-if="coverage.included !== coverage.considered"> {{ coverage.included }} im Bericht enthalten.</span>
