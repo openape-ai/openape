@@ -129,8 +129,10 @@ it('shows detail tags and safe external links without horizontal overflow', asyn
   Object.assign(route, { path: `/inbox/item/${item.id}`, params: { id: item.id } })
   await open(ItemPage)
   expect(wrapper!.get('article .tags').text()).toBe('Tags: finanzen monatsabschluss')
-  expect(wrapper!.get('.links a').attributes('rel')).toBe('noopener noreferrer')
-  for (const width of [390, 1280]) {
+  expect(wrapper!.get('.primary-link a').attributes('rel')).toBe('noopener noreferrer')
+  expect(wrapper!.get('.primary-link a').element.getBoundingClientRect().height).toBeGreaterThanOrEqual(44)
+  expect(wrapper!.get('.message-management').element.getBoundingClientRect().top).toBeGreaterThan(wrapper!.get('.primary-link').element.getBoundingClientRect().bottom)
+  for (const width of [320, 390, 768, 1280]) {
     await page.viewport(width, 844); await settle()
     const article = wrapper!.get('article').element.getBoundingClientRect()
     for (const tag of wrapper!.findAll('article .tag')) {
@@ -140,6 +142,10 @@ it('shows detail tags and safe external links without horizontal overflow', asyn
       expect(getComputedStyle(tag.element).borderRadius).toBe('999px')
     }
     await shot(`detail-tags-${width}`)
+    document.body.style.fontSize = '200%'
+    await settle()
+    expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+    document.body.style.fontSize = ''
   }
 })
 
