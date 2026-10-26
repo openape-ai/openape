@@ -1,6 +1,6 @@
-import type { Briefing } from '../shared/briefing'
+import type { BriefingV1, BriefingV2 } from '../shared/briefing'
 
-export function sampleBriefing(seriesId = 'series', editionDate = '2026-09-27'): Briefing {
+export function sampleBriefing(seriesId = 'series', editionDate = '2026-09-27'): BriefingV1 {
   const generatedAt = `${editionDate}T05:01:00Z`
   return {
     schemaVersion: 1,
@@ -18,5 +18,46 @@ export function sampleBriefing(seriesId = 'series', editionDate = '2026-09-27'):
     issues: [{ repository: 'team/product', number: 42, title: 'Review the release checklist', state: 'open', updatedAt: generatedAt, url: 'https://example.com/issues/42' }],
     sources: [{ id: 'calendar', label: 'Calendars', collectedAt: generatedAt, status: 'fresh', coverage: 'Today and the next seven days.', total: 2 }, { id: 'mail', label: 'Mail review', collectedAt: generatedAt, status: 'fresh', coverage: 'Two selected messages from the existing review.', total: 68, limit: 20, approvalCount: 3, approvalUrl: 'https://example.com/archive-approval' }, { id: 'issues', label: 'Repository issues', collectedAt: generatedAt, status: 'partial', coverage: 'Selected recently updated open issues.', total: 23, limit: 10 }, { id: 'personal', label: 'Personal calendar', collectedAt: null, status: 'missing', coverage: 'Unavailable during collection.' }],
     gaps: [{ sourceId: 'personal', reason: 'The calendar provider did not respond. Personal events may be missing.' }],
+  }
+}
+
+export function sampleBriefingV2(seriesId = 'series', editionDate = '2026-10-26'): BriefingV2 {
+  const base = sampleBriefing(seriesId, editionDate)
+  const emails = [
+    { ...base.emails[0]!, id: 'sync-1', account: 'Work inbox', sender: 'Sync monitor <monitor@example.com>', subject: 'Sync failed: export.csv', summary: 'The scheduled export failed on the reporting host.', nextAction: '', disposition: 'action' },
+    { ...base.emails[0]!, id: 'sync-2', account: 'Work inbox', sender: 'Sync monitor <monitor@example.com>', subject: 'Sync failed again: export.csv', summary: 'A second notification names the same export and host.', nextAction: '', disposition: 'action' },
+    { ...base.emails[1]!, id: 'guest', account: 'Work inbox', sender: 'Access service <access@example.com>', subject: 'Guest invitation expired', summary: 'The invitation expired yesterday.', nextAction: '', disposition: 'keep' },
+    { ...base.emails[1]!, id: 'news', account: 'Personal inbox', sender: 'Team newsletter <news@example.com>', subject: 'October product notes', summary: 'Product notes are available.', nextAction: '', disposition: 'keep', informationItems: [{ id: 'info-1', text: 'The October product notes are available in the team workspace.' }] },
+  ]
+  const topics: BriefingV2['topics'] = [
+    { id: 'sync', placement: 'focus', title: 'Two notifications about the same export', summary: 'Both messages name export.csv on the reporting host.', rationale: 'Review the original messages if the export is still needed.', uncertainty: 'A shared incident and the current status have not been verified.', references: [{ account: 'Work inbox', emailId: 'sync-1' }, { account: 'Work inbox', emailId: 'sync-2' }] },
+    { id: 'guest', placement: 'focus', title: 'A guest invitation has expired', summary: 'The invitation expired yesterday.', rationale: 'Check access if the invitation is still needed.', uncertainty: '', references: [{ account: 'Work inbox', emailId: 'guest' }] },
+    { id: 'news', placement: 'information', title: 'October product notes', summary: 'The team has shared its product notes.', rationale: '', uncertainty: '', references: [{ account: 'Personal inbox', emailId: 'news' }] },
+  ]
+  return {
+    ...base,
+    schemaVersion: 2,
+    title: 'Dein Morgen',
+    overview: 'Two notifications concern the same export; a guest invitation has expired.',
+    importantItems: [],
+    nextActions: [],
+    emails,
+    topics,
+    calendar: [
+      { id: 'day', account: 'Personal calendar', title: 'National holiday', start: editionDate, end: '2026-10-27', allDay: true, location: '' },
+      { id: 'meeting-1', account: 'Work calendar', title: 'Project call', start: '2026-11-02T08:30:00+01:00', end: '2026-11-02T09:30:00+01:00', allDay: false, location: 'Video call' },
+      { id: 'meeting-2', account: 'Personal calendar', title: 'Service appointment', start: '2026-11-02T08:30:00+01:00', end: '2026-11-02T09:00:00+01:00', allDay: false, location: 'Service center' },
+    ],
+    sources: [
+      { id: 'work', label: 'Work inbox', collectedAt: base.generatedAt, status: 'partial', coverage: 'Three selected messages from eight inbox candidates.' },
+      { id: 'personal', label: 'Personal inbox', collectedAt: base.generatedAt, status: 'fresh', coverage: 'One message with assessed open information.' },
+      { id: 'calendar', label: 'Calendars', collectedAt: base.generatedAt, status: 'fresh', coverage: 'Today and the next seven days.' },
+    ],
+    sourceCoverage: [
+      { sourceId: 'work', account: 'Work inbox', population: 'inbox', status: 'partial', available: 8, scanned: 8, considered: 3, included: 3, informationItems: null },
+      { sourceId: 'personal', account: 'Personal inbox', population: 'open-information', status: 'complete', available: 1, scanned: 1, considered: 1, included: 1, informationItems: 1 },
+    ],
+    issues: [],
+    gaps: [{ sourceId: 'work', reason: 'Only selected message bodies are included.' }],
   }
 }

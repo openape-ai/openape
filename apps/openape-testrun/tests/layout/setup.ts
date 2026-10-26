@@ -4,6 +4,7 @@ import { beforeEach } from 'vitest'
 
 declare module 'vitest/browser' {
   interface BrowserCommands {
+    captureBriefing: (name: string) => Promise<void>
     setColorScheme: (colorScheme: 'light' | 'dark') => Promise<void>
   }
 }
