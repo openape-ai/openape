@@ -1,3 +1,12 @@
+# Seven Pods: durable Codex handoff — issue 1541
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1541. Branch `feature/issue-1541-seven-pod-handoff`, worktree `openape-monorepo.worktrees/seven-pod-handoff-1541`, canonical base `3ec2c92537dacb22b0b73fead6897a3cca37fed7`.
+- Approved infrastructure proposal revision 1: https://report.openape.ai/d/01M5WF35NNDY6VJCC2SH28XMV6. Separate product-task and plan approvals remain mandatory.
+- M1 adds immutable dispatch/status/reconciliation to the existing apes CLI. Real Astra dispatch returned from the Pod in 5.232 seconds; Codex independently completed the delayed marker write. Actual Opus 5.5 text reviews identified and corrected persistence and in-flight reporting issues.
+- Lost turn/start response was injected after actual daemon acceptance. An unchanged dispatch did not restart; later exact-input reconciliation recovered the existing completed turn.
+- Repeated real Pod start currently returns `No execution slot available` before creating a run. Do not restart shared services or interrupt unrelated work. M1 acceptance remains partial; M2–M4 and installation/release are not complete.
+- Next: final review and required affected gate, publish actual evidence, then complete the real unchanged Pod repeat when capacity is available. Retain receipts and the isolated worktree.
+
 # Useful morning briefing — issue 1540
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1540. Branch `feature/issue-1540-briefing-ux`, worktree `openape-monorepo.worktrees/briefing-ux-1540`, canonical base `15cb8b80f5f268fc0253bfb994dfccf3fe080646`.

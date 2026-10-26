@@ -35,6 +35,7 @@ import { initCommand } from './commands/init/index'
 import { enrollCommand } from './commands/enroll'
 import { registerUserCommand } from './commands/register-user'
 import { utilsCommand } from './commands/utils/index'
+import { codexCommand } from './commands/codex/index'
 import { sessionsCommand } from './commands/sessions/index'
 import { dnsCheckCommand } from './commands/dns-check'
 import { healthCommand } from './commands/health'
@@ -154,6 +155,7 @@ const main = defineCommand({
     'dns-check': dnsCheckCommand,
     utils: utilsCommand,
     sessions: sessionsCommand,
+    codex: codexCommand,
     login: loginCommand,
     logout: logoutCommand,
     whoami: whoamiCommand,
