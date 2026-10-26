@@ -2,10 +2,11 @@
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1541. Branch `feature/issue-1541-seven-pod-handoff`, worktree `openape-monorepo.worktrees/seven-pod-handoff-1541`, canonical base `3ec2c92537dacb22b0b73fead6897a3cca37fed7`.
 - Approved infrastructure proposal revision 1: https://report.openape.ai/d/01M5WF35NNDY6VJCC2SH28XMV6. Separate product-task and plan approvals remain mandatory.
+- WIP PR: https://repos.openape.ai/patrick/monorepo/pulls/515. Implementation head `cd5c80c814738ec4ffd560867748e31fca3e5bda` and documentation head `d86f11bc7ac1cfd089dde8f79c7339e7e0a36af8` passed the mandatory affected unit gate; 16 focused tests pass.
 - M1 adds immutable dispatch/status/reconciliation to the existing apes CLI. Real Astra dispatch returned from the Pod in 5.232 seconds; Codex independently completed the delayed marker write. Actual Opus 5.5 text reviews identified and corrected persistence and in-flight reporting issues.
 - Lost turn/start response was injected after actual daemon acceptance. An unchanged dispatch did not restart; later exact-input reconciliation recovered the existing completed turn.
 - Repeated real Pod start currently returns `No execution slot available` before creating a run. Do not restart shared services or interrupt unrelated work. M1 acceptance remains partial; M2–M4 and installation/release are not complete.
-- Next: final review and required affected gate, publish actual evidence, then complete the real unchanged Pod repeat when capacity is available. Retain receipts and the isolated worktree.
+- Next: complete the real unchanged Pod repeat when capacity is available and reverify the final candidate. Actual Opus final review and affected gate passed for the partial candidate; the published evidence preserves the remaining acceptance limits. Retain receipts and the isolated worktree.
 
 # Useful morning briefing — issue 1540
 
