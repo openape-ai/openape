@@ -3,7 +3,7 @@ import type { Rpc } from './contract'
 
 export async function connect(socketPath: string, timeoutMs = 15000): Promise<Rpc> {
   if (!socketPath.startsWith('/') || /[:\n\r\0]/.test(socketPath)) throw new Error('Unsupported Codex Unix socket path')
-  const socket = new WebSocket(`ws+unix://${socketPath}:/`, { maxPayload: 8 * 1024 * 1024 })
+  const socket = new WebSocket(`ws+unix://${socketPath}:/`, { maxPayload: 32 * 1024 * 1024 })
   let serial = 0
   const pending = new Map<number, { resolve: (value: unknown) => void, reject: (error: Error) => void }>()
   const fail = (message: string) => {

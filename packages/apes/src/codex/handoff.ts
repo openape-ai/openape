@@ -48,7 +48,9 @@ export async function status(root: string, job: Job, rpc: Rpc) {
   if (thread.model !== job.model || thread.cwd !== job.cwd || thread.approvalPolicy !== job.approvalPolicy || thread.sandbox.type !== expectedSandbox) {
     return { state: 'blocked', phase: 'configuration', threadId: thread.thread.id, reason: 'Effective execution configuration differs from the approved job' }
   }
-  const read = readSchema.parse(await rpc.call('thread/read', { threadId: thread.thread.id, includeTurns: true }))
+  let read: z.infer<typeof readSchema>
+  try { read = readSchema.parse(await rpc.call('thread/read', { threadId: thread.thread.id, includeTurns: true })) }
+  catch (error) { return { state: 'unknown', phase: 'thread/read', threadId: thread.thread.id, reason: String(error) } }
   if (read.thread.id !== thread.thread.id || read.thread.cwd !== job.cwd) throw new Error('Thread identity mismatch')
   const recordedTurn = await readRecord(folder, 'turn')
   const turnId = recordedTurn ? z.object({ id: z.string() }).parse(recordedTurn).id : undefined
@@ -82,6 +84,8 @@ export async function dispatch(root: string, job: Job, rpc: Rpc) {
       ephemeral: false,
       allowProviderModelFallback: false,
     })
+    const identity = z.object({ thread: z.object({ id: z.string().min(1) }) }).safeParse(raw)
+    if (identity.success) threadId = identity.data.thread.id
     const thread = startSchema.parse(raw)
     threadId = thread.thread.id
     await publishRecord(folder, 'thread', thread)

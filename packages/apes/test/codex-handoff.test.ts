@@ -79,3 +79,46 @@ describe('Codex handoff effect boundaries', () => {
     }
   })
 })
+
+it('distinguishes an unsettled intent from elapsed or explicitly failed dispatch', async () => {
+  for (const scenario of ['future', 'elapsed', 'failure']) {
+    const f = await fixture()
+    const folder = join(f.root, digest(f.job.key))
+    await publishRecord(folder, 'intent', { schema: 'openape.codex-receipt/1', digest: digest(f.job), job: f.job, requestedAt: new Date().toISOString(), settleBy: new Date(Date.now() + (scenario === 'elapsed' ? -60000 : 60000)).toISOString() })
+    if (scenario === 'failure') await publishRecord(folder, 'failure', { reason: 'response lost' })
+    expect(await status(f.root, f.job, f.rpc)).toMatchObject({ state: scenario === 'future' ? 'dispatching' : 'unknown' })
+    await publishRecord(folder, 'thread', f.effective)
+    f.turn.items = []
+    expect(await status(f.root, f.job, f.rpc)).toMatchObject({ state: scenario === 'future' ? 'dispatching' : 'unknown' })
+    expect(f.call.mock.calls.some(([method]) => method === 'turn/start')).toBe(false)
+  }
+})
+
+it('refuses two matching turns without persisting an arbitrary identity', async () => {
+  const f = await fixture()
+  f.call.mockImplementationOnce(async () => f.effective).mockRejectedValueOnce(new Error('Lost response'))
+  await dispatch(f.root, f.job, f.rpc)
+  f.call.mockResolvedValueOnce({ thread: { id: 'thread-1', cwd: f.job.cwd, turns: [f.turn, { ...f.turn, id: 'turn-2' }] } })
+  expect(await status(f.root, f.job, f.rpc)).toMatchObject({ state: 'unknown' })
+  const { readRecord } = await import('../src/codex/records')
+  expect(await readRecord(join(f.root, digest(f.job.key)), 'turn')).toBeUndefined()
+  expect(f.call.mock.calls.filter(([method]) => method === 'turn/start')).toHaveLength(1)
+})
+
+it('refuses a public or linked receipt directory before any dispatch', async () => {
+  const f = await fixture()
+  const { chmod, symlink } = await import('node:fs/promises')
+  await chmod(f.root, 0o755)
+  await expect(dispatch(f.root, f.job, f.rpc)).rejects.toThrow('Receipt directory')
+  await chmod(f.root, 0o700)
+  await symlink(f.root, join(f.root, 'link'))
+  await expect(dispatch(join(f.root, 'link'), f.job, f.rpc)).rejects.toThrow('Receipt directory')
+  expect(f.call).not.toHaveBeenCalled()
+})
+
+it('keeps the returned thread identity when response schema changes', async () => {
+  const f = await fixture()
+  f.call.mockResolvedValueOnce({ thread: { id: 'accepted-thread' }, model: null })
+  expect(await dispatch(f.root, f.job, f.rpc)).toMatchObject({ state: 'unknown', phase: 'thread/start', threadId: 'accepted-thread' })
+  expect(f.call.mock.calls.some(([method]) => method === 'turn/start')).toBe(false)
+})

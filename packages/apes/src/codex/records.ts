@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto'
-import { link, mkdir, open, readFile, unlink } from 'node:fs/promises'
+import { link, lstat, mkdir, open, readFile, unlink } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 
 export function digest(value: unknown): string {
@@ -14,15 +14,21 @@ export async function readRecord(directory: string, name: string): Promise<unkno
   }
 }
 
-export async function publishRecord(directory: string, name: string, value: unknown): Promise<boolean> {
-  await mkdir(directory, { recursive: true, mode: 0o700 })
-  let current = directory
-  while (dirname(current) !== current) {
-    const parent = await open(dirname(current), 'r')
-    try { await parent.sync() }
-    finally { await parent.close() }
-    current = dirname(current)
+export async function assertPrivateDirectory(directory: string): Promise<void> {
+  const info = await lstat(directory)
+  if (!info.isDirectory() || info.isSymbolicLink() || info.uid !== process.getuid?.() || (info.mode & 0o077)) {
+    throw new Error('Receipt directory must be a real, owner-owned directory with mode 0700')
   }
+}
+
+export async function publishRecord(directory: string, name: string, value: unknown): Promise<boolean> {
+  await assertPrivateDirectory(dirname(directory))
+  try { await mkdir(directory, { mode: 0o700 }) }
+  catch (error) { if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error }
+  await assertPrivateDirectory(directory)
+  const parent = await open(dirname(directory), 'r')
+  try { await parent.sync() }
+  finally { await parent.close() }
   const temporary = join(directory, `.${randomUUID()}.tmp`)
   const file = await open(temporary, 'wx', 0o600)
   try {
