@@ -45,7 +45,7 @@
     "postcss": "8.5.25",
     "postcss-value-parser": "4.2.0",
     "marked": "catalog:",
-    "sanitize-html": "^2.14.0",
+    "sanitize-html": "^2.18.0",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1"
   },

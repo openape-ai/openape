@@ -34,16 +34,6 @@ minimumReleaseAgeExclude:
   - '@openape/*'
   # First-party unscoped package; permanent exemption like @openape/*.
   - test2docs
-  # ip-address 10.4.0 resolved under the >=10.3.1 override.
-  # Published 2026-07-31 05:07 UTC; eligible 2026-08-07 05:07 UTC.
-  - ip-address
-  # hono 4.12.34: GHSA-8j4g-w8fx-2239, CORS middleware ReDoS.
-  # Exact pin prevents this exception admitting newer, unquarantined releases.
-  # Published 2026-08-03 02:36 UTC; eligible 2026-08-10 02:36 UTC.
-  - hono
-  # source-map-js 1.2.2: GHSA-68fv-2mgg-jv7q. Exact override pin, see overrides.
-  # Published 2026-09-30 14:08 UTC; eligible 2026-10-07 14:08 UTC.
-  - source-map-js
   # electron 42.11.16: clears the high advisories up to GHSA-jr5w-w6x2-84p9.
   # Exact pin in apps/openape-pods prevents newer, unquarantined releases.
   # Published 2026-10-20 02:53 UTC; eligible 2026-10-27 02:53 UTC.
@@ -68,9 +58,9 @@ catalog:
   '@types/ws': ^8.18.1
   '@vite-pwa/nuxt': ^1.1.1
   '@vitejs/plugin-vue': ^6.0.7
-  '@vitest/browser': ^4.1.10
-  '@vitest/browser-playwright': ^4.1.10
-  '@vitest/coverage-istanbul': ^4.1.10
+  '@vitest/browser': ^4.1.12
+  '@vitest/browser-playwright': ^4.1.12
+  '@vitest/coverage-istanbul': ^4.1.12
   '@vue/test-utils': ^2.4.11
   'aws4fetch': ^1.0.20
   'consola': ^3.4.2
@@ -82,7 +72,8 @@ catalog:
   'happy-dom': 21.0.4
   'jose': ^5.10.0
   'marked': ^18.0.5
-  'nuxt': ^4.5.2
+  # Nitro advisories fixed in 4.6.2; published 2026-10-16, quarantine passed.
+  'nuxt': ^4.6.2
   'ofetch': ^1.5.1
   # Keep Playwright identical: CLI and tests share a registry. Duplicate versions
   # can report "No tests found" instead of a version warning.
@@ -93,7 +84,7 @@ catalog:
   'tsup': ^8.5.1
   'typescript': ^5.9.3
   'ulid': ^2.4.0
-  'vitest': ^4.1.10
+  'vitest': ^4.1.12
   'vue': ^3.5.41
   'vue-tsc': ^3.3.5
   'web-push': ^3.6.7
@@ -120,9 +111,10 @@ overrides:
   '@babel/plugin-transform-modules-systemjs': '>=7.29.4'
   '@hono/node-server': '>=2.0.5'
   'tar@>=7 <7.5.21': '>=7.5.21'
-  'brace-expansion@1': 1.1.20
-  'brace-expansion@2': 2.1.6
-  'brace-expansion@5': 5.0.11
+  # ReDoS follow-ups; all three published 2026-09-14, quarantine passed.
+  'brace-expansion@1': 1.1.21
+  'brace-expansion@2': 2.1.7
+  'brace-expansion@5': 5.0.12
   # GHSA-xjj6-f33q-929c and GHSA-4qv8-2p9j-2685; both fixes published
   # 2026-10-15, seven-day quarantine already passed.
   'undici@6': '>=6.29.1'
@@ -132,19 +124,25 @@ overrides:
   # 5.9.3 published 2026-09-18 18:45 UTC; seven-day quarantine already passed.
   devalue: 5.9.3
   drizzle-orm: '>=0.45.2'
-  # GHSA-qw65-cvwx-89v3 / GHSA-58mr-gqgx-xq4g; released 2026-09-02.
-  fast-uri: 4.1.4
-  ip-address: '>=10.3.1'
+  # GHSA-qw65-cvwx-89v3 / GHSA-58mr-gqgx-xq4g; 4.1.5 published 2026-09-15.
+  # 4.2.3 fixes the remaining advisories but is quarantined until 2026-10-26.
+  fast-uri: 4.1.5
+  # Advisory follow-ups; both published >7 days before 2026-10-25.
+  'fflate@<0.7.5': '>=0.7.5'
+  # 10.7.4 published 2026-10-11, quarantine passed.
+  ip-address: '>=10.7.4'
   flatted: '>=3.4.2'
-  hono: 4.12.34
+  # Fixes through 4.13.11; published 2026-09-29, quarantine passed.
+  hono: 4.13.11
   # GHSA-ch52-4w7c-c8xp via electron-builder > @electron/get > got.
   # 4.3.0 published 2026-10-04; seven-day quarantine already passed.
   http-cache-semantics: 4.3.0
   # Transitive apps/docs dependencies stay on their current majors;
   # the advisories do not require js-yaml 5 or nanoid 5.
   # GHSA-5p4m-2wfm-xmqj and GHSA-2883-xcg3-v3hh; 3.15.2 published 2026-08-26.
-  'js-yaml@3': '>=3.15.2'
-  'js-yaml@4': '>=4.3.1'
+  'js-yaml@3': '>=3.15.2 <4'
+  # The unbounded range resolves into the 5.x line; 5.4.1+ carries its fix.
+  'js-yaml@4': '>=5.4.1'
   'nanoid@3': '>=3.3.18'
   # A single Vue instance is required: Nuxt 4.5.2 accepts ^3.5.40.
   # Duplicate instances broke six CRM component tests through resolveComponent.
@@ -168,11 +166,16 @@ overrides:
   prosemirror-view: '>=1.42.3'
   picomatch: '>=4.0.4'
   postcss: '>=8.5.18'
+  # 7.1.3 fixes the remaining low advisory but is quarantined until 2026-10-29.
   serialize-javascript: '>=7.0.3'
+  # Low-severity dev-server advisory; 0.28.1 published 2026-06-11.
+  'esbuild@<0.28.1': '>=0.28.1'
+  # 7.1.6 published 2026-09-03; also lifts eslint-plugin-vue's 6.x resolution.
+  'postcss-selector-parser@<7.1.6': '>=7.1.6'
   # GHSA-jp82-f5mq-hwhp; 1.6.3 and later published in September 2026.
   seroval: '>=1.6.3'
-  # GHSA-68fv-2mgg-jv7q. Exact pin: 1.2.2 is still inside the seven-day quarantine.
-  source-map-js: 1.2.2
+  # GHSA-68fv-2mgg-jv7q; 1.2.2 published 2026-09-30, quarantine passed.
+  source-map-js: '>=1.2.2'
   # Patched releases verified on 2026-09-12; all exceed the seven-day quarantine.
   # Tiptap declares exact peer versions, so its package family moves together.
   '@tiptap/core': 3.30.5
@@ -215,7 +218,8 @@ overrides:
   '@tiptap/y-tiptap': 3.0.7
   # GHSA-wq5f-xc86-pv6w (CVE-2026-96889, librsvg); 0.35.5 published 2026-09-27.
   sharp: 0.35.5
-  smol-toml: 1.7.1
+  # 1.9.0 published 2026-09-22, quarantine passed.
+  smol-toml: '>=1.9.0'
   # GHSA-pqg4-j6r4-53mv; 1.11.0 published 2026-09-29.
   shell-quote: '>=1.11.0'
   # 4.x removes the default export that @nuxt/devtools 3.x imports; see ignoreGhsas.

@@ -9,11 +9,13 @@ const props = defineProps<{
 }>()
 
 const issuesEnabled = useRuntimeConfig().public.issuesEnabled
-const metadata = ref<{ issueHomeOnly: number, codeSourceUrl: string | null } | null>(null)
+interface RepoMetadata { issueHomeOnly: number, codeSourceUrl: string | null }
+const metadata = ref<RepoMetadata | null>(null)
 const metadataError = ref('')
 onMounted(async () => {
   if (!issuesEnabled) return
-  try { metadata.value = await $fetch(`/api/repos/${props.owner}/${props.name}/metadata`) }
+  // Widened to string: Nuxt 4.6 typed-route matching exceeds the TS stack depth.
+  try { metadata.value = await $fetch<RepoMetadata>(`/api/repos/${props.owner}/${props.name}/metadata` as string) }
   catch (err) { metadataError.value = issueError(err) }
 })
 const tabs = computed(() => [
