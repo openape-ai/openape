@@ -39,8 +39,7 @@ After uncertain turn/start, exact digest-tagged user input and one unique matchi
 turn permit reconciliation. Missing or ambiguous observations never permit retry.
 Transport/schema/configuration/persistence failures do not mean human rejection.
 CLI exit codes: 0 = inProgress/completed; 3 = dispatching/not-started;
-2 = unknown/blocked/stale/failed/interrupted; 1 = local/usage error (outcome unchanged,
-never blindly retry). Read the JSON state; exit 0 alone is not job completion.
+2 = unknown/blocked/stale/failed/interrupted; 1 = local/usage error; inspect status before any action, never blindly retry. Read the JSON state; exit 0 alone is not job completion.
 Thread reads are bounded to 32 MiB. Transport, oversized payload and schema failures
 return unknown with phase thread/read; they never permit a new start.
 
@@ -62,5 +61,7 @@ it stayed unknown on repeat and later reconciled the original completed turn.
 This harness is not a real Pod replay. A real unchanged Pod repeat after completion
 remains blocked by runtime capacity, and full M1 acceptance is not certified.
 The candidate bundle used for live acceptance precedes the final filesystem/exit
-status refinements. The final source has focused tests and must pass the affected
-gate before publication; see the PR for its actual result. M2–M4 are not certified.
+status refinements. The final source has 16 passing focused tests and a passing affected unit gate at
+`cd5c80c814738ec4ffd560867748e31fca3e5bda`. This documentation correction changes no
+implementation; the pre-push hook also checks its final commit. M2–M4 are not certified.
+The Unix socket and uid checks target POSIX hosts; other hosts fail closed.
