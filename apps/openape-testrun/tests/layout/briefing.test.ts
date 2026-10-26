@@ -6,7 +6,7 @@ import ReportPage from '../../app/pages/r/[slug].vue'
 import { flushPromises, mount } from '@vue/test-utils'
 import { afterEach, expect, it } from 'vitest'
 import BriefingReport from '../../app/components/BriefingReport.vue'
-import { sampleBriefing } from '../briefing-fixture'
+import { sampleBriefing, sampleBriefingV2 } from '../briefing-fixture'
 
 let wrapper: ReturnType<typeof mount>
 afterEach(() => wrapper?.unmount())
@@ -79,4 +79,36 @@ it.each([
   expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
   expect(wrapper.get('.native').element.scrollWidth).toBeLessThanOrEqual(width)
   await page.screenshot({ path: screenshotPath(`briefing-${width}-${theme}`) })
+})
+
+it.each([320, 390, 768, 1280].flatMap(width => (['light', 'dark'] as const).map(theme => ({ width, theme }))))('presents v2 focus, honest coverage and expandable originals at $width px in $theme', async ({ width, theme }) => {
+  await page.viewport(width, 900)
+  await commands.setColorScheme(theme)
+  const report = sampleBriefingV2()
+  wrapper = mount(BriefingReport, { props: { report, version: 2, latestVersion: 2, editions: [{ version: 2, date: report.editionDate }] }, attachTo: document.body })
+  await nextTick()
+  await wrapper.get('select[aria-label="Darstellung"]').setValue(theme)
+  expect(wrapper.findAll('#focus > article')).toHaveLength(2)
+  expect(wrapper.findAll('.original')).toHaveLength(4)
+  expect(wrapper.text()).not.toContain('Du bist am Zug')
+  expect(wrapper.text()).not.toContain('Offene Repository-Issues')
+  expect(wrapper.get('.coverage-note').text()).toContain('3 Mailtexte berücksichtigt von 8 Inbox-Nachrichten')
+  expect(wrapper.get('#agenda').text()).toContain('Keine Termine mit Uhrzeit heute')
+  expect(wrapper.get('#agenda').text()).toContain('Ganztägig: National holiday')
+  expect(wrapper.get('.conflicts').text()).toContain('30 Minuten')
+  expect(wrapper.findAll('details[open]')).toHaveLength(0)
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+  for (const control of wrapper.findAll('summary, select, .coverage-note a')) expect(control.element.getBoundingClientRect().height).toBeGreaterThanOrEqual(44)
+  await commands.captureBriefing(`briefing-v2-${width}-${theme}`)
+  const original = wrapper.get('.original summary').element as HTMLElement
+  original.focus()
+  await page.getByText('Sync failed: export.csv', { exact: false }).first().click()
+  expect(wrapper.get('.original').element).toHaveProperty('open', true)
+  expect(wrapper.get('.original .byline').text()).toContain('monitor@example.com')
+  await wrapper.get('.more-information summary').trigger('click')
+  expect(wrapper.get('.more-information').element).toHaveProperty('open', true)
+  document.documentElement.style.fontSize = '200%'
+  await nextTick()
+  expect(document.documentElement.scrollWidth).toBeLessThanOrEqual(width)
+  document.documentElement.style.fontSize = ''
 })

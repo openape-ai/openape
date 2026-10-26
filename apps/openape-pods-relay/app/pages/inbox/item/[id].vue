@@ -76,14 +76,21 @@ async function check() { if (item.value) await inbox.check(item.value.id) }
     <p v-if="error" class="inbox-error" role="alert">
       {{ error }}
     </p>
-    <article v-if="item">
-      <small class="inbox-muted">{{ item.kind === 'decision' ? t('itemDecision') : t('itemMessage') }}<template v-if="item.pod?.name"> · {{ t('itemPod', { name: item.pod.name }) }}</template> · {{ formatTime(item.created) }}</small>
-      <InboxTags :tags="item.pod?.tags" />
+    <article v-if="item" :class="{ 'message-detail': item.kind === 'message' }">
+      <small v-if="item.kind !== 'message'" class="inbox-muted">{{ item.kind === 'decision' ? t('itemDecision') : t('itemMessage') }}<template v-if="item.pod?.name"> · {{ t('itemPod', { name: item.pod.name }) }}</template> · {{ formatTime(item.created) }}</small>
+      <InboxTags v-if="item.kind !== 'message'" :tags="item.pod?.tags" />
+      <p v-if="item.kind === 'message'" class="message-meta inbox-muted">
+        {{ item.pod?.name }} · {{ formatTime(item.created) }}
+      </p>
       <h1>{{ needsRepair(item) ? repairTitle(item) : item.title }}</h1>
       <p v-if="!needsRepair(item)" class="inbox-body">
         {{ item.body }}
       </p>
-      <template v-if="safeLinks.length">
+      <div v-if="item.kind === 'message' && safeLinks.length === 1" class="primary-link">
+        <a :href="safeLinks[0]!.url" target="_blank" rel="noopener noreferrer">{{ safeLinks[0]!.title }} <span aria-hidden="true">↗</span></a>
+        <small class="inbox-muted">{{ safeLinks[0]!.host }}</small>
+      </div>
+      <template v-else-if="safeLinks.length">
         <h2>{{ t('itemLinks') }}</h2>
         <ul class="links">
           <li v-for="link in safeLinks" :key="link.url">
@@ -93,13 +100,16 @@ async function check() { if (item.value) await inbox.check(item.value.id) }
         </ul>
       </template>
       <InboxDecision v-if="item.kind === 'decision'" :item="item" :preselect="typeof route.query.option === 'string' ? route.query.option : undefined" :receipt="state.receipts[item.id]" :online="online" :checking="!!state.checking[item.id]" :pending="state.pending[item.id]" @decide="decide" @check="check" @undo="undo" />
-      <div v-else class="actions">
-        <button type="button" class="secondary" :disabled="!online" @click="change({ archived: !item.archived })">
-          {{ item.archived ? t('itemUnarchive') : t('itemArchive') }}
-        </button>
-        <button type="button" class="secondary" :disabled="!online || !item.read" @click="change({ read: false })">
-          {{ t('itemMarkUnread') }}
-        </button>
+      <div v-else class="message-management">
+        <InboxTags :tags="item.pod?.tags" />
+        <div class="actions">
+          <button type="button" class="secondary" :disabled="!online" @click="change({ archived: !item.archived })">
+            {{ item.archived ? t('itemUnarchive') : t('itemArchive') }}
+          </button>
+          <button type="button" class="secondary" :disabled="!online || !item.read" @click="change({ read: false })">
+            {{ t('itemMarkUnread') }}
+          </button>
+        </div>
       </div>
     </article>
   </InboxShell>
@@ -110,4 +120,13 @@ async function check() { if (item.value) await inbox.check(item.value.id) }
 .links { padding-left: 1.2em; display: grid; gap: 8px; }
 .links small { display: block; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.message-detail { padding-top: 12px; }
+.message-detail h1 { font-size: 1.45em; line-height: 1.2; margin: 6px 0 20px; }
+.message-meta { font-size: .8em; margin: 0 0 8px; }
+.message-detail .inbox-body { font-size: 1.05em; line-height: 1.55; margin-bottom: 24px; }
+.primary-link { display: grid; gap: 8px; justify-items: start; margin: 24px 0 32px; }
+.primary-link a { display: inline-flex; align-items: center; justify-content: space-between; gap: 20px; box-sizing: border-box; min-height: 48px; padding: 12px 20px; border-radius: 10px; background: var(--accent); color: var(--bg); font-weight: 600; text-decoration: none; }
+.primary-link small { font-size: .75em; }
+.message-management { border-top: 1px solid var(--line); padding-top: 20px; margin-top: 32px; }
+.message-management .actions { font-size: .85em; }
 </style>
