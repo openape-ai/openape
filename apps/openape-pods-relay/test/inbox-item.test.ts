@@ -45,3 +45,22 @@ it('shows the reference link of a decision Pods settles and leaves an IdP handof
   const idp = await open(item({ kind: 'decision', title: 'Grant', links: [{ title: 'Decide', url: 'https://id.example.com/grant' }], decision: decision('idp') }))
   expect(idp.find('.links').exists()).toBe(false)
 })
+
+it('promotes one safe message link and keeps metadata and management after the content', async () => {
+  const wrapper = await open(item({ title: 'Morning briefing · 26 October', body: 'Two notifications concern the same export.', pod: { id: crypto.randomUUID(), name: 'Briefing', tags: ['briefing'] }, links: [{ title: 'Read briefing', url: 'https://report.example.com/r/daily?v=4' }] }))
+  expect(wrapper.get('.primary-link a').attributes()).toMatchObject({ href: 'https://report.example.com/r/daily?v=4', target: '_blank', rel: 'noopener noreferrer' })
+  expect(wrapper.get('.primary-link small').text()).toBe('report.example.com')
+  expect(wrapper.find('.links').exists()).toBe(false)
+  expect(wrapper.get('.message-management .tags').text()).toContain('briefing')
+  expect(wrapper.get('.inbox-body').element.compareDocumentPosition(wrapper.get('.message-management').element) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  wrapper.unmount()
+})
+
+it('preserves zero-link and multiple-link messages without inventing a primary destination', async () => {
+  for (const links of [[], [{ title: 'First', url: 'https://example.com/one' }, { title: 'Second', url: 'https://example.com/two' }], [{ title: 'Unsafe', url: 'javascript:alert(1)' }]]) {
+    const wrapper = await open(item({ links }))
+    expect(wrapper.find('.primary-link').exists()).toBe(false)
+    expect(wrapper.findAll('.links a')).toHaveLength(links.length === 2 ? 2 : 0)
+    wrapper.unmount()
+  }
+})

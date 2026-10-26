@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 import { migrateReports } from '../server/database/migrate'
 import { validateBriefing } from '../server/utils/briefing-shape'
 import { createReportSeries, publishBriefing } from '../server/utils/report-store'
-import { sampleBriefing } from './briefing-fixture'
+import { sampleBriefing, sampleBriefingV2 } from './briefing-fixture'
 
 let client: ReturnType<typeof createClient> | undefined
 let directory: string | undefined
@@ -84,5 +84,79 @@ describe('controlled briefing data', () => {
     { overview: 'x'.repeat(2001) },
   ])('rejects unauthorized or malformed input: %j', (changes) => {
     expect(() => validateBriefing({ ...sampleBriefing(), ...changes })).toThrow()
+  })
+})
+
+describe('versioned briefing presentation', () => {
+  it('preserves exact information and rejects presentation fields on legacy input', () => {
+    const report = sampleBriefingV2()
+    expect(validateBriefing(report)).toEqual(report)
+    expect(() => validateBriefing({ ...report, schemaVersion: 1 })).toThrow()
+    expect(() => validateBriefing({ ...report, schemaVersion: 3 })).toThrow()
+  })
+  it.each([
+    ['missing email', (report: ReturnType<typeof sampleBriefingV2>) => { report.topics.pop() }],
+    ['duplicate reference', (report) => { report.topics[0]!.references.push(report.topics[1]!.references[0]!) }],
+    ['unknown reference', (report) => { report.topics[0]!.references[0]!.emailId = 'unknown' }],
+    ['duplicate mail', (report) => { report.emails.push(report.emails[0]!) }],
+    ['duplicate topic', (report) => { report.topics[1]!.id = report.topics[0]!.id }],
+    ['duplicate information', (report) => { report.emails[3]!.informationItems!.push(report.emails[3]!.informationItems![0]!) }],
+    ['missing information', (report) => { delete report.emails[3]!.informationItems }],
+    ['missing coverage', (report) => { report.sourceCoverage.pop() }],
+    ['unknown source', (report) => { report.sourceCoverage[0]!.sourceId = 'unknown' }],
+    ['inaccurate included count', (report) => { report.sourceCoverage[0]!.included = 4 }],
+    ['inaccurate information count', (report) => { report.sourceCoverage[1]!.informationItems = 0 }],
+    ['false complete coverage', (report) => { report.sourceCoverage[0]!.status = 'complete' }],
+    ['negative count', (report) => { report.sourceCoverage[0]!.available = -1 }],
+  ])('rejects %s', (_name, change) => {
+    const report = sampleBriefingV2()
+    change(report)
+    expect(() => validateBriefing(report)).toThrow()
+  })
+  it('enforces three focus topics and rejects unknown presentation fields', () => {
+    const report = sampleBriefingV2()
+    report.topics = report.emails.map((mail, index) => ({ ...report.topics[0]!, id: String(index), references: [{ account: mail.account, emailId: mail.id }], placement: 'focus' }))
+    expect(() => validateBriefing(report)).toThrow()
+    expect(() => validateBriefing({ ...sampleBriefingV2(), sourceCoverage: [{ ...sampleBriefingV2().sourceCoverage[0], extra: true }] })).toThrow()
+  })
+  it('preserves unknown coverage instead of reporting zero', () => {
+    const report = sampleBriefingV2()
+    Object.assign(report.sourceCoverage[0]!, { available: null, scanned: null, status: 'unknown' })
+    expect(validateBriefing(report)).toMatchObject({ sourceCoverage: [{ available: null, scanned: null, status: 'unknown' }, {}] })
+  })
+  it('archives v1 alongside v2 and replays the exact v2 publication', async () => {
+    const { db, series, publish } = await fixture()
+    await publish('2026-10-25')
+    const report = validateBriefing(sampleBriefingV2(String(series.id)))
+    const raw = JSON.stringify(report)
+    const result = await publishBriefing(db, report, raw, 'publisher@example.com', 'v2')
+    expect(result.version).toBe(2)
+    expect(await publishBriefing(db, report, raw, 'publisher@example.com', 'v2')).toEqual({ ...result, replayed: true })
+    expect(JSON.parse(String((await db.execute('SELECT manifest FROM run_versions')).rows[0]!.manifest)).schemaVersion).toBe(1)
+    expect(JSON.parse(String((await db.execute('SELECT manifest FROM runs')).rows[0]!.manifest)).schemaVersion).toBe(2)
+  })
+})
+
+describe('calendar presentation', () => {
+  it('separates all-day entries and detects only real timed overlaps', async () => {
+    const { occursOn, calendarConflicts } = await import('../app/utils/briefing-calendar')
+    const report = sampleBriefingV2()
+    expect(report.calendar.filter(event => !event.allDay && occursOn(event, report.editionDate))).toHaveLength(0)
+    expect(occursOn(report.calendar[0]!, '2026-10-26')).toBe(true)
+    expect(occursOn(report.calendar[0]!, '2026-10-27')).toBe(false)
+    expect(calendarConflicts(report.calendar)).toMatchObject([{ minutes: 30, start: '2026-11-02T07:30:00.000Z' }])
+    const event = report.calendar[1]!
+    expect(calendarConflicts([event, event])).toEqual([])
+    expect(calendarConflicts([event, { ...event, id: 'adjacent', start: event.end, end: '2026-11-02T10:00:00+01:00' }])).toEqual([])
+  })
+  it('respects Vienna day boundaries and the repeated DST hour', async () => {
+    const { occursOn, calendarConflicts } = await import('../app/utils/briefing-calendar')
+    const event = { ...sampleBriefingV2().calendar[1]!, start: '2026-10-24T23:00:00+02:00', end: '2026-10-26T00:00:00+01:00' }
+    expect(occursOn(event, '2026-10-24')).toBe(true)
+    expect(occursOn(event, '2026-10-25')).toBe(true)
+    expect(occursOn(event, '2026-10-26')).toBe(false)
+    const first = { ...event, id: 'first', start: '2026-10-25T02:00:00+02:00', end: '2026-10-25T02:30:00+02:00' }
+    const second = { ...event, id: 'second', start: '2026-10-25T02:00:00+01:00', end: '2026-10-25T02:30:00+01:00' }
+    expect(calendarConflicts([first, second])).toEqual([])
   })
 })

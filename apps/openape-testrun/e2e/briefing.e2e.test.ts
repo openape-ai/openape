@@ -12,7 +12,7 @@ import { startIdp } from 'openape-e2e/idp-fixture'
 import { loginWithSshKey } from 'openape-e2e/key-auth'
 import { makeTempDir, startServer } from 'openape-e2e/lifecycle'
 import { DdisaAgentTokens } from '../../openape-pods/src/main/programs/ddisa-agent'
-import { sampleBriefing } from '../tests/briefing-fixture'
+import { sampleBriefing, sampleBriefingV2 } from '../tests/briefing-fixture'
 
 const owner = 'owner@reports.test'; const publisher = 'publisher@reports.test'
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
@@ -119,6 +119,12 @@ describe('private briefing publication and viewing', () => {
     expect((await (await call('GET', `/api/public/runs/${series.slug}?v=1`)).json()).briefing.editionDate).toBe('2026-09-27')
     const unsafe = sampleBriefing(series.id, '2026-09-29'); unsafe.nextActions[0]!.url = 'javascript:alert(1)'
     expect((await call('POST', '/api/reports', unsafe, agentToken, { 'idempotency-key': 'unsafe' })).status).toBe(400)
+    const v2 = sampleBriefingV2(series.id)
+    const third = await call('POST', '/api/reports', v2, agentToken, { 'idempotency-key': 'morning:v2' })
+    expect(third.status, await third.clone().text()).toBe(201)
+    expect((await third.json()).version).toBe(3)
+    expect((await (await call('GET', `/api/public/runs/${series.slug}?v=3`)).json()).briefing).toMatchObject(v2)
+    expect((await (await call('GET', `/api/public/runs/${series.slug}?v=1`)).json()).briefing.schemaVersion).toBe(1)
     expect((await call('PUT', `/api/report-series/${series.id}/publisher`, { publisher: null, expectedRevision: 2 })).status).toBe(200)
     expect((await call('POST', '/api/reports', sampleBriefing(series.id, '2026-09-29'), agentToken, { 'idempotency-key': 'revoked' })).status).toBe(401)
     expect((await call('GET', `/api/report-series/${series.id}/editions/2026-09-27/publication`, undefined, agentToken)).status).toBe(401)

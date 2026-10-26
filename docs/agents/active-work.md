@@ -1,3 +1,11 @@
+# Useful morning briefing — issue 1540
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1540. Branch `feature/issue-1540-briefing-ux`, worktree `openape-monorepo.worktrees/briefing-ux-1540`, canonical base `15cb8b80f5f268fc0253bfb994dfccf3fe080646`.
+- Owner approved proposal revision 1 with “Freigegeben” on October 26, 2026: https://report.openape.ai/d/01M5VPX8D0VGVX0QM6T70C7HCZ?v=1.
+- Add strict briefing v2 readers, source-bound focus topics, complete expandable information, explicit coverage and timed calendar conflicts. Keep v1 readable. Promote a single safe message link in the mobile inbox; decisions, push payloads and runtime protocols are unchanged.
+- Focused verification: report unit/publication, 14 briefing browser cases, 5 authenticated briefing integration cases, 5 inbox component cases and 16 inbox browser cases pass. Screenshots inspected for mobile light and desktop dark reports and mobile inbox; full affected and deployment gates follow.
+- Next: native PR review, required gates and consumer-first deployment, then existing personal publisher/editorial rollout and private preview/repeat. The next regular morning delivery remains required for final acceptance. Personal recipes and real data remain outside Git.
+
 # Remaining OpenApe dependency audit findings — issue 1539
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1539. Branch `bugfix/issue-1539-audit-findings`, worktree `openape-monorepo.worktrees/audit-dependencies-20261025`, canonical base `48ab24d93f801c131cd0ef08e3682ed85f37cec0`.
