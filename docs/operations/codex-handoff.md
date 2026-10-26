@@ -3,7 +3,8 @@
 `apes codex dispatch --job /absolute/job.json --receipts /absolute/private/receipts`
 starts one immutable job on an **already running** official Codex app-server daemon.
 `status` and `reconcile` inspect the same job; both can recover a lost turn response.
-They never create another thread or turn. No daemon is installed, started or restarted.
+Both may persist a recovered turn identity; this is their only write. They never
+create another thread or turn. No daemon is installed, started or restarted.
 
 The manifest schema is `openape.codex-job/1`: `key`, absolute existing `cwd`, explicit
 `model`, `sandbox` (`read-only` or `danger-full-access`), `approvalPolicy: never`,
@@ -11,8 +12,9 @@ The manifest schema is `openape.codex-job/1`: `key`, absolute existing `cwd`, ex
 Canonical identity uses a fixed-order JSON object, canonical realpath for cwd,
 exact prompt bytes and SHA-256. Same key with changed inputs is a conflict.
 
-The private receipt directory must be retained, local, owner-controlled and
-owner-only. Removing or editing receipts defeats deduplication. Separate receipt
+Create the receipt root explicitly with mode 0700 before using the CLI. The root
+and job directories must be real directories owned by the current user; symlinks
+and group/world permissions are refused. Retain this local, owner-controlled root. Removing or editing receipts defeats deduplication. Separate receipt
 roots are separate dispatch authorities; do not assign two roots to the same job.
 Prompts and effective execution settings are private records. Nothing in this
 adapter grants permission to perform the requested effects. The caller must bind
@@ -36,7 +38,11 @@ After uncertain thread/start, retain `unknown` and inspect the daemon manually.
 After uncertain turn/start, exact digest-tagged user input and one unique matching
 turn permit reconciliation. Missing or ambiguous observations never permit retry.
 Transport/schema/configuration/persistence failures do not mean human rejection.
-CLI exit 2 covers unknown, blocked, stale, failed and interrupted states.
+CLI exit codes: 0 = inProgress/completed; 3 = dispatching/not-started;
+2 = unknown/blocked/stale/failed/interrupted; 1 = local/usage error (outcome unchanged,
+never blindly retry). Read the JSON state; exit 0 alone is not job completion.
+Thread reads are bounded to 32 MiB. Transport, oversized payload and schema failures
+return unknown with phase thread/read; they never permit a new start.
 
 ## Delivery boundary
 
@@ -46,3 +52,15 @@ it is not a package release or a replacement of the installed owner app.
 Personal scripts, real inputs, model receipts and run evidence stay outside Git.
 M2–M4 approval, Azure verification, notifications and seven-stage wiring remain
 separate plan milestones. No automatic merge, deployment or signing is included.
+
+## Verification status
+
+The real Pod dispatched once and returned before Astra's delayed marker write.
+Effective settings and actual shell exit codes were recorded. A separate direct
+host harness discarded an actual turn/start response after daemon acceptance;
+it stayed unknown on repeat and later reconciled the original completed turn.
+This harness is not a real Pod replay. A real unchanged Pod repeat after completion
+remains blocked by runtime capacity, and full M1 acceptance is not certified.
+The candidate bundle used for live acceptance precedes the final filesystem/exit
+status refinements. The final source has focused tests and must pass the affected
+gate before publication; see the PR for its actual result. M2–M4 are not certified.
