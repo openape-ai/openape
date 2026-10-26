@@ -21,7 +21,10 @@ its production code does not call Forge's signature verifier. The alternative
 crypto-library replacement is preserved separately and is not required for this
 exception. No runtime certificate identity or behavior changes accompany it.
 
-`auditConfig.ignoreCves` suppresses this exact CVE throughout this monorepo;
+`auditConfig.ignoreGhsas` suppresses the exact `GHSA-86w9-cpqp-85rv` advisory
+(CVE-2026-85393) throughout this monorepo. The October 25 migration from the
+CVE key preserves the existing approval and makes the policy compatible with
+both repository pnpm 10 and the standalone Pod collector's pnpm 11;
 pnpm does not limit this setting to individual dependency paths. It does not
 ignore every node-forge advisory or lower the high-severity audit threshold.
 Reassess if Forge signature verification is introduced, untrusted certificate

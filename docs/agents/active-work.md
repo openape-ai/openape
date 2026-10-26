@@ -1,3 +1,19 @@
+# Useful morning briefing — issue 1540
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1540. Branch `feature/issue-1540-briefing-ux`, worktree `openape-monorepo.worktrees/briefing-ux-1540`, canonical base `15cb8b80f5f268fc0253bfb994dfccf3fe080646`.
+- Owner approved proposal revision 1 with “Freigegeben” on October 26, 2026: https://report.openape.ai/d/01M5VPX8D0VGVX0QM6T70C7HCZ?v=1.
+- Add strict briefing v2 readers, source-bound focus topics, complete expandable information, explicit coverage and timed calendar conflicts. Keep v1 readable. Promote a single safe message link in the mobile inbox; decisions, push payloads and runtime protocols are unchanged.
+- Focused verification: report unit/publication, 14 briefing browser cases, 5 authenticated briefing integration cases, 5 inbox component cases and 16 inbox browser cases pass. Screenshots inspected for mobile light and desktop dark reports and mobile inbox; full affected and deployment gates follow.
+- Next: native PR review, required gates and consumer-first deployment, then existing personal publisher/editorial rollout and private preview/repeat. The next regular morning delivery remains required for final acceptance. Personal recipes and real data remain outside Git.
+
+# Remaining OpenApe dependency audit findings — issue 1539
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1539. Branch `bugfix/issue-1539-audit-findings`, worktree `openape-monorepo.worktrees/audit-dependencies-20261025`, canonical base `48ab24d93f801c131cd0ef08e3682ed85f37cec0`.
+- Pin transitive `http-cache-semantics` to 4.3.0, outside GHSA-ch52-4w7c-c8xp's affected range and past quarantine. Preserve all other locked versions.
+- Express the existing owner-approved CVE-2026-85393 exception by exact GHSA ID (GHSA-86w9-cpqp-85rv), so repository pnpm 10.29.3 and the standalone audit Pod's pnpm 11.5.2 apply the same policy. This adds no advisory exception and does not claim node-forge is patched.
+- Verification: frozen installation passes; full and production audits with both actual pnpm versions report no non-exempt high/critical advisories. The pnpm 11 check uses the collector's manifest-only snapshot format to avoid automatic switching to the repository's pinned pnpm 10.
+- Next: mandatory pre-push affected gate, native PR review and merge, then real OpenApe Pod audit against canonical main. Post-merge receipts belong on the PR and issue.
+
 # Pods volume-stable directory identity and standard data root — issue 1538
 
 - Owner approved plan revision 2 on October 23, 2026 ("Freigabe erteilt"): https://report.openape.ai/d/01M5MXRKJ4CV34MDX6MHJRJ0GZ?v=3. Implementation by Claude Opus 5.5, reviewed by the parent agent.
