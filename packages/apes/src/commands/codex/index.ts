@@ -1,8 +1,9 @@
 import { defineCommand } from 'citty'
-import { readFile, stat } from 'node:fs/promises'
+import { readFile } from 'node:fs/promises'
 import { isAbsolute, join } from 'node:path'
 import { homedir } from 'node:os'
 import { dispatch, normalizeJob, status } from '../../codex/handoff'
+import { assertPrivateDirectory } from '../../codex/records'
 import { connect } from '../../codex/rpc'
 
 function command(operation: 'dispatch' | 'status' | 'reconcile') {
@@ -15,16 +16,14 @@ function command(operation: 'dispatch' | 'status' | 'reconcile') {
     },
     async run({ args }) {
       if (!isAbsolute(args.job) || !isAbsolute(args.receipts)) throw new Error('Job and receipt paths must be absolute')
-      try {
-        if ((await stat(args.receipts)).mode & 0o077) throw new Error('Receipt directory must be owner-only (mode 0700)')
-      }
-      catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
+      await assertPrivateDirectory(args.receipts)
       const job = await normalizeJob(JSON.parse(await readFile(args.job, 'utf8')))
       const socket = args.socket ?? join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'app-server-control', 'app-server-control.sock')
       const rpc = await connect(socket)
       try {
         const result = await (operation === 'dispatch' ? dispatch : status)(args.receipts, job, rpc)
         process.stdout.write(`${JSON.stringify(result)}\n`)
+        if (['dispatching', 'not-started'].includes(result.state)) process.exitCode = 3
         if (['unknown', 'blocked', 'stale', 'failed', 'interrupted'].includes(result.state)) process.exitCode = 2
       }
       finally { rpc.close() }
