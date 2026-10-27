@@ -1,10 +1,13 @@
-# Durable Codex handoff (M1 candidate)
+# Durable Codex handoff and exact approval receipts
 
 `apes codex dispatch --job /absolute/job.json --receipts /absolute/private/receipts`
 starts one immutable job on an **already running** official Codex app-server daemon.
 `status` and `reconcile` inspect the same job; both can recover a lost turn response.
 Both may persist a recovered turn identity; this is their only write. They never
 create another thread or turn. No daemon is installed, started or restarted.
+
+`apes codex digest --job FILE` returns the canonical digest without connecting or
+writing. Use it to construct exact approval argv instead of duplicating normalization.
 
 The manifest schema is `openape.codex-job/1`: `key`, absolute existing `cwd`, explicit
 `model`, `sandbox` (`read-only` or `danger-full-access`), `approvalPolicy: never`,
@@ -52,16 +55,73 @@ Personal scripts, real inputs, model receipts and run evidence stay outside Git.
 M2–M4 approval, Azure verification, notifications and seven-stage wiring remain
 separate plan milestones. No automatic merge, deployment or signing is included.
 
+## Result inspection and input pinning
+
+`dispatch`, `status` and `reconcile` accept `--expected-digest`, the SHA-256 of
+`JSON.stringify(normalizeJob(input))`. A mismatch exits 2 with `blocked/digest`
+before connecting or writing an intent. The normalized in-memory job is reused.
+This binds content; it does not supply task or plan authorization.
+
+`status --result` and `reconcile --result` return the identified completed turn's
+single `agentMessage` with `phase: final_answer`, its item ID and SHA-256 over the
+exact UTF-8 text. A full item view is required. Missing, ambiguous, malformed,
+partial or larger-than-256-KiB final output is `unknown`, never truncated success.
+Commentary and unfinished output are not completion results. Consumers validate
+business schemas and independently inspect tests, Opus receipts and provider
+metadata; model text alone is not proof of these effects.
+
+## Exact approval receipts (M3 candidate)
+
+`approve --job FILE --receipts APPROVAL_ROOT --expected-digest SHA256
+--reference STABLE_REFERENCE --expires-at UTC_TIMESTAMP` records one immutable
+`openape.codex-approval/1` receipt. It never connects to Codex or dispatches work.
+The command must itself run through the existing exact-operation IdP approval;
+put the digest, stable reference and expiry in the actual argv, not only a summary.
+Repeats recover the original receipt without rewriting it, including after expiry
+(`expired`, exit 2). New expired approvals publish nothing. Recorded approvals exit
+0; digest mismatch exits 2; usage, conflict and new-expired errors exit 1. Conflicting references
+or expiry values do not replace authority. A consumed grant with no receipt is
+unknown and requires explicit recovery; never invent a new reference automatically.
+
+`dispatch --approval-root APPROVAL_ROOT` requires a matching unexpired receipt
+before socket access and again after connection, before a new intent. Existing
+intents remain observable after expiry without renewed authority or another start.
+The intent retains its approval reference and expiry. Expiry immediately before
+thread/start leaves a blocked intent; it cannot silently retry. Task, base commit, plan digest, intended branch and permitted effects must
+be included in the immutable job prompt. Approval of planning does not authorize
+an implementation job with different content. A new digest must really return
+pending in the actual IdP flow; a reusable broad grant is not a human decision.
+
+These are owner-controlled local workflow records, not signed IdP assertions.
+The approval Pod is deterministic; downstream Pods receive read-only assignments.
+All jobs share owner trust: explicit full access can technically alter other files.
+The CLI does not claim containment against a malicious owner agent. Material input
+changes are a workflow invalidation: downstream scripts compare current task/plan
+inputs and withdraw obsolete pending references before considering new work.
+
 ## Verification status
 
-The real Pod dispatched once and returned before Astra's delayed marker write.
-Effective settings and actual shell exit codes were recorded. A separate direct
-host harness discarded an actual turn/start response after daemon acceptance;
-it stayed unknown on repeat and later reconciled the original completed turn.
-This harness is not a real Pod replay. A real unchanged Pod repeat after completion
-remains blocked by runtime capacity, and full M1 acceptance is not certified.
-The candidate bundle used for live acceptance precedes the final filesystem/exit
-status refinements. The final source has 16 passing focused tests and a passing affected unit gate at
-`cd5c80c814738ec4ffd560867748e31fca3e5bda`. This documentation correction changes no
-implementation; the pre-push hook also checks its final commit. M2–M4 are not certified.
-The Unix socket and uid checks target POSIX hosts; other hosts fail closed.
+Final M1 source has real Pod normal and unchanged-repeat acceptance. Normal run
+`cdf1a206-b533-4de0-899b-759f921378cc` returned in 2.798 seconds, before Astra wrote
+the isolated marker. Repeat `56d40c35-1142-4e16-9acd-b087b0c6c9a4` returned the same
+thread/turn with `skipped: true`. Effective configuration matched the authorized
+model, cwd, full access and never policy. The exact candidate bundle digest and
+write-after-exit timestamps are retained in the private Test Run.
+
+A final-source host harness discarded an actual accepted turn/start response.
+The immediate repeat stayed unknown; later reconciliation recovered the original
+completed turn without starting another. This is a disclosed host fault harness,
+not a live runtime restart test. PR 516 resolved the previous runtime blocker and
+was separately merged, deployed and installed with owner authorization.
+
+The original M1 implementation has 16 focused tests and passing affected gates.
+Result extraction, exact-digest pinning and approval receipt recovery bring the
+focused total to 36 checks. Final-answer retrieval matched the actual daemon
+message and UTF-8 digest. A real referenced approval fixture stayed pending under
+the same grant, recorded once after an authorized fixture decision, and skipped
+all tool calls on repeat. This tests the mechanism, not human approval of an INITECH
+task. The final PR receipt records the required affected gate and source SHA.
+M2–M4 product-task/plan approvals, Azure workflow and seven-Pod acceptance are not
+certified. POSIX uid/socket checks fail closed elsewhere. Full-access Codex jobs
+share the owner's trust boundary; local receipts do not contain a malicious
+owner agent or turn a worktree into filesystem isolation.
