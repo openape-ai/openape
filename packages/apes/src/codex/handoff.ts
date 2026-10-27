@@ -1,9 +1,11 @@
 import { realpath, stat } from 'node:fs/promises'
+import { createHash } from 'node:crypto'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { intentSchema, jobSchema, readSchema, startSchema, turnSchema } from './contract'
 import type { Intent, Job, Rpc } from './contract'
-import { digest, publishRecord, readRecord } from './records'
+import { assertPrivateDirectory, digest, publishRecord, readRecord } from './records'
+import { requireApproval } from './approval'
 
 export async function normalizeJob(value: unknown): Promise<Job> {
   const parsed = jobSchema.parse(value)
@@ -34,7 +36,7 @@ function matchesTurn(turn: z.infer<typeof turnSchema>, intent: Intent): boolean 
   })
 }
 
-export async function status(root: string, job: Job, rpc: Rpc) {
+export async function status(root: string, job: Job, rpc: Rpc, options: { result?: boolean } = {}) {
   const folder = directory(root, job)
   const raw = await readRecord(folder, 'intent')
   if (!raw) return { state: 'not-started' }
@@ -42,7 +44,11 @@ export async function status(root: string, job: Job, rpc: Rpc) {
   if (intent.digest !== digest(job)) throw new Error('Job key conflict: immutable inputs changed')
   const failure = await readRecord(folder, 'failure')
   const threadRaw = await readRecord(folder, 'thread')
-  if (!threadRaw) return { state: uncertain(intent, failure), phase: 'thread/start', reason: 'Intent exists without a durable thread response; never redispatch' }
+  if (!threadRaw) {
+    const refused = z.object({ phase: z.literal('approval'), cause: z.string() }).safeParse(failure)
+    if (refused.success) return { state: 'blocked', phase: 'approval', reason: refused.data.cause }
+    return { state: uncertain(intent, failure), phase: 'thread/start', reason: 'Intent exists without a durable thread response; never redispatch' }
+  }
   const thread = startSchema.parse(threadRaw)
   const expectedSandbox = job.sandbox === 'read-only' ? 'readOnly' : 'dangerFullAccess'
   if (thread.model !== job.model || thread.cwd !== job.cwd || thread.approvalPolicy !== job.approvalPolicy || thread.sandbox.type !== expectedSandbox) {
@@ -64,18 +70,48 @@ export async function status(root: string, job: Job, rpc: Rpc) {
     catch (error) { return { state: 'unknown', phase: 'reconcile/persist', threadId: thread.thread.id, turnId: turn.id, reason: String(error) } }
   }
   const stale = turn.status === 'inProgress' && Date.now() - Date.parse(intent.requestedAt) > job.maxAgeSeconds * 1000
-  return { state: stale ? 'stale' : turn.status, threadId: thread.thread.id, turnId: turn.id, effective: thread, reconciled: !turnId, reconciliationRecorded }
+  if (options.result && turn.status === 'completed') {
+    const unknown = (reason: string) => ({ state: 'unknown', phase: 'result', threadId: thread.thread.id, turnId: turn.id, reason })
+    if (turn.itemsView !== 'full') return unknown('Completed turn items are not a full view; never infer a complete result')
+    const candidates = turn.items.filter(item => typeof item === 'object' && item !== null && 'type' in item && item.type === 'agentMessage' && 'phase' in item && item.phase === 'final_answer')
+    if (candidates.length !== 1) return unknown('Completed turn must contain exactly one final answer')
+    const message = z.object({ id: z.string().min(1), text: z.string() }).safeParse(candidates[0])
+    if (!message.success || /\p{Surrogate}/u.test(message.data.text) || Buffer.byteLength(message.data.text) > 256 * 1024) return unknown('Final answer is invalid or exceeds 256 KiB')
+    const { id, text } = message.data
+    return { state: 'completed', threadId: thread.thread.id, turnId: turn.id, effective: thread, approval: intent.approval, reconciled: !turnId, reconciliationRecorded, result: { itemId: id, text, sha256: createHash('sha256').update(text).digest('hex') } }
+  }
+  return { state: stale ? 'stale' : turn.status, threadId: thread.thread.id, turnId: turn.id, effective: thread, approval: intent.approval, reconciled: !turnId, reconciliationRecorded }
 }
 
-export async function dispatch(root: string, job: Job, rpc: Rpc) {
+export async function dispatchApproval(root: string, job: Job, approvalRoot: string) {
+  await assertPrivateDirectory(root)
+  const existing = await readRecord(directory(root, job), 'intent')
+  if (existing) {
+    if (intentSchema.parse(existing).digest !== digest(job)) throw new Error('Job key conflict: immutable inputs changed')
+    return undefined
+  }
+  return requireApproval(approvalRoot, job)
+}
+
+export async function dispatch(root: string, job: Job, rpc: Rpc, options: { approvalRoot?: string } = {}) {
   const folder = directory(root, job)
-  const intent: Intent = { schema: 'openape.codex-receipt/1', digest: digest(job), job, requestedAt: new Date().toISOString(), settleBy: new Date(Date.now() + 45000).toISOString() }
+  let approval: Intent['approval']
+  if (options.approvalRoot) {
+    try {
+      const receipt = await dispatchApproval(root, job, options.approvalRoot)
+      if (receipt) approval = { jobDigest: receipt.jobDigest, reference: receipt.reference, expiresAt: receipt.expiresAt }
+    }
+    catch (error) { return { state: 'blocked', phase: 'approval', reason: String(error) } }
+  }
+  const intent: Intent = { schema: 'openape.codex-receipt/1', digest: digest(job), job, requestedAt: new Date().toISOString(), settleBy: new Date(Date.now() + 45000).toISOString(), ...(approval ? { approval } : {}) }
   const won = await publishRecord(folder, 'intent', intent)
   if (!won) return { ...await status(root, job, rpc), skipped: true }
-  let phase = 'thread/start'
+  let phase = approval ? 'approval' : 'thread/start'
   let threadId: string | undefined
   let turnId: string | undefined
   try {
+    if (approval && Date.parse(approval.expiresAt) <= Date.now()) throw new Error('Approval expired before thread/start; no start was sent')
+    phase = 'thread/start'
     const raw = await rpc.call('thread/start', {
       cwd: job.cwd,
       model: job.model,
@@ -110,6 +146,6 @@ export async function dispatch(root: string, job: Job, rpc: Rpc) {
     let persistenceError: string | undefined
     try { failureRecorded = await publishRecord(folder, 'failure', { phase, cause, threadId, turnId }) }
     catch (error) { persistenceError = String(error) }
-    return { state: 'unknown', phase, threadId, turnId, reason: cause, failureRecorded, persistenceError }
+    return { state: phase === 'approval' && failureRecorded ? 'blocked' : 'unknown', phase, threadId, turnId, reason: cause, failureRecorded, persistenceError }
   }
 }

@@ -26,6 +26,7 @@ export const startSchema = z.object({
 export const turnSchema = z.object({
   id: z.string().min(1),
   status: z.enum(['inProgress', 'completed', 'interrupted', 'failed']),
+  itemsView: z.string().optional(),
   items: z.array(z.unknown()).default([]),
 })
 export const readSchema = z.object({
@@ -37,5 +38,6 @@ export const intentSchema = z.object({
   job: jobSchema,
   requestedAt: z.string().datetime(),
   settleBy: z.string().datetime(),
+  approval: z.object({ jobDigest: z.string(), reference: z.string(), expiresAt: z.string().datetime() }).optional(),
 })
 export type Intent = z.infer<typeof intentSchema>
