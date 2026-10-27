@@ -313,7 +313,9 @@ release acceptance remain separately authorized gates.
 ## M5: durable schedules and local events
 
 Settings stores interval or daily schedules with a separate enabled flag, pod
-pause/resume and a global concurrency limit (default two, range one to sixteen).
+pause/resume. Independent Pods run concurrently without a global execution cap;
+each Pod retains an exclusive run lease to prevent overlapping effects. The legacy
+settings column is retained for database rollback compatibility and is no longer read.
 Pausing prevents new automatic dispatch and allows an existing run to finish.
 Daily schedules name an IANA timezone, choose the first repeated wall-clock time
 and move a missing time to the next available local minute. Interval schedules
@@ -761,6 +763,19 @@ and the network chapter in the shared handbook.
 
 Use the existing installed MCP server: [setup and central workspace commands](docs/claude-code.md).
 Claude Code and Codex share the desktop executor and central data.
+
+Stale workspace sessions reconnect through the desktop's existing connection loop.
+Concurrent client requests wait for that same reconnect for up to 45 seconds;
+responses from an older session cannot replace current results. Submissions keep
+their operation ID and check the existing receipt before resubmission. A completed
+owner action keeps its in-memory result while its durable completion is published
+again. Unknown execution outcomes still require reconciliation, and a changed
+runtime binding remains an explicit conflict. This recovery does not restart the
+app or rerun an action merely because its confirmation was lost.
+
+Roll out the paired relay before this desktop: scheduling views no longer require
+or emit the retired concurrency field. The new parser still reads older snapshots.
+
 
 ## Morning mail protection and Jev evaluation
 

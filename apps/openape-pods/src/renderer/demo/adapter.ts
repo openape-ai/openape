@@ -129,7 +129,6 @@ export function createDemoAdapter(scenario: DemoScenario, notify: (message: stri
         checkRevision(pod.scripts.pod.revision, command.revision)
         pod.scripts.pod.lifecycle = command.lifecycle; pod.scripts.pod.revision++; changed()
       }
-      else if (command.type === 'concurrency') { pod.scheduling.concurrency = command.maximum; changed() }
       return structuredClone(pod.scheduling)
     },
     async runs(input) {

@@ -6,7 +6,6 @@ import { ExecutionIdentityBridge } from './runtime/execution-identity'
 import { recordProgramExecution } from './runs/program-execution'
 import type { OpenApeGrantWithdrawResult } from '@openape/core'
 import type { ProgramExecutionCheck } from '../contracts/program-execution'
-import { occupiedRunSlots } from './runs/slots'
 import { assertDataIdle } from './data/backup'
 import { automaticBackupDue, runAutomaticBackup } from './data/automatic-backup'
 import { InboxOutbox, parseInboxOutboxCommand } from './inbox/outbox'
@@ -197,8 +196,6 @@ function startControlledRun(podId: string, operationId: string, accepted?: (runI
   assertExecutionSupported(execution)
   const schedulingAllowed = !oneShot && Date.now() < centralUntil
   if (!startupReady || suspended || maintenance || (!schedulingAllowed && ownerOperations.getStore() !== true)) throw new Error('Controlled execution requires a ready local runtime')
-  const maximum = Number(store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency)
-  if (occupiedRunSlots(store) >= maximum) throw new Error('No execution slot available; retry after pending work progresses')
   const runId = dispatcher.start(podId, { reason: 'manual', eventIds: [], operationId }, accepted)
   if (schedulingAllowed) schedule()
   return runId
@@ -470,7 +467,6 @@ port.on('message', async (event) => {
       const command = parseScheduleCommand(request.command.schedule)
       store.getPod(command.podId)
       if (command.type === 'save') scheduler.save(command.podId, command.revision, command.spec, command.enabled)
-      if (command.type === 'concurrency') scheduler.concurrency(command.maximum)
       if (command.type === 'lifecycle') scheduler.lifecycle(command.podId, command.revision, command.lifecycle)
       port.postMessage({ id: request.id, state: scheduler.view(command.podId) })
       return

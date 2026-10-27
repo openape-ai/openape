@@ -67,6 +67,7 @@ type Completion = Parameters<WorkspaceStore['publishParts']>[6]
 function relay(server: WorkspaceStore, actor: WorkspaceActor, trustedRuntime = false) {
   return async (body: Record<string, unknown>): Promise<unknown> => {
     const lease = String(body.lease)
+    if (body.type !== 'begin') server.assertLease(actor, lease)
     if (body.type === 'inventory') return server.inventory(actor.owner)
     if (body.type === 'read') return body.view ? server.view(actor.owner, String(body.runtimeId), String(body.podId), body as never) : server.read(actor.owner, String(body.runtimeId), String(body.podId))
     if (body.type === 'operation') return server.visibleOperation(actor.owner, String(body.id))
@@ -196,7 +197,7 @@ it.each([false, true])('settles a command lost after its claim (started locally:
 }, 15000)
 
 const fast = { heartbeatMs: 100, publishIntervalMs: 0, submitRetryMs: 10 }
-function connected(options: { request?: (forward: (body: Record<string, unknown>) => Promise<unknown>, body: Record<string, unknown>) => Promise<unknown>, executor?: Partial<CentralExecutor> } = {}) {
+function connected(options: { sessionRecoveryMs?: number, request?: (forward: (body: Record<string, unknown>) => Promise<unknown>, body: Record<string, unknown>) => Promise<unknown>, executor?: Partial<CentralExecutor> } = {}) {
   const { root, projection, actor, pod, store, details } = fixture()
   const server = new WorkspaceStore(':memory:'); cleanup.push(() => server.close())
   const forward = relay(server, actor)
@@ -204,7 +205,7 @@ function connected(options: { request?: (forward: (body: Record<string, unknown>
   const request = async (body: Record<string, unknown>) => { requests.push(body); return options.request ? options.request(forward, body) : forward(body) }
   const gates: number[] = []
   const executor: CentralExecutor = { snapshot: async () => projection.snapshot(actor.owner), execute: async () => null, gate: async (until) => { gates.push(until) }, ...options.executor }
-  const controller = new CentralController(root, request, executor, fast)
+  const controller = new CentralController(root, request, executor, { ...fast, sessionRecoveryMs: options.sessionRecoveryMs })
   cleanup.push(() => controller.stop())
   return { controller, server, actor, pod, store, details, requests, gates, root }
 }
@@ -628,4 +629,114 @@ it('projects version sources without repeating knowledge queries for every scrip
     expect(details).toHaveBeenCalledOnce()
   }
   finally { details.mockRestore() }
+})
+
+it('shares one reconnect between concurrent reads and discards a late old-session response', async () => {
+  let release: () => void = () => {}
+  const held = new Promise<void>((resolve) => { release = resolve })
+  let hold = false; let entered = false
+  const { controller, server, actor, requests } = connected({
+    request: async (forward, body) => {
+      const result = await forward(body)
+      if (hold && body.type === 'inventory' && !entered) { entered = true; await held; return [{ id: 'obsolete' }] }
+      return result
+    },
+  })
+  controller.start()
+  await vi.waitFor(() => expect(controller.available).toBe(true))
+  hold = true
+  const late = controller.query({ type: 'inventory' })
+  await vi.waitFor(() => expect(entered).toBe(true))
+  server.db.prepare('UPDATE runtimes SET lease=?,heartbeat=0 WHERE id=?').run(randomUUID(), actor.id)
+  const reads = Array.from({ length: 4 }, () => controller.query({ type: 'inventory' }))
+  try {
+    const results = await Promise.all(reads)
+    for (const result of results) expect(result).toMatchObject([{ id: actor.id, online: true }])
+    release()
+    expect(await late).toMatchObject([{ id: actor.id, online: true }])
+    expect(requests.filter(body => body.type === 'begin')).toHaveLength(2)
+  }
+  finally { release(); await late }
+}, 10000)
+
+it.each(['before acceptance', 'after completion'])('recovers a stale submit %s using the same operation without duplicate execution', async (failure) => {
+  let injected = false
+  const execute = vi.fn(async () => ({ saved: true }))
+  const { controller, server, actor, pod, requests } = connected({
+    executor: { execute },
+    request: async (forward, body) => {
+      if (body.type === 'submit' && !injected) {
+        injected = true
+        if (failure === 'after completion') {
+          await forward(body)
+          await vi.waitFor(() => expect(server.operation(actor.owner, String(body.id)).state).toBe('applied'), { timeout: 5000 })
+        }
+        server.db.prepare('UPDATE runtimes SET lease=?,heartbeat=0 WHERE id=?').run(randomUUID(), actor.id)
+        throw new ProtocolError('stale_workspace_runtime', 409)
+      }
+      return forward(body)
+    },
+  })
+  controller.start()
+  await vi.waitFor(() => expect(controller.available).toBe(true))
+  const submit = { type: 'submit', runtimeId: actor.id, revision: 1, id: randomUUID(), command: { channel: 'runs', body: { type: 'start', podId: pod.id } } }
+  expect(await controller.query(submit)).toMatchObject({ id: submit.id, state: failure === 'after completion' ? 'applied' : 'accepted' })
+  await vi.waitFor(() => expect(server.operation(actor.owner, submit.id).state).toBe('applied'), { timeout: 5000 })
+  expect(execute).toHaveBeenCalledOnce()
+  expect(new Set(requests.filter(body => body.type === 'submit').map(body => body.id))).toEqual(new Set([submit.id]))
+  expect(server.db.prepare('SELECT count(*) AS total FROM operations').get()!.total).toBe(1)
+}, 15000)
+
+it('retains the owner callback and its result while reconnecting after the action completed', async () => {
+  const { controller, actor, server } = connected({
+    request: async (forward, body) => {
+      if (body.type === 'submit') {
+        server.assertLease(actor, String(body.lease))
+        return server.submit(actor.owner, actor.id, Number(body.revision), body.command as Parameters<WorkspaceStore['submit']>[3], String(body.id), true)
+      }
+      if (body.type === 'operation') { server.assertLease(actor, String(body.lease)); return server.operation(actor.owner, String(body.id)) }
+      return forward(body)
+    },
+  })
+  controller.start()
+  await vi.waitFor(() => expect(controller.available).toBe(true))
+  const action = vi.fn(async () => {
+    server.db.prepare('UPDATE runtimes SET lease=?,heartbeat=0 WHERE id=?').run(randomUUID(), actor.id)
+    return { saved: 'exact result' }
+  })
+  expect(await controller.local(action)).toEqual({ saved: 'exact result' })
+  expect(action).toHaveBeenCalledOnce()
+  expect(server.db.prepare('SELECT state FROM operations').all()).toEqual([{ state: 'applied' }])
+}, 10000)
+
+it('reports an actual runtime binding change instead of retrying the action', async () => {
+  const { controller, server, actor } = connected()
+  controller.start()
+  await vi.waitFor(() => expect(controller.available).toBe(true))
+  server.db.prepare('UPDATE runtimes SET generation=? WHERE id=?').run(randomUUID(), actor.id)
+  await expect(controller.query({ type: 'inventory' })).rejects.toThrow('workspace_binding_changed')
+}, 10000)
+
+it('bounds stale-session waits and includes the unresolved submission ID without executing it', async () => {
+  let disconnected = false
+  const execute = vi.fn(async () => null)
+  const { controller, server, actor, pod } = connected({
+    sessionRecoveryMs: 200,
+    executor: { execute },
+    request: async (forward, body) => {
+      if (body.type === 'submit') {
+        disconnected = true
+        server.db.prepare('UPDATE runtimes SET lease=?,heartbeat=0 WHERE id=?').run(randomUUID(), actor.id)
+        throw new ProtocolError('stale_workspace_runtime', 409)
+      }
+      if (disconnected && body.type === 'begin') throw new ProtocolError('workspace_already_connected', 409)
+      return forward(body)
+    },
+  })
+  controller.start()
+  await vi.waitFor(() => expect(controller.available).toBe(true))
+  const id = randomUUID()
+  await expect(controller.query({ type: 'submit', runtimeId: actor.id, revision: 1, id, command: { channel: 'runs', body: { type: 'start', podId: pod.id } } })).rejects.toThrow(`Workspace submit ${id} reconnect not confirmed`)
+  expect(execute).not.toHaveBeenCalled()
+  expect(server.db.prepare('SELECT count(*) AS total FROM operations').get()!.total).toBe(0)
 })

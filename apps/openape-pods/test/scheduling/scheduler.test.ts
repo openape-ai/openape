@@ -67,16 +67,23 @@ describe('persistent scheduling and intake', () => {
     expect(() => f.scheduler.acceptEvent(pod, 'fixture', 'redelivered', { value: 2 })).toThrow('conflicts')
     f.scheduler.tick(); expect(f.started[0]!.trigger.eventIds).toEqual([id])
   })
-  it('admits ready pods in FIFO order and never exceeds global or per-pod leases', () => {
-    const f = fixture(); const ids = [f.pod(), f.pod(), f.pod()]
+  it('starts independent Pods beyond the former cap while preserving per-Pod exclusion', () => {
+    const f = fixture(); const ids = Array.from({ length: 20 }, () => f.pod())
     for (const [index, id] of ids.entries()) f.scheduler.acceptEvent(id, 'fixture', String(index), {})
-    f.scheduler.tick(); expect(f.started.map(run => run.podId)).toEqual(ids.slice(0, 2))
+    f.scheduler.tick(); expect(f.started.map(run => run.podId)).toEqual(ids)
     f.scheduler.acceptEvent(ids[0]!, 'fixture', 'later', {})
-    f.scheduler.tick(); expect(f.started).toHaveLength(2)
-    f.runs.finish(f.started[0]!.id, 'completed', 'Processed', null, f.started[0]!.trigger.eventIds)
-    f.scheduler.tick(); expect(f.started[2]!.podId).toBe(ids[2])
-    expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(2)
-    f.scheduler.concurrency(1); f.scheduler.tick(); expect(f.started).toHaveLength(3)
+    f.scheduler.tick(); expect(f.started).toHaveLength(20)
+    const first = f.started[0]!
+    expect(f.runs.reserve(ids[0]!, f.store.getPod(ids[0]!).activeScript!, f.resources.epoch(ids[0]!))).toMatchObject({ existing: true, run: { id: first.id } })
+    f.runs.finish(first.id, 'completed', 'Processed', null, first.trigger.eventIds)
+    f.scheduler.tick(); expect(f.started[20]!.podId).toBe(ids[0])
+    expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(20)
+  })
+  it('starts manually reviewed Pods independently and refuses an overlapping review run', () => {
+    const f = fixture(); const ids = Array.from({ length: 20 }, () => f.pod(false))
+    for (const id of ids) f.scheduler.requestManual(id, f.store.getPod(id).activeScript!)
+    expect(f.started.map(run => run.podId)).toEqual(ids)
+    expect(() => f.scheduler.requestManual(ids[0]!, f.store.getPod(ids[0]!).activeScript!)).toThrow('already has an active run')
   })
   it('includes accepted input in an explicitly requested run while keeping automatic execution paused', () => {
     const f = fixture(); const pod = f.pod(false)
@@ -145,22 +152,22 @@ it('starts exactly the reviewed script or rejects without adding a delayed manua
   expect(() => f.scheduler.requestManual(pod, '0'.repeat(64))).toThrow('Script changed')
   expect(f.scheduler.view(pod).pending).toBe(0)
   f.scheduler.requestManual(pod, hash); expect(f.started).toHaveLength(1)
-  expect(() => f.scheduler.requestManual(pod, hash)).toThrow('execution slot')
+  expect(() => f.scheduler.requestManual(pod, hash)).toThrow('already has an active run')
   f.runs.finish(f.started[0]!.id, 'completed', 'Done', null, f.started[0]!.trigger.eventIds)
   f.scheduler.acceptEvent(pod, 'fixture', 'pending', {})
   expect(() => f.scheduler.requestManual(pod, hash)).toThrow('pending inputs')
   expect(f.scheduler.view(pod).pending).toBe(1)
 })
 
-it('lets earlier ready pods take their slots without queuing a reviewed script for later', () => {
+it('starts earlier ready Pods and the reviewed script without a global capacity refusal', () => {
   const f = fixture(); const earlier = [f.pod(), f.pod()]; const selected = f.pod(false)
   for (const podId of earlier) f.scheduler.acceptEvent(podId, 'fixture', 'earlier', {})
-  expect(() => f.scheduler.requestManual(selected, f.store.getPod(selected).activeScript!)).toThrow('execution slot')
-  expect(f.started.map(run => run.podId)).toEqual(earlier)
+  f.scheduler.requestManual(selected, f.store.getPod(selected).activeScript!)
+  expect(f.started.map(run => run.podId)).toEqual([...earlier, selected])
   expect(f.scheduler.view(selected).pending).toBe(0)
   for (const run of f.started) f.runs.finish(run.id, 'completed', 'Done', null, run.trigger.eventIds)
   f.scheduler.tick()
-  expect(f.started.map(run => run.podId)).toEqual(earlier)
+  expect(f.started.map(run => run.podId)).toEqual([...earlier, selected])
 })
 it('continues a scheduler tick past a step whose promise never settles and names that step', async () => {
   const expired = vi.fn()
@@ -396,18 +403,12 @@ it('runs Pods of a profile whose inputs and lease an earlier version held for ow
   expect(f.started.slice(2).map(run => run.podId).sort()).toEqual([finished, leased].sort())
 })
 
-it('frees the execution slot of a run while it waits for an IdP decision and takes it back afterwards', () => {
-  const f = fixture(); const pods = [f.pod(), f.pod(), f.pod()]
-  f.scheduler.concurrency(1)
-  for (const pod of pods) f.scheduler.save(pod, 0, { kind: 'interval', seconds: 60 }, true)
-  const approval = (state: string) => ({ grantId: 'grant-1', issuer: 'https://id.example.test', title: 'Run the Pod', state })
-  f.time(61000); f.scheduler.tick()
-  expect(f.started).toHaveLength(1)
-  f.runs.append(f.started[0]!.id, 'approval', approval('pending'))
-  f.scheduler.tick()
-  expect(f.started).toHaveLength(2)
-  expect(f.started[1]!.podId).not.toBe(f.started[0]!.podId)
-  f.runs.append(f.started[0]!.id, 'approval', approval('approved'))
-  f.scheduler.tick()
-  expect(f.started).toHaveLength(2)
+it('keeps a pending approval exclusive to its Pod without delaying other Pods', () => {
+  const f = fixture(); const first = f.pod()
+  f.scheduler.requestManual(first)
+  f.runs.append(f.started[0]!.id, 'approval', { grantId: 'grant-1', issuer: 'https://id.example.test', title: 'Run the Pod', state: 'pending' })
+  const others = Array.from({ length: 20 }, () => f.pod())
+  for (const pod of others) f.scheduler.requestManual(pod)
+  f.scheduler.requestManual(first)
+  expect(f.started.map(run => run.podId)).toEqual([first, ...others])
 })

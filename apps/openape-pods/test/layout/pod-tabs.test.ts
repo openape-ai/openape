@@ -171,7 +171,7 @@ describe('pod tabs with the production stylesheet', () => {
 it.each(['en', 'de'] as const)('explains automatic recovery without a manual unlock in {0}', async (language) => {
   const view: RunView = { runs: [{ id: '00000000-0000-4000-8000-000000000042', podId, scriptHash: hash, state: 'failed', startedAt: 1_790_000_000_000, finishedAt: 1_790_000_005_000, summary: 'Run failed', error: 'Temporary read failure', checkpointRevision: 2, recovery: null, automaticRecovery: { disposition: 'retry', reason: 'Automatic retry scheduled', nextAt: 1_790_000_015_000, attempt: 1 } }], events: [] }
   applyLanguage(language)
-  await openTab(language === 'de' ? 'Historie' : 'History', { runs: async () => structuredClone(view), scheduling: async () => ({ spec: { kind: 'interval', seconds: 300 }, enabled: true, revision: 1, nextAt: 1_790_000_300_000, error: null, pending: 1, blocked: 0, failed: 0, concurrency: 2 }) })
+  await openTab(language === 'de' ? 'Historie' : 'History', { runs: async () => structuredClone(view), scheduling: async () => ({ spec: { kind: 'interval', seconds: 300 }, enabled: true, revision: 1, nextAt: 1_790_000_300_000, error: null, pending: 1, blocked: 0, failed: 0 }) })
   await show(language === 'de' ? 560 : 1060, 850, language === 'de' ? 'dark' : 'light')
   expect(document.querySelector('.automatic-recovery')?.textContent).toContain(language === 'de' ? 'Automatischer Wiederanlauf' : 'Automatic retry')
   expect(document.querySelector('.next-action')).toBeNull()
@@ -214,4 +214,15 @@ it.each(['en', 'de'] as const)('keeps agent backend settings and long configured
   expect(section.scrollWidth).toBeLessThanOrEqual(section.clientWidth + 1)
   for (const button of Array.from(section.querySelectorAll('button'))) expect(button.getBoundingClientRect().right).toBeLessThanOrEqual(innerWidth)
   await page.screenshot({ path: artifact(`agent-backend-settings-${language}.png`), element: section })
+})
+
+it.each([{ width: 1060, theme: 'light' as const }, { width: 390, theme: 'dark' as const }])('shows schedule controls without a global run limit at $width in $theme', async ({ width, theme }) => {
+  await openTab('Settings')
+  await show(width, 850, theme)
+  const panel = document.querySelector<HTMLElement>('.schedule-panel')!
+  expect(panel.querySelectorAll('form')).toHaveLength(1)
+  expect(panel.querySelector('.limit-form')).toBeNull()
+  panel.scrollIntoView({ block: 'start' }); await frame()
+  expect(pageFits()).toBe(true)
+  await page.screenshot({ path: artifact(`schedule-unlimited-${width}-${theme}.png`) })
 })

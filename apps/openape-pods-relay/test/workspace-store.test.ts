@@ -22,7 +22,7 @@ function snapshot(): CentralSnapshot {
       details: { claims: [], counts: { finding: 0, question: 0, gap: 0 }, total: 0, versions: [], checkpointRevision: 0, source: null },
       scripts: { pod, resourceEpoch: 0, credentialAliases: [], versions: [], drafts: [], source: null },
       resources: { resources: [], variables: [], epoch: 0 },
-      scheduling: { spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 },
+      scheduling: { spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0 },
       runs: { runs: [], events: [] },
       versions: {},
       history: {},

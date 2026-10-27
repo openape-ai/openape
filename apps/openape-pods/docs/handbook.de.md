@@ -159,7 +159,7 @@ Wenn die App wieder läuft oder der Mac aufwacht, wird für einen überfälligen
 
 Ein unterbrochener oder fehlgeschlagener Lauf wird automatisch wiederholt, sobald seine vorherigen Prozesse beendet sind; ein Pod ist nur aktiv oder pausiert. Pro Pod läuft höchstens eine Ausführung gleichzeitig. Pausieren verhindert neue automatische Starts und lässt einen aktiven Lauf enden; Lauf abbrechen in der Historie stoppt ihn. Der verbundene Codex kann Zeitpläne auf deinen Auftrag hin aktivieren.
 
-1. Öffne nach einem erfolgreichen manuellen Lauf Einstellungen → Zeitplan und Limits. Wähle In einem Intervall mit Minuten oder Täglich mit Ortszeit und ausdrücklicher Zeitzone, beispielsweise Europe/Vienna.
+1. Öffne nach einem erfolgreichen manuellen Lauf Einstellungen → Zeitplan. Wähle In einem Intervall mit Minuten oder Täglich mit Ortszeit und ausdrücklicher Zeitzone, beispielsweise Europe/Vienna.
 2. Aktiviere Diesen Zeitplan aktivieren und wähle Zeitplan speichern. Ist der Pod pausiert, wähle nach Prüfung der Bereitschaft zusätzlich Automatische Ausführung fortsetzen.
 3. Prüfe Nächster geplanter Zeitpunkt, den Aktivierungsstatus und angezeigte Fehler. Lass Pods laufen und den Mac wach, wenn Ausführungen erforderlich sind.
 4. Zum Stoppen weiterer Zeitplanläufe deaktiviere und speichere den Zeitplan oder pausiere die automatische Ausführung. Prüfe nach Ruhezustand, Beenden oder Absturz zuerst die Historie, bevor du unterbrochene Arbeit erneut startest.
@@ -349,7 +349,7 @@ Wähle eine Anwendung aus, um ihre HTTPS-Hostnamen hinzuzufügen oder zu entfern
 
 ## Einstellungen
 
-Einstellungen enthält Name, Pod-Identität, Zeitplan und Limits sowie Weitere Optionen. Die Beschreibung bearbeitest du direkt in Übersicht. Umbenennen erhält Arbeit und Berechtigungen.
+Einstellungen enthält Name, Pod-Identität, Zeitplan sowie Weitere Optionen. Die Beschreibung bearbeitest du direkt in Übersicht. Umbenennen erhält Arbeit und Berechtigungen.
 
 Weitere Optionen kann einen Pod archivieren oder einen archivierten Pod nach nativer Bestätigung löschen. Lokale Daten und Variablen werden entfernt. Gemeinsame Konten und ursprüngliche Referenzdateien bleiben; gespeicherte Gesprächshistorie folgt den bestehenden Aufbewahrungsregeln.
 

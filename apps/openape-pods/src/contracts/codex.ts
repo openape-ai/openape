@@ -23,7 +23,7 @@ export function parseDesktopAction(action: Record<string, unknown>): DesktopActi
 export const desktopHelp = {
   usage: 'Use action=desktop with channel and command for desktop settings that the other actions do not cover. The command is the same body the desktop window sends and runs through the same checks. Every command except list and map needs a stable requestId: the same requestId with the same arguments returns the recorded result without running again, different arguments are refused, and an interrupted request requires inspection before a new requestId.',
   definitions: ['{type:list}', '{type:adopt}', '{type:prepareLocal,podId,expectedScript,name,defaults:{}} pins the paused instance\'s active script as its own local definition', '{type:publish,podId,expectedScript,name,defaults:{}}', '{type:instantiate,requestId:UUID,definitionId,version,name} creates a fresh paused instance of a published definition', '{type:retryProvision,requestId}', '{type:previewUpdate|prepareUpdate,podId,definitionId,version,expectedBinding}', '{type:activateUpdate,draftId,podId,expectedBinding}'],
-  scheduling: ['{type:list,podId}', '{type:concurrency,podId,maximum:1..16}', '{type:save,podId,revision,spec,enabled}', '{type:lifecycle,podId,revision,lifecycle:active|paused}'],
+  scheduling: ['{type:list,podId}', '{type:save,podId,revision,spec,enabled}', '{type:lifecycle,podId,revision,lifecycle:active|paused}'],
   workspace: ['{type:list}', '{type:map}', '{type:pauseAll} pauses every Pod', '{type:create,name}', '{type:update,id,revision,name,lifecycle:active|paused|archived}', '{type:tag,id,revision,tags}'],
   excluded: 'The MCP session itself, account sign-in, backups, restores, updates and file pickers stay in the desktop window. Grant decisions use the grants action of the owner session.',
 }
@@ -68,7 +68,7 @@ export const codexTool = {
     properties: {
       ...masterTool.inputSchema.properties,
       action: { type: 'string', enum: [...masterTool.inputSchema.properties.action.enum, 'select', 'setSchedule', 'workspace', 'desktop', ...administrationActions, 'session'] },
-      channel: { type: 'string', enum: [...desktopChannels], description: 'desktop: definitions (list/adopt/publish/prepareLocal/instantiate/retryProvision/previewUpdate/prepareUpdate/activateUpdate), scheduling (list/save/concurrency/lifecycle) or workspace (list/map/pauseAll/create/update/tag). command carries the same body the desktop sends; read runtime.desktop.' },
+      channel: { type: 'string', enum: [...desktopChannels], description: 'desktop: definitions (list/adopt/publish/prepareLocal/instantiate/retryProvision/previewUpdate/prepareUpdate/activateUpdate), scheduling (list/save/lifecycle) or workspace (list/map/pauseAll/create/update/tag). command carries the same body the desktop sends; read runtime.desktop.' },
       requestId: { type: 'string', description: 'Stable UUID for a local administration request. Generate once and reuse unchanged after a lost response; never retry an uncertain effect with a new identity. Central workspace submit uses query.id instead.' },
       query: { type: 'object', description: 'workspace: {type: inventory} | {type: read, runtimeId, podId} | {type: submit, runtimeId, revision, id: stable UUID, command: {channel,body}} | {type: operation, id}. Read runtime for command formats. Poll operation until applied; accepted is not completion.' },
       packages: { type: 'object', description: 'Exact npm dependency versions; prepare through scripts prepareDependencies before validation.' },
