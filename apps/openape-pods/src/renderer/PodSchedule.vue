@@ -11,7 +11,7 @@ export default defineComponent({
   props: { pod: { type: Object as PropType<StoredPod>, required: true } },
   emits: ['changed'],
   setup() { const access = usePodAccess(); return { access, remoteRevision: access.revision } },
-  data() { return { saved: '', view: null as ScheduleView | null, kind: 'interval', minutes: 60, time: '08:00', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, enabled: false, concurrency: 2, error: '', message: '', busy: false } },
+  data() { return { saved: '', view: null as ScheduleView | null, kind: 'interval', minutes: 60, time: '08:00', timezone: Intl.DateTimeFormat().resolvedOptions().timeZone, enabled: false, error: '', message: '', busy: false } },
   watch: { remoteRevision() { if (!this.busy && !this.error && this.editState() === this.saved) void this.load() }, 'pod.id': { immediate: true, handler() { void this.load() } } },
   beforeUnmount() { if (this.access.remote && this.editState() === this.saved) scheduleDrafts.delete(this.access.key(this.pod.id)); else if (this.access.remote) scheduleDrafts.set(this.access.key(this.pod.id), { kind: this.kind, minutes: this.minutes, time: this.time, timezone: this.timezone, enabled: this.enabled, saved: this.saved }) },
   methods: {
@@ -24,7 +24,7 @@ export default defineComponent({
       this.busy = true; this.error = ''
       try {
         this.view = await this.access.api.scheduling({ type: 'list', podId: this.pod.id })
-        this.enabled = this.view.enabled; this.concurrency = this.view.concurrency
+        this.enabled = this.view.enabled
         const spec = this.view.spec
         if (spec) {
           this.kind = spec.kind; if (spec.kind === 'interval') {
@@ -57,7 +57,7 @@ export default defineComponent({
 <template>
   <article class="card schedule-panel">
     <div class="card-heading">
-      <h2>{{ t("Schedule and limits") }}</h2><span class="badge">{{ label(pod.lifecycle) }}</span>
+      <h2>{{ t("Schedule") }}</h2><span class="badge">{{ label(pod.lifecycle) }}</span>
     </div>
     <p class="muted">
       {{ t("Schedules run while Pods is open. Missed times produce one catch-up. Pausing stops new automatic runs; an existing run can finish.") }}
@@ -93,11 +93,6 @@ export default defineComponent({
     <button class="secondary" :disabled="busy || pod.lifecycle === 'archived'" @click="act({ type: 'lifecycle', podId: pod.id, revision: pod.revision, lifecycle: pod.lifecycle === 'active' ? 'paused' : 'active' })">
       {{ pod.lifecycle === 'active' ? t("Pause automatic execution") : t("Resume automatic execution") }}
     </button>
-    <form v-if="!access.remote" class="limit-form" @submit.prevent="act({ type: 'concurrency', podId: pod.id, maximum: concurrency })">
-      <label>{{ t("Concurrent pods on this Mac") }}<input v-model.number="concurrency" type="number" min="1" max="16" required :disabled="busy"></label><button class="secondary" :disabled="busy">
-        {{ t("Save concurrency limit") }}
-      </button>
-    </form>
     <p v-if="view" class="muted">
       {{ t("{p0} pending inputs", { p0: view.pending }) }}
     </p>
@@ -115,5 +110,4 @@ export default defineComponent({
 form, label { display: grid; gap: 10px; } form { margin: 20px 0; gap: 16px; }
 input, select { font: inherit; color: inherit; background: transparent; border: 1px solid currentColor; border-radius: 8px; padding: 10px; box-sizing: border-box; }
 .check { display: flex; align-items: center; } button { justify-self: start; }
-.limit-form { border-top: 1px solid #81908355; padding-top: 20px; }
 </style>

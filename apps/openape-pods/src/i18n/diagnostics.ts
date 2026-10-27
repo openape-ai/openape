@@ -154,4 +154,6 @@ export const diagnosticPatterns = [
   'Account service cleanup failed: {p0}; quit and reopen Pods',
   '{p0}; release failed: {p1}',
   'The previous worker did not exit within {p0} seconds; quit and reopen Pods',
+  'Workspace {p0} reconnect not confirmed: {p1}',
+  'Workspace operation {p0} conflicts with the submitted command',
 ] as const satisfies readonly MessageKey[]

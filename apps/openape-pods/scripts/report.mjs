@@ -29,7 +29,7 @@ else {
     ['workspace-source.png', 'A pinned source version', 'The source viewer shows the exact stored content and digest supporting a finding. (test/layout)'],
     ['workspace-560-light-permissions.png', 'Explicit resource scope', 'Permissions remains usable in a narrow window, with per-pod access and revocation. (test/layout)'],
     ['recovery-packaged.png', 'Explicit recovery after an app crash', 'The packaged app preserves a committed fact and checkpoint. Inspection confirms previous execution has stopped before an explicit retry completes the remaining inputs.'],
-    ['schedule-settings.png', 'Explicit schedules and concurrency', 'Schedule, activation, pause/resume and the global concurrency limit are separate owner controls. Rendered with the production stylesheet in Chrome (test/layout).'],
+    ['schedule-settings.png', 'Explicit schedules and activation', 'Schedule, activation and pause/resume are separate owner controls. Independent Pods have no global execution cap. Rendered with the production stylesheet in Chrome (test/layout).'],
     ['runs-packaged.png', 'Manual script execution', 'A bundled script completes inside the native boundary. History shows its persisted result, checkpoint revision and ordered events.'],
     ['resources-packaged.png', 'Assigned reference snapshots', 'The packaged app lists the chosen file, its permission revision and the hash of a separate snapshot. Access can be revoked from the same view.'],
     ['storage-settings.png', 'Pod settings', 'Name, group and automation controls of a paused pod. Rendered with the production stylesheet in Chrome (test/layout); persistence is proven by the storage suites.'],

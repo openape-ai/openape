@@ -1,4 +1,3 @@
-import { occupiedRunSlots } from './slots'
 import { recoveryDecision } from '../recovery/policy'
 import type { RecoveryDecision, RecoveryFailure } from '../recovery/policy'
 import { parseRunApproval } from '../../contracts/activity'
@@ -32,9 +31,6 @@ export class RunStore {
       if (this.store.db.prepare('SELECT 1 FROM program_leases WHERE pod_id=?').get(podId)) throw new Error('Finish or recover the current pod run or terminal first')
       const active = this.store.db.prepare('SELECT run_id FROM run_leases WHERE pod_id=?').get(podId)
       if (active) return { run: this.get(active.run_id as string), existing: true }
-      const count = occupiedRunSlots(this.store)
-      const maximum = this.store.db.prepare('SELECT concurrency FROM settings WHERE id=1').get()!.concurrency as number
-      if (count >= maximum) throw new Error('All run slots are occupied')
       const pod = this.store.getPod(podId)
       if (pod.lifecycle === 'archived' || pod.activeScript !== scriptHash) throw new Error('Script is no longer active')
       const validation = this.store.db.prepare('SELECT evidence FROM validations WHERE pod_id=? AND script_hash=? AND assignment_revision=? AND resource_epoch=?').get(podId, scriptHash, pod.bindingRevision, epoch)
