@@ -2,10 +2,29 @@ import { mkdtemp, mkdir, readFile, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { afterEach, expect, it, vi } from 'vitest'
-import { approval, handoff, read, save, stage } from '../src/pods/index'
+import { approval, handoff, queued, read, save, stage } from '../src/pods/index'
 import type { Tools } from '../src/pods/invoke'
 
 const roots: string[] = []
+it('exposes a completed business outcome for caller validation without another dispatch', async () => {
+  const { root, digest } = await fixture()
+  const answer = { status: 'blocked', phase: 'verification', cause: 'Baseline fixture missing', reportUrl: 'https://example.invalid/report' }
+  const terminal = { state: 'completed', threadId: 'thread', turnId: 'turn', result: { text: JSON.stringify(answer), sha256: digest } }
+  const tools: Tools = { withdraw: vi.fn(), invoke: vi.fn(async () => ({ exitCode: 0, stdout: JSON.stringify(terminal) })) }
+  const input = { application: 'fixture', jobs: root, receipts: root, query: join(root, 'query.json'), id: digest, digest, inspectOutcome: true }
+  expect(await queued(tools, input)).toEqual({ state: 'completed', terminal, answer })
+  expect((tools.invoke as ReturnType<typeof vi.fn>).mock.calls[0]![0].argv[0]).toBe('lookup')
+  await expect(queued(tools, { ...input, inspectOutcome: false })).rejects.toMatchObject({ status: 'blocked', phase: 'verification', terminal: true })
+})
+
+it('keeps unknown execution and malformed final text distinct from inspected business outcomes', async () => {
+  const { root, digest } = await fixture()
+  const input = { application: 'fixture', jobs: root, receipts: root, query: join(root, 'query.json'), id: digest, digest, inspectOutcome: true }
+  const tools: Tools = { withdraw: vi.fn(), invoke: vi.fn(async () => ({ exitCode: 0, stdout: JSON.stringify({ state: 'unknown', phase: 'thread/read', reason: 'Connection lost' }) })) }
+  await expect(queued(tools, input)).rejects.toMatchObject({ status: 'unknown', phase: 'thread/read', terminal: false })
+  tools.invoke = vi.fn(async () => ({ exitCode: 0, stdout: JSON.stringify({ state: 'completed', result: { text: 'invalid JSON', sha256: digest } }) }))
+  await expect(queued(tools, input)).rejects.toMatchObject({ status: 'unknown', phase: 'result/parse', terminal: true })
+})
 afterEach(async () => { await Promise.all(roots.splice(0).map(root => rm(root, { recursive: true, force: true }))) })
 async function fixture() {
   const root = await mkdtemp(join(tmpdir(), 'pod-workflow-')); roots.push(root)
