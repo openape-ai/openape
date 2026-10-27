@@ -41,13 +41,14 @@ export async function queued(tools: Tools, input: {
   advance?: boolean,
   policy?: string,
   policyDigest?: string,
+  inspectOutcome?: boolean,
 }) {
   await save(input.query, { id: input.id, digest: input.digest, file: input.file ?? 'job.json' })
   const terminal = await invokeJSON<Terminal>(tools, input.application, [input.advance ? 'advance' : 'lookup', '--jobs', input.jobs, '--receipts', input.receipts, '--query', input.query, ...(input.policy ? ['--policy', input.policy, '--policy-digest', input.policyDigest ?? ''] : [])])
-  return result(terminal)
+  return result(terminal, input.inspectOutcome)
 }
 
-function result(terminal: Terminal) {
+function result(terminal: Terminal, inspectOutcome = false) {
   if (['inProgress', 'dispatching'].includes(terminal.state)) return { state: 'running' as const, terminal }
   if (terminal.state !== 'completed' || !terminal.result?.text || !terminal.result.sha256) {
     throw new StageFailure('unknown', terminal.phase ?? 'result', terminal.reason ?? 'Complete final answer absent')
@@ -55,7 +56,7 @@ function result(terminal: Terminal) {
   let answer: unknown
   try { answer = jsonAnswer(terminal.result.text) }
   catch { throw new StageFailure('unknown', 'result/parse', `Completed turn returned non-JSON; inspect thread ${terminal.threadId}, result ${terminal.result.sha256}`, true) }
-  if (answer && typeof answer === 'object' && 'status' in answer && answer.status !== 'completed') {
+  if (!inspectOutcome && answer && typeof answer === 'object' && 'status' in answer && answer.status !== 'completed') {
     const detail = answer as Record<string, unknown>
     throw new StageFailure(String(detail.status), String(detail.phase ?? detail.operation ?? 'result'),      String(detail.cause ?? detail.reason ?? detail.summary ?? 'Model reported failure without a cause'), true)
   }
