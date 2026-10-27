@@ -5,7 +5,8 @@
 - Remove global capacity checks from scheduled, manual and controlled starts, the setting/UI and MCP contract. Keep per-Pod exclusion, event deduplication and inert legacy database settings for rollback compatibility.
 - Stale sessions use the existing single connection loop; fence superseded responses, reconcile submissions by their stable operation ID and retain owner callbacks/results across reconnects. Binding conflicts and unknown outcomes stay explicit. No blind effect retry.
 - Focused verification: 106 tests pass, including 20 independent Pods, controlled-start admission, per-Pod exclusion, concurrent stale queries, late responses, pre-acceptance and post-completion submit recovery, owner completion recovery and binding conflicts. App lint, typecheck and build pass.
-- Next: final affected gate, native PR and published evidence. No merge, deployment, signed build, installed runtime replacement or live acceptance is included. Deploy the paired relay parser before the desktop because new schedule views omit the concurrency field.
+- PR: https://repos.openape.ai/patrick/monorepo/pulls/516, explicitly related to the issue. Verified source `3cb58189beebe5bd35444075c7f1a8af7718e14b`; mandatory affected gate passes (Pods: 1,988 passed / 1 opt-in skipped; relay: 113 passed). Two targeted Chrome cases pass; wide/light and narrow/dark screenshots inspected. Test Run: https://report.openape.ai/d/01M5XX2VV981VP8KGFSSP1Q5SF. Local evidence: `~/.codex/tmp/pods-runtime-recovery-1542/`.
+- Next: review and merge, then separately authorized relay-first rollout and the original M1 live repeat. No merge, deployment, signed build, installed runtime replacement or live acceptance is included. Deploy the paired relay parser before the desktop because new schedule views omit the concurrency field.
 
 # Useful morning briefing — issue 1540
 
