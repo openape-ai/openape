@@ -93,8 +93,13 @@ export async function dispatchApproval(root: string, job: Job, approvalRoot: str
   return requireApproval(approvalRoot, job)
 }
 
-export async function dispatch(root: string, job: Job, rpc: Rpc, options: { approvalRoot?: string } = {}) {
+export async function dispatch(root: string, job: Job, rpc: Rpc, options: { approvalRoot?: string, deadline?: string, reference?: string } = {}) {
   const folder = directory(root, job)
+  if (options.deadline && !await readRecord(folder, 'intent')) {
+    if (!Number.isFinite(Date.parse(options.deadline)) || Date.parse(options.deadline) <= Date.now()) {
+      return { state: 'blocked', phase: 'approval', reason: 'Start approval deadline expired; no start was sent' }
+    }
+  }
   let approval: Intent['approval']
   if (options.approvalRoot) {
     try {
@@ -103,13 +108,17 @@ export async function dispatch(root: string, job: Job, rpc: Rpc, options: { appr
     }
     catch (error) { return { state: 'blocked', phase: 'approval', reason: String(error) } }
   }
-  const intent: Intent = { schema: 'openape.codex-receipt/1', digest: digest(job), job, requestedAt: new Date().toISOString(), settleBy: new Date(Date.now() + 45000).toISOString(), ...(approval ? { approval } : {}) }
+  const intent: Intent = { schema: 'openape.codex-receipt/1', digest: digest(job), job, requestedAt: new Date().toISOString(), settleBy: new Date(Date.now() + 45000).toISOString(), ...(approval ? { approval } : {}), ...(options.deadline && options.reference ? { startApproval: { reference: options.reference, deadline: options.deadline } } : {}) }
   const won = await publishRecord(folder, 'intent', intent)
   if (!won) return { ...await status(root, job, rpc), skipped: true }
   let phase = approval ? 'approval' : 'thread/start'
   let threadId: string | undefined
   let turnId: string | undefined
   try {
+    if (options.deadline && Date.parse(options.deadline) <= Date.now()) {
+      phase = 'approval'
+      throw new Error('Start approval deadline expired before thread/start; no start was sent')
+    }
     if (approval && Date.parse(approval.expiresAt) <= Date.now()) throw new Error('Approval expired before thread/start; no start was sent')
     phase = 'thread/start'
     const raw = await rpc.call('thread/start', {

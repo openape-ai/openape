@@ -6,6 +6,7 @@ import { dispatch, dispatchApproval, normalizeJob, status } from '../../codex/ha
 import { assertPrivateDirectory, digest } from '../../codex/records'
 import { connect } from '../../codex/rpc'
 import { recordApproval } from '../../codex/approval'
+import { queueCommand } from './queue'
 
 function command(operation: 'dispatch' | 'status' | 'reconcile' | 'approve') {
   return defineCommand({
@@ -19,11 +20,13 @@ function command(operation: 'dispatch' | 'status' | 'reconcile' | 'approve') {
       'approval-root': { type: 'string', description: 'Dispatch requires an unexpired exact-job receipt in this owner-controlled directory' },
       reference: { type: 'string', description: 'Approve only: exact IdP operation reference; this command must itself be authorized' },
       'expires-at': { type: 'string', description: 'Approve only: immutable approval expiry as a UTC ISO timestamp' },
+      deadline: { type: 'string', description: 'Dispatch only: immutable UTC deadline for a directly authorized new start' },
     },
     async run({ args }) {
       if (!isAbsolute(args.job) || !isAbsolute(args.receipts)) throw new Error('Job and receipt paths must be absolute')
       await assertPrivateDirectory(args.receipts)
       const job = await normalizeJob(JSON.parse(await readFile(args.job, 'utf8')))
+      if (args.deadline && (operation !== 'dispatch' || !args.reference || !/^[\w.:-]+$/.test(args.reference) || !/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(?:\.\d{3})?Z$/.test(args.deadline) || !Number.isFinite(Date.parse(args.deadline)))) throw new Error('--deadline requires dispatch, an exact reference and a valid UTC timestamp')
       if (args.result && !['status', 'reconcile'].includes(operation)) throw new Error('--result requires status or reconcile')
       if (args['expected-digest'] !== undefined && args['expected-digest'] !== digest(job)) {
         process.stdout.write(`${JSON.stringify({ state: 'blocked', phase: 'digest', reason: 'Job content differs from the expected normalized digest' })}\n`)
@@ -38,7 +41,7 @@ function command(operation: 'dispatch' | 'status' | 'reconcile' | 'approve') {
         if (expired) process.exitCode = 2
         return
       }
-      if (args.reference || args['expires-at']) throw new Error('--reference and --expires-at require approve')
+      if ((args.reference && !args.deadline) || args['expires-at']) throw new Error('--reference requires approve or a dispatch deadline; --expires-at requires approve')
       if (args['approval-root']) {
         if (operation !== 'dispatch' || !isAbsolute(args['approval-root'])) throw new Error('--approval-root requires dispatch and an absolute path')
         try { await dispatchApproval(args.receipts, job, args['approval-root']) }
@@ -51,7 +54,7 @@ function command(operation: 'dispatch' | 'status' | 'reconcile' | 'approve') {
       const socket = args.socket ?? join(process.env.CODEX_HOME ?? join(homedir(), '.codex'), 'app-server-control', 'app-server-control.sock')
       const rpc = await connect(socket)
       try {
-        const result = operation === 'dispatch' ? await dispatch(args.receipts, job, rpc, { approvalRoot: args['approval-root'] }) : await status(args.receipts, job, rpc, { result: args.result })
+        const result = operation === 'dispatch' ? await dispatch(args.receipts, job, rpc, { approvalRoot: args['approval-root'], deadline: args.deadline, reference: args.reference }) : await status(args.receipts, job, rpc, { result: args.result })
         process.stdout.write(`${JSON.stringify(result)}\n`)
         if (['dispatching', 'not-started'].includes(result.state)) process.exitCode = 3
         if (['unknown', 'blocked', 'stale', 'failed', 'interrupted'].includes(result.state)) process.exitCode = 2
@@ -64,6 +67,8 @@ function command(operation: 'dispatch' | 'status' | 'reconcile' | 'approve') {
 export const codexCommand = defineCommand({
   meta: { name: 'codex', description: 'Dispatch and inspect immutable jobs on the existing Codex daemon' },
   subCommands: {
+    lookup: queueCommand('lookup'),
+    advance: queueCommand('advance'),
     dispatch: command('dispatch'),
     status: command('status'),
     reconcile: command('reconcile'),

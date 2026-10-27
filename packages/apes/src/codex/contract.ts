@@ -39,5 +39,6 @@ export const intentSchema = z.object({
   requestedAt: z.string().datetime(),
   settleBy: z.string().datetime(),
   approval: z.object({ jobDigest: z.string(), reference: z.string(), expiresAt: z.string().datetime() }).optional(),
+  startApproval: z.object({ reference: z.string(), deadline: z.string().datetime() }).optional(),
 })
 export type Intent = z.infer<typeof intentSchema>

@@ -9,10 +9,15 @@
   "description": "Unified CLI + MCP Server for OpenApe",
   "type": "module",
   "bin": {
+    "ape-codex": "./dist/codex-cli.js",
     "apes": "./dist/cli.js",
     "ape-shell": "./scripts/ape-shell-wrapper.sh"
   },
   "exports": {
+    "./pods": {
+      "import": "./dist/pods/index.js",
+      "types": "./dist/pods/index.d.ts"
+    },
     "./program": {
       "import": "./dist/authorization/program-binding.js",
       "types": "./dist/authorization/program-binding.d.ts"

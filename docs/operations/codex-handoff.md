@@ -21,8 +21,7 @@ and group/world permissions are refused. Retain this local, owner-controlled roo
 roots are separate dispatch authorities; do not assign two roots to the same job.
 Prompts and effective execution settings are private records. Nothing in this
 adapter grants permission to perform the requested effects. The caller must bind
-its task and plan approvals to immutable job inputs before dispatch; that workflow
-integration is **not implemented by M1**. An approval for a mutable file path alone
+its task and plan approvals to immutable job inputs before dispatch; M3 adds the exact-start workflow described below. An approval for a mutable file path alone
 is insufficient for production work.
 
 An exclusive hard-link publication elects one dispatcher. File and directory fsync
@@ -48,12 +47,13 @@ return unknown with phase thread/read; they never permit a new start.
 
 ## Delivery boundary
 
-This is an M1 candidate in the existing `@openape/apes` package. The local Pod test
+This is an unreleased candidate in the existing `@openape/apes` package.
+The standalone `ape-codex` entry point exposes the same commands as `apes codex`. The local Pod test
 uses a self-contained bundle of this exact command implementation, outside Git;
 it is not a package release or a replacement of the installed owner app.
 Personal scripts, real inputs, model receipts and run evidence stay outside Git.
-M2–M4 approval, Azure verification, notifications and seven-stage wiring remain
-separate plan milestones. No automatic merge, deployment or signing is included.
+The personal seven-stage wiring is activated locally; fresh product planning
+through both approval gates remains a separate acceptance boundary. No automatic merge, deployment or signing is included.
 
 ## Result inspection and input pinning
 
@@ -121,7 +121,63 @@ message and UTF-8 digest. A real referenced approval fixture stayed pending unde
 the same grant, recorded once after an authorized fixture decision, and skipped
 all tool calls on repeat. This tests the mechanism, not human approval of an IURIO
 task. The final PR receipt records the required affected gate and source SHA.
-M2–M4 product-task/plan approvals, Azure workflow and seven-Pod acceptance are not
-certified. POSIX uid/socket checks fail closed elsewhere. Full-access Codex jobs
+IURIO #7054 subsequently completed the authorized Pod-started implementation,
+Azure draft PR 903, independent Azure verification and one queued notification;
+unchanged repeats created no additional effects. Its planning stage adopted an
+existing approved plan, so this is not evidence of fresh product plan generation. POSIX uid/socket checks fail closed elsewhere. Full-access Codex jobs
 share the owner's trust boundary; local receipts do not contain a malicious
 owner agent or turn a worktree into filesystem isolation.
+
+
+## Exact-start approvals and reusable observation (M3/M4)
+
+The personal task-approval and plan-approval Pods now request the actual immutable
+`dispatch` operation. The exact argv contains the job digest, one stable reference,
+receipt root and `--deadline`. Approval starts that one job asynchronously. The
+planning and implementation consumers only use `lookup`; they have no reusable
+business dispatch grant. The older receipt command remains available for existing
+jobs, but local receipt contents are not a substitute for a new human decision.
+
+A new dispatch refuses an expired deadline before admission and again immediately
+before thread/start. Its immutable intent retains `startApproval.reference` and
+`startApproval.deadline`. Existing intents remain observable after expiry. A
+pre-start expiry leaves a terminal failure; it does not create a new identity.
+`requestStart` persists the job and exact request before calling the runtime,
+reconciles a lost response against that bound intent, and retains pending/unknown
+outcomes. A consumed reference without an observed intent requires investigation.
+It never invents a new reference to get past denial, expiry or uncertainty.
+
+`ape-codex lookup --jobs JOBS --receipts RECEIPTS --query QUERY` observes only an
+existing job. QUERY contains `{id, file, digest}`: a 64-character hex workflow ID,
+`job.json` (or legacy `job-v2.json`), and the canonical job digest. Queue roots are
+absolute, private owner directories; linked job paths and changed digests fail
+closed. The result is the original turn's complete final answer. These fixed argv
+can receive a reusable read grant while job identities change inside the queue.
+
+`advance` may also dispatch automatic infrastructure inspections. It additionally
+requires `--policy ABSOLUTE_FILE --policy-digest SHA256`. The owner-approved policy
+pins cwd, model, sandbox, approval mode, age, key template, manifest filename and
+prompt prefix; only trailing JSON evidence varies. Changing policy bytes or fixed
+execution settings requires a new exact grant. Product planning/implementation
+consumers do not receive this permission. A full-access inspection prompt is an
+instruction, not an OS-enforced read-only boundary or prompt-injection containment.
+
+`@openape/apes/pods` provides reusable file publication, exact-start requests,
+observation, failure classification and supersession. Personal domain scripts stay
+outside Git. Obsolete pending references are withdrawn from their immutable request;
+already started jobs remain observable even after selection changes. Unknown
+transport/parse errors retain their cause and do not become human rejection.
+Explicit terminal job failures are retained and notified once per stage/status.
+
+The selector excludes rejected task content across unrelated base changes and
+completed task content still present on the board. Blocked inspection is distinct
+from rejection and excludes only that exact task/base revision; a changed input
+can be reconsidered. Content rejection survives unrelated base advances. The implementation consumer independently reads the active Azure
+PR inventory and checks repository, source/target branch, commit, active and draft
+status; an inventory at its 1,000-entry bound fails closed. Notification receipts
+mean queued, not read. Existing jobs/receipts are preserved through the migration.
+
+Executable hashes are checked by the native runtime. Shared Pod helper code is in
+an owner-controlled read-only directory assignment; its bytes are not individually
+included in every IdP grant. This remains one owner's trust boundary. No daemon
+restart, malicious-owner containment, merge or deployment guarantee is made.

@@ -122,3 +122,12 @@ it('keeps the returned thread identity when response schema changes', async () =
   expect(await dispatch(f.root, f.job, f.rpc)).toMatchObject({ state: 'unknown', phase: 'thread/start', threadId: 'accepted-thread' })
   expect(f.call.mock.calls.some(([method]) => method === 'turn/start')).toBe(false)
 })
+
+it('a directly approved start deadline blocks a new job but preserves an existing one', async () => {
+  const f = await fixture()
+  const expired = '2000-01-01T00:00:00.000Z'
+  expect(await dispatch(f.root, f.job, f.rpc, { deadline: expired })).toMatchObject({ state: 'blocked', phase: 'approval' })
+  expect(f.rpc.call).not.toHaveBeenCalled()
+  await dispatch(f.root, f.job, f.rpc)
+  expect(await dispatch(f.root, f.job, f.rpc, { deadline: expired })).toMatchObject({ skipped: true })
+})
