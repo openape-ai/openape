@@ -3535,5 +3535,9 @@
   "The last sign-in step failed. The details below name the cause; open the browser again or cancel the sign-in.": "Der letzte Anmeldeschritt ist fehlgeschlagen. Die Details unten nennen die Ursache; öffne den Browser erneut oder brich die Anmeldung ab.",
   "Pods cannot run automations on this Mac": "Pods kann auf diesem Mac keine Automationen ausführen",
   "Pods runs automations only on Apple silicon Macs. On this computer no Pod starts, neither scheduled nor manually. Sign-in, settings and diagnosis remain available.": "Pods führt Automationen nur auf Macs mit Apple Silicon aus. Auf diesem Computer startet kein Pod, weder geplant noch manuell. Anmeldung, Einstellungen und Diagnose bleiben verfügbar.",
-  "Pod execution is not available on {p0} {p1} ({p2}): Pods executes only on Apple silicon Macs": "Die Ausführung von Pods ist auf {p0} {p1} ({p2}) nicht verfügbar: Pods führt nur auf Macs mit Apple Silicon aus"
+  "Pod execution is not available on {p0} {p1} ({p2}): Pods executes only on Apple silicon Macs": "Die Ausführung von Pods ist auf {p0} {p1} ({p2}) nicht verfügbar: Pods führt nur auf Macs mit Apple Silicon aus",
+  "Workspace {p0} reconnect not confirmed: {p1}": "Die Wiederverbindung für Workspace-Vorgang {p0} ist nicht bestätigt: {p1}",
+  "Workspace operation {p0} conflicts with the submitted command": "Workspace-Vorgang {p0} stimmt nicht mit dem übermittelten Auftrag überein",
+  "This Pod already has an active run": "Dieser Pod hat bereits einen aktiven Lauf",
+  "Workspace session changed; reconnecting": "Die Workspace-Sitzung hat sich geändert; die Verbindung wird wiederhergestellt"
 }
