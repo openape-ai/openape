@@ -166,13 +166,13 @@ it('sends desktop commands and approval page opening through the producers of th
   const pauseAll = { id: randomUUID(), action: { action: 'desktop', channel: 'workspace', command: { type: 'pauseAll' } } }
 
   await worker.codex({ id: randomUUID(), action: { action: 'desktop', channel: 'definitions', command: prepare } })
-  await worker.codex({ id: randomUUID(), action: { action: 'desktop', channel: 'scheduling', command: { type: 'concurrency', podId: id, maximum: 2 } } })
+  await worker.codex({ id: randomUUID(), action: { action: 'desktop', channel: 'scheduling', command: { type: 'lifecycle', podId: id, revision: 1, lifecycle: 'paused' } } })
   await worker.codex(pauseAll)
   await worker.codex(pauseAll)
   await worker.codex({ id: randomUUID(), action: { action: 'desktop', channel: 'workspace', command: { type: 'list' } } })
 
   expect(definitions).toHaveBeenCalledWith(prepare)
-  expect(scheduling).toHaveBeenCalledWith({ type: 'concurrency', podId: id, maximum: 2 })
+  expect(scheduling).toHaveBeenCalledWith({ type: 'lifecycle', podId: id, revision: 1, lifecycle: 'paused' })
   expect(request.mock.calls).toEqual([[{ type: 'pauseAll' }], [{ type: 'list' }]])
   expect(dispatch.mock.calls.filter(([command]) => command.codexAdministration.type === 'begin')).toHaveLength(4)
   await expect(worker.codex({ id, action: { action: 'desktop', channel: 'runtimeApproval', command: { type: 'set', enabled: true } } })).rejects.toThrow('Unsupported desktop MCP channel')

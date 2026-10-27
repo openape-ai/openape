@@ -27,7 +27,7 @@ beforeEach(async () => {
   window.pods = {
     workspace: async () => ({ pods: store.listPods() }),
     runs: async (command: RunCommand) => parseRunView(structuredClone(dispatcher.view(command.podId, 'runId' in command ? command.runId : undefined, command.type === 'list' ? command.after : undefined))),
-    scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }),
+    scheduling: async () => ({ spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0 }),
   } as unknown as typeof window.pods
 })
 afterEach(async () => { applyLanguage('en'); store.close(); await rm(root, { recursive: true, force: true }) })

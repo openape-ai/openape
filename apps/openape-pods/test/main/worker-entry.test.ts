@@ -363,3 +363,27 @@ it('lets owner commands wait for a running automatic backup instead of refusing 
   }
   finally { release(); vi.unstubAllEnvs(); vi.stubEnv('PODS_RUNTIME_EXECUTABLE', process.execPath); await rm(backups, { recursive: true, force: true }) }
 })
+
+it('admits a controlled run while other Pods already hold the former capacity', async () => {
+  const store = new PodDatabase(root)
+  const registry = new ResourceRegistry(store, () => {})
+  const held: string[] = []
+  const runId = randomUUID()
+  const start = vi.spyOn(RunDispatcher.prototype, 'start').mockReturnValue(runId)
+  try {
+    for (let index = 0; index < 3; index++) {
+      const pod = store.createPod({ name: 'Parallel run fixture' })
+      installExample(store, registry, pod.id, 'deterministic', 'a'.repeat(64))
+      held.push(captured.runs!.reserve(pod.id, store.getPod(pod.id).activeScript!, registry.epoch(pod.id)).run.id)
+    }
+    const selected = store.createPod({ name: 'Controlled parallel run' })
+    await send({ id: 'parallel-owner-gate', command: { central: { type: 'gate', until: Date.now() + 3600000 } } })
+    expect(captured.startControlled!(selected.id, randomUUID())).toBe(runId)
+    expect(start).toHaveBeenCalledOnce()
+  }
+  finally {
+    start.mockRestore()
+    for (const id of held) captured.runs!.finish(id, 'completed', 'Fixture complete', null)
+    store.close()
+  }
+})

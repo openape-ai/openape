@@ -74,7 +74,7 @@ export class CentralProjection {
             details: { claims: [], counts: { finding: 0, question: 0, gap: 0 }, total: 0, versions: [], checkpointRevision: 0, source: null },
             scripts: { pod, resourceEpoch: this.resources.epoch(pod.id), credentialAliases: [], versions: [], drafts: [], source: null },
             resources: { resources: [], variables: [], epoch: this.resources.epoch(pod.id) },
-            scheduling: { spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: this.scheduler.view(pod.id).concurrency },
+            scheduling: { spec: null, enabled: false, revision: 0, nextAt: null, error: null, pending: 0, blocked: 0 },
             runs: { runs: [], events: [] },
             versions: {},
             history: {},

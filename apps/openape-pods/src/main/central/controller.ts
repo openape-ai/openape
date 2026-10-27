@@ -59,6 +59,16 @@ export function partBatches(parts: Record<string, unknown>, maximum = batchBytes
 }
 
 class ConnectionLost extends Error {}
+class SessionChanged extends Error {
+  readonly status = 409
+  readonly code = 'stale_workspace_runtime'
+  constructor() { super('Workspace session changed; reconnecting') }
+}
+function staleSession(error: unknown): boolean {
+  if (!error || typeof error !== 'object') return false
+  const { status, code } = error as { status?: unknown, code?: unknown }
+  return status === 409 && code === 'stale_workspace_runtime'
+}
 
 export function uncertainOperation(operation: CentralOperation, executing: string | null): UncertainOperation {
   const body = operation.command.body as Record<string, unknown>
@@ -67,6 +77,9 @@ export function uncertainOperation(operation: CentralOperation, executing: strin
 
 export class CentralController {
   private lease = ''
+  private sessionEpoch = 0
+  private recoveringSession = false
+  private connectionError: unknown = null
   private state: State = { revision: 0, hash: '' }
   private localQueue: Promise<void> = Promise.resolve()
   private online = false
@@ -94,7 +107,7 @@ export class CentralController {
   private cached: { version: number, snapshot: CentralSnapshot, hash: string } | null = null
   private uncertain: UncertainOperation[] = []
   error: string | null = null
-  constructor(private readonly root: string, private readonly request: WorkspaceRequest, private readonly executor: CentralExecutor, private readonly timing: { heartbeatMs: number, publishIntervalMs: number, submitRetryMs?: number } = { heartbeatMs: centralHeartbeatMs, publishIntervalMs: 5000 }) {}
+  constructor(private readonly root: string, private readonly request: WorkspaceRequest, private readonly executor: CentralExecutor, private readonly timing: { heartbeatMs: number, publishIntervalMs: number, submitRetryMs?: number, sessionRecoveryMs?: number } = { heartbeatMs: centralHeartbeatMs, publishIntervalMs: 5000 }) {}
 
   get executing(): boolean { return this.context.getStore() === true }
   get available(): boolean { return this.online }
@@ -130,7 +143,65 @@ export class CentralController {
     finally { await rm(staging, { force: true }) }
   }
 
-  private async call(body: Record<string, unknown>): Promise<unknown> { return this.request({ ...body, lease: this.lease }) }
+  private async call(body: Record<string, unknown>): Promise<unknown> {
+    const epoch = this.sessionEpoch
+    try {
+      const result = await this.request({ ...body, lease: this.lease })
+      if (epoch !== this.sessionEpoch) throw new SessionChanged()
+      return result
+    }
+    catch (error) {
+      if (epoch !== this.sessionEpoch) throw new SessionChanged()
+      if (staleSession(error)) {
+        this.sessionEpoch++
+        this.recoveringSession = true
+        this.offline(`${String(body.type)}: ${error instanceof Error ? error.message : 'Stale workspace session'}`)
+        this.wake?.()
+      }
+      throw error
+    }
+  }
+
+  private async waitForSession(deadline: number, operation = 'connection'): Promise<void> {
+    while (!this.online) {
+      const code = (this.connectionError as { code?: string } | null)?.code
+      if (code === 'workspace_binding_changed') throw this.connectionError
+      if (!this.runner || this.abort.signal.aborted || Date.now() >= deadline) throw new Error(`Workspace ${operation} reconnect not confirmed: ${this.error ?? 'connection unavailable'}`)
+      await delay(50, undefined, { signal: this.abort.signal })
+    }
+  }
+
+  private matchingOperation(operation: CentralOperation, body: Record<string, unknown>): boolean {
+    return operation.runtimeId === (body.runtimeId ?? this.runtimeId) && canonicalJson(operation.command) === canonicalJson(body.command)
+  }
+
+  private async clientCall(body: Record<string, unknown>): Promise<unknown> {
+    const deadline = Date.now() + (this.timing.sessionRecoveryMs ?? 45000)
+    const operation = `${String(body.type)}${body.id ? ` ${String(body.id)}` : ''}`
+    let reconcile = false
+    for (;;) {
+      if (this.recoveringSession) await this.waitForSession(deadline, operation)
+      try {
+        if (reconcile && body.type === 'submit') {
+          try {
+            const operation = await this.call({ type: 'operation', id: body.id }) as CentralOperation
+            if (!this.matchingOperation(operation, body)) throw new Error(`Workspace operation ${String(body.id)} conflicts with the submitted command`)
+            return operation
+          }
+          catch (error) {
+            if ((error as { code?: string }).code !== 'workspace_operation_not_found') throw error
+          }
+        }
+        return await this.call(body)
+      }
+      catch (error) {
+        if (!staleSession(error) || Date.now() >= deadline || this.abort.signal.aborted) throw error
+        reconcile = true
+        await this.waitForSession(deadline, operation)
+      }
+    }
+  }
+
   private async gate(until: number): Promise<void> {
     this.worker = await this.executor.gate(until) ?? this.worker
     this.gateUntil = until
@@ -140,7 +211,9 @@ export class CentralController {
     const saved = await this.read<State>('state.json')
     this.phase = 'begin'
     const session = await this.request({ type: 'begin' }) as Session
+    this.sessionEpoch++
     this.lease = session.lease
+    this.connectionError = null
     this.cached = null; this.publishedAt = 0
     if (session.format !== 2) throw new Error('The central service predates this desktop; update the service before connecting')
     this.format = 2
@@ -161,7 +234,7 @@ export class CentralController {
       try { await this.publish(pending) }
       catch (error) {
         // A refused format-2 delta never committed; rebuild it from the current state instead of retrying forever.
-        if ((error as { status?: number }).status !== 409) throw error
+        if ((error as { status?: number }).status !== 409 || staleSession(error)) throw error
         await rm(join(this.root, 'central/publication.json'))
         this.manifest = session.manifest ?? {}
         await this.synchronize(pending.completion)
@@ -184,6 +257,7 @@ export class CentralController {
     await this.synchronize()
     this.phase = 'heartbeat'
     await this.heartbeat()
+    this.recoveringSession = false
   }
 
   // Never waits for a publication: the service accepts the replaced hash.
@@ -336,6 +410,7 @@ export class CentralController {
         }
       }
       catch (error) {
+        this.connectionError = error
         if (!(error instanceof ConnectionLost)) this.offline(`${this.phase}: ${error instanceof Error ? error.message : 'Central workspace is unavailable'}`)
         try { await this.gate(0) }
         catch (failure) { this.error += `; ${String(failure)}` }
@@ -364,6 +439,7 @@ export class CentralController {
   }
 
   private async submitLocal<T>(action: () => Promise<T>): Promise<T> {
+    if (this.recoveringSession) await this.waitForSession(Date.now() + (this.timing.sessionRecoveryMs ?? 45000))
     if (!this.online) throw new Error(this.offlineMessage())
     const id = randomUUID()
     let localResult: T
@@ -372,7 +448,7 @@ export class CentralController {
     try {
       for (;;) {
         try {
-          await this.call({ type: 'submit', id, revision: this.state.revision, command: { channel: 'local', body: { type: 'ownerAction' } } })
+          await this.clientCall({ type: 'submit', id, revision: this.state.revision, command: { channel: 'local', body: { type: 'ownerAction' } } })
           this.wake?.()
           break
         }
@@ -382,7 +458,7 @@ export class CentralController {
         }
       }
       while (Date.now() < deadline && !this.abort.signal.aborted) {
-        const operation = await this.call({ type: 'operation', id }) as CentralOperation
+        const operation = await this.clientCall({ type: 'operation', id }) as CentralOperation
         if (operation.state === 'applied') return localResult!
         if (operation.state === 'failed' || operation.state === 'unknown') throw new Error(operation.error ?? 'Inspect the uncertain workspace operation')
         await delay(250, undefined, { signal: this.abort.signal })
@@ -408,7 +484,7 @@ export class CentralController {
     if (!['inventory', 'read', 'submit', 'operation', 'changes'].includes(String(body.type))) throw new Error('Unsupported workspace query')
     if (!this.lease) throw new Error(this.offlineMessage())
     if (body.type === 'submit') return this.submit(body)
-    const result = await this.call(body)
+    const result = await this.clientCall(body)
     if (body.type !== 'inventory' || !Array.isArray(result)) return result
     return result.map((runtime: { id?: unknown }) => runtime.id === this.runtimeId ? { ...runtime, desktop: this.status() } : runtime)
   }
@@ -421,7 +497,7 @@ export class CentralController {
   private async submit(body: Record<string, unknown>): Promise<unknown> {
     let revision = body.revision
     for (let attempt = 1; ; attempt++) {
-      try { return await this.call({ ...body, revision }) }
+      try { return await this.clientCall({ ...body, revision }) }
       catch (error) {
         if (operationConflict(error)) return this.acceptedAtAnotherRevision(body, error)
         if (!refusedWithoutOperation(error) || attempt >= submitAttempts) throw error
@@ -434,14 +510,14 @@ export class CentralController {
   /** A resubmitted command may have been accepted at a later revision than the caller read; the identical command keeps that receipt. */
   private async acceptedAtAnotherRevision(body: Record<string, unknown>, conflict: unknown): Promise<CentralOperation> {
     let operation: CentralOperation
-    try { operation = await this.call({ type: 'operation', id: body.id }) as CentralOperation }
+    try { operation = await this.clientCall({ type: 'operation', id: body.id }) as CentralOperation }
     catch { throw conflict }
-    if (operation.runtimeId !== body.runtimeId || canonicalJson(operation.command) !== canonicalJson(body.command)) throw conflict
+    if (!this.matchingOperation(operation, body)) throw conflict
     return operation
   }
 
   private async runtimeRevision(runtimeId: string): Promise<number> {
-    const runtimes = await this.call({ type: 'inventory' }) as CentralRuntime[]
+    const runtimes = await this.clientCall({ type: 'inventory' }) as CentralRuntime[]
     const runtime = runtimes.find(item => item.id === runtimeId)
     if (!runtime) throw new Error('This runtime is no longer in the workspace inventory')
     return runtime.revision

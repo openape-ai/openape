@@ -159,7 +159,7 @@ When the app is running again or the Mac wakes, an overdue enabled schedule queu
 
 An interrupted or failed run is retried automatically once its previous processes have stopped; a Pod is only active or paused. One Pod can run only once at a time. Pausing blocks new automatic starts but lets an active run finish; use Cancel run in History to stop it. Connected Codex can enable schedules when you request it.
 
-1. After a successful manual run, open Settings → Schedule and limits. Choose At an interval and enter minutes, or Daily with Local time and an explicit timezone such as Europe/Vienna.
+1. After a successful manual run, open Settings → Schedule. Choose At an interval and enter minutes, or Daily with Local time and an explicit timezone such as Europe/Vienna.
 2. Check Enable this schedule and choose Save schedule. If the Pod is paused, separately choose Resume automatic execution after reviewing readiness.
 3. Check Next scheduled time, the enabled state and any displayed error. Keep Pods running and the Mac awake when execution is needed.
 4. To stop future scheduled work, disable and save the schedule or pause automatic execution. Inspect History after sleep, quitting or a crash before retrying interrupted work.
@@ -349,7 +349,7 @@ Select an application to add or remove its HTTPS hostnames. Sandboxed applicatio
 
 ## Settings
 
-Settings contains name, Pod identity, schedule and limits, and More options. Edit Description directly in Overview. Renaming preserves work and permissions.
+Settings contains name, Pod identity, schedule, and More options. Edit Description directly in Overview. Renaming preserves work and permissions.
 
 More options can archive a Pod or delete an archived Pod after the native confirmation. Deletion removes its local data and variables. Shared accounts and original reference files remain; retained conversation history follows the existing retention policy.
 
