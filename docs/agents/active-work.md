@@ -1,3 +1,12 @@
+# Pods independent execution and stale-session recovery — issue 1542
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1542. Owner approved both changes in chat: “Setze beides um”. Separate platform fix supporting the seven-Pod handoff (issue 1541).
+- Worktree `openape-monorepo.worktrees/pods-runtime-recovery-1542`, branch `bugfix/issue-1542-pods-runtime-recovery`, canonical base `3ec2c92537dacb22b0b73fead6897a3cca37fed7`.
+- Remove global capacity checks from scheduled, manual and controlled starts, the setting/UI and MCP contract. Keep per-Pod exclusion, event deduplication and inert legacy database settings for rollback compatibility.
+- Stale sessions use the existing single connection loop; fence superseded responses, reconcile submissions by their stable operation ID and retain owner callbacks/results across reconnects. Binding conflicts and unknown outcomes stay explicit. No blind effect retry.
+- Focused verification: 106 tests pass, including 20 independent Pods, controlled-start admission, per-Pod exclusion, concurrent stale queries, late responses, pre-acceptance and post-completion submit recovery, owner completion recovery and binding conflicts. App lint, typecheck and build pass.
+- Next: final affected gate, native PR and published evidence. No merge, deployment, signed build, installed runtime replacement or live acceptance is included. Deploy the paired relay parser before the desktop because new schedule views omit the concurrency field.
+
 # Useful morning briefing — issue 1540
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1540. Branch `feature/issue-1540-briefing-ux`, worktree `openape-monorepo.worktrees/briefing-ux-1540`, canonical base `15cb8b80f5f268fc0253bfb994dfccf3fe080646`.

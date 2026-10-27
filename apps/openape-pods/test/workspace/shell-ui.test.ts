@@ -3,7 +3,7 @@ import type { VueWrapper } from '@vue/test-utils'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import App from '../../src/renderer/App.vue'
 import type { RunCommand } from '../../src/contracts/runs'
-import { installWorkspace, podId } from '../layout/workspace-fixture'
+import { installWorkspace } from '../layout/workspace-fixture'
 
 // Behaviour formerly asserted by the packaged `pod-workspace`, `groups` and
 // `foundation` E2E files; geometry for the same views lives in test/layout.
@@ -70,14 +70,11 @@ describe('pod settings', () => {
   })
 })
 
-describe('schedule limits', () => {
-  it('saves the global concurrency limit as an explicit owner command', async () => {
-    const scheduling = vi.fn(async () => ({ spec: null, enabled: false, revision: 1, nextAt: null, error: null, pending: 0, blocked: 0, concurrency: 2 }))
-    installWorkspace({ scheduling })
+describe('schedule controls', () => {
+  it('does not offer a global execution limit', async () => {
+    installWorkspace()
     await mountApp()
-    const input = wrapper!.findAll('label').find(item => item.text().includes('Concurrent pods on this Mac'))!.get('input')
-    await input.setValue(3)
-    await wrapper!.get('.limit-form').trigger('submit'); await flushPromises()
-    expect(scheduling).toHaveBeenCalledWith({ type: 'concurrency', podId, maximum: 3 })
+    expect(wrapper!.find('.limit-form').exists()).toBe(false)
+    expect(wrapper!.text()).not.toContain('Concurrent pods on this Mac')
   })
 })
