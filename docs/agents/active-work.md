@@ -1,3 +1,10 @@
+# Raw bearer issuer check — issue 1549
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1549. Owner approved fix and rollout in chat. Branch `bugfix/issue-1549-raw-bearer-issuer-check`, canonical base `99fb36a2`.
+- `requireCaller` verifies raw IdP bearer tokens locally like `/api/cli/exchange` (shared `verifyIdpToken`: DDISA issuer, SSRF guard, JWKS signature, `aud=apes-cli`, `exp`); delegated or scoped tokens must use the exchange. The IdP verify round-trip is removed.
+- Verification: `nuxt-auth-sp` suite 127 passed; the new raw-bearer cases fail on the old code.
+- Next: PR, merge, `pnpm check:ci`, rollout of all apps bundling the module, live refusal check.
+
 # Pods independent execution and stale-session recovery — issue 1542
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1542. Owner approved both changes in chat: “Setze beides um”. Separate platform fix supporting the seven-Pod handoff (issue 1541).
