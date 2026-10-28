@@ -14,9 +14,11 @@ export class Scheduler {
     this.store.getPod(podId)
     const row = this.store.db.prepare('SELECT * FROM schedules WHERE pod_id=?').get(podId)
     const count = (state: string) => this.store.db.prepare('SELECT count(*) AS count FROM accepted_events WHERE pod_id=? AND state=?').get(podId, state)!.count as number
+    // Failures before the most recent processed input are history; a successful run resets the count.
+    const failed = this.store.db.prepare('SELECT count(*) AS count FROM accepted_events WHERE pod_id=? AND state=\'failed\' AND sequence>coalesce((SELECT max(sequence) FROM accepted_events WHERE pod_id=? AND state=\'processed\'),0)').get(podId, podId)!.count as number
     const retryRun = this.store.db.prepare('SELECT run_id FROM accepted_events WHERE pod_id=? AND state=\'pending\' AND run_id IS NOT NULL ORDER BY sequence LIMIT 1').get(podId)
     const retry = infrastructureRetry(this.store, retryRun ? String(retryRun.run_id) : null)
-    return { failed: count('failed'), ...(retry ? { retry: { at: retry.at, attempt: retry.attempt, error: retry.error } } : {}), spec: row ? parseSchedule(JSON.parse(row.spec as string)) : null, enabled: row?.enabled === 1, revision: row?.revision as number ?? 0, nextAt: row?.next_at as number | null ?? null, error: row?.error as string | null ?? this.store.db.prepare('SELECT o.error FROM reference_observations o JOIN resources r ON r.id=o.resource_id AND r.pod_id=o.pod_id WHERE o.pod_id=? AND o.error IS NOT NULL AND r.state=\'ready\' LIMIT 1').get(podId)?.error as string | null ?? null, pending: count('pending'), blocked: 0, blockedSince: null }
+    return { failed, ...(retry ? { retry: { at: retry.at, attempt: retry.attempt, error: retry.error } } : {}), spec: row ? parseSchedule(JSON.parse(row.spec as string)) : null, enabled: row?.enabled === 1, revision: row?.revision as number ?? 0, nextAt: row?.next_at as number | null ?? null, error: row?.error as string | null ?? this.store.db.prepare('SELECT o.error FROM reference_observations o JOIN resources r ON r.id=o.resource_id AND r.pod_id=o.pod_id WHERE o.pod_id=? AND o.error IS NOT NULL AND r.state=\'ready\' LIMIT 1').get(podId)?.error as string | null ?? null, pending: count('pending'), blocked: 0, blockedSince: null }
   }
 
   save(podId: string, revision: number, spec: ScheduleSpec, enabled: boolean): void {
