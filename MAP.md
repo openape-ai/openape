@@ -69,12 +69,11 @@ Source lives in the [legacy repository](https://repos.openape.ai/patrick/legacy)
 
 | Name | Was | State 2026-10-28 |
 | --- | --- | --- |
-| troop, crm, chat, chat-cli, nest | Agent company, CRM, chat | Not deployed in prod; only old PR previews remain on chatty |
+| troop, crm, chat, chat-cli, nest | Agent company, CRM, chat | Not deployed; old PR previews stopped |
 | coder, ape-agent, question-service | Agent experiments | Not deployed |
 | openclaw, apes-openclaw, openclaw-grant-gate | Operator loop | Retired |
 | desktop | Tauri desktop | Abandoned; replaced by Pods |
 
 ## Open questions
 
-- `space.openape.ai` runs in prod (`openape-prod-space-1`, own database) but its source is in neither this repository nor legacy.
-- Ten Coolify PR-preview containers (troop, chat, free-idp; PRs 1224–1317) and `chat-demo` still run on chatty.
+- Ten Coolify PR-preview containers (troop, chat, free-idp; PRs 1224–1317) were stopped on 2026-10-28 but not removed; `chat-demo` still runs on chatty.
