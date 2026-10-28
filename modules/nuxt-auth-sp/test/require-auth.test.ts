@@ -28,6 +28,12 @@ vi.mock('../src/runtime/server/utils/sp-config', () => ({
   getSpConfig: () => ({ clientId: CLIENT_ID }),
 }))
 
+// The raw IdP token fallback must never touch the network here (its cases live
+// in require-auth-raw-bearer.test.ts): no resolvable issuer → deterministic 401.
+vi.mock('../src/runtime/server/utils/ddisa-issuer', () => ({
+  resolveIssuerForToken: async () => null,
+}))
+
 vi.mock('h3', async (importOriginal) => {
   const actual = await importOriginal<typeof import('h3')>()
   return {
@@ -40,11 +46,6 @@ vi.mock('h3', async (importOriginal) => {
 
 const { signCliToken } = await import('../src/runtime/server/utils/cli-token')
 const { requireCaller } = await import('../src/runtime/server/utils/require-auth')
-
-// The agent-token fallback ($fetch to the IdP verify endpoint) must never
-// touch the network in unit tests — stub it to reject so any invalid CLI
-// token deterministically ends in 401 rather than a real round-trip.
-;(globalThis as Record<string, unknown>).$fetch = vi.fn().mockRejectedValue(new Error('no network in test'))
 
 const event = { path: '/' } as H3Event
 const bearer = (token: string) => mockGetHeader.mockReturnValue(`Bearer ${token}`)
