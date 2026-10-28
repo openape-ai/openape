@@ -61,6 +61,9 @@ const artifacts = await build({
 // install:owner takes both: the ad-hoc owner build and a Developer ID signed-local build, which migrates keychain files.
 if (source) {
   const bundle = resolve(output, 'mac-arm64', `${productName}.app`)
+  // An ad-hoc signature defaults to a cdhash requirement, so macOS folder consent would reset with every build (issue 1546).
+  // The owner accepted that a fixed identifier requirement lets any app signed with that identifier satisfy existing consent.
+  if (owner) execFileSync('/usr/bin/codesign', ['--force', '--sign', '-', '--preserve-metadata=entitlements,flags', '-r=designated => identifier "ai.openape.pods"', bundle], { stdio: 'inherit' })
   execFileSync('/usr/bin/codesign', ['--verify', '--deep', '--strict', bundle], { stdio: 'inherit' })
   writeFileSync(resolve(output, 'owner-build.json'), `${JSON.stringify({ bundle, ...source }, null, 2)}\n`)
 }

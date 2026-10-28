@@ -91,7 +91,9 @@ catch (error) {
   fail(`copying the candidate failed and the previous app was put back: ${error.message}`)
 }
 // Start in the background; a start that fails or asks a person ends the run with the backup path, it never waits.
-try { run('/usr/bin/open', ['-g', options.app]) }
+// An agent or Electron shell may export ELECTRON_RUN_AS_NODE; open passes it on and the app would exit as plain Node.
+const { ELECTRON_RUN_AS_NODE: _node, ...appEnvironment } = process.env
+try { execFileSync('/usr/bin/open', ['-g', options.app], { env: appEnvironment, timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'] }) }
 catch (error) { fail(`the new app could not be opened (${error.message}); the previous app and profile are in ${pair}`) }
 let dialog = false
 if (!await until(() => (dialog = dialogs() > 0) || (gui() && databaseOpen()), 60) || dialog) fail(`${dialog ? 'a keychain or authorization dialog opened' : 'OpenApe Pods did not start within 60 s'}; the previous app and profile are in ${pair}`)
