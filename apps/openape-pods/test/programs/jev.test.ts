@@ -60,6 +60,10 @@ it('counts retries, refuses auth errors and enforces the shared per-run attempt 
   let count = 0
   await expect(evaluateTypesafe(request, defaultJevModel, signal(), limited, () => { if (++count > 2) throw new Error('budget exhausted') })).rejects.toThrow('budget exhausted')
   expect(limited).toHaveBeenCalledTimes(2)
+  const rejected = vi.fn(async () => Response.json({ error: { message: 'prompt is too long:\n40000 tokens' } }, { status: 400 }))
+  await expect(evaluateTypesafe(request, defaultJevModel, signal(), rejected, consume)).rejects.toThrow('TypeSafe request failed (HTTP 400): prompt is too long: 40000 tokens')
+  const plain = vi.fn(async () => new Response('private error', { status: 400 }))
+  await expect(evaluateTypesafe(request, defaultJevModel, signal(), plain, consume)).rejects.toThrow(/^TypeSafe request failed \(HTTP 400\)$/)
 })
 
 it('cancels provider backoff immediately and rejects oversized or malformed bodies', async () => {
