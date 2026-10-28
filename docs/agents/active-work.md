@@ -1,3 +1,9 @@
+# Dashboard Traefik routing — issue 1550
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1550. Owner approved in chat. Branch `bugfix/issue-1550-dashboard-traefik-routing`, base `bbe1fda5`.
+- The dashboard routers referenced the missing `redirect-to-https@docker`/`gzip@docker` middlewares, so Traefik dropped them (external 404) and the issue 1549 deploy rolled the dashboard back. The middlewares are now defined in the dashboard's own labels.
+- Next: merge, deploy the dashboard, verify external health and the issue 1549 refusal check.
+
 # Raw bearer issuer check — issue 1549
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1549. Owner approved fix and rollout in chat. Branch `bugfix/issue-1549-raw-bearer-issuer-check`, canonical base `99fb36a2`.
