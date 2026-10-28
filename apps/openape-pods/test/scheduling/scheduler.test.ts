@@ -127,6 +127,17 @@ describe('persistent scheduling and intake', () => {
     f.scheduler.requestManual(other.id)
     expect(f.scheduler.view(other.id).failed).toBe(1)
   })
+  it('resets the failure count after a successful run', () => {
+    const f = fixture(); const pod = f.pod()
+    const fail = (key: string) => { f.scheduler.acceptEvent(pod, 'schedule', key, {}); f.scheduler.tick(); f.runs.finish(f.started.at(-1)!.id, 'failed', 'Permission unavailable', 'Permission denied', [], 0, { cause: 'permission' }) }
+    fail('first'); fail('second')
+    expect(f.scheduler.view(pod).failed).toBe(2)
+    const ok = f.scheduler.acceptEvent(pod, 'schedule', 'third', {}); f.scheduler.tick()
+    f.runs.finish(f.started.at(-1)!.id, 'completed', 'Processed', null, [ok])
+    expect(f.scheduler.view(pod).failed).toBe(0)
+    fail('fourth')
+    expect(f.scheduler.view(pod).failed).toBe(1)
+  })
   it('persists event claims atomically with the run lease and rejects foreign event binding', () => {
     const f = fixture(); const first = f.pod(); const other = f.pod()
     const foreign = f.scheduler.acceptEvent(other, 'fixture', 'foreign', {})
