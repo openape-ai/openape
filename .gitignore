@@ -49,3 +49,7 @@ docs/local-stack/manifest-*.json
 
 # Restricted production issue cutover evidence
 .openape/native-issues-m7/
+
+# Local agent work artifacts (plans, reports and evidence)
+.claude/plans/
+.claude/reports/
