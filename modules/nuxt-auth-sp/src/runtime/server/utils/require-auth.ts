@@ -2,6 +2,7 @@ import type { H3Event } from 'h3'
 import { normalizeActClaim } from '@openape/core'
 import { createError, getHeader, getMethod, useSession } from 'h3'
 import { useRuntimeConfig } from 'nitropack/runtime'
+import { FIRST_PARTY_AUD, verifyIdpToken } from './cli-exchange'
 import { verifyCliToken } from './cli-token'
 
 export interface Caller {
@@ -115,7 +116,8 @@ interface SpSessionData {
  *
  *   1. Session cookie from @openape/nuxt-auth-sp (browser, after DDISA login).
  *      Cookie name is "openape-sp"; payload lives under `data.claims`.
- *   2. Bearer token (agent CLI) — verified against the DDISA-resolved IdP.
+ *   2. Bearer token: an SP-issued CLI token, or a raw first-party IdP token
+ *      verified locally against the DDISA-resolved issuer.
  *
  * Returns { email, act } or throws 401.
  */
@@ -138,7 +140,7 @@ export async function requireCaller(event: H3Event): Promise<Caller> {
   }
 
   // 2. Try bearer token — first as a locally-issued CLI token (fast, offline
-  //    verify), then fall back to IdP-issued agent tokens (network round-trip).
+  //    verify), then fall back to raw IdP-issued tokens (JWKS verify).
   const authHeader = getHeader(event, 'authorization')
   if (authHeader?.startsWith('Bearer ')) {
     const token = authHeader.slice(7).trim()
@@ -154,43 +156,23 @@ export async function requireCaller(event: H3Event): Promise<Caller> {
 }
 
 /**
- * Verify an agent bearer token by posting it to the issuing IdP's verify endpoint.
- * The IdP URL is derived from the token's `iss` claim via DDISA, or falls back to
- * the configured fallback IdP.
+ * Verify a raw first-party IdP token (`apes login` / agent token, aud
+ * `apes-cli`) locally: issuer resolved via DDISA from the subject's domain,
+ * signature against that issuer's JWKS, SSRF guard, `aud` and `exp` — the same
+ * checks as /api/cli/exchange. Delegated or scoped tokens carry bounds this
+ * path cannot enforce, so they must use the exchange.
  */
 async function verifyAgentToken(token: string): Promise<Caller | null> {
   try {
-    const parts = token.split('.')
-    if (parts.length !== 3) return null
-    const payload = JSON.parse(Buffer.from(parts[1]!, 'base64url').toString('utf-8')) as {
-      iss?: string
-      sub?: string
-      email?: string
-      act?: unknown
-      exp?: number
-    }
-    if (payload.exp && payload.exp * 1000 < Date.now()) return null
-
-    const iss = payload.iss
-    const config = useRuntimeConfig()
-    const fallbackIdpUrl = (config.openapeSp as { fallbackIdpUrl?: string } | undefined)?.fallbackIdpUrl || 'https://id.openape.ai'
-    const idpUrl = iss?.startsWith('https://') ? iss : fallbackIdpUrl
-
-    // POST {idpUrl}/api/grants/verify — returns { valid: boolean, claims? }
-    const result = await $fetch<{ valid: boolean, claims?: { sub?: string, email?: string, act?: unknown } }>(
-      `${idpUrl}/api/grants/verify`,
-      { method: 'POST', body: { token } },
-    )
-    if (!result.valid) return null
-    const email = result.claims?.email ?? result.claims?.sub ?? payload.email ?? payload.sub
-    if (!email) return null
-    return {
-      email,
-      act: normalizeActClaim(result.claims?.act ?? payload.act),
-    }
+    const { claims } = await verifyIdpToken(token, [FIRST_PARTY_AUD])
+    const delegated = (typeof claims.act === 'object' && claims.act !== null)
+      || 'delegate' in claims || 'delegation_grant' in claims || 'grant_id' in claims
+      || 'scope' in claims || 'scopes' in claims
+    if (delegated || typeof claims.sub !== 'string' || !claims.sub.includes('@')) return null
+    return { email: claims.sub, act: normalizeActClaim(claims.act) }
   }
   catch (err) {
-    console.warn('[require-auth] bearer verify failed:', err)
+    console.warn('[require-auth] bearer verify failed:', err instanceof Error ? err.message : err)
     return null
   }
 }

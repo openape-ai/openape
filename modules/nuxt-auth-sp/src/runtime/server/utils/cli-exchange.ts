@@ -16,7 +16,7 @@ interface ExchangeBody {
 // RFC 8693 / DDISA-CLI: the IdP mints subject tokens with this audience for
 // all first-party CLI flows (`apes login`). Delegation AuthZ-JWTs instead
 // carry aud=<this SP's clientId> (sp-data-access.md §4); both are accepted.
-const FIRST_PARTY_AUD = 'apes-cli'
+export const FIRST_PARTY_AUD = 'apes-cli'
 
 let _idpJwks: ReturnType<typeof createRemoteJWKSet> | null = null
 let _idpJwksUrl = ''
@@ -31,6 +31,58 @@ function getIdpJwks(idpUrl: string): ReturnType<typeof createRemoteJWKSet> {
     _idpJwksUrl = url
   }
   return _idpJwks
+}
+
+/**
+ * Verify an IdP-issued JWT the DDISA way: resolve the authoritative issuer from
+ * the subject's domain, run it through the SSRF guard, then verify signature,
+ * `iss`, `aud` and `exp` against that issuer's JWKS. Never trust the token's
+ * own `iss`. Shared by the exchange and raw-bearer `requireCaller` paths.
+ */
+export async function verifyIdpToken(token: string, acceptedAudiences: string[]): Promise<{ claims: JWTPayload, idpUrl: string }> {
+  // DDISA: resolve the authoritative issuer from the SUBJECT's domain
+  // (protocol sp-data-access.md §2.1) — never a hardcoded/configured single
+  // issuer, no allowlist.
+  const resolved = await resolveIssuerForToken(token)
+  if (!resolved) {
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'subject_token has no usable subject claim',
+      data: { detail: 'Expected sub to be an email address.' },
+    })
+  }
+  const idpUrl = resolved.issuer
+
+  // SSRF guard: the issuer was resolved from the subject's DDISA record
+  // (attacker-influenceable). Refuse non-https or private/loopback targets
+  // before fetching their JWKS.
+  try {
+    await assertSafeIdpUrl(idpUrl)
+  }
+  catch (err) {
+    const detail = err instanceof Error ? err.message : 'issuer rejected'
+    throw createError({
+      statusCode: 502,
+      statusMessage: 'IdP issuer not permitted',
+      data: { detail },
+    })
+  }
+
+  try {
+    const verified = await jwtVerify(token, getIdpJwks(idpUrl), {
+      issuer: idpUrl,
+      audience: acceptedAudiences,
+    })
+    return { claims: verified.payload, idpUrl }
+  }
+  catch (err) {
+    const detail = err instanceof Error ? err.message : 'verify failed'
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Invalid subject_token',
+      data: { detail: `Token must be issued by ${idpUrl} with aud in [${acceptedAudiences.join(', ')}]. ${detail}` },
+    })
+  }
 }
 
 /**
@@ -68,53 +120,8 @@ export function createCliExchangeHandler() {
       throw createError({ statusCode: 400, statusMessage: 'subject_token required' })
     }
 
-    // DDISA: resolve the authoritative issuer from the SUBJECT's domain
-    // (protocol sp-data-access.md §2.1) — never a hardcoded/configured single
-    // issuer, no allowlist.
-    const resolved = await resolveIssuerForToken(body.subject_token)
-    if (!resolved) {
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'subject_token has no usable subject claim',
-        data: { detail: 'Expected sub to be an email address.' },
-      })
-    }
-    const idpUrl = resolved.issuer
-
-    // SSRF guard: the issuer was resolved from the subject's DDISA record
-    // (attacker-influenceable). Refuse non-https or private/loopback targets
-    // before fetching their JWKS.
-    try {
-      await assertSafeIdpUrl(idpUrl)
-    }
-    catch (err) {
-      const detail = err instanceof Error ? err.message : 'issuer rejected'
-      throw createError({
-        statusCode: 502,
-        statusMessage: 'IdP issuer not permitted',
-        data: { detail },
-      })
-    }
-
     const { clientId } = getSpConfig()
-    const acceptedAudiences = [FIRST_PARTY_AUD, clientId].filter(Boolean)
-
-    let claims: JWTPayload
-    try {
-      const verified = await jwtVerify(body.subject_token, getIdpJwks(idpUrl), {
-        issuer: idpUrl,
-        audience: acceptedAudiences,
-      })
-      claims = verified.payload
-    }
-    catch (err) {
-      const detail = err instanceof Error ? err.message : 'verify failed'
-      throw createError({
-        statusCode: 401,
-        statusMessage: 'Invalid subject_token',
-        data: { detail: `Token must be issued by ${idpUrl} with aud in [${acceptedAudiences.join(', ')}]. ${detail}` },
-      })
-    }
+    const { claims, idpUrl } = await verifyIdpToken(body.subject_token, [FIRST_PARTY_AUD, clientId].filter(Boolean))
 
     const sub = claims.sub
     if (typeof sub !== 'string' || !sub.includes('@')) {
