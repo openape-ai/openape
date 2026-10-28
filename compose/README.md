@@ -1,10 +1,10 @@
 # OpenApe deployment and local integration configuration
 
-`chatty.yml` describes deployed services. Troop, CRM and Chat remain explicitly
-listed with their existing image tags, mounts and routes, but their source now
-lives in [the legacy repository](https://repos.openape.ai/patrick/legacy).
-Removing source does not authorize stopping these services or deleting data.
-The normal `deploy:image` targets no longer build these three legacy applications.
+`chatty.yml` describes deployed services. Troop, CRM and Chat are no longer
+listed or deployed in production (verified 2026-10-28); their source lives in
+[the legacy repository](https://repos.openape.ai/patrick/legacy). Old Coolify
+PR-preview containers may remain; removing them or their data needs an owner
+decision. The normal `deploy:image` targets no longer build these applications.
 
 `local-stack.yml` and `Caddyfile` cover active local applications. Legacy
 Troop/CRM/Chat/Nest builds and their exclusive story/lifecycle harnesses have
