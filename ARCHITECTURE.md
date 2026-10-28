@@ -174,8 +174,9 @@ IdP token for SP-scoped tokens via RFC 8693 (`packages/cli-auth`).
 
 - **Work enters as an issue and a plan.** Every change starts from an issue on
   git.openape.ai and lands via PR on repos.openape.ai (`CONTRIBUTING.md`); anything larger than a
-  session is written up first as a plan in `.claude/plans/` (mirrored on
-  plans.openape.ai) and kept current while the work runs. `stories/` and the
+  session is written up first as a plan published on OpenApe Reports and kept
+  current while the work runs; local plan sources under `.claude/plans/` are
+  ignored, not repository content. `stories/` and the
   story agents in `.claude/agents/` are a frozen experiment from June 2026 —
   read `stories/README.md` before assuming they are live.
 - **User guides are generated from E2E tests.** A "story" in
