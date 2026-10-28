@@ -24,6 +24,7 @@ sibling repositories and linked worktrees have their own checkout state.
   branch or clean it to make a task easier.
 - Use an issue and a feature branch `<type>/issue-<number>-<description>` from
   canonical main. All changes, including configuration, go through a native PR.
+- [System map](MAP.md): role-based areas, what runs where and retired names.
 - [Workspace map](docs/architecture/workspace-map.md): package names, paths,
   purpose and actual scripts. [Dependency graph](docs/architecture/dependency-graph.md)
   identifies consumers. Prefer scoped `rg` searches in the selected checkout;
