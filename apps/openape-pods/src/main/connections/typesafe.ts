@@ -7,7 +7,15 @@ const attemptTimeoutMs = 30000
 const evaluationTimeoutMs = 60000
 
 export class TypesafeError extends Error {
-  constructor(readonly status: number) { super(status === 401 || status === 403 ? 'TypeSafe API key is invalid or access was denied; reconnect' : `TypeSafe request failed (HTTP ${status})`) }
+  constructor(readonly status: number, detail?: string) { super(status === 401 || status === 403 ? 'TypeSafe API key is invalid or access was denied; reconnect' : `TypeSafe request failed (HTTP ${status})${detail ? `: ${detail}` : ''}`) }
+}
+// Only a structured provider message is kept, bounded, so a rejected run names its cause (for example an input limit) without echoing raw bodies.
+async function errorDetail(response: Response): Promise<string | undefined> {
+  if (response.status === 401 || response.status === 403) { await response.body?.cancel(); return undefined }
+  const value = await typesafeJSON(response).catch(() => undefined) as { error?: unknown, message?: unknown } | null | undefined
+  const error = value?.error as { message?: unknown } | string | undefined
+  const message = typeof error === 'string' ? error : typeof error?.message === 'string' ? error.message : value?.message
+  return typeof message === 'string' && message.trim() ? message.replace(/\s+/g, ' ').trim().slice(0, 300) : undefined
 }
 export async function typesafeJSON(response: Response): Promise<unknown> {
   if (!response.body) throw new Error('TypeSafe returned an empty response')
@@ -59,8 +67,8 @@ export async function evaluateTypesafe(request: JevRequest, model: string, signa
       return { result, attempts: attempt }
     }
     const wait = retryDelay(response.headers.get('retry-after'), attempt)
+    if (![429, 529, 502, 503, 504].includes(response.status) || attempt === 3) throw new TypesafeError(response.status, await errorDetail(response))
     await response.body?.cancel()
-    if (![429, 529, 502, 503, 504].includes(response.status) || attempt === 3) throw new TypesafeError(response.status)
     await delay(wait, undefined, { signal: bounded })
   }
   throw new Error('TypeSafe evaluation exhausted its retry limit')
