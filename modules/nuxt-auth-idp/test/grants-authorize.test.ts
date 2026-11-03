@@ -777,7 +777,7 @@ describe('owner shapes', () => {
     expect(brokeredGrant.request.execution_context?.adapter_owner).toBeUndefined()
   })
 
-  it('issues no token for a grant whose owner shape changed, was removed or was taken over by the registry', async () => {
+  it('issues no token for a grant whose owner shape changed or was removed, and keeps it over a later IdP-wide shape', async () => {
     await shapeStore.saveOwnerShape!(owner, jevShape)
     const first = await call(direct, jevCall())
     await approveGrant(first.json.grant_id, owner, grantStore)
@@ -786,15 +786,19 @@ describe('owner shapes', () => {
     await shapeStore.saveOwnerShape!(owner, { ...jevShape, digest: 'SHA-256:owner-jev-v2' })
     const stale = await token()
     expect(stale.status).toBe(409)
-    expect(JSON.stringify(stale.json)).toContain('owner shape')
+    expect(JSON.stringify(stale.json)).toContain('shape this grant was approved for changed')
     await shapeStore.saveOwnerShape!(owner, jevShape)
     expect((await token()).status).toBe(200)
+    // A later IdP-wide shape for the same program never takes over: the personal shape wins (issue 1553).
     await shapeStore.saveShape({ ...jevShape, source: 'builtin', owner: undefined, digest: 'SHA-256:registry-jev' })
+    expect((await token()).status).toBe(200)
+    expect((await call(direct, jevCall())).status).toBe(200)
+    // Removing the personal shape moves the call to the IdP-wide shape, which does not reuse the personal approval.
+    await shapeStore.deleteOwnerShape!(owner, 'jev')
     expect((await token()).status).toBe(409)
-    // The registry shape now reads the call; the owner approval is not reused.
-    const takenOver = await call(direct, jevCall())
-    expect(takenOver.status).toBe(202)
-    expect((await grantStore.findById(takenOver.json.grant_id))!.request.execution_context?.adapter_owner).toBeUndefined()
+    const registry = await call(direct, jevCall())
+    expect(registry.status).toBe(202)
+    expect((await grantStore.findById(registry.json.grant_id))!.request.execution_context?.adapter_owner).toBeUndefined()
   })
 
   it('asks again after the owner removes the shape, and a client-built request never reuses an owner-shape grant', async () => {
@@ -813,9 +817,78 @@ describe('owner shapes', () => {
     expect((await grantStore.findById(removed.json.grant_id))!.request.authorization_details?.[0]?.operation_id).toBe('_generic.exec')
   })
 
-  it('refuses a client-written adapter owner on POST /api/grants', async () => {
+  it('refuses a client-written adapter owner or domain on POST /api/grants', async () => {
+    const domainForged = await call(direct, { requester: direct, target_host: 'macmini', audience: 'shapes', grant_type: 'once', command: ['jev', 'ask'], execution_context: { adapter_id: 'jev', adapter_version: 'x', adapter_digest: 'SHA-256:domain', adapter_domain: 'owner.test', resolved_executable: 'jev' } }, '/grants')
+    expect(domainForged.status).toBe(400)
+    expect(JSON.stringify(domainForged.json)).toContain('adapter_domain')
     const forged = await call(direct, { requester: direct, target_host: 'macmini', audience: 'shapes', grant_type: 'once', command: ['jev', 'ask'], execution_context: { adapter_id: 'jev', adapter_version: 'x', adapter_digest: 'SHA-256:owner-jev-v1', adapter_owner: owner, resolved_executable: 'jev' } }, '/grants')
     expect(forged.status).toBe(400)
     expect(JSON.stringify(forged.json)).toContain('adapter_owner')
+  })
+})
+
+// Shape tiers (issue 1553): personal shapes before the owner's domain shapes
+// before IdP-wide shapes; personal and domain approvals bind tier and digest.
+describe('shape tiers', () => {
+  const domainGit: ServerShape = { ...gitShape, source: 'custom', tested_digests: undefined, digest: 'SHA-256:domain-git-v1' }
+  const gitStatus = () => body()
+
+  it('reads an agent call with its owner\'s domain shape instead of the IdP-wide one and never reuses the IdP-wide approval', async () => {
+    const before = await call(direct, gitStatus())
+    await approveGrant(before.json.grant_id, owner, grantStore)
+    expect((await call(direct, gitStatus())).status).toBe(200)
+
+    await shapeStore.saveDomainShape!('owner.test', domainGit)
+    const domain = await call(direct, gitStatus())
+    expect(domain.status).toBe(202)
+    const stored = (await grantStore.findById(domain.json.grant_id))!.request.execution_context!
+    // The domain shape overrides the IdP-wide shape including its tested digests.
+    expect(stored).toMatchObject({ adapter_domain: 'owner.test', adapter_digest: 'SHA-256:domain-git-v1', version_tested: false })
+    expect(stored.adapter_owner).toBeUndefined()
+    await approveGrant(domain.json.grant_id, owner, grantStore)
+    expect((await call(direct, gitStatus())).status).toBe(200)
+
+    // Removing the domain shape returns to the IdP-wide shape and its earlier approval, never the domain one.
+    await shapeStore.deleteDomainShape!('owner.test', 'git')
+    const back = await call(direct, gitStatus())
+    expect(back.status).toBe(200)
+    expect(back.json.grant_id).toBe(before.json.grant_id)
+  })
+
+  it('stops covering a domain approval after republish, removal or a personal override', async () => {
+    await shapeStore.saveDomainShape!('owner.test', domainGit)
+    const first = await call(direct, gitStatus())
+    await approveGrant(first.json.grant_id, owner, grantStore)
+    const token = () => call(direct, {}, `/grants/${first.json.grant_id}/token`)
+    expect((await token()).status).toBe(200)
+
+    await shapeStore.saveDomainShape!('owner.test', { ...domainGit, digest: 'SHA-256:domain-git-v2' })
+    expect((await token()).status).toBe(409)
+    const republished = await call(direct, gitStatus())
+    expect(republished.status).toBe(202)
+    expect(republished.json.grant_id).not.toBe(first.json.grant_id)
+
+    await shapeStore.saveDomainShape!('owner.test', domainGit)
+    expect((await token()).status).toBe(200)
+    await shapeStore.saveOwnerShape!(owner, { ...domainGit, digest: 'SHA-256:personal-git' })
+    expect((await token()).status).toBe(409)
+    const personal = await call(direct, gitStatus())
+    expect(personal.status).toBe(202)
+    expect((await grantStore.findById(personal.json.grant_id))!.request.execution_context).toMatchObject({ adapter_owner: owner, adapter_digest: 'SHA-256:personal-git' })
+  })
+
+  it('never applies a domain shape to another domain, an ownerless agent or a brokered identity', async () => {
+    await shapeStore.saveDomainShape!('other.test', domainGit)
+    const foreign = await call(direct, gitStatus())
+    expect((await grantStore.findById(foreign.json.grant_id))!.request.execution_context?.adapter_domain).toBeUndefined()
+    await shapeStore.saveDomainShape!('owner.test', domainGit)
+    // yolo@owner.test is an agent without owner: it reads no personal or domain shapes.
+    const ownerless = await call(yolo, gitStatus())
+    expect((await grantStore.findById(ownerless.json.grant_id))!.request.execution_context?.adapter_domain).toBeUndefined()
+    const viaPods = await viaBroker(gitStatus())
+    expect(viaPods.status).toBe(202)
+    const brokeredGrant = (await grantStore.listGrants()).data.find(grant => grant.brokered)!
+    expect(brokeredGrant.request.execution_context?.adapter_domain).toBeUndefined()
+    expect(brokeredGrant.request.execution_context?.adapter_digest).toBe(gitShape.digest)
   })
 })

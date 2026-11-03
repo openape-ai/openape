@@ -12,7 +12,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { bindsExactCommand, registryCard, withGrantCards } from '../src/runtime/server/utils/grant-card'
 import { formatGrantDuration, grantBindingLine, grantScope, grantScopeNote, grantValidity, requesterHeadline } from '../src/runtime/utils/grant-card'
 import type { GrantWithCard } from '../src/runtime/utils/grant-card'
-import { buildCardFixtures, findUser, getShape, gitAdapter, graphGateArgv, idpResolvedRequest, POD_ID, podArgv, podRuntimeAdapter, pushArgv, shapedRequest, UNTESTED_GIT_SHA256 } from './helpers/grant-card-fixtures'
+import { buildCardFixtures, findUser, getShape, listShapes, gitAdapter, graphGateArgv, idpResolvedRequest, POD_ID, podArgv, podRuntimeAdapter, pushArgv, shapedRequest, UNTESTED_GIT_SHA256 } from './helpers/grant-card-fixtures'
 
 vi.mock('nitropack/runtime', () => ({ useRuntimeConfig: () => ({}), useEvent: () => undefined, useStorage: () => ({}) }))
 
@@ -94,13 +94,13 @@ describe('grant cards', () => {
   it('uses only the verified provider name for a federated requester', async () => {
     const { unknown } = await buildCardFixtures()
     const binding = { connection_id: 'connection', broker_issuer: 'https://pods.example.test', agent_issuer: 'https://pods.example.test', owner: 'owner@example.test', key_id: 'key' }
-    const [named, missing] = await withGrantCards([{ ...unknown, brokered: { ...binding, requester_name: 'Morning briefing' } }, { ...unknown, brokered: binding }], { getShape, findUser: async () => ({ name: 'Unrelated local registration', owner: 'other@example.test' } as User) })
+    const [named, missing] = await withGrantCards([{ ...unknown, brokered: { ...binding, requester_name: 'Morning briefing' } }, { ...unknown, brokered: binding }], { listShapes, findUser: async () => ({ name: 'Unrelated local registration', owner: 'other@example.test' } as User) })
     expect(named!.card.requester).toEqual({ name: 'Morning briefing', owner: 'owner@example.test' })
     expect(missing!.card.requester).toBeNull()
   })
   it('attach the requester registration from the IdP', async () => {
     const { podRun } = await buildCardFixtures()
-    const [unknown] = await withGrantCards([{ ...podRun, request: { ...podRun.request, requester: 'stranger@example.com' } } as OpenApeGrant], { getShape, findUser })
+    const [unknown] = await withGrantCards([{ ...podRun, request: { ...podRun.request, requester: 'stranger@example.com' } } as OpenApeGrant], { listShapes, findUser })
 
     expect(podRun.card!.requester).toEqual({ name: 'Mail digest Pod', owner: 'owner@example.com' })
     expect(podRun.card!.registry?.title.en).toBe('Mail digest')
@@ -214,7 +214,7 @@ describe('grant cards', () => {
     // Still re-derived from the argv: a forged command cannot borrow the meaning.
     expect(await registryCard({ ...request, command: [...request.command!.slice(0, -1), 'main'] }, getShape)).toBeNull()
 
-    const [unknownProgram] = await withGrantCards([{ id: 'g', status: 'pending', created_at: 0, request: await idpResolvedRequest({ name: 'acme', sha256: UNTESTED_GIT_SHA256 }, ['deploy']) }], { getShape, findUser })
+    const [unknownProgram] = await withGrantCards([{ id: 'g', status: 'pending', created_at: 0, request: await idpResolvedRequest({ name: 'acme', sha256: UNTESTED_GIT_SHA256 }, ['deploy']) }], { listShapes, findUser })
     expect(unknownProgram!.card.program).toEqual({ sha256: UNTESTED_GIT_SHA256, version_tested: null })
   })
 

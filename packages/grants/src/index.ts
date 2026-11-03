@@ -67,9 +67,14 @@ export {
 } from './shape-presentation.js'
 export {
   createInMemoryShapeStore,
-  ownerScopedShapeStore,
+  emailDomain,
+  sameShapeTier,
+  scopedShapeStore,
   type ServerShape,
   type ServerShapeOperation,
+  type ShapeScope,
+  type ShapeTierFacts,
+  shapeScopeOf,
   type ShapeStore,
 } from './shape-registry.js'
 export {

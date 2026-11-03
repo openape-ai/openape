@@ -137,11 +137,12 @@ describe('owner shape endpoints', () => {
     expect((await request('DELETE', '/shapes/jev', owner)).status).toBe(404)
   })
 
-  it('refuses agents, registry collisions, mismatched ids and adapters the matcher cannot use', async () => {
+  it('refuses agents, mismatched ids and adapters the matcher cannot use, but accepts an IdP-wide name', async () => {
     expect((await request('PUT', '/shapes/jev', agent, { toml: jevToml() })).status).toBe(403)
     expect((await request('GET', '/shapes?mine=1', agent)).status).toBe(403)
     const git = jevToml().replace('id = "jev"\nexecutable = "jev"', 'id = "git"\nexecutable = "git"')
-    expect((await request('PUT', '/shapes/git', owner, { toml: git })).status).toBe(409)
+    // A personal shape may override an IdP-wide shape for its owner (issue 1553).
+    expect((await request('PUT', '/shapes/git?dry_run=1', owner, { toml: git })).status).toBe(200)
     expect((await request('PUT', '/shapes/other', owner, { toml: jevToml() })).status).toBe(400)
     const badChain = await request('PUT', '/shapes/jev', owner, { toml: jevToml().replace('model:name=jev', 'model:jev') })
     expect(badChain.status).toBe(400)

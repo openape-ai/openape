@@ -89,9 +89,6 @@ export async function parseOwnerShape(cliId: string, toml: unknown, owner: strin
     }
     catch (error) { fail(`Operation ${operation.id}: ${error instanceof Error ? error.message : String(error)} (templates may use positionals and required options)`) }
   }
-  const registry = await useShapeStore().listShapes()
-  const taken = registry.find(shape => [shape.cli_id, shape.executable].some(name => name === id || name === executable))
-  if (taken) fail(`The shapes-registry already describes ${taken.cli_id}; use or extend the registry shape`, 409)
   const own = await requireStore().listOwnerShapes(owner)
   // One program, one shape: a second shape for the same executable (or a renamed id) would leave
   // the call resolved by whichever id sorts first. Remove the old shape first.
