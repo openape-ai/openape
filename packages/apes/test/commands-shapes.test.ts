@@ -73,7 +73,7 @@ describe('apes shapes', () => {
 
   it('previews with a dry run, then publishes with the owner token', async () => {
     fetchMock.mockResolvedValueOnce(json(publishBody(false))).mockResolvedValueOnce(json(publishBody(true)))
-    await run('publish', file)
+    await run('publish', file, '--yes')
     expect(calls()).toEqual(['PUT https://idp.test/api/shapes/mytool?dry_run=1', 'PUT https://idp.test/api/shapes/mytool'])
     const [, init] = fetchMock.mock.calls[1]!
     expect(init.headers.Authorization).toBe('Bearer owner-token')
@@ -83,6 +83,12 @@ describe('apes shapes', () => {
     expect(output).toContain('Visible only to you.')
     expect(output).toContain('1 continuing grant(s) stop being reused')
     expect(output).toContain('agent+bot@example.com')
+  })
+
+  it('stops without --yes when continuing grants would stop being reused', async () => {
+    fetchMock.mockResolvedValueOnce(json(publishBody(false)))
+    await expect(run('publish', file)).rejects.toMatchObject({ name: 'CliError', message: expect.stringContaining('--yes') })
+    expect(calls()).toEqual(['PUT https://idp.test/api/shapes/mytool?dry_run=1'])
   })
 
   it('does not publish with --dry-run', async () => {

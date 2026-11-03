@@ -53,6 +53,19 @@ describe('owner shape card', () => {
     expect((await withGrantCards([grant], sources))[0]!.card.owner_shape).toMatchObject({ current: false, published_at: null, operations: [] })
   })
 
+  it('never shows a later registry shape\'s meaning for a grant an owner shape resolved', async () => {
+    const store = createInMemoryShapeStore()
+    await store.saveOwnerShape!(owner, { ...jev, operations: jev.operations.map(op => ({ ...op, presentation: { title: { en: 'Ask Jev', de: 'Jev fragen' } } as never })) })
+    const grant = await grantFor(store)
+    const before = { getShape: (cliId: string, shapeOwner?: string) => ownerScopedShapeStore(store, shapeOwner).getShape(cliId), findUser: async () => null }
+    expect((await withGrantCards([grant], before))[0]!.card.registry).not.toBeNull()
+    await store.saveShape({ ...jev, source: 'builtin', digest: 'SHA-256:registry', operations: jev.operations.map(op => ({ ...op, presentation: { title: { en: 'Registry Jev', de: 'Registry Jev' } } as never })) })
+    const sources = { getShape: (cliId: string, shapeOwner?: string) => ownerScopedShapeStore(store, shapeOwner).getShape(cliId), findUser: async () => null }
+    const [card] = await withGrantCards([grant], sources)
+    expect(card!.card.registry).toBeNull()
+    expect(card!.card.owner_shape).toMatchObject({ current: false })
+  })
+
   it('has no owner shape for registry or client-resolved grants', async () => {
     const store = createInMemoryShapeStore()
     await store.saveOwnerShape!(owner, jev)

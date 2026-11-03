@@ -31,6 +31,8 @@ function hasExactStructuredDetail(request: Pick<OpenApeGrantRequest, 'authorizat
 
 function reusable(grant: OpenApeGrant, request: OpenApeGrantRequest, brokered: BrokeredGrant | undefined, now: number): boolean {
   if (grant.status !== 'approved') return false
+  // Owner-shape grants bind their shape version, which only POST /api/grants/authorize checks; a client-built request cannot reuse them (issue 1551).
+  if (grant.request.execution_context?.adapter_owner) return false
   if ((grant.request.grant_type ?? 'once') === 'once') return false
   if (grant.expires_at && grant.expires_at <= now) return false
   // A brokered identity reuses only grants of its own broker binding; a direct identity never reuses a brokered one.

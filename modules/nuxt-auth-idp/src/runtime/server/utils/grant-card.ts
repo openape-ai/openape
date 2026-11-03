@@ -57,8 +57,9 @@ export async function registryCard(request: OpenApeGrantRequest, getShape: Grant
   if (context.argv_hash && context.argv_hash !== await computeArgvHash(argv)) return null
   const shape = await getShape(detail.cli_id, byIdp ? context.adapter_owner : undefined)
   if (!shape) return null
-  // An owner shape speaks for this card only in the version the grant was resolved with.
-  if (shape.owner && shape.digest !== context.adapter_digest) return null
+  // An owner shape speaks for this card only in the version the grant was resolved with, and a
+  // registry shape never speaks for a grant an owner shape resolved (a later takeover).
+  if ((shape.owner && shape.digest !== context.adapter_digest) || (byIdp && (shape.owner ?? undefined) !== (context.adapter_owner ?? undefined))) return null
   if (!byIdp && (shape.digest !== context.adapter_digest || argv[0]!.split('/').pop() !== shape.executable)) return null
   const match = matchArgvToOperation(shape.operations, argv.slice(1))
   const presentation = match?.operation.presentation

@@ -165,4 +165,12 @@ describe('owner shape endpoints', () => {
     expect((await request('PUT', '/shapes/jev?dry_run=1', owner, { toml: bound })).status).toBe(200)
     expect(await shapeStore.listOwnerShapes!(owner)).toEqual([])
   })
+
+  it('refuses a second own shape for the same program', async () => {
+    expect((await request('PUT', '/shapes/jev', owner, { toml: jevToml() })).status).toBe(200)
+    const renamed = jevToml().replace('id = "jev"', 'id = "jev-new"')
+    const clash = await request('PUT', '/shapes/jev-new', owner, { toml: renamed })
+    expect(clash.status).toBe(409)
+    expect(JSON.stringify(clash.json)).toContain('remove it before')
+  })
 })
