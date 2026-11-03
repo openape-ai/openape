@@ -167,8 +167,17 @@ describe('apes shapes', () => {
       execFileSync('git', ['-C', registry, 'config', 'core.fsmonitor', `touch ${marker}; echo`])
       fetchMock.mockResolvedValueOnce(json(report()))
       await run('import', registry, '--scope', 'instance', '--dry-run')
-      const { existsSync } = await import('node:fs')
+      const { existsSync, utimesSync } = await import('node:fs')
       expect(existsSync(marker)).toBe(false)
+      // A clean filter the checkout defines is never run; the source then counts as uncommitted.
+      writeFileSync(join(registry, '.gitattributes'), '*.toml filter=evil\n')
+      execFileSync('git', ['-C', registry, 'config', 'filter.evil.clean', `touch ${marker}; cat`])
+      // Same content, newer time: git status would hash the file through the filter.
+      utimesSync(join(registry, 'adapters', 'mytool', 'adapter.toml'), new Date(), new Date(Date.now() + 5000))
+      fetchMock.mockResolvedValueOnce(json(report()))
+      await run('import', registry, '--scope', 'instance', '--dry-run')
+      expect(existsSync(marker)).toBe(false)
+      expect(JSON.parse(fetchMock.mock.calls[1]![1].body).source.dirty).toBe(true)
     })
 
     it('never takes the management token from anywhere but the environment', async () => {

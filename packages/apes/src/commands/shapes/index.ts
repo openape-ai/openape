@@ -245,7 +245,20 @@ export function claimedSource(dir: string): { repo?: string, commit?: string, di
       repo = remote.includes('@') && !remote.includes('://') ? remote : undefined
     }
   }
-  return { ...(repo ? { repo } : {}), commit, dirty: !!git(dir, ['status', '--porcelain']) }
+  return { ...(repo ? { repo } : {}), commit, dirty: isDirty(dir) }
+}
+
+/**
+ * Whether the checkout has uncommitted changes. `git status` runs the clean
+ * and process filters a checkout's own config defines, so with any such
+ * filter it is not run and the source counts as uncommitted; reading the
+ * config itself runs nothing.
+ */
+function isDirty(dir: string): boolean {
+  const local = git(dir, ['config', '--local', '--includes', '--name-only', '--list'])
+  if (local === undefined || local.split('\n').some(key => key.startsWith('filter.')))
+    return true
+  return git(dir, ['status', '--porcelain', '--ignore-submodules=all']) !== ''
 }
 
 function printReport(report: ImportReport): void {
