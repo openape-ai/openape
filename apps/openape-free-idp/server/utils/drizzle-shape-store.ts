@@ -101,8 +101,8 @@ export function createDrizzleShapeStore(): ShapeStore {
       })
     },
 
-    async listShapeChanges(scope, scopeKey, limit) {
-      const rows = await db.select().from(shapeChanges).where(and(eq(shapeChanges.scope, scope), eq(shapeChanges.scopeKey, scopeKey))).orderBy(desc(shapeChanges.id)).limit(limit)
+    async listShapeChanges(scope, scopeKey, limit, cliId) {
+      const rows = await db.select().from(shapeChanges).where(and(eq(shapeChanges.scope, scope), eq(shapeChanges.scopeKey, scopeKey), ...(cliId === undefined ? [] : [eq(shapeChanges.cliId, cliId)]))).orderBy(desc(shapeChanges.id)).limit(limit)
       return rows.map((row): ShapeChange => ({ scope: row.scope as ShapeTier, scope_key: row.scopeKey, action: row.action as ShapeChange['action'], cli_id: row.cliId, previous_digest: row.previousDigest, digest: row.digest, previous_toml: row.previousToml, toml: row.toml, source: (row.source as ShapeChange['source']) ?? null, actor: row.actor, created_at: row.createdAt }))
     },
   }

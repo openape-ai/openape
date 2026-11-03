@@ -838,7 +838,14 @@ describe('shape tiers', () => {
     await approveGrant(before.json.grant_id, owner, grantStore)
     expect((await call(direct, gitStatus())).status).toBe(200)
 
+    const registryToken = () => call(direct, {}, `/grants/${before.json.grant_id}/token`)
+    expect((await registryToken()).status).toBe(200)
+
     await shapeStore.saveDomainShape!('owner.test', domainGit)
+    // The overridden IdP-wide approval issues no token on any path either.
+    const overridden = await registryToken()
+    expect(overridden.status).toBe(409)
+    expect(JSON.stringify(overridden.json)).toContain('now overrides the IdP-wide shape')
     const domain = await call(direct, gitStatus())
     expect(domain.status).toBe(202)
     const stored = (await grantStore.findById(domain.json.grant_id))!.request.execution_context!
@@ -853,6 +860,7 @@ describe('shape tiers', () => {
     const back = await call(direct, gitStatus())
     expect(back.status).toBe(200)
     expect(back.json.grant_id).toBe(before.json.grant_id)
+    expect((await registryToken()).status).toBe(200)
   })
 
   it('stops covering a domain approval after republish, removal or a personal override', async () => {

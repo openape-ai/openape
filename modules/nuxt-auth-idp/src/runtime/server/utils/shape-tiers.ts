@@ -258,6 +258,19 @@ function parseBatchShape(scope: ShapeTier, item: ImportBody['shapes'][number], i
  * removed. An unchanged repeat writes nothing.
  */
 export async function importShapes(writer: ShapeWriter, body: unknown, dryRun: boolean): Promise<ShapeImportReport> {
+  return await serialized(() => importNow(writer, body, dryRun))
+}
+
+// Shape writes run one at a time in this process (the IdP runs as one process), so the state an import
+// checks and audits against is the state it writes over.
+let writes: Promise<unknown> = Promise.resolve()
+function serialized<T>(write: () => Promise<T>): Promise<T> {
+  const next = writes.then(write, write)
+  writes = next.catch(() => undefined)
+  return next
+}
+
+async function importNow(writer: ShapeWriter, body: unknown, dryRun: boolean): Promise<ShapeImportReport> {
   const store = tierStore()
   const input = readImportBody(body)
   const limit = SHAPE_LIMITS.perScope[writer.scope]
@@ -292,7 +305,7 @@ export async function importShapes(writer: ShapeWriter, body: unknown, dryRun: b
     if (list !== report.unchanged) save.push({ ...shape, ...(writer.scope === 'domain' ? { published_by: writer.actor } : {}), createdAt: previous?.createdAt ?? now, updatedAt: now })
   }
 
-  const previousToml = writer.scope === 'instance' ? await lastInstanceToml(store) : new Map<string, string>()
+  const previousToml = writer.scope === 'instance' ? await lastInstanceToml(store, [...save.map(shape => shape.cli_id), ...report.removed].filter(cliId => previousOf.has(cliId))) : new Map<string, string>()
   const change = (action: ShapeChange['action'], previous: ServerShape | undefined, next: ServerShape | undefined): ShapeChange => ({
     scope: writer.scope,
     scope_key: writer.key,
@@ -318,12 +331,9 @@ export async function importShapes(writer: ShapeWriter, body: unknown, dryRun: b
 }
 
 /** IdP-wide rows keep no TOML; the newest audit entry of a shape holds the last imported one. */
-async function lastInstanceToml(store: ShapeStore): Promise<Map<string, string>> {
-  const latest = new Map<string, string>()
-  for (const entry of await store.listShapeChanges?.('instance', '', 5000) ?? []) {
-    if (!latest.has(entry.cli_id) && entry.toml) latest.set(entry.cli_id, entry.toml)
-  }
-  return latest
+async function lastInstanceToml(store: ShapeStore, cliIds: string[]): Promise<Map<string, string>> {
+  const entries = await Promise.all(cliIds.map(async cliId => [cliId, (await store.listShapeChanges?.('instance', '', 1, cliId))?.[0]?.toml] as const))
+  return new Map(entries.filter((entry): entry is readonly [string, string] => typeof entry[1] === 'string'))
 }
 
 /** Fills in which continuing grants the write affects and which lower-tier shapes it newly hides. */
@@ -407,6 +417,10 @@ export async function publishTierShape(writer: ShapeWriter, cliId: string, body:
 
 /** Removes one shape of one tier, audited like an import. */
 export async function removeTierShape(writer: ShapeWriter, cliId: string) {
+  return await serialized(() => removeNow(writer, cliId))
+}
+
+async function removeNow(writer: ShapeWriter, cliId: string) {
   const store = tierStore()
   const previous = (await listTier(store, writer)).find(shape => shape.cli_id === cliId)
   if (!previous) fail(`There is no ${writer.scope} shape ${cliId}`, 404)
@@ -415,7 +429,7 @@ export async function removeTierShape(writer: ShapeWriter, cliId: string) {
   // IdP-wide grants bind no digest: every one of them stops covering once its shape is gone.
   const losing = boundGrants(grants, writer, previous).filter(grant => writer.scope === 'instance' || grant.digest_current)
   const now = Math.floor(Date.now() / 1000)
-  const previousToml = previous.toml ?? (writer.scope === 'instance' ? (await lastInstanceToml(store)).get(cliId) : undefined) ?? null
+  const previousToml = previous.toml ?? (writer.scope === 'instance' ? (await lastInstanceToml(store, [cliId])).get(cliId) : undefined) ?? null
   await store.applyShapeChanges({ scope: writer.scope, scope_key: writer.key, save: [], remove: [cliId], changes: [{ scope: writer.scope, scope_key: writer.key, action: 'remove', cli_id: cliId, previous_digest: previous.digest, digest: null, previous_toml: previousToml, toml: null, source: null, actor: writer.actor, created_at: now }] })
   console.info(`[shapes] ${writer.actor} removed ${writer.scope} shape ${cliId} ${previous.digest}`)
   return { removed: true, grants_losing_reuse: losing.map(({ digest_current: _current, ...grant }) => grant) }

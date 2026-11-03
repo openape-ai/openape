@@ -193,8 +193,8 @@ export interface ShapeStore {
   deleteDomainShape?: (domain: string, cliId: string) => Promise<boolean>
   /** Writes one batch of one tier and its audit entries in one transaction (issue 1553). */
   applyShapeChanges?: (batch: ShapeChangeBatch) => Promise<void>
-  /** The newest audit entries of one tier, newest first. */
-  listShapeChanges?: (scope: ShapeTier, scopeKey: string, limit: number) => Promise<ShapeChange[]>
+  /** The newest audit entries of one tier (of one shape with `cliId`), newest first. */
+  listShapeChanges?: (scope: ShapeTier, scopeKey: string, limit: number, cliId?: string) => Promise<ShapeChange[]>
 }
 
 /** Whose calls a shape view reads: the human owner (personal shapes) and their email domain (domain shapes). */
@@ -306,8 +306,8 @@ export function createInMemoryShapeStore(seed: ServerShape[] = []): ShapeStore {
       for (const shape of batch.save) shapes.set(shape.cli_id, batch.scope === 'instance' ? shape : { ...shape, source: 'custom', ...(batch.scope === 'domain' ? { domain: batch.scope_key } : { owner: batch.scope_key }) })
       audit.push(...batch.changes)
     },
-    async listShapeChanges(scope, scopeKey, limit) {
-      return audit.filter(change => change.scope === scope && change.scope_key === scopeKey).reverse().slice(0, limit)
+    async listShapeChanges(scope, scopeKey, limit, cliId) {
+      return audit.filter(change => change.scope === scope && change.scope_key === scopeKey && (cliId === undefined || change.cli_id === cliId)).reverse().slice(0, limit)
     },
     async listDomainShapes(domain) {
       return [...(domains.get(domain)?.values() ?? [])].sort((a, b) => a.cli_id.localeCompare(b.cli_id))

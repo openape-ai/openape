@@ -62,6 +62,8 @@ it('stores domain shapes per domain and writes an import with its audit all or n
     expect((await store.listDomainShapes!('b.test'))[0]?.digest).toBe('SHA-256:b')
     expect(await store.listShapeChanges!('domain', 'a.test', 10)).toEqual([change])
     expect(await store.listShapeChanges!('domain', 'b.test', 10)).toEqual([])
+    expect(await store.listShapeChanges!('domain', 'a.test', 10, 'jev')).toEqual([change])
+    expect(await store.listShapeChanges!('domain', 'a.test', 10, 'tool')).toEqual([])
 
     // A failing audit entry rolls back the whole batch, including its removals.
     await expect(store.applyShapeChanges!({ scope: 'domain', scope_key: 'a.test', save: [{ ...jev, cli_id: 'tool', executable: 'tool' }], remove: ['jev'], changes: [{ ...change, actor: null as never }] })).rejects.toThrow()

@@ -225,6 +225,25 @@ describe('shape import writes', () => {
     expect((await shapeStore.listShapes()).map(shape => shape.cli_id)).toEqual(['git'])
   })
 
+  it('checks and audits concurrent writes against the state each one writes over', async () => {
+    // A slow read lets both requests read before either writes, as on a remote database.
+    const read = shapeStore.listDomainShapes!.bind(shapeStore)
+    shapeStore.listDomainShapes = async (domain) => {
+      const shapes = await read(domain)
+      await new Promise(resolve => setTimeout(resolve, 20))
+      return shapes
+    }
+    const [first, second] = await Promise.all([
+      request('POST', '/shapes/import?scope=domain', admin, batch(adapter('jev'))),
+      request('POST', '/shapes/import?scope=domain', operator, batch(adapter('jev2', { executable: 'jev' }))),
+    ])
+    expect([first.status, second.status].sort()).toEqual([200, 409])
+    expect(await shapeStore.listDomainShapes!('example.test')).toHaveLength(1)
+    await Promise.all(['one', 'two', 'three'].map(operation => request('PUT', '/shapes/tool?scope=domain', admin, { toml: adapter('tool', { operation }) })))
+    const updates = (await shapeStore.listShapeChanges!('domain', 'example.test', 10, 'tool')).reverse()
+    expect(updates.map(change => change.previous_digest)).toEqual([null, updates[0]!.digest, updates[1]!.digest])
+  })
+
   it('lists a domain\'s shapes to its members and its history only to its admins', async () => {
     await request('POST', '/shapes/import?scope=domain', admin, batch(adapter('jev')))
     const digest = (await shapeStore.listDomainShapes!('example.test'))[0]!.digest
