@@ -19,6 +19,7 @@ import { publishDocument } from '../server/utils/document-store'
 import { validateDocument } from '../server/utils/document-shape'
 import { drizzle } from 'drizzle-orm/libsql'
 import { runs } from '../server/database/schema'
+import { writePlan } from '../server/utils/plans-store'
 
 class MemoryStore implements ObjectStore {
   objects = new Map<string, ObjectValue>()
@@ -93,6 +94,19 @@ beforeEach(async () => {
 afterEach(() => { for (const c of clients) c.close(); rmSync(directory, { recursive: true, force: true }) })
 
 describe('independent Reports recovery authority', () => {
+  it('rejects oversized rendered plans without fencing reads or subsequent writes', async () => {
+    const secret = 'synthetic-size-regression-secret-at-least-32-characters'
+    const team = await mutateTeam(client, owner, 'POST', [], { name: 'Size boundary' }, false, secret, base)
+    const count = store.objects.size
+    const body = { title: 'Expanded plan', body_md: `\`\`\`\n${'&'.repeat(12 * 1024 * 1024)}\n\`\`\``, status: 'draft' }
+    await expect(writePlan(client, owner, body, { team: String(team.id) })).rejects.toMatchObject({ statusCode: 413 })
+    expect(recoveryFailure(client)).toBeUndefined()
+    expect(store.objects.size).toBe(count)
+    expect((await client.execute('SELECT COUNT(*) AS count FROM html_documents')).rows[0]?.count).toBe(0)
+    await publish()
+    expect((await client.execute('SELECT COUNT(*) AS count FROM html_documents')).rows[0]?.count).toBe(1)
+  })
+
   it('advances a verified checkpoint without deleting history and recovers subsequent writes', async () => {
     await publish()
     const count = store.objects.size

@@ -6,15 +6,21 @@ const MAGIC = Buffer.from('OAR1')
 const NONCE_BYTES = 12
 const TAG_BYTES = 16
 const MAX_OBJECT_BYTES = 64 * 1024 * 1024
+export class RecoveryRecordSizeError extends Error {
+  statusCode = 413
+  statusMessage = 'Report transaction exceeds the recoverable size limit'
+  constructor() { super('Recovery record exceeds the 64 MiB boundary') }
+}
 export const digest = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex')
 export function seal(value: unknown, key: Uint8Array): Uint8Array {
   if (key.byteLength !== 32) throw new Error('Recovery encryption requires a 32-byte key')
+  const plaintext = JSON.stringify(value)
+  if (Buffer.byteLength(plaintext) + MAGIC.length + NONCE_BYTES + TAG_BYTES > MAX_OBJECT_BYTES) throw new RecoveryRecordSizeError()
   const nonce = randomBytes(NONCE_BYTES)
   const cipher = createCipheriv('aes-256-gcm', key, nonce)
   cipher.setAAD(MAGIC)
-  const ciphertext = Buffer.concat([cipher.update(JSON.stringify(value)), cipher.final()])
+  const ciphertext = Buffer.concat([cipher.update(plaintext), cipher.final()])
   const result = Buffer.concat([MAGIC, nonce, ciphertext, cipher.getAuthTag()])
-  if (result.byteLength > MAX_OBJECT_BYTES) throw new Error('Recovery record exceeds the 64 MiB boundary')
   return result
 }
 export function unseal(bytes: Uint8Array, key: Uint8Array): unknown {

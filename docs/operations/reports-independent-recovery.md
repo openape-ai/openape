@@ -27,7 +27,8 @@ objects before activation. The management process separately needs Restic read a
 Records contain deterministic parameterized SQL, including immutable content, encrypted
 with AES-256-GCM and linked by ciphertext digests. A write creates its immutable record,
 conditionally advances the encrypted head, then commits locally. A failed or ambiguous
-external/local commit fences serving with HTTP 503. API errors use the existing problem
+external/local commit fences serving with HTTP 503. A record exceeding the size limit
+is rejected with HTTP 413 before storage access; it rolls back without fencing other requests. API errors use the existing problem
 format with `operation`, `phase`, and a safe `cause` code. Reconcile before retrying and
 reuse the original idempotency key; a lost response can follow a durable remote commit.
 
