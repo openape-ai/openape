@@ -174,6 +174,6 @@ describe('owner shape endpoints', () => {
     const renamed = jevToml().replace('id = "jev"', 'id = "jev-new"')
     const clash = await request('PUT', '/shapes/jev-new', owner, { toml: renamed })
     expect(clash.status).toBe(409)
-    expect(JSON.stringify(clash.json)).toContain('remove it before')
+    expect(JSON.stringify(clash.json)).toContain('already describes jev')
   })
 })

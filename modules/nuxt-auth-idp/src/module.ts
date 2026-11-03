@@ -422,11 +422,14 @@ export default defineNuxtModule<ModuleOptions>({
       // `grants` because shapes drive the grant-creation pipeline (argv
       // resolution, risk scoring, display strings).
       addServerHandler({ route: '/api/shapes', method: 'get', handler: resolve('./runtime/server/api/shapes/index.get') })
+      // Shape tiers (issue 1553): before /api/shapes/:cliId so `changes` is never read as a shape id.
+      addServerHandler({ route: '/api/shapes/changes', method: 'get', handler: resolve('./runtime/server/api/shapes/changes.get') })
       addServerHandler({ route: '/api/shapes/:cliId', method: 'get', handler: resolve('./runtime/server/api/shapes/[cliId].get') })
       // Owner-published shapes (issue 1551): the signed-in human owner only.
       addServerHandler({ route: '/api/shapes/:cliId', method: 'put', handler: resolve('./runtime/server/api/shapes/[cliId].put') })
       addServerHandler({ route: '/api/shapes/:cliId', method: 'delete', handler: resolve('./runtime/server/api/shapes/[cliId].delete') })
       addServerHandler({ route: '/api/shapes/resolve', method: 'post', handler: resolve('./runtime/server/api/shapes/resolve.post') })
+      addServerHandler({ route: '/api/shapes/import', method: 'post', handler: resolve('./runtime/server/api/shapes/import.post') })
 
       // Standing grants — user-created pre-authorizations that auto-approve
       // matching agent grant requests. Phase 1 Milestone 5.

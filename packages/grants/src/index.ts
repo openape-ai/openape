@@ -67,15 +67,19 @@ export {
 } from './shape-presentation.js'
 export {
   createInMemoryShapeStore,
+  DESKTOP_OWN_SHAPE_IDS,
   emailDomain,
   sameShapeTier,
   scopedShapeStore,
   type ServerShape,
   type ServerShapeOperation,
+  type ShapeChange,
+  type ShapeChangeBatch,
   type ShapeScope,
   type ShapeTierFacts,
   shapeScopeOf,
   type ShapeStore,
+  type ShapeTier,
 } from './shape-registry.js'
 export {
   InvalidProgramAuthorizeRequestError,
