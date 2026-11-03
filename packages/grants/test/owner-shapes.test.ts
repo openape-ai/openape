@@ -114,6 +114,24 @@ describe('scopedShapeStore', () => {
   })
 })
 
+describe('createInMemoryShapeStore tiers', () => {
+  it('writes each tier\'s batch into that tier only and keeps the audit per tier, newest first', async () => {
+    const store = createInMemoryShapeStore([registryGit])
+    const change = { scope: 'domain' as const, scope_key: 'example.com', action: 'add' as const, cli_id: 'jev', previous_digest: null, digest: jev.digest, previous_toml: null, toml: 'toml', source: null, actor: 'admin@example.com', created_at: 1 }
+    await store.applyShapeChanges!({ scope: 'domain', scope_key: 'example.com', save: [jev], remove: [], changes: [change] })
+    await store.applyShapeChanges!({ scope: 'personal', scope_key: owner, save: [jev], remove: [], changes: [{ ...change, scope: 'personal', scope_key: owner }] })
+    await store.applyShapeChanges!({ scope: 'instance', scope_key: '', save: [{ ...jev, source: 'builtin' }], remove: ['git'], changes: [{ ...change, scope: 'instance', scope_key: '' }, { ...change, scope: 'instance', scope_key: '', action: 'remove', cli_id: 'git' }] })
+    expect(await store.listDomainShapes!('example.com')).toEqual([{ ...jev, domain: 'example.com' }])
+    expect(await store.listOwnerShapes!(owner)).toEqual([{ ...jev, owner }])
+    expect((await store.listShapes()).map(shape => `${shape.source}:${shape.cli_id}`)).toEqual(['builtin:jev'])
+    expect((await store.listShapeChanges!('instance', '', 10)).map(entry => entry.action)).toEqual(['remove', 'add'])
+    expect(await store.listShapeChanges!('domain', 'other.test', 10)).toEqual([])
+    expect(await store.deleteDomainShape!('example.com', 'jev')).toBe(true)
+    expect(await store.deleteDomainShape!('example.com', 'jev')).toBe(false)
+    expect(await store.deleteDomainShape!('nowhere.test', 'jev')).toBe(false)
+  })
+})
+
 describe('sameShapeTier', () => {
   const personal = { adapter_owner: owner, adapter_digest: 'SHA-256:v1' }
   const domain = { adapter_domain: 'example.com', adapter_digest: 'SHA-256:v1' }
