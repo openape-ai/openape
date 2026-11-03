@@ -99,3 +99,8 @@ export async function initializeHtmlPolicyJournal(client: Client, path: string) 
   journals.set(client, path)
   await writeHtmlPolicyJournal(client)
 }
+
+export async function persistAuthoritativePolicyJournal(client: Client, path: string) {
+  journals.set(client, path)
+  await writeHtmlPolicyJournal(client)
+}

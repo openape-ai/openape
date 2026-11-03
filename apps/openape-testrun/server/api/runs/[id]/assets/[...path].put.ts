@@ -45,16 +45,18 @@ export default defineEventHandler(async (event) => {
 
   const db = useDb()
   const now = Math.floor(Date.now() / 1000)
-  await db.delete(assets).where(and(eq(assets.runId, run.id), eq(assets.path, decoded), eq(assets.version, run.version)))
-  await db.insert(assets).values({
-    id: ulid(),
-    runId: run.id,
-    path: decoded,
-    contentType,
-    size: body.length,
-    bytes: body,
-    createdAt: now,
-    version: run.version,
+  await db.transaction(async (tx) => {
+    await tx.delete(assets).where(and(eq(assets.runId, run.id), eq(assets.path, decoded), eq(assets.version, run.version)))
+    await tx.insert(assets).values({
+      id: ulid(),
+      runId: run.id,
+      path: decoded,
+      contentType,
+      size: body.length,
+      bytes: body,
+      createdAt: now,
+      version: run.version,
+    })
   })
 
   setResponseStatus(event, 201)

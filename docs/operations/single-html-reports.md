@@ -98,6 +98,10 @@ They may contain historical content until rotated; online purge is not a claim o
 instant backup erasure. Take consistent SQLite snapshots for migration. A restored
 backup cannot be exposed until the current policy journal and immutable content reconcile.
 
+For host-independent recovery of confirmed content and permission changes, use the
+[external recovery authority](reports-independent-recovery.md). A historical database
+and matching historical journal alone do not establish current access policy.
+
 ## Single-writer cutover
 
 Run only from clean, merged canonical main after exact-head native review/CI and
