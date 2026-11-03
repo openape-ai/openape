@@ -112,6 +112,7 @@ export const shapesCommand = defineCommand({
       args: {
         path: { type: 'positional', description: 'Path to adapter.toml', required: true },
         'dry-run': { type: 'boolean', description: 'Only preview; do not publish', default: false },
+        'yes': { type: 'boolean', description: 'Publish even when continuing grants stop being reused', default: false },
         json: jsonArg,
       },
       async run({ args }) {
@@ -134,6 +135,9 @@ export const shapesCommand = defineCommand({
             consola.info('Dry run: nothing published.')
           return
         }
+        // Same safeguard as the IdP page, which publishes only after a separate click on the preview.
+        if (preview.grants_losing_reuse.length && !args.yes)
+          throw new CliError(`Not published: ${preview.grants_losing_reuse.length} continuing grant(s) would stop being reused. Re-run with --yes to publish anyway.`)
         const result = await ownerFetch<PublishResult>(url, { method: 'PUT', body: { toml } })
         if (args.json)
           printJson(result)

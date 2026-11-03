@@ -221,7 +221,7 @@ the shared registry. Agent, Pod and brokered logins are refused.
 
 | Command | Description |
 |---|---|
-| `apes shapes publish <path> [--dry-run] [--json]` | Parse the adapter locally, preview it at the IdP (id, executable, digest, operations and the continuing grants that stop being reused when the digest changes), then publish it. `--dry-run` only previews. |
+| `apes shapes publish <path> [--dry-run] [--yes] [--json]` | Parse the adapter locally, preview it at the IdP (id, executable, digest, operations and the continuing grants that stop being reused when the digest changes), then publish it. `--dry-run` only previews; when continuing grants would stop being reused, publishing needs `--yes`. |
 | `apes shapes list --mine [--json]` | List your shapes: id, operation count, short digest, publish date, bound continuing grants |
 | `apes shapes remove <id> [--json]` | Remove a shape and report how many continuing grants stop being reused |
 

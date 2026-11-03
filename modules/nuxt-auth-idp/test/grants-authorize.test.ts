@@ -797,6 +797,22 @@ describe('owner shapes', () => {
     expect((await grantStore.findById(takenOver.json.grant_id))!.request.execution_context?.adapter_owner).toBeUndefined()
   })
 
+  it('asks again after the owner removes the shape, and a client-built request never reuses an owner-shape grant', async () => {
+    await shapeStore.saveOwnerShape!(owner, jevShape)
+    const first = await call(direct, jevCall())
+    await approveGrant(first.json.grant_id, owner, grantStore)
+    const stored = (await grantStore.findById(first.json.grant_id))!.request
+    // POST /api/grants with the same details and digest the agent knows from its own grant.
+    const legacy = await call(direct, { requester: direct, target_host: 'macmini', audience: 'shapes', grant_type: 'always', authorization_details: stored.authorization_details, execution_context: { adapter_id: 'jev', adapter_version: 'server', adapter_digest: stored.execution_context!.adapter_digest, resolved_executable: 'jev' } }, '/grants')
+    expect(legacy.status).toBe(201)
+    expect(legacy.json).toMatchObject({ status: 'pending' })
+    expect(legacy.json.id).not.toBe(first.json.grant_id)
+    await shapeStore.deleteOwnerShape!(owner, 'jev')
+    const removed = await call(direct, jevCall())
+    expect(removed.status).toBe(202)
+    expect((await grantStore.findById(removed.json.grant_id))!.request.authorization_details?.[0]?.operation_id).toBe('_generic.exec')
+  })
+
   it('refuses a client-written adapter owner on POST /api/grants', async () => {
     const forged = await call(direct, { requester: direct, target_host: 'macmini', audience: 'shapes', grant_type: 'once', command: ['jev', 'ask'], execution_context: { adapter_id: 'jev', adapter_version: 'x', adapter_digest: 'SHA-256:owner-jev-v1', adapter_owner: owner, resolved_executable: 'jev' } }, '/grants')
     expect(forged.status).toBe(400)

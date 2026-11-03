@@ -160,7 +160,10 @@ export interface ShapeStore {
 export function ownerScopedShapeStore(store: ShapeStore, owner: string | undefined): ShapeStore {
   if (!owner || !store.listOwnerShapes) return store
   const listOwnerShapes = store.listOwnerShapes
-  const combined = async (): Promise<{ registry: ServerShape[], own: ServerShape[] }> => {
+  // One read per view: a view lives for one decision, so it never serves a stale list across requests.
+  let cached: Promise<{ registry: ServerShape[], own: ServerShape[] }> | undefined
+  const combined = () => cached ??= load()
+  const load = async (): Promise<{ registry: ServerShape[], own: ServerShape[] }> => {
     const registry = await store.listShapes()
     const taken = new Set(registry.flatMap(shape => [shape.cli_id, shape.executable]))
     const own = (await listOwnerShapes(owner))

@@ -1,6 +1,9 @@
 // Owner-published shapes (issue 1551): an owner's own shapes resolve that
 // owner's program calls after every registry shape and never for anyone else.
+import type { OpenApeGrant } from '@openape/core'
 import { describe, expect, it } from 'vitest'
+import { approveGrantWithExtension } from '../src/grants.js'
+import { InMemoryGrantStore } from '../src/stores.js'
 import { resolveProgramCall } from '../src/program-authorization.js'
 import { GENERIC_OPERATION_ID } from '../src/server-resolver.js'
 import type { ServerShape } from '../src/shape-registry.js'
@@ -77,5 +80,18 @@ describe('assertResourceChainTemplates', () => {
     expect(() => assertResourceChainTemplates(['model', 'model:*', 'model:name=jev', 'repo:owner={repo|owner},name={repo|name}'])).not.toThrow()
     expect(() => assertResourceChainTemplates(['model:jev'])).toThrow('use key=value')
     expect(() => assertResourceChainTemplates(['{x}:a=b'])).toThrow('Invalid resource chain entry')
+  })
+})
+
+describe('approveGrantWithExtension', () => {
+  it('refuses to merge an owner-shape grant with a grant of another shape', async () => {
+    const store = new InMemoryGrantStore()
+    const base = { requester: 'agent@example.com', target_host: 'macmini', audience: 'shapes', grant_type: 'always' as const, authorization_details: [{ type: 'openape_cli' as const, cli_id: 'jev', operation_id: 'ask', resource_chain: [], action: 'read', permission: 'jev[]#read', display: 'Ask', risk: 'low' as const }] }
+    const context = { adapter_id: 'jev', adapter_version: 'server', resolved_executable: 'jev' }
+    const old: OpenApeGrant = { id: 'old', status: 'approved', type: 'command', created_at: 1, request: { ...base, execution_context: { ...context, adapter_digest: 'SHA-256:registry' } } }
+    const pending: OpenApeGrant = { id: 'new', status: 'pending', type: 'command', created_at: 2, request: { ...base, execution_context: { ...context, adapter_digest: 'SHA-256:owner', adapter_owner: 'owner@example.com' } } }
+    await store.save(old); await store.save(pending)
+    await expect(approveGrantWithExtension('new', 'owner@example.com', store, { extend_mode: 'merge', extend_grant_ids: ['old'] })).rejects.toThrow('same shape version')
+    expect((await store.findById('old'))!.status).toBe('approved')
   })
 })
