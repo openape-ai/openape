@@ -1,7 +1,7 @@
 import { defineConfig } from 'tsup'
 
 export default defineConfig({
-  entry: { 'plans-migration': 'scripts/plans-migration.ts' },
+  entry: { 'plans-migration': 'scripts/plans-migration.ts', 'reports-recovery': 'scripts/reports-recovery.ts' },
   outDir: '.output/server',
   format: ['esm'],
   target: 'node20',

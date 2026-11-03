@@ -1,3 +1,12 @@
+# Reports independent recovery — issue 1554
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1554. Implements the Reports gate of the approved Chatty M2 recovery work; later service retirement and migration remain separate.
+- Worktree `openape-reports-recovery-1554`, branch `feature/issue-1554-reports-recovery`, canonical base `9306719324217962cc9866a23e3f35233b54b310`.
+- Encrypted conditional external commits precede local acknowledgement. Prepared databases require reconciliation; ambiguous commits fence serving. Offline commands retrieve verified Restic checkpoints, restore into a new directory, and advance checkpoints without pruning.
+- Focused recovery/storage, HTML, Plans, schema-one document and briefing tests: 82 passed. App typecheck/build and four built-service startup refusal cases passed. Real provider IAM tests reject deletion, unconditional/record replacement and access outside the dedicated prefixes. Authenticated built-service acceptance passed with real Exoscale/Restic retrieval, permission revocation, legacy deletion, injected network failure, source shutdown, restore and checkpoint advancement. Its initial failure-path test identified and corrected missing problem-response details.
+- PR: https://repos.openape.ai/patrick/monorepo/pulls/530. Initial source `26e208d671af13ca929145bbdf423ce1957acb08` passed the mandatory affected gate. Read-only completeness review found oversized rendered Plans incorrectly fencing all serving before storage access; a request-local 413 and a real large-Plan regression now prevent that. Compose also preserves the existing MPTCP mitigation across Reports recreation.
+- Next: final source review and mandatory checks, then protected production activation and source-independent restore. Full replacement-host/core RTO acceptance remains open. No production Reports database or service changes have been applied.
+
 # Three shape tiers — issue 1553
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1553. Owner approved plan revision 2 on 2026-11-03 (“das passt - freigabe erteilt - mach das so in einer frischen session”), M1–M5 including IdP deployment, live instance import and domain-shape acceptance: https://report.openape.ai/d/01M6HEWRG6PTBAAFP83AAQ1G6Y. Branch `feature/issue-1553-shape-tiers`, worktree `~/.t3/worktrees/openape-monorepo/feature-shape-tiers`, base `e5b327aa`.

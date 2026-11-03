@@ -42,63 +42,65 @@ export default defineEventHandler(async (event) => {
     finishedAt: manifest.finishedAt ? Math.floor(Date.parse(manifest.finishedAt) / 1000) || null : null,
   }
 
-  const head = manifest.series
-    ? await db.select().from(runs).where(and(eq(runs.createdBy, caller.email), eq(runs.series, manifest.series), eq(runs.reportType, 'test'), eq(runs.visibility, 'shared'), isNull(runs.deletedAt))).orderBy(desc(runs.version)).limit(1).get()
-    : undefined
+  return db.transaction(async (tx) => {
+    const head = manifest.series
+      ? await tx.select().from(runs).where(and(eq(runs.createdBy, caller.email), eq(runs.series, manifest.series), eq(runs.reportType, 'test'), eq(runs.visibility, 'shared'), isNull(runs.deletedAt))).orderBy(desc(runs.version)).limit(1).get()
+      : undefined
 
-  if (head) {
-    await db.insert(runVersions).values({
-      id: ulid(),
-      runId: head.id,
-      version: head.version,
-      title: head.title,
-      project: head.project,
-      summary: head.summary,
-      status: head.status,
-      passedCount: head.passedCount,
-      failedCount: head.failedCount,
-      skippedCount: head.skippedCount,
-      manifest: head.manifest,
-      startedAt: head.startedAt,
-      finishedAt: head.finishedAt,
-      createdAt: head.createdAt,
+    if (head) {
+      await tx.insert(runVersions).values({
+        id: ulid(),
+        runId: head.id,
+        version: head.version,
+        title: head.title,
+        project: head.project,
+        summary: head.summary,
+        status: head.status,
+        passedCount: head.passedCount,
+        failedCount: head.failedCount,
+        skippedCount: head.skippedCount,
+        manifest: head.manifest,
+        startedAt: head.startedAt,
+        finishedAt: head.finishedAt,
+        createdAt: head.createdAt,
+      })
+      const version = head.version + 1
+      await tx.update(runs)
+        .set({ ...fields, version, createdByAct: caller.act, createdAt: now })
+        .where(eq(runs.id, head.id))
+
+      setResponseStatus(event, 201)
+      return {
+        id: head.id,
+        slug: head.slug,
+        url: publicRunUrl(event, head.slug),
+        status,
+        version,
+        expected_assets: referencedShots(manifest),
+      }
+    }
+
+    const id = ulid()
+    const slug = randomBytes(18).toString('base64url')
+    await tx.insert(runs).values({
+      id,
+      slug,
+      ...fields,
+      series: manifest.series ?? null,
+      version: 1,
+      createdBy: caller.email,
+      createdByAct: caller.act,
+      createdAt: now,
     })
-    const version = head.version + 1
-    await db.update(runs)
-      .set({ ...fields, version, createdByAct: caller.act, createdAt: now })
-      .where(eq(runs.id, head.id))
 
     setResponseStatus(event, 201)
     return {
-      id: head.id,
-      slug: head.slug,
-      url: publicRunUrl(event, head.slug),
+      id,
+      slug,
+      url: publicRunUrl(event, slug),
       status,
-      version,
+      version: 1,
       expected_assets: referencedShots(manifest),
     }
-  }
-
-  const id = ulid()
-  const slug = randomBytes(18).toString('base64url')
-  await db.insert(runs).values({
-    id,
-    slug,
-    ...fields,
-    series: manifest.series ?? null,
-    version: 1,
-    createdBy: caller.email,
-    createdByAct: caller.act,
-    createdAt: now,
   })
-
-  setResponseStatus(event, 201)
-  return {
-    id,
-    slug,
-    url: publicRunUrl(event, slug),
-    status,
-    version: 1,
-    expected_assets: referencedShots(manifest),
-  }
 })

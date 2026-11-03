@@ -6,26 +6,31 @@ import { getFreePort, makeTempDir, startServer } from 'openape-e2e/lifecycle'
 import { migrateReports } from '../server/database/migrate'
 import { publishHtml } from '../server/utils/html-store'
 import { inspectHtml } from '../shared/html-publication'
+import { prepareLocalState } from '../server/recovery/state'
+import { initializeHtmlPolicyJournal } from '../server/utils/html-policy-journal'
 
 const root = resolve(import.meta.dirname, '..')
 describe('built server backup recovery readiness', () => {
-  for (const state of ['missing', 'invalid']) {
+  for (const state of ['missing', 'invalid', 'unconfigured-authority', 'unavailable-authority']) {
     it(`denies all document delivery and health with a ${state} current policy journal`, async () => {
       const directory = makeTempDir('reports-recovery-readiness-'); const database = join(directory, 'reports.db')
       const client = createClient({ url: `file:${database}` })
       let id: string
       try {
         await migrateReports(client)
+        if (state.endsWith('-authority')) await initializeHtmlPolicyJournal(client, `${database}.policies.json`)
         const html = '<!doctype html><html><title>Recovered public report</title><body>Must remain inaccessible before current policy reconciliation</body></html>'
         const publication = inspectHtml(html)
         const receipt = await publishHtml(client, { publication, audience: { mode: 'public' } }, html, { subject: 'owner@example.test', actor: 'owner@example.test' }, 'recovery', 'https://example.test')
         id = String(receipt.document_id)
+        if (state.endsWith('-authority')) await prepareLocalState(client)
       }
       finally { client.close() }
       if (state === 'invalid') writeFileSync(`${database}.policies.json`, '{"schema":99}', { mode: 0o600 })
       const port = await getFreePort(); const base = `http://127.0.0.1:${port}`
-      const starting = startServer({ cwd: root, port, command: () => [process.execPath, '.output/server/index.mjs'], readyPath: '/api/health', timeoutMs: 4000, env: { HOST: '127.0.0.1', PORT: String(port), NITRO_PORT: String(port), NUXT_TURSO_URL: `file:${database}`, NUXT_OPENAPE_SP_SESSION_SECRET: 'synthetic-readiness-secret-at-least-32-characters' } })
-      const stopped = expect(starting).rejects.toThrow(state === 'missing' ? 'Missing Reports policy journal' : 'Invalid Reports policy journal')
+      const starting = startServer({ cwd: root, port, command: () => [process.execPath, '.output/server/index.mjs'], readyPath: '/api/health', timeoutMs: 4000, env: { HOST: '127.0.0.1', PORT: String(port), NITRO_PORT: String(port), NUXT_TURSO_URL: `file:${database}`, NUXT_REPORTS_RECOVERY_CONFIG_PATH: state === 'unavailable-authority' ? join(directory, 'absent-config.json') : '', NUXT_OPENAPE_SP_SESSION_SECRET: 'synthetic-readiness-secret-at-least-32-characters' } })
+      const failure = { missing: 'Missing Reports policy journal', invalid: 'Invalid Reports policy journal', 'unconfigured-authority': 'requires independent recovery configuration', 'unavailable-authority': 'absent-config.json' }[state]
+      const stopped = expect(starting).rejects.toThrow(failure)
       await expect.poll(async () => {
         try { return (await fetch(`${base}/api/health`)).status }
         catch { return 0 }

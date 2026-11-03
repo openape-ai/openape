@@ -30,7 +30,8 @@
     "sanitize-html": "^2.18.0",
     "postcss": "8.5.25",
     "postcss-value-parser": "4.2.0",
-    "@openape/report-contracts": "workspace:*"
+    "@openape/report-contracts": "workspace:*",
+    "aws4fetch": "catalog:"
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "catalog:",

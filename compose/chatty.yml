@@ -105,6 +105,8 @@ services:
   testrun:
     image: registry.openape.ai/openape-testrun:${TESTRUN_TAG:-unset}
     restart: unless-stopped
+    sysctls:
+      net.mptcp.enabled: "0"
     user: "999:988"
     env_file: /home/openape/projects/openape-testrun/shared/.env
     environment:
