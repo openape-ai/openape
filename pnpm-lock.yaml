@@ -139,7 +139,7 @@ overrides:
   body-parser@2: 2.4.0
   vite@>=8.2.0 <8.2.4: 8.2.4
   launch-editor@<2.14.2: 2.14.2
-  node-forge: '>=1.4.0'
+  node-forge: 1.4.1
   path-to-regexp: '>=8.4.0'
   proxy-addr: '>=2.0.8'
   prosemirror-view: '>=1.42.3'
@@ -148,7 +148,7 @@ overrides:
   serialize-javascript: '>=7.0.3'
   esbuild@<0.28.1: '>=0.28.1'
   postcss-selector-parser@<7.1.6: '>=7.1.6'
-  seroval: '>=1.6.3'
+  seroval: 1.6.12
   source-map-js: '>=1.2.2'
   '@tiptap/core': 3.30.5
   '@tiptap/extension-blockquote': 3.30.5
@@ -1816,8 +1816,8 @@ importers:
         specifier: workspace:*
         version: link:../core
       node-forge:
-        specifier: '>=1.4.0'
-        version: 1.4.0
+        specifier: 1.4.1
+        version: 1.4.1
       smol-toml:
         specifier: '>=1.9.0'
         version: 1.9.1
@@ -9672,8 +9672,8 @@ packages:
     resolution: {integrity: sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
-  node-forge@1.4.0:
-    resolution: {integrity: sha512-LarFH0+6VfriEhqMMcLX2F7SwSXeWwnEAJEsYm5QKWchiVYVvJyV9v7UDvUv+w5HO23ZpQTXDv/GxdDdMyOuoQ==}
+  node-forge@1.4.1:
+    resolution: {integrity: sha512-w5/MfWaeMrpR/5ba6fZyAUTLSuE6aYz7H/3cYrqwZEmf5eQS3IaaLgJt4MBv7HglGFWmV22K8h4U18RJQmw/ow==}
     engines: {node: '>= 6.13.0'}
 
   node-gyp-build@4.8.4:
@@ -10985,8 +10985,8 @@ packages:
     resolution: {integrity: sha512-ATTK5Q4gFVg0YDp1my2vqygyvhcklD/UV5GIlYHooGTn/NogJqIzpetkD6E5kmuVULqz/S9inUL25XcAgDRJQg==}
     engines: {node: '>=20.0.0'}
 
-  seroval@1.6.7:
-    resolution: {integrity: sha512-AeDcLh0yO2SFm9W71essgnSzLV9DI8ZH0x0knXn2DMnUZj728mpLbxjlbB6IqKCmqh8JA3cEqRyGoNkt584JcQ==}
+  seroval@1.6.12:
+    resolution: {integrity: sha512-CqbIVfk/7GL3ITwZI55lcPbpQbjHZ2DD5cUj4iH7E9YsCfHNJV1mx7yNp86Z84w5IpmkZZS/2s5vPOWmVWSdQg==}
     engines: {node: '>=10'}
 
   serve-placeholder@2.0.2:
@@ -17294,7 +17294,7 @@ snapshots:
       pkg-types: 2.3.3
       postcss: 8.5.25
       rolldown-string: 0.3.1(rolldown@1.2.14)
-      seroval: 1.6.7
+      seroval: 1.6.12
       std-env: 4.3.0
       ufo: 1.6.4
       unenv: 2.0.0-rc.24
@@ -17361,7 +17361,7 @@ snapshots:
       pkg-types: 2.3.3
       postcss: 8.5.25
       rolldown-string: 0.3.1(rolldown@1.2.14)
-      seroval: 1.6.7
+      seroval: 1.6.12
       std-env: 4.3.0
       ufo: 1.6.4
       unenv: 2.0.0-rc.24
@@ -17428,7 +17428,7 @@ snapshots:
       pkg-types: 2.3.3
       postcss: 8.5.25
       rolldown-string: 0.3.1(rolldown@1.2.14)
-      seroval: 1.6.7
+      seroval: 1.6.12
       std-env: 4.3.0
       ufo: 1.6.4
       unenv: 2.0.0-rc.24
@@ -17495,7 +17495,7 @@ snapshots:
       pkg-types: 2.3.3
       postcss: 8.5.25
       rolldown-string: 0.3.1(rolldown@1.2.14)
-      seroval: 1.6.7
+      seroval: 1.6.12
       std-env: 4.3.0
       ufo: 1.6.4
       unenv: 2.0.0-rc.24
@@ -17562,7 +17562,7 @@ snapshots:
       pkg-types: 2.3.3
       postcss: 8.5.25
       rolldown-string: 0.3.1(rolldown@1.2.14)
-      seroval: 1.6.7
+      seroval: 1.6.12
       std-env: 4.3.0
       ufo: 1.6.4
       unenv: 2.0.0-rc.24
@@ -17629,7 +17629,7 @@ snapshots:
       pkg-types: 2.3.3
       postcss: 8.5.25
       rolldown-string: 0.3.1(rolldown@1.2.14)
-      seroval: 1.6.7
+      seroval: 1.6.12
       std-env: 4.3.0
       ufo: 1.6.4
       unenv: 2.0.0-rc.24
@@ -17696,7 +17696,7 @@ snapshots:
       pkg-types: 2.3.3
       postcss: 8.5.25
       rolldown-string: 0.3.1(rolldown@1.2.14)
-      seroval: 1.6.7
+      seroval: 1.6.12
       std-env: 4.3.0
       ufo: 1.6.4
       unenv: 2.0.0-rc.24
@@ -24095,7 +24095,7 @@ snapshots:
       http-shutdown: 1.2.2
       jiti: 2.7.0
       mlly: 1.8.2
-      node-forge: 1.4.0
+      node-forge: 1.4.1
       pathe: 2.0.3
       std-env: 4.3.0
       tinyclip: 0.1.15
@@ -25193,7 +25193,7 @@ snapshots:
       fetch-blob: 3.2.0
       formdata-polyfill: 4.0.10
 
-  node-forge@1.4.0: {}
+  node-forge@1.4.1: {}
 
   node-gyp-build@4.8.4: {}
 
@@ -27907,7 +27907,7 @@ snapshots:
 
   serialize-javascript@7.0.6: {}
 
-  seroval@1.6.7: {}
+  seroval@1.6.12: {}
 
   serve-placeholder@2.0.2:
     dependencies:
