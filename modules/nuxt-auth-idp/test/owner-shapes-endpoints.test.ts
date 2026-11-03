@@ -46,7 +46,8 @@ const index = (await import('../src/runtime/server/api/shapes/index.get')).defau
 const put = (await import('../src/runtime/server/api/shapes/[cliId].put')).default
 const remove = (await import('../src/runtime/server/api/shapes/[cliId].delete')).default
 
-const jevToml = (operation = 'ask') => `schema = "openape-shapes/v1"
+function jevToml(operation = 'ask') {
+  return `schema = "openape-shapes/v1"
 
 [cli]
 id = "jev"
@@ -62,6 +63,7 @@ action = "read"
 risk = "low"
 resource_chain = ["model:name=jev"]
 `
+}
 
 async function request(method: string, path: string, subject: string | null, body?: unknown) {
   const response = await fetch(`${base}${path}`, { method, headers: { 'Content-Type': 'application/json', ...(subject ? { Authorization: `Bearer ${subject}` } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
