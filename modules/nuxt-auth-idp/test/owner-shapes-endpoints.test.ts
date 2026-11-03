@@ -23,10 +23,12 @@ let base: string
 vi.mock('../src/runtime/server/utils/agent-auth', () => ({
   tryBearerAuth: async (event: H3Event) => {
     const subject = getHeader(event, 'authorization')?.replace('Bearer ', '')
+    if (subject === 'delegated') return { sub: owner, act: 'human', delegation_grant: 'g-delegation' }
     return subject ? { sub: subject, act: subject === agent ? 'agent' : 'human' } : null
   },
 }))
-vi.mock('../src/runtime/server/utils/session', () => ({ getAppSession: async () => ({ data: {} }) }))
+// A browser session of the owner, signalled by a test header instead of a cookie.
+vi.mock('../src/runtime/server/utils/session', () => ({ getAppSession: async (event: H3Event) => ({ data: getHeader(event, 'x-test-session') ? { userId: owner } : {} }) }))
 vi.mock('nitropack/runtime', () => ({ useRuntimeConfig: () => ({}), useEvent: () => undefined, useStorage: () => ({}) }))
 vi.mock('../src/runtime/server/utils/grant-stores', () => ({ useGrantStores: () => ({ grantStore }) }))
 vi.mock('../src/runtime/server/utils/shape-store', () => ({ useShapeStore: () => shapeStore }))
@@ -97,6 +99,14 @@ beforeEach(async () => {
 afterEach(async () => { await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())) })
 
 describe('owner shape endpoints', () => {
+  it('accepts session writes only from the IdP origin and never a delegated token', async () => {
+    const session = (origin: string) => fetch(`${base}/shapes/jev`, { method: 'PUT', headers: { 'Content-Type': 'application/json', 'x-test-session': '1', 'Origin': origin }, body: JSON.stringify({ toml: jevToml() }) })
+    expect((await session('https://evil.example')).status).toBe(403)
+    expect((await session(issuer)).status).toBe(200)
+    expect((await request('PUT', '/shapes/jev', 'delegated', { toml: jevToml() })).status).toBe(403)
+    expect((await request('DELETE', '/shapes/jev', 'delegated')).status).toBe(403)
+  })
+
   it('previews without saving, publishes, and lists only the owner\'s shapes', async () => {
     const preview = await request('PUT', '/shapes/jev?dry_run=1', owner, { toml: jevToml() })
     expect(preview.status).toBe(200)
@@ -141,6 +151,18 @@ describe('owner shape endpoints', () => {
     const reserved = jevToml().replace('id = "jev"\nexecutable = "jev"', 'id = "pod-runtime"\nexecutable = "pod-runtime"')
     expect((await request('PUT', '/shapes/pod-runtime', owner, { toml: reserved })).status).toBe(409)
     expect((await request('PUT', '/shapes/jev', owner, { toml: 'not toml [' })).status).toBe(400)
+    // A duplicate id would let the resolver read a later `deny` from an earlier operation.
+    const duplicate = `${jevToml()}\n[[operation]]\nid = "ask"\ncommand = ["delete"]\ndisplay = "Delete"\naction = "delete"\nrisk = "high"\nresource_chain = []\ndecision = "deny"\n`
+    const duplicated = await request('PUT', '/shapes/jev', owner, { toml: duplicate })
+    expect(duplicated.status).toBe(400)
+    expect(JSON.stringify(duplicated.json)).toContain('declared twice')
+    for (const chain of ['model:name={missing}', 'model:name={name|unsupported}']) {
+      const unbound = await request('PUT', '/shapes/jev', owner, { toml: jevToml().replace('model:name=jev', chain) })
+      expect(unbound.status, chain).toBe(400)
+    }
+    // A positional binding renders, including the owner transform.
+    const bound = jevToml().replace('command = ["ask"]', 'command = ["ask"]\npositionals = ["repo"]').replace('model:name=jev', 'repo:owner={repo|owner}')
+    expect((await request('PUT', '/shapes/jev?dry_run=1', owner, { toml: bound })).status).toBe(200)
     expect(await shapeStore.listOwnerShapes!(owner)).toEqual([])
   })
 })

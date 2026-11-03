@@ -6,6 +6,7 @@ import { useGrantStores } from '../../../utils/grant-stores'
 import { getAppSession } from '../../../utils/session'
 import { getIdpIssuer, useIdpStores } from '../../../utils/stores'
 import { createProblemError } from '../../../utils/problem'
+import { assertOwnerShapeCurrent } from '../../../utils/owner-shape-current'
 
 export default defineEventHandler(async (event) => {
   // Accept both bearer token and session auth
@@ -51,6 +52,7 @@ export default defineEventHandler(async (event) => {
     throw createProblemError({ status: 400, title: `Grant is not approved (status: ${grant.status})`, type: 'https://openape.org/errors/grant_not_approved' })
   }
 
+  await assertOwnerShapeCurrent(grant)
   const signingKey = await keyStore.getSigningKey()
   const authzJwt = await issueAuthzJWT(grant, getIdpIssuer(), signingKey.privateKey, signingKey.kid)
 
