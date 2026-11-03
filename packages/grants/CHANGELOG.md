@@ -1,5 +1,84 @@
 # Changelog
 
+## 0.15.0
+
+### Minor Changes
+
+- a4ed076: Lead approval views with readable request summaries and registered requester identities,
+  keep technical details collapsed, preserve requested validity, and make optional scope
+  expansion explicit. Show per-item batch context and decision counts. Support optional
+  requester-authored batch descriptions with consistent validation across request paths.
+- e1ee0f8: Add optional opaque references for atomic, authority-scoped single-use grant
+  requests and status lookup. Retain terminal decisions and reject changed
+  authorization bindings. Support complete cross-run batch review with explicit
+  refresh and retries limited to the original unresolved decisions.
+- 10c391f: Let a requester withdraw its own referenced single-use request, also through
+  the grant broker. The new terminal status `withdrawn` cannot be approved,
+  consumed or renewed, leaves batch review and pending limits, and records an
+  optional reason. apes treats it as a refusal.
+- 8c1ff32: Add owner-published shapes (issue 1551). A signed-in human owner publishes the
+  adapter of a tool they built (`PUT /api/shapes/{cliId}`, `?dry_run=1` to
+  preview, `DELETE`, `GET /api/shapes?mine=1`, IdP page `/shapes`,
+  `apes shapes publish|list --mine|remove`). The IdP resolves the program calls of
+  that owner's direct agents with the owner's shapes after every registry shape;
+  an owner shape never takes a registry id or executable, never counts as a
+  tested version and is never used for other accounts or brokered identities.
+  The IdP records the shape owner in `execution_context.adapter_owner`; clients
+  cannot write it. Unlike registry shapes, an owner shape binds its continuing
+  grants by digest: republishing, removing it or a registry shape that later
+  takes over the program asks again. The grant card marks the owner shape and
+  lists every operation it declares. `assertResourceChainTemplates` rejects
+  resource chains the matcher could not render when a shape is published.
+- b8b9d26: Add three shape tiers with one import path (issue 1553). Program calls resolve
+  with the caller's personal shapes first, then the shapes of the owner's email
+  domain, then the IdP-wide shapes; an upper tier overrides a lower one by
+  `cli_id` or executable, and an overridden shape drops out with its tested
+  digests. Only the Pods desktop names `pod-runtime`, `pod-http` and `pod-ssh`
+  stay reserved, so personal shapes may now use registry names. Grants on
+  personal and domain shapes bind tier and digest (`execution_context.adapter_owner`
+  or the new `adapter_domain`, written only by the IdP); IdP-wide grants keep
+  carrying over adapter updates. `POST /api/shapes/import?scope=instance|domain|personal`
+  (`?dry_run=1`) writes one all-or-nothing batch with optional `prune` and an
+  audit in `shape_changes`: IdP-wide shapes only with the management token,
+  domain shapes only by root admins and operators of their own domain, personal
+  shapes by the human owner. `PUT`/`DELETE /api/shapes/{cliId}` and
+  `GET /api/shapes` accept `?scope=`, `GET /api/shapes/changes?scope=` lists the
+  audit. `apes shapes import <dir> [--scope] [--dry-run] [--prune]` imports a
+  shapes-registry checkout or a folder of adapters (management token only from
+  `APES_MANAGEMENT_TOKEN`), and `publish`, `list` and `remove` take `--scope`.
+  The `/shapes` page has Personal, Domain and IdP-wide tabs, and the grant card
+  names the tier, its writer and what it overrides.
+
+### Patch Changes
+
+- 0669f39: A broker now relays a command token from `POST /api/grants/authorize` up to
+  `PROGRAM_AUTHORIZE_LIMITS.tokenChars` (120 KiB). Before, it refused tokens over
+  16 KiB with 503. A command token repeats the argv, so a program call with a
+  few kilobytes of arguments already exceeded that limit (issue 1476). The
+  decision IdP answers a command whose token would be larger with a definite 413
+  `command_too_large`, and it does not spend a single-use grant. Brokers relay
+  that 413.
+
+  `POST /api/grants/authorize` logs unexpected 5xx failures with a request id,
+  the program name and the resolved operation, and never the arguments. The
+  problem answer carries the same id as `request_id`.
+
+  Coverage and reuse ignore stored authorization details that lack a field they
+  compare (`isCoverableCliDetail`, `coverableCliDetails`). Before, such a detail
+  could fail the request with 500.
+
+- 4a4d2d2: Carry negotiated provider-verified requester names through signed broker requests,
+  persist display-only metadata without changing grant decisions, and show federated
+  names beside stable identities. Keep authorization bindings and token claims unchanged.
+- Updated dependencies [a4ed076]
+- Updated dependencies [e1ee0f8]
+- Updated dependencies [10c391f]
+- Updated dependencies [089421e]
+- Updated dependencies [8c1ff32]
+- Updated dependencies [b8b9d26]
+- Updated dependencies [4a4d2d2]
+  - @openape/core@1.1.0
+
 ## 0.14.0
 
 ### Minor Changes
