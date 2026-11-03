@@ -1,6 +1,6 @@
 import type { OpenApeGrant } from '@openape/core'
 import type { ServerShape, ShapeStore } from '@openape/grants'
-import { assertResourceChainTemplates } from '@openape/grants'
+import { assertResourceChainTemplates, buildCliAuthDetail } from '@openape/grants'
 import { parseAdapterToml, semanticAdapterDigest } from '@openape/shapes'
 import { useGrantStores } from './grant-stores'
 import { createProblemError } from './problem'
@@ -73,10 +73,21 @@ export async function parseOwnerShape(cliId: string, toml: unknown, owner: strin
   if (adapter.cli.tested_digests || adapter.cli.tested_versions || adapter.cli.version_command || adapter.cli.version_pattern)
     fail('tested_digests and tested versions are registry facts; remove them from an owner shape')
   if (!adapter.operations.length) fail('The adapter declares no operation')
+  const ids = new Set<string>()
   for (const operation of adapter.operations) {
     if (operation.id.startsWith('_')) fail(`Operation id ${operation.id} is reserved`)
-    try { assertResourceChainTemplates(operation.resource_chain) }
-    catch (error) { fail(`Operation ${operation.id}: ${error instanceof Error ? error.message : String(error)}`) }
+    // The resolver reads an operation's policy by id: a duplicate would let a later `deny` or `once` be read from an earlier one.
+    if (ids.has(operation.id)) fail(`Operation id ${operation.id} is declared twice`)
+    ids.add(operation.id)
+    try {
+      assertResourceChainTemplates(operation.resource_chain)
+      // Render with exactly the bindings every match sets (positionals and required options), so a
+      // template naming an optional or unknown binding, or an unsupported transform, fails now
+      // instead of failing the first matching call with 500.
+      const always = [...(operation.positionals ?? []).filter(name => !name.startsWith('=')), ...(operation.required_options ?? [])]
+      buildCliAuthDetail(id, operation, Object.fromEntries(always.map(name => [name, 'owner/name'])))
+    }
+    catch (error) { fail(`Operation ${operation.id}: ${error instanceof Error ? error.message : String(error)} (templates may use positionals and required options)`) }
   }
   const registry = await useShapeStore().listShapes()
   const taken = registry.find(shape => [shape.cli_id, shape.executable].some(name => name === id || name === executable))

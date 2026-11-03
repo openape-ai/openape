@@ -130,6 +130,7 @@ const brokered = (await import('../src/runtime/server/api/brokered-grants.post')
 const create = (await import('../src/runtime/server/api/grants/index.post')).default
 const list = (await import('../src/runtime/server/api/grants/index.get')).default
 const withdraw = (await import('../src/runtime/server/api/grants/withdraw.post')).default
+const tokenFor = (await import('../src/runtime/server/api/grants/[id]/token.post')).default
 
 interface CallInput { argv?: string[], sha256?: string, name?: string, grant_type?: string, [key: string]: unknown }
 function body({ argv = ['status'], sha256 = tested, name = 'git', ...rest }: CallInput = {}) {
@@ -155,7 +156,7 @@ beforeEach(async () => {
   delete process.env.OPENAPE_RATE_LIMIT_MAX_AUTHORIZE
   delete process.env.OPENAPE_RATE_LIMIT_MAX_AGENT
   connection = { id: randomUUID(), owner: { issuer, subject: owner }, broker_issuer: broker, agent_domain: 'pods.provider.test', status: 'active', created_at: 1 }
-  const router = createRouter().get('/grants', list).get('/pods/grants', list).post('/grants/authorize', authorize).post('/grants', create).post('/brokered', brokered).post('/pods/grants/authorize', authorize).post('/grants/:id/consume', consume).post('/grants/withdraw', withdraw).post('/pods/grants/withdraw', withdraw)
+  const router = createRouter().get('/grants', list).get('/pods/grants', list).post('/grants/authorize', authorize).post('/grants', create).post('/brokered', brokered).post('/pods/grants/authorize', authorize).post('/grants/:id/consume', consume).post('/grants/:id/token', tokenFor).post('/grants/withdraw', withdraw).post('/pods/grants/withdraw', withdraw)
   const listener = toNodeListener(createApp().use(router))
   server = createServer((req, res) => role.run(req.url?.startsWith('/pods/') ? 'broker' : 'decision', () => listener(req, res)))
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -774,6 +775,26 @@ describe('owner shapes', () => {
     const brokeredGrant = (await grantStore.listGrants()).data.find(grant => grant.brokered)!
     expect(brokeredGrant.request.authorization_details?.[0]?.operation_id).toBe('_generic.exec')
     expect(brokeredGrant.request.execution_context?.adapter_owner).toBeUndefined()
+  })
+
+  it('issues no token for a grant whose owner shape changed, was removed or was taken over by the registry', async () => {
+    await shapeStore.saveOwnerShape!(owner, jevShape)
+    const first = await call(direct, jevCall())
+    await approveGrant(first.json.grant_id, owner, grantStore)
+    const token = () => call(direct, {}, `/grants/${first.json.grant_id}/token`)
+    expect((await token()).status).toBe(200)
+    await shapeStore.saveOwnerShape!(owner, { ...jevShape, digest: 'SHA-256:owner-jev-v2' })
+    const stale = await token()
+    expect(stale.status).toBe(409)
+    expect(JSON.stringify(stale.json)).toContain('owner shape')
+    await shapeStore.saveOwnerShape!(owner, jevShape)
+    expect((await token()).status).toBe(200)
+    await shapeStore.saveShape({ ...jevShape, source: 'builtin', owner: undefined, digest: 'SHA-256:registry-jev' })
+    expect((await token()).status).toBe(409)
+    // The registry shape now reads the call; the owner approval is not reused.
+    const takenOver = await call(direct, jevCall())
+    expect(takenOver.status).toBe(202)
+    expect((await grantStore.findById(takenOver.json.grant_id))!.request.execution_context?.adapter_owner).toBeUndefined()
   })
 
   it('refuses a client-written adapter owner on POST /api/grants', async () => {
