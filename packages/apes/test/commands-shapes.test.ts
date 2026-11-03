@@ -178,6 +178,14 @@ describe('apes shapes', () => {
       await run('import', registry, '--scope', 'instance', '--dry-run')
       expect(existsSync(marker)).toBe(false)
       expect(JSON.parse(fetchMock.mock.calls[1]![1].body).source.dirty).toBe(true)
+      // The same filter in the worktree-scoped config is found too.
+      execFileSync('git', ['-C', registry, 'config', '--unset', 'filter.evil.clean'])
+      execFileSync('git', ['-C', registry, 'config', 'extensions.worktreeConfig', 'true'])
+      execFileSync('git', ['-C', registry, 'config', '--worktree', 'filter.evil.clean', `touch ${marker}; cat`])
+      utimesSync(join(registry, 'adapters', 'mytool', 'adapter.toml'), new Date(), new Date(Date.now() + 10000))
+      fetchMock.mockResolvedValueOnce(json(report()))
+      await run('import', registry, '--scope', 'instance', '--dry-run')
+      expect(existsSync(marker)).toBe(false)
     })
 
     it('never takes the management token from anywhere but the environment', async () => {
