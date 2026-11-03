@@ -188,6 +188,23 @@ describe('apes shapes', () => {
       expect(existsSync(marker)).toBe(false)
     })
 
+    it('never prints any part of the management token, not even with --debug', async () => {
+      vi.resetModules()
+      process.argv.push('--debug')
+      try {
+        const consola = (await import('consola')).default
+        const debug = vi.spyOn(consola, 'debug').mockImplementation(() => {})
+        fetchMock.mockResolvedValueOnce(json(report()))
+        await run('import', registry, '--scope', 'instance', '--dry-run')
+        expect(debug).toHaveBeenCalled()
+        expect(JSON.stringify(debug.mock.calls)).not.toContain('management')
+      }
+      finally {
+        process.argv.splice(process.argv.indexOf('--debug'), 1)
+        vi.resetModules()
+      }
+    })
+
     it('never takes the management token from anywhere but the environment', async () => {
       vi.stubEnv('APES_MANAGEMENT_TOKEN', '')
       await expect(run('import', registry, '--scope', 'instance')).rejects.toThrow(/APES_MANAGEMENT_TOKEN/)
