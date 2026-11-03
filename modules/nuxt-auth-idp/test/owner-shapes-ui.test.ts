@@ -32,7 +32,11 @@ const stubs = {
 
 const ownerShape: OwnerShapeCard = {
   cli_id: 'jev',
+  tier: 'personal',
   owner: 'owner@example.test',
+  domain: null,
+  published_by: null,
+  overrides: null,
   digest: 'sha256:4f1c0000000000000000b2e9',
   published_at: 1_762_160_400,
   current: true,
@@ -63,7 +67,8 @@ describe('GrantOwnerShape in the grant card', () => {
   it('marks the owner shape and highlights the requested operation among all declared ones', () => {
     const wrapper = mount(GrantCard, { props: { grant: ownerGrant(ownerShape), german: false, technical: false }, global: { stubs } })
     const block = wrapper.find('[data-owner-shape]')
-    expect(block.text()).toContain('Owner shape · not from the registry')
+    expect(block.text()).toContain('Personal shape · not IdP-wide')
+    expect(block.find('[data-shape-overrides]').exists()).toBe(false)
     expect(block.text()).toContain('published by owner@example.test')
     expect(block.text()).toContain('4f1c00000000')
     expect(block.find('[data-owner-shape-stale]').exists()).toBe(false)
@@ -79,7 +84,18 @@ describe('GrantOwnerShape in the grant card', () => {
   it('warns when the shape is no longer current, in German too', () => {
     const wrapper = mount(GrantCard, { props: { grant: ownerGrant({ ...ownerShape, current: false, published_at: null }), german: true, technical: false }, global: { stubs } })
     expect(wrapper.find('[data-owner-shape-stale]').text()).toContain('nach der Anfrage geändert oder entfernt')
-    expect(wrapper.find('[data-owner-shape]').text()).toContain('Owner-Shape · nicht aus der Registry')
+    expect(wrapper.find('[data-owner-shape]').text()).toContain('Persönliches Shape · nicht IdP-weit')
+  })
+
+  it('marks a domain shape with its domain, writer and the IdP-wide shape it replaces', () => {
+    const domainShape: OwnerShapeCard = { ...ownerShape, tier: 'domain', owner: null, domain: 'example.test', published_by: 'admin@example.test', overrides: 'instance' }
+    const english = mount(GrantCard, { props: { grant: ownerGrant(domainShape), german: false, technical: false }, global: { stubs } })
+    const block = english.find('[data-owner-shape]')
+    expect(block.text()).toContain('Domain shape of example.test')
+    expect(block.text()).toContain('published by admin@example.test')
+    expect(block.find('[data-shape-overrides]').text()).toBe('Replaces the IdP-wide shape for this program, for example.test only.')
+    const german = mount(GrantCard, { props: { grant: ownerGrant({ ...ownerShape, overrides: 'domain' }), german: true, technical: false }, global: { stubs } })
+    expect(german.find('[data-shape-overrides]').text()).toBe('Ersetzt für dich das Domain-Shape für dieses Programm.')
   })
 
   it('renders nothing without an owner shape', () => {
@@ -105,6 +121,7 @@ const shapeView = {
 describe('shapes page', () => {
   const calls: Array<{ url: string, opts: { method?: string, body?: Record<string, unknown> } }> = []
   let listed = [shapeView]
+  let domainAdmin = false
 
   beforeEach(() => {
     __resetNuxtImportsMocks()
@@ -112,9 +129,16 @@ describe('shapes page', () => {
     __setFetchUser(async () => {})
     calls.length = 0
     listed = [shapeView]
+    domainAdmin = false
     vi.stubGlobal('$fetch', vi.fn(async (url: string, opts: { method?: string, body?: Record<string, unknown> } = {}) => {
       calls.push({ url, opts })
       if (url === '/api/shapes?mine=1') return listed
+      if (url === '/api/shapes?scope=domain') return [{ ...shapeView, cli_id: 'deploy', executable: 'deploy', published_by: 'admin@example.test' }]
+      if (url === '/api/shapes?scope=instance') return [{ ...shapeView, cli_id: 'git', executable: 'git', toml: null, description: 'Git version control', bound_grants: [] }]
+      if (url.startsWith('/api/shapes/changes')) {
+        if (url.endsWith('scope=domain') && !domainAdmin) throw Object.assign(new Error('403'), { data: { title: 'Only a root admin or operator of your domain reads its shape history' } })
+        return [{ scope: 'instance', scope_key: '', action: 'update', cli_id: 'git', previous_digest: 'SHA-256:aaaa00000000', digest: 'SHA-256:bbbb00000000', previous_toml: null, toml: null, source: { commit: '958d342abcdef' }, actor: '_management_', created_at: 1_762_160_400 }]
+      }
       if (opts.method === 'PUT') {
         const dryRun = url.endsWith('?dry_run=1')
         if (!dryRun) listed = [{ ...shapeView, digest: 'sha256:new0000000000000' }]
@@ -134,7 +158,7 @@ describe('shapes page', () => {
     await flushPromises()
     const row = wrapper.find('[data-shape-row="jev"]')
     expect(row.text()).toContain('jev')
-    expect(row.text()).toContain('owner')
+    expect(row.text()).toContain('personal')
     expect(row.text()).toContain('executable jev')
     expect(row.text()).toContain('4f1c00000000')
     expect(row.text()).toContain('1 continuing')
@@ -201,4 +225,49 @@ describe('shapes page', () => {
     expect(calls.find(call => call.opts.method === 'DELETE')?.url).toBe('/api/shapes/jev')
     expect(wrapper.find('[data-shapes-empty]').exists()).toBe(true)
   })
+
+  it('shows the domain tab read-only to members and writable with history to its admins', async () => {
+    const wrapper = mount(ShapesPage, { global: { stubs } })
+    await flushPromises()
+    expect(wrapper.find('[data-shape-tab="personal"]').attributes('aria-selected')).toBe('true')
+    await wrapper.find('[data-shape-tab="domain"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-shape-tab="domain"]').attributes('aria-selected')).toBe('true')
+    expect(wrapper.find('[data-shape-row="deploy"]').text()).toContain('by admin@example.test')
+    expect(wrapper.find('[data-shape-domain-readonly]').exists()).toBe(true)
+    expect(wrapper.find('[data-shape-toml]').exists()).toBe(false)
+    expect(wrapper.find('[data-shape-remove]').exists()).toBe(false)
+    expect(wrapper.find('[data-shape-history]').exists()).toBe(false)
+
+    domainAdmin = true
+    await wrapper.find('[data-shape-tab="personal"]').trigger('click')
+    await wrapper.find('[data-shape-tab="domain"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-shape-history]').exists()).toBe(true)
+    await wrapper.find('[data-shape-toml]').setValue(TOML)
+    await wrapper.find('[data-shape-preview-button]').trigger('click')
+    await flushPromises()
+    expect(calls.at(-1)).toMatchObject({ url: '/api/shapes/jev?scope=domain&dry_run=1', opts: { method: 'PUT' } })
+    confirmAll()
+    await wrapper.find('[data-shape-remove]').trigger('click')
+    await flushPromises()
+    expect(calls.find(call => call.opts.method === 'DELETE')?.url).toBe('/api/shapes/deploy?scope=domain')
+  })
+
+  it('shows IdP-wide shapes and their history read-only', async () => {
+    const wrapper = mount(ShapesPage, { global: { stubs } })
+    await flushPromises()
+    await wrapper.find('[data-shape-tab="instance"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-shape-row="git"]').text()).toContain('executable git')
+    expect(wrapper.find('[data-shape-toml]').exists()).toBe(false)
+    expect(wrapper.find('[data-shape-remove]').exists()).toBe(false)
+    expect(wrapper.find('[data-shape-change="git"]').text()).toContain('management token')
+    expect(wrapper.find('[data-shape-change="git"]').text()).toContain('958d342abcde')
+    expect(calls.some(call => call.opts.method === 'PUT' || call.opts.method === 'DELETE')).toBe(false)
+  })
 })
+
+function confirmAll() {
+  vi.stubGlobal('confirm', vi.fn(() => true))
+}

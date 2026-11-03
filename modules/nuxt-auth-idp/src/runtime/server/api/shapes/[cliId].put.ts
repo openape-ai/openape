@@ -1,18 +1,18 @@
 import { defineEventHandler, getQuery, getRouterParam, readBody } from 'h3'
-import { requireBrokerOwner } from '../../utils/broker-owner'
-import { publishOwnerShape } from '../../utils/owner-shapes'
+import { publishTierShape } from '../../utils/shape-tiers'
+import { readShapeScope, requireShapeWriter } from '../../utils/shape-writer'
 
 /**
- * PUT /api/shapes/:cliId  body `{ "toml": "<adapter.toml>" }`
+ * PUT /api/shapes/:cliId[?scope=personal|domain|instance]  body `{ "toml": "<adapter.toml>", "description"?: string }`
  *
- * Publishes the signed-in human owner's own shape (issue 1551); with
- * `?dry_run=1` only previews it. Agents, Pods, delegations and brokered
- * sessions cannot publish, so no requester can widen its own grants.
+ * Publishes one shape of one tier (issues 1551, 1553), the signed-in human
+ * owner's personal shape by default; with `?dry_run=1` only previews it.
+ * The same import path as `POST /api/shapes/import`, so the same writers,
+ * checks and audit apply.
  */
 export default defineEventHandler(async (event) => {
-  const owner = await requireBrokerOwner(event, true)
+  const writer = await requireShapeWriter(event, readShapeScope(event, 'personal'))
   const cliId = decodeURIComponent(getRouterParam(event, 'cliId') ?? '')
-  const body = await readBody<{ toml?: unknown }>(event)
   const dryRun = ['1', 'true'].includes(String(getQuery(event).dry_run ?? ''))
-  return await publishOwnerShape(owner, cliId, body?.toml, dryRun)
+  return await publishTierShape(writer, cliId, await readBody(event), dryRun)
 })

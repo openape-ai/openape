@@ -125,6 +125,11 @@ export interface OpenApeExecutionContext {
    * shape resolved the command. A grant with it binds that shape's digest.
    */
   adapter_owner?: string
+  /**
+   * Set by the IdP, never by a client: the email domain whose domain shape
+   * resolved the command (issue 1553). A grant with it binds that shape's digest.
+   */
+  adapter_domain?: string
   /** Path or command name of the resolved executable */
   resolved_executable: string
   /** Captured bindings used to render the resource chain */

@@ -80,6 +80,43 @@ export const ownerShapes = sqliteTable('owner_shapes', {
   primaryKey({ columns: [table.owner, table.cliId] }),
 ])
 
+// Domain shapes (issue 1553): adapters root admins and operators of one email
+// domain wrote for its users. Keyed by domain; read before IdP-wide shapes.
+export const domainShapes = sqliteTable('domain_shapes', {
+  domain: text('domain').notNull(),
+  cliId: text('cli_id').notNull(),
+  executable: text('executable').notNull(),
+  description: text('description').notNull(),
+  // JSON-encoded ServerShapeOperation[]
+  operations: text('operations', { mode: 'json' }).notNull(),
+  digest: text('digest').notNull(),
+  toml: text('toml').notNull(),
+  publishedBy: text('published_by').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.domain, table.cliId] }),
+])
+
+// Audit of every shape write of every tier (issue 1553); `scope_key` is '' for IdP-wide shapes.
+export const shapeChanges = sqliteTable('shape_changes', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  scope: text('scope').notNull(),
+  scopeKey: text('scope_key').notNull(),
+  action: text('action').notNull(),
+  cliId: text('cli_id').notNull(),
+  previousDigest: text('previous_digest'),
+  digest: text('digest'),
+  previousToml: text('previous_toml'),
+  toml: text('toml'),
+  // JSON-encoded claimed provenance { repo?, commit?, dirty? }; recorded, never verified
+  source: text('source', { mode: 'json' }),
+  actor: text('actor').notNull(),
+  createdAt: integer('created_at').notNull(),
+}, table => [
+  index('idx_shape_changes_scope').on(table.scope, table.scopeKey, table.id),
+])
+
 export const grantChallenges = sqliteTable('grant_challenges', {
   challenge: text('challenge').primaryKey(),
   agentId: text('agent_id').notNull(),
