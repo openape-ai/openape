@@ -1,6 +1,6 @@
 export { grantCursor, parseGrantCursor } from './grant-cursor.js'
 export { assertGrantReferenceRequest, assertSameReferencedGrant, grantReferenceBinding, grantReferenceKey, GrantReferenceConflictError, InvalidGrantReferenceError, parseGrantReference } from './grant-reference.js'
-export { buildCliAuthDetail, matchArgvToOperation, type ShapeMatchOperation } from './shape-matcher.js'
+export { assertResourceChainTemplates, buildCliAuthDetail, matchArgvToOperation, type ShapeMatchOperation } from './shape-matcher.js'
 export {
   canonicalizeCliPermission,
   cliAuthorizationDetailCovers,
@@ -67,6 +67,7 @@ export {
 } from './shape-presentation.js'
 export {
   createInMemoryShapeStore,
+  ownerScopedShapeStore,
   type ServerShape,
   type ServerShapeOperation,
   type ShapeStore,

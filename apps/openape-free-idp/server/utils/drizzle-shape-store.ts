@@ -1,7 +1,7 @@
 import type { ServerShape, ServerShapeOperation, ShapeCliVersions, ShapeStore } from '@openape/grants'
-import { asc, eq } from 'drizzle-orm'
+import { and, asc, eq } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
-import { shapes } from '../database/schema'
+import { ownerShapes, shapes } from '../database/schema'
 
 /**
  * Drizzle-backed ShapeStore. Wraps CRUD over the `shapes` table for the
@@ -54,6 +54,35 @@ export function createDrizzleShapeStore(): ShapeStore {
 
     async deleteShape(cliId) {
       await db.delete(shapes).where(eq(shapes.cliId, cliId))
+    },
+
+    async listOwnerShapes(owner) {
+      const rows = await db.select().from(ownerShapes).where(eq(ownerShapes.owner, owner)).orderBy(asc(ownerShapes.cliId))
+      return rows.map(row => ({
+        cli_id: row.cliId,
+        executable: row.executable,
+        description: '',
+        operations: row.operations as ServerShapeOperation[],
+        source: 'custom' as const,
+        owner: row.owner,
+        digest: row.digest,
+        toml: row.toml,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      }))
+    },
+
+    async saveOwnerShape(owner, shape) {
+      const values = { owner, cliId: shape.cli_id, executable: shape.executable, operations: shape.operations, digest: shape.digest, toml: shape.toml ?? '', createdAt: shape.createdAt, updatedAt: shape.updatedAt }
+      await db.insert(ownerShapes).values(values).onConflictDoUpdate({
+        target: [ownerShapes.owner, ownerShapes.cliId],
+        set: { executable: values.executable, operations: values.operations, digest: values.digest, toml: values.toml, updatedAt: values.updatedAt },
+      })
+    },
+
+    async deleteOwnerShape(owner, cliId) {
+      const removed = await db.delete(ownerShapes).where(and(eq(ownerShapes.owner, owner), eq(ownerShapes.cliId, cliId))).returning({ cliId: ownerShapes.cliId })
+      return removed.length > 0
     },
   }
 }

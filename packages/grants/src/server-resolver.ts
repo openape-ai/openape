@@ -25,6 +25,8 @@ export interface ServerResolvedCommand {
     adapter_id: string
     adapter_version: string
     adapter_digest: string
+    /** The account whose own shape resolved the command; absent for registry shapes and the generic fallback. */
+    adapter_owner?: string
     resolved_executable: string
     context_bindings: Record<string, string>
   }
@@ -88,6 +90,7 @@ async function tryMatchShape(
       adapter_id: shape.cli_id,
       adapter_version: 'server',
       adapter_digest: shape.digest,
+      ...(shape.owner ? { adapter_owner: shape.owner } : {}),
       resolved_executable: executable,
       context_bindings: bindings,
     },

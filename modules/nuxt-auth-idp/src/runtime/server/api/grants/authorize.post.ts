@@ -56,5 +56,7 @@ export default defineEventHandler(async (event) => {
   if (forwarded) return sendProgramAuthorizeResult(event, forwarded)
   const account = await useIdpStores().userStore.findByEmail(caller.sub)
   if (!account?.isActive) throw createProblemError({ status: 403, title: 'The requester account is inactive or missing' })
-  return sendProgramAuthorizeResult(event, await authorizeProgramCall(event, { requester: caller.sub, request }))
+  // An agent reads its owner's own shapes, a human its own (issue 1551).
+  const shapeOwner = account.owner ?? (account.type === 'agent' ? undefined : account.email)
+  return sendProgramAuthorizeResult(event, await authorizeProgramCall(event, { requester: caller.sub, request, shapeOwner }))
 })

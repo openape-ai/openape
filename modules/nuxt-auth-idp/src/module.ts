@@ -237,6 +237,8 @@ export default defineNuxtModule<ModuleOptions>({
             { name: 'openape-grant-approval', path: '/grant-approval', file: resolve('./runtime/pages/grant-approval.vue') },
             { name: 'openape-grants', path: '/grants', file: resolve('./runtime/pages/grants.vue') },
             { name: 'openape-enroll', path: '/enroll', file: resolve('./runtime/pages/enroll.vue') },
+            // Owner-published shapes (issue 1551)
+            { name: 'openape-shapes', path: '/shapes', file: resolve('./runtime/pages/shapes.vue') },
             // Phase 2: Agents view + standing-grant management
             { name: 'openape-agents', path: '/agents', file: resolve('./runtime/pages/agents.vue') },
             { name: 'openape-agents-detail', path: '/agents/:email', file: resolve('./runtime/pages/agents/[email].vue') },
@@ -419,8 +421,11 @@ export default defineNuxtModule<ModuleOptions>({
       // Server-side shape registry (Phase 1 of policy-shift). Gated with
       // `grants` because shapes drive the grant-creation pipeline (argv
       // resolution, risk scoring, display strings).
-      addServerHandler({ route: '/api/shapes', handler: resolve('./runtime/server/api/shapes/index.get') })
-      addServerHandler({ route: '/api/shapes/:cliId', handler: resolve('./runtime/server/api/shapes/[cliId].get') })
+      addServerHandler({ route: '/api/shapes', method: 'get', handler: resolve('./runtime/server/api/shapes/index.get') })
+      addServerHandler({ route: '/api/shapes/:cliId', method: 'get', handler: resolve('./runtime/server/api/shapes/[cliId].get') })
+      // Owner-published shapes (issue 1551): the signed-in human owner only.
+      addServerHandler({ route: '/api/shapes/:cliId', method: 'put', handler: resolve('./runtime/server/api/shapes/[cliId].put') })
+      addServerHandler({ route: '/api/shapes/:cliId', method: 'delete', handler: resolve('./runtime/server/api/shapes/[cliId].delete') })
       addServerHandler({ route: '/api/shapes/resolve', method: 'post', handler: resolve('./runtime/server/api/shapes/resolve.post') })
 
       // Standing grants — user-created pre-authorizations that auto-approve

@@ -24,6 +24,7 @@ import { agentsCommand } from './commands/agents/index'
 import { nestCommand } from './commands/nest/index'
 import { yoloCommand } from './commands/yolo/index'
 import { adapterCommand } from './commands/adapter/index'
+import { shapesCommand } from './commands/shapes/index'
 import { runCommand } from './commands/run'
 import { proxyCommand } from './commands/proxy'
 import { explainCommand } from './commands/explain'
@@ -168,6 +169,7 @@ const main = defineCommand({
     proxy: proxyCommand,
     explain: explainCommand,
     adapter: adapterCommand,
+    shapes: shapesCommand,
     config: configCommand,
     fetch: fetchCommand,
     mcp: mcpCommand,

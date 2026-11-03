@@ -1142,6 +1142,9 @@ importers:
       '@openape/grants':
         specifier: workspace:*
         version: link:../../packages/grants
+      '@openape/shapes':
+        specifier: workspace:*
+        version: link:../../packages/shapes
       '@simplewebauthn/browser':
         specifier: ^13.3.0
         version: 13.3.0
@@ -1161,9 +1164,6 @@ importers:
       '@nuxt/ui':
         specifier: 'catalog:'
         version: 4.9.0(38dcd9e35cb4be6a1185ca6e65855fca)
-      '@openape/shapes':
-        specifier: workspace:*
-        version: link:../../packages/shapes
       '@types/node':
         specifier: 'catalog:'
         version: 22.20.0
