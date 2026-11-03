@@ -250,14 +250,19 @@ export function claimedSource(dir: string): { repo?: string, commit?: string, di
 
 /**
  * Whether the checkout has uncommitted changes. `git status` runs the clean
- * and process filters a checkout's own config defines, so with any such
- * filter it is not run and the source counts as uncommitted; reading the
- * config itself runs nothing.
+ * and process filters the checkout's config defines (local, worktree or
+ * included), so with any such filter it is not run and the source counts as
+ * uncommitted; reading the config itself runs nothing.
  */
 function isDirty(dir: string): boolean {
-  const local = git(dir, ['config', '--local', '--includes', '--name-only', '--list'])
-  if (local === undefined || local.split('\n').some(key => key.startsWith('filter.')))
+  // Every scope git uses here (local, worktree, includes) except the user's own global config.
+  const config = git(dir, ['config', '--list', '--includes', '--name-only', '--show-scope'])
+  if (config === undefined || config.split('\n').some((line) => {
+    const [scope, key = ''] = line.split('\t')
+    return scope !== 'global' && key.startsWith('filter.')
+  })) {
     return true
+  }
   return git(dir, ['status', '--porcelain', '--ignore-submodules=all']) !== ''
 }
 
