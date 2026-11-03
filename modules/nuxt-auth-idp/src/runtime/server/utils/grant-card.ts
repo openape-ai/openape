@@ -5,6 +5,7 @@ import { brokerRequesterName, buildCliAuthDetail, canonicalizeCliPermission, com
 import type { GrantCardContext, OwnerShapeCard, RegistryCard } from '../../utils/grant-card'
 import { renderRegistryCard } from '../../utils/grant-card'
 import { getCliAuthorizationDetails } from '../../utils/cli-grants'
+import { shapeOwnerOf } from './owner-shape-current'
 import { useShapeStore } from './shape-store'
 import { useIdpStores } from './stores'
 
@@ -151,13 +152,15 @@ function overriddenTier(shape: ServerShape, lower: ServerShape[]): OwnerShapeCar
  * (`execution_context.adapter_owner` or `adapter_domain`, written only by the
  * IdP), or null.
  */
-export async function ownerShapeCard(request: OpenApeGrantRequest, sources: Pick<GrantCardSources, 'listShapes'>): Promise<OwnerShapeCard | null> {
+export async function ownerShapeCard(request: OpenApeGrantRequest, sources: Pick<GrantCardSources, 'listShapes'>, requesterOwner?: string): Promise<OwnerShapeCard | null> {
   const context = request.execution_context
   const detail = getCliAuthorizationDetails(request.authorization_details)[0]
   if (!resolvedByIdp(request) || (!context?.adapter_owner && !context?.adapter_domain) || !detail) return null
   const scope = contextScope(context)
-  const shape = (await sources.listShapes(scope)).find(item => item.cli_id === detail.cli_id)
-  const own = shape && shape.owner === scope.owner && shape.domain === scope.domain ? shape : null
+  // A domain shape is read with the requester's owner, so a later personal override shows as a change.
+  const readScope = !scope.owner && requesterOwner ? { ...scope, owner: requesterOwner } : scope
+  const shape = (await sources.listShapes(readScope)).find(item => item.cli_id === detail.cli_id)
+  const own = shape && shape.owner === context.adapter_owner && shape.domain === context.adapter_domain ? shape : null
   // What the shape hides: below a personal shape the owner's domain and the IdP-wide shapes, below a domain shape the IdP-wide ones.
   const lower = own ? await sources.listShapes(scope.owner ? { domain: emailDomain(scope.owner) } : {}) : []
   return {
@@ -188,7 +191,7 @@ export async function withGrantCards<T extends OpenApeGrant>(grants: T[], source
   const getShape: GetShape = async (cliId, scope) => (await listShapes(scope)).find(shape => shape.cli_id === cliId) ?? null
   const findUser = memoize(sources.findUser)
   return await Promise.all(grants.map(async (grant) => {
-    const [registry, user, exactCommand, ownerShape] = await Promise.all([registryCard(grant.request, getShape), grant.brokered ? null : findUser(grant.request.requester), bindsExactCommand(grant.request), ownerShapeCard(grant.request, { listShapes })])
+    const [registry, user, exactCommand, ownerShape] = await Promise.all([registryCard(grant.request, getShape), grant.brokered ? null : findUser(grant.request.requester), bindsExactCommand(grant.request), (grant.brokered ? Promise.resolve(null) : findUser(grant.request.requester)).then(found => ownerShapeCard(grant.request, { listShapes }, found ? shapeOwnerOf(found) : undefined))])
     const providerName = brokerRequesterName(grant.brokered?.requester_name)
     const requester = grant.brokered ? providerName ? { name: providerName, owner: grant.brokered.owner } : null : user ? { name: user.name, owner: user.owner ?? null } : null
     return { ...grant, card: { registry, requester, program: programFacts(grant.request), binds_exact_command: exactCommand, owner_shape: ownerShape } }

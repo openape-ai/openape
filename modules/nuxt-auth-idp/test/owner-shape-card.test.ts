@@ -84,7 +84,11 @@ describe('owner shape card', () => {
     await store.saveDomainShape!('example.com', { ...jev, digest: 'SHA-256:domain', published_by: 'admin@example.com' })
     const call = await resolveProgramCall(scopedShapeStore(store, shapeScopeOf('colleague@example.com')), { program: { name: 'jev', sha256: 'a'.repeat(64) }, argv: ['ask'] })
     const grant: OpenApeGrant = { id: 'g2', status: 'pending', type: 'command', created_at: 1, request: { requester: 'agent@example.com', target_host: 'macmini', audience: 'shapes', grant_type: 'always', permissions: [call.detail.permission], authorization_details: [call.detail], command: call.executionArgv, execution_context: call.executionContext } }
-    expect((await withGrantCards([grant], sourcesFor(store)))[0]!.card.owner_shape).toMatchObject({ tier: 'domain', owner: null, domain: 'example.com', published_by: 'admin@example.com', overrides: 'instance', current: true })
+    const sources = { ...sourcesFor(store), findUser: async (email: string) => ({ email, type: 'agent', owner: 'colleague@example.com' }) as never }
+    expect((await withGrantCards([grant], sources))[0]!.card.owner_shape).toMatchObject({ tier: 'domain', owner: null, domain: 'example.com', published_by: 'admin@example.com', overrides: 'instance', current: true })
+    // The requester's owner later publishes a personal shape for the program: the domain grant no longer applies.
+    await store.saveOwnerShape!('colleague@example.com', { ...jev, digest: 'SHA-256:personal' })
+    expect((await withGrantCards([grant], sources))[0]!.card.owner_shape).toMatchObject({ tier: 'domain', current: false, published_at: null })
   })
 
   it('has no owner shape for registry or client-resolved grants', async () => {

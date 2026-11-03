@@ -196,7 +196,7 @@ describe('shape import writes', () => {
     expect(await shapeStore.listShapeChanges!('instance', '', 10)).toHaveLength(2)
 
     // Importing the older directory with prune restores the older state, and the audit keeps the replaced TOML.
-    const older = await request('POST', '/shapes/import?scope=instance', managementToken, { shapes: [{ toml: adapter('git', { operation: 'status' }), description: 'Git' }], prune: true })
+    const older = await request('POST', '/shapes/import?scope=instance', managementToken, { shapes: [{ toml: adapter('git', { operation: 'status' }), description: 'Git version control' }], prune: true })
     expect(older.json).toMatchObject({ removed: ['jev'], text_changed: ['git'] })
     expect((await shapeStore.listShapes()).map(shape => shape.cli_id)).toEqual(['git'])
     const [removal, textChange] = await shapeStore.listShapeChanges!('instance', '', 2)
@@ -212,6 +212,8 @@ describe('shape import writes', () => {
     expect((await shapeStore.listDomainShapes!('example.test')).map(shape => shape.published_by)).toEqual([operator, operator])
     const jevDigest = (await shapeStore.listDomainShapes!('example.test'))[0]!.digest
     await grantStore.save(domainGrant('jev', jevDigest))
+    // A grant of an earlier digest already stopped being reused; it is not counted again.
+    await grantStore.save(domainGrant('jev', 'SHA-256:earlier'))
     await grantStore.save(domainGrant('git', 'SHA-256:git', {}))
 
     const preview = await request('POST', '/shapes/import?scope=domain&dry_run=1', admin, { ...batch(adapter('git', { operation: 'status' })), prune: true })
@@ -242,6 +244,14 @@ describe('shape import writes', () => {
     await Promise.all(['one', 'two', 'three'].map(operation => request('PUT', '/shapes/tool?scope=domain', admin, { toml: adapter('tool', { operation }) })))
     const updates = (await shapeStore.listShapeChanges!('domain', 'example.test', 10, 'tool')).reverse()
     expect(updates.map(change => change.previous_digest)).toEqual([null, updates[0]!.digest, updates[1]!.digest])
+  })
+
+  it('keeps the stored description when a single publish sends none', async () => {
+    await request('POST', '/shapes/import?scope=instance', managementToken, { shapes: [{ toml: adapter('jev'), description: 'Jev from the registry' }] })
+    const republished = await request('PUT', '/shapes/jev?scope=instance', managementToken, { toml: adapter('jev') })
+    expect(republished.json.saved).toBe(false)
+    expect((await shapeStore.getShape('jev'))?.description).toBe('Jev from the registry')
+    expect((await request('PUT', '/shapes/other?scope=instance&dry_run=1', managementToken, { toml: adapter('jev') })).status).toBe(400)
   })
 
   it('lists a domain\'s shapes to its members and its history only to its admins', async () => {

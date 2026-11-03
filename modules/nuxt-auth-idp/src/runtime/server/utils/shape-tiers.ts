@@ -258,7 +258,7 @@ function parseBatchShape(scope: ShapeTier, item: ImportBody['shapes'][number], i
  * removed. An unchanged repeat writes nothing.
  */
 export async function importShapes(writer: ShapeWriter, body: unknown, dryRun: boolean): Promise<ShapeImportReport> {
-  return await serialized(() => importNow(writer, body, dryRun))
+  return (await serialized(() => importNow(writer, body, dryRun))).report
 }
 
 // Shape writes run one at a time in this process (the IdP runs as one process), so the state an import
@@ -270,18 +270,33 @@ function serialized<T>(write: () => Promise<T>): Promise<T> {
   return next
 }
 
-async function importNow(writer: ShapeWriter, body: unknown, dryRun: boolean): Promise<ShapeImportReport> {
+/** An import's report with what it read, so a single publish answers without reading again. */
+interface ImportOutcome {
+  report: ShapeImportReport
+  incoming: ServerShape[]
+  existing: ServerShape[]
+  /** The grants the impact was computed from; null when nothing changed. */
+  grants: OpenApeGrant[] | null
+}
+
+async function importNow(writer: ShapeWriter, body: unknown, dryRun: boolean, urlId?: string): Promise<ImportOutcome> {
   const store = tierStore()
   const input = readImportBody(body)
   const limit = SHAPE_LIMITS.perScope[writer.scope]
   if (input.shapes.length > limit) fail(`A ${writer.scope} import holds at most ${limit} shapes`, 413)
   const incoming = input.shapes.map((item, index) => parseBatchShape(writer.scope, item, index))
+  if (urlId !== undefined && incoming[0]?.cli_id !== urlId) fail(`The adapter id ${JSON.stringify(incoming[0]?.cli_id)} differs from the shape id ${JSON.stringify(urlId)} in the URL`)
   // One program, one shape: a second shape for the same id or executable would leave the call resolved by whichever sorts first.
   incoming.forEach((shape, index) => {
     const twin = incoming.slice(0, index).find(other => shares(other, shape))
     if (twin) fail(`${shape.cli_id} and ${twin.cli_id} describe the same program; nothing was imported`, 409)
   })
   const existing = await listTier(store, writer)
+  // A shape sent without a description keeps the stored one (a single publish never clears the registry text).
+  input.shapes.forEach((item, index) => {
+    const previous = existing.find(shape => shape.cli_id === incoming[index]!.cli_id)
+    if (item.description === undefined && previous && writer.scope !== 'personal') incoming[index]!.description = previous.description
+  })
   const incomingIds = new Set(incoming.map(shape => shape.cli_id))
   const removed = input.prune ? existing.filter(shape => !incomingIds.has(shape.cli_id)) : []
   const desktop = removed.find(shape => DESKTOP_OWN.has(shape.cli_id))
@@ -321,13 +336,13 @@ async function importNow(writer: ShapeWriter, body: unknown, dryRun: boolean): P
   })
   const changes = [...save.map(shape => change(previousOf.has(shape.cli_id) ? 'update' : 'add', previousOf.get(shape.cli_id), shape)), ...removed.map(shape => change('remove', shape, undefined))]
 
-  await describeImpact(report, writer, incoming, existing)
+  const grants = await describeImpact(report, writer, incoming, existing)
   if (!dryRun && changes.length) {
     await store.applyShapeChanges({ scope: writer.scope, scope_key: writer.key, save: save.map(({ toml, ...shape }) => writer.scope === 'instance' ? shape : { ...shape, toml }), remove: report.removed, changes })
     report.saved = true
     console.info(`[shapes] ${writer.actor} imported ${writer.scope}${writer.key ? ` ${writer.key}` : ''}: +${report.added.length} ~${report.rules_changed.length} rules ~${report.text_changed.length} text -${report.removed.length}${input.source?.commit ? ` from ${input.source.commit}` : ''}`)
   }
-  return report
+  return { report, incoming, existing, grants }
 }
 
 /** IdP-wide rows keep no TOML; the newest audit entry of a shape holds the last imported one. */
@@ -337,19 +352,22 @@ async function lastInstanceToml(store: ShapeStore, cliIds: string[]): Promise<Ma
 }
 
 /** Fills in which continuing grants the write affects and which lower-tier shapes it newly hides. */
-async function describeImpact(report: ShapeImportReport, writer: ShapeWriter, incoming: ServerShape[], existing: ServerShape[]): Promise<void> {
+async function describeImpact(report: ShapeImportReport, writer: ShapeWriter, incoming: ServerShape[], existing: ServerShape[]): Promise<OpenApeGrant[] | null> {
   const changed = new Set([...report.rules_changed, ...report.removed])
   const added = incoming.filter(shape => report.added.includes(shape.cli_id) || report.rules_changed.includes(shape.cli_id))
-  if (!changed.size && !added.length) return
+  if (!changed.size && !added.length) return null
   const grants = await scopeGrants(writer)
   const own = `${writer.scope}:${writer.key}`
+  const digestOf = new Map(existing.map(shape => [shape.cli_id, shape.digest]))
   for (const { grant } of grants) {
     if (grantTier(grant) !== own || !changed.has(affected(grant).cli_id)) continue
+    // A personal or domain grant of an earlier digest already stopped being reused.
+    if (writer.scope !== 'instance' && grant.request.execution_context?.adapter_digest !== digestOf.get(affected(grant).cli_id)) continue
     // IdP-wide approvals carry over rule changes and lose reuse only when their shape is removed.
     if (writer.scope === 'instance' && !report.removed.includes(affected(grant).cli_id)) report.grants_keeping_reuse.push(affected(grant))
     else report.grants_losing_reuse.push(affected(grant))
   }
-  if (writer.scope === 'instance') return
+  if (writer.scope === 'instance') return grants.map(entry => entry.grant)
   // What the writer's scope read before the write below this tier: for a domain the IdP-wide shapes, for an owner their domain's and the IdP-wide ones.
   const lower = await scopedShapeStore(useShapeStore(), writer.scope === 'personal' ? { domain: emailDomain(writer.key) } : {}).listShapes()
   for (const shape of added) {
@@ -360,6 +378,7 @@ async function describeImpact(report: ShapeImportReport, writer: ShapeWriter, in
       report.overrides.push({ cli_id: hidden.cli_id, tier, by: shape.cli_id, grants: grants.filter(entry => (writer.scope === 'personal' || entry.domain === writer.key) && grantTier(entry.grant) === hiddenTier && affected(entry.grant).cli_id === hidden.cli_id).map(entry => affected(entry.grant)) })
     }
   }
+  return grants.map(entry => entry.grant)
 }
 
 function boundGrants(grants: OpenApeGrant[], writer: Pick<ShapeWriter, 'scope' | 'key'>, shape: Pick<ServerShape, 'cli_id' | 'digest'>): OwnerShapeGrant[] {
@@ -400,19 +419,14 @@ export async function listTierChanges(reader: Pick<ShapeWriter, 'scope' | 'key'>
  */
 export async function publishTierShape(writer: ShapeWriter, cliId: string, body: unknown, dryRun: boolean) {
   const { toml, description } = (body && typeof body === 'object' ? body : {}) as { toml?: unknown, description?: unknown }
-  if (typeof toml === 'string') {
-    let id: string | undefined
-    try { id = parseAdapterToml(toml).cli.id }
-    catch { /* parseTierShape reports it */ }
-    if (id !== undefined && id !== cliId) fail(`The adapter id ${JSON.stringify(id)} differs from the shape id ${JSON.stringify(cliId)} in the URL`)
-  }
-  const previous = (await listTier(tierStore(), writer)).find(shape => shape.cli_id === cliId) ?? null
-  const report = await importShapes(writer, { shapes: [{ toml, ...(description === undefined ? {} : { description }) }] }, dryRun)
-  const shape = parseTierShape(writer.scope, toml, description ?? '')
-  const grants = writer.scope === 'instance' ? [] : (await scopeGrants(writer)).map(entry => entry.grant)
+  const { report, incoming, existing, grants } = await serialized(() => importNow(writer, { shapes: [{ toml, ...(description === undefined ? {} : { description }) }] }, dryRun, cliId))
+  // importNow refused any other id, so the one shape is the URL's.
+  const shape = incoming[0]!
+  const previous = existing.find(item => item.cli_id === cliId) ?? null
+  const bound = writer.scope === 'instance' ? [] : grants ?? (await scopeGrants(writer)).map(entry => entry.grant)
   const now = Math.floor(Date.now() / 1000)
   const stored = { ...shape, ...(writer.scope === 'domain' ? { published_by: writer.actor } : {}), createdAt: previous?.createdAt ?? now, updatedAt: report.saved || !previous ? now : previous.updatedAt }
-  return { saved: report.saved, shape: view(stored, grants, writer), replaced_digest: previous?.digest ?? null, grants_losing_reuse: report.grants_losing_reuse, grants_keeping_reuse: report.grants_keeping_reuse, overrides: report.overrides }
+  return { saved: report.saved, shape: view(stored, bound, writer), replaced_digest: previous?.digest ?? null, grants_losing_reuse: report.grants_losing_reuse, grants_keeping_reuse: report.grants_keeping_reuse, overrides: report.overrides }
 }
 
 /** Removes one shape of one tier, audited like an import. */
