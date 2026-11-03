@@ -38,8 +38,8 @@ export const grants = sqliteTable('grants', {
 
 // --- Server-side shape registry ---
 // Replaces client-side ~/.openape/shapes/adapters/*.toml — the IdP is the
-// canonical source of CLI operation definitions. Populated via the seed
-// script (scripts/seed-shapes.ts) and eventually user uploads.
+// canonical source of CLI operation definitions. Written only through
+// POST /api/shapes/import?scope=instance (`apes shapes import --scope instance`).
 export const shapes = sqliteTable('shapes', {
   cliId: text('cli_id').primaryKey(),
   executable: text('executable').notNull(),

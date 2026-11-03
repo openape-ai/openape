@@ -25,7 +25,6 @@
     "deploy:image": "node scripts/deploy-image.mjs",
     "deploy:gateway": "node scripts/deploy-gateway.mjs",
     "gateway:drift": "node scripts/gateway-drift.mjs",
-    "seed:shapes": "tsx scripts/seed-shapes.ts",
     "prepare": "git config core.hooksPath .githooks || true",
     "deploy:docs-site": "node scripts/deploy-docs-site.mjs",
     "guides": "bash compose/demo/run.sh",
