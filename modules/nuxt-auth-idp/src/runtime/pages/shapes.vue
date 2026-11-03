@@ -63,13 +63,17 @@ onMounted(async () => {
   await loadShapes()
 })
 
+let loads = 0
 async function loadShapes() {
+  // Only the newest load may fill the page: a slow answer for a tab left meanwhile is dropped.
+  const load = ++loads
   shapesLoading.value = true
   const listUrl = scope.value === 'personal' ? '/api/shapes?mine=1' : `/api/shapes?scope=${scope.value}`
   const [list, changes] = await Promise.allSettled([
     $fetch<OwnerShapeView[]>(listUrl),
     scope.value === 'personal' ? Promise.resolve(null) : $fetch<ShapeChange[]>(`/api/shapes/changes?scope=${scope.value}`),
   ])
+  if (load !== loads) return
   shapes.value = list.status === 'fulfilled' ? list.value : []
   history.value = changes.status === 'fulfilled' ? changes.value : null
   shapesLoading.value = false

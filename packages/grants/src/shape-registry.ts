@@ -266,7 +266,7 @@ export function scopedShapeStore(store: ShapeStore, scope: ShapeScope): ShapeSto
   const load = async (): Promise<ServerShape[]> => {
     const [registry, ownShapes, domainShapes] = await Promise.all([store.listShapes(), readPersonal?.() ?? [], readDomain?.() ?? []])
     // Operations the Pods desktop performs itself are never overridden, whatever a store holds.
-    const desktop = notIn(names(registry.filter(shape => shape.virtual)))
+    const desktop = notIn(new Set([...DESKTOP_OWN_SHAPE_IDS, ...names(registry.filter(shape => shape.virtual))]))
     const personal = owner ? ownShapes.filter(desktop).map(shape => scoped(shape, { owner })) : []
     const domainTier = domain ? domainShapes.filter(desktop).filter(notIn(names(personal))).map(shape => scoped(shape, { domain })) : []
     return [...personal, ...domainTier, ...registry.filter(notIn(names([...personal, ...domainTier])))]
