@@ -1,7 +1,7 @@
 import type { BrokeredGrant, OpenApeGrant, OpenApeGrantRequest, OpenApeProgramAuthorizeRequest, OpenApeProgramAuthorizeResponse } from '@openape/core'
 import type { ResolvedProgramCall } from '@openape/grants'
 import { computeCmdHash } from '@openape/core'
-import { assertGrantBatchMember, createGrant, evaluateStandingGrants, InvalidGrantBatchError, InvalidProgramAuthorizeRequestError, issueCommandJWT, ownerScopedShapeStore, PROGRAM_AUTHORIZE_LIMITS, resolveProgramCall } from '@openape/grants'
+import { assertGrantBatchMember, createGrant, evaluateStandingGrants, InvalidGrantBatchError, InvalidProgramAuthorizeRequestError, issueCommandJWT, PROGRAM_AUTHORIZE_LIMITS, resolveProgramCall, scopedShapeStore, shapeScopeOf } from '@openape/grants'
 import type { H3Event } from 'h3'
 import { isError, setResponseHeader, setResponseStatus } from 'h3'
 import { requestReferencedGrant } from './grant-reference'
@@ -28,9 +28,10 @@ export interface ProgramAuthorizeInput {
   /** Called after a command token was issued (the decision IdP audits brokered tokens). */
   onToken?: (grant: OpenApeGrant) => Promise<void>
   /**
-   * The human owner whose own shapes resolve this call after the registry
-   * (issue 1551): the requester's owner, or the requester when it is human.
-   * Absent for brokered identities, which only use registry shapes.
+   * The human owner whose personal shapes, and whose email domain's shapes,
+   * resolve this call before the IdP-wide shapes (issues 1551, 1553): the
+   * requester's owner, or the requester when it is human. Absent for brokered
+   * identities, which only use IdP-wide shapes.
    */
   shapeOwner?: string
 }
@@ -157,7 +158,7 @@ async function requestDecision(request: OpenApeGrantRequest, brokered: BrokeredG
 }
 
 async function resolveCall(request: OpenApeProgramAuthorizeRequest, shapeOwner: string | undefined): Promise<ResolvedProgramCall> {
-  try { return await resolveProgramCall(ownerScopedShapeStore(useShapeStore(), shapeOwner), request) }
+  try { return await resolveProgramCall(scopedShapeStore(useShapeStore(), shapeScopeOf(shapeOwner)), request) }
   catch (error) {
     if (!(error instanceof InvalidProgramAuthorizeRequestError)) throw error
     throw createProblemError({ status: 400, title: error.message })
@@ -203,7 +204,7 @@ async function decideProgramCall(event: H3Event, input: ProgramAuthorizeInput, t
     throw createProblemError({ status: 400, title: `Invalid batch: ${error.message}` })
   }
 
-  const scope: ProgramCallScope = { target_host: request.target_host, audience: request.audience, detail: call.detail, argvHash: call.argvHash, programSha256: request.program.sha256, files: request.files, requiresOnce: call.requiresOnce, adapterOwner: call.executionContext.adapter_owner, adapterDigest: call.executionContext.adapter_digest }
+  const scope: ProgramCallScope = { target_host: request.target_host, audience: request.audience, detail: call.detail, argvHash: call.argvHash, programSha256: request.program.sha256, files: request.files, requiresOnce: call.requiresOnce, adapterOwner: call.executionContext.adapter_owner, adapterDomain: call.executionContext.adapter_domain, adapterDigest: call.executionContext.adapter_digest }
   const existing = await grantStore.findByRequester(requester)
   const covering = findCoveringGrant(existing, scope, brokered)
   if (covering) return await approvedAnswer(covering, call, onToken)

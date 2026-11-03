@@ -1,8 +1,8 @@
 // Owner-published shapes on the grant card (issue 1551): the card says the
 // owner's own shape resolved the grant and lists every operation it declares.
 import type { OpenApeGrant } from '@openape/core'
-import type { ServerShape } from '@openape/grants'
-import { createInMemoryShapeStore, ownerScopedShapeStore, resolveProgramCall } from '@openape/grants'
+import type { ServerShape, ShapeScope } from '@openape/grants'
+import { createInMemoryShapeStore, resolveProgramCall, scopedShapeStore, shapeScopeOf } from '@openape/grants'
 import { describe, expect, it, vi } from 'vitest'
 import { withGrantCards } from '../src/runtime/server/utils/grant-card'
 
@@ -24,8 +24,12 @@ const jev: ServerShape = {
 }
 
 async function grantFor(store: ReturnType<typeof createInMemoryShapeStore>): Promise<OpenApeGrant> {
-  const call = await resolveProgramCall(ownerScopedShapeStore(store, owner), { program: { name: 'jev', sha256: 'a'.repeat(64) }, argv: ['ask'] })
+  const call = await resolveProgramCall(scopedShapeStore(store, shapeScopeOf(owner)), { program: { name: 'jev', sha256: 'a'.repeat(64) }, argv: ['ask'] })
   return { id: 'g1', status: 'pending', type: 'command', created_at: 1, request: { requester: 'agent@example.com', target_host: 'macmini', audience: 'shapes', grant_type: 'always', permissions: [call.detail.permission], authorization_details: [call.detail], command: call.executionArgv, execution_context: call.executionContext } }
+}
+
+function sourcesFor(store: ReturnType<typeof createInMemoryShapeStore>) {
+  return { listShapes: (scope: ShapeScope) => scopedShapeStore(store, scope).listShapes(), findUser: async () => null }
 }
 
 describe('owner shape card', () => {
@@ -33,11 +37,15 @@ describe('owner shape card', () => {
     const store = createInMemoryShapeStore()
     await store.saveOwnerShape!(owner, jev)
     const grant = await grantFor(store)
-    const sources = { getShape: (cliId: string, shapeOwner?: string) => ownerScopedShapeStore(store, shapeOwner).getShape(cliId), findUser: async () => null }
+    const sources = sourcesFor(store)
     const [card] = await withGrantCards([grant], sources)
     expect(card!.card.owner_shape).toEqual({
       cli_id: 'jev',
+      tier: 'personal',
       owner,
+      domain: null,
+      published_by: null,
+      overrides: null,
       digest: 'SHA-256:jev-v1',
       published_at: 20,
       current: true,
@@ -53,17 +61,30 @@ describe('owner shape card', () => {
     expect((await withGrantCards([grant], sources))[0]!.card.owner_shape).toMatchObject({ current: false, published_at: null, operations: [] })
   })
 
-  it('never shows a later registry shape\'s meaning for a grant an owner shape resolved', async () => {
+  it('never shows another tier\'s meaning for a grant a personal shape resolved, and names what it overrides', async () => {
     const store = createInMemoryShapeStore()
-    await store.saveOwnerShape!(owner, { ...jev, operations: jev.operations.map(op => ({ ...op, presentation: { title: { en: 'Ask Jev', de: 'Jev fragen' } } as never })) })
+    const presented = (title: string) => jev.operations.map(op => ({ ...op, presentation: { title: { en: title, de: title } } as never }))
+    await store.saveShape({ ...jev, source: 'builtin', digest: 'SHA-256:registry', operations: presented('Registry Jev') })
+    await store.saveOwnerShape!(owner, { ...jev, operations: presented('Ask Jev') })
     const grant = await grantFor(store)
-    const before = { getShape: (cliId: string, shapeOwner?: string) => ownerScopedShapeStore(store, shapeOwner).getShape(cliId), findUser: async () => null }
-    expect((await withGrantCards([grant], before))[0]!.card.registry).not.toBeNull()
-    await store.saveShape({ ...jev, source: 'builtin', digest: 'SHA-256:registry', operations: jev.operations.map(op => ({ ...op, presentation: { title: { en: 'Registry Jev', de: 'Registry Jev' } } as never })) })
-    const sources = { getShape: (cliId: string, shapeOwner?: string) => ownerScopedShapeStore(store, shapeOwner).getShape(cliId), findUser: async () => null }
-    const [card] = await withGrantCards([grant], sources)
+    const [before] = await withGrantCards([grant], sourcesFor(store))
+    expect(before!.card.registry).not.toBeNull()
+    expect(before!.card.owner_shape).toMatchObject({ tier: 'personal', overrides: 'instance', current: true })
+    await store.saveDomainShape!('example.com', { ...jev, digest: 'SHA-256:domain', published_by: 'admin@example.com' })
+    expect((await withGrantCards([grant], sourcesFor(store)))[0]!.card.owner_shape).toMatchObject({ overrides: 'domain' })
+    // Removed: the domain shape now reads the owner's calls; it never speaks for the personal grant.
+    await store.deleteOwnerShape!(owner, 'jev')
+    const [card] = await withGrantCards([grant], sourcesFor(store))
     expect(card!.card.registry).toBeNull()
-    expect(card!.card.owner_shape).toMatchObject({ current: false })
+    expect(card!.card.owner_shape).toMatchObject({ current: false, overrides: null })
+  })
+
+  it('marks a domain shape with its domain and writer', async () => {
+    const store = createInMemoryShapeStore([{ ...jev, source: 'builtin', digest: 'SHA-256:registry' }])
+    await store.saveDomainShape!('example.com', { ...jev, digest: 'SHA-256:domain', published_by: 'admin@example.com' })
+    const call = await resolveProgramCall(scopedShapeStore(store, shapeScopeOf('colleague@example.com')), { program: { name: 'jev', sha256: 'a'.repeat(64) }, argv: ['ask'] })
+    const grant: OpenApeGrant = { id: 'g2', status: 'pending', type: 'command', created_at: 1, request: { requester: 'agent@example.com', target_host: 'macmini', audience: 'shapes', grant_type: 'always', permissions: [call.detail.permission], authorization_details: [call.detail], command: call.executionArgv, execution_context: call.executionContext } }
+    expect((await withGrantCards([grant], sourcesFor(store)))[0]!.card.owner_shape).toMatchObject({ tier: 'domain', owner: null, domain: 'example.com', published_by: 'admin@example.com', overrides: 'instance', current: true })
   })
 
   it('has no owner shape for registry or client-resolved grants', async () => {
@@ -72,7 +93,7 @@ describe('owner shape card', () => {
     const grant = await grantFor(store)
     // A client cannot write adapter_owner; without the IdP's program hash the field is ignored.
     const { program_sha256: _sha, ...clientContext } = grant.request.execution_context!
-    const sources = { getShape: async () => null, findUser: async () => null }
+    const sources = { listShapes: async () => [], findUser: async () => null }
     expect((await withGrantCards([{ ...grant, request: { ...grant.request, execution_context: clientContext } }], sources))[0]!.card.owner_shape).toBeNull()
   })
 })

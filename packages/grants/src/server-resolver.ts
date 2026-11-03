@@ -27,6 +27,8 @@ export interface ServerResolvedCommand {
     adapter_digest: string
     /** The account whose own shape resolved the command; absent for registry shapes and the generic fallback. */
     adapter_owner?: string
+    /** The email domain whose domain shape resolved the command; absent otherwise. */
+    adapter_domain?: string
     resolved_executable: string
     context_bindings: Record<string, string>
   }
@@ -91,6 +93,7 @@ async function tryMatchShape(
       adapter_version: 'server',
       adapter_digest: shape.digest,
       ...(shape.owner ? { adapter_owner: shape.owner } : {}),
+      ...(shape.domain ? { adapter_domain: shape.domain } : {}),
       resolved_executable: executable,
       context_bindings: bindings,
     },

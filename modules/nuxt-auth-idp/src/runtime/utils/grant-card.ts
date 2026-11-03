@@ -57,10 +57,18 @@ export interface GrantCardContext {
   owner_shape?: OwnerShapeCard | null
 }
 
-/** An owner's own shape as the approver sees it: who published it and every operation it declares. */
+/** A personal or domain shape as the approver sees it: whose it is, who published it, what it overrides and every operation it declares. */
 export interface OwnerShapeCard {
   cli_id: string
-  owner: string
+  tier: 'personal' | 'domain'
+  /** The owner of a personal shape; null for a domain shape. */
+  owner: string | null
+  /** The email domain of a domain shape; null for a personal shape. */
+  domain: string | null
+  /** The root admin or operator who last wrote a domain shape; null otherwise or when it was removed. */
+  published_by: string | null
+  /** The lower tier whose shape for the same program this one replaces, or null. */
+  overrides: 'domain' | 'instance' | null
   digest: string
   /** Unix seconds of the last publication; null when the shape was removed since. */
   published_at: number | null

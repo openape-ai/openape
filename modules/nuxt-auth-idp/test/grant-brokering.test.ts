@@ -33,7 +33,7 @@ vi.mock('../src/runtime/server/utils/admin', () => ({ requireAuth: async (event:
 vi.mock('../src/runtime/server/utils/session', () => ({ getAppSession: async (event: H3Event) => ({ data: { userId: getHeader(event, 'x-session') } }) }))
 vi.mock('../src/runtime/server/utils/grant-card', async (importOriginal) => {
   const original = await importOriginal<typeof import('../src/runtime/server/utils/grant-card')>()
-  return { withGrantCards: async (grants: OpenApeGrant[]) => original.withGrantCards(grants, { getShape: async () => null, findUser: async () => null }) }
+  return { withGrantCards: async (grants: OpenApeGrant[]) => original.withGrantCards(grants, { listShapes: async () => [], findUser: async () => null }) }
 })
 vi.mock('../src/runtime/server/utils/grant-stores', () => ({ useGrantStores: () => ({ grantStore }) }))
 vi.mock('../src/runtime/server/utils/grant-pending-hooks', () => ({ runGrantPendingHooks: async (grant: unknown) => notified(grant) }))
