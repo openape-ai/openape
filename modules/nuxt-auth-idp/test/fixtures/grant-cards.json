@@ -136,7 +136,8 @@
         "owner": "owner@example.com"
       },
       "program": null,
-      "binds_exact_command": false
+      "binds_exact_command": false,
+      "owner_shape": null
     }
   },
   "gitPush": {
@@ -257,7 +258,8 @@
         "owner": "owner@example.com"
       },
       "program": null,
-      "binds_exact_command": false
+      "binds_exact_command": false,
+      "owner_shape": null
     }
   },
   "unknown": {
@@ -315,7 +317,8 @@
       "registry": null,
       "requester": null,
       "program": null,
-      "binds_exact_command": true
+      "binds_exact_command": true,
+      "owner_shape": null
     }
   },
   "gitUntested": {
@@ -439,7 +442,8 @@
         "sha256": "5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e",
         "version_tested": false
       },
-      "binds_exact_command": false
+      "binds_exact_command": false,
+      "owner_shape": null
     }
   },
   "graphGate": {
@@ -495,7 +499,8 @@
       "registry": null,
       "requester": null,
       "program": null,
-      "binds_exact_command": true
+      "binds_exact_command": true,
+      "owner_shape": null
     }
   }
 }

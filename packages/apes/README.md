@@ -213,6 +213,18 @@ agent-writable directory off their `PATH` and never use one as a program locatio
 | `apes explain -- <cmd>` | Preview how the IdP resolves a command (`POST /api/shapes/resolve`) |
 | `apes adapter list\|info\|search` | Show the Shapes adapters known to the IdP (read-only) |
 
+### Your own shapes
+
+A signed-in human owner can publish the shape (`adapter.toml`) of a tool they built to their own IdP. The
+shape is visible and used only for the owner and their agents; registry ids and executables stay reserved for
+the shared registry. Agent, Pod and brokered logins are refused.
+
+| Command | Description |
+|---|---|
+| `apes shapes publish <path> [--dry-run] [--yes] [--json]` | Parse the adapter locally, preview it at the IdP (id, executable, digest, operations and the continuing grants that stop being reused when the digest changes), then publish it. `--dry-run` only previews; when continuing grants would stop being reused, publishing needs `--yes`. |
+| `apes shapes list --mine [--json]` | List your shapes: id, operation count, short digest, publish date, bound continuing grants |
+| `apes shapes remove <id> [--json]` | Remove a shape and report how many continuing grants stop being reused |
+
 ### Configuration
 
 Auth and config are stored in `~/.config/apes/`:

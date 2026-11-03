@@ -1,3 +1,10 @@
+# Owner-published shapes — issue 1551
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1551. Owner approved plan revision 4 in chat on 2026-11-03 (“passt - dann setze das jetzt bitte um”, then “mach den plan gleich von anfang bis ende”): https://report.openape.ai/d/01M6G8D4YN6YKXFP135VC4CE2K?v=4. Branch `feature/issue-1551-owner-shapes`, worktree `openape-monorepo.worktrees/openape-monorepo-feature-issue-1551-owner-shapes`, canonical base `f9d995ff`.
+- Owner shapes live in their own `owner_shapes` table (key owner + cli_id); `ownerScopedShapeStore` reads an owner's calls with registry shapes first, then non-colliding owner shapes without tested digests. Only the direct human owner writes (`requireBrokerOwner`). Continuing grants on an owner shape bind its digest; registry grants keep carrying over adapter updates.
+- PR: https://repos.openape.ai/patrick/monorepo/pulls/526, explicitly related to the issue. Cross-model review (GPT-6 Astra, Claude Fable 5.1) of `8ad9bd90`; all findings fixed with tests. Pre-push affected unit gate passed on `b68bae94` (core 168, grants 407, nuxt-auth-idp 881, free IdP 426, apes 683 passed / 8 skipped). The gate had been blocked by new high advisories on main, fixed separately in issue 1552 / PR 525.
+- Next: merge, `pnpm check:ci`, `pnpm deploy:image free-idp`, publish the jev shape and verify the daemon Pod run.
+
 # Dashboard Traefik routing — issue 1550
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1550. Owner approved in chat. Branch `bugfix/issue-1550-dashboard-traefik-routing`, base `bbe1fda5`.

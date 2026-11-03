@@ -1,7 +1,7 @@
 import type { BrokeredGrant, OpenApeGrant, OpenApeGrantRequest, OpenApeProgramAuthorizeRequest, OpenApeProgramAuthorizeResponse } from '@openape/core'
 import type { ResolvedProgramCall } from '@openape/grants'
 import { computeCmdHash } from '@openape/core'
-import { assertGrantBatchMember, createGrant, evaluateStandingGrants, InvalidGrantBatchError, InvalidProgramAuthorizeRequestError, issueCommandJWT, PROGRAM_AUTHORIZE_LIMITS, resolveProgramCall } from '@openape/grants'
+import { assertGrantBatchMember, createGrant, evaluateStandingGrants, InvalidGrantBatchError, InvalidProgramAuthorizeRequestError, issueCommandJWT, ownerScopedShapeStore, PROGRAM_AUTHORIZE_LIMITS, resolveProgramCall } from '@openape/grants'
 import type { H3Event } from 'h3'
 import { isError, setResponseHeader, setResponseStatus } from 'h3'
 import { requestReferencedGrant } from './grant-reference'
@@ -27,6 +27,12 @@ export interface ProgramAuthorizeInput {
   brokered?: BrokeredGrant
   /** Called after a command token was issued (the decision IdP audits brokered tokens). */
   onToken?: (grant: OpenApeGrant) => Promise<void>
+  /**
+   * The human owner whose own shapes resolve this call after the registry
+   * (issue 1551): the requester's owner, or the requester when it is human.
+   * Absent for brokered identities, which only use registry shapes.
+   */
+  shapeOwner?: string
 }
 
 /** Sends an authorize answer; a refusal is problem+json that keeps `state` and `grant_id`. */
@@ -150,8 +156,8 @@ async function requestDecision(request: OpenApeGrantRequest, brokered: BrokeredG
   return grant
 }
 
-async function resolveCall(request: OpenApeProgramAuthorizeRequest): Promise<ResolvedProgramCall> {
-  try { return await resolveProgramCall(useShapeStore(), request) }
+async function resolveCall(request: OpenApeProgramAuthorizeRequest, shapeOwner: string | undefined): Promise<ResolvedProgramCall> {
+  try { return await resolveProgramCall(ownerScopedShapeStore(useShapeStore(), shapeOwner), request) }
   catch (error) {
     if (!(error instanceof InvalidProgramAuthorizeRequestError)) throw error
     throw createProblemError({ status: 400, title: error.message })
@@ -182,7 +188,7 @@ export async function authorizeProgramCall(event: H3Event, input: ProgramAuthori
 async function decideProgramCall(event: H3Event, input: ProgramAuthorizeInput, trace: AuthorizeTrace): Promise<ProgramAuthorizeResult | null> {
   const { requester, request, brokered, onToken } = input
   const { grantStore } = useGrantStores()
-  const call = await resolveCall(request)
+  const call = await resolveCall(request, brokered ? undefined : input.shapeOwner)
   trace.operation = call.detail.operation_id
   const grantRequest = grantRequestFor(requester, request, call, await computeCmdHash(call.executionArgv.join(' ')))
   if (grantRequest.reference !== undefined) {
@@ -197,7 +203,7 @@ async function decideProgramCall(event: H3Event, input: ProgramAuthorizeInput, t
     throw createProblemError({ status: 400, title: `Invalid batch: ${error.message}` })
   }
 
-  const scope: ProgramCallScope = { target_host: request.target_host, audience: request.audience, detail: call.detail, argvHash: call.argvHash, programSha256: request.program.sha256, files: request.files, requiresOnce: call.requiresOnce }
+  const scope: ProgramCallScope = { target_host: request.target_host, audience: request.audience, detail: call.detail, argvHash: call.argvHash, programSha256: request.program.sha256, files: request.files, requiresOnce: call.requiresOnce, adapterOwner: call.executionContext.adapter_owner, adapterDigest: call.executionContext.adapter_digest }
   const existing = await grantStore.findByRequester(requester)
   const covering = findCoveringGrant(existing, scope, brokered)
   if (covering) return await approvedAnswer(covering, call, onToken)

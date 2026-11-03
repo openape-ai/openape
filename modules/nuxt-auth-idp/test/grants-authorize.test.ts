@@ -90,7 +90,7 @@ vi.mock('../src/runtime/server/utils/stores', () => ({
   getIdpIssuer: () => role.getStore() === 'broker' ? broker : issuer,
   useIdpStores: () => ({
     keyStore: { getSigningKey: async () => role.getStore() === 'broker' ? { ...brokerKeys, kid: 'broker-key' } : { ...keys, kid: 'owner-key' } },
-    userStore: { findByOwner: async () => [], findByApprover: async () => [], findByEmail: async (email: string) => activeAccounts.has(email) || email === inactive ? { email, type: 'agent', isActive: email !== inactive } : null },
+    userStore: { findByOwner: async () => [], findByApprover: async () => [], findByEmail: async (email: string) => activeAccounts.has(email) || email === inactive ? { email, type: 'agent', isActive: email !== inactive, ...(email === direct || email === other ? { owner } : {}) } : null },
     sshKeyStore: { findByUser: async (email: string) => email === podAgent ? [{ keyId: 'pod-key' }] : [] },
   }),
 }))
@@ -130,6 +130,7 @@ const brokered = (await import('../src/runtime/server/api/brokered-grants.post')
 const create = (await import('../src/runtime/server/api/grants/index.post')).default
 const list = (await import('../src/runtime/server/api/grants/index.get')).default
 const withdraw = (await import('../src/runtime/server/api/grants/withdraw.post')).default
+const tokenFor = (await import('../src/runtime/server/api/grants/[id]/token.post')).default
 
 interface CallInput { argv?: string[], sha256?: string, name?: string, grant_type?: string, [key: string]: unknown }
 function body({ argv = ['status'], sha256 = tested, name = 'git', ...rest }: CallInput = {}) {
@@ -155,7 +156,7 @@ beforeEach(async () => {
   delete process.env.OPENAPE_RATE_LIMIT_MAX_AUTHORIZE
   delete process.env.OPENAPE_RATE_LIMIT_MAX_AGENT
   connection = { id: randomUUID(), owner: { issuer, subject: owner }, broker_issuer: broker, agent_domain: 'pods.provider.test', status: 'active', created_at: 1 }
-  const router = createRouter().get('/grants', list).get('/pods/grants', list).post('/grants/authorize', authorize).post('/grants', create).post('/brokered', brokered).post('/pods/grants/authorize', authorize).post('/grants/:id/consume', consume).post('/grants/withdraw', withdraw).post('/pods/grants/withdraw', withdraw)
+  const router = createRouter().get('/grants', list).get('/pods/grants', list).post('/grants/authorize', authorize).post('/grants', create).post('/brokered', brokered).post('/pods/grants/authorize', authorize).post('/grants/:id/consume', consume).post('/grants/:id/token', tokenFor).post('/grants/withdraw', withdraw).post('/pods/grants/withdraw', withdraw)
   const listener = toNodeListener(createApp().use(router))
   server = createServer((req, res) => role.run(req.url?.startsWith('/pods/') ? 'broker' : 'decision', () => listener(req, res)))
   await new Promise<void>(resolve => server.listen(0, '127.0.0.1', resolve))
@@ -727,5 +728,94 @@ describe('requester withdrawal by reference (issue 1536)', () => {
     const refused = await call(podAgent, { reference: 'report-7:v1' }, '/pods/grants/withdraw')
     expect(refused.status).toBe(501)
     expect((await grantStore.findById(pending.json.grant_id))?.status).toBe('pending')
+  })
+})
+
+// Owner-published shapes (issue 1551): the owner's own shape reads the calls of
+// the owner's agents after the registry and binds its approvals by digest.
+describe('owner shapes', () => {
+  const jevShape: ServerShape = {
+    cli_id: 'jev',
+    executable: 'jev',
+    description: '',
+    operations: [{ id: 'ask', command: ['ask'], display: 'Ask Jev', action: 'read', risk: 'low', resource_chain: ['model:name=jev'] }],
+    source: 'custom',
+    digest: 'SHA-256:owner-jev-v1',
+    createdAt: 0,
+    updatedAt: 0,
+  }
+  const jevCall = () => body({ name: 'jev', argv: ['ask'], sha256: 'e'.repeat(64) })
+
+  it('resolves an agent call with its owner\'s shape and binds the approval to that digest', async () => {
+    await shapeStore.saveOwnerShape!(owner, jevShape)
+    const first = await call(direct, jevCall())
+    expect(first.status).toBe(202)
+    const stored = (await grantStore.findById(first.json.grant_id))!.request
+    expect(stored.authorization_details?.[0]).toMatchObject({ cli_id: 'jev', operation_id: 'ask' })
+    expect(stored.execution_context).toMatchObject({ adapter_owner: owner, adapter_digest: 'SHA-256:owner-jev-v1' })
+    await approveGrant(first.json.grant_id, owner, grantStore)
+    expect((await call(direct, jevCall())).status).toBe(200)
+    // Another agent of the same owner reads the same shape but needs its own approval.
+    expect((await grantStore.findById((await call(other, jevCall())).json.grant_id))!.request.execution_context?.adapter_owner).toBe(owner)
+
+    // A republished shape with another digest does not inherit the approval.
+    await shapeStore.saveOwnerShape!(owner, { ...jevShape, digest: 'SHA-256:owner-jev-v2' })
+    const republished = await call(direct, jevCall())
+    expect(republished.status).toBe(202)
+    expect(republished.json.grant_id).not.toBe(first.json.grant_id)
+  })
+
+  it('never applies an owner shape to accounts of other owners or to brokered identities', async () => {
+    await shapeStore.saveOwnerShape!('someone@else.test', jevShape)
+    const foreign = await call(direct, jevCall())
+    expect((await grantStore.findById(foreign.json.grant_id))!.request.authorization_details?.[0]?.operation_id).toBe('_generic.exec')
+    await shapeStore.saveOwnerShape!(owner, jevShape)
+    const viaPods = await viaBroker(jevCall())
+    expect(viaPods.status).toBe(202)
+    const brokeredGrant = (await grantStore.listGrants()).data.find(grant => grant.brokered)!
+    expect(brokeredGrant.request.authorization_details?.[0]?.operation_id).toBe('_generic.exec')
+    expect(brokeredGrant.request.execution_context?.adapter_owner).toBeUndefined()
+  })
+
+  it('issues no token for a grant whose owner shape changed, was removed or was taken over by the registry', async () => {
+    await shapeStore.saveOwnerShape!(owner, jevShape)
+    const first = await call(direct, jevCall())
+    await approveGrant(first.json.grant_id, owner, grantStore)
+    const token = () => call(direct, {}, `/grants/${first.json.grant_id}/token`)
+    expect((await token()).status).toBe(200)
+    await shapeStore.saveOwnerShape!(owner, { ...jevShape, digest: 'SHA-256:owner-jev-v2' })
+    const stale = await token()
+    expect(stale.status).toBe(409)
+    expect(JSON.stringify(stale.json)).toContain('owner shape')
+    await shapeStore.saveOwnerShape!(owner, jevShape)
+    expect((await token()).status).toBe(200)
+    await shapeStore.saveShape({ ...jevShape, source: 'builtin', owner: undefined, digest: 'SHA-256:registry-jev' })
+    expect((await token()).status).toBe(409)
+    // The registry shape now reads the call; the owner approval is not reused.
+    const takenOver = await call(direct, jevCall())
+    expect(takenOver.status).toBe(202)
+    expect((await grantStore.findById(takenOver.json.grant_id))!.request.execution_context?.adapter_owner).toBeUndefined()
+  })
+
+  it('asks again after the owner removes the shape, and a client-built request never reuses an owner-shape grant', async () => {
+    await shapeStore.saveOwnerShape!(owner, jevShape)
+    const first = await call(direct, jevCall())
+    await approveGrant(first.json.grant_id, owner, grantStore)
+    const stored = (await grantStore.findById(first.json.grant_id))!.request
+    // POST /api/grants with the same details and digest the agent knows from its own grant.
+    const legacy = await call(direct, { requester: direct, target_host: 'macmini', audience: 'shapes', grant_type: 'always', authorization_details: stored.authorization_details, execution_context: { adapter_id: 'jev', adapter_version: 'server', adapter_digest: stored.execution_context!.adapter_digest, resolved_executable: 'jev' } }, '/grants')
+    expect(legacy.status).toBe(201)
+    expect(legacy.json).toMatchObject({ status: 'pending' })
+    expect(legacy.json.id).not.toBe(first.json.grant_id)
+    await shapeStore.deleteOwnerShape!(owner, 'jev')
+    const removed = await call(direct, jevCall())
+    expect(removed.status).toBe(202)
+    expect((await grantStore.findById(removed.json.grant_id))!.request.authorization_details?.[0]?.operation_id).toBe('_generic.exec')
+  })
+
+  it('refuses a client-written adapter owner on POST /api/grants', async () => {
+    const forged = await call(direct, { requester: direct, target_host: 'macmini', audience: 'shapes', grant_type: 'once', command: ['jev', 'ask'], execution_context: { adapter_id: 'jev', adapter_version: 'x', adapter_digest: 'SHA-256:owner-jev-v1', adapter_owner: owner, resolved_executable: 'jev' } }, '/grants')
+    expect(forged.status).toBe(400)
+    expect(JSON.stringify(forged.json)).toContain('adapter_owner')
   })
 })

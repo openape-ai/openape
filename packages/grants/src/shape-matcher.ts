@@ -222,6 +222,24 @@ function renderTemplate(template: string, bindings: Record<string, string>): str
   return template.replace(/\{([^}]+)\}/g, (_, expression: string) => resolveBindingToken(`{${expression}}`, bindings))
 }
 
+/**
+ * Throws for a resource chain template the matcher cannot render: an entry is
+ * `resource`, `resource:*` or `resource:key=value[,key=value]`, where a value
+ * may use `{binding}` templates. Lets a shape be rejected when it is
+ * published instead of when a call first matches it.
+ */
+export function assertResourceChainTemplates(chain: string[]): void {
+  for (const entry of chain) {
+    const [resource, selectorSpec = '*'] = entry.split(':', 2)
+    if (!resource || !/^[\w-]+$/.test(resource)) throw new Error(`Invalid resource chain entry: ${entry}`)
+    if (selectorSpec === '*') continue
+    for (const segment of selectorSpec.split(',')) {
+      const [key, rawValue] = segment.split('=', 2)
+      if (!key || !rawValue) throw new Error(`Invalid selector segment in ${entry}: ${segment} (use key=value)`)
+    }
+  }
+}
+
 function parseResourceChain(chain: string[], bindings: Record<string, string>): OpenApeCliResourceRef[] {
   return chain.map((entry) => {
     const [resource, selectorSpec = '*'] = entry.split(':', 2)

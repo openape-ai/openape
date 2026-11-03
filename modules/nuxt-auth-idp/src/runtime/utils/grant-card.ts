@@ -53,6 +53,22 @@ export interface GrantCardContext {
   program?: { sha256: string, version_tested: boolean | null } | null
   /** The IdP verified that approving binds nothing but the request's command line (`bindsExactCommand`). */
   binds_exact_command?: boolean
+  /** Set when the owner's own shape, not the registry, resolved the grant (issue 1551). */
+  owner_shape?: OwnerShapeCard | null
+}
+
+/** An owner's own shape as the approver sees it: who published it and every operation it declares. */
+export interface OwnerShapeCard {
+  cli_id: string
+  owner: string
+  digest: string
+  /** Unix seconds of the last publication; null when the shape was removed since. */
+  published_at: number | null
+  /** False when the shape was republished with another digest or removed after this request. */
+  current: boolean
+  /** The operation this grant asks for. */
+  operation_id: string
+  operations: { id: string, command: string[], display: string, action: string, risk: string }[]
 }
 
 export type GrantWithCard = OpenApeGrant & { card?: GrantCardContext }
