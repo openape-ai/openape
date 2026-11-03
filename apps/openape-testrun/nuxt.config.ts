@@ -34,6 +34,7 @@ export default defineNuxtConfig({
     plansInviteSecret: '',
     htmlContentOrigin: '',
     htmlPolicyJournalPath: '',
+    reportsRecoveryConfigPath: '',
     public: {
       siteName: 'OpenApe Reports',
       htmlContentOrigin: '',
