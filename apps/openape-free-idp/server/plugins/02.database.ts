@@ -121,6 +121,19 @@ export default defineNitroPlugin(async () => {
       PRIMARY KEY (owner, cli_id)
     )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_shapes_executable ON shapes(executable)`)
+    // Domain shapes and the audit of every shape write (issue 1553).
+    await db.run(sql`CREATE TABLE IF NOT EXISTS domain_shapes (
+      domain TEXT NOT NULL, cli_id TEXT NOT NULL, executable TEXT NOT NULL, description TEXT NOT NULL,
+      operations TEXT NOT NULL, digest TEXT NOT NULL, toml TEXT NOT NULL, published_by TEXT NOT NULL,
+      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+      PRIMARY KEY (domain, cli_id)
+    )`)
+    await db.run(sql`CREATE TABLE IF NOT EXISTS shape_changes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, scope TEXT NOT NULL, scope_key TEXT NOT NULL, action TEXT NOT NULL,
+      cli_id TEXT NOT NULL, previous_digest TEXT, digest TEXT, previous_toml TEXT, toml TEXT, source TEXT,
+      actor TEXT NOT NULL, created_at INTEGER NOT NULL
+    )`)
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_shape_changes_scope ON shape_changes(scope, scope_key, id)`)
 
     // OAuth/OIDC auth-code + refresh-token + JWT id + signing-key tables.
     // Declared in schema.ts but missing from this init plugin — every first

@@ -275,7 +275,8 @@ export async function apiFetch<T = unknown>(
 
   if (debug) {
     consola.debug(`${method} ${url}`)
-    consola.debug(`Token: ${token.substring(0, 20)}...${token.substring(token.length - 10)}`)
+    // Never any part of the token: a short one (such as the management token) would be readable in full.
+    consola.debug(`Token: ${token.length} characters`)
   }
 
   // Retry on 429 (the IdP's per-IP rate limit on auth endpoints). Rapid

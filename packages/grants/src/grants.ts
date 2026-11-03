@@ -2,6 +2,7 @@ import type { GrantType, OpenApeCliAuthorizationDetail, OpenApeGrant, OpenApeGra
 import { canonicalizeCliPermission, cliAuthorizationDetailCovers, cliAuthorizationDetailIsSimilar, mergeCliAuthorizationDetails, resourceChainsStructurallyMatch, widenCliAuthorizationDetail } from './cli-permissions.js'
 import { codePointLength, GRANT_DESCRIPTION_LIMIT, hasHiddenCharacter } from './grant-summary.js'
 import { assertGrantReferenceRequest } from './grant-reference.js'
+import { sameShapeTier } from './shape-registry.js'
 import type { GrantStore } from './stores.js'
 
 export type ExtendMode = 'widen' | 'merge'
@@ -341,10 +342,9 @@ export async function approveGrantWithExtension(
       throw new Error(`Extend grant target_host mismatch`)
     if (old.request.audience !== pendingGrant.request.audience)
       throw new Error(`Extend grant audience mismatch`)
-    // An owner-shape grant binds its shape version (issue 1551); merged with another kind, the result would cover neither.
-    const [a, b] = [old.request.execution_context, pendingGrant.request.execution_context]
-    if ((a?.adapter_owner || b?.adapter_owner) && (a?.adapter_owner !== b?.adapter_owner || a?.adapter_digest !== b?.adapter_digest))
-      throw new Error('Extend grant was resolved with another shape; owner-shape grants extend only grants of the same shape version')
+    // A personal or domain shape grant binds its tier and shape version (issues 1551, 1553); merged with another kind, the result would cover neither.
+    if (!sameShapeTier(old.request.execution_context, pendingGrant.request.execution_context))
+      throw new Error('Extend grant was resolved with another shape; personal and domain shape grants extend only grants of the same shape version')
     oldGrants.push(old)
   }
 

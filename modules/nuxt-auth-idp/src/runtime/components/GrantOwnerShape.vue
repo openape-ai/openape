@@ -1,27 +1,40 @@
 <script setup lang="ts">
 import type { OwnerShapeCard } from '../utils/grant-card'
 
-// An owner's own shape resolved this grant (issue 1551): say so, name who
-// published which digest when, and show every operation the shape declares
-// so an over-broad shape is noticed at approval time, not after.
+// A personal or domain shape resolved this grant (issues 1551, 1553): say
+// which tier, who published which digest when and what it replaces, and show
+// every operation the shape declares so an over-broad shape is noticed at
+// approval time, not after.
 const props = defineProps<{ shape: OwnerShapeCard, german: boolean }>()
+const personal = props.shape.tier === 'personal'
+const badge = personal
+  ? (props.german ? 'Persönliches Shape · nicht IdP-weit' : 'Personal shape · not IdP-wide')
+  : (props.german ? `Domain-Shape von ${props.shape.domain}` : `Domain shape of ${props.shape.domain}`)
+const publisher = personal ? props.shape.owner : props.shape.published_by
+const replaced = props.shape.overrides === 'instance'
+  ? (props.german ? 'das IdP-weite Shape' : 'the IdP-wide shape')
+  : (props.german ? 'das Domain-Shape' : 'the domain shape')
 const shortDigest = (digest: string) => digest.replace(/^(sha256|SHA-256):/i, '').slice(0, 12)
 const riskColor = (risk: string) => risk === 'high' || risk === 'critical' ? 'error' : risk === 'medium' ? 'warning' : 'success'
 const published = props.shape.published_at === null
   ? null
   : new Date(props.shape.published_at * 1000).toLocaleDateString(props.german ? 'de-AT' : 'en-GB', { year: 'numeric', month: '2-digit', day: '2-digit' })
+const byline = [
+  publisher ? ` ${props.german ? 'veröffentlicht von' : 'published by'} ${publisher}` : '',
+  published ? ` ${props.german ? 'am' : 'on'} ${published}` : '',
+].join('')
 </script>
 
 <template>
   <div class="min-w-0 space-y-2 border-t border-default pt-3 text-sm" data-owner-shape>
-    <UBadge color="warning" variant="subtle" size="sm" :label="german ? 'Owner-Shape · nicht aus der Registry' : 'Owner shape · not from the registry'" />
+    <UBadge color="warning" variant="subtle" size="sm" :label="badge" :data-shape-tier="shape.tier" />
     <p class="text-xs text-muted break-words">
-      {{ german ? 'Shape' : 'Shape' }} <code>{{ shape.cli_id }}</code>
-      {{ german ? 'veröffentlicht von' : 'published by' }} {{ shape.owner }}
-      <template v-if="published">
-        {{ german ? 'am' : 'on' }} {{ published }}
-      </template>
-      · Digest <code>{{ shortDigest(shape.digest) }}</code>
+      Shape <code>{{ shape.cli_id }}</code>{{ byline }} · Digest <code>{{ shortDigest(shape.digest) }}</code>
+    </p>
+    <p v-if="shape.overrides" class="text-xs text-warning break-words" data-shape-overrides>
+      {{ personal
+        ? (german ? `Ersetzt für dich ${replaced} für dieses Programm.` : `Replaces ${replaced} for this program, for you only.`)
+        : (german ? `Ersetzt für ${shape.domain} ${replaced} für dieses Programm.` : `Replaces ${replaced} for this program, for ${shape.domain} only.`) }}
     </p>
     <p v-if="!shape.current" class="text-xs text-warning" data-owner-shape-stale>
       {{ german ? 'Dieses Shape wurde nach der Anfrage geändert oder entfernt.' : 'This shape changed or was removed after the request.' }}

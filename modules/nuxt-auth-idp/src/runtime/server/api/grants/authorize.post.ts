@@ -8,6 +8,7 @@ import { enforceAuthorizeRateLimit } from '../../utils/authorize-rate-limit'
 import { maybeForwardBrokerGrant } from '../../utils/broker-forward'
 import type { ProgramAuthorizeResult } from '../../utils/program-authorize'
 import { authorizeProgramCall, readForwardedAuthorize, reportUnexpectedAuthorizeFailure, sendProgramAuthorizeResult } from '../../utils/program-authorize'
+import { shapeOwnerOf } from '../../utils/owner-shape-current'
 import { createProblemError } from '../../utils/problem'
 import { useIdpStores } from '../../utils/stores'
 
@@ -56,7 +57,5 @@ export default defineEventHandler(async (event) => {
   if (forwarded) return sendProgramAuthorizeResult(event, forwarded)
   const account = await useIdpStores().userStore.findByEmail(caller.sub)
   if (!account?.isActive) throw createProblemError({ status: 403, title: 'The requester account is inactive or missing' })
-  // An agent reads its owner's own shapes, a human its own (issue 1551).
-  const shapeOwner = account.owner ?? (account.type === 'agent' ? undefined : account.email)
-  return sendProgramAuthorizeResult(event, await authorizeProgramCall(event, { requester: caller.sub, request, shapeOwner }))
+  return sendProgramAuthorizeResult(event, await authorizeProgramCall(event, { requester: caller.sub, request, shapeOwner: shapeOwnerOf(account) }))
 })

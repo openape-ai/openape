@@ -28,6 +28,7 @@ function storeShape(loaded: LoadedAdapter): ServerShape {
 
 const shapes = new Map([podRuntimeAdapter, gitAdapter].map(loaded => [loaded.adapter.cli.id, storeShape(loaded)]))
 export const getShape = async (cliId: string): Promise<ServerShape | null> => shapes.get(cliId) ?? null
+export const listShapes = async (): Promise<ServerShape[]> => [...shapes.values()]
 
 const registrations: Record<string, User> = {
   'mail-digest+owner+example_com@id.example.com': { email: 'mail-digest+owner+example_com@id.example.com', name: 'Mail digest Pod', owner: 'owner@example.com', type: 'agent', isActive: true, createdAt: 0 },
@@ -113,6 +114,6 @@ export async function buildCardFixtures(): Promise<CardFixtures> {
     audience: 'pods-graph-gate',
     summary: { title: 'Produktneuigkeiten für Oktober' },
   }))
-  const [podRunCard, gitPushCard, unknownCard, gitUntestedCard, graphGateCard] = await withGrantCards([podRun, gitPush, unknown, gitUntested, graphGate], { getShape, findUser })
+  const [podRunCard, gitPushCard, unknownCard, gitUntestedCard, graphGateCard] = await withGrantCards([podRun, gitPush, unknown, gitUntested, graphGate], { listShapes, findUser })
   return { podRun: podRunCard!, gitPush: gitPushCard!, unknown: unknownCard!, gitUntested: gitUntestedCard!, graphGate: graphGateCard! }
 }

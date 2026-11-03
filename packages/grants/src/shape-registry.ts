@@ -91,13 +91,17 @@ export interface ServerShape {
   /** All recognizable operations, matched in declared order. */
   operations: ServerShapeOperation[]
   /**
-   * `'builtin'` — seeded from the shapes-registry.
-   * `'custom'` — published by one human owner for their own agents (`owner`).
+   * `'builtin'` — an IdP-wide shape (imported from the shapes-registry).
+   * `'custom'` — a personal shape of one human owner (`owner`) or a domain shape (`domain`).
    */
   source: 'builtin' | 'custom'
-  /** The account that published a custom shape; absent for registry shapes. */
+  /** The account a personal shape belongs to; absent for domain and IdP-wide shapes. */
   owner?: string
-  /** The adapter TOML an owner published, kept so the owner can read it again; absent for registry shapes. */
+  /** The email domain a domain shape belongs to; absent for personal and IdP-wide shapes. */
+  domain?: string
+  /** The account that last wrote a domain shape. */
+  published_by?: string
+  /** The adapter TOML as written, kept so its writers can read it again. */
   toml?: string
   /**
    * Semantic adapter digest (`semanticAdapterDigest()` in `@openape/shapes`):
@@ -124,6 +128,39 @@ export interface ServerShape {
   updatedAt: number
 }
 
+/** The three shape tiers (issue 1553): IdP-wide (`instance`), one email domain's, one human owner's. */
+export type ShapeTier = 'instance' | 'domain' | 'personal'
+
+/** Registry adapters of operations the Pods desktop performs itself; IdP-wide imports mark them virtual, no other tier may use the names. */
+export const DESKTOP_OWN_SHAPE_IDS: readonly string[] = ['pod-runtime', 'pod-http', 'pod-ssh']
+
+/** One audited shape write (`shape_changes`). */
+export interface ShapeChange {
+  scope: ShapeTier
+  /** `''` for IdP-wide shapes, the domain for domain shapes, the owner for personal shapes. */
+  scope_key: string
+  action: 'add' | 'update' | 'remove'
+  cli_id: string
+  previous_digest: string | null
+  digest: string | null
+  previous_toml: string | null
+  toml: string | null
+  /** Provenance the writer claimed (repository, commit, uncommitted changes); recorded, never verified. */
+  source: { repo?: string, commit?: string, dirty?: boolean } | null
+  actor: string
+  /** Unix seconds. */
+  created_at: number
+}
+
+/** One all-or-nothing write of one tier: the shapes to upsert and remove, with one audit entry each. */
+export interface ShapeChangeBatch {
+  scope: ShapeTier
+  scope_key: string
+  save: ServerShape[]
+  remove: string[]
+  changes: ShapeChange[]
+}
+
 /**
  * Persistence contract. Implemented by
  * `apps/openape-free-idp/server/utils/drizzle-shape-store.ts` for production
@@ -148,38 +185,98 @@ export interface ShapeStore {
   saveOwnerShape?: (owner: string, shape: ServerShape) => Promise<void>
   /** Removes an owner shape; false when the owner has none with this id. */
   deleteOwnerShape?: (owner: string, cliId: string) => Promise<boolean>
+  /** Shapes root admins and operators of one email domain wrote for its users, sorted by `cli_id`. */
+  listDomainShapes?: (domain: string) => Promise<ServerShape[]>
+  /** Upserts a domain shape by (`domain`, `cli_id`). */
+  saveDomainShape?: (domain: string, shape: ServerShape) => Promise<void>
+  /** Removes a domain shape; false when the domain has none with this id. */
+  deleteDomainShape?: (domain: string, cliId: string) => Promise<boolean>
+  /** Writes one batch of one tier and its audit entries in one transaction (issue 1553). */
+  applyShapeChanges?: (batch: ShapeChangeBatch) => Promise<void>
+  /** The newest audit entries of one tier (of one shape with `cliId`), newest first. */
+  listShapeChanges?: (scope: ShapeTier, scopeKey: string, limit: number, cliId?: string) => Promise<ShapeChange[]>
+}
+
+/** Whose calls a shape view reads: the human owner (personal shapes) and their email domain (domain shapes). */
+export interface ShapeScope {
+  owner?: string
+  domain?: string
+}
+
+/** The email domain of an account, lower-cased; undefined without one. */
+export function emailDomain(email: string | undefined): string | undefined {
+  const at = email?.lastIndexOf('@') ?? -1
+  return email && at > 0 && at < email.length - 1 ? email.slice(at + 1).toLowerCase() : undefined
+}
+
+/** The scope of one human owner's calls (their own and their agents'); empty without an owner (brokered identities). */
+export function shapeScopeOf(owner: string | undefined): ShapeScope {
+  return owner ? { owner, domain: emailDomain(owner) } : {}
+}
+
+/** The shape facts a grant or call carries: which personal or domain shape version resolved it. */
+export interface ShapeTierFacts {
+  adapter_owner?: string
+  adapter_domain?: string
+  adapter_digest?: string
 }
 
 /**
- * The shapes the IdP reads one owner's program calls with: every registry
- * shape first, then the owner's own shapes whose `cli_id` and executable no
- * registry shape uses. Owner shapes never count as tested versions, so a
- * program hash can never move a call from a registry shape to an owner shape.
- * Without an owner (brokered identities, public endpoints) it is the registry.
+ * Whether two grants or calls were resolved by the same shape tier. Personal
+ * and domain shapes bind owner or domain and digest, so a republished,
+ * removed or overriding shape never inherits an approval; IdP-wide shapes
+ * bind no digest, so registry approvals carry over adapter updates.
  */
-export function ownerScopedShapeStore(store: ShapeStore, owner: string | undefined): ShapeStore {
-  if (!owner || !store.listOwnerShapes) return store
-  const listOwnerShapes = store.listOwnerShapes
+export function sameShapeTier(a: ShapeTierFacts | undefined, b: ShapeTierFacts | undefined): boolean {
+  if (!a?.adapter_owner && !a?.adapter_domain && !b?.adapter_owner && !b?.adapter_domain) return true
+  return a?.adapter_owner === b?.adapter_owner && a?.adapter_domain === b?.adapter_domain && a?.adapter_digest === b?.adapter_digest
+}
+
+function names(shapes: ServerShape[]): Set<string> {
+  return new Set(shapes.flatMap(shape => [shape.cli_id, shape.executable]))
+}
+
+function notIn(taken: Set<string>) {
+  return (shape: ServerShape) => !taken.has(shape.cli_id) && !taken.has(shape.executable)
+}
+
+/** Personal and domain shapes never count as tested versions or desktop operations; registry facts stay registry facts. */
+function scoped(shape: ServerShape, tier: { owner: string } | { domain: string }): ServerShape {
+  const { tested_digests: _tested, versions: _versions, virtual: _virtual, owner: _owner, domain: _domain, ...rest } = shape
+  return { ...rest, source: 'custom', ...tier }
+}
+
+/**
+ * The shapes the IdP reads calls of one scope with (issue 1553): the owner's
+ * personal shapes first, then the domain's shapes whose `cli_id` and
+ * executable no personal shape uses, then the IdP-wide shapes whose names
+ * neither upper tier uses. An overridden shape drops out completely,
+ * including its tested digests; only the Pods desktop's own (virtual) shapes
+ * are never overridden. Without a scope (brokered identities, public
+ * endpoints) it is the IdP-wide store.
+ */
+export function scopedShapeStore(store: ShapeStore, scope: ShapeScope): ShapeStore {
+  const { owner, domain } = scope
+  const { listOwnerShapes, listDomainShapes } = store
+  const readPersonal = owner && listOwnerShapes ? () => listOwnerShapes(owner) : undefined
+  const readDomain = domain && listDomainShapes ? () => listDomainShapes(domain) : undefined
+  if (!readPersonal && !readDomain) return store
   // One read per view: a view lives for one decision, so it never serves a stale list across requests.
-  let cached: Promise<{ registry: ServerShape[], own: ServerShape[] }> | undefined
-  const load = async (): Promise<{ registry: ServerShape[], own: ServerShape[] }> => {
-    const registry = await store.listShapes()
-    const taken = new Set(registry.flatMap(shape => [shape.cli_id, shape.executable]))
-    const own = (await listOwnerShapes(owner))
-      .filter(shape => !taken.has(shape.cli_id) && !taken.has(shape.executable))
-      .map(({ tested_digests: _tested, versions: _versions, virtual: _virtual, ...shape }) => ({ ...shape, source: 'custom' as const, owner }))
-    return { registry, own }
+  let cached: Promise<ServerShape[]> | undefined
+  const load = async (): Promise<ServerShape[]> => {
+    const [registry, ownShapes, domainShapes] = await Promise.all([store.listShapes(), readPersonal?.() ?? [], readDomain?.() ?? []])
+    // Operations the Pods desktop performs itself are never overridden, whatever a store holds.
+    const desktop = notIn(new Set([...DESKTOP_OWN_SHAPE_IDS, ...names(registry.filter(shape => shape.virtual))]))
+    const personal = owner ? ownShapes.filter(desktop).map(shape => scoped(shape, { owner })) : []
+    const domainTier = domain ? domainShapes.filter(desktop).filter(notIn(names(personal))).map(shape => scoped(shape, { domain })) : []
+    return [...personal, ...domainTier, ...registry.filter(notIn(names([...personal, ...domainTier])))]
   }
   const combined = () => cached ??= load()
-  const readOnly = async () => { throw new Error('ownerScopedShapeStore is read-only') }
+  const readOnly = async () => { throw new Error('scopedShapeStore is read-only') }
   return {
-    async listShapes() {
-      const { registry, own } = await combined()
-      return [...registry, ...own]
-    },
+    listShapes: combined,
     async getShape(cliId) {
-      const { registry, own } = await combined()
-      return registry.find(shape => shape.cli_id === cliId) ?? own.find(shape => shape.cli_id === cliId) ?? null
+      return (await combined()).find(shape => shape.cli_id === cliId) ?? null
     },
     saveShape: readOnly,
     deleteShape: readOnly,
@@ -193,7 +290,35 @@ export function ownerScopedShapeStore(store: ShapeStore, owner: string | undefin
 export function createInMemoryShapeStore(seed: ServerShape[] = []): ShapeStore {
   const map = new Map<string, ServerShape>(seed.map(s => [s.cli_id, s]))
   const owned = new Map<string, Map<string, ServerShape>>()
+  const domains = new Map<string, Map<string, ServerShape>>()
+  const audit: ShapeChange[] = []
+  const tierMap = (scope: ShapeTier, key: string): Map<string, ServerShape> => {
+    if (scope === 'instance') return map
+    const tiers = scope === 'domain' ? domains : owned
+    const shapes = tiers.get(key) ?? new Map<string, ServerShape>()
+    tiers.set(key, shapes)
+    return shapes
+  }
   return {
+    async applyShapeChanges(batch) {
+      const shapes = tierMap(batch.scope, batch.scope_key)
+      for (const cliId of batch.remove) shapes.delete(cliId)
+      for (const shape of batch.save) shapes.set(shape.cli_id, batch.scope === 'instance' ? shape : { ...shape, source: 'custom', ...(batch.scope === 'domain' ? { domain: batch.scope_key } : { owner: batch.scope_key }) })
+      audit.push(...batch.changes)
+    },
+    async listShapeChanges(scope, scopeKey, limit, cliId) {
+      return audit.filter(change => change.scope === scope && change.scope_key === scopeKey && (cliId === undefined || change.cli_id === cliId)).reverse().slice(0, limit)
+    },
+    async listDomainShapes(domain) {
+      return [...(domains.get(domain)?.values() ?? [])].sort((a, b) => a.cli_id.localeCompare(b.cli_id))
+    },
+    async saveDomainShape(domain, shape) {
+      if (!domains.has(domain)) domains.set(domain, new Map())
+      domains.get(domain)!.set(shape.cli_id, { ...shape, source: 'custom', domain })
+    },
+    async deleteDomainShape(domain, cliId) {
+      return domains.get(domain)?.delete(cliId) ?? false
+    },
     async listOwnerShapes(owner) {
       return [...(owned.get(owner)?.values() ?? [])].sort((a, b) => a.cli_id.localeCompare(b.cli_id))
     },
@@ -205,7 +330,6 @@ export function createInMemoryShapeStore(seed: ServerShape[] = []): ShapeStore {
       return owned.get(owner)?.delete(cliId) ?? false
     },
     async listShapes() {
-
       return [...map.values()].sort((a, b) => a.cli_id.localeCompare(b.cli_id))
     },
     async getShape(cliId) {
