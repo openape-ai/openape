@@ -158,6 +158,19 @@ describe('apes shapes', () => {
       expect(output).not.toContain('secret@')
     })
 
+    it('never runs a helper program named by the checkout\'s git config while reading the source', async () => {
+      execFileSync('git', ['init', '-q', registry])
+      execFileSync('git', ['-C', registry, '-c', 'user.email=t@example.com', '-c', 'user.name=t', 'add', '.'])
+      execFileSync('git', ['-C', registry, '-c', 'user.email=t@example.com', '-c', 'user.name=t', 'commit', '-qm', 'init'])
+      // Outside the checkout, so git status itself does not list it.
+      const marker = join(mkdtempSync(join(tmpdir(), 'apes-fsmonitor-')), 'ran')
+      execFileSync('git', ['-C', registry, 'config', 'core.fsmonitor', `touch ${marker}; echo`])
+      fetchMock.mockResolvedValueOnce(json(report()))
+      await run('import', registry, '--scope', 'instance', '--dry-run')
+      const { existsSync } = await import('node:fs')
+      expect(existsSync(marker)).toBe(false)
+    })
+
     it('never takes the management token from anywhere but the environment', async () => {
       vi.stubEnv('APES_MANAGEMENT_TOKEN', '')
       await expect(run('import', registry, '--scope', 'instance')).rejects.toThrow(/APES_MANAGEMENT_TOKEN/)

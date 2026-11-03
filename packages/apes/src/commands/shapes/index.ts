@@ -212,9 +212,15 @@ export function readAdapterDirectory(dir: string): AdapterFile[] {
   return files
 }
 
+/**
+ * Runs read-only git in a directory the user may not trust: a checkout's own
+ * config could name an fsmonitor or other helper program, so those are
+ * switched off, and the child never sees the management token.
+ */
 function git(dir: string, args: string[]): string | undefined {
+  const { APES_MANAGEMENT_TOKEN: _token, ...env } = process.env
   try {
-    return execFileSync('git', ['-C', dir, ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim()
+    return execFileSync('git', ['-C', dir, '-c', 'core.fsmonitor=false', '-c', 'core.hooksPath=/dev/null', '-c', 'core.untrackedCache=false', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'], env: { ...env, GIT_CONFIG_NOSYSTEM: '1', GIT_TERMINAL_PROMPT: '0' } }).trim()
   }
   catch {
     return undefined
