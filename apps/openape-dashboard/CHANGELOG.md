@@ -1,5 +1,11 @@
 # @openape-dashboard/app
 
+## 0.0.4
+
+### Patch Changes
+
+- @openape/nuxt-auth-sp@0.17.1
+
 ## 0.0.3
 
 ### Patch Changes
