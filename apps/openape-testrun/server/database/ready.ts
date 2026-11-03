@@ -1,6 +1,8 @@
 import { createError } from 'h3'
 
 let initialization: Promise<Error | null> | undefined
+let recoveryFailure: () => Error | undefined = () => undefined
+export function setRecoveryReadiness(check: () => Error | undefined) { recoveryFailure = check }
 export function initializeReportsDatabase(operation: () => Promise<void>) {
   initialization = (async () => {
     try { await operation(); return null }
@@ -12,4 +14,6 @@ export function initializeReportsDatabase(operation: () => Promise<void>) {
 }
 export async function requireReportsDatabase() {
   if (!initialization || await initialization) throw createError({ statusCode: 503, statusMessage: 'Reports database recovery is incomplete; service is unavailable' })
+  const failure = recoveryFailure()
+  if (failure) throw failure
 }

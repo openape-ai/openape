@@ -223,6 +223,8 @@ export async function manageHtml(client: Client, id: string, identity: ReportIde
   })
 }
 export async function purgeHtml(client: Client, now = Date.now()) {
+  const pending = await row(client, 'SELECT id FROM html_documents WHERE purged_at IS NULL AND ((removed_at IS NOT NULL AND removed_at<=?) OR (expires_at IS NOT NULL AND expires_at<=?)) LIMIT 1', [now - RECOVERY_MS, now - RECOVERY_MS])
+  if (!pending) return 0
   return transaction(client, async (tx) => {
     const candidates = (await tx.execute({ sql: 'SELECT * FROM html_documents WHERE purged_at IS NULL AND ((removed_at IS NOT NULL AND removed_at<=?) OR (expires_at IS NOT NULL AND expires_at<=?))', args: [now - RECOVERY_MS, now - RECOVERY_MS] })).rows as HtmlDocumentRow[]
     for (const document of candidates) {

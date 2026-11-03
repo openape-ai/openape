@@ -15,9 +15,11 @@ export default defineEventHandler(async (event) => {
 
   const db = useDb()
   const now = Math.floor(Date.now() / 1000)
-  await db.update(runs).set({ deletedAt: now }).where(eq(runs.id, run.id))
-  await db.delete(assets).where(eq(assets.runId, run.id))
-  await db.delete(runVersions).where(eq(runVersions.runId, run.id))
+  await db.transaction(async (tx) => {
+    await tx.update(runs).set({ deletedAt: now }).where(eq(runs.id, run.id))
+    await tx.delete(assets).where(eq(assets.runId, run.id))
+    await tx.delete(runVersions).where(eq(runVersions.runId, run.id))
+  })
 
   setResponseStatus(event, 204)
   return null
