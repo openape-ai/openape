@@ -1,15 +1,34 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { navigateTo, useHead, useIdpAuth } from '#imports'
-import type { OwnerShapeGrant, OwnerShapeView } from '../server/utils/shape-tiers'
+import type { ShapeChange, ShapeTier } from '@openape/grants'
+import type { AffectedGrant, OverriddenShape, OwnerShapeGrant, OwnerShapeView } from '../server/utils/shape-tiers'
 
-// /shapes — owner-published shapes (issue 1551): publish the adapter of a
-// tool you built, see what it declares and which continuing grants bind to
-// its digest, remove it again. Only the owner's session reaches this page.
+// /shapes — three shape tiers (issues 1551, 1553): personal shapes of tools
+// you built, your domain's shapes (written by its root admins and operators)
+// and the IdP-wide shapes (read-only here; written with the management
+// token). Publish, see what a shape declares and which continuing grants
+// bind to its digest, remove it again.
 
 useHead({ title: 'Shapes' })
 
-interface Preview { shape: OwnerShapeView, replaced_digest: string | null, grants_losing_reuse: OwnerShapeGrant[] }
+interface Preview { shape: OwnerShapeView, replaced_digest: string | null, grants_losing_reuse: AffectedGrant[], overrides?: OverriddenShape[] }
+
+const TABS: { scope: ShapeTier, label: string, intro: string }[] = [
+  { scope: 'personal', label: 'Personal', intro: 'Shapes of tools you built. Only your own calls and your agents\' calls use them, before any domain or IdP-wide shape for the same program.' },
+  { scope: 'domain', label: 'Domain', intro: 'Shapes for every account of your email domain, written by its root admins and operators. They come before IdP-wide shapes; your personal shapes come before them.' },
+  { scope: 'instance', label: 'IdP-wide', intro: 'Shapes for every account of this IdP, imported from the shapes-registry with the management token (apes shapes import --scope instance). Read-only here.' },
+]
+const scope = ref<ShapeTier>('personal')
+const tab = computed(() => TABS.find(item => item.scope === scope.value)!)
+const history = ref<ShapeChange[] | null>(null)
+/** A domain's history answers only its root admins and operators, so it also tells whether this account may write there. */
+const writable = computed(() => scope.value === 'personal' || (scope.value === 'domain' && history.value !== null))
+function query(dryRun = false) {
+  const params = new URLSearchParams({ ...(scope.value === 'personal' ? {} : { scope: scope.value }), ...(dryRun ? { dry_run: '1' } : {}) }).toString()
+  return params ? `?${params}` : ''
+}
+const overriddenGrants = (overrides: OverriddenShape[] = []) => overrides.reduce((sum, override) => sum + override.grants.length, 0)
 
 const { user, loading: authLoading, fetchUser } = useIdpAuth()
 const shapes = ref<OwnerShapeView[]>([])
@@ -46,15 +65,25 @@ onMounted(async () => {
 
 async function loadShapes() {
   shapesLoading.value = true
-  try {
-    shapes.value = await $fetch<OwnerShapeView[]>('/api/shapes?mine=1')
-  }
-  catch {
-    shapes.value = []
-  }
-  finally {
-    shapesLoading.value = false
-  }
+  const listUrl = scope.value === 'personal' ? '/api/shapes?mine=1' : `/api/shapes?scope=${scope.value}`
+  const [list, changes] = await Promise.allSettled([
+    $fetch<OwnerShapeView[]>(listUrl),
+    scope.value === 'personal' ? Promise.resolve(null) : $fetch<ShapeChange[]>(`/api/shapes/changes?scope=${scope.value}`),
+  ])
+  shapes.value = list.status === 'fulfilled' ? list.value : []
+  history.value = changes.status === 'fulfilled' ? changes.value : null
+  shapesLoading.value = false
+}
+
+async function selectTab(next: ShapeTier) {
+  if (next === scope.value) return
+  scope.value = next
+  toml.value = ''
+  preview.value = null
+  expanded.value = {}
+  shownToml.value = null
+  reset()
+  await loadShapes()
 }
 
 function reset() {
@@ -78,7 +107,7 @@ async function put(dryRun: boolean) {
   }
   busy.value = true
   try {
-    const result = await $fetch<Preview>(`/api/shapes/${encodeURIComponent(cliId.value)}${dryRun ? '?dry_run=1' : ''}`, { method: 'PUT', body: { toml: toml.value } })
+    const result = await $fetch<Preview>(`/api/shapes/${encodeURIComponent(cliId.value)}${query(dryRun)}`, { method: 'PUT', body: { toml: toml.value } })
     if (dryRun) {
       preview.value = result
       return
@@ -102,7 +131,7 @@ async function remove(shape: OwnerShapeView) {
     return
   reset()
   try {
-    await $fetch(`/api/shapes/${encodeURIComponent(shape.cli_id)}`, { method: 'DELETE' })
+    await $fetch(`/api/shapes/${encodeURIComponent(shape.cli_id)}${query()}`, { method: 'DELETE' })
     success.value = `Shape ${shape.cli_id} removed.`
     await loadShapes()
   }
@@ -119,19 +148,37 @@ async function remove(shape: OwnerShapeView) {
     </div>
 
     <template v-else>
-      <p class="mb-6 text-sm text-muted">
-        Shapes of tools you built. Only you see them; the shapes-registry stays the shared source and always wins for the same id. Grants bind to the shape digest.
+      <div role="tablist" aria-label="Shape tiers" class="mb-4 flex flex-wrap gap-1 border-b border-default">
+        <button
+          v-for="item in TABS"
+          :key="item.scope"
+          type="button"
+          role="tab"
+          :aria-selected="scope === item.scope"
+          class="-mb-px border-b-2 px-3 py-2 text-sm font-medium"
+          :class="scope === item.scope ? 'border-primary text-highlighted' : 'border-transparent text-muted hover:text-default'"
+          :data-shape-tab="item.scope"
+          @click="selectTab(item.scope)"
+        >
+          {{ item.label }}
+        </button>
+      </div>
+      <p class="mb-6 text-sm text-muted" data-shape-tab-intro>
+        {{ tab.intro }} Personal and domain grants bind to the shape digest; IdP-wide grants carry over registry updates.
+      </p>
+      <p v-if="scope === 'domain' && !writable && !shapesLoading" class="mb-4 text-xs text-muted" data-shape-domain-readonly>
+        Only root admins and operators of your domain publish domain shapes.
       </p>
       <UAlert v-if="error" color="error" :title="error" class="mb-4" data-shapes-error />
       <UAlert v-if="success" color="success" :title="success" class="mb-4" data-shapes-success />
 
-      <UCard class="mb-6">
+      <UCard v-if="writable" class="mb-6">
         <template #header>
           <h2 class="text-lg font-semibold">
-            Publish a shape
+            Publish a {{ scope === 'domain' ? 'domain' : 'personal' }} shape
           </h2>
           <p class="text-sm text-muted mt-1">
-            Paste or choose the adapter.toml of your tool. Same as <code>apes shapes publish FILE</code>.
+            Paste or choose the adapter.toml of your tool. Same as <code>apes shapes publish FILE{{ scope === 'domain' ? ' --scope domain' : '' }}</code>.
           </p>
         </template>
 
@@ -156,6 +203,12 @@ async function remove(shape: OwnerShapeView) {
             <p v-else-if="preview.replaced_digest" class="text-muted">
               Same digest as the published version; nothing changes for grants.
             </p>
+            <p v-for="override in preview.overrides ?? []" :key="override.cli_id" class="text-warning" data-shape-preview-override>
+              ⚠ Overrides the {{ override.tier === 'instance' ? 'IdP-wide' : 'domain' }} shape <code>{{ override.cli_id }}</code>{{ scope === 'domain' ? ' for your domain' : ' for you' }}: {{ override.grants.length }} continuing grant{{ override.grants.length === 1 ? '' : 's' }} of it stop{{ override.grants.length === 1 ? 's' : '' }} covering these calls.
+            </p>
+            <p v-if="overriddenGrants(preview.overrides) + preview.grants_losing_reuse.length === 0 && !preview.replaced_digest" class="text-muted">
+              No existing grant changes.
+            </p>
           </div>
 
           <div class="flex gap-2">
@@ -172,7 +225,7 @@ async function remove(shape: OwnerShapeView) {
       <UCard :ui="{ body: 'p-0' }">
         <template #header>
           <h2 class="text-lg font-semibold">
-            Your shapes <span class="text-sm text-muted font-normal">{{ shapes.length }}</span>
+            {{ scope === 'personal' ? 'Your shapes' : scope === 'domain' ? 'Domain shapes' : 'IdP-wide shapes' }} <span class="text-sm text-muted font-normal">{{ shapes.length }}</span>
           </h2>
         </template>
 
@@ -186,10 +239,10 @@ async function remove(shape: OwnerShapeView) {
           <table class="w-full">
             <thead class="border-b border-(--ui-border)">
               <tr>
-                <th v-for="head in ['Shape', 'Operations', 'Digest', 'Published', 'Bound grants']" :key="head" class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
+                <th v-for="head in scope === 'instance' ? ['Shape', 'Operations', 'Digest', 'Updated'] : ['Shape', 'Operations', 'Digest', 'Published', 'Bound grants']" :key="head" class="text-left px-4 py-3 text-xs font-medium text-muted uppercase">
                   {{ head }}
                 </th>
-                <th class="text-right px-4 py-3 text-xs font-medium text-muted uppercase">
+                <th v-if="scope !== 'instance'" class="text-right px-4 py-3 text-xs font-medium text-muted uppercase">
                   Actions
                 </th>
               </tr>
@@ -201,8 +254,9 @@ async function remove(shape: OwnerShapeView) {
                     <button type="button" class="font-semibold underline-offset-2 hover:underline" data-shape-toggle @click="expanded[shape.cli_id] = !expanded[shape.cli_id]">
                       {{ shape.cli_id }}
                     </button>
-                    <UBadge color="warning" variant="subtle" size="xs" label="owner" class="ml-1" />
+                    <UBadge :color="scope === 'instance' ? 'neutral' : 'warning'" variant="subtle" size="xs" :label="tab.label.toLowerCase()" class="ml-1" />
                     <span class="block font-mono text-xs text-muted">executable {{ shape.executable }}</span>
+                    <span v-if="shape.published_by" class="block text-xs text-muted break-all">by {{ shape.published_by }}</span>
                   </td>
                   <td class="px-4 py-3 text-sm">
                     {{ shape.operations.length }}
@@ -213,15 +267,15 @@ async function remove(shape: OwnerShapeView) {
                   <td class="px-4 py-3 text-xs text-muted">
                     {{ formatDate(shape.published_at) }}
                   </td>
-                  <td class="px-4 py-3 text-xs">
+                  <td v-if="scope !== 'instance'" class="px-4 py-3 text-xs">
                     {{ shape.bound_grants.length }} continuing
                     <span v-if="shape.bound_grants.length" class="block font-mono text-muted break-all">{{ requesters(shape.bound_grants).join(', ') }}</span>
                   </td>
-                  <td class="px-4 py-3 text-right whitespace-nowrap">
+                  <td v-if="scope !== 'instance'" class="px-4 py-3 text-right whitespace-nowrap">
                     <UButton variant="ghost" size="xs" data-shape-show-toml @click="shownToml = shownToml === shape.cli_id ? null : shape.cli_id">
                       TOML
                     </UButton>
-                    <UButton variant="ghost" size="xs" color="error" data-shape-remove @click="remove(shape)">
+                    <UButton v-if="writable" variant="ghost" size="xs" color="error" data-shape-remove @click="remove(shape)">
                       Remove
                     </UButton>
                   </td>
@@ -264,10 +318,13 @@ async function remove(shape: OwnerShapeView) {
                         </tr>
                       </tbody>
                     </table>
-                    <p class="text-xs font-medium text-muted uppercase">
+                    <p v-if="scope !== 'instance'" class="text-xs font-medium text-muted uppercase">
                       Grants bound to this digest
                     </p>
-                    <p v-if="!shape.bound_grants.length" class="text-xs text-muted">
+                    <p v-if="scope === 'instance'" class="text-xs text-muted">
+                      {{ shape.description }}
+                    </p>
+                    <p v-else-if="!shape.bound_grants.length" class="text-xs text-muted">
                       None.
                     </p>
                     <ul v-else class="space-y-1 text-xs">
@@ -285,9 +342,33 @@ async function remove(shape: OwnerShapeView) {
             </tbody>
           </table>
         </div>
-        <p class="p-4 text-xs text-muted">
+        <p v-if="writable" class="p-4 text-xs text-muted">
           Remove: continuing grants on this digest stop being reused at once; exact-command grants are untouched. Agents and brokered sessions never see this page.
         </p>
+      </UCard>
+
+      <UCard v-if="history" class="mt-6" :ui="{ body: 'p-0' }" data-shape-history>
+        <template #header>
+          <h2 class="text-lg font-semibold">
+            History
+          </h2>
+          <p class="text-sm text-muted mt-1">
+            Every audited write of this tier, newest first. The source commit is what the writer claimed.
+          </p>
+        </template>
+        <p v-if="!history.length" class="p-6 text-center text-sm text-muted">
+          No changes recorded yet.
+        </p>
+        <ul v-else class="divide-y divide-(--ui-border) text-xs">
+          <li v-for="(change, index) in history" :key="index" class="flex flex-wrap gap-x-3 gap-y-1 px-4 py-2" :data-shape-change="change.cli_id">
+            <span class="text-muted">{{ formatDate(change.created_at) }}</span>
+            <span class="font-medium">{{ change.action }}</span>
+            <code>{{ change.cli_id }}</code>
+            <span class="font-mono text-muted">{{ change.previous_digest ? shortDigest(change.previous_digest) : '—' }} → {{ change.digest ? shortDigest(change.digest) : '—' }}</span>
+            <span class="text-muted break-all">{{ change.actor === '_management_' ? 'management token' : change.actor }}</span>
+            <span v-if="change.source?.commit" class="font-mono text-muted">{{ change.source.commit.slice(0, 12) }}{{ change.source.dirty ? ' (uncommitted changes)' : '' }}</span>
+          </li>
+        </ul>
       </UCard>
     </template>
   </IdpPage>
