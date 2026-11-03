@@ -6,6 +6,7 @@ import { grantSummaryView } from '../utils/grant-summary'
 import { grantBatchPath } from '../utils/grant-batch'
 import GrantClaims from './GrantClaims.vue'
 import GrantIdentity from './GrantIdentity.vue'
+import GrantOwnerShape from './GrantOwnerShape.vue'
 import GrantTechnicalDetails from './GrantTechnicalDetails.vue'
 import GrantRequestedMarker from './GrantRequestedMarker.vue'
 import GrantRequestDate from './GrantRequestDate.vue'
@@ -40,6 +41,7 @@ const batchPath = computed(() => props.grant.request.batch ? grantBatchPath(prop
       </button>
     </div>
     <GrantIdentity v-if="identity" :grant="grant" :german="german" />
+    <GrantOwnerShape v-if="grant.card?.owner_shape" :shape="grant.card.owner_shape" :german="german" />
     <GrantRequestDate :created-at="grant.created_at" :german="german" />
     <div class="space-y-1.5" data-bound-scope>
       <p class="text-xs text-muted">

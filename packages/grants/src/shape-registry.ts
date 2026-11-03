@@ -91,10 +91,14 @@ export interface ServerShape {
   /** All recognizable operations, matched in declared order. */
   operations: ServerShapeOperation[]
   /**
-   * `'builtin'` — seeded from the monorepo adapter directory.
-   * `'custom'` — uploaded by a user via API (future feature).
+   * `'builtin'` — seeded from the shapes-registry.
+   * `'custom'` — published by one human owner for their own agents (`owner`).
    */
   source: 'builtin' | 'custom'
+  /** The account that published a custom shape; absent for registry shapes. */
+  owner?: string
+  /** The adapter TOML an owner published, kept so the owner can read it again; absent for registry shapes. */
+  toml?: string
   /**
    * Semantic adapter digest (`semanticAdapterDigest()` in `@openape/shapes`):
    * covers only matching rules, so presentation and texts never change it.
@@ -134,6 +138,49 @@ export interface ShapeStore {
   saveShape: (shape: ServerShape) => Promise<void>
   /** No-op if the cli_id does not exist. */
   deleteShape: (cliId: string) => Promise<void>
+  /**
+   * Shapes one human owner published for their own agents, sorted by `cli_id`.
+   * They live apart from the registry shapes above, which `listShapes` and
+   * `getShape` alone return; `ownerScopedShapeStore` joins both for one owner.
+   */
+  listOwnerShapes?: (owner: string) => Promise<ServerShape[]>
+  /** Upserts an owner shape by (`owner`, `cli_id`). */
+  saveOwnerShape?: (owner: string, shape: ServerShape) => Promise<void>
+  /** Removes an owner shape; false when the owner has none with this id. */
+  deleteOwnerShape?: (owner: string, cliId: string) => Promise<boolean>
+}
+
+/**
+ * The shapes the IdP reads one owner's program calls with: every registry
+ * shape first, then the owner's own shapes whose `cli_id` and executable no
+ * registry shape uses. Owner shapes never count as tested versions, so a
+ * program hash can never move a call from a registry shape to an owner shape.
+ * Without an owner (brokered identities, public endpoints) it is the registry.
+ */
+export function ownerScopedShapeStore(store: ShapeStore, owner: string | undefined): ShapeStore {
+  if (!owner || !store.listOwnerShapes) return store
+  const listOwnerShapes = store.listOwnerShapes
+  const combined = async (): Promise<{ registry: ServerShape[], own: ServerShape[] }> => {
+    const registry = await store.listShapes()
+    const taken = new Set(registry.flatMap(shape => [shape.cli_id, shape.executable]))
+    const own = (await listOwnerShapes(owner))
+      .filter(shape => !taken.has(shape.cli_id) && !taken.has(shape.executable))
+      .map(({ tested_digests: _tested, versions: _versions, virtual: _virtual, ...shape }) => ({ ...shape, source: 'custom' as const, owner }))
+    return { registry, own }
+  }
+  const readOnly = async () => { throw new Error('ownerScopedShapeStore is read-only') }
+  return {
+    async listShapes() {
+      const { registry, own } = await combined()
+      return [...registry, ...own]
+    },
+    async getShape(cliId) {
+      const { registry, own } = await combined()
+      return registry.find(shape => shape.cli_id === cliId) ?? own.find(shape => shape.cli_id === cliId) ?? null
+    },
+    saveShape: readOnly,
+    deleteShape: readOnly,
+  }
 }
 
 /**
@@ -142,7 +189,18 @@ export interface ShapeStore {
  */
 export function createInMemoryShapeStore(seed: ServerShape[] = []): ShapeStore {
   const map = new Map<string, ServerShape>(seed.map(s => [s.cli_id, s]))
+  const owned = new Map<string, Map<string, ServerShape>>()
   return {
+    async listOwnerShapes(owner) {
+      return [...(owned.get(owner)?.values() ?? [])].sort((a, b) => a.cli_id.localeCompare(b.cli_id))
+    },
+    async saveOwnerShape(owner, shape) {
+      if (!owned.has(owner)) owned.set(owner, new Map())
+      owned.get(owner)!.set(shape.cli_id, { ...shape, source: 'custom', owner })
+    },
+    async deleteOwnerShape(owner, cliId) {
+      return owned.get(owner)?.delete(cliId) ?? false
+    },
     async listShapes() {
 
       return [...map.values()].sort((a, b) => a.cli_id.localeCompare(b.cli_id))

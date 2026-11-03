@@ -63,6 +63,23 @@ export const shapes = sqliteTable('shapes', {
   index('idx_shapes_executable').on(table.executable),
 ])
 
+// Owner-published shapes (issue 1551): adapters a human owner published for
+// their own agents. Apart from the registry `shapes` table, keyed by owner.
+export const ownerShapes = sqliteTable('owner_shapes', {
+  owner: text('owner').notNull(),
+  cliId: text('cli_id').notNull(),
+  executable: text('executable').notNull(),
+  // JSON-encoded ServerShapeOperation[]
+  operations: text('operations', { mode: 'json' }).notNull(),
+  digest: text('digest').notNull(),
+  // The published adapter TOML, shown to the owner again
+  toml: text('toml').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+}, table => [
+  primaryKey({ columns: [table.owner, table.cliId] }),
+])
+
 export const grantChallenges = sqliteTable('grant_challenges', {
   challenge: text('challenge').primaryKey(),
   agentId: text('agent_id').notNull(),
