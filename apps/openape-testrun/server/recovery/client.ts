@@ -2,7 +2,7 @@ import type { Client, InArgs, InStatement, ResultSet, Transaction, TransactionMo
 import type { EncodedStatement, RecoverySession } from './types'
 import { authorityFingerprint } from './fingerprint'
 import { recoveryUnavailable } from './errors'
-import { encodeStatement, isReadStatement } from './encoding'
+import { encodeStatement, isReadStatement, RecoveryRecordSizeError } from './encoding'
 import { commitRecord, readLocalState, reconcileDatabase } from './state'
 
 interface Connection { original: Client, session?: RecoverySession, pending?: Promise<void> }
@@ -82,6 +82,7 @@ async function begin(connection: Connection, mode?: TransactionMode): Promise<Tr
         if (!statements.length) { await transaction.commit(); return }
         try { await commitRecord(session, transaction, statements) }
         catch (cause) {
+          if (cause instanceof RecoveryRecordSizeError) throw cause
           session.failure = recoveryUnavailable('independent-commit', 'commit-outcome-unconfirmed', cause)
           throw session.failure
         }
