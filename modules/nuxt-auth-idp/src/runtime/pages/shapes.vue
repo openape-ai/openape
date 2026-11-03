@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { navigateTo, useHead, useIdpAuth } from '#imports'
-import type { OwnerShapeGrant, OwnerShapeView } from '../server/utils/owner-shapes'
+import type { OwnerShapeGrant, OwnerShapeView } from '../server/utils/shape-tiers'
 
 // /shapes — owner-published shapes (issue 1551): publish the adapter of a
 // tool you built, see what it declares and which continuing grants bind to

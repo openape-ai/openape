@@ -128,6 +128,39 @@ export interface ServerShape {
   updatedAt: number
 }
 
+/** The three shape tiers (issue 1553): IdP-wide (`instance`), one email domain's, one human owner's. */
+export type ShapeTier = 'instance' | 'domain' | 'personal'
+
+/** Registry adapters of operations the Pods desktop performs itself; IdP-wide imports mark them virtual, no other tier may use the names. */
+export const DESKTOP_OWN_SHAPE_IDS: readonly string[] = ['pod-runtime', 'pod-http', 'pod-ssh']
+
+/** One audited shape write (`shape_changes`). */
+export interface ShapeChange {
+  scope: ShapeTier
+  /** `''` for IdP-wide shapes, the domain for domain shapes, the owner for personal shapes. */
+  scope_key: string
+  action: 'add' | 'update' | 'remove'
+  cli_id: string
+  previous_digest: string | null
+  digest: string | null
+  previous_toml: string | null
+  toml: string | null
+  /** Provenance the writer claimed (repository, commit, uncommitted changes); recorded, never verified. */
+  source: { repo?: string, commit?: string, dirty?: boolean } | null
+  actor: string
+  /** Unix seconds. */
+  created_at: number
+}
+
+/** One all-or-nothing write of one tier: the shapes to upsert and remove, with one audit entry each. */
+export interface ShapeChangeBatch {
+  scope: ShapeTier
+  scope_key: string
+  save: ServerShape[]
+  remove: string[]
+  changes: ShapeChange[]
+}
+
 /**
  * Persistence contract. Implemented by
  * `apps/openape-free-idp/server/utils/drizzle-shape-store.ts` for production
@@ -158,6 +191,10 @@ export interface ShapeStore {
   saveDomainShape?: (domain: string, shape: ServerShape) => Promise<void>
   /** Removes a domain shape; false when the domain has none with this id. */
   deleteDomainShape?: (domain: string, cliId: string) => Promise<boolean>
+  /** Writes one batch of one tier and its audit entries in one transaction (issue 1553). */
+  applyShapeChanges?: (batch: ShapeChangeBatch) => Promise<void>
+  /** The newest audit entries of one tier, newest first. */
+  listShapeChanges?: (scope: ShapeTier, scopeKey: string, limit: number) => Promise<ShapeChange[]>
 }
 
 /** Whose calls a shape view reads: the human owner (personal shapes) and their email domain (domain shapes). */
@@ -254,7 +291,24 @@ export function createInMemoryShapeStore(seed: ServerShape[] = []): ShapeStore {
   const map = new Map<string, ServerShape>(seed.map(s => [s.cli_id, s]))
   const owned = new Map<string, Map<string, ServerShape>>()
   const domains = new Map<string, Map<string, ServerShape>>()
+  const audit: ShapeChange[] = []
+  const tierMap = (scope: ShapeTier, key: string): Map<string, ServerShape> => {
+    if (scope === 'instance') return map
+    const tiers = scope === 'domain' ? domains : owned
+    const shapes = tiers.get(key) ?? new Map<string, ServerShape>()
+    tiers.set(key, shapes)
+    return shapes
+  }
   return {
+    async applyShapeChanges(batch) {
+      const shapes = tierMap(batch.scope, batch.scope_key)
+      for (const cliId of batch.remove) shapes.delete(cliId)
+      for (const shape of batch.save) shapes.set(shape.cli_id, batch.scope === 'instance' ? shape : { ...shape, source: 'custom', ...(batch.scope === 'domain' ? { domain: batch.scope_key } : { owner: batch.scope_key }) })
+      audit.push(...batch.changes)
+    },
+    async listShapeChanges(scope, scopeKey, limit) {
+      return audit.filter(change => change.scope === scope && change.scope_key === scopeKey).reverse().slice(0, limit)
+    },
     async listDomainShapes(domain) {
       return [...(domains.get(domain)?.values() ?? [])].sort((a, b) => a.cli_id.localeCompare(b.cli_id))
     },
