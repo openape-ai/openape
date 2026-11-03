@@ -162,7 +162,6 @@ export function ownerScopedShapeStore(store: ShapeStore, owner: string | undefin
   const listOwnerShapes = store.listOwnerShapes
   // One read per view: a view lives for one decision, so it never serves a stale list across requests.
   let cached: Promise<{ registry: ServerShape[], own: ServerShape[] }> | undefined
-  const combined = () => cached ??= load()
   const load = async (): Promise<{ registry: ServerShape[], own: ServerShape[] }> => {
     const registry = await store.listShapes()
     const taken = new Set(registry.flatMap(shape => [shape.cli_id, shape.executable]))
@@ -171,6 +170,7 @@ export function ownerScopedShapeStore(store: ShapeStore, owner: string | undefin
       .map(({ tested_digests: _tested, versions: _versions, virtual: _virtual, ...shape }) => ({ ...shape, source: 'custom' as const, owner }))
     return { registry, own }
   }
+  const combined = () => cached ??= load()
   const readOnly = async () => { throw new Error('ownerScopedShapeStore is read-only') }
   return {
     async listShapes() {
