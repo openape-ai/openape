@@ -1,8 +1,8 @@
 import type { User } from '@openape/auth'
 import type { OpenApeGrant, OpenApeGrantRequest } from '@openape/core'
 import type { ServerShape } from '@openape/grants'
-import { brokerRequesterName, buildCliAuthDetail, canonicalizeCliPermission, computeArgvHash, GENERIC_OPERATION_ID, matchArgvToOperation } from '@openape/grants'
-import type { GrantCardContext, RegistryCard } from '../../utils/grant-card'
+import { brokerRequesterName, buildCliAuthDetail, canonicalizeCliPermission, computeArgvHash, GENERIC_OPERATION_ID, matchArgvToOperation, ownerScopedShapeStore } from '@openape/grants'
+import type { GrantCardContext, OwnerShapeCard, RegistryCard } from '../../utils/grant-card'
 import { renderRegistryCard } from '../../utils/grant-card'
 import { getCliAuthorizationDetails } from '../../utils/cli-grants'
 import { useShapeStore } from './shape-store'
@@ -10,7 +10,8 @@ import { useIdpStores } from './stores'
 
 /** Where the card's IdP-side facts come from; injectable for tests. */
 export interface GrantCardSources {
-  getShape: (cliId: string) => Promise<ServerShape | null>
+  /** A registry shape, or with `owner` the shape that owner's calls are read with. */
+  getShape: (cliId: string, owner?: string) => Promise<ServerShape | null>
   findUser: (email: string) => Promise<User | null>
 }
 
@@ -54,8 +55,11 @@ export async function registryCard(request: OpenApeGrantRequest, getShape: Grant
   const argv = context.argv ?? request.command
   if (!argv?.length || (request.command && !sameArgv(request.command, argv))) return null
   if (context.argv_hash && context.argv_hash !== await computeArgvHash(argv)) return null
-  const shape = await getShape(detail.cli_id)
+  const shape = await getShape(detail.cli_id, byIdp ? context.adapter_owner : undefined)
   if (!shape) return null
+  // An owner shape speaks for this card only in the version the grant was resolved with, and a
+  // registry shape never speaks for a grant an owner shape resolved (a later takeover).
+  if ((shape.owner && shape.digest !== context.adapter_digest) || (byIdp && (shape.owner ?? undefined) !== (context.adapter_owner ?? undefined))) return null
   if (!byIdp && (shape.digest !== context.adapter_digest || argv[0]!.split('/').pop() !== shape.executable)) return null
   const match = matchArgvToOperation(shape.operations, argv.slice(1))
   const presentation = match?.operation.presentation
@@ -128,20 +132,42 @@ export async function bindsExactCommand(request: OpenApeGrantRequest): Promise<b
   return permissions.every(permission => allowed.has(permission))
 }
 
+/**
+ * The owner-shape facts of a grant the IdP resolved with an owner's own shape
+ * (`execution_context.adapter_owner`, written only by the IdP), or null.
+ */
+export async function ownerShapeCard(request: OpenApeGrantRequest, getShape: GrantCardSources['getShape']): Promise<OwnerShapeCard | null> {
+  const context = request.execution_context
+  const detail = getCliAuthorizationDetails(request.authorization_details)[0]
+  if (!resolvedByIdp(request) || !context?.adapter_owner || !detail) return null
+  const shape = await getShape(detail.cli_id, context.adapter_owner)
+  const own = shape?.owner === context.adapter_owner ? shape : null
+  return {
+    cli_id: detail.cli_id,
+    owner: context.adapter_owner,
+    digest: context.adapter_digest,
+    published_at: own?.updatedAt ?? null,
+    current: own?.digest === context.adapter_digest,
+    operation_id: detail.operation_id,
+    operations: (own?.operations ?? []).map(operation => ({ id: operation.id, command: operation.command, display: operation.display, action: operation.action, risk: operation.risk })),
+  }
+}
+
 function defaultSources(): GrantCardSources {
   const shapeStore = useShapeStore()
   const { userStore } = useIdpStores()
-  return { getShape: cliId => shapeStore.getShape(cliId), findUser: email => userStore.findByEmail(email) }
+  return { getShape: (cliId, owner) => ownerScopedShapeStore(shapeStore, owner).getShape(cliId), findUser: email => userStore.findByEmail(email) }
 }
 
 /** Adds `card` (registry meaning and the requester's registration) to each grant. */
 export async function withGrantCards<T extends OpenApeGrant>(grants: T[], sources: GrantCardSources = defaultSources()): Promise<(T & { card: GrantCardContext })[]> {
-  const getShape = memoize(sources.getShape)
+  const cachedShape = memoize(key => sources.getShape(...(JSON.parse(key) as [string, string | undefined])))
+  const getShape: GrantCardSources['getShape'] = (cliId, owner) => cachedShape(JSON.stringify([cliId, owner]))
   const findUser = memoize(sources.findUser)
   return await Promise.all(grants.map(async (grant) => {
-    const [registry, user, exactCommand] = await Promise.all([registryCard(grant.request, getShape), grant.brokered ? null : findUser(grant.request.requester), bindsExactCommand(grant.request)])
+    const [registry, user, exactCommand, ownerShape] = await Promise.all([registryCard(grant.request, getShape), grant.brokered ? null : findUser(grant.request.requester), bindsExactCommand(grant.request), ownerShapeCard(grant.request, getShape)])
     const providerName = brokerRequesterName(grant.brokered?.requester_name)
     const requester = grant.brokered ? providerName ? { name: providerName, owner: grant.brokered.owner } : null : user ? { name: user.name, owner: user.owner ?? null } : null
-    return { ...grant, card: { registry, requester, program: programFacts(grant.request), binds_exact_command: exactCommand } }
+    return { ...grant, card: { registry, requester, program: programFacts(grant.request), binds_exact_command: exactCommand, owner_shape: ownerShape } }
   }))
 }

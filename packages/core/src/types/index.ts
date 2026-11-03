@@ -120,6 +120,11 @@ export interface OpenApeExecutionContext {
   adapter_version: string
   /** Digest of the adapter used during resolution */
   adapter_digest: string
+  /**
+   * Set by the IdP, never by a client: the account whose own (non-registry)
+   * shape resolved the command. A grant with it binds that shape's digest.
+   */
+  adapter_owner?: string
   /** Path or command name of the resolved executable */
   resolved_executable: string
   /** Captured bindings used to render the resource chain */

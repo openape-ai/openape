@@ -8,6 +8,7 @@ import { requireGrantActionAuthority } from '../../../utils/grant-authority'
 import { useGrantStores } from '../../../utils/grant-stores'
 import { getIdpIssuer, useIdpStores } from '../../../utils/stores'
 import { createProblemError } from '../../../utils/problem'
+import { assertOwnerShapeCurrent } from '../../../utils/owner-shape-current'
 
 const VALID_GRANT_TYPES: GrantType[] = ['once', 'timed', 'always']
 
@@ -41,6 +42,8 @@ export default defineEventHandler(async (event) => {
   }
 
   await requireGrantActionAuthority(event, grant, email, 'approve')
+  // A request resolved with an owner shape that changed since cannot be approved (issue 1551).
+  await assertOwnerShapeCurrent(grant)
 
   // widened_details and extend_mode are mutually exclusive
   const hasWidenedDetails = Array.isArray(body.widened_details) && body.widened_details.length > 0

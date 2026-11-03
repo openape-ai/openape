@@ -38,6 +38,7 @@
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
+    "@openape/shapes": "workspace:*",
     "@simplewebauthn/browser": "^13.3.0",
     "defu": "catalog:",
     "jose": "catalog:",
@@ -50,7 +51,6 @@
   "devDependencies": {
     "@nuxt/module-builder": "catalog:",
     "@nuxt/ui": "catalog:",
-    "@openape/shapes": "workspace:*",
     "@types/node": "catalog:",
     "@vitejs/plugin-vue": "catalog:",
     "@vitest/browser": "catalog:",

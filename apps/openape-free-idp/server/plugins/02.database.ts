@@ -113,6 +113,13 @@ export default defineNitroPlugin(async () => {
     try { await db.run(sql`ALTER TABLE shapes ADD COLUMN versions TEXT`) }
     catch { /* already present */ }
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_shapes_source ON shapes(source)`)
+    // Owner-published shapes (issue 1551).
+    await db.run(sql`CREATE TABLE IF NOT EXISTS owner_shapes (
+      owner TEXT NOT NULL, cli_id TEXT NOT NULL, executable TEXT NOT NULL,
+      operations TEXT NOT NULL, digest TEXT NOT NULL, toml TEXT NOT NULL,
+      created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
+      PRIMARY KEY (owner, cli_id)
+    )`)
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_shapes_executable ON shapes(executable)`)
 
     // OAuth/OIDC auth-code + refresh-token + JWT id + signing-key tables.

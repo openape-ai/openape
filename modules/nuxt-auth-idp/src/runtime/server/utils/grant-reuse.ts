@@ -31,6 +31,8 @@ function hasExactStructuredDetail(request: Pick<OpenApeGrantRequest, 'authorizat
 
 function reusable(grant: OpenApeGrant, request: OpenApeGrantRequest, brokered: BrokeredGrant | undefined, now: number): boolean {
   if (grant.status !== 'approved') return false
+  // Owner-shape grants bind their shape version, which only POST /api/grants/authorize checks; a client-built request cannot reuse them (issue 1551).
+  if (grant.request.execution_context?.adapter_owner) return false
   if ((grant.request.grant_type ?? 'once') === 'once') return false
   if (grant.expires_at && grant.expires_at <= now) return false
   // A brokered identity reuses only grants of its own broker binding; a direct identity never reuses a brokered one.
@@ -85,6 +87,9 @@ export interface ProgramCallScope {
   programSha256: string
   requiresOnce?: true
   files?: { path: string, sha256: string }[]
+  /** Set when an owner's own shape resolved the call (`execution_context.adapter_owner`). */
+  adapterOwner?: string
+  adapterDigest?: string
 }
 
 function commandGrantFor(grant: OpenApeGrant, call: ProgramCallScope, brokered: BrokeredGrant | undefined): boolean {
@@ -97,7 +102,10 @@ function commandGrantFor(grant: OpenApeGrant, call: ProgramCallScope, brokered: 
 /**
  * An exact command binds its argv hash; a command no shape describes also
  * binds the program file it was approved for, when the grant records one.
- * The adapter digest is never compared: approvals carry over adapter updates.
+ * A registry adapter digest is never compared: approvals carry over registry
+ * updates. An owner's own shape is bound by its digest (issue 1551): a
+ * republished or removed owner shape, or a registry shape that later takes
+ * over the program, never inherits the approvals of the previous shape.
  */
 function bindsCall(grant: OpenApeGrant, call: ProgramCallScope): boolean {
   if (call.requiresOnce && ((grant.request.grant_type ?? 'once') !== 'once' || grant.auto_approval_kind || grant.decided_by_standing_grant)) return false
@@ -108,6 +116,7 @@ function bindsCall(grant: OpenApeGrant, call: ProgramCallScope): boolean {
     if (context?.argv_hash !== call.argvHash) return false
   }
   if (call.detail.operation_id === GENERIC_OPERATION_ID && context?.program_sha256 && context.program_sha256 !== call.programSha256) return false
+  if ((context?.adapter_owner || call.adapterOwner) && (context?.adapter_owner !== call.adapterOwner || context?.adapter_digest !== call.adapterDigest)) return false
   return true
 }
 
