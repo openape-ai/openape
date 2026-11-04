@@ -1,0 +1,11 @@
+[Unit]
+Description=OpenApe retained-workload health receipt
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/libexec/host_health.py
+TimeoutStartSec=90
+StateDirectory=openape-operations
+UMask=0077

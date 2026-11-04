@@ -1,0 +1,11 @@
+[Unit]
+Description=Bounded OpenApe image and build-cache cleanup
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/libexec/bounded_cleanup.py --apply
+TimeoutStartSec=20min
+UMask=0077
+Nice=10
