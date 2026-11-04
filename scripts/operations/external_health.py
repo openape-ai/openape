@@ -45,7 +45,7 @@ def check(config):
     return failures
 
 
-def record(directory, failures, notify):
+def record(directory, failures, notify, label='Chatty'):
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     state_file = directory / 'state.json'
     before = json.loads(state_file.read_text()) if state_file.exists() else None
@@ -54,7 +54,7 @@ def record(directory, failures, notify):
     result = {'at': dt.datetime.now(dt.timezone.utc).isoformat(), 'status': status,
               'failures': failures, 'transition': bool(changed), 'notificationExecuted': False}
     if changed and notify:
-        message = 'Chatty unavailable. Inspect the local health receipt.' if failures else 'Chatty recovered. Independent checks pass.'
+        message = label + (' unavailable. Inspect the local health receipt.' if failures else ' recovered. Independent checks pass.')
         script = 'on run argv\ndisplay notification (item 1 of argv) with title "OpenApe host health"\nend run'
         subprocess.run(['/usr/bin/osascript', '-e', script, message], check=True, capture_output=True, timeout=15)
         result['notificationExecuted'] = True
@@ -80,7 +80,7 @@ def main():
             failures = check(config)
         except Exception as error:
             failures = ['checker:' + type(error).__name__]
-        print(json.dumps(record(directory, failures, config.get('notify', True))))
+        print(json.dumps(record(directory, failures, config.get('notify', True), config.get('label', 'Chatty'))))
 
 
 if __name__ == '__main__':
