@@ -2481,3 +2481,17 @@ are implied by merging this preparation increment.
 - Live historical synchronization returned `outcome=unknown, reason=Gone` for a persisted Sent Items continuation. Restart that folder once per run, retain stored evidence, checkpoint each complete page and avoid full reads for unchanged provider versions.
 - Focused verification: 26 autonomous mail cases, including expired cursor recovery and retaining the last complete page after a later provider failure.
 - Reuse source-bound version-five machine assessments during the version-six transition; update context and uncertainty without another model choice or fabricated owner answer.
+
+## Chatty M4 operational duties — issue 1556
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1556
+- Worktree: `/Users/patrickhofmann/Companies/private/repos/openape/openape-operations-m4-1556`
+- Branch: `feature/issue-1556-operational-duties`, based on canonical `6d6f873dfc351bf32366861475a8e1fe9b913a4f`.
+- Scope: backup lifecycle, bounded cleanup, independent health, obsolete deployment-preview retirement and reconstruction-aware edge rollback. All five management services remain running; M5–M7 excluded.
+- Plan source revision 17 / publication 19 is maintained privately. Initial normal-DNS authenticated CRM and all 52 public HTTPS/TLS baselines passed. The old stopped proxy container is missing; cause unproven. Other 40 identities/start times are unchanged.
+- PR: https://repos.openape.ai/patrick/monorepo/pulls/532. Initial reviewed head `db7aa009a9a27c52dd68f8984f9a33c6392c845b`; final source/target and merge receipts belong on this PR.
+- Live acceptance on November 4: two normal backups passed, latest encrypted snapshot `0bb13cfb765df256fa5fc3f005f5892f81cbfe6dc7ec020419318f1bc2f48f18`; independent retrieval verified 51 final operations/recovery files. The earlier snapshot restored 64 Coolify tables into an isolated PostgreSQL fixture, including archived-state acceptance/refusal without stopping production DB. Production remains active-state.
+- Cleanup dry run and two normal runs removed zero candidates and preserved volumes; 40 rollback image IDs remain protected. Host health covers 38 containers/13 units; independent Mac checks cover 52 HTTPS targets and fresh host status. Controlled local outage/recovery produced two desktop notification calls and no duplicate on repeat; no mail.
+- All 40 retained container identities/start times and 52 HTTPS/TLS baselines match. All five management containers run; only the Coolify scheduler worker and narrow writer flags are fenced. Its stale read-only environment bind is documented; do not restart the worker against it. Active file Preview remains available. Reports checkpoint ownership/rotation is documented, not automatically scheduled.
+- CRM passed before/after changes and at final acceptance using normal VPN DNS, trusted TLS, login/state/details/search/logout. A pre-change HTTP 502 coincided with an independent CRM deployment; progression stopped until two full checks passed. No CRM/VPN change by M4.
+- Five focused checks and full `pnpm check:ci` pass; final push runs the affected gate. Private evidence source: `/Users/patrickhofmann/Documents/ChatGPT/General/outputs/chatty-operations-m4-20261104/`. Native protection inspected disabled; automatic CI remains paused. Next: publish final Test Run, merge reviewed PR and update the living plan. M5 management stop remains excluded.
