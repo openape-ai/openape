@@ -1,3 +1,11 @@
+# Independent Traefik edge — issue 1555
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1555. Owner explicitly authorized M3 implementation; M4–M7 and management retirement are excluded.
+- Worktree `openape-proxy-m3-1555`, branch `feature/issue-1555-independent-proxy`, canonical base `567743b40f063e8672d041826d56ab6d424f6bc2`.
+- Adopt the existing image, routes, network and current ACME stores under `/srv/openape-proxy` and independent Compose ownership. Preserve protected effective configuration as recovery artifacts; version the public-safe contract and runbook here.
+- Live preparation: 38 running containers, 26 healthy checks, 52 unchanged HTTPS/TLS baselines; all 52 also pass on the loopback staging proxy with identical certificates. Production proxy and management remain unchanged at this entry.
+- Next: local gates and native PR; real staging renewal, ownership detachment, deliberate cutover/rollback/restart and private recovery evidence. Add post-merge receipts to the implementing PR.
+
 # Reports independent recovery — issue 1554
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1554. Implements the Reports gate of the approved Chatty M2 recovery work; later service retirement and migration remain separate.

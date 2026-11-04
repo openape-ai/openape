@@ -1,0 +1,66 @@
+name: openape-proxy
+networks:
+  coolify:
+    external: true
+services:
+  traefik:
+    container_name: openape-proxy
+    image: traefik@sha256:cc1799c50550f730f686df9b368e690f9199542787db8d1dd328a7c3779f6eea
+    restart: unless-stopped
+    env_file:
+    - /srv/openape-proxy/dns01.env
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    networks:
+      coolify:
+        aliases:
+        - traefik
+        - coolify-proxy
+    ports:
+    - 80:80
+    - 443:443
+    - 443:443/udp
+    - 8080:8080
+    healthcheck:
+      test: wget -qO- http://localhost:80/ping || exit 1
+      interval: 4s
+      timeout: 2s
+      retries: 5
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock:ro
+    - /srv/openape-proxy:/traefik
+    command:
+    - --ping=true
+    - --ping.entrypoint=http
+    - --api.dashboard=true
+    - --entrypoints.http.address=:80
+    - --entrypoints.https.address=:443
+    - --entrypoints.http.http.encodequerysemicolons=true
+    - --entryPoints.http.http2.maxConcurrentStreams=250
+    - --entrypoints.https.http.encodequerysemicolons=true
+    - --entryPoints.https.http2.maxConcurrentStreams=250
+    - --entrypoints.https.http3
+    - --providers.file.directory=/traefik/dynamic/
+    - --providers.file.watch=true
+    - --certificatesresolvers.letsencrypt.acme.httpchallenge=true
+    - --certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=http
+    - --certificatesresolvers.letsencrypt.acme.storage=/traefik/acme.json
+    - --certificatesresolvers.dns01.acme.dnschallenge=true
+    - --certificatesresolvers.dns01.acme.dnschallenge.provider=exoscale
+    - --certificatesresolvers.dns01.acme.dnschallenge.delaybeforecheck=15
+    - --certificatesresolvers.dns01.acme.email=${ACME_EMAIL:?Set ACME_EMAIL in the
+      protected project .env}
+    - --certificatesresolvers.dns01.acme.storage=/traefik/acme-dns01.json
+    - --api.insecure=false
+    - --providers.docker=true
+    - --providers.docker.exposedbydefault=false
+    labels:
+    - traefik.enable=true
+    - traefik.http.routers.traefik.entrypoints=http
+    - traefik.http.routers.traefik.service=api@internal
+    - traefik.http.services.traefik.loadbalancer.server.port=8080
+    - traefik.http.routers.traefik.rule=Host(`traefik-coolify-proxy`)
+    sysctls:
+      net.mptcp.enabled: '0'
+    pull_policy: never
+
