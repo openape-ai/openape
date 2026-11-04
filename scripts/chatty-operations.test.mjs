@@ -62,8 +62,10 @@ def image(i, **extra): return dict(Id=i,Created=old,Size=100,RepoTags=[],RepoDig
 images=[image(str(i)) for i in range(20)]
 images += [dict(Id='tagged',Created=old,Size=100,RepoTags=['keep:rollback'],RepoDigests=[])]
 cache=[dict(ID='busy',CreatedAt=old,LastUsedAt=old,Size=100,InUse=True,Shared=False)]
+cache += [dict(ID='shared',CreatedAt=old,LastUsedAt=old,Size=100,InUse=False,Shared=True)]
+cache += [dict(ID='recent',CreatedAt=old,LastUsedAt='2026-11-04T00:00:00Z',Size=100,InUse=False,Shared=False)]
 selected=select(images,cache,{'0','1'},now)
-assert len(selected)==10 and not {'0','1','tagged','busy'} & {x['id'] for x in selected}
+assert len(selected)==10 and not {'0','1','tagged','busy','shared','recent'} & {x['id'] for x in selected}
 images=[dict(Id='huge',Created=old,Size=MAX_BYTES+1,RepoTags=[],RepoDigests=[])]
 assert select(images,[],set(),now)==[]
 assert select([],[],set(),now)==[]

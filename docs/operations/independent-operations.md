@@ -40,8 +40,12 @@ not use it to simulate a host outage or silently change its recipients/settings.
 Inspect the exact installed source before changing flags. Current Coolify 4.1.3
 supports `SCHEDULER_ENABLED=false` in its existing `.env`: the s6
 `scheduler-worker` run script then sleeps instead of starting `schedule:work`.
-Update the bound file **in place** to preserve its inode, and restart only that
-worker with s6. No management container restart is required.
+Update the host file **in place** to preserve its inode. Verify the actual container
+bind: a read-only stale inode can still expose the original bytes. In that case,
+leave the correct host file for the next container creation and stop only the
+current scheduler worker with `docker exec -u 0 coolify /command/s6-svc -d
+/run/service/scheduler-worker`. Verify it is down and no scheduled job remains;
+do not restart it against a stale bind. No management container restart is required.
 
 Also preserve and set the narrow guards: instance auto-update/API/MCP off;
 server `force_disabled=true`; metrics and Sentinel API scheduling off; application
@@ -54,7 +58,10 @@ jobs or broad cache-clear/queue-delete commands.
 The `is_sentinel_enabled` flag alone is insufficient: `isSentinelEnabled()` also
 returns true when metrics are enabled, and its scheduled job can restart Sentinel
 without checking `force_disabled`. Both settings and the scheduler fence matter.
-The existing Sentinel container continues running during M4.
+The existing Sentinel container continues running during M4. Its controller checks
+`isFunctional()` before accepting telemetry; `force_disabled=true` prevents
+telemetry from enqueueing a second health/proxy writer. Verify this guard in the
+installed source and confirm pending/reserved/delayed queues are empty.
 
 The obsolete Forgejo deployment-preview workflow is removed. Its retained
 `preview-dispatch.mjs` entry point exits 2 before builds, credentials or network
