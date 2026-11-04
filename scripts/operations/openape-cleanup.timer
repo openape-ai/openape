@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily bounded OpenApe cleanup
+
+[Timer]
+OnCalendar=*-*-* 05:30:00
+RandomizedDelaySec=5min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

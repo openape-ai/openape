@@ -80,3 +80,12 @@ This procedure does not retire Coolify management, alter cleanup/monitoring duti
 remove static sites or authorize the later M4–M7 milestones. Record actual results
 and limitations in a private Test Run; put post-merge receipts on the implementing
 PR and its explicitly related issue.
+
+## Missing original container
+
+The November 4 M4 reconciliation found the retained old proxy container absent;
+its removal cause is unproven. Protected configuration and the exact image remain.
+Use the reconstruction-aware procedure in
+[independent operations](independent-operations.md#proxy-rollback-when-the-old-container-is-absent)
+instead of assuming `docker start coolify-proxy` can restore it. Keep current
+ACME state and one writer; validate the reconstructed definition before cutover.

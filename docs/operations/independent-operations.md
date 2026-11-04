@@ -1,0 +1,166 @@
+# Independent Chatty operational duties
+
+M4 transfers operational ownership while **all five Coolify management containers
+remain running**. Management shutdown is M5 and is a separate assignment.
+The implementation belongs to [issue 1556](https://repos.openape.ai/patrick/monorepo/issues/1556).
+
+Before and after every infrastructure change, and at intermediate checkpoints,
+verify the separate `docpit.crm.delta-mind.at` CRM using normal system/VPN DNS,
+trusted TLS, existing login, state, deferred details and bounded searches. Stop
+progression on a regression. Forced-IP probes cannot satisfy this gate.
+
+## Ownership and installation
+
+Reviewed source is in `scripts/operations/`. Install Python helpers root-owned,
+0755 under `/usr/local/libexec/`; configuration is root-owned, 0600 under
+`/etc/openape-operations/`. Never commit production configuration or credentials.
+Preserve exact original files/settings in a private recovery directory before
+installation. Keep the current proxy, firewall and per-namespace MPTCP settings.
+
+| Duty | Single scheduler/owner | Contract |
+| --- | --- | --- |
+| Database/file recovery | Existing `openape-backup.timer` | Existing tar and encrypted Restic stages; no pruning |
+| Image/build cache | `openape-cleanup.timer` | Daily, explicit IDs, seven-day age, ten objects/1 GiB maximum |
+| Local workload health | `openape-health.timer` | Every minute; Docker/systemd, disk, backup age, MPTCP |
+| External availability | Mac mini LaunchAgent `ai.openape.chatty-health` | Every five minutes; normal HTTPS and fresh host receipt |
+| Reports checkpoint | Patrick/operator | Weekly review, before schema changes, measured replay/sequence triggers |
+| Mail certificate renewal, runner cache, CI image warming | Existing specific timers | Preserve their independent scope and the CI pause |
+
+The external checker is independent of Chatty. It stores private local state and
+transition history, and invokes only local macOS notifications. It does not send
+mail or third-party messages. Execution of `osascript` proves notification API
+submission, not that a person read the notification. The Mac must remain awake,
+online and logged in; no redundant off-Mac alert delivery is claimed.
+
+The existing Monitor service runs on Chatty and sends mail on transitions. Do
+not use it to simulate a host outage or silently change its recipients/settings.
+
+## Coolify writer fence
+
+Inspect the exact installed source before changing flags. Current Coolify 4.1.3
+supports `SCHEDULER_ENABLED=false` in its existing `.env`: the s6
+`scheduler-worker` run script then sleeps instead of starting `schedule:work`.
+Update the bound file **in place** to preserve its inode, and restart only that
+worker with s6. No management container restart is required.
+
+Also preserve and set the narrow guards: instance auto-update/API/MCP off;
+server `force_disabled=true`; metrics and Sentinel API scheduling off; application
+auto-deploy and preview deployment flags off; expire the obsolete preview token.
+Keep proxy `type=NONE` and `force_stop=true`. Do not erase tokens, app records,
+preview history, data or credentials. Inspect pending/reserved queues before
+handoff and verify no external writer job remains. Never invoke test notification
+jobs or broad cache-clear/queue-delete commands.
+
+The `is_sentinel_enabled` flag alone is insufficient: `isSentinelEnabled()` also
+returns true when metrics are enabled, and its scheduled job can restart Sentinel
+without checking `force_disabled`. Both settings and the scheduler fence matter.
+The existing Sentinel container continues running during M4.
+
+The obsolete Forgejo deployment-preview workflow is removed. Its retained
+`preview-dispatch.mjs` entry point exits 2 before builds, credentials or network
+access. The active **file review** service at `preview.openape.ai`, its systemd
+unit and API remain in service. Inspect webhook consumers and deployment queues;
+a missing access log is not proof of no historical consumer.
+
+## Backup lifecycle
+
+Both existing backup stages call `coolify_lifecycle.capture`. Without a policy,
+state defaults to `active`; failure of the real `pg_dump` is fatal. Production
+remains explicitly active throughout M4.
+
+A future, separately approved retirement may use this root-private policy:
+
+```json
+{"state":"retired","archive":"/private/final-coolify.sql","sha256":"FULL_SHA256","receipt":"/private/verified-archive.json"}
+```
+
+The independently verified receipt must bind `archiveSha256`, `restoredSha256`,
+`restoreCheck: "passed"`, a full Restic `snapshot`, `verifiedAt` and
+`independentLocation`. Capture verifies permissions, bytes and dump completion;
+it never tries a running DB in retired state. A missing receipt or changed
+archive fails. Producing that receipt requires actual off-host retrieval and
+SQL restoration; writing a JSON assertion is not archival acceptance.
+
+The retirement archive is not created or selected merely because the DB is
+missing. No SQL is imported into production during backup or configuration
+rollback. Keep all valid archives/snapshots at least 30 days, with no automatic
+pruning. The encrypted supplement also exports explicitly protected rollback
+image IDs from the cleanup policy, not only images attached to current containers.
+
+## Bounded cleanup
+
+`cleanup.json` contains a nonempty `protectedImages` array of exact image IDs.
+Seed it from the verified recovery inventory and current image inventory; add
+new rollback IDs before any deployment retires their containers. All existing
+container image IDs are additionally protected at each run. Missing protected
+images fail closed. Tagged images and repository digests are never candidates.
+
+Run `/usr/bin/python3 /usr/local/libexec/bounded_cleanup.py` for a dry run;
+`--apply` uses the same selection and rechecks before each deletion. The helper
+uses one lock, no force image removal, and explicit cache-ID/age filters. It never
+prunes containers, networks, volumes, registry blobs or backup objects. Receipts
+name every selected ID and declared size. Layer sharing can reduce actual bytes
+reclaimed. A zero-candidate normal run and repeat are valid no-op results.
+
+## Proxy rollback when the old container is absent
+
+The November 4 M4 baseline found the old `coolify-proxy` container absent while
+all remaining identities/start times matched M3. Its removal actor was not
+established. Do not depend on `docker start coolify-proxy` alone.
+
+`edge_rollback.py` validates the saved original definition and exact image,
+generates a protected Compose definition with persistent MPTCP0, and supports
+reconstruction. Without `--apply`, it changes no running container. Validate the
+same definition in a disposable isolated fixture before relying on it.
+
+Actual rollback is a separately intentional edge action: first disable restart
+and stop `openape-proxy`, carry its latest ACME stores to the original directory,
+then bring up the reconstructed pinned original and wait for healthy before the
+52-route probe. Only one ACME writer may run. Do not restore a whole Coolify DB,
+older application data or a historical Reports authority/journal. M4 does not
+repeat the already accepted public M3 cutover merely to test reconstruction.
+
+## Reports checkpoint rotation
+
+The ordinary nightly backup does not advance the external authority checkpoint.
+Patrick/operator reviews the current `reports-recovery.mjs status` weekly and
+before every schema change. Rotate when replay exceeds 15 measured minutes or
+the chain exceeds 10,000 transactions; these conservative operating triggers
+reserve time within the provisional four-hour core recovery objective.
+
+1. Pass CRM and protected Reports read baselines. Preserve the exact running
+   image, config and restart policy; acquire an exclusive maintenance lock and
+   confirm no ordinary backup capture is active.
+2. Disable the Reports restart path and stop its single writer, including the
+   retention worker. Do not run another writer or disable authority enforcement.
+3. Capture the frozen current database into the existing encrypted off-host
+   Restic repository. Keep the full snapshot ID and absolute snapshot path.
+4. Run the reviewed `checkpoint` command described in
+   [independent Reports recovery](reports-independent-recovery.md), with
+   `--writers-frozen`, the existing protected config and Restic wrapper. The CLI
+   retrieves and fully compares the checkpoint before conditionally moving the
+   head. Mount trusted CA roots; never bypass TLS verification.
+5. Verify current head/local status, resume the **same** authority-aware image
+   and restart policy, then verify normal private/refused reads and CRM.
+
+Do not prune old checkpoints or transaction records. On an ambiguous failure,
+keep Reports fenced and inspect the current authenticated head; reconcile or
+recover to that authority before resuming. Never restore an older head/journal.
+M4 assigns this procedure; it adds no automatic writer-stop timer. A future
+schema migration needs its own compatible checkpoint and verification.
+
+## Per-duty rollback
+
+Pause the affected replacement timer or LaunchAgent and wait for its lock before
+restoring its exact protected helper/config. For backup, restore only the prior
+mandatory-active helpers while the DB remains running; no database restore.
+For health, remove only the replacement checker and restore only that prior
+monitoring duty. Cache deletion cannot be undone; retained image/data preservation
+must already have passed before deletion.
+
+Keep the global Coolify scheduler fenced during a partial rollback. If a specific
+original Coolify duty must resume, explicitly schedule/invoke only its reviewed
+job and restore only its required settings. Do not set `SCHEDULER_ENABLED=true`
+or broadly re-enable API, updates, cleanup and proxy ownership together. A full
+return to original ownership requires all replacement duties paused first and a
+separately reviewed scope; it is not an automatic error handler.

@@ -2481,3 +2481,12 @@ are implied by merging this preparation increment.
 - Live historical synchronization returned `outcome=unknown, reason=Gone` for a persisted Sent Items continuation. Restart that folder once per run, retain stored evidence, checkpoint each complete page and avoid full reads for unchanged provider versions.
 - Focused verification: 26 autonomous mail cases, including expired cursor recovery and retaining the last complete page after a later provider failure.
 - Reuse source-bound version-five machine assessments during the version-six transition; update context and uncertainty without another model choice or fabricated owner answer.
+
+## Chatty M4 operational duties — issue 1556
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1556
+- Worktree: `/Users/patrickhofmann/Companies/private/repos/openape/openape-operations-m4-1556`
+- Branch: `feature/issue-1556-operational-duties`, based on canonical `6d6f873dfc351bf32366861475a8e1fe9b913a4f`.
+- Scope: backup lifecycle, bounded cleanup, independent health, obsolete deployment-preview retirement and reconstruction-aware edge rollback. All five management services remain running; M5–M7 excluded.
+- Plan source revision 17 / publication 19 is maintained privately. Initial normal-DNS authenticated CRM and all 52 public HTTPS/TLS baselines passed. The old stopped proxy container is missing; cause unproven. Other 40 identities/start times are unchanged.
+- Five focused operations checks and the full local deployment contract pass; live installation/acceptance are pending. Next: finish exact-source checks, install one duty at a time with CRM gates, publish actual evidence and native PR.
