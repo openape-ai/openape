@@ -63,4 +63,3 @@ services:
     sysctls:
       net.mptcp.enabled: '0'
     pull_policy: never
-

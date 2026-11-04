@@ -4,7 +4,8 @@
 - Worktree `openape-proxy-m3-1555`, branch `feature/issue-1555-independent-proxy`, canonical base `567743b40f063e8672d041826d56ab6d424f6bc2`.
 - Adopt the existing image, routes, network and current ACME stores under `/srv/openape-proxy` and independent Compose ownership. Preserve protected effective configuration as recovery artifacts; version the public-safe contract and runbook here.
 - Live preparation: 38 running containers, 26 healthy checks, 52 unchanged HTTPS/TLS baselines; all 52 also pass on the loopback staging proxy with identical certificates. Production proxy and management remain unchanged at this entry.
-- Next: local gates and native PR; real staging renewal, ownership detachment, deliberate cutover/rollback/restart and private recovery evidence. Add post-merge receipts to the implementing PR.
+- PR: https://repos.openape.ai/patrick/monorepo/pulls/531. Reviewed source `27d188f3a2c7f0a16c1ca2bb8d886f0f84167c20`; full local check and affected pre-push gate pass. Real staging-CA issuance/renewal and isolated Docker/file WebSocket echo pass.
+- Next: merge, ownership detachment, deliberate cutover/rollback/restart and private recovery evidence. Add post-merge receipts to the implementing PR.
 
 # Reports independent recovery — issue 1554
 
