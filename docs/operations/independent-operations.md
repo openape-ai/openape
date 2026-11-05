@@ -236,3 +236,37 @@ only), `docker rename NAME-before-m6 NAME`, restore its restart policy,
 The recovery backup also captures every container's compose config files and
 the `.env` in its compose working directory, so a definition outside the usual
 roots is still restorable.
+
+## Operating Chatty without Coolify (M7)
+
+Coolify management is stopped and retained only for rollback
+([issue 1560](https://repos.openape.ai/patrick/monorepo/issues/1560)). No
+running workload depends on it. Each workload has exactly one definition:
+
+| Kind | Definition | Deploy or change |
+|---|---|---|
+| OpenApe apps | `compose/chatty.yml`, installed as `/home/openape/prod/docker-compose.yml` | `pnpm run deploy:image <target>`; rollback through `<APP>_TAG_PREV` |
+| Docs site | `compose/docs-site.yml` | `pnpm run deploy:docs-site` |
+| LLM gateway | `compose/gateway/docker-compose.yml` | copy to the host project directory, then `docker compose up -d` |
+| Sites from other repositories | their `compose/chatty*.yml` | their `scripts/deploy-image.mjs` |
+| Host-defined workloads | `/srv/workloads/NAME/compose.yaml` (root `0600`) | `docker compose -f … up -d`; see [Host-defined workloads (M6)](#host-defined-workloads-m6) |
+| Edge | `/srv/openape-proxy/compose.yaml` and `dynamic/*.yml` | [Independent Traefik edge](independent-edge.md) |
+| Host services | systemd units | `systemctl restart UNIT` |
+
+The root-private catalog `/srv/openape-operations/catalog.md` lists every
+workload with its definition, source, image, data, routes and start, restart
+and rollback commands, plus an operator quick start. Health is configured in
+`/etc/openape-operations/health.json` and checked every minute; the independent
+Mac checker alarms on transitions. Backups, off-host restore, cleanup and the
+retired-management rollback follow the sections above.
+
+The Docker network named `coolify` and its gateway `10.0.1.1` are load-bearing.
+Traefik reaches containers by name on that network, and every host-port backend
+is reached through `10.0.1.1`: route URLs, host port bindings and firewall rules
+use `10.0.1.0/24`. The name is historical; the network does not depend on the
+stopped management stack. Never remove it together with the Coolify archive.
+Renaming it is a separate migration that recreates every attached container.
+
+Every rollback artifact from M5 and M6 is retained for at least 30 days after
+2026-11-05. Deleting any of them is a separate explicit owner decision after a
+dependency and restore check; reaching the date deletes nothing.

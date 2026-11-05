@@ -157,10 +157,9 @@ IdP token for SP-scoped tokens via RFC 8693 (`packages/cli-auth`).
    2026-08-29, and still where CI runs; GitHub mirrors from there in turn.
    Workflows in `.forgejo/workflows/`): `ci.yml` runs
    lint/typecheck/test/build with turbo
-   `--affected` (only changed packages + dependents); `e2e.yml` runs the
-   self-contained `examples/e2e` suite; `preview.yml` builds per-app PR
-   preview images on a Mac runner and deploys them via Coolify to
-   `https://<app>-pr-<n>.preview.openape.ai`.
+   `--affected` (only changed packages + dependents); `deploy.yml` is a
+   manually dispatched trigger for the tested-image deploy below. Coolify PR
+   preview deployments were retired in issue 1556.
 3. **Tested-image deploy** (`scripts/deploy-image.mjs`,
    `pnpm run deploy:image <target…|--all>`): the maintainer's Mac builds the
    app with warm turbo caches, packages the `.output` into a COPY-only amd64

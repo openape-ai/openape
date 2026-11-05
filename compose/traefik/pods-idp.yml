@@ -1,4 +1,4 @@
-# Install as /data/coolify/proxy/dynamic/pods-idp.yml on chatty.
+# Install as /srv/openape-proxy/dynamic/pods-idp.yml on chatty.
 # Human accounts belong to their decision IdP; enrollment uses broker receipts.
 http:
   services:
