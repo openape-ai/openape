@@ -76,4 +76,4 @@ Source lives in the [legacy repository](https://repos.openape.ai/patrick/legacy)
 
 ## Open questions
 
-- Ten Coolify PR-preview containers (troop, chat, free-idp; PRs 1224–1317) were stopped on 2026-10-28 but not removed; `chat-demo` still runs on chatty.
+- None currently. The former Coolify PR-preview containers are gone and `chat-demo` was retired on 2026-11-05.
