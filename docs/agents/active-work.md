@@ -1,3 +1,10 @@
+# Retired Coolify management — issue 1557
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1557. Owner approved M5 on 2026-11-05 (“ja ziehe M5 durch - so dass wir keine daten dazwischen verlieren”); M6–M7 excluded.
+- Worktree `openape-operations-m5-1557`, branch `feature/issue-1557-health-retired-state`, base `a0ce77633cdbc8f8be652e1e6c77d0aff3fe3f50`.
+- `host_health.py` gains an optional `retired` list with three refusal states; the new test fails on the base helper (`KeyError: retiredChecked`) and passes with the change.
+- Next: merge, install the helper with unchanged config, then the M5 stop sequence with archive, independent restore and CRM/52-route gates.
+
 # Independent Traefik edge — issue 1555
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1555. Owner explicitly authorized M3 implementation; M4–M7 and management retirement are excluded.

@@ -25,6 +25,15 @@ def check(config):
         item = by_name.get(name)
         if not item or not item['State']['Running'] or item['State'].get('Health', {}).get('Status', 'healthy') != 'healthy':
             failures.append('container:' + name)
+    # Retired containers stay present for rollback but must never run or auto-restart.
+    for name in config.get('retired', []):
+        item = by_name.get(name)
+        if not item:
+            failures.append('retired-missing:' + name)
+        elif item['State']['Running'] or item['State'].get('Restarting'):
+            failures.append('retired-running:' + name)
+        elif item['HostConfig']['RestartPolicy']['Name'] != 'no':
+            failures.append('retired-restart:' + name)
     for unit in config['services']:
         if command('systemctl', 'show', unit, '-p', 'ActiveState', '--value') != 'active':
             failures.append('service:' + unit)
@@ -45,6 +54,7 @@ def check(config):
                 failures.append('mptcp:' + name)
     return {'at': dt.datetime.now(dt.timezone.utc).isoformat(), 'ok': not failures,
             'failures': failures, 'containersChecked': len(config['containers']),
+            'retiredChecked': len(config.get('retired', [])),
             'servicesChecked': len(config['services']), 'backupCapturedAt': receipt['manifest']['capturedAt']}
 
 
