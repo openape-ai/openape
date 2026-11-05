@@ -196,30 +196,37 @@ containers in reverse order. Never `compose up` from `/data/coolify/source`; an
 upgrade attempt rewrote those files. Never import SQL.
 
 1. `docker start coolify-db`, then `docker start coolify-redis`; set MPTCP 0 in both.
-2. With only the database running, verify the guards before anything can act on them:
+2. With only the database and Redis running, verify the
+   [writer fence](#coolify-writer-fence) before anything can act on it:
 
    ```sh
-   docker exec coolify-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -c "select is_auto_update_enabled,is_api_enabled from instance_settings" -c "select force_disabled,is_metrics_enabled,is_sentinel_enabled from server_settings" -c "select proxy from servers"'
+   docker exec coolify-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At \
+     -c "select is_auto_update_enabled,is_api_enabled,is_mcp_server_enabled from instance_settings where id=0" \
+     -c "select force_disabled,is_metrics_enabled,is_sentinel_enabled from server_settings where server_id=0" \
+     -c "select count(*) from application_settings where is_auto_deploy_enabled or is_preview_deployments_enabled" \
+     -c "select count(*) from personal_access_tokens where name='"'"'ci-preview-deploy'"'"' and (expires_at is null or expires_at > now())" \
+     -c "select proxy from servers where id=0"'
+   docker exec coolify-redis sh -c 'export REDISCLI_AUTH="$REDIS_PASSWORD"; for k in $(redis-cli --scan --pattern "*queue*"); do t=$(redis-cli type "$k"); case $t in list) n=$(redis-cli llen "$k");; zset) n=$(redis-cli zcard "$k");; *) n=-;; esac; echo "$k $t $n"; done'
+   grep '^SCHEDULER_ENABLED=false' /data/coolify/source/.env
    ```
 
-   Expect auto-update and API off, `force_disabled` true, metrics and Sentinel
-   off and a proxy JSON with `"type":"NONE"` and `"force_stop":true`. Also
-   confirm `SCHEDULER_ENABLED=false` in `/data/coolify/source/.env` and repeat
-   every other check of [Coolify writer fence](#coolify-writer-fence) that the
-   database and Redis can answer: MCP off, application auto-deploy and preview
-   flags off, the obsolete preview token expired, and pending, reserved and
-   delayed queues empty.
+   Expect `f|f|f`, `t|f|f`, `0`, `0`, a proxy JSON with `"type":"NONE"` and
+   `"force_stop":true`, every list and sorted-set queue at 0, and the grep match.
 3. Abort path: if any guard differs, run `docker stop coolify-redis coolify-db`,
    keep the retired lifecycle and health config unchanged and decide separately.
+   Never correct a guard and continue in the same attempt.
 4. Keep a dated copy of the current `/etc/openape-operations/coolify-lifecycle.json`,
    then copy the protected `before/coolify-lifecycle.json` over it.
 5. `docker start coolify-realtime`, `docker start coolify`, `docker start coolify-sentinel`;
    set MPTCP 0 in each. Immediately after `coolify` starts, confirm the
    container sees `SCHEDULER_ENABLED=false` in `/var/www/html/.env` and that
    `docker exec -u 0 coolify /command/s6-svstat /run/service/scheduler-worker`
-   reports it down or sleeping without `schedule:work`; otherwise stop
-   `coolify` at once. The edge stays independent; `coolify.openape.ai` stays 403
-   through the deny router.
+   reports it down or sleeping without `schedule:work`. Otherwise abort: stop
+   `coolify-sentinel`, `coolify`, `coolify-realtime`, `coolify-redis` and
+   `coolify-db`, put the dated copy of the retired lifecycle back, keep restart
+   policy `no` and health unchanged, so backups use the verified archive again.
+   The edge stays independent; `coolify.openape.ai` stays 403 through the deny
+   router.
 
 Then restore the original restart policies (`always` for `coolify`,
 `coolify-db`, `coolify-redis` and `coolify-realtime`; `no` for
@@ -312,12 +319,13 @@ Rollback rules:
   or restore data from the pre-deploy snapshot as a separate decision. Take an
   on-demand backup first. Keep a timestamped copy of `.env`
   (`.env.before-rollback-$(date +%FT%H%M%S)`), set `<APP>_TAG`, and run
-  `docker compose --env-file .env -f docker-compose.yml up -d SERVICE` in the
-  host directory. `compose/chatty.yml` sets `name: openape-prod`, so this
+  `docker compose --env-file .env -f docker-compose.yml up -d --no-deps SERVICE`
+  in the host directory. `compose/chatty.yml` sets `name: openape-prod`, so this
   targets the existing project. A deploy also installs `compose/chatty.yml` of
   the deployed commit as `docker-compose.yml`. Compare it with
   `git diff <good-commit> <deployed-commit> -- compose/chatty.yml`. If it changed,
-  install the good version (`install -m 644`) before `up -d`.
+  install the good version (`install -m 644`) before `up -d`. Always use
+  `up -d --no-deps SERVICE`, so no other service is recreated.
 - After every `docker start` or recreation, check MPTCP. A container without a
   persistent sysctl starts with 1: `nsenter -t PID -n sysctl -w net.mptcp.enabled=0`.
 - Edit only the current config `/etc/openape-operations/health.json`
@@ -328,10 +336,10 @@ Rollback rules:
   backup uploads immediately. Pick a snapshot taken after the file's last
   change and compare the SHA256 before using it.
 - If a rollback step fails, stop and keep every file. Bring back the last
-  working state: after a failed M6 rollback, `docker compose -f
-  /srv/workloads/NAME/compose.yaml up -d` restarts the unchanged M6 definition,
-  provided the old container keeps the name `NAME-before-m6`. Then decide
-  separately.
+  working state: after a failed M6 rollback, stop the old container, rename it
+  back to `NAME-before-m6` if it was already renamed, and run
+  `docker compose -f /srv/workloads/NAME/compose.yaml up -d` to restart the
+  unchanged M6 definition. Then decide separately.
 - Run the CRM continuity gate before and after every infrastructure change,
   including a plain restart.
 
