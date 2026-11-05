@@ -2,8 +2,9 @@
 
 The Chatty edge uses the digest-pinned [Compose contract](../../compose/traefik/edge.compose.yaml).
 The owner is the SSH operator, using project/container `openape-proxy` and
-`/srv/openape-proxy/compose.yaml`. Coolify management remains running with its
-server proxy type `NONE` (Custom Proxy) and `force_stop=true`. This is operational
+`/srv/openape-proxy/compose.yaml`. Coolify management was stopped in M5 and is retained only for rollback (see
+[Operating Chatty without Coolify](independent-operations.md#operating-chatty-without-coolify-m7)).
+If it is ever restarted, its server proxy type stays `NONE` (Custom Proxy) with `force_stop=true`. This is operational
 separation, not isolation from an administrator with Docker/root privileges.
 
 ## Protected runtime contract

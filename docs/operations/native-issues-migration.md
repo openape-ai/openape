@@ -30,7 +30,7 @@ reproduction also passed without weakening assertions.
 | Web entry points | 13 web services passed tested-image smoke/deploy/HTTPS health gates on `prod-78fad3f1`; native Git also enabled |
 
 The HTTP gateway listens on `10.0.1.1:33030`; Forgejo listens on
-`127.0.0.1:3030`. The verified Coolify bridge is `10.0.1.0/24`. Permit only that
+`127.0.0.1:3030`. The verified `coolify` Docker bridge is `10.0.1.0/24`. Permit only that
 bridge to the gateway in the host firewall and probe from the actual proxy
 container before switching Traefik. A host-local curl alone misses firewall
 failures. The former bridge-facing Forgejo listener must remain unreachable.
@@ -343,7 +343,8 @@ tradeoff; canonical native PRs and Git/CI remain available. Direct root/database
 filesystem administration cannot be protected by an application proxy and must
 remain excluded during the approved maintenance window.
 
-Read-only production topology verification found Forgejo's systemd service using
+Historical (before the independent edge; dynamic files now live in
+`/srv/openape-proxy/dynamic/`): read-only production topology verification found Forgejo's systemd service using
 `/etc/forgejo/app.ini`, listening on `0.0.0.0:3030`, and Coolify Traefik's current
 `/data/coolify/proxy/dynamic/openape-services.yml` routing `git.openape.ai` to
 `http://10.0.1.1:3030`. M7 must review the exact deployment: bind the Forgejo upstream
