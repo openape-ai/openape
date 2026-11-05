@@ -171,3 +171,28 @@ job and restore only its required settings. Do not set `SCHEDULER_ENABLED=true`
 or broadly re-enable API, updates, cleanup and proxy ownership together. A full
 return to original ownership requires all replacement duties paused first and a
 separately reviewed scope; it is not an automatic error handler.
+
+## Retired management (M5)
+
+M5 ([issue 1557](https://repos.openape.ai/patrick/monorepo/issues/1557)) stops
+the five management containers but keeps them, their images and the
+`coolify-db`/`coolify-redis` volumes for rollback. Each stopped name moves from
+`containers` to `retired` in `health.json`. A retired container must exist, be
+stopped and have restart policy `no`; health fails with `retired-missing`,
+`retired-running` or `retired-restart` otherwise. A config without `retired`
+behaves as before.
+
+Order: set `--restart=no` on all five, stop `coolify-sentinel`, `coolify`,
+`coolify-realtime`, take the quiescent final `pg_dump`, include it in a normal
+backup snapshot, restore it independently off-host and write the receipt, switch
+the backup lifecycle to `retired`, then stop `coolify-redis` and `coolify-db`.
+Because no writer runs after the first phase, the stopped database equals the
+archive.
+
+Rollback uses `docker start` of the retained containers in reverse order:
+`coolify-db`, `coolify-redis`, active lifecycle config, `coolify-realtime`,
+`coolify`, `coolify-sentinel`. Never `compose up` from `/data/coolify/source`;
+an upgrade attempt rewrote those files. Never import SQL. Before starting
+`coolify`, confirm `SCHEDULER_ENABLED=false` in the host `.env`; afterwards
+verify auto-update/API off, server `force_disabled`, proxy `NONE` and MPTCP 0,
+then restore the original restart policies and health config.
