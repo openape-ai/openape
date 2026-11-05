@@ -26,6 +26,8 @@ services:
   idp:
     image: registry.openape.ai/openape-free-idp:${IDP_TAG:-unset}
     restart: unless-stopped
+    sysctls:
+      net.mptcp.enabled: "0"
     user: "999:988"
     env_file: /home/openape/projects/openape-free-idp/shared/.env
     environment:
@@ -46,6 +48,8 @@ services:
   pods-idp:
     image: registry.openape.ai/openape-pods-idp:${PODS_IDP_TAG:-unset}
     restart: unless-stopped
+    sysctls:
+      net.mptcp.enabled: "0"
     user: "999:988"
     env_file: /home/openape/projects/openape-pods-idp/shared/.env
     environment:
@@ -68,6 +72,8 @@ services:
   pods-relay:
     image: registry.openape.ai/openape-pods-relay:${PODS_RELAY_TAG:-unset}
     restart: unless-stopped
+    sysctls:
+      net.mptcp.enabled: "0"
     user: "999:988"
     read_only: true
     tmpfs:
@@ -130,6 +136,8 @@ services:
   tasks:
     image: registry.openape.ai/openape-tasks:${TASKS_TAG:-unset}
     restart: unless-stopped
+    sysctls:
+      net.mptcp.enabled: "0"
     user: "999:988"
     env_file: /home/openape/projects/openape-tasks/shared/.env
     environment:
@@ -150,6 +158,8 @@ services:
   pr:
     image: registry.openape.ai/openape-pr:${PR_TAG:-unset}
     restart: unless-stopped
+    sysctls:
+      net.mptcp.enabled: "0"
     user: "999:988"
     env_file: /home/openape/projects/openape-pr/shared/.env
     environment:
@@ -170,6 +180,8 @@ services:
   plans:
     image: registry.openape.ai/openape-plans:${PLANS_TAG:-unset}
     restart: unless-stopped
+    sysctls:
+      net.mptcp.enabled: "0"
     user: "999:988"
     env_file: /home/openape/projects/openape-plans/shared/.env
     environment:
@@ -190,6 +202,8 @@ services:
   timetrack:
     image: registry.openape.ai/openape-timetrack:${TIMETRACK_TAG:-unset}
     restart: unless-stopped
+    sysctls:
+      net.mptcp.enabled: "0"
     user: "999:988"
     env_file: /home/openape/projects/openape-timetrack/shared/.env
     environment:
@@ -210,6 +224,8 @@ services:
   monitor:
     image: registry.openape.ai/openape-monitor:${MONITOR_TAG:-unset}
     restart: unless-stopped
+    sysctls:
+      net.mptcp.enabled: "0"
     user: "999:988"
     env_file: /home/openape/projects/openape-monitor/shared/.env
     environment:
@@ -234,6 +250,8 @@ services:
   secrets:
     image: registry.openape.ai/openape-secrets:${SECRETS_TAG:-unset}
     restart: unless-stopped
+    sysctls:
+      net.mptcp.enabled: "0"
     user: "999:988"
     env_file: /home/openape/projects/openape-secrets/shared/.env
     environment:
@@ -258,6 +276,8 @@ services:
   dashboard:
     image: registry.openape.ai/openape-dashboard:${DASHBOARD_TAG:-unset}
     restart: unless-stopped
+    sysctls:
+      net.mptcp.enabled: "0"
     user: "999:988"
     env_file: /home/openape/projects/openape-dashboard/shared/.env
     environment:
