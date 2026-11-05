@@ -216,14 +216,17 @@ upgrade attempt rewrote those files. Never import SQL.
    keep the retired lifecycle and health config unchanged and decide separately.
    Never correct a guard and continue in the same attempt.
 4. Keep a dated copy of the current `/etc/openape-operations/coolify-lifecycle.json`,
-   then copy the protected `before/coolify-lifecycle.json` over it.
+   then copy the protected `before/coolify-lifecycle.json` over it. From here
+   on, any failure, including a container that does not start, takes the abort
+   path in step 6; never stop `coolify-db` again in this attempt.
 5. `docker start coolify-realtime`, then `docker start coolify`; set MPTCP 0 in
    each. Immediately confirm the container sees `SCHEDULER_ENABLED=false` in
    `/var/www/html/.env` and that
    `docker exec -u 0 coolify /command/s6-svstat /run/service/scheduler-worker`
    reports it down or sleeping without `schedule:work`. If not, take the abort
-   path in step 6. Only then `docker start coolify-sentinel` and set MPTCP 0.
-6. Abort after `coolify` has run: the database may now differ from the archive.
+   path in step 6; the `s6-svc -d` workaround of the writer fence is not used in
+   a rollback. Only then `docker start coolify-sentinel` and set MPTCP 0.
+6. Abort after step 4: the database may now differ from the archive.
    Stop `coolify-sentinel`, `coolify` and `coolify-realtime`, but keep
    `coolify-db` and `coolify-redis` running with the active lifecycle and set
    both to `--restart=always`, so a host restart cannot leave the database down
@@ -342,9 +345,11 @@ Rollback rules:
   (the receipt in `/var/lib/openape-operations/` is output): write a `.new` file with mode `0600`
   and rename it over the original. Move just the affected names; never restore
   an older full copy.
-- Restore from backup: snapshots contain plain host paths, and an on-demand
-  backup uploads immediately. Pick a snapshot taken after the file's last
-  change and compare the SHA256 before using it.
+- Restore from backup: snapshots contain plain host paths (restored below
+  `<target>/`), and an on-demand backup uploads immediately. Pick a snapshot
+  taken after the file's last good change and compare the SHA256 before using
+  it. A non-root restore cannot keep owners; set owner and mode on the host to
+  those of the protected copy or the original before putting a file back.
 - Retirement rollback: route files are shared by many hosts. Re-add only the
   removed router block from the protected copy; never copy a whole older route
   file back.
