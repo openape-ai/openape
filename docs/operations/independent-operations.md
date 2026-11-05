@@ -210,3 +210,29 @@ gives them source-owned definitions. The IdP currently runs with the known
 value 1 and `health.json` expects `"1"`; after its first deploy with this file,
 health reports `mptcp:openape-prod-idp-1` and the expected value must be set to
 `"0"`.
+
+`compose/docs-site.yml` and `compose/gateway/docker-compose.yml` set the same
+sysctl on every service and pin LiteLLM by digest
+([issue 1559](https://repos.openape.ai/patrick/monorepo/issues/1559)); the
+existing MPTCP test covers all three files.
+
+## Host-defined workloads (M6)
+
+Containers that are not built from this repository get exactly one root-private
+definition at `/srv/workloads/NAME/compose.yaml`. The directory is never a served
+content root. Each definition keeps the container name, the network, mounts and
+ports. It pins the image to its current ID or digest and sets
+`net.mptcp.enabled: "0"`. Secrets live only in a root-owned `0600` env file next
+to the definition. A repeated `docker compose up -d` must recreate nothing.
+
+Cutover per container: record the served content hash and stop the old container
+before the new one starts, so two writers never share a data directory. Set the
+old container to `restart=no`, rename it `NAME-before-m6` and add that name to
+`retired` in `/etc/openape-operations/health.json`. Then run `compose up -d`.
+Rollback: `docker compose -f /srv/workloads/NAME/compose.yaml down` (bind mounts
+only), `docker rename NAME-before-m6 NAME`, restore its restart policy,
+`docker start`, then reapply MPTCP 0.
+
+The recovery backup also captures every container's compose config files and
+the `.env` in its compose working directory, so a definition outside the usual
+roots is still restorable.
