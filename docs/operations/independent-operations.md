@@ -189,13 +189,25 @@ the backup lifecycle to `retired`, then stop `coolify-redis` and `coolify-db`.
 Because no writer runs after the first phase, the stopped database equals the
 archive.
 
-Rollback uses `docker start` of the retained containers in reverse order:
-`coolify-db`, `coolify-redis`, active lifecycle config, `coolify-realtime`,
+Rollback is an owner decision and uses `docker start` of the retained
+containers in reverse order: `coolify-db`, `coolify-redis`, then copy the
+protected `before/coolify-lifecycle.json` back to
+`/etc/openape-operations/coolify-lifecycle.json`, then `coolify-realtime`,
 `coolify`, `coolify-sentinel`. Never `compose up` from `/data/coolify/source`;
 an upgrade attempt rewrote those files. Never import SQL. Before starting
-`coolify`, confirm `SCHEDULER_ENABLED=false` in the host `.env`; afterwards
-verify auto-update/API off, server `force_disabled`, proxy `NONE` and MPTCP 0,
-then restore the original restart policies and health config.
+`coolify`, confirm `SCHEDULER_ENABLED=false` in `/data/coolify/source/.env`.
+Afterwards set MPTCP 0 in all five namespaces and verify auto-update/API off,
+server `force_disabled` and proxy `NONE`:
+
+```sh
+docker exec coolify-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -c "select is_auto_update_enabled,is_api_enabled from instance_settings" -c "select force_disabled from server_settings" -c "select proxy from servers"'
+```
+
+Then restore the original restart policies (`always` for `coolify`,
+`coolify-db`, `coolify-redis` and `coolify-realtime`; `no` for
+`coolify-sentinel`) and move the five names from `retired` back to `containers`
+in the current `health.json`. Do not restore the pre-M5 `health.json`; later
+milestones changed it.
 
 ## Container MPTCP mitigation
 
@@ -230,8 +242,11 @@ before the new one starts, so two writers never share a data directory. Set the
 old container to `restart=no`, rename it `NAME-before-m6` and add that name to
 `retired` in `/etc/openape-operations/health.json`. Then run `compose up -d`.
 Rollback: `docker compose -f /srv/workloads/NAME/compose.yaml down` (bind mounts
-only), `docker rename NAME-before-m6 NAME`, restore its restart policy,
-`docker start`, then reapply MPTCP 0.
+only; the external `coolify` network stays), `docker rename NAME-before-m6 NAME`,
+`docker update --restart=unless-stopped NAME`, `docker start NAME`, then set
+MPTCP 0 (the old container has no persistent sysctl). Remove `NAME-before-m6`
+from `retired`, move `/srv/workloads/NAME` aside so a later `up -d` cannot
+conflict, and regenerate the catalog.
 
 The recovery backup also captures every container's compose config files and
 the `.env` in its compose working directory, so a definition outside the usual
@@ -266,6 +281,27 @@ is reached through `10.0.1.1`: route URLs, host port bindings and firewall rules
 use `10.0.1.0/24`. The name is historical; the network does not depend on the
 stopped management stack. Never remove it together with the Coolify archive.
 Renaming it is a separate migration that recreates every attached container.
+
+Rollback rules:
+
+- Tag rollback: the `<APP>_TAG` variable names come from the compose file, and
+  every `deploy:image` writes the previously live tag to `<APP>_TAG_PREV`. Check
+  that the two differ, set `<APP>_TAG` to the previous value and run
+  `docker compose --env-file .env -f docker-compose.yml up -d SERVICE` in the
+  host directory. `compose/chatty.yml` sets `name: openape-prod`, so this
+  targets the existing project. Data migrations are not undone.
+- After every `docker start` or recreation, check MPTCP. A container without a
+  persistent sysctl starts with 1: `nsenter -t PID -n sysctl -w net.mptcp.enabled=0`.
+- Edit only the current `health.json`: write a `.new` file with mode `0600`
+  and rename it over the original. Move just the affected names; never restore
+  an older full copy.
+- Restore from backup: snapshots contain plain host paths, and an on-demand
+  backup uploads immediately. Pick a snapshot taken after the file's last
+  change and compare the SHA256 before using it.
+- If a rollback step fails, stop. Keep old and new containers and all files,
+  and decide separately.
+- Run the CRM continuity gate before and after every infrastructure change,
+  including a plain restart.
 
 Every rollback artifact from M5 and M6 is retained for at least 30 days after
 2026-11-05. Deleting any of them is a separate explicit owner decision after a
