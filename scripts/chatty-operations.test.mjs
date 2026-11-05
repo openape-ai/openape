@@ -72,6 +72,33 @@ assert select([],[],set(),now)==[]
 `)
 })
 
+test('retired containers must exist, stay stopped and never auto-restart', () => {
+  python(`
+import json, datetime as dt
+from unittest.mock import patch
+from types import SimpleNamespace
+import host_health
+def container(name, running, policy):
+    return dict(Name='/'+name, State=dict(Running=running, Restarting=False, Pid=1 if running else 0), HostConfig=dict(RestartPolicy=dict(Name=policy)))
+def run(containers, config):
+    def command(*args):
+        if args[:2] == ('docker', 'ps'): return ' '.join(c['Name'] for c in containers)
+        if args[:2] == ('docker', 'inspect'): return json.dumps(containers)
+        if args[0] == 'systemctl': return 'active'
+        return '0'
+    receipt = json.dumps(dict(manifest=dict(capturedAt=dt.datetime.now(dt.timezone.utc).isoformat())))
+    with patch('host_health.command', command), patch('host_health.Path', lambda p: SimpleNamespace(read_text=lambda: receipt)), \\
+         patch('host_health.shutil.disk_usage', lambda p: SimpleNamespace(free=10 * 1024 ** 3)):
+        return host_health.check(dict(containers=['app'], services=['docker.service'], mptcp={}, **config))
+app = container('app', True, 'always')
+assert run([app], {})['ok'] and run([app], {})['retiredChecked'] == 0
+assert run([app, container('db', False, 'no')], dict(retired=['db']))['ok']
+assert run([app], dict(retired=['db']))['failures'] == ['retired-missing:db']
+assert run([app, container('db', True, 'no')], dict(retired=['db']))['failures'] == ['retired-running:db']
+assert run([app, container('db', False, 'always')], dict(retired=['db']))['failures'] == ['retired-restart:db']
+`)
+})
+
 test('health transitions notify once per state change without mail', () => {
   python(`
 import tempfile,pathlib,json
