@@ -202,17 +202,23 @@ upgrade attempt rewrote those files. Never import SQL.
    docker exec coolify-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -c "select is_auto_update_enabled,is_api_enabled from instance_settings" -c "select force_disabled,is_metrics_enabled,is_sentinel_enabled from server_settings" -c "select proxy from servers"'
    ```
 
-   Expect auto-update and API off, `force_disabled` true and a proxy JSON with
-   `"type":"NONE"` and `"force_stop":true`. Also confirm
-   `SCHEDULER_ENABLED=false` in `/data/coolify/source/.env`.
+   Expect auto-update and API off, `force_disabled` true, metrics and Sentinel
+   off and a proxy JSON with `"type":"NONE"` and `"force_stop":true`. Also
+   confirm `SCHEDULER_ENABLED=false` in `/data/coolify/source/.env` and repeat
+   every other check of [Coolify writer fence](#coolify-writer-fence) that the
+   database and Redis can answer: MCP off, application auto-deploy and preview
+   flags off, the obsolete preview token expired, and pending, reserved and
+   delayed queues empty.
 3. Abort path: if any guard differs, run `docker stop coolify-redis coolify-db`,
    keep the retired lifecycle and health config unchanged and decide separately.
 4. Keep a dated copy of the current `/etc/openape-operations/coolify-lifecycle.json`,
    then copy the protected `before/coolify-lifecycle.json` over it.
 5. `docker start coolify-realtime`, `docker start coolify`, `docker start coolify-sentinel`;
-   set MPTCP 0 in each. Within the first minute confirm the container sees
-   `SCHEDULER_ENABLED=false` in `/var/www/html/.env`; otherwise stop `coolify`
-   immediately. The edge stays independent; `coolify.openape.ai` stays 403
+   set MPTCP 0 in each. Immediately after `coolify` starts, confirm the
+   container sees `SCHEDULER_ENABLED=false` in `/var/www/html/.env` and that
+   `docker exec -u 0 coolify /command/s6-svstat /run/service/scheduler-worker`
+   reports it down or sleeping without `schedule:work`; otherwise stop
+   `coolify` at once. The edge stays independent; `coolify.openape.ai` stays 403
    through the deny router.
 
 Then restore the original restart policies (`always` for `coolify`,
@@ -300,14 +306,18 @@ Rollback rules:
   every `deploy:image` writes the previously live tag to `<APP>_TAG_PREV`. That
   is one level of history: after a retry or a repeated deploy it may not be the
   last good image. Tags are `prod-<commit>`, so a known-good earlier commit can
-  be chosen instead; compose pulls a missing tag from the registry. If the
-  broken release may have changed data, take an on-demand backup first. Keep a
-  dated copy of `.env`, set `<APP>_TAG`, and run
+  be chosen instead; compose pulls a missing tag from the registry. Before
+  rolling back, check the commit range for schema or data migrations. If the
+  broken release migrated data, do not run the older image on it: fix forward,
+  or restore data from the pre-deploy snapshot as a separate decision. Take an
+  on-demand backup first. Keep a timestamped copy of `.env`
+  (`.env.before-rollback-$(date +%FT%H%M%S)`), set `<APP>_TAG`, and run
   `docker compose --env-file .env -f docker-compose.yml up -d SERVICE` in the
   host directory. `compose/chatty.yml` sets `name: openape-prod`, so this
-  targets the existing project. A deploy also syncs `docker-compose.yml`; if
-  that file changed, restore it from the previous commit. Data migrations are
-  not undone.
+  targets the existing project. A deploy also installs `compose/chatty.yml` of
+  the deployed commit as `docker-compose.yml`. Compare it with
+  `git diff <good-commit> <deployed-commit> -- compose/chatty.yml`. If it changed,
+  install the good version (`install -m 644`) before `up -d`.
 - After every `docker start` or recreation, check MPTCP. A container without a
   persistent sysctl starts with 1: `nsenter -t PID -n sysctl -w net.mptcp.enabled=0`.
 - Edit only the current config `/etc/openape-operations/health.json`
@@ -317,8 +327,11 @@ Rollback rules:
 - Restore from backup: snapshots contain plain host paths, and an on-demand
   backup uploads immediately. Pick a snapshot taken after the file's last
   change and compare the SHA256 before using it.
-- If a rollback step fails, stop. Keep old and new containers and all files,
-  and decide separately.
+- If a rollback step fails, stop and keep every file. Bring back the last
+  working state: after a failed M6 rollback, `docker compose -f
+  /srv/workloads/NAME/compose.yaml up -d` restarts the unchanged M6 definition,
+  provided the old container keeps the name `NAME-before-m6`. Then decide
+  separately.
 - Run the CRM continuity gate before and after every infrastructure change,
   including a plain restart.
 
