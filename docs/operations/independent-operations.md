@@ -217,16 +217,21 @@ upgrade attempt rewrote those files. Never import SQL.
    Never correct a guard and continue in the same attempt.
 4. Keep a dated copy of the current `/etc/openape-operations/coolify-lifecycle.json`,
    then copy the protected `before/coolify-lifecycle.json` over it.
-5. `docker start coolify-realtime`, `docker start coolify`, `docker start coolify-sentinel`;
-   set MPTCP 0 in each. Immediately after `coolify` starts, confirm the
-   container sees `SCHEDULER_ENABLED=false` in `/var/www/html/.env` and that
+5. `docker start coolify-realtime`, then `docker start coolify`; set MPTCP 0 in
+   each. Immediately confirm the container sees `SCHEDULER_ENABLED=false` in
+   `/var/www/html/.env` and that
    `docker exec -u 0 coolify /command/s6-svstat /run/service/scheduler-worker`
-   reports it down or sleeping without `schedule:work`. Otherwise abort: stop
-   `coolify-sentinel`, `coolify`, `coolify-realtime`, `coolify-redis` and
-   `coolify-db`, put the dated copy of the retired lifecycle back, keep restart
-   policy `no` and health unchanged, so backups use the verified archive again.
-   The edge stays independent; `coolify.openape.ai` stays 403 through the deny
-   router.
+   reports it down or sleeping without `schedule:work`. Only then
+   `docker start coolify-sentinel` and set MPTCP 0.
+6. Abort after `coolify` has run: the database may now differ from the archive.
+   Stop `coolify-sentinel`, `coolify` and `coolify-realtime`, but keep
+   `coolify-db` and `coolify-redis` running with the active lifecycle. Move
+   those two names from `retired` to `containers` in health, run one on-demand
+   backup so the live database is dumped, and decide separately. Do not put the
+   retired lifecycle back while the archive no longer equals the database.
+
+The edge stays independent; `coolify.openape.ai` stays 403 through the deny
+router.
 
 Then restore the original restart policies (`always` for `coolify`,
 `coolify-db`, `coolify-redis` and `coolify-realtime`; `no` for
@@ -335,11 +340,16 @@ Rollback rules:
 - Restore from backup: snapshots contain plain host paths, and an on-demand
   backup uploads immediately. Pick a snapshot taken after the file's last
   change and compare the SHA256 before using it.
+- Retirement rollback: route files are shared by many hosts. Re-add only the
+  removed router block from the protected copy; never copy a whole older route
+  file back.
 - If a rollback step fails, stop and keep every file. Bring back the last
   working state: after a failed M6 rollback, stop the old container, rename it
-  back to `NAME-before-m6` if it was already renamed, and run
+  back to `NAME-before-m6` if it was already renamed, set its restart policy to
+  `no`, move `/srv/workloads/NAME` back if it was moved, and run
   `docker compose -f /srv/workloads/NAME/compose.yaml up -d` to restart the
-  unchanged M6 definition. Then decide separately.
+  unchanged M6 definition. Keep `NAME-before-m6` in `retired`. Then decide
+  separately.
 - Run the CRM continuity gate before and after every infrastructure change,
   including a plain restart.
 
