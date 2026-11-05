@@ -1,8 +1,10 @@
 # Independent Chatty operational duties
 
-M4 transfers operational ownership while **all five Coolify management containers
-remain running**. Management shutdown is M5 and is a separate assignment.
-The implementation belongs to [issue 1556](https://repos.openape.ai/patrick/monorepo/issues/1556).
+Current state: M4 transferred the operational duties
+([issue 1556](https://repos.openape.ai/patrick/monorepo/issues/1556)), M5 stopped
+the five Coolify management containers and M6 gave every workload one
+definition. Start with [Operating Chatty without Coolify](#operating-chatty-without-coolify-m7);
+the M4 wording below describes how the duties were transferred.
 
 Before and after every infrastructure change, and at intermediate checkpoints,
 verify the separate `docpit.crm.delta-mind.at` CRM using normal system/VPN DNS,
@@ -73,7 +75,7 @@ a missing access log is not proof of no historical consumer.
 
 Both existing backup stages call `coolify_lifecycle.capture`. Without a policy,
 state defaults to `active`; failure of the real `pg_dump` is fatal. Production
-remains explicitly active throughout M4.
+was active throughout M4 and has been `retired` since M5.
 
 A future, separately approved retirement may use this root-private policy:
 
@@ -190,23 +192,33 @@ Because no writer runs after the first phase, the stopped database equals the
 archive.
 
 Rollback is an owner decision and uses `docker start` of the retained
-containers in reverse order: `coolify-db`, `coolify-redis`, then copy the
-protected `before/coolify-lifecycle.json` back to
-`/etc/openape-operations/coolify-lifecycle.json`, then `coolify-realtime`,
-`coolify`, `coolify-sentinel`. Never `compose up` from `/data/coolify/source`;
-an upgrade attempt rewrote those files. Never import SQL. Before starting
-`coolify`, confirm `SCHEDULER_ENABLED=false` in `/data/coolify/source/.env`.
-Afterwards set MPTCP 0 in all five namespaces and verify auto-update/API off,
-server `force_disabled` and proxy `NONE`:
+containers in reverse order. Never `compose up` from `/data/coolify/source`; an
+upgrade attempt rewrote those files. Never import SQL.
 
-```sh
-docker exec coolify-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -c "select is_auto_update_enabled,is_api_enabled from instance_settings" -c "select force_disabled from server_settings" -c "select proxy from servers"'
-```
+1. `docker start coolify-db`, then `docker start coolify-redis`; set MPTCP 0 in both.
+2. With only the database running, verify the guards before anything can act on them:
+
+   ```sh
+   docker exec coolify-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At -c "select is_auto_update_enabled,is_api_enabled from instance_settings" -c "select force_disabled,is_metrics_enabled,is_sentinel_enabled from server_settings" -c "select proxy from servers"'
+   ```
+
+   Expect auto-update and API off, `force_disabled` true and a proxy JSON with
+   `"type":"NONE"` and `"force_stop":true`. Also confirm
+   `SCHEDULER_ENABLED=false` in `/data/coolify/source/.env`.
+3. Abort path: if any guard differs, run `docker stop coolify-redis coolify-db`,
+   keep the retired lifecycle and health config unchanged and decide separately.
+4. Keep a dated copy of the current `/etc/openape-operations/coolify-lifecycle.json`,
+   then copy the protected `before/coolify-lifecycle.json` over it.
+5. `docker start coolify-realtime`, `docker start coolify`, `docker start coolify-sentinel`;
+   set MPTCP 0 in each. Within the first minute confirm the container sees
+   `SCHEDULER_ENABLED=false` in `/var/www/html/.env`; otherwise stop `coolify`
+   immediately. The edge stays independent; `coolify.openape.ai` stays 403
+   through the deny router.
 
 Then restore the original restart policies (`always` for `coolify`,
 `coolify-db`, `coolify-redis` and `coolify-realtime`; `no` for
 `coolify-sentinel`) and move the five names from `retired` back to `containers`
-in the current `health.json`. Do not restore the pre-M5 `health.json`; later
+in the current `/etc/openape-operations/health.json`. Do not restore the pre-M5 `health.json`; later
 milestones changed it.
 
 ## Container MPTCP mitigation
@@ -246,7 +258,7 @@ only; the external `coolify` network stays), `docker rename NAME-before-m6 NAME`
 `docker update --restart=unless-stopped NAME`, `docker start NAME`, then set
 MPTCP 0 (the old container has no persistent sysctl). Remove `NAME-before-m6`
 from `retired`, move `/srv/workloads/NAME` aside so a later `up -d` cannot
-conflict, and regenerate the catalog.
+conflict, and regenerate the catalog with `python3 /srv/openape-operations/catalog.py`.
 
 The recovery backup also captures every container's compose config files and
 the `.env` in its compose working directory, so a definition outside the usual
@@ -285,14 +297,21 @@ Renaming it is a separate migration that recreates every attached container.
 Rollback rules:
 
 - Tag rollback: the `<APP>_TAG` variable names come from the compose file, and
-  every `deploy:image` writes the previously live tag to `<APP>_TAG_PREV`. Check
-  that the two differ, set `<APP>_TAG` to the previous value and run
+  every `deploy:image` writes the previously live tag to `<APP>_TAG_PREV`. That
+  is one level of history: after a retry or a repeated deploy it may not be the
+  last good image. Tags are `prod-<commit>`, so a known-good earlier commit can
+  be chosen instead; compose pulls a missing tag from the registry. If the
+  broken release may have changed data, take an on-demand backup first. Keep a
+  dated copy of `.env`, set `<APP>_TAG`, and run
   `docker compose --env-file .env -f docker-compose.yml up -d SERVICE` in the
   host directory. `compose/chatty.yml` sets `name: openape-prod`, so this
-  targets the existing project. Data migrations are not undone.
+  targets the existing project. A deploy also syncs `docker-compose.yml`; if
+  that file changed, restore it from the previous commit. Data migrations are
+  not undone.
 - After every `docker start` or recreation, check MPTCP. A container without a
   persistent sysctl starts with 1: `nsenter -t PID -n sysctl -w net.mptcp.enabled=0`.
-- Edit only the current `health.json`: write a `.new` file with mode `0600`
+- Edit only the current config `/etc/openape-operations/health.json`
+  (the receipt in `/var/lib/openape-operations/` is output): write a `.new` file with mode `0600`
   and rename it over the original. Move just the affected names; never restore
   an older full copy.
 - Restore from backup: snapshots contain plain host paths, and an on-demand
