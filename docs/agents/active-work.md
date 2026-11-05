@@ -1,3 +1,9 @@
+# Host-defined workload definitions (M6) — issue 1559
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1559. Owner approved M6 per plan revision 21 on 2026-11-05 (“passt - los gehts”); M7 excluded.
+- Branch `feature/issue-1559-workload-definitions` in worktree `openape-operations-m5-1557`, base `1da9394f`.
+- Next: merge, install the backup helper and verify the formerly uncovered compose file is in the snapshot; then container-by-container cutover per the runbook.
+
 # Persistent container MPTCP 0 — issue 1558
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1558. Owner asked for it on 2026-11-05 after M5 (“ja mach das”).

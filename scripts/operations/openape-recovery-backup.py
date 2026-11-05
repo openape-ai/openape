@@ -70,6 +70,12 @@ def source_paths(containers):
         paths.add(current)
         paths.add(current.resolve(strict=True))
     for container in containers:
+        # Compose definitions and their default .env can live outside every other root.
+        labels = container['Config'].get('Labels') or {}
+        paths.update(Path(f) for f in labels.get('com.docker.compose.project.config_files', '').split(',') if f)
+        workdir = labels.get('com.docker.compose.project.working_dir')
+        if workdir and (Path(workdir) / '.env').exists():
+            paths.add(Path(workdir) / '.env')
         for mount in container['Mounts']:
             if mount['Type'] == 'bind' and mount['Source'] != '/var/run/docker.sock':
                 paths.add(Path(mount['Source']))

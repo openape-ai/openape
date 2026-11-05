@@ -99,6 +99,23 @@ assert run([app, container('db', False, 'always')], dict(retired=['db']))['failu
 `)
 })
 
+test('recovery backup captures compose definitions outside every other root', () => {
+  python(`
+import ast
+from pathlib import Path
+from unittest.mock import patch
+tree = ast.parse(Path('scripts/operations/openape-recovery-backup.py').read_text())
+namespace = {'Path': Path}
+exec(compile(ast.Module([n for n in tree.body if getattr(n, 'name', '') == 'source_paths'], []), 'helper', 'exec'), namespace)
+labels = {'com.docker.compose.project.config_files': '/home/openape/projects/app/compose.yml',
+          'com.docker.compose.project.working_dir': '/home/openape/projects/app'}
+with patch.object(Path, 'exists', lambda self: True), patch.object(Path, 'glob', lambda self, pattern: iter([])):
+    paths = namespace['source_paths']([dict(Config=dict(Labels=labels), Mounts=[]), dict(Config=dict(Labels=None), Mounts=[])])
+assert Path('/home/openape/projects/app/compose.yml') in paths, paths
+assert Path('/home/openape/projects/app/.env') in paths, paths
+`)
+})
+
 test('health transitions notify once per state change without mail', () => {
   python(`
 import tempfile,pathlib,json
