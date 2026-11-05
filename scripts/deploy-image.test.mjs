@@ -12,6 +12,17 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { healthyResponse, resolveTruthRemote, rollbackScript } from './deploy-image.mjs'
 
+it('keeps the CVE-2026-98432 MPTCP mitigation on every recreated prod container', () => {
+  // Container sysctls are per namespace; without this every deploy resets MPTCP to 1.
+  const services = readFileSync(new URL('../compose/chatty.yml', import.meta.url), 'utf8')
+    .split(/^services:\n/m)[1]
+    .split(/^(?= {2}[a-z0-9-]+:\n)/m)
+    .filter(block => block.startsWith('  '))
+  assert.ok(services.length >= 11)
+  for (const block of services)
+    assert.match(block, /^ {4}sysctls:\n {6}net\.mptcp\.enabled: "0"$/m, block.split(':')[0].trim())
+})
+
 it('does not mistake the existing provider for a successful relay deployment', () => {
   assert.equal(healthyResponse({ ok: true, service: 'openape-free-idp' }, 'openape-pods-relay'), false)
   assert.equal(healthyResponse({ ok: true, service: 'openape-pods-relay' }, 'openape-pods-relay'), true)

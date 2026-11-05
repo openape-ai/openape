@@ -196,3 +196,17 @@ an upgrade attempt rewrote those files. Never import SQL. Before starting
 `coolify`, confirm `SCHEDULER_ENABLED=false` in the host `.env`; afterwards
 verify auto-update/API off, server `force_disabled`, proxy `NONE` and MPTCP 0,
 then restore the original restart policies and health config.
+
+## Container MPTCP mitigation
+
+Container `net.mptcp.enabled` is per network namespace and resets to 1 when a
+container is recreated unless its definition sets it. Every service in
+`compose/chatty.yml` sets `sysctls: net.mptcp.enabled: "0"`
+([issue 1558](https://repos.openape.ai/patrick/monorepo/issues/1558)); it takes
+effect at each service's next deploy. Containers started from other host
+definitions (static sites, LLM stack, Space) still need
+`nsenter -t PID -n sysctl -w net.mptcp.enabled=0` after recreation until M6
+gives them source-owned definitions. The IdP currently runs with the known
+value 1 and `health.json` expects `"1"`; after its first deploy with this file,
+health reports `mptcp:openape-prod-idp-1` and the expected value must be set to
+`"0"`.
