@@ -221,13 +221,15 @@ upgrade attempt rewrote those files. Never import SQL.
    each. Immediately confirm the container sees `SCHEDULER_ENABLED=false` in
    `/var/www/html/.env` and that
    `docker exec -u 0 coolify /command/s6-svstat /run/service/scheduler-worker`
-   reports it down or sleeping without `schedule:work`. Only then
-   `docker start coolify-sentinel` and set MPTCP 0.
+   reports it down or sleeping without `schedule:work`. If not, take the abort
+   path in step 6. Only then `docker start coolify-sentinel` and set MPTCP 0.
 6. Abort after `coolify` has run: the database may now differ from the archive.
    Stop `coolify-sentinel`, `coolify` and `coolify-realtime`, but keep
-   `coolify-db` and `coolify-redis` running with the active lifecycle. Move
-   those two names from `retired` to `containers` in health, run one on-demand
-   backup so the live database is dumped, and decide separately. Do not put the
+   `coolify-db` and `coolify-redis` running with the active lifecycle and set
+   both to `--restart=always`, so a host restart cannot leave the database down
+   and fail every backup. Move those two names from `retired` to `containers`
+   in health, run one on-demand backup so the live database is dumped, and
+   decide separately. Do not put the
    retired lifecycle back while the archive no longer equals the database.
 
 The edge stays independent; `coolify.openape.ai` stays 403 through the deny
@@ -328,9 +330,12 @@ Rollback rules:
   in the host directory. `compose/chatty.yml` sets `name: openape-prod`, so this
   targets the existing project. A deploy also installs `compose/chatty.yml` of
   the deployed commit as `docker-compose.yml`. Compare it with
-  `git diff <good-commit> <deployed-commit> -- compose/chatty.yml`. If it changed,
-  install the good version (`install -m 644`) before `up -d`. Always use
-  `up -d --no-deps SERVICE`, so no other service is recreated.
+  `git diff <good-commit> <deployed-commit> -- compose/chatty.yml`. The file is
+  shared by every OpenApe app: if the affected service's block changed, keep a
+  dated copy of the installed file and revert only that block; never install a
+  whole older file, because a later restart of another service would recreate it
+  from the old definition. Always use `up -d --no-deps SERVICE`, so no other
+  service is recreated.
 - After every `docker start` or recreation, check MPTCP. A container without a
   persistent sysctl starts with 1: `nsenter -t PID -n sysctl -w net.mptcp.enabled=0`.
 - Edit only the current config `/etc/openape-operations/health.json`
