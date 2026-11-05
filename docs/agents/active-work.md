@@ -1,3 +1,9 @@
+# Persistent container MPTCP 0 — issue 1558
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1558. Owner asked for it on 2026-11-05 after M5 (“ja mach das”).
+- Branch `bugfix/issue-1558-compose-mptcp` in worktree `openape-operations-m5-1557`, base `339da692e0949a12fac44b7bcc06038f299891c0`.
+- All 11 services in `compose/chatty.yml` set `net.mptcp.enabled: "0"`; the new test fails on the base file (first service `idp`). Host `docker compose config` with the prod env resolves all 11 to 0. No live recreation; effective at each next deploy.
+
 # Retired Coolify management — issue 1557
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1557. Owner approved M5 on 2026-11-05 (“ja ziehe M5 durch - so dass wir keine daten dazwischen verlieren”); M6–M7 excluded.
