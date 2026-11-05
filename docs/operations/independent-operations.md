@@ -1,8 +1,10 @@
 # Independent Chatty operational duties
 
-M4 transfers operational ownership while **all five Coolify management containers
-remain running**. Management shutdown is M5 and is a separate assignment.
-The implementation belongs to [issue 1556](https://repos.openape.ai/patrick/monorepo/issues/1556).
+Current state: M4 transferred the operational duties
+([issue 1556](https://repos.openape.ai/patrick/monorepo/issues/1556)), M5 stopped
+the five Coolify management containers and M6 gave every workload one
+definition. Start with [Operating Chatty without Coolify](#operating-chatty-without-coolify-m7);
+the M4 wording below describes how the duties were transferred.
 
 Before and after every infrastructure change, and at intermediate checkpoints,
 verify the separate `docpit.crm.delta-mind.at` CRM using normal system/VPN DNS,
@@ -73,7 +75,7 @@ a missing access log is not proof of no historical consumer.
 
 Both existing backup stages call `coolify_lifecycle.capture`. Without a policy,
 state defaults to `active`; failure of the real `pg_dump` is fatal. Production
-remains explicitly active throughout M4.
+was active throughout M4 and has been `retired` since M5.
 
 A future, separately approved retirement may use this root-private policy:
 
@@ -189,13 +191,62 @@ the backup lifecycle to `retired`, then stop `coolify-redis` and `coolify-db`.
 Because no writer runs after the first phase, the stopped database equals the
 archive.
 
-Rollback uses `docker start` of the retained containers in reverse order:
-`coolify-db`, `coolify-redis`, active lifecycle config, `coolify-realtime`,
-`coolify`, `coolify-sentinel`. Never `compose up` from `/data/coolify/source`;
-an upgrade attempt rewrote those files. Never import SQL. Before starting
-`coolify`, confirm `SCHEDULER_ENABLED=false` in the host `.env`; afterwards
-verify auto-update/API off, server `force_disabled`, proxy `NONE` and MPTCP 0,
-then restore the original restart policies and health config.
+Rollback is an owner decision and uses `docker start` of the retained
+containers in reverse order. Never `compose up` from `/data/coolify/source`; an
+upgrade attempt rewrote those files. Never import SQL.
+
+1. `docker start coolify-db`, then `docker start coolify-redis`; set MPTCP 0 in both.
+2. With only the database and Redis running, verify the
+   [writer fence](#coolify-writer-fence) before anything can act on it:
+
+   ```sh
+   docker exec coolify-db sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -At \
+     -c "select is_auto_update_enabled,is_api_enabled,is_mcp_server_enabled from instance_settings where id=0" \
+     -c "select force_disabled,is_metrics_enabled,is_sentinel_enabled from server_settings where server_id=0" \
+     -c "select count(*) from application_settings where is_auto_deploy_enabled or is_preview_deployments_enabled" \
+     -c "select count(*) from personal_access_tokens where name='"'"'ci-preview-deploy'"'"' and (expires_at is null or expires_at > now())" \
+     -c "select proxy from servers where id=0"'
+   docker exec coolify-redis sh -c 'export REDISCLI_AUTH="$REDIS_PASSWORD"; for k in $(redis-cli --scan --pattern "*queue*"); do t=$(redis-cli type "$k"); case $t in list) n=$(redis-cli llen "$k");; zset) n=$(redis-cli zcard "$k");; *) n=-;; esac; echo "$k $t $n"; done'
+   grep '^SCHEDULER_ENABLED=false' /data/coolify/source/.env
+   ```
+
+   Expect `f|f|f`, `t|f|f`, `0`, `0`, a proxy JSON with `"type":"NONE"` and
+   `"force_stop":true`, every list and sorted-set queue at 0, and the grep match.
+   `docker start` binds the host file afresh, so the host check applies; the
+   stale-inode case only concerns a container that kept running while the file
+   was replaced.
+3. Abort path: if any guard differs, run `docker stop coolify-redis coolify-db`,
+   keep the retired lifecycle and health config unchanged and decide separately.
+   Never correct a guard and continue in the same attempt.
+4. Keep a dated copy of the current `/etc/openape-operations/coolify-lifecycle.json`,
+   then copy the protected `before/coolify-lifecycle.json` over it. From here
+   on, any failure, including a container that does not start, takes the abort
+   path in step 6; never stop `coolify-db` again in this attempt.
+5. `docker start coolify-realtime`, then `docker start coolify`; set MPTCP 0 in
+   each. Immediately confirm the container sees `SCHEDULER_ENABLED=false` in
+   `/var/www/html/.env` and that
+   `docker exec -u 0 coolify /command/s6-svstat /run/service/scheduler-worker`
+   reports it down or sleeping, and `docker exec coolify ps aux` shows no
+   `schedule:work` process. If not, take the abort
+   path in step 6; the `s6-svc -d` workaround of the writer fence is not used in
+   a rollback. Only then `docker start coolify-sentinel` and set MPTCP 0.
+6. Abort after step 4: the database may now differ from the archive.
+   Stop `coolify-sentinel`, `coolify` and `coolify-realtime`, but keep
+   `coolify-db` and `coolify-redis` running with the active lifecycle and set
+   both to `--restart=always`, so a host restart cannot leave the database down
+   and fail every backup. Move those two names from `retired` to `containers`
+   in health, run one on-demand backup so the live database is dumped, and
+   decide separately. Do not put the
+   retired lifecycle back while the archive no longer equals the database.
+
+The edge stays independent; `coolify.openape.ai` stays 403 through the deny
+router.
+
+Then restore the original restart policies (`always` for `coolify`,
+`coolify-db`, `coolify-redis` and `coolify-realtime`; `no` for
+`coolify-sentinel`) and move the five names from `retired` back to `containers`
+in the current `/etc/openape-operations/health.json`. Do not restore the pre-M5 `health.json`; later
+milestones changed it.
 
 ## Container MPTCP mitigation
 
@@ -230,9 +281,92 @@ before the new one starts, so two writers never share a data directory. Set the
 old container to `restart=no`, rename it `NAME-before-m6` and add that name to
 `retired` in `/etc/openape-operations/health.json`. Then run `compose up -d`.
 Rollback: `docker compose -f /srv/workloads/NAME/compose.yaml down` (bind mounts
-only), `docker rename NAME-before-m6 NAME`, restore its restart policy,
-`docker start`, then reapply MPTCP 0.
+only; the external `coolify` network stays), `docker rename NAME-before-m6 NAME`,
+`docker update --restart=unless-stopped NAME`, `docker start NAME`, then set
+MPTCP 0 (the old container has no persistent sysctl). Remove `NAME-before-m6`
+from `retired`, move `/srv/workloads/NAME` aside so a later `up -d` cannot
+conflict, and regenerate the catalog with `python3 /srv/openape-operations/catalog.py`.
 
 The recovery backup also captures every container's compose config files and
 the `.env` in its compose working directory, so a definition outside the usual
 roots is still restorable.
+
+## Operating Chatty without Coolify (M7)
+
+Coolify management is stopped and retained only for rollback
+([issue 1560](https://repos.openape.ai/patrick/monorepo/issues/1560)). No
+running workload depends on it. Each workload has exactly one definition:
+
+| Kind | Definition | Deploy or change |
+|---|---|---|
+| OpenApe apps | `compose/chatty.yml`, installed as `/home/openape/prod/docker-compose.yml` | `pnpm run deploy:image <target>`; rollback through `<APP>_TAG_PREV` |
+| Docs site | `compose/docs-site.yml` | `pnpm run deploy:docs-site` |
+| LLM gateway | `compose/gateway/docker-compose.yml` | copy to the host project directory, then `docker compose up -d` |
+| Sites from other repositories | their `compose/chatty*.yml` | their `scripts/deploy-image.mjs` |
+| Host-defined workloads | `/srv/workloads/NAME/compose.yaml` (root `0600`) | `docker compose -f … up -d`; see [Host-defined workloads (M6)](#host-defined-workloads-m6) |
+| Edge | `/srv/openape-proxy/compose.yaml` and `dynamic/*.yml` | [Independent Traefik edge](independent-edge.md) |
+| Host services | systemd units | `systemctl restart UNIT` |
+
+The root-private catalog `/srv/openape-operations/catalog.md` lists every
+workload with its definition, source, image, data, routes and start, restart
+and rollback commands, plus an operator quick start. Health is configured in
+`/etc/openape-operations/health.json` and checked every minute; the independent
+Mac checker alarms on transitions. Backups, off-host restore, cleanup and the
+retired-management rollback follow the sections above.
+
+The Docker network named `coolify` and its gateway `10.0.1.1` are load-bearing.
+Traefik reaches containers by name on that network, and every host-port backend
+is reached through `10.0.1.1`: route URLs, host port bindings and firewall rules
+use `10.0.1.0/24`. The name is historical; the network does not depend on the
+stopped management stack. Never remove it together with the Coolify archive.
+Renaming it is a separate migration that recreates every attached container.
+
+Rollback rules:
+
+- Tag rollback: the `<APP>_TAG` variable names come from the compose file, and
+  every `deploy:image` writes the previously live tag to `<APP>_TAG_PREV`. That
+  is one level of history: after a retry or a repeated deploy it may not be the
+  last good image. Tags are `prod-<commit>`, so a known-good earlier commit can
+  be chosen instead; compose pulls a missing tag from the registry. Before
+  rolling back, check the commit range for schema or data migrations. If the
+  broken release migrated data, do not run the older image on it: fix forward,
+  or restore data from the pre-deploy snapshot as a separate decision. Take an
+  on-demand backup first. Keep a timestamped copy of `.env`
+  (`.env.before-rollback-$(date +%FT%H%M%S)`), set `<APP>_TAG`, and run
+  `docker compose --env-file .env -f docker-compose.yml up -d --no-deps SERVICE`
+  in the host directory. `compose/chatty.yml` sets `name: openape-prod`, so this
+  targets the existing project. A deploy also installs `compose/chatty.yml` of
+  the deployed commit as `docker-compose.yml`. Compare it with
+  `git diff <good-commit> <deployed-commit> -- compose/chatty.yml`. The file is
+  shared by every OpenApe app: if the affected service's block changed, keep a
+  dated copy of the installed file and revert only that block; never install a
+  whole older file, because a later restart of another service would recreate it
+  from the old definition. Always use `up -d --no-deps SERVICE`, so no other
+  service is recreated.
+- After every `docker start` or recreation, check MPTCP. A container without a
+  persistent sysctl starts with 1: `nsenter -t PID -n sysctl -w net.mptcp.enabled=0`.
+- Edit only the current config `/etc/openape-operations/health.json`
+  (the receipt in `/var/lib/openape-operations/` is output): write a `.new` file with mode `0600`
+  and rename it over the original. Move just the affected names; never restore
+  an older full copy.
+- Restore from backup: snapshots contain plain host paths (restored below
+  `<target>/`), and an on-demand backup uploads immediately. Pick a snapshot
+  taken after the file's last good change and compare the SHA256 before using
+  it. A non-root restore cannot keep owners; set owner and mode on the host to
+  those of the protected copy or the original before putting a file back.
+- Retirement rollback: route files are shared by many hosts. Re-add only the
+  removed router block from the protected copy; never copy a whole older route
+  file back.
+- If a rollback step fails, stop and keep every file. Bring back the last
+  working state: after a failed M6 rollback, stop the old container, rename it
+  back to `NAME-before-m6` if it was already renamed, set its restart policy to
+  `no`, move `/srv/workloads/NAME` back if it was moved, and run
+  `docker compose -f /srv/workloads/NAME/compose.yaml up -d` to restart the
+  unchanged M6 definition. Keep `NAME-before-m6` in `retired`. Then decide
+  separately.
+- Run the CRM continuity gate before and after every infrastructure change,
+  including a plain restart.
+
+Every rollback artifact from M5 and M6 is retained for at least 30 days after
+2026-11-05. Deleting any of them is a separate explicit owner decision after a
+dependency and restore check; reaching the date deletes nothing.
