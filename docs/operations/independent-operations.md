@@ -212,6 +212,9 @@ upgrade attempt rewrote those files. Never import SQL.
 
    Expect `f|f|f`, `t|f|f`, `0`, `0`, a proxy JSON with `"type":"NONE"` and
    `"force_stop":true`, every list and sorted-set queue at 0, and the grep match.
+   `docker start` binds the host file afresh, so the host check applies; the
+   stale-inode case only concerns a container that kept running while the file
+   was replaced.
 3. Abort path: if any guard differs, run `docker stop coolify-redis coolify-db`,
    keep the retired lifecycle and health config unchanged and decide separately.
    Never correct a guard and continue in the same attempt.
@@ -223,7 +226,8 @@ upgrade attempt rewrote those files. Never import SQL.
    each. Immediately confirm the container sees `SCHEDULER_ENABLED=false` in
    `/var/www/html/.env` and that
    `docker exec -u 0 coolify /command/s6-svstat /run/service/scheduler-worker`
-   reports it down or sleeping without `schedule:work`. If not, take the abort
+   reports it down or sleeping, and `docker exec coolify ps aux` shows no
+   `schedule:work` process. If not, take the abort
    path in step 6; the `s6-svc -d` workaround of the writer fence is not used in
    a rollback. Only then `docker start coolify-sentinel` and set MPTCP 0.
 6. Abort after step 4: the database may now differ from the archive.
