@@ -204,7 +204,7 @@ container is recreated unless its definition sets it. Every service in
 `compose/chatty.yml` sets `sysctls: net.mptcp.enabled: "0"`
 ([issue 1558](https://repos.openape.ai/patrick/monorepo/issues/1558)); it takes
 effect at each service's next deploy. Containers started from other host
-definitions (static sites, LLM stack, Space) still need
+definitions (static sites, the LLM stack and other host-defined apps) still need
 `nsenter -t PID -n sysctl -w net.mptcp.enabled=0` after recreation until M6
 gives them source-owned definitions. The IdP currently runs with the known
 value 1 and `health.json` expects `"1"`; after its first deploy with this file,
