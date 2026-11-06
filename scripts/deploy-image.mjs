@@ -182,8 +182,16 @@ async function bake(name, sha) {
   const t = TARGETS[name]
   const tag = tagFor(t, sha)
   shQuiet('docker', ['buildx', 'build', '--platform', 'linux/amd64', '-f', t.dockerfile || 'compose/preview-package.Dockerfile', '--build-arg', `PORT=${t.port}`, '-t', tag, '--load', `${t.dir}/.output`])
-  await smokeTest(tag, t)
-  shQuiet('docker', ['push', tag], { env: PUSH_ENV })
+  try {
+    await smokeTest(tag, t)
+    shQuiet('docker', ['push', tag], { env: PUSH_ENV })
+  }
+  finally {
+    // The registry holds the image; keeping every --load copy filled the
+    // deploying Mac with hundreds of prod-<sha> images.
+    try { shQuiet('docker', ['image', 'rm', tag]) }
+    catch (error) { console.warn(`  ⚠ could not remove local ${tag}: ${error.stderr?.trim() || error.message}`) }
+  }
   console.log(`  ✓ baked ${name} (${tag})`)
 }
 
