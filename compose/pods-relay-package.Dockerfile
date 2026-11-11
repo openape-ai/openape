@@ -1,4 +1,4 @@
-FROM node:24.15.0-bookworm-slim
+FROM node:24.22.3-bookworm-slim
 ARG PORT=3028
 WORKDIR /app
 COPY --chown=999:988 . ./.output
