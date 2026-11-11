@@ -1,7 +1,7 @@
 # Toolchain for a new session
 
 Select the checkout and read `.nvmrc` and `package.json` first. Development and
-the three required CI suites use exact Node 24.15.0 from `.nvmrc`; pnpm is pinned
+the three required CI suites use exact Node 24.22.3 from `.nvmrc`; pnpm is pinned
 to 10.29.3. Package engine minimums and production images remain separate
 compatibility/runtime settings. The pnpm launcher on PATH may be a different version that
 downloads the pinned version before executing even a local command.
