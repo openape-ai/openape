@@ -13,13 +13,6 @@ auditConfig:
     # Use its exact GHSA ID so pnpm 10 and the pnpm 11 audit collector agree.
     - GHSA-86w9-cpqp-85rv
     - GHSA-vfj7-8cjw-p6xm
-    # simple-git 3.x via nuxt > @nuxt/devtools (development tooling only).
-    # Owner decision 2026-10-06, issue 1428: simple-git 4 drops the default export
-    # that every @nuxt/devtools 3.x release imports, so no update resolves these.
-    - GHSA-x6jw-m9v5-85vh
-    - GHSA-g4wm-2vf7-vfgr
-    - GHSA-858h-whjf-mvg5
-    - GHSA-v5rq-49vh-5v5c
     # zod 3.25.76 via apps/docs > @nuxt/content (build-time collection schemas
     # over first-party docs sources). The fix exists only as zod >=4.6.6; every
     # @nuxt/content 3.x release requires zod ^3.25.76, so no update resolves it.
@@ -49,9 +42,9 @@ catalog:
   '@antfu/eslint-config': ^7.7.3
   '@changesets/cli': ^2.31.0
   '@iconify-json/lucide': ^1.2.114
-  '@nuxt/kit': ^4.4.8
+  '@nuxt/kit': ^4.6.4
   '@nuxt/module-builder': ^1.0.2
-  '@nuxt/ui': ^4.9.0
+  '@nuxt/ui': ^4.12.0
   '@types/node': ^22.20.0
   '@types/shell-quote': ^1.7.5
   '@types/web-push': ^3.6.4
@@ -72,8 +65,8 @@ catalog:
   'happy-dom': 21.0.4
   'jose': ^5.10.0
   'marked': ^18.0.5
-  # Nitro advisories fixed in 4.6.2; published 2026-10-16, quarantine passed.
-  'nuxt': ^4.6.2
+  # Nuxt/Nitro/Vite-builder advisories fixed in 4.6.3; 4.6.4 published 2026-11-02.
+  'nuxt': ^4.6.4
   'ofetch': ^1.5.1
   # Keep Playwright identical: CLI and tests share a registry. Duplicate versions
   # can report "No tests found" instead of a version warning.
@@ -105,7 +98,6 @@ onlyBuiltDependencies:
 overrides:
   # GHSA-p2f4-r6v6-j797: the pinned updater still requests the vulnerable 9.3.1.
   'electron-updater@6.6.2>builder-util-runtime': 9.7.0
-  '@nuxtjs/mdc': 0.22.1
   # Security fixes verified 2026-09-07; both versions exceed the 7-day quarantine.
   browserslist: ">=4.28.7 <5"
   '@babel/plugin-transform-modules-systemjs': '>=7.29.4'
@@ -226,15 +218,7 @@ overrides:
   smol-toml: '>=1.9.0'
   # GHSA-pqg4-j6r4-53mv; 1.11.0 published 2026-09-29.
   shell-quote: '>=1.11.0'
-  # 4.x removes the default export that @nuxt/devtools 3.x imports; see ignoreGhsas.
-  simple-git: '>=3.36.0 <4'
   socket.io-parser: '>=4.2.7'
   svgo: 4.1.0
   ws: '>=8.21.0'
 
-# Nuxt Content 3.14 imports H3 at runtime but omits it from its manifest.
-# Its Nitro 2 integration requires H3 1, regardless of the public hoist order.
-packageExtensions:
-  '@nuxt/content@3.14.0':
-    dependencies:
-      h3: 1.15.11
