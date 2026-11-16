@@ -15,11 +15,12 @@ MIN_AGE = 7 * 86400
 
 
 def run(*args):
+    operation = ' '.join(args[:2])
     if args[0] == 'docker':
         args = ('docker', '--context', 'default', *args[1:])
     result = subprocess.run(args, text=True, capture_output=True, timeout=120)
     if result.returncode:
-        raise RuntimeError(f'cleanup: {args[0]} {args[1]} failed (exit {result.returncode})')
+        raise RuntimeError(f'cleanup: {operation} failed (exit {result.returncode})')
     return result.stdout
 
 
@@ -66,7 +67,7 @@ def inventory(policy):
     if not policy['protectedImages'] or protected - set(images):
         raise RuntimeError('cleanup: protected image inventory incomplete')
     # Buildx formats sizes and ages for display, even in its JSON output.
-    usage = json.loads(run('curl', '--fail', '--silent', '--show-error', '--max-time', '120',
+    usage = json.loads(run('curl', '--fail', '--silent', '--show-error', '--max-time', '120', '--noproxy', '*',
                            '--unix-socket', '/var/run/docker.sock', 'http://localhost/system/df'))
     caches = usage['BuildCache']
     if caches is None:
