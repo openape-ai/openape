@@ -2,7 +2,7 @@
 
 `chatty.yml` describes deployed services. Troop, CRM and Chat are no longer
 listed or deployed in production (verified 2026-10-28); their source lives in
-[the legacy repository](https://repos.openape.ai/patrick/legacy). The former Coolify
+[the legacy repository](https://github.com/patrick-hofmann/legacy). The former Coolify
 PR-preview containers no longer exist. The normal `deploy:image` targets no longer build these applications.
 
 `local-stack.yml` and `Caddyfile` cover active local applications. Legacy

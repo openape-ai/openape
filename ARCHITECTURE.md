@@ -149,17 +149,14 @@ IdP token for SP-scoped tokens via RFC 8693 (`packages/cli-auth`).
 ## How code gets to production
 
 1. **Issue-first development** (`CONTRIBUTING.md`): every change starts from an
-   issue on git.openape.ai, on a `<type>/issue-<nr>-…` branch, lands via PR on
-   repos.openape.ai. Git hooks (`.githooks/`) and a Claude hook block source
-   edits directly on `main`. Code lives on repos.openape.ai (ape-git); issues
-   stay on Forgejo, which has the tracker ape-git lacks.
-2. **CI on git.openape.ai** (Forgejo — a mirror of repos.openape.ai since
-   2026-08-29, and still where CI runs; GitHub mirrors from there in turn.
-   Workflows in `.forgejo/workflows/`): `ci.yml` runs
-   lint/typecheck/test/build with turbo
-   `--affected` (only changed packages + dependents); `deploy.yml` is a
-   manually dispatched trigger for the tested-image deploy below. Coolify PR
-   preview deployments were retired in issue 1556.
+   issue on github.com/openape-ai/openape, on a `<type>/issue-<nr>-…` branch,
+   and lands via PR there. Git hooks (`.githooks/`) and a Claude hook block
+   source edits directly on `main`. The former forges repos.openape.ai (ape-git)
+   and git.openape.ai (Forgejo) were retired in November 2026; their issue and
+   PR history is in the private openape-ai/openape-history repository.
+2. **CI** (`.github/workflows/ci.yml`): manual dispatch only by owner decision
+   (issue 1448); the local pre-push hook runs the affected unit contract.
+   Coolify PR preview deployments were retired in issue 1556.
 3. **Tested-image deploy** (`scripts/deploy-image.mjs`,
    `pnpm run deploy:image <target…|--all>`): the maintainer's Mac builds the
    app with warm turbo caches, packages the `.output` into a COPY-only amd64
@@ -172,7 +169,7 @@ IdP token for SP-scoped tokens via RFC 8693 (`packages/cli-auth`).
 ## Non-obvious decisions (read before changing things)
 
 - **Work enters as an issue and a plan.** Every change starts from an issue on
-  git.openape.ai and lands via PR on repos.openape.ai (`CONTRIBUTING.md`); anything larger than a
+  GitHub and lands via PR there (`CONTRIBUTING.md`); anything larger than a
   session is written up first as a plan published on OpenApe Reports and kept
   current while the work runs; local plan sources under `.claude/plans/` are
   ignored, not repository content. `stories/` and the

@@ -60,12 +60,12 @@ sharing `packages/proof-cli`.
 | chatty.delta-mind.at | idp, pods-idp, pods-relay, testrun, plans, pr, tasks, timetrack, monitor, secrets, dashboard | `compose/chatty.yml` |
 | chatty.delta-mind.at | LLM gateway (llms-auth, llms-route, codex proxy, litellm) | `apps/openape-llm`, `packages/codex-proxy`, `compose/openape-llm.codex.yml` |
 | chatty.delta-mind.at | Static sites (docs, website, delta-mind, …) | `compose/docs-site.yml`, sibling repos |
-| repos.openape.ai | Native forge, issues, CI | `apps/openape-git`, `compose/forge.yml` |
+| repos.openape.ai | Retired native forge (code kept, not deployed) | `apps/openape-git` |
 | Local | Integration stack | `compose/local-stack.yml` |
 
 ## Retired names
 
-Source lives in the [legacy repository](https://repos.openape.ai/patrick/legacy) or is gone. Do not revive.
+Source lives in the [legacy repository](https://github.com/patrick-hofmann/legacy) or is gone. Do not revive.
 
 | Name | Was | State 2026-10-28 |
 | --- | --- | --- |
