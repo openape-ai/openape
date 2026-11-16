@@ -33,27 +33,27 @@ it('does not mistake the existing provider for a successful relay deployment', (
 
 describe('resolveTruthRemote', () => {
   it('finds the authoritative remote by URL, whatever it is called locally', () => {
-    // This checkout calls it `apegit`; a fresh clone from the forge calls the
-    // same remote `origin`. Matching on the name would pick the wrong one.
+    // A checkout may call it `github`; another remote named `origin` can point
+    // at a retired forge. Matching on the name would pick the wrong one.
     const remotes = {
-      apegit: 'https://repos.openape.ai/patrick/monorepo.git',
-      origin: 'https://git.openape.ai/openape-ai/openape.git',
+      github: 'git@github.com:openape-ai/openape.git',
+      origin: 'https://repos.openape.ai/patrick/monorepo.git',
     }
-    assert.equal(resolveTruthRemote(remotes), 'apegit')
+    assert.equal(resolveTruthRemote(remotes), 'github')
   })
 
-  it('picks it when the forge clone is the one named origin', () => {
-    const remotes = { origin: 'https://repos.openape.ai/patrick/monorepo.git' }
+  it('picks it when the canonical clone is the one named origin', () => {
+    const remotes = { origin: 'https://github.com/openape-ai/openape.git' }
     assert.equal(resolveTruthRemote(remotes), 'origin')
   })
 
-  it('rejects a mirror when no remote points at the forge', () => {
-    const remotes = { origin: 'git@github.com:openape-ai/openape.git' }
+  it('rejects a retired forge when no remote points at the canonical repository', () => {
+    const remotes = { origin: 'https://git.openape.ai/openape-ai/openape.git' }
     assert.throws(() => resolveTruthRemote(remotes), /No remote/)
   })
 
-  it('ignores a host that merely contains the forge name', () => {
-    const remotes = { origin: 'https://evil-repos.openape.ai.attacker.test/x.git' }
+  it('ignores a host that merely contains the canonical host name', () => {
+    const remotes = { origin: 'https://evil-github.com.attacker.test/openape-ai/openape.git' }
     assert.throws(() => resolveTruthRemote(remotes), /No remote/)
   })
 })
