@@ -104,6 +104,11 @@ new rollback IDs before any deployment retires their containers. All existing
 container image IDs are additionally protected at each run. Missing protected
 images fail closed. Tagged images and repository digests are never candidates.
 
+Cache inventory comes from the local Docker Engine `/system/df` API, preserving exact byte sizes,
+boolean usage flags and absolute timestamps. The helper requires the local `default` Docker context
+and its single-node engine builder; it rejects remote or container-backed builders. Formatted
+`buildx du` JSON is not an inventory contract. Cache pruning explicitly targets that same builder.
+
 Run `/usr/bin/python3 /usr/local/libexec/bounded_cleanup.py` for a dry run;
 `--apply` uses the same selection and rechecks before each deletion. The helper
 uses one lock, no force image removal, and explicit cache-ID/age filters. It never
