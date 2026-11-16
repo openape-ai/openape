@@ -5,13 +5,13 @@ import { assertPushTarget, repository, repositoryIdentity, resolveTruthRemote } 
 
 describe('canonical repository', () => {
   it('matches HTTPS and SSH forms of the same complete repository', () => {
-    for (const url of [repository.url, 'https://repos.openape.ai/patrick/monorepo', 'git@repos.openape.ai:patrick/monorepo.git']) {
-      assert.equal(repositoryIdentity(url), 'repos.openape.ai/patrick/monorepo')
+    for (const url of [repository.url, 'https://github.com/openape-ai/openape', 'git@github.com:openape-ai/openape.git']) {
+      assert.equal(repositoryIdentity(url), 'github.com/openape-ai/openape')
       assert.doesNotThrow(() => assertPushTarget(url))
     }
   })
   it('rejects a different repository on the same host and misleading URLs', () => {
-    for (const url of ['https://repos.openape.ai/other/monorepo.git', 'https://repos.openape.ai.attacker.test/patrick/monorepo.git', 'https://repos.openape.ai/patrick/monorepo.git?x=1', 'file:///tmp/monorepo', ...repository.mirrors]) {
+    for (const url of ['https://github.com/other/openape.git', 'https://github.com.attacker.test/openape-ai/openape.git', 'https://github.com/openape-ai/openape.git?x=1', 'file:///tmp/monorepo', 'https://repos.openape.ai/patrick/monorepo.git', 'https://git.openape.ai/openape-ai/openape.git']) {
       assert.throws(() => assertPushTarget(url), /Push rejected/)
       assert.throws(() => resolveTruthRemote({ origin: url }), /No remote/)
     }

@@ -104,14 +104,6 @@ export async function diagnose(args = []) {
       }
       catch { add('canonical-main', 'fail', 'Cannot read canonical main', 'Check network and Git credentials') }
     }
-    try {
-      const { createClient } = await import('./ape-git.mjs')
-      const request = createClient()
-      const base = `/api/repos${new URL(repository.url).pathname.replace(/\.git$/, '')}`
-      const [mirrors, policies] = await Promise.all([request('GET', `${base}/mirrors`), request('GET', `${base}/protections`)])
-      add('forge-access', 'pass', { mirrors, policies })
-    }
-    catch (error) { add('forge-access', 'fail', { code: error.code || 'UNAVAILABLE' }, 'Authenticate with apes login and retry; no credentials are printed') }
   }
   return { readOnly: true, root, checks, ok: checks.every(c => c.state !== 'fail') }
 }

@@ -20,12 +20,12 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://repos.openape.ai/patrick/monorepo.git",
+    "url": "git+https://github.com/openape-ai/openape.git",
     "directory": "packages/ape-testruns"
   },
   "homepage": "https://report.openape.ai",
   "bugs": {
-    "url": "https://repos.openape.ai/patrick/monorepo/issues"
+    "url": "https://github.com/openape-ai/openape/issues"
   },
   "publishConfig": {
     "access": "public"

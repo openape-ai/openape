@@ -1,21 +1,26 @@
 # Shared with the local pre-push gate: scripts/check.mjs + .openape/checks.json.
-# Branch heads run the affected subset against origin/main at their exact pushed
-# commit; pushes to main run the complete contract as the post-merge safety net.
+# Manual dispatch only: the owner keeps CI paused (issue 1448, confirmed for the
+# GitHub move on November 16, 2026); the local pre-push gate is the PR check.
+# A dispatch on main runs the complete unit contract, on a branch the affected
+# subset. Deploys stay local (pnpm run deploy:image); there is no deploy workflow.
 name: CI
-# Paused by owner decision on October 7, 2026 (issue 1448): manual dispatch only until a stable CI is approved.
 on:
   workflow_dispatch:
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+permissions:
+  contents: read
 jobs:
   ci:
-    runs-on: docker
+    runs-on: ubuntu-latest
+    env:
+      HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ env.HEAD_SHA }}
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -25,7 +30,7 @@ jobs:
         id: dependency-cache
         run: echo "store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
       - name: Restore dependency downloads
-        uses: https://data.forgejo.org/actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        uses: actions/cache@v4
         with:
           path: |
             ${{ steps.dependency-cache.outputs.store }}
@@ -33,12 +38,12 @@ jobs:
           key: dependencies-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml', '.nvmrc', 'pnpm-workspace.yaml', 'package.json') }}
           restore-keys: dependencies-${{ runner.os }}-${{ runner.arch }}-
       - name: Install
-        run: time pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile
       - name: Restore check cache
-        uses: https://data.forgejo.org/actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+        uses: actions/cache@v4
         with:
           path: .turbo-cache
-          key: checks-${{ runner.os }}-unit-${{ hashFiles('pnpm-lock.yaml', '.nvmrc') }}-${{ github.sha }}
+          key: checks-${{ runner.os }}-unit-${{ hashFiles('pnpm-lock.yaml', '.nvmrc') }}-${{ env.HEAD_SHA }}
           restore-keys: checks-${{ runner.os }}-unit-${{ hashFiles('pnpm-lock.yaml', '.nvmrc') }}-
       - name: Shared unit contract
         run: |
@@ -46,20 +51,14 @@ jobs:
             pnpm check:ci --suite unit
           else
             git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
-            pnpm check:affected --base origin/main --head "$GITHUB_SHA" --suite unit
+            pnpm check:affected --base origin/main --head "$HEAD_SHA" --suite unit
           fi
         env:
           TURBO_CACHE_DIR: .turbo-cache
       - name: Preserve complete check logs and summary
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: unit-check-results
           path: .openape/check-results/
           if-no-files-found: warn
-      - name: Report checked SHA and log excerpts to ape-git
-        if: always() && github.event_name == 'push'
-        env:
-          APE_GIT_STATUS_SECRET: ${{ secrets.APE_GIT_STATUS_SECRET }}
-          APE_CHECK_JOB_STATUS: ${{ job.status }}
-        run: git show "$GITHUB_SHA:scripts/report-check.mjs" | node --input-type=module - unit

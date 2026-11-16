@@ -45,12 +45,6 @@ const HOSTS = {
     composeFile: 'compose/chatty.yml',
     unitGuard: true,
   },
-  forge: {
-    ssh: `${process.env.FORGE_USER || 'ubuntu'}@${process.env.FORGE_HOST || 'repos.openape.ai'}`,
-    prodDir: '/home/ubuntu/prod',
-    composeFile: 'compose/forge.yml',
-    unitGuard: false,
-  },
 }
 
 // Registry auth for `docker push` from ANY session. The default
@@ -78,10 +72,6 @@ const TARGETS = {
   'monitor': { filter: '@openape-monitor/app', dir: 'apps/openape-monitor', image: 'openape-monitor', port: 3018, compose: 'monitor', unit: 'openape-monitor', domain: 'monitor.openape.ai', envVar: 'MONITOR_TAG' },
   'dashboard': { filter: '@openape-dashboard/app', dir: 'apps/openape-dashboard', image: 'openape-dashboard', port: 3022, compose: 'dashboard', unit: 'openape-dashboard', domain: 'dashboard.openape.ai', envVar: 'DASHBOARD_TAG' },
   'secrets': { filter: '@openape-secrets/app', dir: 'apps/openape-secrets', image: 'openape-secrets', port: 3025, compose: 'secrets', unit: 'openape-secrets', domain: 'secrets.openape.ai', envVar: 'SECRETS_TAG' },
-  // ape-git needs git in the image (http-backend CGI) → own packaging Dockerfile.
-  // `compose: 'git ci'` — the CI consumer runs from the same image and is
-  // brought up with the app, so a deploy never leaves it on the old tag.
-  'git': { filter: '@openape-git/app', dir: 'apps/openape-git', image: 'openape-git', port: 3026, compose: 'git ci', unit: 'openape-git', domain: 'repos.openape.ai', envVar: 'GIT_TAG', host: 'forge', dockerfile: 'compose/forge-package.Dockerfile' },
 }
 
 function sh(cmd, args, opts = {}) {

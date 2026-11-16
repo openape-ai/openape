@@ -1,15 +1,17 @@
-import { repository } from './repository.mjs'
+// Client for the retired native forge (repos.openape.ai), kept for archive access
+// until its shutdown; the canonical repository is GitHub (.openape/repository.json).
+const NATIVE_REPOSITORY = new URL('https://repos.openape.ai/patrick/monorepo.git')
 
 export class ForgeError extends Error {
   constructor(code, message, status = 0) { super(message); this.code = code; this.status = status }
 }
 
-export function parseRepository(value = new URL(repository.url).pathname.slice(1).replace(/\.git$/, '')) {
+export function parseRepository(value = NATIVE_REPOSITORY.pathname.slice(1).replace(/\.git$/, '')) {
   if (!/^[a-z0-9][\w.-]*\/[a-z0-9][\w.-]*$/i.test(value)) throw new ForgeError('INVALID_REPOSITORY', 'Use --repo owner/name')
   return value
 }
 
-export function createClient({ endpoint = new URL(repository.url).origin, authorize, fetcher = fetch } = {}) {
+export function createClient({ endpoint = NATIVE_REPOSITORY.origin, authorize, fetcher = fetch } = {}) {
   return async (method, path, body, { idempotencyKey } = {}) => {
     if (!path.startsWith('/api/')) throw new ForgeError('INVALID_PATH', 'API path required')
     let authorization

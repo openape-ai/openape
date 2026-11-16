@@ -5,12 +5,11 @@ sibling repositories and linked worktrees have their own checkout state.
 
 ## Locate the work
 
-- Source of truth: `.openape/repository.json`. Code, pushes and PRs belong to
-  `https://repos.openape.ai/patrick/monorepo.git`. Forgejo and GitHub are mirrors.
-- Development issues live at `https://repos.openape.ai/patrick/monorepo/issues`.
-  Use the native [issue CLI](docs/operations/native-issues.md); Forgejo retains
-  the read-only issue archive and CI. Link the full issue URL and add an explicit
-  PR relation. Merging a PR never closes an issue automatically.
+- Source of truth: `.openape/repository.json`. Code, pushes, PRs and issues belong
+  to `https://github.com/openape-ai/openape` (use `gh`). repos.openape.ai and
+  git.openape.ai are retired; issues and PRs from before November 16, 2026 live in
+  the private `openape-ai/openape-history`; each migrated item names its
+  source URL. Link the full issue URL in the PR.
 - Tasks owns general work/reminders; Plans owns approved proposals. Link the
   development issue instead of duplicating its discussion or resolution state.
 - Run `git status --short` and `git branch --show-current`. In each tool shell,
@@ -18,12 +17,11 @@ sibling repositories and linked worktrees have their own checkout state.
   Use the explicit `run`: `pnpm doctor` is pnpm's own command. For restricted
   sessions, prepare the [local toolchain](docs/operations/session-toolchain.md)
   before running package scripts; a version-manager download is not a repo test.
-  [Native CLI and diagnosis](docs/operations/native-cli.md) cover PRs, checks, logs
-  and merge commands. `pnpm repo:status` prints the canonical repository identity.
+  `pnpm repo:status` prints the canonical repository identity.
   Preserve existing tracked and untracked work. Never switch another worktree's
   branch or clean it to make a task easier.
 - Use an issue and a feature branch `<type>/issue-<number>-<description>` from
-  canonical main. All changes, including configuration, go through a native PR.
+  canonical main. All changes, including configuration, go through a GitHub PR.
 - [System map](MAP.md): role-based areas, what runs where and retired names.
 - [Workspace map](docs/architecture/workspace-map.md): package names, paths,
   purpose and actual scripts. [Dependency graph](docs/architecture/dependency-graph.md)
@@ -50,9 +48,8 @@ supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
   packaged boundaries; do not repeat every UI scenario in Electron or per host.
   Retire an existing assertion only after its replacement proves the same behavior.
 - Automatic CI is paused by the October 7, 2026 owner decision
-  ([issue 1448](https://repos.openape.ai/patrick/monorepo/issues/1448), PR 296).
-  The recorded configuration uses manual Forgejo dispatch with main protection
-  disabled; inspect actual configuration before making a live-state claim.
+  (issue 1448, PR 296; confirmed for GitHub on November 16, 2026).
+  `.github/workflows/ci.yml` runs only on manual dispatch; inspect actual configuration before making a live-state claim.
   Merge after the required local checks without waiting for automatic CI.
   Do not re-enable CI or protection without a new owner decision. The local
   pre-push affected unit gate remains mandatory; deployments require `pnpm check:ci`.
@@ -93,20 +90,20 @@ supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
 
 ## Merge, publish and hand off
 
-Review the native PR diff and retain its source and target SHAs. Inspect actual
+Review the PR diff and retain its source and target SHAs. Inspect actual
 branch protection and apply the owner CI decision above; do not infer a required
-external gate from historical instructions. The merge API verifies both expected
-SHAs and blocks protected-branch direct pushes; see
+external gate from historical instructions. Merge with
+`gh pr merge --match-head-commit <sha>`; see
 [branch protection](docs/operations/branch-protection.md).
 
 Version with Changesets on a branch, merge the version PR, then publish from a
 clean canonical main with `pnpm release:local`. Inspect deployments with
-`pnpm deploy:image git --dry-run`; app images use the tested-image deployment
+`pnpm deploy:image <target> --dry-run`; app images use the tested-image deployment
 path, including health checks and rollback. Never substitute a mirror as the
 release/deployment base. [Rollout evidence](docs/operations/ai-workflow.md).
 
 The DDISA specification is the separate `protocol` repository on
-`https://git.openape.ai/openape-ai/protocol`. For protocol-relevant changes,
+`https://github.com/openape-ai/protocol`. For protocol-relevant changes,
 read the relevant specification, verify behavior against it and identify any
 intended deviation before implementation. Do not redefine the protocol in an
 app or rewrite historical/specification links as part of a host migration.

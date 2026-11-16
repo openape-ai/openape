@@ -3,12 +3,10 @@
 Start with [AGENTS.md](AGENTS.md) and the generated
 [workspace map](docs/architecture/workspace-map.md).
 
-Code, pushes and pull requests use
-[repos.openape.ai/patrick/monorepo](https://repos.openape.ai/patrick/monorepo).
-[Native issues](https://repos.openape.ai/patrick/monorepo/issues) own development
-discussion and resolution. Forgejo retains the read-only issue archive and CI;
-Forgejo and GitHub remain code mirrors. `gh` is not a client for the native forge.
-Use [the issue CLI](docs/operations/native-issues.md) with your DDISA identity.
+Code, pushes, pull requests and issues use
+[github.com/openape-ai/openape](https://github.com/openape-ai/openape) via `gh`.
+Issues and PRs from the retired repos.openape.ai and git.openape.ai forges are
+archived in the private `openape-ai/openape-history` repository.
 General tasks/reminders remain in Tasks and approved proposals remain in Plans;
 link their canonical issue instead of copying its lifecycle.
 
@@ -24,9 +22,9 @@ link their canonical issue instead of copying its lifecycle.
    App changes also require an app build and relevant tests. E2E/layout remain
    manual; deployments require full `pnpm check:ci`.
    [Check details and logs](docs/operations/checks.md).
-5. Push the branch to the canonical remote and open a native PR. Include the
-   complete native issue URL, behavior change and actual validation evidence.
-   Add an explicit issue/PR relation; closing keywords do not change issue state.
+5. Push the branch to the canonical remote and open a GitHub PR. Include the
+   complete issue URL, behavior change and actual validation evidence.
+   Add an explicit issue/PR relation.
 6. Review the exact source/target pair and local check evidence. CI is paused
    by owner decision (issue 1448); do not reactivate it or wait for external
    checks while paused. Merge with the reviewed pair; if either changes,

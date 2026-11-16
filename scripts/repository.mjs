@@ -26,7 +26,7 @@ export function resolveTruthRemote(remotes, config = repository) {
   if (matches.length === 1) return matches[0]
   throw new Error(matches.length
     ? `Ambiguous canonical remotes: ${matches.join(', ')}. Use origin for ${config.url}.`
-    : `No remote points at ${config.url}. Check git remote -v; do not use a mirror as the base.`)
+    : `No remote points at ${config.url}. Check git remote -v; do not use a retired forge as the base.`)
 }
 
 export function gitRemotes(cwd = process.cwd()) {
@@ -36,7 +36,7 @@ export function gitRemotes(cwd = process.cwd()) {
 
 export function assertPushTarget(url, config = repository) {
   if (repositoryIdentity(url) !== repositoryIdentity(config.url)) {
-    throw new Error(`Push rejected: development pushes belong on ${config.url}. Mirrors are populated by the forge.`)
+    throw new Error(`Push rejected: pushes belong on ${config.url}. The former forges repos.openape.ai and git.openape.ai are retired.`)
   }
 }
 

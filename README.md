@@ -42,5 +42,5 @@ MIT
 ## Preserved legacy applications
 
 Nest, Troop, ape-agent, CRM, Chat with their CLIs, and Question Service are maintained separately in
-[OpenApe Legacy](https://repos.openape.ai/patrick/legacy). See the
+[OpenApe Legacy](https://github.com/patrick-hofmann/legacy). See the
 [extraction and runtime boundary](docs/operations/legacy-apps.md).
