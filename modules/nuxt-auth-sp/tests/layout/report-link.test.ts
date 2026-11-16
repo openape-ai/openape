@@ -9,7 +9,7 @@ it('keeps reporting hidden until rollout, then opens the selected product withou
     await wrapper.setProps({ enabled: true })
     const link = wrapper.get('a')
     expect(link.text()).toBe('Report a problem')
-    expect(link.attributes()).toMatchObject({ href: 'https://repos.openape.ai/report?product=plans', target: '_blank', rel: 'noopener noreferrer', referrerpolicy: 'no-referrer' })
+    expect(link.attributes()).toMatchObject({ href: 'https://github.com/openape-ai/openape/issues/new?title=%5Bplans%5D%20', target: '_blank', rel: 'noopener noreferrer', referrerpolicy: 'no-referrer' })
     const element = link.element as HTMLAnchorElement
     element.focus()
     expect(document.activeElement).toBe(element)

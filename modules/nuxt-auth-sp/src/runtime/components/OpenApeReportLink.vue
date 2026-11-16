@@ -2,7 +2,7 @@
 import { computed } from 'vue'
 
 const props = withDefaults(defineProps<{ product: string, enabled?: boolean }>(), { enabled: false })
-const destination = computed(() => `https://repos.openape.ai/report?product=${encodeURIComponent(props.product)}`)
+const destination = computed(() => `https://github.com/openape-ai/openape/issues/new?title=${encodeURIComponent(`[${props.product}] `)}`)
 </script>
 
 <template>
