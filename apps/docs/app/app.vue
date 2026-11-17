@@ -49,7 +49,7 @@ provide('navigation', navigation)
       />
     </ClientOnly>
     <footer v-if="useRuntimeConfig().public.issueReportingEnabled" class="border-t border-zinc-800 p-3 text-center text-sm">
-      <a href="https://repos.openape.ai/report?product=docs" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" class="text-amber-500 hover:underline">Report a problem</a>
+      <a href="https://github.com/openape-ai/openape/issues/new?title=%5Bdocs%5D%20" target="_blank" rel="noopener noreferrer" referrerpolicy="no-referrer" class="text-amber-500 hover:underline">Report a problem</a>
     </footer>
   </UApp>
 </template>
