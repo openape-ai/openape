@@ -1,3 +1,9 @@
+# Bounded cleanup cache inventory — issue 1562
+
+- Issue: https://repos.openape.ai/patrick/monorepo/issues/1562. Branch `bugfix/issue-1562-cleanup-cache-inventory`, base `710aa623`.
+- Replace formatted buildx cache inventory with raw local Engine data, bind inventory/pruning to the same default engine builder, and reject ambiguous flags/sizes.
+- Verify the existing operations suite and read-only production dry runs. Production installation and deletion remain separately unapproved.
+
 # Three shape tiers — issue 1553
 
 - Issue: https://repos.openape.ai/patrick/monorepo/issues/1553. Owner approved plan revision 2 on 2026-11-03 (“das passt - freigabe erteilt - mach das so in einer frischen session”), M1–M5 including IdP deployment, live instance import and domain-shape acceptance: https://report.openape.ai/d/01M6HEWRG6PTBAAFP83AAQ1G6Y. Branch `feature/issue-1553-shape-tiers`, worktree `~/.t3/worktrees/openape-monorepo/feature-shape-tiers`, base `e5b327aa`.
