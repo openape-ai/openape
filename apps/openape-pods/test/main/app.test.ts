@@ -127,7 +127,7 @@ describe('main process menus', () => {
     main = await startMain({ OPENAPE_PODS_ISSUE_REPORTING_ENABLED: '1' })
     const report = items(main.menu() as Item[]).find(item => item.id === 'report-problem')!
     report.click!()
-    expect(main.shell.openExternal).toHaveBeenCalledExactlyOnceWith('https://repos.openape.ai/report?product=pods')
+    expect(main.shell.openExternal).toHaveBeenCalledExactlyOnceWith('https://github.com/openape-ai/openape/issues/new?title=%5Bpods%5D%20')
   })
 
   it('rebuilds native menus and dialogs in German after a language switch', async () => {

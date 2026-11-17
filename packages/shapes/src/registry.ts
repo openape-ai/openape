@@ -3,8 +3,8 @@ import { homedir } from 'node:os'
 import { join } from 'node:path'
 import type { RegistryEntry, RegistryIndex } from './types.js'
 
-// The canonical repository (repos.openape.ai/patrick/shapes-registry) serves no
-// anonymous raw files; its public GitHub mirror is updated on every push.
+// The canonical repository is github.com/openape-ai/shapes-registry; read the
+// registry index anonymously from its raw main branch.
 const REGISTRY_URL = process.env.SHAPES_REGISTRY_URL
   ?? 'https://raw.githubusercontent.com/openape-ai/shapes-registry/main/registry.json'
 
