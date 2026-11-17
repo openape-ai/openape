@@ -72,6 +72,42 @@ assert select([],[],set(),now)==[]
 `)
 })
 
+test('cleanup consumes raw engine cache bytes and dates and refuses ambiguous builders', () => {
+  python(`
+import json
+from unittest.mock import patch
+from bounded_cleanup import inventory, select
+old='2020-01-01T00:00:00Z'
+cache=dict(ID='oldcache',InUse=False,Shared=False,Size=4096,CreatedAt=old,LastUsedAt=old)
+builder=dict(Name='default',Driver='docker',Nodes=[dict(Endpoint='default')])
+calls=[]
+def command(*args):
+    calls.append(args)
+    if args[:3]==('docker','context','inspect'): return json.dumps('unix:///var/run/docker.sock')
+    if args[:3]==('docker','buildx','ls'): return json.dumps(builder)
+    if args[:3]==('docker','ps','-aq'): return 'container'
+    if args[:2]==('docker','inspect'): return json.dumps([dict(Image='protected')])
+    if args[:3]==('docker','image','ls'): return 'protected'
+    if args[:3]==('docker','image','inspect'): return json.dumps([dict(Id='protected',Created=old,Size=100,RepoTags=[],RepoDigests=[])])
+    if args[0]=='curl': return json.dumps(dict(BuildCache=[cache]))
+    raise AssertionError(args)
+with patch('bounded_cleanup.run',command):
+    assert inventory(dict(protectedImages=['protected']))==[dict(kind='cache',id='oldcache',bytes=4096)]
+    assert any('/system/df' in args[-1] for args in calls)
+    builder['Driver']='docker-container'
+    calls.clear()
+    try: inventory(dict(protectedImages=['protected']))
+    except RuntimeError as error: assert 'local default' in str(error)
+    else: raise AssertionError('Foreign builder accepted')
+    assert not any(args[0]=='curl' for args in calls)
+for replacement in [dict(Size='4.096kB'),dict(InUse=None),dict(InUse='false'),dict(Shared=0),dict(Size=True)]:
+    try: select([], [dict(cache,**replacement)], set(), 1793800000)
+    except RuntimeError: pass
+    else: raise AssertionError('Malformed cache accepted')
+assert select([], [dict(cache,InUse=True),dict(cache,Shared=True)], set(), 1793800000)==[]
+`)
+})
+
 test('retired containers must exist, stay stopped and never auto-restart', () => {
   python(`
 import json, datetime as dt
