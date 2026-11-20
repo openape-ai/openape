@@ -19,15 +19,15 @@
   },
   "dependencies": {
     "@iconify-json/lucide": "catalog:",
-    "@iconify-json/simple-icons": "^1.2.87",
-    "@iconify-json/vscode-icons": "^1.2.62",
+    "@iconify-json/simple-icons": "^1.2.102",
+    "@iconify-json/vscode-icons": "^1.2.98",
     "@libsql/client": "^0.17.4",
     "@nuxt/content": "^3.16.2",
-    "@nuxt/image": "^2.0.0",
+    "@nuxt/image": "^2.2.1",
     "@nuxt/ui": "catalog:",
     "@nuxtjs/mcp-toolkit": "^0.16.1",
-    "@nuxtjs/mdc": "^0.23.2",
-    "@vueuse/core": "^14.3.0",
+    "@nuxtjs/mdc": "^0.23.3",
+    "@vueuse/core": "^14.4.0",
     "h3": "catalog:",
     "minimark": "^0.2.0",
     "nuxt": "catalog:",
@@ -39,7 +39,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@nuxt/eslint": "^1.16.0",
+    "@nuxt/eslint": "^1.17.0",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "vue-tsc": "catalog:"

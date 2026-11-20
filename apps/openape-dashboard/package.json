@@ -17,17 +17,17 @@
     "@libsql/client": "^0.14.0",
     "@nuxt/ui": "catalog:",
     "@openape/nuxt-auth-sp": "workspace:*",
-    "@tailwindcss/typography": "^0.5.19",
+    "@tailwindcss/typography": "^0.5.20",
     "drizzle-orm": "catalog:",
     "h3": "catalog:",
     "marked": "catalog:",
     "nuxt": "catalog:",
-    "sanitize-html": "^2.18.0",
+    "sanitize-html": "^2.18.2",
     "tailwindcss": "catalog:",
     "ulid": "catalog:"
   },
   "devDependencies": {
-    "@types/sanitize-html": "^2.13.0",
+    "@types/sanitize-html": "^2.16.2",
     "typescript": "catalog:",
     "vitest": "catalog:",
     "vue-tsc": "catalog:"
