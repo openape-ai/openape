@@ -21,7 +21,7 @@ Regeln:
    modules → apps, mit dem Dependency-Fluss); (c) Laufzeit-Topologie: was
    läuft wo (Prod auf chatty, lokaler compose-Stack, nest/agents) und wie
    eine Anfrage fließt (ein Auth-Flow als Beispiel, Schritt für Schritt);
-   (d) wie Code zu Prod kommt (CI auf git.openape.ai, tested-image-Deploy);
+   (d) wie Code zu Prod kommt (GitHub-PR mit lokalem Pre-Push-Gate, tested-image-Deploy);
    (e) die nicht offensichtlichen Entscheidungen mit ihrem Warum (z. B.
    Guides aus E2E-Tests, Story-Kanon, COPY-only-Images) — je 2–3 Sätze,
    keine Essays.
