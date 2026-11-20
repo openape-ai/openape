@@ -34,7 +34,7 @@
     "@openape/grants": "workspace:*",
     "consola": "catalog:",
     "shell-quote": "catalog:",
-    "smol-toml": "^1.7.0"
+    "smol-toml": "^1.9.1"
   },
   "devDependencies": {
     "@types/node": "catalog:",

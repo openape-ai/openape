@@ -42,7 +42,7 @@
     "@simplewebauthn/browser": "^13.3.0",
     "defu": "catalog:",
     "jose": "catalog:",
-    "uqr": "^0.1.2"
+    "uqr": "^0.1.3"
   },
   "peerDependencies": {
     "h3": "^1.15.11",

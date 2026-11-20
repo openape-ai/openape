@@ -28,11 +28,11 @@
   },
   "dependencies": {
     "@openape/core": "workspace:*",
-    "node-forge": "^1.4.0",
-    "smol-toml": "^1.7.0"
+    "node-forge": "1.4.1",
+    "smol-toml": "^1.9.1"
   },
   "devDependencies": {
-    "@types/bun": "^1.3.14",
+    "@types/bun": "^1.4.4",
     "@types/node": "catalog:",
     "@types/node-forge": "^1.3.14",
     "tsup": "catalog:",
