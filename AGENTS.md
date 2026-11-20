@@ -49,7 +49,7 @@ supply-chain quarantine and targeted overrides in `pnpm-workspace.yaml`.
   Retire an existing assertion only after its replacement proves the same behavior.
 - Automatic CI is paused by the October 7, 2026 owner decision
   (issue 1448, PR 296; confirmed for GitHub on November 16, 2026).
-  `.github/workflows/ci.yml` runs only on manual dispatch; inspect actual configuration before making a live-state claim.
+  GitHub workflows and Dependabot were removed on November 20, 2026; inspect actual configuration before making a live-state claim.
   Merge after the required local checks without waiting for automatic CI.
   Do not re-enable CI or protection without a new owner decision. The local
   pre-push affected unit gate remains mandatory; deployments require `pnpm check:ci`.
