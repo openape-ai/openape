@@ -154,8 +154,9 @@ IdP token for SP-scoped tokens via RFC 8693 (`packages/cli-auth`).
    source edits directly on `main`. The former forges repos.openape.ai (ape-git)
    and git.openape.ai (Forgejo) were retired in November 2026; their issue and
    PR history is in the private openape-ai/openape-history repository.
-2. **CI** (`.github/workflows/ci.yml`): manual dispatch only by owner decision
-   (issue 1448); the local pre-push hook runs the affected unit contract.
+2. **CI**: none on GitHub; workflows and Dependabot were removed in November
+   2026 by owner decision (after issue 1448 paused CI); the local pre-push hook
+   runs the affected unit contract.
    Coolify PR preview deployments were retired in issue 1556.
 3. **Tested-image deploy** (`scripts/deploy-image.mjs`,
    `pnpm run deploy:image <target…|--all>`): the maintainer's Mac builds the
