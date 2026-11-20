@@ -58,7 +58,7 @@ apps/             # Deployable applications (private, not published)
   openape-timetrack/  # timetrack.openape.ai — time tracking → self-hosted (chatty)
   openape-monitor/    # monitor.openape.ai — uptime monitor (checks + mail alerts) → self-hosted (chatty)
   openape-crm/        # crm.openape.ai — Deal-Pipeline, Kontakte, Notizen → self-hosted (chatty)
-  openape-git/        # repos.openape.ai — ape-git, DDISA-natives Git-Forge → self-hosted (Forge-VM)
+  openape-git/        # ape-git, DDISA-native Git forge — retired 2026-11 (code kept, not deployed)
   openape-ape-agent/  # @openape/ape-agent — per-agent runtime process
   openape-chat-cli/   # @openape/ape-chat — CLI for chat.openape.ai
   openape-nest/       # @openape/nest — local control-plane daemon
@@ -158,7 +158,7 @@ Ablauf pro Target: turbo build (.output, Mac, warme Caches) → COPY-only amd64-
 | `pr`         | 3014 | openape-pr             |
 | `dashboard`  | 3022 | openape-dashboard      |
 | `crm`        | 3024 | openape-crm            |
-| `git`        | 3026 | openape-git (Host `forge` = eigene Forge-VM, `compose/forge.yml`, eigenes `compose/forge-package.Dockerfile` mit git) |
+| `git`        | 3026 | openape-git (stillgelegt seit 2026-11, nicht mehr deployt) |
 
 **Docs-Site (eigener Pfad):** `docs.openape.ai` läuft nicht über `deploy:image`, sondern über `pnpm run deploy:docs-site` (`scripts/deploy-docs-site.mjs` + `compose/docs-site.yml`). Gleiches Muster — `pnpm turbo run build --filter docs` → `apps/docs/.output/public` in ein amd64-Caddy-Image (`compose/site.Dockerfile`, Image `site-docs`) → Smoke-Test → push → chatty pullt. Der Container hängt am `coolify`-Netz hinter Traefik (keine publizierten Ports), compose-Projekt `site-docs` unter `/home/openape/prod-site-docs`, Tag-Pin `DOCS_TAG` / Rollback `DOCS_TAG_PREV`.
 
@@ -223,7 +223,7 @@ Siehe `CONTRIBUTING.md` für den vollständigen Workflow.
 1. **Nie Source-Code auf `main` editieren** — `/issue-start <nr>` zum Starten verwenden
 2. **Branch-Naming:** `<type>/issue-<nr>-<kurzbeschreibung>`
 3. **PRs required** — CI muss grün sein vor Merge
-4. **Hosts (Stand 2026-08-29):** Code + Push + PRs auf **repos.openape.ai** (ape-git, `patrick/monorepo`); **Issues** weiterhin auf git.openape.ai (ape-git hat keinen Tracker); **CI** weiterhin Forgejo Actions auf dem Mirror. GitHub ist überall nur Mirror. `gh` funktioniert gegen keinen der beiden.
+4. **Hosts (seit 2026-11-16):** Code, Push, PRs und Issues auf **GitHub** (`openape-ai/openape`, mit `gh`). repos.openape.ai (ape-git) und git.openape.ai (Forgejo) sind stillgelegt und leiten nur noch auf GitHub weiter; ältere Issues/PRs liegen im privaten `openape-ai/openape-history`. Online-CI ist pausiert; das PR-Gate ist der lokale Pre-Push-Check (siehe `AGENTS.md`).
 4. **Alle Änderungen über Branch + PR.** Der serverseitige Branchschutz gilt auch für Konfigurationsänderungen und Admin-Pushes.
 
 **Enforcement:** Lokale Hooks nutzen den gemeinsamen Prüfvertrag; serverseitige Regeln und der protokollierte Wiederherstellungsweg stehen in `docs/operations/branch-protection.md`. GitHub ist kein Merge-Gate für dieses Repository.
@@ -254,7 +254,7 @@ Siehe `CONTRIBUTING.md` für den vollständigen Workflow.
 
 ## DDISA Protocol Compliance
 
-OpenApe implementiert das DDISA-Protokoll. Die formale Spezifikation liegt im Repo `openape-ai/protocol` auf **git.openape.ai** (lokal: `~/Companies/private/repos/openape/protocol`) — das Protokoll-Repo ist noch nicht nach ape-git umgezogen, anders als das Monorepo. Spec-Änderungen gehen als PR nach git.openape.ai, nie nach GitHub (GitHub ist überall nur Mirror).
+OpenApe implementiert das DDISA-Protokoll. Die formale Spezifikation liegt im Repo [`openape-ai/protocol`](https://github.com/openape-ai/protocol) auf GitHub (lokal: `~/Companies/private/repos/openape/protocol`). Spec-Änderungen gehen als PR dorthin.
 
 **Pflicht bei jeder Änderung an protokollrelevanten Dateien:**
 

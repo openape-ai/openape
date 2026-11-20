@@ -17,7 +17,7 @@ Each persona has a specific mandate:
 
 Stay in your lane. For work outside your mandate, file a task for the right persona.
 
-Development problems and implementation work belong to [native issues](https://repos.openape.ai/issues). Tasks below describe general work and reminders. A task may link an issue, but must not duplicate its discussion or resolution status. Approved implementation proposals remain in Plans.
+Development problems and implementation work belong to [GitHub issues](https://github.com/openape-ai/openape/issues). Tasks below describe general work and reminders. A task may link an issue, but must not duplicate its discussion or resolution status. Approved implementation proposals remain in Plans.
 
 ## Finding Your Tasks
 
@@ -124,33 +124,30 @@ If your task requires code changes:
 
 ### 1. Find Related Issues
 
-From your own monorepo checkout, activate the pinned Node version and use the authenticated native CLI:
+Issues live at [github.com/openape-ai/openape/issues](https://github.com/openape-ai/openape/issues). Use `gh` from your monorepo checkout:
 
 ```bash
-. ./scripts/activate-node.sh
-pnpm git:cli -- issue list --all-repos --state open --assignee me
-pnpm git:cli -- issue show <number> --repo patrick/monorepo
+gh issue list --repo openape-ai/openape --state open --assignee @me
+gh issue view <number> --repo openape-ai/openape
 ```
 
-Results use your live repository or individual reporter access. An assignment does not grant access. Ask the repository owner for the necessary permission when access is missing; do not switch to a mirror token.
+Issues and PRs from before November 16, 2026 are archived in the private `openape-ai/openape-history` repository. An assignment does not grant access; ask the repository owner for missing permissions.
 
 ### 2. Create a Worktree and Verify Changes
 
 Read `AGENTS.md` in the selected checkout. Create an isolated branch from canonical main, preserve other worktrees, and follow its lint, typecheck, build and behavioral test gates. The collection's `openape-monorepo` directory may be a bare Git directory: create a working checkout before running package or CLI scripts there.
 
-### 3. Push and Open a Native PR
+### 3. Push and Open a Pull Request
 
 ```bash
 git push -u origin feature/issue-<number>-<description>
-pnpm git:cli -- pr create --repo patrick/monorepo --source feature/issue-<number>-<description> --title 'Describe the behavior change' --body-file /tmp/pr-body.md
-pnpm git:cli -- issue link <number> --repo patrick/monorepo --pull-repo patrick/monorepo --pull-number <pr-number>
+gh pr create --repo openape-ai/openape --head feature/issue-<number>-<description> --title 'Describe the behavior change' --body-file /tmp/pr-body.md
 ```
 
-Write the full native issue URL and actual validation evidence in the PR body. Review the exact source/target SHAs and require the protected branch's external checks. Follow the current repository merge authorization; a linked PR does not close its issue. After verifying resolution, read the latest issue version and explicitly close it:
+Write the full issue URL and actual validation evidence in the PR body. Follow the current repository merge authorization in `AGENTS.md`. A merged PR closes its issue only when the body contains a closing keyword (`Fixes #<number>`); otherwise close it explicitly after verifying the resolution:
 
 ```bash
-pnpm git:cli -- issue show <number> --repo patrick/monorepo
-pnpm git:cli -- issue close <number> --repo patrick/monorepo --expected-version <current-version>
+gh issue close <number> --repo openape-ai/openape --comment 'Resolved by #<pr-number>'
 ```
 
 Keep umbrella issues open while approved work remains. Update a linked reminder only when that separate reminder is complete.
@@ -159,10 +156,10 @@ Keep umbrella issues open while approved work remains. Update a linked reminder 
 
 | Resource | URL |
 |----------|-----|
-| Development issues | https://repos.openape.ai/issues |
-| Product problem reporting | https://repos.openape.ai/report |
+| Development issues | https://github.com/openape-ai/openape/issues |
+| Product problem reporting | https://github.com/openape-ai/openape/issues/new |
 | General tasks and reminders | https://tasks.openape.ai |
-| Code and pull requests | https://repos.openape.ai/patrick/monorepo |
+| Code and pull requests | https://github.com/openape-ai/openape |
 | Implementation proposals | https://plans.openape.ai |
 | Company overview | https://troop.openape.ai |
 

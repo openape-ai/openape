@@ -2,7 +2,7 @@
 
 This document explains how tasks flow autonomously in OpenApe Werkstatt — from creation to completion without manual intervention.
 
-Development issue discussion and resolution belong to [native issues](https://repos.openape.ai/issues). This task workflow covers general work and reminders. Link a development issue when needed, without copying its lifecycle. Plans owns implementation proposals. Existing worker pauses and company exclusions remain in force.
+Development issue discussion and resolution belong to [GitHub issues](https://github.com/openape-ai/openape/issues). This task workflow covers general work and reminders. Link a development issue when needed, without copying its lifecycle. Plans owns implementation proposals. Existing worker pauses and company exclusions remain in force.
 
 ## Overview
 
@@ -155,14 +155,14 @@ Creates a new task:
 
 ## Working with Code
 
-For development work, follow the [native contribution workflow](how-to-contribute.md#working-with-code) and the selected checkout's `AGENTS.md`.
+For development work, follow the [contribution workflow](how-to-contribute.md#working-with-code) and the selected checkout's `AGENTS.md`.
 
-1. Query native issues using `pnpm git:cli -- issue list --all-repos --state open --assignee me` from a working checkout with the pinned Node version active. The API/CLI uses DDISA and live access checks.
+1. Query issues using `gh issue list --repo openape-ai/openape --state open --assignee @me`.
 2. Read the issue, its linked plan and the existing implementation. Create an isolated feature branch from canonical main.
 3. Make targeted changes and run the repository's required checks.
-4. Push to repos.openape.ai and create a native PR with the full issue URL and validation evidence. Add the reciprocal relation with `pnpm git:cli -- issue link <number> --pull-repo patrick/monorepo --pull-number <pr-number>`.
-5. Preserve exact-source review and external check gates. Follow the worker's existing merge authorization. Forgejo remains the CI/code mirror and frozen issue archive; never open or mutate monorepo issues there.
-6. After verified resolution, explicitly close the issue using its current version. A merged PR does not close it automatically. Update a linked task/reminder only for its independent completion criteria.
+4. Push to GitHub (`origin`) and create a PR with `gh pr create`, including the full issue URL and validation evidence.
+5. Preserve exact-source review and the local check gate from `AGENTS.md`. Follow the worker's existing merge authorization. The former forges repos.openape.ai and git.openape.ai are retired; never push or file issues there.
+6. After verified resolution, close the issue (`gh issue close`) unless the PR body already closed it with `Fixes #<number>`. Update a linked task/reminder only for its independent completion criteria.
 
 Do not resume a paused worker or remove company exclusions as part of changing issue endpoints. Historical task and plan links remain usable through the archive compatibility route; do not rewrite historical conversation payloads.
 
@@ -223,7 +223,7 @@ file_write --path ~/repos/openape/docs/autonomous-workflow.md --content "..."
 # ... git operations ...
 
 # 6. Agent reports results
-printf '%s' "Created docs/autonomous-workflow.md. PR: https://repos.openape.ai/patrick/monorepo/pulls/<number>" | \
+printf '%s' "Created docs/autonomous-workflow.md. PR: https://github.com/openape-ai/openape/pull/<number>" | \
   ape-tasks edit 01KVGGRFA9CGC9XNKHR8Z0B8BX --notes-from-stdin
 
 # 7. Agent completes the task
