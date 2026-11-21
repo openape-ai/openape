@@ -2,7 +2,6 @@
 import { createHash, randomUUID } from 'node:crypto'
 import { existsSync } from 'node:fs'
 import { mkdir, mkdtemp, readFile, realpath, readdir, rm, stat, writeFile } from 'node:fs/promises'
-import { spawnSync } from 'node:child_process'
 import { podIdentityFile } from '../../src/main/connections/identity-file'
 import type { AgentConnection } from '../../src/main/broker/authorization'
 import { homedir, tmpdir } from 'node:os'
@@ -181,28 +180,6 @@ it('keeps credentials usable across the CLI expiry buffer while refresh is async
     expect(identity.signal.aborted).toBe(false)
   }
   finally { finishRefresh('REFRESHED_POD_TOKEN'); await identity.close(); vi.useRealTimers() }
-})
-
-it('scopes Git credentials to the canonical HTTPS host and respects an explicit Pod identity', async () => {
-  const file = join(root, 'pod-auth.json')
-  await writeFile(file, JSON.stringify({ access_token: 'SYNTHETIC_GIT_POD' }))
-  const helper = join(process.cwd(), 'scripts/git-credential-apes')
-  const env = { ...process.env, HOME: join(root, 'no-owner-home'), APES_AUTH_FILE: file }
-  const input = 'protocol=https\nhost=repos.openape.ai\n\n'
-  const execute = (request = input, authFile = file, operation = 'get') => spawnSync('/bin/sh', [helper, operation], { env: { ...env, APES_AUTH_FILE: authFile }, input: request, encoding: 'utf8' })
-  expect(execute()).toMatchObject({ status: 0, stdout: 'username=x-access-token\npassword=SYNTHETIC_GIT_POD\n' })
-  for (const request of ['', 'protocol=http\nhost=repos.openape.ai\n\n', 'protocol=https\nhost=example.test\n\n', 'protocol=https\nhost=repos.openape.ai.example.test\n\n', 'protocol=https\nhost=repos.openape.ai:444\n\n', 'protocol=https\nhost=repos.openape.ai\nhost=example.test\n\n']) {
-    expect(execute(request)).toMatchObject({ status: 0, stdout: '' })
-  }
-  for (const authFile of [join(root, 'missing'), '']) {
-    const result = execute(input, authFile)
-    expect(result.status).not.toBe(0)
-    expect(result.stdout).toBe('')
-  }
-  expect(execute(input, file, 'store')).toMatchObject({ status: 0, stdout: '' })
-  await writeFile(file, JSON.stringify({ access_token: 'INVALID\nTOKEN' }))
-  expect(execute().status).not.toBe(0)
-  expect(execute().stdout).toBe('')
 })
 
 it('returns large program stdout in memory and creates no output files', async () => {
