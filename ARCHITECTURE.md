@@ -75,7 +75,8 @@ publishes the `@openape/*` packages to npm in dependency order.
 
 ### Production (host "chatty")
 
-The web apps run as Docker containers from `registry.openape.ai`, orchestrated
+The web apps run as Docker containers (images named `registry.openape.ai/…`,
+uploaded with `docker pussh`), orchestrated
 by `compose/chatty.yml` (compose project `openape-prod`), each publishing on
 `127.0.0.1:<port>` behind Traefik. The deploy target names are the ones
 `pnpm run deploy:image` takes:
@@ -162,9 +163,11 @@ IdP token for SP-scoped tokens via RFC 8693 (`packages/cli-auth`).
    `pnpm run deploy:image <target…|--all>`): the maintainer's Mac builds the
    app with warm turbo caches, packages the `.output` into a COPY-only amd64
    image (`compose/preview-package.Dockerfile`, tag `prod-<sha>`), smoke-tests
-   `/api/health` locally, pushes to `registry.openape.ai`, then chatty pulls
-   and restarts that one compose service. An external health gate follows;
-   on failure the tag pin (`<APP>_TAG_PREV`) is reverted automatically.
+   `/api/health` locally, uploads it into chatty's image store with
+   `docker pussh` (unregistry over SSH, only missing layers), then chatty
+   restarts that one compose service without pulling. An external health gate follows;
+   on failure the tag pin (`<APP>_TAG_PREV`) is reverted automatically; on
+   success chatty keeps only the `<APP>_TAG` and `<APP>_TAG_PREV` image tags.
    There is no build step on the prod host.
 
 ## Non-obvious decisions (read before changing things)

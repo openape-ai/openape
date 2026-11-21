@@ -136,14 +136,14 @@ The release script never commits or pushes. Do not publish an unmerged version.
 
 ## Deploy Flow
 
-**Prod = tested images** (seit 2026-06-10): die Web-Apps laufen als Container aus `registry.openape.ai`, orchestriert von `scripts/deploy-image.mjs` + `compose/chatty.yml` (auf chatty unter `/home/openape/prod/`, compose-Projekt `openape-prod`).
+**Prod = tested images** (seit 2026-06-10): die Web-Apps laufen als Container (Image-Namen `registry.openape.ai/…`, per `docker pussh` hochgeladen), orchestriert von `scripts/deploy-image.mjs` + `compose/chatty.yml` (auf chatty unter `/home/openape/prod/`, compose-Projekt `openape-prod`).
 
 ```bash
 pnpm run deploy:image <target...>   # free-idp | troop | chat | testrun | tasks | pr | plans | timetrack | monitor | dashboard | crm
 pnpm run deploy:image --all
 ```
 
-Ablauf pro Target: turbo build (.output, Mac, warme Caches) → COPY-only amd64-Image (`compose/preview-package.Dockerfile`, identisches Artefakt-Format wie die PR-Previews, Tag `prod-<sha>`) → lokaler Smoke-Test (`/api/health`) → push → chatty pullt + `compose up` → externes Health-Gate → bei Fehler automatischer Rollback auf `<APP>_TAG_PREV`. Kein Build auf chatty. Die Container mounten das bestehende `/home/openape/projects/<app>/shared` (gleicher Pfad, gleiche `.env`), nginx-Ports unverändert (`127.0.0.1:<port>`).
+Ablauf pro Target: turbo build (.output, Mac, warme Caches) → COPY-only amd64-Image (`compose/preview-package.Dockerfile`, identisches Artefakt-Format wie die PR-Previews, Tag `prod-<sha>`) → lokaler Smoke-Test (`/api/health`) → `docker pussh` nach `ubuntu@chatty` (nur fehlende Layer) → `compose up --pull never` → externes Health-Gate → bei Fehler automatischer Rollback auf `<APP>_TAG_PREV`, bei Erfolg bleiben auf chatty nur die Tags `<APP>_TAG` und `<APP>_TAG_PREV` dieses Images. Voraussetzung: `brew install psviderski/tap/docker-pussh` und Link nach `~/.docker/cli-plugins/docker-pussh`. Kein Build auf chatty. Die Container mounten das bestehende `/home/openape/projects/<app>/shared` (gleicher Pfad, gleiche `.env`), nginx-Ports unverändert (`127.0.0.1:<port>`).
 
 | Target       | Port | Image                  |
 |--------------|------|------------------------|
@@ -160,7 +160,7 @@ Ablauf pro Target: turbo build (.output, Mac, warme Caches) → COPY-only amd64-
 | `crm`        | 3024 | openape-crm            |
 | `git`        | 3026 | openape-git (stillgelegt seit 2026-11, nicht mehr deployt) |
 
-**Docs-Site (eigener Pfad):** `docs.openape.ai` läuft nicht über `deploy:image`, sondern über `pnpm run deploy:docs-site` (`scripts/deploy-docs-site.mjs` + `compose/docs-site.yml`). Gleiches Muster — `pnpm turbo run build --filter docs` → `apps/docs/.output/public` in ein amd64-Caddy-Image (`compose/site.Dockerfile`, Image `site-docs`) → Smoke-Test → push → chatty pullt. Der Container hängt am `coolify`-Netz hinter Traefik (keine publizierten Ports), compose-Projekt `site-docs` unter `/home/openape/prod-site-docs`, Tag-Pin `DOCS_TAG` / Rollback `DOCS_TAG_PREV`.
+**Docs-Site (eigener Pfad):** `docs.openape.ai` läuft nicht über `deploy:image`, sondern über `pnpm run deploy:docs-site` (`scripts/deploy-docs-site.mjs` + `compose/docs-site.yml`). Gleiches Muster — `pnpm turbo run build --filter docs` → `apps/docs/.output/public` in ein amd64-Caddy-Image (`compose/site.Dockerfile`, Image `site-docs`) → Smoke-Test → `docker pussh` → `compose up`. Der Container hängt am `coolify`-Netz hinter Traefik (keine publizierten Ports), compose-Projekt `site-docs` unter `/home/openape/prod-site-docs`, Tag-Pin `DOCS_TAG` / Rollback `DOCS_TAG_PREV`.
 
 **Fallback (dormant):** die alten systemd-Units (`openape-<app>.service`) sind disabled, aber intakt — Notfall: Container stoppen + `sudo systemctl start openape-<app>` (ubuntu-User). Der dazugehörige rsync/systemd-Deploy (`pnpm run deploy`, `scripts/deploy.mjs`) ist der Notfallpfad auf genau diese Units und kennt nur drei Targets: `troop`, `chat`, `free-idp` (je `scripts/deploy-<t>.sh`: build → rsync nach `releases/<TS>` → `current`-Symlink → `systemctl restart` → Health-Check). `docs` ist dort **kein** Target.
 
