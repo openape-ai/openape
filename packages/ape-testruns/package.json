@@ -42,10 +42,10 @@
     "@openape/proof-cli": "workspace:*",
     "citty": "^0.1.6",
     "htmlparser2": "10.1.0",
-    "postcss": "8.5.25",
+    "postcss": "8.5.32",
     "postcss-value-parser": "4.2.0",
     "marked": "catalog:",
-    "sanitize-html": "^2.18.0",
+    "sanitize-html": "^2.18.2",
     "ajv": "8.20.0",
     "ajv-formats": "3.0.1"
   },
@@ -55,7 +55,7 @@
     "typescript": "catalog:",
     "vitest": "catalog:",
     "@openape/report-contracts": "workspace:*",
-    "@types/sanitize-html": "^2.13.0"
+    "@types/sanitize-html": "^2.16.2"
   },
   "engines": {
     "node": ">=20"
