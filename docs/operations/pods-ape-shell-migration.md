@@ -52,7 +52,7 @@ workspace and assigned directories and exposes only explicit pinned inputs.
 
 Maintained tool: `https://git.openape.ai/delta-mind/o365-cli.git`, candidate branch
 `feature/pods-protected-archive`, base `dfc306e30b50bbaab33c965007e8fd72894ce36a`.
-Registry: `https://repos.openape.ai/patrick/shapes-registry.git`, branch
+Registry: `https://github.com/openape-ai/shapes-registry.git`, branch
 `feature/issue-1497-protected-mail`, base `958d342fcf263edae049d50907b99539cf33def5`.
 Existing primary checkout changes are preserved.
 

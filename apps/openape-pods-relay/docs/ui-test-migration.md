@@ -1,6 +1,6 @@
 # Inbox UI verification migration
 
-Issue: https://repos.openape.ai/patrick/monorepo/issues/1485
+Issue: https://github.com/openape-ai/openape-history/issues/1968
 
 Frozen source: `95d1083abfb9de07ad8edf5bb16c71e06207c5fd`.
 Scope: `apps/openape-pods-relay` only, approved UI migration revision 1.

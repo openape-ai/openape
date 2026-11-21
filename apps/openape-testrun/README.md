@@ -93,7 +93,7 @@ Back up the router file and inspect its current contents before a targeted atomi
 
 ## Pods integration
 
-[Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3HW6FG47VR534XC5EAFNS1R) · [issue 1397](https://repos.openape.ai/patrick/monorepo/issues/1397).
+[Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3HW6FG47VR534XC5EAFNS1R) · [issue 1397](https://github.com/openape-ai/openape-history/issues/1577).
 
 The existing `Morgenbriefing · Mail-Prüfung` workflow (`5f7ea0d7-1f9c-4c74-8c8a-afd513950001`) owns daily 07:00 Europe/Vienna. The sender is `991849f7-b612-4cf9-8201-5b78b4a12e55`. Its standalone daily schedule stays disabled. The mail review's 60-second approval processor remains enabled. `Daily action website` stays paused.
 

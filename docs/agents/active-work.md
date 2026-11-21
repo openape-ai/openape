@@ -1,12 +1,12 @@
 # Bounded cleanup cache inventory — issue 1562
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1562. Branch `bugfix/issue-1562-cleanup-cache-inventory`, base `710aa623`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2185. Branch `bugfix/issue-1562-cleanup-cache-inventory`, base `710aa623`.
 - Replace formatted buildx cache inventory with raw local Engine data, bind inventory/pruning to the same default engine builder, and reject ambiguous flags/sizes.
 - Verify the existing operations suite and read-only production dry runs. Production installation and deletion remain separately unapproved.
 
 # Three shape tiers — issue 1553
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1553. Owner approved plan revision 2 on 2026-11-03 (“das passt - freigabe erteilt - mach das so in einer frischen session”), M1–M5 including IdP deployment, live instance import and domain-shape acceptance: https://report.openape.ai/d/01M6HEWRG6PTBAAFP83AAQ1G6Y. Branch `feature/issue-1553-shape-tiers`, worktree `~/.t3/worktrees/openape-monorepo/feature-shape-tiers`, base `e5b327aa`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2161. Owner approved plan revision 2 on 2026-11-03 (“das passt - freigabe erteilt - mach das so in einer frischen session”), M1–M5 including IdP deployment, live instance import and domain-shape acceptance: https://report.openape.ai/d/01M6HEWRG6PTBAAFP83AAQ1G6Y. Branch `feature/issue-1553-shape-tiers`, worktree `~/.t3/worktrees/openape-monorepo/feature-shape-tiers`, base `e5b327aa`.
 - Resolution personal > domain > IdP-wide (`scopedShapeStore`); overridden shapes drop out with their tested digests; only `pod-runtime`, `pod-http`, `pod-ssh` stay reserved. Personal and domain grants bind tier and digest (`adapter_owner`, new `adapter_domain`); IdP-wide grants keep carrying over. One write path `POST /api/shapes/import?scope=…` (dry run, all or nothing, prune, `shape_changes` audit); new table `domain_shapes`; `apes shapes import` and `--scope`; `/shapes` tabs and the grant card tier marker.
 - Evidence: every new refusal test fails on `e5b327aa` (grants import, 6 module cases plus the import suite, 7 CLI cases). Cross-model review (GPT-6 Astra, Claude Fable 5.1) of `b8b9d26e`/`83b1bc34`: fixed with tests that fail without the fix — overridden IdP-wide grants refused on token/approve, serialized shape writes, per-shape audit lookup, no token fragments in `apes --debug`, current-digest-only loss counts, descriptions kept on single publish, card state after a personal override; the CLI provenance read never runs checkout git helpers or filters (automated security review). Not changed: the domain tab derives write access from the history answer. Suites: grants 413, nuxt-auth-idp 898 + 3 Chrome cases (light/dark, 1280/390 screenshots inspected), apes 14 shape cases, free IdP store 2; affected unit gate passed on `4c421c64`.
 - Rollout: PR 527 merged as `2ab5b768` and deployed (`prod-2ab5b768`, DB backup `shared/backups/issue-1553-shape-tiers-20261103T211357Z`); version PR 528 merged as `93067193` (core 1.1.0, grants 0.15.0, shapes 0.10.1, proxy 0.4.12, agent-runtime 0.2.11, apes 3.1.0). Live IdP-wide import of shapes-registry `18cdfdc` on 2026-11-03: dry run 32 unchanged, `pods-mail` rules changed, no grant affected; apply imported 1 change; repeat reported 33 unchanged. The management token came from the IdP server environment (the owner's vault holds no such secret) and appeared in no output. Domain acceptance: `patrick@hofmann.eco` became root admin of `hofmann.eco` (TXT `_openape-admin-id-openape-ai.hofmann.eco`); domain shape `hostname` (`SHA-256:d98c31a0…`) imported, repeat unchanged; grant `77cb54c8` (`adapter_domain: hofmann.eco`) approved always, executed, and a repeated `apes run -- hostname` reused it without a new request. `pnpm seed:shapes` is removed.
@@ -14,37 +14,37 @@
 
 # Owner-published shapes — issue 1551
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1551. Owner approved plan revision 4 in chat on 2026-11-03 (“passt - dann setze das jetzt bitte um”, then “mach den plan gleich von anfang bis ende”): https://report.openape.ai/d/01M6G8D4YN6YKXFP135VC4CE2K?v=4. Branch `feature/issue-1551-owner-shapes`, worktree `openape-monorepo.worktrees/openape-monorepo-feature-issue-1551-owner-shapes`, canonical base `f9d995ff`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2157. Owner approved plan revision 4 in chat on 2026-11-03 (“passt - dann setze das jetzt bitte um”, then “mach den plan gleich von anfang bis ende”): https://report.openape.ai/d/01M6G8D4YN6YKXFP135VC4CE2K?v=4. Branch `feature/issue-1551-owner-shapes`, worktree `openape-monorepo.worktrees/openape-monorepo-feature-issue-1551-owner-shapes`, canonical base `f9d995ff`.
 - Owner shapes live in their own `owner_shapes` table (key owner + cli_id); `ownerScopedShapeStore` reads an owner's calls with registry shapes first, then non-colliding owner shapes without tested digests. Only the direct human owner writes (`requireBrokerOwner`). Continuing grants on an owner shape bind its digest; registry grants keep carrying over adapter updates.
-- PR: https://repos.openape.ai/patrick/monorepo/pulls/526, explicitly related to the issue. Cross-model review (GPT-6 Astra, Claude Fable 5.1) of `8ad9bd90`; all findings fixed with tests. Pre-push affected unit gate passed on `b68bae94` (core 168, grants 407, nuxt-auth-idp 881, free IdP 426, apes 683 passed / 8 skipped). The gate had been blocked by new high advisories on main, fixed separately in issue 1552 / PR 525.
+- PR: https://github.com/openape-ai/openape-history/issues/2160, explicitly related to the issue. Cross-model review (GPT-6 Astra, Claude Fable 5.1) of `8ad9bd90`; all findings fixed with tests. Pre-push affected unit gate passed on `b68bae94` (core 168, grants 407, nuxt-auth-idp 881, free IdP 426, apes 683 passed / 8 skipped). The gate had been blocked by new high advisories on main, fixed separately in issue 1552 / PR 525.
 - Next: merge, `pnpm check:ci`, `pnpm deploy:image free-idp`, publish the jev shape and verify the daemon Pod run.
 
 # Dashboard Traefik routing — issue 1550
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1550. Owner approved in chat. Branch `bugfix/issue-1550-dashboard-traefik-routing`, base `bbe1fda5`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2154. Owner approved in chat. Branch `bugfix/issue-1550-dashboard-traefik-routing`, base `bbe1fda5`.
 - The dashboard routers referenced the missing `redirect-to-https@docker`/`gzip@docker` middlewares, so Traefik dropped them (external 404) and the issue 1549 deploy rolled the dashboard back. The middlewares are now defined in the dashboard's own labels.
 - Next: merge, deploy the dashboard, verify external health and the issue 1549 refusal check.
 
 # Raw bearer issuer check — issue 1549
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1549. Owner approved fix and rollout in chat. Branch `bugfix/issue-1549-raw-bearer-issuer-check`, canonical base `99fb36a2`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2152. Owner approved fix and rollout in chat. Branch `bugfix/issue-1549-raw-bearer-issuer-check`, canonical base `99fb36a2`.
 - `requireCaller` verifies raw IdP bearer tokens locally like `/api/cli/exchange` (shared `verifyIdpToken`: DDISA issuer, SSRF guard, JWKS signature, `aud=apes-cli`, `exp`); delegated or scoped tokens must use the exchange. The IdP verify round-trip is removed.
 - Verification: `nuxt-auth-sp` suite 127 passed; the new raw-bearer cases fail on the old code.
 - Next: PR, merge, `pnpm check:ci`, rollout of all apps bundling the module, live refusal check.
 
 # Pods independent execution and stale-session recovery — issue 1542
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1542. Owner approved both changes in chat: “Setze beides um”. Separate platform fix supporting the seven-Pod handoff (issue 1541).
+- Issue: https://github.com/openape-ai/openape-history/issues/2138. Owner approved both changes in chat: “Setze beides um”. Separate platform fix supporting the seven-Pod handoff (issue 1541).
 - Worktree `openape-monorepo.worktrees/pods-runtime-recovery-1542`, branch `bugfix/issue-1542-pods-runtime-recovery`, canonical base `3ec2c92537dacb22b0b73fead6897a3cca37fed7`.
 - Remove global capacity checks from scheduled, manual and controlled starts, the setting/UI and MCP contract. Keep per-Pod exclusion, event deduplication and inert legacy database settings for rollback compatibility.
 - Stale sessions use the existing single connection loop; fence superseded responses, reconcile submissions by their stable operation ID and retain owner callbacks/results across reconnects. Binding conflicts and unknown outcomes stay explicit. No blind effect retry.
 - Focused verification: 106 tests pass, including 20 independent Pods, controlled-start admission, per-Pod exclusion, concurrent stale queries, late responses, pre-acceptance and post-completion submit recovery, owner completion recovery and binding conflicts. App lint, typecheck and build pass.
-- PR: https://repos.openape.ai/patrick/monorepo/pulls/516, explicitly related to the issue. Verified source `3cb58189beebe5bd35444075c7f1a8af7718e14b`; mandatory affected gate passes (Pods: 1,988 passed / 1 opt-in skipped; relay: 113 passed). Two targeted Chrome cases pass; wide/light and narrow/dark screenshots inspected. Test Run: https://report.openape.ai/d/01M5XX2VV981VP8KGFSSP1Q5SF. Local evidence: `~/.codex/tmp/pods-runtime-recovery-1542/`.
+- PR: https://github.com/openape-ai/openape-history/issues/2139, explicitly related to the issue. Verified source `3cb58189beebe5bd35444075c7f1a8af7718e14b`; mandatory affected gate passes (Pods: 1,988 passed / 1 opt-in skipped; relay: 113 passed). Two targeted Chrome cases pass; wide/light and narrow/dark screenshots inspected. Test Run: https://report.openape.ai/d/01M5XX2VV981VP8KGFSSP1Q5SF. Local evidence: `~/.codex/tmp/pods-runtime-recovery-1542/`.
 - Next: review and merge, then separately authorized relay-first rollout and the original M1 live repeat. No merge, deployment, signed build, installed runtime replacement or live acceptance is included. Deploy the paired relay parser before the desktop because new schedule views omit the concurrency field.
 
 # Useful morning briefing — issue 1540
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1540. Branch `feature/issue-1540-briefing-ux`, worktree `openape-monorepo.worktrees/briefing-ux-1540`, canonical base `15cb8b80f5f268fc0253bfb994dfccf3fe080646`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2133. Branch `feature/issue-1540-briefing-ux`, worktree `openape-monorepo.worktrees/briefing-ux-1540`, canonical base `15cb8b80f5f268fc0253bfb994dfccf3fe080646`.
 - Owner approved proposal revision 1 with “Freigegeben” on October 26, 2026: https://report.openape.ai/d/01M5VPX8D0VGVX0QM6T70C7HCZ?v=1.
 - Add strict briefing v2 readers, source-bound focus topics, complete expandable information, explicit coverage and timed calendar conflicts. Keep v1 readable. Promote a single safe message link in the mobile inbox; decisions, push payloads and runtime protocols are unchanged.
 - Focused verification: report unit/publication, 14 briefing browser cases, 5 authenticated briefing integration cases, 5 inbox component cases and 16 inbox browser cases pass. Screenshots inspected for mobile light and desktop dark reports and mobile inbox; full affected and deployment gates follow.
@@ -52,7 +52,7 @@
 
 # Remaining OpenApe dependency audit findings — issue 1539
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1539. Branch `bugfix/issue-1539-audit-findings`, worktree `openape-monorepo.worktrees/audit-dependencies-20261025`, canonical base `48ab24d93f801c131cd0ef08e3682ed85f37cec0`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2131. Branch `bugfix/issue-1539-audit-findings`, worktree `openape-monorepo.worktrees/audit-dependencies-20261025`, canonical base `48ab24d93f801c131cd0ef08e3682ed85f37cec0`.
 - Pin transitive `http-cache-semantics` to 4.3.0, outside GHSA-ch52-4w7c-c8xp's affected range and past quarantine. Preserve all other locked versions.
 - Express the existing owner-approved CVE-2026-85393 exception by exact GHSA ID (GHSA-86w9-cpqp-85rv), so repository pnpm 10.29.3 and the standalone audit Pod's pnpm 11.5.2 apply the same policy. This adds no advisory exception and does not claim node-forge is patched.
 - Verification: frozen installation passes; full and production audits with both actual pnpm versions report no non-exempt high/critical advisories. The pnpm 11 check uses the collector's manifest-only snapshot format to avoid automatic switching to the repository's pinned pnpm 10.
@@ -61,7 +61,7 @@
 # Pods volume-stable directory identity and standard data root — issue 1538
 
 - Owner approved plan revision 2 on October 23, 2026 ("Freigabe erteilt"): https://report.openape.ai/d/01M5MXRKJ4CV34MDX6MHJRJ0GZ?v=3. Implementation by Claude Opus 5.5, reviewed by the parent agent.
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1538. Worktree `openape-monorepo.worktrees/pods-managed-directories`, branch `bugfix/issue-1538-pods-managed-directories`, canonical base `381e3b54ecbc46070eb1704a9a9a8106d709d4fc`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2126. Worktree `openape-monorepo.worktrees/pods-managed-directories`, branch `bugfix/issue-1538-pods-managed-directories`, canonical base `381e3b54ecbc46070eb1704a9a9a8106d709d4fc`.
 - Assigned folders are verified by volume UUID (`pods-helper volume-identity`) plus inode in the script dispatcher and the application/shell sessions; legacy records pass only on their original device. Runtime contract 9 reports `directories.managedRoot` (`~/.openape/pods`); `assignDirectory` creates missing owner-only folders below it, refuses the root and its ancestors and accepts an optional portable `alias`. Sandbox levels and grants are unchanged.
 - Verification: focused identity, dispatcher, session, alias and refusal tests; real isolated sandbox regression; opt-in native APFS remount test (`PODS_NATIVE_VOLUME_TEST=1`); full Pods unit suite 1,979 passed.
 - Next: parent code review, native PR, merge, `pnpm check:ci`, keychain-free owner installation, grouped live migration of the 15 non-archived Pods with folders and acceptance.
@@ -69,22 +69,22 @@
 # Pods sign-in and execution compatibility — issue 1537
 
 - Owner approved the startup mock and implementation on October 23, 2026. Plan: `.claude/plans/2026-10-23-pods-startup/plan.json`. Implementation delegated to Claude Opus 5.5, reviewed by the parent agent.
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1537. Worktree `openape-monorepo.worktrees/pods-startup-recovery`, branch `feature/issue-1537-pods-startup-recovery`, canonical base `d49dfd7a67ffe78b1e4756097da6eb33e6761486`. `pnpm check:ci` passes on `74789fa83`. Test Run: https://report.openape.ai/d/01M5MVCQ65A4CKQGZ38WTZN60V?v=1.
+- Issue: https://github.com/openape-ai/openape-history/issues/2124. Worktree `openape-monorepo.worktrees/pods-startup-recovery`, branch `feature/issue-1537-pods-startup-recovery`, canonical base `d49dfd7a67ffe78b1e4756097da6eb33e6761486`. `pnpm check:ci` passes on `74789fa83`. Test Run: https://report.openape.ai/d/01M5MVCQ65A4CKQGZ38WTZN60V?v=1.
 - One DDISA startup screen with explicit failures and retry; owner authentication is independent of execution support. Execution is checked before scheduling, manual/controlled runs and native/external program launch. Exact Darwin 27.0.0 acceptance uses isolated unsigned fixtures; the installed owner app and credentials remain untouched.
 - Verification artifacts and handoff: `/Users/owner/.codex/tmp/pods-startup-implementation/`. The final full affected unit gate passes (Pods 1,972 tests); seven startup browser cases and 15 rebuilt native startup/recovery cases pass after lifecycle review. Full native acceptance passes 151 tests with one opt-in parser case skipped. The existing decisions-demo browser test also fails on the untouched base. Local Test Run: `verification.html`; exact changed-Pods file hashes: `verified-source.json` in the artifact directory.
 - Next (owner authorized installation and publication on October 23): native PR with explicit issue relation, guarded merge after local checks, then keychain-free owner installation (`build`, `package:owner`, `install:owner`) from clean merged main with paired rollback and live acceptance; receipts go to the merged PR and the issue.
 
 # Pods withdraw their own single-use grant requests — issue 1536
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1536. Approved Plan revision 1: https://report.openape.ai/d/01M5M346FHXZQS84VC0GPWJ2ZE?v=2. Protocol PR: https://repos.openape.ai/patrick/protocol/pulls/9.
+- Issue: https://github.com/openape-ai/openape-history/issues/2121. Approved Plan revision 1: https://report.openape.ai/d/01M5M346FHXZQS84VC0GPWJ2ZE?v=2. Protocol PR: https://github.com/openape-ai/openape-history/issues/2122.
 - Branch `feature/pods-withdraw-grant-request`, worktree `openape-monorepo.worktrees/pods-withdraw-grant-request-1536`, canonical base `2ab279bc67df9440fc43b5250f697b1836a6ce4c`.
 - IdP: terminal status `withdrawn`, requester-only `POST /api/grants/withdraw` by reference, broker operation `withdraw`, discovery `openape_grant_withdraw_supported`, atomic store transition with broker audit, batch page and consume refusal. Pods: `context.tools.withdraw`, `grant-withdraw` run event, runtime contract 8. apes maps 403 `withdrawn` to a refusal.
-- PR: https://repos.openape.ai/patrick/monorepo/pulls/506, explicitly related to issue 1536 (as is protocol PR 9). Affected unit gate and `pnpm check:ci` pass on `65e46149ae8ce725d542557593a18013bc1d2631`. Test Run: https://report.openape.ai/d/01M5M52S9ZX9Z576YY0QG4X3MZ?v=2.
+- PR: https://github.com/openape-ai/openape-history/issues/2123, explicitly related to issue 1536 (as is protocol PR 9). Affected unit gate and `pnpm check:ci` pass on `65e46149ae8ce725d542557593a18013bc1d2631`. Test Run: https://report.openape.ai/d/01M5M52S9ZX9Z576YY0QG4X3MZ?v=2.
 - Next: owner review and merge; IdP deploy (decision and agent provider) before a Pods release, each with owner OK; then the archive Pods withdraw references whose mail left the Inbox.
 
 # Secrets PRF vault, single-confirmation setup — issue 1535
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1535. Live since 2026-10-22 as `prod-db2ad6ba5`, enabled for patrick@hofmann.eco only (receipts on PR 502 and 503).
+- Issue: https://github.com/openape-ai/openape-history/issues/2107. Live since 2026-10-22 as `prod-db2ad6ba5`, enabled for patrick@hofmann.eco only (receipts on PR 502 and 503).
 - Branch `feature/issue-1535-single-confirm-setup`, worktree `openape-monorepo.worktrees/secrets-vault`, canonical base `db2ad6ba59786a6ac127bb4cad90ed247b8d7915`.
 - Owner decision after setting up the vault: when the authenticator returns PRF output while creating a passkey, creation needs no second confirmation; authenticators without PRF at creation keep the two-ceremony stability check. Applies to setup, adding a passkey and recovery.
 - Verification: lint/typecheck, 47 of 47 end-to-end checks; setup counted one creation, PRF at creation and no extra confirmation. The fallback path is not exercised by the virtual authenticator.
@@ -92,7 +92,7 @@
 
 # Model API settings and latest family versions — issue 1532
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1532. Native PR: https://repos.openape.ai/patrick/monorepo/pulls/495, with an explicit issue relation. Approved revision 4: https://report.openape.ai/d/01M5DAMFMDW26PAF781Z9T2A26?v=10.
+- Issue: https://github.com/openape-ai/openape-history/issues/2088. Native PR: https://github.com/openape-ai/openape-history/issues/2091, with an explicit issue relation. Approved revision 4: https://report.openape.ai/d/01M5DAMFMDW26PAF781Z9T2A26?v=10.
 - Branch `feature/issue-1532-pods-model-api-settings`, isolated worktree `openape-monorepo.worktrees/pods-model-api-1532`, canonical base `c5a18e3b735fd5432a9dcd8494f6b9bd7fc45519`. Real inference source `20f1634d97ef6610e934a0cf28a95d1ddaed8775`; reviewed product source `5e9382733` adds the two verified corrections below;  shared checkout and unrelated work remain untouched.
 - Adds two local API settings sections, private atomic token storage, explicit Responses support and fresh latest-version selection within the eight approved families. Native calls retain account defaults and tools; proxy remains text-only without fallback or retries.
 - Required affected gate passed all seven steps, including 1,930 Pods tests. Native/CLI acceptance: 151 existing passes and one existing optional parser skip, plus a successful real CLI settings save/reopen/no-op/catalog check. Six real-CSS browser cases pass; wide/light English and narrow/dark German screenshots were inspected.
@@ -102,14 +102,14 @@
 
 # Inbox message swipe gestures — issue 1531
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1531. Branch `feature/issue-1531-pods-inbox-swipe`, worktree `.claude/worktrees/openape-pods-tags-discussion-586b3a`, canonical base `2025040a2ebde6e802e51d537c24fd9dd4b197e4`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2089. Branch `feature/issue-1531-pods-inbox-swipe`, worktree `.claude/worktrees/openape-pods-tags-discussion-586b3a`, canonical base `2025040a2ebde6e802e51d537c24fd9dd4b197e4`.
 - On the PWA Messages tab, swiping a message card right archives it and swiping left marks it read, through the existing account-wide `PATCH items/:id`. `touch-action: pan-y` keeps vertical scrolling with the browser; archived lists, offline state and decisions are not swipeable.
 - Verification: a real-CSS Chromium layout case drives CDP touch input in light and dark: a vertical drag scrolls without changes, a short swipe does nothing, each full swipe sends exactly one request for the swiped message only. Screenshots inspected. Physical iPhone acceptance and relay rollout remain.
 
 # CLIProxyAPI agent backend — issue 1530
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1530. Approved proposal revision 2: https://report.openape.ai/d/01M5DAMFMDW26PAF781Z9T2A26?v=4; the plan preserves the original revision-1 approval and failures.
-- PR: https://repos.openape.ai/patrick/monorepo/pulls/493, explicitly related to issue 1530. Branch `feature/issue-1530-pods-cliproxyapi`, dedicated worktree `openape-monorepo.worktrees/pods-cliproxyapi-1530`, canonical base `1ca4dac10c71e2112cc99a83a724f8eeff6f8c28`. The shared checkout and other sessions remain untouched.
+- Issue: https://github.com/openape-ai/openape-history/issues/2085. Approved proposal revision 2: https://report.openape.ai/d/01M5DAMFMDW26PAF781Z9T2A26?v=4; the plan preserves the original revision-1 approval and failures.
+- PR: https://github.com/openape-ai/openape-history/issues/2086, explicitly related to issue 1530. Branch `feature/issue-1530-pods-cliproxyapi`, dedicated worktree `openape-monorepo.worktrees/pods-cliproxyapi-1530`, canonical base `1ca4dac10c71e2112cc99a83a724f8eeff6f8c28`. The shared checkout and other sessions remain untouched.
 - Adds an explicit text-only proxy backend through the shared desktop/CLI host, private configuration and credential path guards, exact model/thinking mappings, safe call metadata, independent backend cancellation and cleanup confirmation. Existing agent calls retain native Codex defaults and tools.
 - Real acceptance used exactly eight calls: four Codex mappings passed exact markers; all four Claude mappings returned HTTP 400 `invalid_request_error` because `fallbacks: []` fails upstream minimum-list validation. The isolated mixed Pod stopped on its first Claude call; its remaining Codex mapping passed once separately. No automatic retry or replacement was used.
 - The approved revision-2 filter is active in CLIProxyAPI 8.0.0 for the four exact native-Claude model IDs. It was appended during verified idle time and hot-reloaded without a restart, with private backup and hash-guarded rollback. Other configuration, accounts and personal Pods remain unchanged. All three selected dependency patches are committed in `c07173962a2b7ce25d94d45b625bd2ad16539843`; the audit passes with unchanged quarantine and exceptions.
@@ -118,29 +118,29 @@
 
 # Shared datastore retirement — issue 1529
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1529. Approved Plan revision 1: https://report.openape.ai/d/01M5D589V56Y9CSP5R41J5448F.
+- Issue: https://github.com/openape-ai/openape-history/issues/2083. Approved Plan revision 1: https://report.openape.ai/d/01M5D589V56Y9CSP5R41J5448F.
 - Branch `feature/issue-1529-remove-shared-datastore`, worktree `openape-monorepo.worktrees/remove-shared-store-1529`, canonical base `6b0f06ba9a4be13733d5226bf1baebef29224b60`.
 - Removes shared namespaces, records, work, owner questions, script APIs, MCP domain administration and related UI. Schema 54 deletes their tables after a verified private backup. Independent scripts, private state, identities, receipts and historical approvals remain.
 - Verification: populated/empty upgrades, exact unrelated-row parity, unchanged repeat, transactional interruption, dependent-script refusal and inert archive retention; a real Electron schema-53 startup and 16 real-CSS browser cases pass. Required affected gate and deployment checks precede PR merge, relay rollout and owner installation. Final receipts belong on the PR and issue.
 
 # Grant request dates — issue 1526
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1526. Branch `feature/issue-1526-grant-request-dates`, reused checkout `cross-run-grant-reference`, canonical base `110697ded886a9221349299edbf55e180d4abedd`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2076. Branch `feature/issue-1526-grant-request-dates`, reused checkout `cross-run-grant-reference`, canonical base `110697ded886a9221349299edbf55e180d4abedd`.
 - Show localized request dates with a time zone on individual cards and oldest/newest pending member dates on batch cards. Preserve decision behavior and existing newest-first sorting.
 - Verification: 68 existing page/component tests and a focused real-CSS browser case pass, including unsorted cross-day members, single-member groups and individual cards. Mobile light and desktop dark screenshots were inspected. Next: required affected gate, native PR review and deployment gate, then IdP rollout.
 - Docpit grant assessment is read-only. No Pod scripts, decisions, batches or mail data are changed by this work.
 
 # Local-only archived Pod deletion — issue 1525
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1525. Branch `bugfix/issue-1525-local-pod-deletion`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `110697ded886a9221349299edbf55e180d4abedd`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2075. Branch `bugfix/issue-1525-local-pod-deletion`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `110697ded886a9221349299edbf55e180d4abedd`.
 - Owner authorized removing the remaining eleven archived local-only Pods and their obsolete open approvals. Allow native-owner coordinated deletion while the relay continues to refuse browser placeholder mutations. Optional `discardApprovals` requires explicit owner intent; uncertain effects and approval outcomes remain protected.
 - Verification covers local-only native receipts/replay/key cleanup, browser refusal, discarded historical approvals, preservation of other Pods and effect receipts, and uncertain-action refusal. Deploy the additive command parser to the relay and the canonical owner desktop build before live deletion. Record exact gates, source, operation receipts and unchanged shared data in the issue and Reports.
 
 # Cross-run grant references — issue 1523
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1523. Approved proposal revision 2: https://report.openape.ai/d/01M5CA08QYSZV34SMQ0Z129XWJ?v=2. Worktree `cross-run-grant-reference`, branch `feature/issue-1523-cross-run-grant-reference`, canonical base `a02d5a7b69a275cb7091dac83779757594a53d40`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2069. Approved proposal revision 2: https://report.openape.ai/d/01M5CA08QYSZV34SMQ0Z129XWJ?v=2. Worktree `cross-run-grant-reference`, branch `feature/issue-1523-cross-run-grant-reference`, canonical base `a02d5a7b69a275cb7091dac83779757594a53d40`.
 - Add an opaque optional reference to existing exact single-use request paths, atomic scoped uniqueness, retained terminal decisions and authorized lookup. Complete pending batch pagination, explicit refresh, frozen decision retries and notification coalescing remain generic. Pods only passes metadata through existing execution paths.
-- Protocol contract: https://repos.openape.ai/patrick/protocol/issues/3. Personal archive draft stays outside Git; stable references and batch IDs preserve legacy records and CLI reconciliation. It remains 289 readable lines versus 290 before; a broad recipe/tooling rewrite is excluded.
+- Protocol contract: https://github.com/openape-ai/openape-history/issues/2070. Personal archive draft stays outside Git; stable references and batch IDs preserve legacy records and CLI reconciliation. It remains 289 readable lines versus 290 before; a broad recipe/tooling rewrite is excluded.
 - Focused persistence, API, client and UI checks pass, including concurrent creates, lost replies, immutable bindings, terminal states, 150 equal-timestamp entries and partial decisions. IdP and Pods builds pass. Real browser screenshots confirm selection retention and unselected new arrivals at mobile/desktop sizes.
 - Next: required affected gate and native PR review, full deployment gate, coordinated IdP/desktop rollout, then exact owner-approved real archive requests and an unchanged repeat. Synthetic Pod checks are not live acceptance; existing live grants and Pod revision 2 remain unchanged.
 
@@ -152,7 +152,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Responsive startup and synchronization — issue 1528
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1528. Branch `bugfix/issue-1528-responsive-sync`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `bfd19417168f1e342b4e7be46050063105a7efff`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2081. Branch `bugfix/issue-1528-responsive-sync`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `bfd19417168f1e342b4e7be46050063105a7efff`.
 - Owner requested empty-snapshot cleanup/prevention, responsive synchronization and repeated installed startup/action measurements. Source: `.claude/plans/issue-1528-responsive-sync.json`; [Plan](https://report.openape.ai/d/01M5D1BTT2DDRDC7Y8Y4XAJTX4).
 - Empty captures stay in memory; bounded startup cleanup removes only verified empty manifests, preserving nonempty or unexpected contents. A supplemental claims index and shared script metadata eliminate repeated full detail queries. Cooperative projection restarts on data changes. Background staging no longer occupies the command loop; generation checks discard obsolete publications while the final commit and command claim remain serialized. Local reads work during reconnecting.
 - Verification: focused controller, resource, storage, script and backup suites passed (100 cases); extended projection regression and final gates pending. Next: finish checks, native PR/review/merge, install the owner build and repeat startup/concurrent action measurements with exact artifact evidence.
@@ -160,41 +160,41 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Program output in memory — issue 1527
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1527. Branch `bugfix/issue-1527-memory-output`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `a56ad6d7c5403fe2d2e1cd8448d1a7816363446b`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2079. Branch `bugfix/issue-1527-memory-output`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `a56ad6d7c5403fe2d2e1cd8448d1a7816363446b`.
 - Approved scope: bounded in-memory program replies, no intermediate output files, cleanup of old local/server outputs, and explanation of the 256 KiB runner frame bound. Maintained source: `.claude/plans/issue-1527-memory-output.json`; [Plan](https://report.openape.ai/d/01M5CWBJ3V368J81DAYS8VH0QV).
 - Implementation preserves request/log/result frame bounds, sends program stdout/stderr in bounded response chunks with backpressure, and keeps legacy file-mode requests compatible through stdout. New central publications carry only structured views; retired generated output copies are removed transactionally at the relay without deleting other artifact copies.
 - Verification and rollout are pending. Next: focused transport/broker/controller/relay checks, required gates and native PR, relay-first rollout, owner installation, exact generated-file cleanup and real run/restart acceptance. No personal Pod scripts are checked into Git.
 
 ## Independent archived Pod deletion — issue 1524
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1524. Branch `bugfix/issue-1524-independent-pod-deletion`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `a02d5a7b69a275cb7091dac83779757594a53d40`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2072. Branch `bugfix/issue-1524-independent-pod-deletion`, checkout `openape-monorepo.worktrees/pods-delete-independent`, canonical base `a02d5a7b69a275cb7091dac83779757594a53d40`.
 - Scope deletion checks to the target Pod's work, preserve shared namespaces and their records/results under owner custody, and clean only the deleted Pod's private files. Keep uncertain-effect, open-approval, published-definition and current-review checks. Whole-profile backup, restore and garbage collection still require an idle profile.
 - Verification: 75 focused retention/work, real worker-entry and diagnostic translation tests pass. They cover unrelated active work and unpublished blobs, unchanged shared-data history, reader access, replacement-writer reuse, and continuing authenticated run services while deletion cleanup is pending; forged bindings remain refused. The native PR records the final source SHA, affected gate, app build and published evidence.
 - Next: required local gate, native review/merge and owner build installation; the installed app remains unchanged until that rollout.
 
 ## Tray tag filter and menu bar icon — issue 1522
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1522. Branch `feature/issue-1522-tray-tags`, checkout `openape-monorepo.worktrees/pods-tray-status`, canonical base `f4dffcb1cd968baca837c8458df2430ed1a9b1f3`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2067. Branch `feature/issue-1522-tray-tags`, checkout `openape-monorepo.worktrees/pods-tray-status`, canonical base `f4dffcb1cd968baca837c8458df2430ed1a9b1f3`.
 - Add a single-tag radio submenu with All Pods, refreshed from the workspace inventory. Store the local selection atomically in `tray-tag.json`; removed tags reset to All Pods, malformed files do not block startup, and failed writes retain the previous selection with a visible error. Include archived tags when listing the already-inclusive Pod inventory.
 - Keep alphabetical names and latest-run indicators, querying runs only for matching Pods. Add the existing cube mark as an 18-point macOS template icon with 1x/2x PNGs and editable SVG source.
 - Verification: 26 focused menu, real worker entry and language checks pass, including restart persistence, removed/archived tags and write failure. Next: affected gate, native image validation, canonical merge, deployment gate and owner installation with lifecycle restoration.
 
 ## Remove relay request rate limits — issue 1521
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1521. Branch `bugfix/issue-1521-remove-relay-rate-limit`, checkout `openape-monorepo.worktrees/pods-tray-status`, canonical base `dc7569088781cfa1e08d800032fccd09507ab6f8`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2065. Branch `bugfix/issue-1521-remove-relay-rate-limit`, checkout `openape-monorepo.worktrees/pods-tray-status`, canonical base `dc7569088781cfa1e08d800032fccd09507ab6f8`.
 - Remove both API and registration/login rate buckets at the owner's request after `429 rate_limited` prevented desktop reconnection. Preserve authentication, proof, origin and body-size checks.
 - Verification covers 650 requests per route class within one fixed minute, missing authentication and the existing 503 retry hint. Next: affected gate, reviewed native PR, full deployment gate and tested relay image rollout, then restore the previously active desktop Pods.
 
 ## Desktop tray Pod list — issue 1520
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1520. Branch `feature/issue-1520-pods-tray`, checkout `openape-monorepo.worktrees/pods-tray-status`, canonical base `b947f30b430a6ef02ffb91636800b12c7ec1d909`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2063. Branch `feature/issue-1520-pods-tray`, checkout `openape-monorepo.worktrees/pods-tray-status`, canonical base `b947f30b430a6ef02ffb91636800b12c7ec1d909`.
 - Replace the three static tray actions with every local Pod sorted by name. Each entry shows the latest run start in the current language and a status indicator; opening the menu reloads worker data. Empty, unavailable and failed reads stay explicit. Clicking an entry opens the existing workspace.
 - Verification: 23 focused main-process tests pass, including ten permanent tray regression cases; the Pods app build passes. Native menu painting and installation are not covered by these checks. The native PR records the final source SHA, pre-push affected unit gate and published Test Run.
 - Next: native PR review and release integration; the installed desktop is unchanged.
 
 ## Batch approvals for application calls — issue 1516
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1516. Branch `feature/issue-1516-pod-batch-approvals`, checkout `openape-monorepo.worktrees/archive-batch-approvals`, canonical base `62a6c0fdb0ae2ab876d58020b585d1c0d9df1b32`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2053. Branch `feature/issue-1516-pod-batch-approvals`, checkout `openape-monorepo.worktrees/archive-batch-approvals`, canonical base `62a6c0fdb0ae2ab876d58020b585d1c0d9df1b32`.
 - Forward validated optional batch metadata through the existing application execution path. Keep command arguments, effect identity and per-member once-grant authority separate from presentation metadata; reject unsupported destinations before dispatch.
 - Personal archive recipes remain outside Git. New requests from each run persist one shared batch before dispatch and preserve it on retries; existing unbatched requests retain their exact frozen identity.
 - Verification: 36 existing focused metadata/dispatcher/refusal/i18n checks and five personal repeat/legacy/partial-approval checks pass. Independent runtime review has no open findings. Live acceptance must show grouped pending once-grants without approving or archiving them.
@@ -202,7 +202,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Selective shape registry seeding — issue 1515
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1515. Branch `bugfix/issue-1515-selective-shape-seed`, checkout `openape-monorepo.worktrees/selective-shape-seed-1515`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2051. Branch `bugfix/issue-1515-selective-shape-seed`, checkout `openape-monorepo.worktrees/selective-shape-seed-1515`.
 - Add optional `SHAPES_CLI_IDS` to the supported seeder. Validate the complete registry and desktop-own virtual invariants before selecting writes; reject empty, duplicate and unknown names. Omission preserves full-registry refresh behavior.
 - This bounded transport-rollout change prevents an O365 adapter update from overwriting an unrelated deployed adapter. No mailbox action, grant, adapter policy or default check chain changes.
 - Scoped lint and five selection/refusal tests pass. The actual TypeScript seeder against a disposable SQLite database writes only the selected adapter, preserves an unrelated row, and rejects malformed selections or a broken full-registry invariant without writes.
@@ -210,14 +210,14 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Structured tool permission refusals — issue 1514
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1514. Branch `bugfix/issue-1514-tool-invocation`, checkout `openape-monorepo.worktrees/tool-invocation-1514`, canonical base `264218e4b2acc9a5b38be8301d54d75a16c81f60`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2048. Branch `bugfix/issue-1514-tool-invocation`, checkout `openape-monorepo.worktrees/tool-invocation-1514`, canonical base `264218e4b2acc9a5b38be8301d54d75a16c81f60`.
 - Preserve validated private-channel permission state and grant ID in nonblocking assigned-program refusals. Keep exact command authority, final owner decisions and unknown-effect holds unchanged. Existing per-call summaries already use the shared parser and a separate presentation channel; retain that contract and its Pod-origin boundary.
 - Verification: focused refusal, spoofing, infrastructure, unknown-process and existing summary transport cases; required affected gate, app/CLI builds and signed local rollout follow before delivery. Package the regular desktop before building the standalone runtime so the CLI-only profile-lock helper remains outside the desktop signing allowlist.
 - Next: independent review, native PR with explicit issue relation, canonical merge and coordinated app/CLI installation after the owner profile has no active run.
 
 ## Manual recovery for cancelled owner scripts — issue 1513
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1513. Branch `bugfix/issue-1513-owner-script-recovery`, checkout `openape-monorepo.worktrees/owner-script-recovery-1513`, canonical base `f30d5ce7cb1a1ef937674f6440ca19da3ef98292`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2045. Branch `bugfix/issue-1513-owner-script-recovery`, checkout `openape-monorepo.worktrees/owner-script-recovery-1513`, canonical base `f30d5ce7cb1a1ef937674f6440ca19da3ef98292`.
 - This is the necessary recovery follow-up to the approved owner-script implementation. Preserve its original approval; the current explicit Pod-repair request authorizes the operational recovery. The maintained plan source remains the primary checkout's `.claude/plans/2026-10-18-pod-owner-script/plan.json`.
 - Add evidence-bound manual settlement of an exact unresolved `owner-script:<runId>` through the existing recovery command. Require the historical full activation binding, positive stopped-domain evidence and an atomic recheck; retain the failed run, inner effects and separate explicit retry.
 - Expose open root keys through the existing recovery view. Do not create grants, change sandbox or macOS privacy permissions, clear unrelated holds, reset queues or replay work as a side effect of settlement.
@@ -227,7 +227,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Owner-activated script starts — issue 1512
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1512. Branch `feature/issue-1512-owner-script`, checkout `openape-monorepo.worktrees/owner-script-1512`, canonical base `75251c743afda0ac01298d21e06b5331d7a4aa80`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2043. Branch `feature/issue-1512-owner-script`, checkout `openape-monorepo.worktrees/owner-script-1512`, canonical base `75251c743afda0ac01298d21e06b5331d7a4aa80`.
 - Owner approved revision 1 with "Passt dann legen wir los": https://report.openape.ai/d/01M585E4KP7X8STQPJGHCYBSA0?v=2. Living source: the primary checkout's `.claude/plans/2026-10-18-pod-owner-script/plan.json`.
 - Implement `ape-shell --run-script` with owner activation as top-level authority. Pods retains sandbox policy, exact active script/resource checks, private lifecycle, native process domains and honest authority receipts. CLI and desktop share the mode; inner CLI/HTTP calls retain the Pod identity and IdP authorization.
 - Separate safe permission-unavailable outcomes from invalid authority and unknown effects. Later triggers may recheck current grants; denied/revoked grants are not replaced or approved. Completed writes, intents, unknown effects and untracked operations retain replay holds.
@@ -237,7 +237,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Readable registered Pod names — issue 1511
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1511. Branch `bugfix/issue-1511-pod-registration-name`, checkout `openape-monorepo.worktrees/pod-registration-name-1511`, canonical base `b68849b08042555dd7922c8f235d713d1e2e79cf`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2041. Branch `bugfix/issue-1511-pod-registration-name`, checkout `openape-monorepo.worktrees/pod-registration-name-1511`, canonical base `b68849b08042555dd7922c8f235d713d1e2e79cf`.
 - Complete the approved readable-requester-name requirement by registering the current Pod title and refreshing existing brokered registrations through their verified owner receipt. Preserve immutable identity/owner/issuer/connection/key bindings, active-agent checks and existing grants.
 - Repeated exact-match broker enrollment changes only `users.name`, skips identical names and returns optional persisted-name confirmation. Legacy responses remain compatible; clients confirm a synchronized name only when explicitly acknowledged. Existing direct identities retain their separate reprovisioning refusal contract.
 - IdP verification passes: 21 enrollment/transport/direct-provisioning cases and 76 durable store cases, including exact binding/user/key refusals, same-name no-op writes and commit-backed name confirmation. IdP module build, module/free IdP typechecks and scoped lint pass. Existing direct provisioning retains its refusal contract and correctly stores names for new identities.
@@ -246,7 +246,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Federated registered requester names — issue 1510
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1510. Branch `bugfix/issue-1510-federated-requester-name`, checkout `openape-monorepo.worktrees/federated-requester-name-1510`, canonical base `339384910a4a001b8f7c6aed5e48238caf427006`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2037. Branch `bugfix/issue-1510-federated-requester-name`, checkout `openape-monorepo.worktrees/federated-requester-name-1510`, canonical base `339384910a4a001b8f7c6aed5e48238caf427006`.
 - This bounded correction completes the registered-name requirement of the owner-approved approval UI and rollout. A decision provider previously queried only local registrations, while brokered Pod registrations live at their agent provider.
 - Negotiate signed optional `requester_name` through the exact discovery capability; derive it from the active registered agent and validated key. Persist only matching broker JSON metadata, preserve decisions and binding fields, omit names from authorization tokens, and refresh existing pending requests during normal agent traffic. No foreign local users or directory privilege is introduced.
 - Focused verification passes: 76 module/API/card/page cases, 38 broker/token cases, 60 durable store cases and 24 real-CSS browser cases. Core, grants, module and free IdP typechecks and scoped lint pass. SQLite trigger evidence confirms that identical polls perform no row rewrite; both commit orders preserve decisions and token bindings during metadata refresh.
@@ -254,24 +254,24 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Approval presentation and sender context — issue 1509
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1509. Branch `feature/issue-1509-approval-ui`, checkout `openape-monorepo.worktrees/approval-ui-1509`, canonical base `a3afc979234046e01d0b878b7b2cae32e9954a57`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2033. Branch `feature/issue-1509-approval-ui`, checkout `openape-monorepo.worktrees/approval-ui-1509`, canonical base `a3afc979234046e01d0b878b7b2cae32e9954a57`.
 - Patrick approved proposal revision 1 with “Super, setz das um”. Living source: `.claude/plans/2026-10-18-approval-ui/plan.json`; reviewed proposal: https://report.openape.ai/d/01M56ZD1STG23FGPVKYVY4XJKG?v=4.
 - Implement the shared title/description, registered name and identity, compact bound authority and technical disclosure across individual/list/batch views. Preserve requested validity and explicit scope expansion. Enrich generic saved-script context and transport optional requester-written batch descriptions without changing authorization semantics.
-- Native PR: https://repos.openape.ai/patrick/monorepo/pulls/472. Product implementation `a9195c47c22d3fea4622a151774b9ca9e27cd856` passed the full affected unit gate under Node 24.15.0 across 43 workspaces without cache reuse, including 1,710 Pods cases. Independent final review has no open findings.
-- Formal metadata contract: https://repos.openape.ai/patrick/protocol/pulls/6, merged as `45845a49f7d1eb66b0c856b5a0879f3f3e179771` after 11 schema and 32 focused validation checks. Legacy batches can omit the description; member authority remains individual and unchanged.
+- Native PR: https://github.com/openape-ai/openape-history/issues/2036. Product implementation `a9195c47c22d3fea4622a151774b9ca9e27cd856` passed the full affected unit gate under Node 24.15.0 across 43 workspaces without cache reuse, including 1,710 Pods cases. Independent final review has no open findings.
+- Formal metadata contract: https://github.com/openape-ai/openape-history/issues/2035, merged as `45845a49f7d1eb66b0c856b5a0879f3f3e179771` after 11 schema and 32 focused validation checks. Legacy batches can omit the description; member authority remains individual and unchanged.
 - Focused verification: 161 grant validation/authorization cases, 31 direct/brokered API cases, 28 machine-request cases, 33 Pods cases, 114 UI unit cases and 24 real-CSS browser cases pass. Module/Pods typechecks and scoped lint pass; Pods builds successfully. Seven final synthetic-data screenshots were personally inspected, including selected batches, exact timed validity, technical disclosure and broader-scope opt-in.
 - Next: final free IdP app build, actual Test Run publication and checked PR merge. Final source, merge and evidence receipts belong on that PR; release is outside this implementation handoff.
 
 ## Pending approval listing size — issue 1508
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1508. Branch `bugfix/issue-1508-approval-count`, checkout `openape-monorepo.worktrees/pods-approval-counter`, base `31181ab78f94e7eb9d7b94c7e41477aff0e66e2e`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2031. Branch `bugfix/issue-1508-approval-count`, checkout `openape-monorepo.worktrees/pods-approval-counter`, base `31181ab78f94e7eb9d7b94c7e41477aff0e66e2e`.
 - The approval counter uses an explicit 1 MiB JSON response budget; other connection reads retain their 128 KiB default. Requester, expiration, batch and unknown-on-error semantics remain unchanged.
 - Focused verification: seven approval-count/streaming/refusal cases pass, including a synthetic 31-grant response larger than 128 KiB. No owner data or request payloads are included in fixtures.
 - Next: independent diff review, affected pre-push gate, native PR, full deployment gate and signed local installation with a verified relay count. The existing one-page bound is unchanged; timestamp-cursor pagination is a separate issue.
 
 ## Portable HTTP and model credentials — issue 1507
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1507. Branch `bugfix/issue-1507-portable-provider-credentials`, checkout `openape-monorepo.worktrees/ape-pods-cli-1499`, base `9b28b50860fd61573243fad03a8dd5dbe434deb8`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2029. Branch `bugfix/issue-1507-portable-provider-credentials`, checkout `openape-monorepo.worktrees/ape-pods-cli-1499`, base `9b28b50860fd61573243fad03a8dd5dbe434deb8`.
 - Owner approved proposal revision 1 ("Passt los jetzt"): https://report.openape.ai/d/01M52M2X28M3VZ9MTJTFHYZ0PN?v=2. Source: `~/.claude/plans/issue-1507/plan.json`.
 - Extend private portable storage only to assigned authenticated HTTP credentials and connected ChatGPT authentication. Preserve identities, account/resource bindings, sandbox denial, exact-call grants and refresh persistence; ProgramState remains issue 1500.
 - Next: focused refusal/native checks, affected gate, native PR, full deployment gate, signed local rollout, selective real migration and actual Service-Agent/editorial/publication CLI acceptance. Personal scripts and credential values remain outside Git.
@@ -281,18 +281,18 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 - Resume the approved repair plan after removing personal recipes from Git. Private Calendar, Editorial, Publication and Mail scripts stay outside the checkout and use supported script-version activation.
 - Branch `bugfix/issue-1505-run-timing`, clean canonical base `253115f89e34cf0754dba56cb951fc5643cb7133`. Generic changes expose current-run timing and owner-confirmed partial program effects without inventing exit-code success. Existing grants, stopped-domain checks and lease fencing remain enforced.
 - Focused checks: 28 generic cases and 12 private recipe cases pass. Native CLI, required gates, signed rollout, exact private-script activation and actual partial-output recovery remain pending.
-- Issues: https://repos.openape.ai/patrick/monorepo/issues/1503, https://repos.openape.ai/patrick/monorepo/issues/1504, https://repos.openape.ai/patrick/monorepo/issues/1505.
+- Issues: https://github.com/openape-ai/openape-history/issues/2022, https://github.com/openape-ai/openape-history/issues/2023, https://github.com/openape-ai/openape-history/issues/2024.
 
 ## Remove personal Pod recipes — issue 1506
 
 - Owner explicitly authorized removing personal Pod scripts from Git history. Personal recipes, their policies and recipe-only tests are private machine state; generic runtime and safety tests remain in the repository.
 - Branch `bugfix/issue-1506-remove-personal-pods`, base `09e580c85635070ba29b8532bd5de0d670667951`. Maintenance uses an isolated mirror clone and expected-old ref checks; other worktrees and installed Pods remain unchanged.
 - Next: affected checks and native PR, then filter all canonical refs and historical mirror PR refs, reconcile the existing mirror chain, prune unreachable served objects and report host-managed cache limitations.
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1506.
+- Issue: https://github.com/openape-ai/openape-history/issues/2025.
 
 ## Exact runtime grants and owner CLI starts — issue 1501
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1501. PR 465 merged as `ffe0d274004cead6431b6dc81f61cb3f5fce7bee`; signed local app and native CLI are installed from that source. Full affected/deployment unit checks, seven native CLI cases and mounted signed DMG acceptance passed.
+- Issue: https://github.com/openape-ai/openape-history/issues/2018. PR 465 merged as `ffe0d274004cead6431b6dc81f61cb3f5fce7bee`; signed local app and native CLI are installed from that source. Full affected/deployment unit checks, seven native CLI cases and mounted signed DMG acceptance passed.
 - Live CLI run `c7183163-e086-4d27-87c5-abb077324502` verified the implicit exact single-use owner start and four real mailbox reads. It completed with two explicit gaps because the shared Jev credential still requires desktop decryption. Provider encryption was preserved; portable isolated ProgramState remains separate issue 1500.
 - The live cross-check caught a second bulk MCP preparation path in `main/grants/administration.ts` still sending the logical program identity. Follow-up branch `bugfix/issue-1501-bulk-runtime-grants` from the merge routes this path through ProgramManager.grantCall too; the new regression fails before the correction. Keep issue 1501 open until the installed bulk path is verified against actual Node/file grants.
 - Mail cancellation `81d20f5e-c1db-44d3-b43a-e27f86319cb1` was reconciled through the owner API after matching all 15 child input hashes to read-only commands and proving 17 domains stopped. The shutdown-interrupted rebase root was separately reconciled after 18 verified read boundaries, no child writes and 20 stopped domains. Both recovery reviews are ready; no SQL business-state mutation or fabricated success was used.
@@ -301,9 +301,9 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Standalone Pods CLI — issue 1499
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1499. Follow-up branch `bugfix/issue-1499-owner-program-state`, worktree `openape-monorepo.worktrees/ape-pods-cli-1499`, canonical base `877162d1dc9a992a42dca7436f1ffc90607b14a4`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2014. Follow-up branch `bugfix/issue-1499-owner-program-state`, worktree `openape-monorepo.worktrees/ape-pods-cli-1499`, canonical base `877162d1dc9a992a42dca7436f1ffc90607b14a4`.
 - PR 463 is merged. The local signed desktop migrated all 44 execution identities, preserving bindings and existing protections. The subsequent real CLI test exposed unconditional encrypted ProgramState access before assigned owner-program launch. Actual rollout receipt: https://report.openape.ai/d/01M51V4TRBA1KSE1P6JN8MZKDR?v=1.
-- Owner instruction October 16: fix unnecessary ProgramState access in owner mode first. Keep OS-keychain-independent, CLI-usable ProgramState as separate issue 1500: https://repos.openape.ai/patrick/monorepo/issues/1500.
+- Owner instruction October 16: fix unnecessary ProgramState access in owner mode first. Keep OS-keychain-independent, CLI-usable ProgramState as separate issue 1500: https://github.com/openape-ai/openape-history/issues/2016.
 - Owner script invocations and application terminals now use owner HOME and temporary workspaces without reading or updating private ProgramState. Isolated state persistence, Pod identity, ape-shell authorization, file hashes, lease checks and protected paths remain enforced.
 - Focused acceptance: 14 cases pass; the old source fails four strengthened owner cases. Six native CLI cases pass, including an actual assigned owner program through the production no-cipher host with unchanged encrypted state. The local CLI points to this runtime build; the installed signed desktop remains the PR 463 build until a separate desktop rollout.
 - Next: complete the mandatory affected gate and native PR, then inspect the real Task monitor CLI result. Its known INITECH HOME/.env dependency remains separate. Keep issue 1499 open until actual acceptance is reconciled; record final source and evidence on the PR.
@@ -311,8 +311,8 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 ## Unified Pods execution — issue 1497
 
 - Approved proposal revision 2: https://report.openape.ai/d/01M4ZXED8YT88G56VGCG9C9JR7?v=2. Current progress: https://report.openape.ai/d/01M4ZXED8YT88G56VGCG9C9JR7.
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1497. Branch `feature/issue-1497-pods-ape-shell`, checkout `openape-monorepo.worktrees/pods-ape-shell-1497`, base `748782ce21e1079b39941284e4dd4156b8dba60d`.
-- Implementation: [monorepo PR 458](https://repos.openape.ai/patrick/monorepo/pulls/458), [mail CLI PR 19](https://git.openape.ai/delta-mind/o365-cli/pulls/19), [registry PR 5](https://repos.openape.ai/patrick/shapes-registry/pulls/5). Core source `7fefe8cb7bc6e40b5c8dfb127ea6757e6585b693`; current main recipe corrections are integrated with 26 recipe cases passing. See the PR for the current reviewed head.
+- Issue: https://github.com/openape-ai/openape-history/issues/2001. Branch `feature/issue-1497-pods-ape-shell`, checkout `openape-monorepo.worktrees/pods-ape-shell-1497`, base `748782ce21e1079b39941284e4dd4156b8dba60d`.
+- Implementation: [monorepo PR 458](https://github.com/openape-ai/openape-history/issues/2009), [mail CLI PR 19](https://git.openape.ai/delta-mind/o365-cli/pulls/19), [registry PR 5](https://github.com/openape-ai/openape-history/issues/2008). Core source `7fefe8cb7bc6e40b5c8dfb127ea6757e6585b693`; current main recipe corrections are integrated with 26 recipe cases passing. See the PR for the current reviewed head.
 - M0–M4 implementation and rehearsals are complete. The required affected gate, 141 native cases in a fresh fixture package, three focused browser cases, 22 external automation tests, Go/race, Windows build and all 32 registry adapters pass. [Implementation Test Runs](https://report.openape.ai/d/01M5092ZWW862KTC5MEMASKBJJ?v=2) records exact targets and limits. The owner separately authorized deployment and rollout on October 15, 2026.
 - Production IdPs and the protected mail adapter are deployed. The signed local desktop includes PR 461's managed-identity renewal correction; 16 scripts were validated and resumed with unchanged schedules. [Rollout Test Run](https://report.openape.ai/d/01M50JAB782AZQZGH6MDV0BC6C) tracks actual evidence and remaining issues. No public stable feed was published.
 - Current follow-up: `bugfix/issue-1497-node-env-proxy`, base `7c5c783c5568b76fd979bf8fafa1decc3276309d`. The Task monitor's assigned Node CLI uses `--use-env-proxy`; recognize that explicit, no-operand flag while retaining exact argv, script hashes, preload binding and rejection of unbound code. The affected Pod stays paused pending regression checks and a corrected signed package. Preserve unresolved effects until their actual trace proves reconciliation safe.
@@ -320,21 +320,21 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Retire legacy runtime — issue 1498
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1498. Branch `feature/issue-1498-retire-legacy-runtime`.
+- Issue: https://github.com/openape-ai/openape-history/issues/2003. Branch `feature/issue-1498-retire-legacy-runtime`.
 - Owner-authorized shutdown of Troop, CRM and Chat, retaining application data and legacy source/history.
 - Disable old Troop producers and operator support jobs; remove the three Compose services, live containers, routes and associated monitors.
 - Verify database preservation/integrity and unrelated runtime identities. Exact runtime, provider webhook and merge receipts belong on the issue/PR and Test Run.
 
 ## Mail choices and decision notifications — issue 1495
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1495. Branch `bugfix/issue-1495-decision-push`, checkout `openape-monorepo.worktrees/mail-processing-1492`, base `cac6db13`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1997. Branch `bugfix/issue-1495-decision-push`, checkout `openape-monorepo.worktrees/mail-processing-1492`, base `cac6db13`.
 - Preserve an existing owner classification for the same immutable message when sender/subject are unchanged after a fuller provider read. Archive approvals remain bound to complete content versions.
 - Collect decision pushes per account for two quiet minutes, at most ten minutes. Keep individual decisions immediately actionable, group before the dispatch page limit, and retain retry/backoff and resolved-item suppression. Messages keep their existing notification behavior.
 - Focused acceptance covers 100 decisions/two devices, continuous arrival, account isolation, cancellation during backoff, fuller mail retrieval and distinct archive authority. Final checks, merge and deployment receipts belong on the implementing PR.
 
 ## Object and list newline style — issue 1491
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1491. Branch `feature/issue-1491-object-newline-lint-style`, base `b248ac1594c8f83aff24d705eff5df4c1c818a42`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1985. Branch `feature/issue-1491-object-newline-lint-style`, base `b248ac1594c8f83aff24d705eff5df4c1c818a42`.
 - Owner requested consistent object/list newline rules plus a dedicated autofix commit. `style/newline-per-chained-call` is excluded because it cycles with `antfu/consistent-chaining`; `function-paren-newline` uses `consistent` because `multiline-arguments` cycles with `antfu/consistent-list-newline`.
 - Autofix commits `d5ac18b81cfeb11c71c947e1c0ff9bace5f73700` (227 files) , `62087ae2cb836aba2b402b69c3a1c3dfcf6cab31` and `928463c8fb01e68267077a953e8cf6bd449e1846` (files merged from main) are listed in `.git-blame-ignore-revs`; merge with a merge commit so the SHA survives.
 - Verification: zero remaining violations of the new rules, no new violations of other rules; affected lint and typecheck pass. Pods and Pods relay unit timeouts at 5 s reproduce on the unchanged base under load and are tracked separately.
@@ -342,24 +342,24 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Load-sensitive unit test timeouts — issue 1493
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1493. Branch `bugfix/issue-1493-test-timeouts`, base `01ea0ac93240f92b354c4ad453c3d35711c6ccad`, checkout `openape-monorepo.worktrees/test-timeouts-1493`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1990. Branch `bugfix/issue-1493-test-timeouts`, base `01ea0ac93240f92b354c4ad453c3d35711c6ccad`, checkout `openape-monorepo.worktrees/test-timeouts-1493`.
 - Owner first requested a relay fix and a gate worker limit, separate from PR 447 (issue 1491), then kept only the relay fix. The relay quota test filled 10,000 items with a per-write `count(*)` (quadratic, ~3 s unloaded); `InboxStore` now takes the quota and the test uses 20 items with unchanged assertions (1–2 ms; a disabled quota check makes it fail).
-- A gate-wide Vitest worker limit was tried and dropped: in a full uncached `--concurrency=4` comparison it turned `apes` and `openape-e2e` red three times with `403 Invalid management token` while the unlimited run passed; that IdP fixture cross-talk is tracked in https://repos.openape.ai/patrick/monorepo/issues/1494. `VITEST_MAX_WORKERS` must not be used either: Vitest 4.1.10 applies it after `fileParallelism: false`.
+- A gate-wide Vitest worker limit was tried and dropped: in a full uncached `--concurrency=4` comparison it turned `apes` and `openape-e2e` red three times with `403 Invalid management token` while the unlimited run passed; that IdP fixture cross-talk is tracked in https://github.com/openape-ai/openape-history/issues/1992. `VITEST_MAX_WORKERS` must not be used either: Vitest 4.1.10 applies it after `fileParallelism: false`.
 - Next: native PR review and merge.
 
 ## Pods workspace messages tab — issue 1487
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1487. Branch `feature/issue-1487-pods-messages`, base `5150cdc2`, checkout `.claude/worktrees/openape-pods-ui-redesign-7b2382`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1972. Branch `feature/issue-1487-pods-messages`, base `5150cdc2`, checkout `.claude/worktrees/openape-pods-ui-redesign-7b2382`.
 - Owner approved Plan revision 4 on October 15, 2026 ("ja - du kannst mit der umsetzung starten"): https://report.openape.ai/d/01M4ZCQTG2AZM49A5GW2AAWX4T?v=4. The design was iterated in the Vite demo and accepted by the owner.
 - Adds a Mitteilungen tab to the shared workspace, relay endpoints for the owner session and the signed desktop runtime (all of the account's messages, never decisions), a shared message parser, the desktop `messages` channel and the browser client.
 - Rollout: relay first, then a signed desktop build; a new desktop against the old relay would show the tab with an update error. Done on October 15, 2026 after separate owner approvals: relay `prod-2d24afe9` (previous `prod-3b31e751`), signed desktop from `2d24afe9` installed with paired backup `~/Library/Application Support/OpenApe Pods Rollback/20261015-130832-issue-1487-messages`.
-- PR: https://repos.openape.ai/patrick/monorepo/pulls/448 (head `7c7cb7cf`, merged with main `01ea0ac9`). Local affected gate (Pods 1802, relay 101), Pods browser suite 64/64 and relay e2e 2/2 passed: https://report.openape.ai/d/01M4ZJ5P0Q9B6CA57CGM35D2HP?v=1. Plan v5: https://report.openape.ai/d/01M4ZCQTG2AZM49A5GW2AAWX4T?v=5.
+- PR: https://github.com/openape-ai/openape-history/issues/1991 (head `7c7cb7cf`, merged with main `01ea0ac9`). Local affected gate (Pods 1802, relay 101), Pods browser suite 64/64 and relay e2e 2/2 passed: https://report.openape.ai/d/01M4ZJ5P0Q9B6CA57CGM35D2HP?v=1. Plan v5: https://report.openape.ai/d/01M4ZCQTG2AZM49A5GW2AAWX4T?v=5.
 - Merged as `2d24afe9`. Live acceptance (real notify in desktop and browser tab, read state lowers the server badge count 47→46 and reaches the desktop): https://report.openape.ai/d/01M4ZW16SJ0EK0VM09VZZQ3PCW?v=1. Plan v6 done (achieved): https://report.openape.ai/d/01M4ZCQTG2AZM49A5GW2AAWX4T?v=6. The physical phone icon was not observed.
 - Next: none for this issue. Follow-ups: `scripts/verify-distribution.mjs` navigation is stale since #1468; a failed MCP `run` keeps returning its recorded "no execution slot" result for the same requestId; the old GUI relaunched itself during the install backup copy.
 
 ## CI instruction reconciliation — issue 1483
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1483; the native implementation PR is linked there. Branch `bugfix/issue-1483-knowledge-ci-guidance`, checkout `openape-monorepo.worktrees/knowledge-ci-1483`, base `7d0caa8b67a939284d008761efe977dc76fbe288`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1967; the native implementation PR is linked there. Branch `bugfix/issue-1483-knowledge-ci-guidance`, checkout `openape-monorepo.worktrees/knowledge-ci-1483`, base `7d0caa8b67a939284d008761efe977dc76fbe288`.
 - Reconcile AGENTS.md with the October 7 owner decision: keep the local affected gate, require a new owner decision to reactivate CI/protection, and distinguish recorded configuration from actual merge requirements. No product, workflow or protection changes.
 - Verification: instruction diff reviewed against issue 1448 / PR 296; `git diff --check` passes; affected unit dry-run selects zero workspaces and steps for these documentation changes. The isolated checkout has no dependencies or CLI-auth build; the shared checkout doctor passed. The pre-push gate will record the final source result on the PR.
 - Next: native PR review and merge after the local gate; record the merge receipt on the PR and close the issue manually. A separate hosted report is disproportionate for this documentation-only correction.
@@ -377,7 +377,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Affected selection and local gates — issue 1480
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1480. Branch `bugfix/issue-1480-check-gates`, base `c5b02ac94777f2562d329e659d50685c97b1c43e`, isolated checkout `openape-monorepo.worktrees/check-gates-1480`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1960. Branch `bugfix/issue-1480-check-gates`, base `c5b02ac94777f2562d329e659d50685c97b1c43e`, isolated checkout `openape-monorepo.worktrees/check-gates-1480`.
 - Owner requested narrowing affected selection and eliminating duplicate gates without losing meaningful coverage. The runner compares the branch merge base, includes dirty/untracked paths, retains transitive consumers and full scope for global configuration. Equal base/head no longer pulls in the previous commit.
 - Pre-commit retains branch/lockfile guards; pre-push owns the complete affected contract. Instructions no longer add full lint/typecheck or an extra affected run before commits. Full deployment checks and all product test suites remain.
 - Permanent tests extend `scripts/check.test.mjs` because incorrect selection could silently omit consumers or cause repeated whole-repository work. Real Git histories cover equal/divergent bases and local files; actual hook execution covers one push gate and failure propagation.
@@ -385,7 +385,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## OpenClaw retirement — issue 1479
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1479. Branch `feature/issue-1479-remove-openclaw`, base `ba7c4d827f82a556ddfe8009e592e905ce7221ed`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1958. Branch `feature/issue-1479-remove-openclaw`, base `ba7c4d827f82a556ddfe8009e592e905ce7221ed`.
 - Owner approved removing OpenClaw from OpenApe on October 15, 2026: “passt - dann nest zurückbauen...openclaw entfernen wir nun aus openape”. The implementation removes the Nest adapter, setup and grant-gate packages, container/skill-sync distribution, and active documentation wiring.
 - Nest keeps the default bridge and opt-in in-process bridge. Retired runtime entries remain stored and are reported instead of starting a different runtime. Generic identity/grant APIs and external CLI dispatch are preserved. Bundled skills use `metadata.openape`; old imported metadata requires explicit migration.
 - Existing data, installed host packages, published npm packages and services are not modified. Historical receipts and source attributions remain historical. No deployment is part of this repository cleanup.
@@ -395,23 +395,23 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Pods UI test cycles — issue 1478 follow-up
 
-- Owner authorization, October 15, 2026: “Super. Dann halten wir das Fest wo nötig. Mergen das und verkürzen auch für später die testzyklen”. UI PR https://repos.openape.ai/patrick/monorepo/pulls/427 merged as `9a56b378d9941edb280e790421c29bc26867acff`.
+- Owner authorization, October 15, 2026: “Super. Dann halten wir das Fest wo nötig. Mergen das und verkürzen auch für später die testzyklen”. UI PR https://github.com/openape-ai/openape-history/issues/1955 merged as `9a56b378d9941edb280e790421c29bc26867acff`.
 - Follow-up branch: `feature/issue-1478-pods-test-cycles`, same isolated checkout. `test:layout` runs only browser tests; explicit `test:e2e` builds/packages and retains native acceptance in the shared manual E2E suite. Unit/pre-push policy is unchanged; no existing tests were removed.
 - Routing policy is recorded in root AGENTS.md and `apps/openape-pods/docs/testing.md`. Focus UI edits on browser cases, add adapter/backend checks for changed behavior, retain actual native boundaries and prove replacements before retiring assertions.
 - Verification: full repository lint/typecheck passed, 7 check-runner tests passed, all 63 browser tests passed through `test:layout` in 18.78 s. The self-contained native command built/packaged successfully and passed one selected real Electron renderer/IPC isolation test (6 other cases intentionally filtered). Full native suite was not rerun for this routing-only change.
-- Follow-up PR: https://repos.openape.ai/patrick/monorepo/pulls/429. Implementation `6662a40d22fe64a07a776787776dd54731175960`; all configured commit/push stages passed. Verified private Test Run: https://report.openape.ai/d/01M4YEWD3A4VQXZWVGVR07GB8G. Next: merge the exact reviewed heads under the owner's authorization; record the receipt on the PR. No production deployment or signed installation.
+- Follow-up PR: https://github.com/openape-ai/openape-history/issues/1957. Implementation `6662a40d22fe64a07a776787776dd54731175960`; all configured commit/push stages passed. Verified private Test Run: https://report.openape.ai/d/01M4YEWD3A4VQXZWVGVR07GB8G. Next: merge the exact reviewed heads under the owner's authorization; record the receipt on the PR. No production deployment or signed installation.
 
 ## Standalone Pods UI development — issue 1478
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1478. Branch `feature/issue-1478-pods-ui-dev`, base `49fef2b3a8d5b1d91c7df56735a44e266c25b489`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1953. Branch `feature/issue-1478-pods-ui-dev`, base `49fef2b3a8d5b1d91c7df56735a44e266c25b489`.
 - Approved plan revision 2: https://report.openape.ai/d/01M4XBCZ2JQBKT0W16YTRS13S8?v=2. Owner authorized implementation in an isolated worktree on October 15, 2026.
 - Worktree: `/Users/owner/Companies/private/repos/openape/openape-monorepo.worktrees/pods-ui-dev-1478`. `pnpm --filter @openape/pods dev:ui` serves the actual UI at `http://127.0.0.1:5478`; another worktree must choose its own port. No Electron process or backend runs for the demo.
 - Shared workspace controller and injected host/Pod access keep demo, Electron and backend consumers on the same components. Six invented Pods, four resettable scenarios, edits and simulated commands remain memory-only. Production adapters retain their existing capabilities and command contracts.
-- Verification: repository lint/typecheck and Electron/relay builds passed; 1,794 Pods tests, 100 relay tests and 63 browser tests passed. The shared-component transfer probe passed, and final builds exclude demo data/toolbar. Actual outputs and personally inspected screenshots: https://report.openape.ai/d/01M4YD9F33NX8VY85MN8ZSB3KK. Source evidence is bound to the recorded dirty-tree digest, not falsely attributed to the unchanged base commit. Implementation commit `2cb5412de20d9f5954290087576da34b2c9921a0`; native PR https://repos.openape.ai/patrick/monorepo/pulls/427. The mandatory repository-wide commit and push gates passed. Target main later advanced to `448b36a6`; both work-log entries are preserved. Next: iterate on the shared UI and review the PR. No deployment or signed installation.
+- Verification: repository lint/typecheck and Electron/relay builds passed; 1,794 Pods tests, 100 relay tests and 63 browser tests passed. The shared-component transfer probe passed, and final builds exclude demo data/toolbar. Actual outputs and personally inspected screenshots: https://report.openape.ai/d/01M4YD9F33NX8VY85MN8ZSB3KK. Source evidence is bound to the recorded dirty-tree digest, not falsely attributed to the unchanged base commit. Implementation commit `2cb5412de20d9f5954290087576da34b2c9921a0`; native PR https://github.com/openape-ai/openape-history/issues/1955. The mandatory repository-wide commit and push gates passed. Target main later advanced to `448b36a6`; both work-log entries are preserved. Next: iterate on the shared UI and review the PR. No deployment or signed installation.
 
 ## Readable exact-command fallback and batch history — issue 1477
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1477. Branch `feature/issue-1477-readable-command-fallback`, base `49fef2b3`. Follow-up to issue 1473 from the owner's phone screenshot of a pods-graph-gate batch ("Aber auch ohne shape muss das schöner gehen").
+- Issue: https://github.com/openape-ai/openape-history/issues/1952. Branch `feature/issue-1477-readable-command-fallback`, base `49fef2b3`. Follow-up to issue 1473 from the owner's phone screenshot of a pods-graph-gate batch ("Aber auch ohne shape muss das schöner gehen").
 - Generic rules in `modules/nuxt-auth-idp/src/runtime/utils/command-structure.ts`, no program special cases: program + leading subcommand words as head; only canonical JSON objects (`JSON.stringify` round trip, no hidden characters after decoding) become key/value lists, nested one level; ambiguous strings keep JSON quotes; `--name value` options; `--name=value` stays one token. Unsafe argv (control/format characters, over 4096 characters) and `bash -c` lines keep the raw rendering.
 - Batch rows: head + facts within a character budget, middle-truncated values, "+N more". Rows whose short forms read the same while binding different commands add the first differing fact, then full values, else keep the raw line. Card: head + key/value blocks; the raw line sits under the technical details.
 - Owner addition: the batch decision list holds only open decidable members; pending members needing their own view stay visible with "Review individually"; decided members move into a closed "Already decided (N)" history, newest first.
@@ -421,14 +421,14 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Long program calls through the broker — issue 1476
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1476. Branch `bugfix/issue-1476-authorize-activity-failure`, base `4a1fa8eb`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1950. Branch `bugfix/issue-1476-authorize-activity-failure`, base `4a1fa8eb`.
 - The PR monitor Pod's Azure DevOps activity query (`az rest --method POST` with a ~3.5 KB JSON body) failed every run with "Permission service temporarily unavailable". id.openape.ai covered it with grant `fe2988b1` and issued a ~16.6 KB command token, because the token repeats the argv (`command`, `execution_context.argv`, `context_bindings`). pods.openape.ai checked the forwarded token with a 16 KiB string limit and answered 503 `broker_unavailable`, which the desktop retries. The same 503 never reached a log.
 - Fix: `PROGRAM_AUTHORIZE_LIMITS.tokenChars` (120 KiB) bounds forwarded tokens. The decision IdP refuses a larger token with a definite 413 `command_too_large` before it spends a single-use grant, and brokers relay 413. Unexpected 5xx of authorize are logged with a request id and cli/operation only, and the answer carries `request_id`. The desktop's authorization errors name HTTP status, problem type/title and request id, and it isolates 413 as non-retryable. Coverage ignores malformed stored details (`isCoverableCliDetail`). 14,277 production grants were checked read-only and none is malformed.
 - Rollout: IdP deploy (free-idp + pods-idp) fixes the Pod without a desktop build; the desktop diagnostics ship with the next signed build.
 
 ## Pods agent model from the connected account — issue 1475
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1475. Branch `bugfix/issue-1475-pods-agent-model`, base `6c028398`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1948. Branch `bugfix/issue-1475-pods-agent-model`, base `6c028398`.
 - Every agent run and description thread failed because the desktop hard-coded `gpt-5.5`, which ChatGPT accounts reject. Owner rule: the desktop is a generic runtime; a model change at OpenAI needs no code change or signed build.
 - The desktop reads the account default through the bundled Codex app-server `model/list` (`isDefault`, paged by `nextCursor`) with the ChatGPT sign-in, caches it per connection for one hour, reads it again after sign-in and once after a provider "model … not supported" refusal. The worker asks the desktop's model gateway (`POST /v1/model`) per agent run and description thread.
 - The bundled `models.json` holds every model from `codex debug models --bundled` (hash-pinned in the manifest). An account default missing there fails the run with an update-Pods error; no other model is chosen. ESLint refuses `gpt-` slug literals in `apps/openape-pods/src`.
@@ -444,7 +444,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Scheduled Pod identity — issue 1474
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1474. Branch `bugfix/issue-1474-scheduled-pod-identity`, base `013faf3e`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1929. Branch `bugfix/issue-1474-scheduled-pod-identity`, base `013faf3e`.
 - Scheduled program calls receive the same refreshed Pod identity file as Pod terminals through `APES_AUTH_FILE`; the broker permits reading that file, redacts all issued tokens and removes it on completion or failure. The owner's protected apes login remains closed.
 - `apps/openape-pods/scripts/git-credential-apes` honors the explicit identity file and refuses an unreadable file without switching to the owner. The host helper is installed from this source.
 - Validation: full lint/typecheck, Pods build, focused program/approval tests and a native program invocation. Permanent tests protect credential routing, redaction, renewal and cleanup; full Pods results and signed local rollout will be recorded on the PR.
@@ -454,7 +454,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 > **Release state (issue 1473, October 14):** IdP prod-e85625a0 (free-idp + pods-idp) and the signed Pods desktop from main 58118fe1 (schema 52) are live; the IdP deploy gate is lifted. apes 2.0.0 is published with its dependency chain (version PR 422, October 14).
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1473. Plan revision 3, approved October 14, 2026 ("… wir ziehen das jetzt von Anfang bis Ende in dieser Session durch"): https://report.openape.ai/d/01M4VAP3E4WHRB6SRGCJJ8E6CD; source `.claude/plans/2026-10-13-structured-grant-summary.json`. Revision 4, approved October 14 ("Revision 4 freigegeben, Entscheidung 10 wie empfohlen"), report version 6; progress version 7.
+- Issue: https://github.com/openape-ai/openape-history/issues/1919. Plan revision 3, approved October 14, 2026 ("… wir ziehen das jetzt von Anfang bis Ende in dieser Session durch"): https://report.openape.ai/d/01M4VAP3E4WHRB6SRGCJJ8E6CD; source `.claude/plans/2026-10-13-structured-grant-summary.json`. Revision 4, approved October 14 ("Revision 4 freigegeben, Entscheidung 10 wie empfohlen"), report version 6; progress version 7.
 - Milestones: M1 protocol summary {title, description, origin, link} + migration (protocol repo, @openape/core, IdP, apes); M2 shapes-registry as the only adapter source; M3 generic IdP grant card (PodRunGrant removed); M4 Pods pass-through + signed build; M5 delegation scopes (read own grants, request for own agents, never approve); M6 personal grant upgrade Pod; M7 registry upkeep via issues/PRs without user data.
 - Rules: Patrick's "desktop is a generic runtime"; UI checks in Vitest browser mode; no push without owner approval at the IdP; IdP, Pods and apes ship the summary change together.
 - M2 data model: monorepo PR 406 (branch `feature/issue-1473-registry-presentation`) and shapes-registry PR 2 (branch `feature/issue-1473-registry-single-source`). `[operation.presentation]` and `[cli] tested_versions` in `@openape/shapes`/`@openape/grants` (TOML parser, unknown keys fail closed, permissions unchanged); grants bind the semantic adapter digest (matching rules only; presentation, versions, display texts and comments excluded), file integrity keeps the file hash (`fileDigest`, Pods `adapterHash`, registry `digest`); IdP `shapes.versions` column; `pnpm seed:shapes` stores presentation, versions and the semantic digest. Registry: git (declared options, tested 2.54, `-C` stays `repo:*` by lead decision), pod-runtime and pod-http with presentation, gh binds owner and name separately (security fix); `node scripts/check-adapters.mjs` with `SHAPES_MODULE` runs golden, hostile-option and real-CLI checks locally (no npm publish, CI manual). Monorepo copies are byte-identical to the registry files. Rollout: merge 406, merge registry PR 2, deploy the IdP, reseed; loaders follow. The adapter changes re-request grants on git, gh, pod-runtime and pod-http once; later text changes keep grants.
@@ -470,21 +470,21 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Intake category version recovery — issue 1472
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1472. Branch `bugfix/issue-1472-category-version`, worktree `openape-monorepo.worktrees/issue-1472`, base `3b31e7510fc713952f29b936c925a0524e772afb`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1917. Branch `bugfix/issue-1472-category-version`, worktree `openape-monorepo.worktrees/issue-1472`, base `3b31e7510fc713952f29b936c925a0524e772afb`.
 - Mail Sync reads the current provider message before category work, preserves owner overrides and uses its current version for conditional updates. Metadata-only changes no longer cause repeated stale-version failures.
 - Live shutdown recovery: provider reads proved the interrupted action was not applied; its effect and work holds were reconciled through MCP. Recovery run `58be9bf8-bd54-4998-b4cd-ce1a386d0725` completed with three category changes.
 - Verification and deployment receipts will be recorded on the native issue/PR and in the Test Run.
 
 ## Pods failure repair prompts — issue 1471
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1471. Branch `feature/issue-1471-pods-repair-prompt`, worktree `openape-monorepo.worktrees/issue-1471`, base `7946a2487fcfb2097d728706a47e2c24852743d2`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1915. Branch `feature/issue-1471-pods-repair-prompt`, worktree `openape-monorepo.worktrees/issue-1471`, base `7946a2487fcfb2097d728706a47e2c24852743d2`.
 - Relay/PWA lists and details present held work, uncertain effects and uncertain approvals as a Pod needing help, with a localized copyable prompt for Codex or Claude. The prompt carries diagnostic references and requires external reconciliation before recovery; copying does not change runtime state. Ordinary questions and IdP handoffs retain their controls.
 - Verification: full lint/typecheck, relay production build, 99 relay tests; temporary Vitest browser check with actual Inbox CSS passed at 390/1280 pixels, screenshots personally inspected. The temporary check is retained with the report evidence, not in the default test chain.
 - Next: native PR, merge and relay deployment; post-merge receipt and Test Run will be recorded on the issue/PR.
 
 ## Pods UX and creation plan — issue 1468 (delivered)
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1468. Plan revision 6 (done, result partial): https://report.openape.ai/d/01M4TMF0QVFME0772ECFK9HZ4J; source `.claude/plans/2026-10-13-pods-ux-creation.json`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1896. Plan revision 6 (done, result partial): https://report.openape.ai/d/01M4TMF0QVFME0772ECFK9HZ4J; source `.claude/plans/2026-10-13-pods-ux-creation.json`.
 - Owner decisions: owner context with the owner HOME is the creation default, the isolated sandbox is optional when the user wants it; one approval per push through per-object approvals; UI is verified in Vitest browser mode, never E2E.
 - Merged on main `77ee1047`: PR 384 quick wins, 385 M1 rows, 388 M2 one Pod page, 387 M3 problems, 391 M4 settings + tags (schema 49), 390 M5b validation/MCP retries, 386 M5a Shapes declared options + example git adapter, 389 M7 `program.run` approvals (schema 50), 393 global-option value fix, 392 M6 owner HOME.
 - Installed October 13, 17:29: relay `prod-77ee1047` (rollback `prod-cd777449`), signed-local desktop `77ee1047` schema 50 (rollback `~/Library/Application Support/OpenApe Pods Rollback/20261013-172945-ux-1468`).
@@ -494,49 +494,49 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Autonomous Pods: shared data replaces networks — issue 1465
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1465. Plan revision 2 (owner approval October 12, including the production switch): https://report.openape.ai/d/01M4R7G9398CQ3QADNFVM7YKWT?v=2; source `.claude/plans/2026-10-12-autonomous-pods/plan.json`; frozen design `docs/architecture/pods-autonomous/design.md`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1869. Plan revision 2 (owner approval October 12, including the production switch): https://report.openape.ai/d/01M4R7G9398CQ3QADNFVM7YKWT?v=2; source `.claude/plans/2026-10-12-autonomous-pods/plan.json`; frozen design `docs/architecture/pods-autonomous/design.md`.
 - Branch `feature/issue-1465-autonomous-pods` from `7fab4b84`: schema 48 (shared data, work ledger, owner questions, object approvals, storage readiness and recovery), approved mail archive, network runtime and APIs removed, MCP action `domain`.
 - Checks: Pods unit tests, relay tests, lint, typecheck; Electron E2E for shared data, crash recovery and Codex acceptance.
 - Next: PR, cutover (backup, relay + desktop in one window, Mail and Morgenbriefing Pods), 48 h observation with two briefings.
 
 ## Pod tag chips on the inbox item detail — issue 1463
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1463. Branch `feature/issue-1463-inbox-detail-tags` from `83bd3ab0`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1863. Branch `feature/issue-1463-inbox-detail-tags` from `83bd3ab0`.
 - Change: shared `InboxTags.vue` (moved from the list card) also renders on `pages/inbox/item/[id].vue` for messages and decisions; nothing without tags. Relay UI only.
 - Checks: relay vitest (new `test/inbox-item.test.ts`), lint, typecheck; `test:e2e e2e/inbox-app.test.ts` with tagged fixtures and detail screenshots at 390/1280 px, light/dark.
 - Next: merge, relay deploy, Test Run evidence.
 
 ## Free tags for Pods and networks — issue 1459
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1459. Plan (owner "Passt Go"): https://report.openape.ai/d/01M4NC05HHAEYQ29AG60ZDJ4JX; source `.claude/plans/2026-10-11-pods-tags/plan.json`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1853. Plan (owner "Passt Go"): https://report.openape.ai/d/01M4NC05HHAEYQ29AG60ZDJ4JX; source `.claude/plans/2026-10-11-pods-tags/plan.json`.
 - Change: schema 47 adds `item_tags` (46→47 additive, 45 rebuilt then extended); workspace commands `tag` and `renameNetwork`; tags in the workspace view and map (`MapTags`, inherited network tags computed, never copied); tag filter, chips and `TagEditor` in Automatisierungen.
 - Deferred with the owner informed: tags in portable export/import (needs a `pods-protocol` format feature) and in the phone inbox.
 - Delivered October 11: relay prod-8f01fc21, desktop 8f01fc21 (schema 47), 7 items tagged, 19 renames applied. Evidence: https://report.openape.ai/d/01M4NE1E1GW2DKT50SZ0VA0N66
 
 ## Approvals badge and growing approval batches — issue 1458
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1458. Plan revision 2 (owner "Go das passt"): https://report.openape.ai/d/01M4N5D05KHCMXY9DNMPTSSDET; source `.claude/plans/2026-10-11-pods-approvals-badge/plan.json`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1849. Plan revision 2 (owner "Go das passt"): https://report.openape.ai/d/01M4N5D05KHCMXY9DNMPTSSDET; source `.claude/plans/2026-10-11-pods-approvals-badge/plan.json`.
 - Cause: approval batches expired after 12 hours unanswered; the desktop blocked their inputs and the inbox kept an "Am IdP entscheiden" link to the expired grant (tasks `7552ebfa`, `2ae211d1`, October 11).
 - Change: gate manifests version 4 carry `batchId`; frozen tasks of one gate join one open IdP batch (no announced size, grants.md §3.4) for up to seven days and 100 grants; an unanswered expired batch reopens its untouched inputs; pre-1458 expiry blocks reopen once; waiting batches are read once a minute after the first ten minutes. The inbox lists no IdP items; the desktop reads the owner's pending grants with the apes login (read only) and the relay shows them as one Approvals entry and in the badge.
 - Delivered October 11: PR 353 + PR 354 (finished batches withdraw unanswered IdP requests; the IdP keeps pending grants past `waits_until`). Relay prod-49b3b01a, desktop b28a8080. Evidence: https://report.openape.ai/d/01M4N92EK0RSJEJBR9FV1V7TMP. Open: owner check on the iPhone.
 
 ## Mail network learns newsletter senders — issue 1457
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1457. Plan (owner "Du hast mein Go!"): https://report.openape.ai/d/01M4KHHB6FEV9SCHFRXX44D3V9; source `.claude/plans/2026-10-10-mail-newsletter-learning/plan.json`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1846. Plan (owner "Du hast mein Go!"): https://report.openape.ai/d/01M4KHHB6FEV9SCHFRXX44D3V9; source `.claude/plans/2026-10-10-mail-newsletter-learning/plan.json`.
 - M1 in this PR: read-only `context.network.choices({gate,limit})` port (declared feedback is not allowed with routing gates).
 - M2 (Categorisation member script, live via updateMemberScript after the desktop release): a sender with ≥ 2 newsletter choices and no other choice skips the choose gate. With the live history this learns 13 senders.
 - Next: merge, signed desktop build, re-pin Categorisation, observe Intake runs, Test Run.
 
 ## Pods inbox web push (M5) — issue 1446
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1446 (approved plan revision 2, milestone M5). Owner request October 10: "Implementiere das hier", including the count badge on the app icon.
+- Issue: https://github.com/openape-ai/openape-history/issues/1773 (approved plan revision 2, milestone M5). Owner request October 10: "Implementiere das hier", including the count badge on the app icon.
 - Finding before the change: Pod notifications reached the relay inbox and the iPhone PWA (verified with Pod "Inbox-Testmitteilung" 08f8283b), but the relay had 0 push subscriptions and nothing consumed the push outbox.
 - Change: Settings opt-in (`app/inbox/push.ts`, `InboxPushSetting.vue`), renewal on start, relay dispatcher (`server/utils/inbox-push.ts`, plugin every 5 s, backoff, 404/410 cleanup, `NUXT_INBOX_PUSH_ENABLED`), Declarative Web Push payload with `app_badge`.
 - Next: merge, relay deploy, owner opt-in on the iPhone, test notification, Test Run evidence.
 
 ## INITECH PR monitor stays disturbed — issue 1456
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1456. Worktree `.claude/worktrees/initech-pr-monitor-pod-fix-d3a96d`, branch `bugfix/issue-1456-seal-unstarted-domain`, base `8f4e157d`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1843. Worktree `.claude/worktrees/initech-pr-monitor-pod-fix-d3a96d`, branch `bugfix/issue-1456-seal-unstarted-domain`, base `8f4e157d`.
 - Cause 1 (product): an `az` call registered its execution domain while run `3535d415` hit the time limit; the main-process callback threw after the worker stored the row, so no guardian wrote the record and recovery saw `registration-missing` with a live owner until the app restarted. `superviseProcess` now seals such a domain with a closed-lease guardian (closed record, exit 125, no fork). Regression: `test/worker/sandbox-domain.test.ts`; the installed native helper was checked to write `confirmed-closed` without executing the command.
 - Cause 2 (Pod script): 41 PRs exceed 128 execution domains per daily full scan, and the failed scan repeated every run. Owner recipe `~/Downloads/INITECH-PR-monitor/pod-script.mjs` now refreshes PRs on a rolling daily basis within a run budget; active script `b4d0b497`.
 - Live recovery: `recover retry` on runs `3535d415` and `ae07203b` released the blocked inputs.
@@ -544,7 +544,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Pods consolidation — issue 1455
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1455. Owner-approved plan: https://report.openape.ai/d/01M4GPV3M6H73QA4PTCEHTR0DN; source `.claude/plans/2026-10-09-pods-consolidation/plan.json`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1820. Owner-approved plan: https://report.openape.ai/d/01M4GPV3M6H73QA4PTCEHTR0DN; source `.claude/plans/2026-10-09-pods-consolidation/plan.json`.
 - Merged (PRs 327–344, main `8fe57284`): M1 dead code, M2 iOS app and encrypted mobile channel removed, M3 Morgenbriefing as a network, M4 networks as the only orchestration model, M5 route-only networks and one decision model, M6 safety rules for real effects with approvals at the IdP, sandbox (can) separate from grants (may) and owner level with a configurable denylist, M7 MCP owner session through `apes login` (browser sign-in as fallback) with full access including grant decisions, plus the DDISA service-token exchange for HTTP destinations.
 - Installed: desktop build `8fe57284`, relay `prod-8fe57284`, IdP `prod-eb7a4446`.
 - Open: M8 baseline schema (own branch: worker storage, backup, relay workspace store); M9 docs on branch `docs/issue-1455-consolidation-docs` ([Pods model](../../apps/openape-pods/docs/model.md)); M9 installed-app acceptance as a Test Run with inspected screenshots.
@@ -552,7 +552,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Delta Mind mail network live: unblock, cursor, real archiving — issue 1454
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1454; approved plan revision 1 (owner: "Leg los mit dem Plan", October 8): https://report.openape.ai/d/01M4EDTC4JT3RPZRNJMT191EZM?v=2.
+- Issue: https://github.com/openape-ai/openape-history/issues/1801; approved plan revision 1 (owner: "Leg los mit dem Plan", October 8): https://report.openape.ai/d/01M4EDTC4JT3RPZRNJMT191EZM?v=2.
 - Worktree `openape-monorepo.worktrees/delta-mail-live`, branch `feature/issue-1454-delta-mail-live`, base `d65fa479`.
 - Cause of the October 8 stall (12:25 CEST): the relay marks a claimed command `unknown` when the desktop reconnects; `CentralController.connect` then refused every reconnect, and because worker scheduling follows the central lease (approved online-only design), all local schedules stopped. MCP could not name the command (`pod_offline`).
 - M0 change: `runtime.central.uncertain` (and inventory `desktop.uncertain`) lists unknown commands with `startedLocally` from `central/executing.json`. A command that never started locally is settled automatically as failed ("Not executed … Submit it again"). A started one stays blocking until MCP `workspace {type:reconcile,id,applied,evidence}` records the owner-confirmed outcome as its completion; nothing executes again. The relay accepts a completion while other unknown commands still wait.
@@ -563,7 +563,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Pods Mac download, matching landing page and automatic updates — issue 1453
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1453; PR: https://repos.openape.ai/patrick/monorepo/pulls/310. Approved proposal revision 2: https://report.openape.ai/d/01M4DBA7DBFCWAA21NSV1CMR1K?v=2; exact owner instruction: "Plan ist freigegeben, setz das um."
+- Issue: https://github.com/openape-ai/openape-history/issues/1798; PR: https://github.com/openape-ai/openape-history/issues/1799. Approved proposal revision 2: https://report.openape.ai/d/01M4DBA7DBFCWAA21NSV1CMR1K?v=2; exact owner instruction: "Plan ist freigegeben, setz das um."
 - Worktree `openape-monorepo.worktrees/pods-auto-update-1453`, branch `feature/issue-1453-pods-auto-update`, base `e3fd9fa8d2ae384c37092884d7631c5f1d939f03`. The shared checkout and installed app are preserved.
 - Implemented: Claude Opus 5.5 landing page, release availability/download/feed, immutable verified artifacts with atomic promotion/retry, signed ZIP packaging and a guarded updater with worker fencing and paired profile/app backup. The actual CLI model identity is retained in the plan evidence.
 - Local checks: full lint/typecheck, both app builds, 1,355 Pods unit/component tests, 53 browser tests, 90 relay tests, documentation freshness and full `pnpm check:ci`. Actual Nuxt screenshots at 390/1440px and update component states were personally inspected. Fixtures use synthetic version 0.2.0; there is no public 0.2.0 release. The new updater's vulnerable runtime pin is replaced by 9.7.0 without adding an audit exception.
@@ -575,7 +575,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Pods Inbox app badge — issue 1452
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1452. Worktree `openape-monorepo.worktrees/pods-inbox-badge`, branch `feature/issue-1452-pods-inbox-badge`, base `dfa801791e31ff2567e57d6d576c2af0e818d401`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1796. Worktree `openape-monorepo.worktrees/pods-inbox-badge`, branch `feature/issue-1452-pods-inbox-badge`, base `dfa801791e31ff2567e57d6d576c2af0e818d401`.
 - The app icon counts open, unarchived decisions plus unread, unarchived messages. Foreground updates wait for a complete successful sync; reading, archiving and resolved decisions update the count, and sign-out/revocation clears it. Push handling refreshes the account total from an authenticated private/no-store endpoint while still displaying its notification.
 - Verification: full root lint and typecheck; relay production build; 85 relay unit/component tests; real DDISA/browser inbox acceptance with Badging API interception (6 before reading/resolution, 3 after, 0 on revocation), server count and anonymous 401. The two inspected mobile screenshots show the matching 4+2 and 2+1 tab counts.
 - Permanent tests protect the new counting, account isolation, pagination, logout and visible-push contracts. No dependency, database migration or test command changes.
@@ -583,7 +583,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Pods mail network asks the same choice twice — issue 1451
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1451. Owner correction October 8: the problem is the repeated "newsletter?" choice for the same mail; the final IdP approval stays.
+- Issue: https://github.com/openape-ai/openape-history/issues/1793. Owner correction October 8: the problem is the repeated "newsletter?" choice for the same mail; the final IdP approval stays.
 - Cause (read-only DB copy, October 8): the Intake versioned mails by Outlook `changeKey`, so a read/flagged mail became case revision 2 and reached `uncertain-review` again; the Decisions tab shows the newest revision, and answering it left the older question open.
 - Plan revision 3 (owner approved revision 2 with "Go"): https://report.openape.ai/d/01M4BXR6KG3WD5M1GM6CPRQ9N7.
 - M1 (Intake content version + bounded seen digests) is live on the installed mail network since 08:46:39 (script `30c13820`, definition version 5). M2 (a choice closes older waiting revisions of the case, `choice-superseded` trace) is on PR 307.
@@ -592,8 +592,8 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Pods fixture tests never wait for a keychain dialog — issue 1450
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1450. Owner rule October 7: every automated check runs without a person; `test:distribution --signed-local` for `c24af0e3` waited on a SecurityAgent keychain prompt.
-- Worktree `.claude/worktrees/issue-1450-pods-keychain-78e628`, branch `bugfix/issue-1450-pods-fixture-keychain`, PR 308 (https://repos.openape.ai/patrick/monorepo/pulls/308), base `930a8ee5`. Evidence: https://report.openape.ai/d/01M4BY5ENTTV3KCK3S33MDHN5Q.
+- Issue: https://github.com/openape-ai/openape-history/issues/1791. Owner rule October 7: every automated check runs without a person; `test:distribution --signed-local` for `c24af0e3` waited on a SecurityAgent keychain prompt.
+- Worktree `.claude/worktrees/issue-1450-pods-keychain-78e628`, branch `bugfix/issue-1450-pods-fixture-keychain`, PR 308 (https://github.com/openape-ai/openape-history/issues/1795), base `930a8ee5`. Evidence: https://report.openape.ai/d/01M4BY5ENTTV3KCK3S33MDHN5Q.
 - Fixture launches with `NODE_ENV=test` append Chromium's `use-mock-keychain`; `OPENAPE_PODS_TEST_REAL_KEYCHAIN=1` opts `credentials.test.ts` into the login keychain. `e2e/fixtures/keychain.ts` stops the app as soon as a SecurityAgent window is on screen (`credentials`, `programs`, `test:distribution`).
 - Cause detail: local fixture builds are only linker-signed and share one cdhash, which the existing "OpenApe Pods Fixture Safe Storage" item trusts; only newly signed builds (Developer ID, re-signed) prompt.
 - Checks: Pods 1,340 unit tests (new main-process contract with counter-proof), root lint/typecheck, `credentials` E2E on a re-signed build (mock passes without dialog; opt-in fails after 2 s with the guard message), unsigned `test:distribution` passed. `programs` E2E still fails at stale navigation after the redesign (pre-existing, keychain part passed).
@@ -601,7 +601,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Pods mobile inbox PWA — issue 1446
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1446; approved plan revision 2, publication v8: https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR.
+- Issue: https://github.com/openape-ai/openape-history/issues/1773; approved plan revision 2, publication v8: https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR.
 - Live: M1–M4 as relay `prod-76ffae69` (PR 303, October 7); desktop `3c08d3c7` (schema 41). The owner made three real network decisions from the phone (all `applied`), which completes the M2 functional path; formal iPhone acceptance of M4 is open.
 - Live since October 7 ~20:35: card decisions (PR 304) with relay `prod-c24af0e3`. Current branch `feature/issue-1446-inbox-card-sender` (owner feedback 20:43): the card shows the sender first (only when exactly one sender line exists), classification hints instead of the raw field list, smaller type, and a status-bar backdrop. Owner report 20:50 (cards jumped, a mis-tap could not be undone): every answer waits 5 s with Undo; the list freezes once touched or scrolled, new decisions wait behind a floating hint, answered cards keep their height; the update banner floats above the tab bar. The desktop now escapes line breaks in decision facts (active with the next desktop release).
 - Checks: relay 76 and Pods 1,339 unit/component tests, root lint/typecheck, browser acceptance `e2e/inbox-app.test.ts` with mail-choice card, undo and exact card positions.
@@ -609,7 +609,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Pods gate batches collect before freezing — issue 1449
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1449. Owner observation October 7: every answered network choice produced its own one-item IdP approval batch. Owner decision: a quiet window (about 2 minutes without new input, at most 10 minutes) instead of growing sealed batches. Superseded on October 11 by issue 1458: frozen tasks now also join one open IdP batch.
+- Issue: https://github.com/openape-ai/openape-history/issues/1789. Owner observation October 7: every answered network choice produced its own one-item IdP approval batch. Owner decision: a quiet window (about 2 minutes without new input, at most 10 minutes) instead of growing sealed batches. Superseded on October 11 by issue 1458: frozen tasks now also join one open IdP batch.
 - Checkout `/Users/owner/Companies/private/repos/openape/openape-monorepo.worktrees/pods-gate-quiet-window-1449`, branch `bugfix/issue-1449-gate-quiet-window` (base `76ffae69`).
 - Change: `NetworkGates.prepare` freezes only after the quiet window, the maximum age or a full batch; synthetic fixtures (unit fixture, Electron fixture worker via `PODS_FIXTURE_GATE_COLLECT`) keep immediate freezing.
 - Checks: Pods 1,339 unit tests, lint, typecheck, build, Electron `e2e/network-gates.test.ts` (2/2).
@@ -617,7 +617,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Pods network member script updates — issue 1445
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1445; approved plan: https://report.openape.ai/d/01M4B5W5S3S1DDBQF9PDFED194 (revision 1, owner approval October 7).
+- Issue: https://github.com/openape-ai/openape-history/issues/1772; approved plan: https://report.openape.ai/d/01M4B5W5S3S1DDBQF9PDFED194 (revision 1, owner approval October 7).
 - Worktree `openape-monorepo.worktrees/member-scripts-1445`, branch `feature/issue-1445-network-member-scripts`, base `e89449e2`.
 - MCP may inspect, draft and validate network member Pods; `networks updateMemberScript` activates a validated script with unchanged contract, capabilities, effects and dependency lock, re-pins only that member within the current network revision and records `member-script-updated`; `networks replayFailed` restarts blocked runs of that member that failed under an earlier script without effect attempts, workflow calls or approved inputs. The Pod detail shows the latest assistant script update.
 - Checks: Pods 1,312 unit/component tests, 53 browser layout tests, lint and typecheck clean. Local packaged E2E timed out with the installed app running; CI decides.
@@ -625,7 +625,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Pods owner decisions lost silently — issue 1444
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1444. Found on the installed app on October 7: choices after the first few were never saved, while the inbox showed them as decided.
+- Issue: https://github.com/openape-ai/openape-history/issues/1769. Found on the installed app on October 7: choices after the first few were never saved, while the inbox showed them as decided.
 - Worktree `openape-monorepo.worktrees/grant-batches`, branch `bugfix/issue-1444-pods-decisions-saving`, base `d58174bd`.
 - Desktop owner actions run one at a time and resubmit `workspace_busy` / `workspace_revision_conflict` refusals; the inbox shows "saving" until the case leaves the list and returns refused cases with their reason; action errors stay visible; superseded batches without inputs to review are hidden.
 - Checks: Pods 1,305 unit/component tests, 53 layout tests, lint and typecheck clean.
@@ -633,7 +633,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Grant batches — issue 1442
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1442; approved plan: https://report.openape.ai/d/01M4AQCZFG6NXWF4NYS8DWKGV6 (revision 1, owner approval October 7). Protocol PR 3 merged as `ac95a447`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1764; approved plan: https://report.openape.ai/d/01M4AQCZFG6NXWF4NYS8DWKGV6 (revision 1, owner approval October 7). Protocol PR 3 merged as `ac95a447`.
 - Worktree `openape-monorepo.worktrees/grant-batches`, branch `feature/issue-1442-grant-batches`, PR 289; base `31250d69`, merged with main `4687ed4d`.
 - IdP: optional `request.batch` with uniform once members, `batch` list filter, `openape_grant_batch_supported`, batch approval view and grouped pending list, one notification per batch. Pods: one once-grant per gate item for network gates, workflow gates and the mail archive; schema 40.
 - Evidence: https://report.openape.ai/d/01M4AVZ745E30GG2KF5TSA5R2W (v2): unit/layout suites, local acceptance against a running IdP with the real Pods grant authority; the native SIGKILL locator failure was pre-existing and is fixed by issue 1443.
@@ -641,21 +641,21 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Pods network-gates native E2E label — issue 1443
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1443. Worktree `.claude/worktrees/adoring-brahmagupta-463b2a`, branch `bugfix/issue-1443-network-gates-list-label`, base `6bd4c0d0`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1770. Worktree `.claude/worktrees/adoring-brahmagupta-463b2a`, branch `bugfix/issue-1443-network-gates-list-label`, base `6bd4c0d0`.
 - The Automations map draws Pod names on a canvas, so the reopened-app wait now uses the List view's `Gate consumer` cell. Functional assertions are unchanged.
 - Verification: `pnpm build && pnpm package:mac && npx vitest run --config vitest.electron.config.ts e2e/network-gates.test.ts` on an unlocked Mac, 2/2 passed; crash screenshot inspected.
 - Next: exact-source CI, native review and merge.
 
 ## Bilingual Plans — issue 1440
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1440; owner-requested implementation plan: https://report.openape.ai/d/01M4AR4BA9AACFE1MCCPPEP2MZ?v=1.
+- Issue: https://github.com/openape-ai/openape-history/issues/1760; owner-requested implementation plan: https://report.openape.ai/d/01M4AR4BA9AACFE1MCCPPEP2MZ?v=1.
 - Worktree `issue-1439-report-contract` reused without touching parallel work; branch `feature/issue-1440-bilingual-plans`, base `6c0d8e222e87e510ad2719eb2e15d9dfe1947cd9`.
 - Additive plan/2 summary/problem/translations; exact source matching and coverage guards; German/English/both offline template switch; localized labels, shared original evidence and approval; top TL;DR and responsive four-stage overview.
-- Verification: existing unit suite plus retained language/evidence contracts; actual Chrome offline/no-JavaScript, keyboard, light/dark, narrow/wide and selected/both print checks. Independent Claude Opus 5.5 review findings corrected; final focused review found no code blockers. Root lint/typecheck, CLI build and 49 tests pass; 12 browser combinations and the six-page bilingual PDF checked. PR: https://repos.openape.ai/patrick/monorepo/pulls/288. Next: final source CI, merge, local install and shared guidance activation; publish final evidence. Public npm release retains its existing authentication limitation.
+- Verification: existing unit suite plus retained language/evidence contracts; actual Chrome offline/no-JavaScript, keyboard, light/dark, narrow/wide and selected/both print checks. Independent Claude Opus 5.5 review findings corrected; final focused review found no code blockers. Root lint/typecheck, CLI build and 49 tests pass; 12 browser combinations and the six-page bilingual PDF checked. PR: https://github.com/openape-ai/openape-history/issues/1765. Next: final source CI, merge, local install and shared guidance activation; publish final evidence. Public npm release retains its existing authentication limitation.
 
 ## Batch grant approver policy — issue 1441
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1441. Security fix found by code reading on main `6c0d8e22`; not exploited.
+- Issue: https://github.com/openape-ai/openape-history/issues/1761. Security fix found by code reading on main `6c0d8e22`; not exploited.
 - Worktree `.claude/worktrees/gallant-gould-bff3b0`, branch `bugfix/issue-1441-batch-grant-authz`, base `6c0d8e22`.
 - `POST /api/grants/batch` now applies the same shared per-action policy (`grant-authority.ts`) as the single approve/deny/revoke endpoints; refused items return per-item 403.
 - Validation: root lint (55 tasks) and typecheck (78 tasks) pass; 650 nuxt-auth-idp tests pass. The new batch tests fail against the previous handler (agent self-approve succeeded).
@@ -663,14 +663,14 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Report data contract — issue 1439
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1439; approved proposal: https://report.openape.ai/d/01M4AGFRAXT93Y305ZEJJZQ023?v=1. Owner approved implementation on October 7; progress edition 2 records that decision.
+- Issue: https://github.com/openape-ai/openape-history/issues/1757; approved proposal: https://report.openape.ai/d/01M4AGFRAXT93Y305ZEJJZQ023?v=1. Owner approved implementation on October 7; progress edition 2 records that decision.
 - Worktree `issue-1439-report-contract`, branch `bugfix/issue-1439-report-review`, base `cd02ad257e36c2cb3d20f567b7c9503469c7a647`.
 - Versioned schemas, generated types, semantic validation, evidence integrity, reviewed layouts and rendering receipts implemented. Behavioral tests retain regression coverage for misleading status/approval claims and evidence loss.
 - Validation: root lint 55 tasks, root typecheck 78 tasks, CLI build and 43 tests pass. Eight historical/proposed examples pass schema and semantic validation; 375/390/1440 px light/dark, keyboard/anchor behavior, embedded galleries and actual PDF output are verified. Command duration/timestamp consistency has dedicated regression coverage. Evidence: https://report.openape.ai/d/01M4AHX7XN3877QBANQ30VA3ED?v=1. PR 285 merged and 0.6.0 was installed. Supplemental Claude Opus 5.5 review found replacement-character log rejection, publication label mismatches and spacing gaps. This follow-up fixes them and versions 0.6.1 through isolated Changesets, preserving unrelated pending changesets. Next: final follow-up tests, exact-source CI, native review, merge and installation. npm publication depends on the existing registry login; no npm success is claimed.
 
 ## Pods desktop IdP decision links — issue 1438
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1438
+- Issue: https://github.com/openape-ai/openape-history/issues/1756
 - Worktree: `openape-monorepo.worktrees/issue-1438-pods-idp-links`; branch `bugfix/issue-1438-pods-idp-links`; base `dcf3d5cd0339b589cac140e417e8f679193eb69f`.
 - Desktop batch actions use the existing native network/workflow `gateOpen` commands; browser links keep their normal target. Electron navigation restrictions remain intact.
 - Verification: full `pnpm lint` (55 tasks), `pnpm typecheck` (78 tasks), Pods build and `pnpm --filter @openape/pods test:fast` pass (1,297 unit/component and 52 browser tests). Permanent component cases cover both batch types and hosts because attribute-only assertions missed the broken desktop behavior.
@@ -678,7 +678,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Report templates and CLI migration — issue 1437
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1437; approved design: https://report.openape.ai/d/01M49MYRK3TBJ850CR0S0GYGQW; implementation plan: https://report.openape.ai/d/01M49KKGQCJP11RP8XQQT75835.
+- Issue: https://github.com/openape-ai/openape-history/issues/1754; approved design: https://report.openape.ai/d/01M49MYRK3TBJ850CR0S0GYGQW; implementation plan: https://report.openape.ai/d/01M49KKGQCJP11RP8XQQT75835.
 - Owner approved implementation on October 7. Worktree `issue-1437-report-templates`, branch `feature/issue-1437-report-templates`, base `6a8ad37b329e95703d01e04cc5193604f3a0b32f`.
 - Implemented offline Plan/Test Run renderer, embedded raster evidence, input validation, approval separation, native Reports team CLI/API, deprecation notices and producer/guidance migration. Legacy read/write compatibility remains until its conditional retirement gate is met.
 - Checks so far: root lint 55 tasks, typecheck 78 tasks, Reports build, 15 CLI/renderer tests, 79 Reports unit tests, four isolated real-auth CLI/compatibility journeys. Desktop/mobile light/dark template screenshots, expanded passing state and print-CSS harness inspected. Claude Code Opus 5.5 independently reviewed code and UI twice; confirmed findings corrected, including exact Markdown evidence, team list compatibility and deletion policy. Final-head checks precede merge.
@@ -687,17 +687,17 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Reports redesign — issue 1433
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1433; plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M48ZTNG1PGJZ65AYX4QDHNHN (owner-approved October 6, 2026); approved prototype copy: https://report.openape.ai/d/01M48ZPPY22PGEDKFX64H6YRKD.
+- Issue: https://github.com/openape-ai/openape-history/issues/1746; plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M48ZTNG1PGJZ65AYX4QDHNHN (owner-approved October 6, 2026); approved prototype copy: https://report.openape.ai/d/01M48ZPPY22PGEDKFX64H6YRKD.
 - Worktree `openape-monorepo.worktrees/issue-1433-reports-redesign`, branch `feature/issue-1433-reports-redesign`, base `c98a018b`. Tested source `68b44e9f`.
 - Delivered M1–M6: tokens, one merged library over `GET /api/library`, full-page reading view with the trust gate on the sealed frame and a Details drawer, Recently removed with a private restore dialog, browser editor removed (`/d/ID/edit` → 301 `/d/ID`).
 - Evidence: https://report.openape.ai/d/01M492M570VKK81C4HX0GJB5EY (Test Runs): repository lint/typecheck, Reports build, affected unit contract (79 Reports tests), layout 13/13, serial E2E 37/37, 68 personally inspected screenshots.
-- Follow-up: publisher type for HTML reports, https://repos.openape.ai/patrick/monorepo/issues/1434.
+- Follow-up: publisher type for HTML reports, https://github.com/openape-ai/openape-history/issues/1747.
 - Next: owner review of the native PR. No deployment without explicit owner approval.
 
 ## Single-HTML Reports and Plans consolidation — issue 1429
 
 - Plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M486HDNVQDQED9S45AJTJNF3
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1429
+- Issue: https://github.com/openape-ai/openape-history/issues/1719
 - Owner explicitly approved end-to-end implementation in the fresh session on October 6, 2026. Approval is recorded in the synchronized plan, independently of status.
 - Worktree: `openape-monorepo.worktrees/issue-1429-reports`; implementation branch `feature/issue-1429-generic-report-documents`, release branch `feature/issue-1429-reports-release`; base `64b8d98ff69390636e640637aa08a51157504662`.
 - M1 evidence: https://report.openape.ai/r/D8KMoQ-Z2JsUNwQ_EcJGn2j5 (Test Runs). Owner accepted publisher-trusted active HTML with no absolute network-egress promise; Safari remote automation is disabled; native Safari prototype interaction and rendering were personally inspected without changing settings. Complete service census: 154 Plans (including 2 deleted), 2 teams/2 memberships, no invitations; Reports inventory is retained privately.
@@ -718,7 +718,7 @@ The first live installation exposed a post-quit SQLite read failure when WAL sid
 
 ## Descriptions through the central workspace — issue 1426
 
-[Issue1426](https://repos.openape.ai/patrick/monorepo/issues/1426), closed. [PR246](https://repos.openape.ai/patrick/monorepo/pulls/246) merged as `42541063df04c2977e8b0f94e2861531b5b54c67`; exact-source and full-main checks passed; 1,358 Pods tests and 35 relay tests passed.
+[Issue1426](https://github.com/openape-ai/openape-history/issues/1703), closed. [PR246](https://github.com/openape-ai/openape-history/issues/1707) merged as `42541063df04c2977e8b0f94e2861531b5b54c67`; exact-source and full-main checks passed; 1,358 Pods tests and 35 relay tests passed.
 
 `details describe` is accepted for network member Pods and the workspace command `describeCollection` for networks and workflows, through MCP and the central workspace. Every other change to a network member still requires desktop review. The MCP reference in `apps/openape-pods/src/contracts/codex.ts` documents both.
 
@@ -726,11 +726,11 @@ Relay `prod-42541063` was deployed first on October 5 (previous `prod-f452c0ae`)
 
 ## Pods visibility — issues 1424 and 1425
 
-[Issue1424](https://repos.openape.ai/patrick/monorepo/issues/1424) and [issue1425](https://repos.openape.ai/patrick/monorepo/issues/1425), both closed; plans [A](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M4631YCZMYKBKW7F3AQ96D2Z) and [B](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M46759EEZEZA4A9ZQNEDG0JD). Checkout: `/Users/owner/Companies/private/repos/openape/openape-monorepo.worktrees/pods-visibility`.
+[Issue1424](https://github.com/openape-ai/openape-history/issues/1701) and [issue1425](https://github.com/openape-ai/openape-history/issues/1702), both closed; plans [A](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M4631YCZMYKBKW7F3AQ96D2Z) and [B](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M46759EEZEZA4A9ZQNEDG0JD). Checkout: `/Users/owner/Companies/private/repos/openape/openape-monorepo.worktrees/pods-visibility`.
 
 The Pod inventory and standalone overview cards show a one-line purpose per Pod, the Pod overview states the last run's own summary, network choice cards show readable fields with the raw payload under technical details, and the description field is labelled as an explanation. Networks and workflows have an owner-written description (local table `collection_descriptions`, schema 38) that the desktop owner edits on the detail page; overview cards show its summary. Both travel in the workspace state, not in a published table or definition. Editing network and workflow descriptions from the browser or through MCP is not available.
 
-[PR242](https://repos.openape.ai/patrick/monorepo/pulls/242) merged as `e0a15434e7ad77c4ab44a882843d6ea75e14ea4b` and [PR243](https://repos.openape.ai/patrick/monorepo/pulls/243) as `0c6bf3c3c36d1f44d1c3b90cb5073de32a1fb3f8`; exact-source CI5403/5404 and both full-main checks passed. Root lint/typecheck, app build, 1,357 Pods tests, 35 relay tests and five browser layout tests passed. Synthetic evidence: [package A](https://testrun.openape.ai/r/DWKW3tg0aqgc-Vb03zOto0uY), [package B](https://testrun.openape.ai/r/S3EXK34pXTB6V_lFng8kFsyI).
+[PR242](https://github.com/openape-ai/openape-history/issues/1698) merged as `e0a15434e7ad77c4ab44a882843d6ea75e14ea4b` and [PR243](https://github.com/openape-ai/openape-history/issues/1704) as `0c6bf3c3c36d1f44d1c3b90cb5073de32a1fb3f8`; exact-source CI5403/5404 and both full-main checks passed. Root lint/typecheck, app build, 1,357 Pods tests, 35 relay tests and five browser layout tests passed. Synthetic evidence: [package A](https://testrun.openape.ai/r/DWKW3tg0aqgc-Vb03zOto0uY), [package B](https://testrun.openape.ai/r/S3EXK34pXTB6V_lFng8kFsyI).
 
 Signed-local 0.1.2 from clean `0c6bf3c3`, schema 38, is installed since October 5, 17:13 CEST. App and DMG notarization, stapling, Gatekeeper and mounted synthetic acceptance passed (296 packages; DMG SHA256 `fb00d3f1cb292cb54966f3a79778e7b2bfe43e807cd34ada14a454864a1a0153`). The installed archive equals the built one. After migration 38 Pods, 81 scripts, 70 resources, seven schedule definitions, one network with 11 members, five workflows, 86 credential files and the runtime identity are unchanged; the desktop is online and the Delta Mind mail network active. Schedules stood still for about two minutes; the first scheduled runs on the new build completed. The first natural network Intake run `55b0d90c-c6ac-46fc-ab55-8c85781b6b07` completed at 17:19 CEST without error; the network stays at revision 3 with no scheduler or intake error.
 
@@ -738,17 +738,17 @@ Relay `prod-f452c0ae` was deployed from canonical main with owner approval on Oc
 
 ## Runtime identity recovery — issue 1408
 
-[Issue1408](https://repos.openape.ai/patrick/monorepo/issues/1408). Checkout: `/Users/owner/Companies/private/repos/openape/openape-monorepo.worktrees/pods-standing-runtime`; branch `bugfix/issue-1408-preserve-runtime-identity`, base `0b11e01457fc3d85e5f657d090a3ca097a049dc0`.
+[Issue1408](https://github.com/openape-ai/openape-history/issues/1616). Checkout: `/Users/owner/Companies/private/repos/openape/openape-monorepo.worktrees/pods-standing-runtime`; branch `bugfix/issue-1408-preserve-runtime-identity`, base `0b11e01457fc3d85e5f657d090a3ca097a049dc0`.
 
 A revoked session family now requests normal browser authentication using the existing runtime ID and keys. Returned owner, ID and generation must match before credentials or worker registration are replaced. Revoked devices, missing local registration, changed generations and terminal enrollment conflicts fail closed. Compatibility and recovery documentation records the relay-first preflight. Eight retained main-process regressions exercise the real RelayAuth/RelayStore and worker registration with synthetic transport/browser/keychain boundaries; the additional relay regression protects revocation, pairing and same-device enrollment. These permanent tests cover consequential workspace identity loss.
 
-[PR240](https://repos.openape.ai/patrick/monorepo/pulls/240) merged as `6e398662bada39f6689e3018321f79232dd607cc`; exact-source CI5399 and full-main CI5400 passed. Root lint/typecheck, app build,1,323 Pods tests,35 relay tests and clean merged-main full unit checks passed. Signed-local0.1.2/schema37 is installed; App/DMG notarization, stapling, Gatekeeper and mounted synthetic acceptance passed. Actual desktop is online with unchanged runtime/owner/generation, configuration fingerprints, pairing and standing consent; both approval options remain checked. [Verified private Test Runs](https://report.openape.ai/r/m6X0ae-1o76w_4yxSVE3Ju6z) contains personally inspected installed screenshots, actual receipts and synthetic-boundary limits. Production login was not deliberately invalidated. Issue1408 is closed; no implementation or delivery step remains. Protected paired backup: `/Users/owner/Library/Application Support/OpenApe Pods Rollback/20261005-runtime-identity-1408`.
+[PR240](https://github.com/openape-ai/openape-history/issues/1695) merged as `6e398662bada39f6689e3018321f79232dd607cc`; exact-source CI5399 and full-main CI5400 passed. Root lint/typecheck, app build,1,323 Pods tests,35 relay tests and clean merged-main full unit checks passed. Signed-local0.1.2/schema37 is installed; App/DMG notarization, stapling, Gatekeeper and mounted synthetic acceptance passed. Actual desktop is online with unchanged runtime/owner/generation, configuration fingerprints, pairing and standing consent; both approval options remain checked. [Verified private Test Runs](https://report.openape.ai/r/m6X0ae-1o76w_4yxSVE3Ju6z) contains personally inspected installed screenshots, actual receipts and synthetic-boundary limits. Production login was not deliberately invalidated. Issue1408 is closed; no implementation or delivery step remains. Protected paired backup: `/Users/owner/Library/Application Support/OpenApe Pods Rollback/20261005-runtime-identity-1408`.
 
 Patrick separately authorized the Delta Mind mail network: revision3, eleven active members,900second Intake;13 real invocations, three pending owner choices and no mail writes. Nine verified completed Pods issues were closed. [Private activation/backlog Test Runs](https://report.openape.ai/r/kK52np16fhKsZGU_Kz_a_uAq). M14 observation and both human routes remain open under issue1417.
 
 ## Central execution recovery — issue 1423
 
-[Issue1423](https://repos.openape.ai/patrick/monorepo/issues/1423), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M45PKJ4JQAX647R6ZND47A1J), [PR237](https://repos.openape.ai/patrick/monorepo/pulls/237). Checkout: `/Users/owner/Companies/private/repos/openape/openape-monorepo.worktrees/pods-standing-runtime`; delivery receipt branch `bugfix/issue-1423-delivery-receipt`.
+[Issue1423](https://github.com/openape-ai/openape-history/issues/1694), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M45PKJ4JQAX647R6ZND47A1J), [PR237](https://github.com/openape-ai/openape-history/issues/1697). Checkout: `/Users/owner/Companies/private/repos/openape/openape-monorepo.worktrees/pods-standing-runtime`; delivery receipt branch `bugfix/issue-1423-delivery-receipt`.
 
 PR237 merged as `062143d2e41aed0f3dad860a3898e94910fc1b73`; exact-source CI5393 and full main CI5394 passed. Signed-local desktop0.1.2/schema37 and relay `prod-062143d2` are delivered. Root lint/typecheck, app build, 1,315 Pods tests, six browser checks, full repository unit checks and mounted signed-DMG acceptance passed. App and DMG are notarized, stapled and Gatekeeper accepted. [Verified private Test Runs](https://report.openape.ai/r/ktucXlYdTYlspg_QajaQz9TD) includes installed screenshots and actual backend receipts.
 
@@ -760,7 +760,7 @@ Central recovery separates failed history from original-input backoff, exhausted
 
 ## Standing runtime approval — issue 1422
 
-Owner-approved implementation: [issue1422](https://repos.openape.ai/patrick/monorepo/issues/1422),
+Owner-approved implementation: [issue1422](https://github.com/openape-ai/openape-history/issues/1691),
 [plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M45FMPAY4XDXY7FMVTB2F093).
 Checkout: `/Users/owner/Companies/private/repos/openape/openape-monorepo.worktrees/pods-standing-runtime`,
 branch `feature/issue-1422-standing-runtime`, base `d5cbc516`.
@@ -830,9 +830,9 @@ the current script still requires its owner runtime grant.
 
 ## Bounded network MCP and local start correction — issue 1417
 
-Accepted through [PR229](https://repos.openape.ai/patrick/monorepo/pulls/229),
+Accepted through [PR229](https://github.com/openape-ai/openape-history/issues/1687),
 merge `efc7f0a47aa0504451c145c19a7f1ef410842f1b` (CI5377/5378), and
-[PR230](https://repos.openape.ai/patrick/monorepo/pulls/230), merge
+[PR230](https://github.com/openape-ai/openape-history/issues/1688), merge
 `7ebbc8fb49fbb9b515cec21de37c558c5c9c1b10` (CI5379/5380). The signed-local
 0.1.2+efc7f0a4 desktop is installed and verified with a paired rollback; the
 unchanged prod-87020ce8 relay is compatible and healthy. Actual connected MCP
@@ -859,7 +859,7 @@ Next review the pilot scope and intended schedule without replaying old history.
 
 ## Delta Mind persistent network correction — issue 1417
 
-Accepted through [PR228](https://repos.openape.ai/patrick/monorepo/pulls/228),
+Accepted through [PR228](https://github.com/openape-ai/openape-history/issues/1686),
 merge `87020ce82604fe0d4dc9076fb3f3db32484dd5ee`; source/main CI5375/5376 green.
 The signed-local desktop and compatible relay were deployed. The real provider
 baseline completed without emissions, then the existing eleven instances were
@@ -1011,7 +1011,7 @@ incident and recovery are documented; the final restored pre-push gate passed.
 Shared Git config is restored to core.hooksPath=.githooks/core.bare=false, matching
 the documented working-checkout topology. Other branches and working files remain.
 
-[Issue1419](https://repos.openape.ai/patrick/monorepo/issues/1419) tracks required
+[Issue1419](https://github.com/openape-ai/openape-history/issues/1665) tracks required
 portable file sharing. Dedicated checkout `openape-monorepo.worktrees/pods-portable-sharing`,
 branch `feature/issue-1419-pod-workflow-sharing`, canonical base the merge above.
 Frozen install, prescribed prebuild and Doctor pass. Manifest contract implementation
@@ -1040,7 +1040,7 @@ builds; the supported single-worker rerun passed 632 tests (8 existing skips). N
 ## Current M11 — issue1417
 
 M0–M10 are accepted. M11a reviewed conversion is merged in
-[PR212](https://repos.openape.ai/patrick/monorepo/pulls/212). Tested source
+[PR212](https://github.com/openape-ai/openape-history/issues/1666). Tested source
 `5a57c5ad765f4588c9a13cda3db1a782be49f689` passed root lint/typecheck, Pods build,
 1157 units, three native Electron tests and13 manual layout checks. All27 native
 files/1829 displayed lines were reviewed. Actual Opus5.5/Fable5.1 corrections are
@@ -1051,7 +1051,7 @@ contains actual logs and six inspected screenshots; category, owner200/anonymous
 embedded bytes and authenticated browser display verified. Publication-time pending
 CI is superseded by the PR review and these CI receipts.
 
-M11b reviewed archival is merged in [PR213](https://repos.openape.ai/patrick/monorepo/pulls/213).
+M11b reviewed archival is merged in [PR213](https://github.com/openape-ai/openape-history/issues/1667).
 Tested source `0c4a5ec60e173cd9e3a84bd78c355d71f26fc4a3`, merge
 `d0a9eb924657cf91ebba32a8ca3a46b66cab51e9`; exact-source CI5342 and full-main CI5343
 passed. Root lint/typecheck, Pods build,1165 units, one native route and15 layout
@@ -1100,7 +1100,7 @@ lint/typecheck, both app builds,1136 Pods tests,34 relay tests,six protocol test
 seven native checks,18 layout checks and authenticated browser E2E. Primary review
 inspected all39 native diff files/1839 displayed lines against canonical source/base;
 actual Claude Code Opus5.5/Fable5.1 reviews informed the fixes. Protected
-[PR211](https://repos.openape.ai/patrick/monorepo/pulls/211) merged as
+[PR211](https://github.com/openape-ai/openape-history/issues/1664) merged as
 `ad16a8f2cf4fa85864472c8cb8750d4feaed33cc`; exact-head CI5338 and full main CI5339 passed.
 Main reused67/68 Turbo test tasks; fresh local source tests are separately retained.
 [Verified private Test Runs](https://report.openape.ai/r/TIPZLLUeJrGCKBf0UE7ituvS)
@@ -1120,7 +1120,7 @@ lint/typecheck, Pods build, 140 suites/1124 unit tests, six native tests and 19
 manual layout checks. Exact-source unit CI5336 passed. All 43 native diff files
 and 2410 displayed lines match source/base; primary review and actual Claude Code
 Opus5.5/Fable reviews informed the fixes. Protected
-[PR210](https://repos.openape.ai/patrick/monorepo/pulls/210) merged as
+[PR210](https://github.com/openape-ai/openape-history/issues/1663) merged as
 `afbcb7aad45ad16ffccc51077b4b2968806d6c74`; full main CI5337 passed.
 [Verified private Test Runs](https://report.openape.ai/r/38IJwxPQM0gwKEsj6JgwZGQY)
 retains actual results, earlier failed fixture teardown/fairness gate and eight
@@ -1149,7 +1149,7 @@ no copied grants, retained paused results and uncertain-effect non-replay.
 Four English/German desktop/narrow screenshots were personally inspected.
 [Verified private M8 Test Runs](https://report.openape.ai/r/11BVW8loYVf-rTWxSC5SMJAf)
 retains actual results and screenshot bytes; category Test Runs, owner200, anonymous401.
-[Native PR209](https://repos.openape.ai/patrick/monorepo/pulls/209) is linked to
+[Native PR209](https://github.com/openape-ai/openape-history/issues/1662) is linked to
 issue1417. Runtime exact-head unit-only CI5332 passed; primary native review
 reconciled all38 files/1935 displayed lines against canonical source/base.
 Actual Claude Code Opus5.5 reviews closed the safety findings. Its final optional
@@ -1204,7 +1204,7 @@ results, retain uncertain gate items, bound finished polling history and settle
 conclusively denied/expired required branches without replay. Actual Opus5.5 closure found no remaining blocker. Its low-priority multi-hop
 diagnostic observation was tightened to directly prevented terminal branches;
 the final full/native checks passed after that correction. Clean tested runtime `e7ae6e1cec20149ec31f12363930312e6c2226c5` passed
-exact-source unit CI5327. Native [PR208](https://repos.openape.ai/patrick/monorepo/pulls/208)
+exact-source unit CI5327. Native [PR208](https://github.com/openape-ai/openape-history/issues/1658)
 is explicitly linked to issue1417; all33 files/2659 native diff lines match canonical
 source/base. [Verified private Test Runs](https://report.openape.ai/r/GeG_5EXS3PQGRtT0PJmGCcMS)
 retains actual clean-source results and the personally inspected screenshot;
@@ -1216,7 +1216,7 @@ M7 and continuing M8–M14. No production activation is included.
 ## Pods persistent networks — issue 1417
 
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617),
-[native issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417).
+[native issue 1417](https://github.com/openape-ai/openape-history/issues/1650).
 Checkout: `openape-monorepo.worktrees/pods-workflows-networks`; branch
 `feature/issue-1417-pods-networks-m7`; current canonical base
 `d7119e533c0a3ec123ef04b98b813dc7fe8c5e8f`; original canonical base
@@ -1229,7 +1229,7 @@ and exported a private isolated archive: 89 tables, 121 files, 20,703,926 bytes.
 No live owner/profile/provider mutation. Full root lint/typecheck passed with
 Turbo cache reuse; this is a documentation increment, not new runtime acceptance.
 [Verified private Test Runs evidence](https://report.openape.ai/r/4pfGRvsu2cUA1T0VgqnmH16e).
-M0 [PR 200](https://repos.openape.ai/patrick/monorepo/pulls/200): independent
+M0 [PR 200](https://github.com/openape-ai/openape-history/issues/1659): independent
 Claude Code 2.1.286 / Opus 5.5 reviewed the contracts and verified closure of all
 blocking/major findings after corrections. The primary agent checked sources and
 remaining token/identity wording. Final tested SHA `3b7363b2622b8394c429fe8833c6df49e87742db` passed exact-head CI;
@@ -1238,7 +1238,7 @@ M0 merged as `fb80556d8a66843e028da7d13cda97fd5a9f1d50`.
 M0–M6 are accepted and merged. M7 is in progress and unaccepted; M8–M14
 remain unimplemented. M7 starts from the canonical M6 merge;
 M5/M6 runtime acceptance, final exact-head CI and protected merges are recorded below.
-M3 [PR 203](https://repos.openape.ai/patrick/monorepo/pulls/203): tested clean
+M3 [PR 203](https://github.com/openape-ai/openape-history/issues/1652): tested clean
 runtime `da209ca697d79c0cade36759d9ccb69aa9167f53` passed root lint/typecheck/build,
 133 files / 966 fresh Pods unit tests, four manual native/Electron tests and
 exact-head CI 5310. Two unrelated crash cases were skipped by selection.
@@ -1277,7 +1277,7 @@ dependency or relaxed audit threshold; the production audit reports no high find
 Actual Opus targeted closure confirmed conflict disposal and durable owner-run
 journaling. The primary review inspected all 37 files / 2,446 native displayed diff lines,
 verified against canonical source/target commits. Native
-[PR 204](https://repos.openape.ai/patrick/monorepo/pulls/204) is explicitly linked
+[PR 204](https://github.com/openape-ai/openape-history/issues/1653) is explicitly linked
 to issue 1417. Runtime exact-head CI 5315 passed the unit-only contract.
 [Verified private M4 Test Runs receipt](https://report.openape.ai/r/5WUpVPNReI22uBWBuzGVbh0P):
 category Test Runs, owner read 200, anonymous read 401 and the inspected screenshot
@@ -1311,7 +1311,7 @@ before push. Nine affected suites then passed 161 checks with one worker and
 unchanged timeouts; subsequent complete default-concurrency runs passed. No runner,
 retry, CI or timeout configuration changed. Root Turbo cache reuse is disclosed.
 Runtime exact-head unit-only CI 5318 passed all 1,025 Pods tests.
-Native [PR 205](https://repos.openape.ai/patrick/monorepo/pulls/205) is explicitly
+Native [PR 205](https://github.com/openape-ai/openape-history/issues/1654) is explicitly
 linked to issue 1417. [Verified private M5 Test Runs](https://report.openape.ai/r/0vlx3rT-L2Q2NdG5kbgYizCT):
 category Test Runs, owner read 200, anonymous read 401 and both inspected screenshot
 bytes present. Final documentation head `dbbb2f2918520c55974d708de4296c6dd6676873`
@@ -1322,7 +1322,7 @@ same isolated checkout and is now accepted, as recorded below. M9 retains the bo
 historical process proof stays fail-closed. Never repeat unknown external effects.
 
 M6 is accepted and merged through native PR206.
-Native [PR206](https://repos.openape.ai/patrick/monorepo/pulls/206) is explicitly
+Native [PR206](https://github.com/openape-ai/openape-history/issues/1655) is explicitly
 linked to issue1417. Clean tested runtime
 `e5050467cfb91f9ba0545ffe503bf370fc819526` passes root lint/typecheck, Pods build,
 136 files/1,058 fresh unit tests and eight selected manual native checks; two
@@ -1390,7 +1390,7 @@ stress has 195,000 receipts/events, 255,000 deliveries and 30,000 record revisio
 The compacted retained database is 96,526,336 bytes. Transactional queue-count
 projection replaces an observed full-scan bottleneck; see
 [measured limits and dependent gates](../architecture/pods-networks/prototype-findings.md).
-M1 [PR 201](https://repos.openape.ai/patrick/monorepo/pulls/201) is linked to
+M1 [PR 201](https://github.com/openape-ai/openape-history/issues/1661) is linked to
 issue 1417. Tested temporary-fixture SHA
 `26684ec0986d1e3d119ba54cb0ca6c1b25139065` passed full root lint/typecheck,
 Pods build and six focused suites (123 tests). Independent Opus reviews verified
@@ -1400,7 +1400,7 @@ passed external CI and merged as `df832d9d816b97f404eb9f260c834ad8606ed080`.
 [Actual private M1 Test Runs receipt](https://report.openape.ai/r/V1vrDbaXR3kynVJ1ujIBn4Ox). M1 step 4 measures logical CAS only; actual writer contention and implemented
 join measurements are explicitly deferred to M3/M4/M7.
 This is test-only SQL design evidence, not product engine or encrypted-restore
-acceptance. M2 [PR 202](https://repos.openape.ai/patrick/monorepo/pulls/202) adds schema 28,
+acceptance. M2 [PR 202](https://github.com/openape-ai/openape-history/issues/1651) adds schema 28,
 paused/revoked restore and encrypted backup support with activation hidden.
 Runtime source `7dc40d6352d0d7cd994d729db89c0b6a115d4c25` passes clean root
 lint/typecheck, build, all 905 Pods tests and exact-source CI run 5307. Isolated
@@ -1420,8 +1420,8 @@ Production pilot, live conversion and concrete actions keep their separate gates
 
 Worktree: `openape-monorepo.worktrees/pods-ci`; branch:
 `feature/issue-1416-pods-ci`; base: `602c365702949b51c3286895d176b20f0a3ace44`.
-Native [PR 199](https://repos.openape.ai/patrick/monorepo/pulls/199) owns the
-exact-source merge state; [issue 1416](https://repos.openape.ai/patrick/monorepo/issues/1416)
+Native [PR 199](https://github.com/openape-ai/openape-history/issues/1639) owns the
+exact-source merge state; [issue 1416](https://github.com/openape-ai/openape-history/issues/1638)
 owns closeout. Implementation SHA: `f81ec01c36816a69d9bf8895753f5bad30459dab`.
 
 Serial prebuilds cover only selected libraries/modules, consumed CLI apps and
@@ -1450,9 +1450,9 @@ changes or a claim that cached tests executed again.
 
 ## Pods networks and workflows presentation — issue 1410
 
-[Issue 1410](https://repos.openape.ai/patrick/monorepo/issues/1410) delivered the
+[Issue 1410](https://github.com/openape-ai/openape-history/issues/1623) delivered the
 approved N1–N3 follow-up in the [existing graph plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3PF2RKZPA2V0AQ2SJTXD6DX).
-[PR 192](https://repos.openape.ai/patrick/monorepo/pulls/192) reviewed source
+[PR 192](https://github.com/openape-ai/openape-history/issues/1626) reviewed source
 `824c33b881c2b90c7e02b6bb2dd612d3beaa71b4`; merged and installed application
 source `c2325494bd0ccc40bed3b75e0553aab47ad313bf`.
 Own checkout: `openape-monorepo.worktrees/pods-network-presentation`;
@@ -1499,7 +1499,7 @@ No real run, schedule activation, choice, approval, send or archive was triggere
 
 ## Globex server reporting — issue 1409
 
-[Issue 1409](https://repos.openape.ai/patrick/monorepo/issues/1409) implements the
+[Issue 1409](https://github.com/openape-ai/openape-history/issues/1619) implements the
 [approved first-component plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3QN4YQPBMX31GK4KCN4E5EF).
 Own checkout: `openape-monorepo.worktrees/desktop-graph-integration`.
 PRs 187–190 delivered bounded SSH, the actual worker route, spaced-path handling,
@@ -1525,10 +1525,10 @@ verify the installed report and notification, then activate only this workflow.
 
 ## Pods graphs — issue 1407
 
-[Issue 1407](https://repos.openape.ai/patrick/monorepo/issues/1407) tracks the
+[Issue 1407](https://github.com/openape-ai/openape-history/issues/1607) tracks the
 [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3PF2RKZPA2V0AQ2SJTXD6DX).
 M0–M8 are delivered. The missed M6 connected desktop entry is repaired by
-[PR 185](https://repos.openape.ai/patrick/monorepo/pulls/185): reviewed source
+[PR 185](https://github.com/openape-ai/openape-history/issues/1617): reviewed source
 `74b14ddc8f302f25f89f92293b33d01bc64bb9c0`, canonical merge and installed build
 `559622559bf75a55d5fea70804a66b6cf4b20624` (identical Git tree).
 Own checkout: `openape-monorepo.worktrees/desktop-graph-integration`;
@@ -1571,8 +1571,8 @@ The connected desktop integration correction is complete.
 
 ## Pods infrastructure recovery — issue 1405
 
-[Issue 1405](https://repos.openape.ai/patrick/monorepo/issues/1405) is delivered via
-[PR 174](https://repos.openape.ai/patrick/monorepo/pulls/174), reviewed source
+[Issue 1405](https://github.com/openape-ai/openape-history/issues/1601) is delivered via
+[PR 174](https://github.com/openape-ai/openape-history/issues/1604), reviewed source
 `3cdc3531c7f40ca1e041fdbb447c1e0a04b2b69c`, canonical merge
 `3cf34b01758905e2968e0334213c1220301698ae` (identical Git tree).
 Own checkout `openape-monorepo.worktrees/pods-infrastructure-retry`; implementation
@@ -1615,8 +1615,8 @@ No product work remains.
 
 ## Pods browser/desktop visual parity — issue 1404
 
-[Issue 1404](https://repos.openape.ai/patrick/monorepo/issues/1404) is delivered via
-[PR 171](https://repos.openape.ai/patrick/monorepo/pulls/171), reviewed source
+[Issue 1404](https://github.com/openape-ai/openape-history/issues/1598) is delivered via
+[PR 171](https://github.com/openape-ai/openape-history/issues/1599), reviewed source
 `19517fa221683e4e4d005c85c70524bc6a85992a`, canonical merge
 `2943d7acdd6942b680fec7dc9c8f7f60b5f9622e`. Own checkout:
 `openape-monorepo.worktrees/pods-workspace-landing`; implementation branch
@@ -1644,7 +1644,7 @@ No product work remains for this issue; no native desktop binary was released.
 
 ## Pods public workspace entry — issue 1403
 
-[Issue 1403](https://repos.openape.ai/patrick/monorepo/issues/1403).
+[Issue 1403](https://github.com/openape-ai/openape-history/issues/1594).
 Checkout `openape-monorepo.worktrees/pods-workspace-landing`, branch
 `feature/issue-1403-pods-workspace-landing`, base `e5c1814c`.
 The relay serves a public workspace landing page at `/` and reuses the existing
@@ -1659,7 +1659,7 @@ Next step: merge after exact-head checks and deploy the relay plus root proxy ro
 
 ## Pods Variant A — issue 1402
 
-[Issue 1402](https://repos.openape.ai/patrick/monorepo/issues/1402),
+[Issue 1402](https://github.com/openape-ai/openape-history/issues/1595),
 [approved scope and plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3M9ZTF4N6PQR30V8CM6MQCX).
 Checkout `openape-monorepo.worktrees/pods-ux-verification`, branch
 `feature/issue-1402-pods-ux`, base `d1da9ac7aff30f1425ffbbae08b91866bf85b99d`.
@@ -1670,7 +1670,7 @@ MCP off/read/write access are implemented. The manual `report --browser` mode
 captures real components and production CSS into a fresh evidence directory.
 Full monorepo lint/typecheck and initial component/browser checks passed. The
 linked native PR owns the final tested source SHA, Test Runs report and external
-CI result. [PR 169](https://repos.openape.ai/patrick/monorepo/pulls/169) is merged;
+CI result. [PR 169](https://github.com/openape-ai/openape-history/issues/1596) is merged;
 the owner-requested signed local installation completed on September 28.
 Build `0.1.0+fbd0188b` passed mounted-DMG acceptance and owner UI verification,
 with paired rollback and unchanged Pod, schedule and workflow rows.
@@ -1685,7 +1685,7 @@ Current branch `feature/issue-1401-reports-acceptance` starts from canonical `98
 
 ## Morning editorial workflow (September 28, 2026) — deployed
 
-[Issue 1400](https://repos.openape.ai/patrick/monorepo/issues/1400), [PR 164](https://repos.openape.ai/patrick/monorepo/pulls/164), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3KEEMTW4EN59AFD8HP34X7F). Implementation merged as `0b8216bb1b17269bbaa5c1d03cb919ee45b87fae` after exact-source CI 5201. Full lint/typecheck, Pods build and 623 unit tests passed; the clean merged deployment gate `pnpm check:ci` passed (`1790582152595-0b8216bb-unit/summary.json`).
+[Issue 1400](https://github.com/openape-ai/openape-history/issues/1589), [PR 164](https://github.com/openape-ai/openape-history/issues/1590), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3KEEMTW4EN59AFD8HP34X7F). Implementation merged as `0b8216bb1b17269bbaa5c1d03cb919ee45b87fae` after exact-source CI 5201. Full lint/typecheck, Pods build and 623 unit tests passed; the clean merged deployment gate `pnpm check:ci` passed (`1790582152595-0b8216bb-unit/summary.json`).
 
 The existing workflow is active at revision 7, daily 07:00 Europe/Vienna. Mail evidence and Calendar/Issues collection feed the dedicated German editorial Pod; the existing sender consumes only its validated report. New source Pod `51832859-53e0-4cbc-a44c-61ad76aad931` and editorial Pod `6c9d0c12-32fa-4d56-a84a-9a035a030914` are active without independent schedules. The mail approval poll remains enabled every 60 seconds; the sender schedule remains disabled and Daily action website remains paused. Reports server stays at `prod-7bab2ba6`.
 
@@ -1699,7 +1699,7 @@ Receipt checkout `reports`, branch `feature/issue-1400-editorial-receipt`, base 
 
 ## Pod archive and deletion: issue 1399
 
-[Issue 1399](https://repos.openape.ai/patrick/monorepo/issues/1399), branch
+[Issue 1399](https://github.com/openape-ai/openape-history/issues/1583), branch
 `feature/issue-1399-pod-deletion`, checkout
 `/Users/owner/Companies/private/repos/openape/openape-monorepo.worktrees/pods-delete`,
 base `5a84e911567c7c77735c548781ac2379c510b9c0`.
@@ -1717,21 +1717,21 @@ consequential deletion contracts: confirmation/cancel/refusal, cleanup, stable r
 receipt ownership and preserving unrelated artifacts. EN desktop/light and DE
 390-pixel/dark deletion reviews were visually inspected.
 [Verification report](https://testrun.openape.ai/r/fjbkBDEeOW0PnVuzaQk7mfyw).
-[PR 163](https://repos.openape.ai/patrick/monorepo/pulls/163). Next: exact-source external checks and coordinated relay/desktop rollout; no owner Pod has been deleted.
+[PR 163](https://github.com/openape-ai/openape-history/issues/1584). Next: exact-source external checks and coordinated relay/desktop rollout; no owner Pod has been deleted.
 
 ## Reports briefing corrections (September 28, 2026)
 
-[Issue 1398](https://repos.openape.ai/patrick/monorepo/issues/1398). Own checkout `reports`, branch `bugfix/issue-1398-briefing-context`, base `5a84e911`. German briefing copy, one mail presentation and fresh sent/incoming conversation evidence before suggesting reply actions. Existing archive policy, schedules and Telegram receipts remain unchanged. Verified: full lint/typecheck, Testrun build, 603 Pods unit tests, 45 Reports unit tests, 8 component/layout tests and 4 authenticated HTTP/browser tests pass. Phone/desktop light/dark screenshots were inspected directly. Next: native PR, tested-image rollout and actual no-send workflow preview. Delivered editions remain immutable; only new publications receive revised generated content.
+[Issue 1398](https://github.com/openape-ai/openape-history/issues/1585). Own checkout `reports`, branch `bugfix/issue-1398-briefing-context`, base `5a84e911`. German briefing copy, one mail presentation and fresh sent/incoming conversation evidence before suggesting reply actions. Existing archive policy, schedules and Telegram receipts remain unchanged. Verified: full lint/typecheck, Testrun build, 603 Pods unit tests, 45 Reports unit tests, 8 component/layout tests and 4 authenticated HTTP/browser tests pass. Phone/desktop light/dark screenshots were inspected directly. Next: native PR, tested-image rollout and actual no-send workflow preview. Delivered editions remain immutable; only new publications receive revised generated content.
 
 ## OpenApe Reports (September 27, 2026) — deployed; scheduled acceptance pending
 
 Owner follow-up: Reports is the general product; briefings and test runs are specialized formats. Branch `feature/issue-1397-reports-home` from `dc40f3a7` corrects the landing page, private collection labels and default page metadata. This is a presentation change; the existing publication contracts and owning workflow remain in place. Verification and final deployment receipt belong to issue 1397.
 
-[Issue 1397](https://repos.openape.ai/patrick/monorepo/issues/1397), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3HW6FG47VR534XC5EAFNS1R). Isolated checkout `reports`, receipt branch `feature/issue-1397-rollout-receipt`, based on merged main `972df1b8715db1e3166f7c09bd28762496ca03b4`. Implementation [PR 158](https://repos.openape.ai/patrick/monorepo/pulls/158) source `2873623ad08664a00f2371e84bdb2b836d0e13c9` passed exact-source external CI run 5187 before merge.
+[Issue 1397](https://github.com/openape-ai/openape-history/issues/1577), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3HW6FG47VR534XC5EAFNS1R). Isolated checkout `reports`, receipt branch `feature/issue-1397-rollout-receipt`, based on merged main `972df1b8715db1e3166f7c09bd28762496ca03b4`. Implementation [PR 158](https://github.com/openape-ai/openape-history/issues/1580) source `2873623ad08664a00f2371e84bdb2b836d0e13c9` passed exact-source external CI run 5187 before merge.
 
 **Implementation and deployment accepted.** Chatty runs healthy `prod-972df1b8`, deployed through the existing tested-image pipeline from clean `reports-release` after `pnpm check:ci` (`1790532415331-972df1b8-unit/summary.json`). Exoscale A record `report.openape.ai` points to `85.217.175.26`, TTL 300; its explicit Traefik router shares the Testrun service. Public TLS/health and real owner login on the alias work. Existing canonical CLI/SP identity remains `testrun.openape.ai`. All 283 legacy runs, 168 archives and 695 assets were compared in both directions against the protected pre-migration database backup: zero differences; SQLite integrity passes. Existing test JSON differs only by the additive `type: test` discriminator.
 
-Minimum safe rollback is [PR 157](https://repos.openape.ai/patrick/monorepo/pulls/157), `prod-183395e4`, retained as `TESTRUN_TAG_PREV`. It was rehearsed against the final schema with private head/archive/assets and shared test data. Do not deploy older images after private content exists. Protected database and edge backups are under `/home/openape/backups/reports-2026-09-27/` on Chatty.
+Minimum safe rollback is [PR 157](https://github.com/openape-ai/openape-history/issues/1578), `prod-183395e4`, retained as `TESTRUN_TAG_PREV`. It was rehearsed against the final schema with private head/archive/assets and shared test data. Do not deploy older images after private content exists. Protected database and edge backups are under `/home/openape/backups/reports-2026-09-27/` on Chatty.
 
 Focused checks pass: 45 Testrun unit tests, 107 auth tests, 7 browser component/layout tests, 14 HTTP/CLI/browser tests, 600 Pods unit tests and four CLI tests. Both login origins and phone/desktop light/dark screenshots were inspected. Full root lint/typecheck and both affected app builds pass. [Public synthetic evidence](https://testrun.openape.ai/r/AeJDx48LWOG_vVrS_KKBgCsv) contains no personal briefing data.
 
@@ -1742,7 +1742,7 @@ Focused checks pass: 45 Testrun unit tests, 107 auth tests, 7 browser component/
 
 ## Pods: contact protection and Jev evaluation (September 26, 2026)
 
-[Issue 1396](https://repos.openape.ai/patrick/monorepo/issues/1396), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3FKATZRY0Z3BY2YMMMVEFW9). Existing checkout `mail-briefing-grants`, branch `feature/issue-1396-mail-protection-jev`, base `40113402`.
+[Issue 1396](https://github.com/openape-ai/openape-history/issues/1573), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3FKATZRY0Z3BY2YMMMVEFW9). Existing checkout `mail-briefing-grants`, branch `feature/issue-1396-mail-protection-jev`, base `40113402`.
 
 The assigned Microsoft companion retains a per-mailbox union of Sent Items To/Cc/Bcc recipients and enforces an owner-controlled address/domain policy before proposals and actual moves. Incomplete scans and conversation evidence prohibit archival. Jev supplies bounded structured decisions and priorities; free-form LLM calls only summarize selected important messages. A local-only private-file import initializes a missing native Jev connection without exposing its key or implicitly assigning it to a Pod. Changed application bindings expire old pending archive batches locally and require fresh owner review.
 
@@ -1750,25 +1750,25 @@ PR 154 is merged at 84ccff34 and the signed f182add0 app is installed with all 1
 
 ## Morning mail triage and archive approvals (September 26, 2026)
 
-[Issue 1395](https://repos.openape.ai/patrick/monorepo/issues/1395), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3F3FK9MX2BH6QWBCWBZZCJE). Checkout `mail-briefing-grants`, follow-up branch `bugfix/issue-1395-archive-service-lifetime`, [PR 153](https://repos.openape.ai/patrick/monorepo/pulls/153). PRs 150–152 are merged. The dedicated archive service uses exact manually confirmed once grants, frozen readable mail metadata, version/folder rechecks and durable uncertain outcomes. Generic program calls remain read-only. Follow-up fixes cover mailbox read permission reuse, the archive script boundary and native request lifetime, and owner workflow controls in connected desktop settings.
+[Issue 1395](https://github.com/openape-ai/openape-history/issues/1568), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3F3FK9MX2BH6QWBCWBZZCJE). Checkout `mail-briefing-grants`, follow-up branch `bugfix/issue-1395-archive-service-lifetime`, [PR 153](https://github.com/openape-ai/openape-history/issues/1572). PRs 150–152 are merged. The dedicated archive service uses exact manually confirmed once grants, frozen readable mail metadata, version/folder rechecks and durable uncertain outcomes. Generic program calls remain read-only. Follow-up fixes cover mailbox read permission reuse, the archive script boundary and native request lifetime, and owner workflow controls in connected desktop settings.
 
 Native/renderer source `7c104c0436eae9a2e9202aec69f33012831d7ff4` passed full lint/typecheck/build, 576 unit/component tests, 26 browser component tests and the full local deployment contract. Recipe source `c0d7e1ea217874926d6c80aca108c670497a56eb` adds explicit mail dates and invalidates older relative-date summaries. The real two-node workflow preview `a9993b53-1146-40e8-8eec-09e3f42a6aab` completed both nodes with 338 reviewed messages, zero gaps and no Telegram send. A second preview verifies the corrected date summaries. Workflow `5f7ea0d7-1f9c-4c74-8c8a-afd513950001` is configured for 07:00 Europe/Vienna, initially disabled and paused. Next: finish exact-head CI, native grant acceptance, owner UI verification and the single-schedule cutover. Final signed artifact, paired backup, concrete grant and activation evidence are recorded in the linked issue as the authoritative delivery receipt. No mail has moved during setup.
 
 ## IdP pending grant expiry (September 26, 2026)
 
-[Issue 1394](https://repos.openape.ai/patrick/monorepo/issues/1394).
+[Issue 1394](https://github.com/openape-ai/openape-history/issues/1564).
 Worktree `pending-grant-expiry`, branch `bugfix/issue-1394-pending-grant-expiry`, base `531a91ba`.
 The production Drizzle store now expires unanswered requests older than 48 hours before reads, decisions and broker capacity checks. Expiry and broker audit records commit atomically. Existing approved and terminal grants retain their statuses.
 
 Permanent SQLite-backed regression coverage extends the existing broker-store suite because the earlier default-store tests missed the production implementation. The original implementation failed 11 new cases; all 344 IdP tests now pass, including the additional decision-boundary case. Full `pnpm lint`, `pnpm typecheck` and `pnpm --filter openape-free-idp build` pass. A separate built-server smoke with the actual production Drizzle plugin, isolated SQLite and SSH challenge authentication verifies the pending inbox, persisted expiry and HTTP 400 for an old approval link; fresh pending and approved grants remain unchanged.
 
-[PR 148](https://repos.openape.ai/patrick/monorepo/pulls/148) passed external CI at `c836ee53`; its main-branch synchronization preserves the parallel Pods entry. Merge, production image, backup, final live verification and issue closure are recorded in the linked issue as the authoritative delivery receipt.
+[PR 148](https://github.com/openape-ai/openape-history/issues/1566) passed external CI at `c836ee53`; its main-branch synchronization preserves the parallel Pods entry. Merge, production image, backup, final live verification and issue closure are recorded in the linked issue as the authoritative delivery receipt.
 
 ## Pods: central desktop settings (September 26, 2026) — signed evidence; superseded by installed Variant A
 
-[Issue 1393](https://repos.openape.ai/patrick/monorepo/issues/1393),
-[PR 146](https://repos.openape.ai/patrick/monorepo/pulls/146),
-[PR 147](https://repos.openape.ai/patrick/monorepo/pulls/147),
+[Issue 1393](https://github.com/openape-ai/openape-history/issues/1562),
+[PR 146](https://github.com/openape-ai/openape-history/issues/1563),
+[PR 147](https://github.com/openape-ai/openape-history/issues/1565),
 [inspected sidebar and settings screenshots](https://testrun.openape.ai/r/Z8Rrx-TCsYAZj17DQLcoAjRn).
 
 Both implementation PRs passed exact-head external CI. The active central desktop now shows the DDISA account and App settings at the bottom left. The Pod list scrolls separately. Account access opens account settings; App settings exposes Jev, language, Codex preferences and data/backups. The previous Jev acceptance had covered the alternate local shell instead of this active entry point.
@@ -1780,14 +1780,14 @@ DMG SHA-256: `69b1b6bf1e30a12a2d09086a1654a16a611cc93a7bf75a9a9c02d3fa2cfdcd89`.
 Worktree: `pods-jev-settings`; release artifact: `apps/openape-pods/release/distribution/OpenApe-Pods-0.1.0-arm64-signed-local.dmg`; evidence: `apps/openape-pods/.artifacts/issue-1393-sidebar/`. At this September 26 checkpoint, installation was pending because the owner Mac was locked. This artifact was superseded by the September 28 Variant A installation below; it is not the installed binary.
 
 
-September 28 closeout: [PR 169](https://repos.openape.ai/patrick/monorepo/pulls/169) is merged. Signed, notarized and stapled build `0.1.0+fbd0188b` is installed in the owner Applications directory. The paired rollback backup and actual owner UI were verified; all 16 Pods, 13 schedule configurations, one workflow and schema 24 were preserved. See the [verified installation report](https://report.openape.ai/r/mNLilvsZA48fCLkTP944g52n). No server deployment is implied.
+September 28 closeout: [PR 169](https://github.com/openape-ai/openape-history/issues/1596) is merged. Signed, notarized and stapled build `0.1.0+fbd0188b` is installed in the owner Applications directory. The paired rollback backup and actual owner UI were verified; all 16 Pods, 13 schedule configurations, one workflow and schema 24 were preserved. See the [verified installation report](https://report.openape.ai/r/mNLilvsZA48fCLkTP944g52n). No server deployment is implied.
 
 ## Pods: run retention and signed release (September 26, 2026) — installed and verified
 
-[Issue 1391](https://repos.openape.ai/patrick/monorepo/issues/1391),
-[issue 1390](https://repos.openape.ai/patrick/monorepo/issues/1390),
-[PR 144](https://repos.openape.ai/patrick/monorepo/pulls/144),
-[PR 143](https://repos.openape.ai/patrick/monorepo/pulls/143),
+[Issue 1391](https://github.com/openape-ai/openape-history/issues/1558),
+[issue 1390](https://github.com/openape-ai/openape-history/issues/1556),
+[PR 144](https://github.com/openape-ai/openape-history/issues/1559),
+[PR 143](https://github.com/openape-ai/openape-history/issues/1557),
 [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3E5TH9XNWQJGJX4NE11PV2W).
 
 PR 144 merged after exact-head CI success (`1856dd99a7e5a51c2fdb06b993c6a3ca456f1026`) at `9237c1966ec8911b907d6d801051c77f52d3c7f8`, which includes PR 143. Main CI also passed. One signed-local DMG was built from the clean merge worktree with frozen dependencies, the full `pnpm check:ci` contract and a fresh Pods build. No relay deployment was required.
@@ -1830,14 +1830,14 @@ Validation receipts: release `.openape/check-results/1790411276414-9237c196-unit
 Release worktree: `/Users/owner/Companies/private/repos/openape/openape-monorepo.worktrees/pods-release-1391`. DMG: `apps/openape-pods/release/distribution/OpenApe-Pods-0.1.0-arm64-signed-local.dmg`. Local evidence: `apps/openape-pods/.artifacts/issue-1391/`.
 
 Release evidence branch: `feature/issue-1391-release-evidence` in `pods-run-retention`.
-New owner follow-up: [issue 1392](https://repos.openape.ai/patrick/monorepo/issues/1392),
+New owner follow-up: [issue 1392](https://github.com/openape-ai/openape-history/issues/1560),
 per-Pod opt-in parallel runs, disabled by default. Current runs are already serialized
 within each Pod; the existing concurrency limit applies across different Pods.
 The new option is not implemented or included in this signed release.
 
 ## Pods: repeated timer approvals (September 25, 2026)
 
-[Issue 1389](https://repos.openape.ai/patrick/monorepo/issues/1389).
+[Issue 1389](https://github.com/openape-ai/openape-history/issues/1554).
 Worktree `openape-monorepo/openape-timer-investigation`, branch
 `bugfix/issue-1389-pods-standing-grant`, canonical base
 `a23d519d7543ab572585d9bd6ba141155fcbba19`.
@@ -1847,7 +1847,7 @@ remain unchanged. Component coverage exercises both entry points.
 Live timer recovery reused the same Pod-scoped always grant on a second no-op run
 without a pending approval (two seconds). Full lint/typecheck, IdP application build and 26 focused component/broker tests
 pass. Commit/push affected unit gates pass.
-[PR 142](https://repos.openape.ai/patrick/monorepo/pulls/142), implementation
+[PR 142](https://github.com/openape-ai/openape-history/issues/1555), implementation
 `365049fd2ce8bef774f51b177c7126fac44770b1`. September 28 integration preserves
 current main and the signed-release closeout from PR 149. The native PR records
 the final source, repeated checks and merge result. The inbox change still requires
@@ -1862,7 +1862,7 @@ and verification of the corrected test harness.
 
 ## Pods: local MCP runtime approval (September 25, 2026) — verified locally
 
-[Issue 1388](https://repos.openape.ai/patrick/monorepo/issues/1388),
+[Issue 1388](https://github.com/openape-ai/openape-history/issues/1550),
 [approved implementation plan](../../.claude/plans/issue-1388-mcp-runtime-approval.md).
 Worktree `pods-mcp-runtime-approval`, branch `feature/issue-1388-mcp-runtime-approval`,
 canonical base `98cf9078600f5ec94585294772db78cdd7c8cf81`.
@@ -1873,14 +1873,14 @@ new automatic decisions; existing grants require explicit revocation.
 Full lint/typecheck, Pods build, 515 unit/component tests and two real Chrome settings
 tests pass. English/light and German/narrow/dark screenshots were inspected; the
 self-contained local report is `apps/openape-pods/.artifacts/runtime-approval-report.html`.
-[PR 140](https://repos.openape.ai/patrick/monorepo/pulls/140), implementation commit
+[PR 140](https://github.com/openape-ai/openape-history/issues/1552), implementation commit
 `a610cc9ce1fef75375347e6af38da346b01fceae`. Commit/push affected unit gates pass,
 including the relay consumer; receipt `.openape/check-results/1790346471069-a610cc9c-unit/summary.json`.
 Next: exact-head external CI and owner review; installation is separate. No owner-profile changes.
 
 ## Pods: TypeSafe Jev integration (September 25, 2026) — implementation verified
 
-[Issue 1385](https://repos.openape.ai/patrick/monorepo/issues/1385),
+[Issue 1385](https://github.com/openape-ai/openape-history/issues/1541),
 [review plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3C2TZC7HM94KDEG7AWW3BGM),
 [local plan](../../.claude/plans/jev-integration.md).
 Worktree `jev-integration`, branch `feature/issue-1385-jev-integration`,
@@ -1892,7 +1892,7 @@ Real API model discovery and all three decision types passed with `jev-1.13.0`.
 The existing owner-authorized key is encrypted in the isolated Jev development profile;
 production accounts, Pods and schedules were not changed. Remaining acceptance:
 neutral fresh Codex authoring plus live Pod grant flow and labelled workflow quality.
-[PR #134](https://repos.openape.ai/patrick/monorepo/pulls/134), implementation commit
+[PR #134](https://github.com/openape-ai/openape-history/issues/1544), implementation commit
 `fa31c9bc684ed02b6c23a5f2d762eba62daf961a` against the base above.
 [Published evidence](https://testrun.openape.ai/r/q8kG0M6twEJoIpqcVVx8reEg).
 Commit/push hooks passed the affected unit contract, including the relay consumer.
@@ -1900,19 +1900,19 @@ The original head `9f3ee934` passed external CI. Owner UI correction: compact AP
 
 ## Pods: stable central connection (September 25, 2026) — deployed
 
-[Issue 1384](https://repos.openape.ai/patrick/monorepo/issues/1384),
+[Issue 1384](https://github.com/openape-ai/openape-history/issues/1539),
 [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3C2RQPRQ5HE2XBRFXR8KRM5).
 PR 132 (`63ab0bf0`), follow-ups PR 133 (`dea37661`, idle storage rewrite) and PR 135 (`3c9afa24`, bounded scheduler tick), all exact-source CI green.
 Relay `prod-63ab0bf0`; signed desktop `3c9afa24` (DMG sha256 `33a46975…`) installed 15:15.
 Backups: relay `shared/backups/issue-1384-before-20260925T112651Z`; desktop
 `~/Library/Application Support/OpenApe Pods Rollback/2026-09-25-151456-issue-1384-final`.
 5 min nettop on the main process: 132.7 MB in / 63.3 MB out before, 0.74 MB / 0.64 MB after.
-Measurements, incidents and lessons: PR 132 comment. Open follow-ups: storage inspection walks ~24 000 files every 5 s ([issue 1387](https://repos.openape.ai/patrick/monorepo/issues/1387): full inventory every 60 s plus a per-tick disk/limit/error check, PR 139; signed desktop `9f00ed4d` (DMG sha256 `8aa0b77a…`) installed 17:10, backup `OpenApe Pods Rollback/2026-09-25-171031-issue-1387`; worker CPU over 5 min went from 51.2 s to 14.5 s; native acceptance needs the display awake);
+Measurements, incidents and lessons: PR 132 comment. Open follow-ups: storage inspection walks ~24 000 files every 5 s ([issue 1387](https://github.com/openape-ai/openape-history/issues/1548): full inventory every 60 s plus a per-tick disk/limit/error check, PR 139; signed desktop `9f00ed4d` (DMG sha256 `8aa0b77a…`) installed 17:10, backup `OpenApe Pods Rollback/2026-09-25-171031-issue-1387`; worker CPU over 5 min went from 51.2 s to 14.5 s; native acceptance needs the display awake);
 `query` before the first lease answers 400 instead of "connecting".
 
 ## Pods MCP discovery texts (September 25, 2026)
 
-[Issue 1383](https://repos.openape.ai/patrick/monorepo/issues/1383). Worktree `pods-mcp-discovery`,
+[Issue 1383](https://github.com/openape-ai/openape-history/issues/1537). Worktree `pods-mcp-discovery`,
 branch `feature/issue-1383-mcp-discovery`, base `3ff707b6`.
 - Server instructions now carry the discovery signal (category, when to use, capabilities, order, stale-session hint) in 1 188 characters.
 - `pods_control` describes only what it does and returns.
@@ -1923,7 +1923,7 @@ The change reaches installed apps with the next signed release. Splitting read/w
 
 ## Pods: service-queue pattern in runtime help (September 25, 2026)
 
-[Issue 1382](https://repos.openape.ai/patrick/monorepo/issues/1382). Worktree `pods-service-pattern`,
+[Issue 1382](https://github.com/openape-ai/openape-history/issues/1535). Worktree `pods-service-pattern`,
 branch `feature/issue-1382-service-pod-pattern`, base `6c72f271`. The MCP `runtime` help
 gains `patterns.serviceQueue`, the verified issue-1381 pattern: setup, rules and a tested
 example script. It reaches installed apps with the next signed release. A dedicated skill is
@@ -1931,7 +1931,7 @@ deferred until a second or third service Pod exists.
 
 ## Pods: zaz task queue from a scheduled Pod (September 25, 2026) — delivered
 
-[Issue 1381](https://repos.openape.ai/patrick/monorepo/issues/1381),
+[Issue 1381](https://github.com/openape-ai/openape-history/issues/1532),
 [plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3AMN0CXG8G9TH0FR3MX5K5J).
 PR 127 merged as `7103930d`; PR 128 merged as `7a269851` (external CI 5100 and the review-fix run, both green).
 The runtime changes:
@@ -1961,7 +1961,7 @@ The legacy launchd worker stays disabled.
 
 ## Pods: Claude Code MCP integration (September 24, 2026) — implementing
 
-[Issue 1380](https://repos.openape.ai/patrick/monorepo/issues/1380),
+[Issue 1380](https://github.com/openape-ai/openape-history/issues/1528),
 [review plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3AJBBZHMJV6KC8A4WJP67JR),
 [local plan](../../.claude/plans/issue-1380-claude-code.html).
 Worktree `pods-claude-code`, branch `feature/issue-1380-claude-code`, canonical
@@ -1986,7 +1986,7 @@ Use a separate synthetic Pod for acceptance. Automatic E2E/layout remains off.
 
 ## Automatic CI scope (September 24, 2026)
 
-[Issue 1379](https://repos.openape.ai/patrick/monorepo/issues/1379), branch
+[Issue 1379](https://github.com/openape-ai/openape-history/issues/1526), branch
 `bugfix/issue-1379-headless-ci`, worktree `pods-web-workspace`, base canonical
 main `f576ea94bb746f6e811b45a8dce8f9128d5fc40d`.
 Owner decision: remove all automatic E2E/layout jobs and required contexts;
@@ -1999,7 +1999,7 @@ issue. The deployed Pods app and monitor remain running; no runtime changes.
 
 ## Pods: central browser and desktop workspace (September 24, 2026) — deployed
 
-[Issue 1378](https://repos.openape.ai/patrick/monorepo/issues/1378),
+[Issue 1378](https://github.com/openape-ai/openape-history/issues/1521),
 [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3A03YDYB092Z1NDM7J6NQ8X),
 [local plan](../../.claude/plans/2026-09-24-pods-central-workspace.html),
 [live acceptance evidence](https://testrun.openape.ai/r/bPb4nyghS79Z5iXMo5m3_ZGZ).
@@ -2055,7 +2055,7 @@ Do not restore an older profile over newer central writes or effect receipts.
 
 ## Pods: connected Codex owner administration (September 24, 2026) — delivered
 
-[Issue 1377](https://repos.openape.ai/patrick/monorepo/issues/1377), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3971H91PDY5XPHJP3696PZ7). Worktree `issue-1377-broker-capacity`; completion documentation branch `bugfix/issue-1377-completion-docs`.
+[Issue 1377](https://github.com/openape-ai/openape-history/issues/1513), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3971H91PDY5XPHJP3696PZ7). Worktree `issue-1377-broker-capacity`; completion documentation branch `bugfix/issue-1377-completion-docs`.
 
 Delivered: PR 113 (`56eb0366`) removed embedded chat and duplicate local approvals; PR 115 (`b17e2b54`) removed per-script secret selection and documented MCP CLI setup. PR 116 (`4f5977cb`) added explicit native CLI runtimes and corrected active-operation checks for consumed one-shot grants. PR 117 (`8af87e34`) makes current owner-assigned grants take precedence over stale run history. PR 118 (`8ac60bf0`) applies configured machine capacity to broker assertions. All exact-source CI/E2E/layout checks passed; full local checks passed before distribution and deployment.
 
@@ -2067,38 +2067,38 @@ Reuse group `initech` and Pod `98c32f74-ffaf-4628-bd41-95cea821572f`. Private Az
 
 ## Pods installed Codex MCP dependency (September 24, 2026)
 
-[Issue 1376](https://repos.openape.ai/patrick/monorepo/issues/1376). The signed `95fc9d87` installation exposed an external `croner` import in the unpacked MCP runtime; checkout-based acceptance resolved ancestor dependencies and missed it. The repair bundles the dependency and runs the existing packaged MCP case from an isolated path outside the checkout. That regression fails with the installed error before the fix and passes after it; full lint/typecheck and the app build pass. The issue records exact-source merge checks and refreshed signed installation evidence. Preserve the owner app/profile rollback pair.
+[Issue 1376](https://github.com/openape-ai/openape-history/issues/1511). The signed `95fc9d87` installation exposed an external `croner` import in the unpacked MCP runtime; checkout-based acceptance resolved ancestor dependencies and missed it. The repair bundles the dependency and runs the existing packaged MCP case from an isolated path outside the checkout. That regression fails with the installed error before the fix and passes after it; full lint/typecheck and the app build pass. The issue records exact-source merge checks and refreshed signed installation evidence. Preserve the owner app/profile rollback pair.
 
 ## Pods: Codex controls the installed app (September 23, 2026) — done
 
-[Issue 1375](https://repos.openape.ai/patrick/monorepo/issues/1375), [plan](../../.claude/plans/issue-1375-codex-control.md) (D1–D6 and option a approved by Patrick). Issue closed. PR 108 (adapter), PR 109 (MCP shim and launcher) and PR 110 (registration UI, **Prepared by Codex**, handbook chapter and packaged acceptance with a real `codex app-server`) are merged; PR 110 merged as `8aad8901`. The owner's real `~/.codex` and profile were never touched; all tests use isolated `CODEX_HOME` and fixture profiles. Installing on Patrick's Mac and connecting his Codex are his own steps in App settings.
+[Issue 1375](https://github.com/openape-ai/openape-history/issues/1495), [plan](../../.claude/plans/issue-1375-codex-control.md) (D1–D6 and option a approved by Patrick). Issue closed. PR 108 (adapter), PR 109 (MCP shim and launcher) and PR 110 (registration UI, **Prepared by Codex**, handbook chapter and packaged acceptance with a real `codex app-server`) are merged; PR 110 merged as `8aad8901`. The owner's real `~/.codex` and profile were never touched; all tests use isolated `CODEX_HOME` and fixture profiles. Installing on Patrick's Mac and connecting his Codex are his own steps in App settings.
 
 ## Pods test pyramid (September 23, 2026) — done
 
-[Issue 1374](https://repos.openape.ai/patrick/monorepo/issues/1374), [plan](../../.claude/plans/issue-1374-test-pyramid-pods.md) with outcomes. PR 97–104 merged (main `94ca3550`), no production code changes. Pods E2E: 35 files / 135 tests / 72.6 s → 25 files / 109 tests / 27.9 s (CI, 6 workers); pods layout step 54.2 s. iOS client outside the check contract (PR 100, issue 1364). Which level proves what: `apps/openape-pods/docs/testing.md`. Issue closed. Follow-up PR 106 merged as `3cc7104e` (packaged E2E variants only, a leaner browser matrix and `pnpm --filter @openape/pods test:fast`, about 14 seconds without Electron). PR 107 merged as `b2b7002e` (pre-push runs only `check:affected --suite unit`; E2E and layout run externally once per head).
+[Issue 1374](https://github.com/openape-ai/openape-history/issues/1494), [plan](../../.claude/plans/issue-1374-test-pyramid-pods.md) with outcomes. PR 97–104 merged (main `94ca3550`), no production code changes. Pods E2E: 35 files / 135 tests / 72.6 s → 25 files / 109 tests / 27.9 s (CI, 6 workers); pods layout step 54.2 s. iOS client outside the check contract (PR 100, issue 1364). Which level proves what: `apps/openape-pods/docs/testing.md`. Issue closed. Follow-up PR 106 merged as `3cc7104e` (packaged E2E variants only, a leaner browser matrix and `pnpm --filter @openape/pods test:fast`, about 14 seconds without Electron). PR 107 merged as `b2b7002e` (pre-push runs only `check:affected --suite unit`; E2E and layout run externally once per head).
 
 ## Pods: two owner accounts (September 22, 2026)
 
-[Issue 1372](https://repos.openape.ai/patrick/monorepo/issues/1372) (supersedes 1365). Worktree `wt-issue-1372`, branch `feature/issue-1372-two-owner-accounts`, base `b15b564a`. [Plan](../../.claude/plans/issue-1372-two-owner-accounts.md), approved by Patrick with D1 (Pods of another identity are re-provisioned under the owner), D2 (one-time Pods provider consent at the first Pod) and D3 (one email field, IdP from the DDISA DNS record).
-"Your accounts" shows exactly Codex / GPT and the DDISA owner. Startup reconciliation keeps one row per provider, merges duplicate rows of the owner identity without re-provisioning and releases bindings of other identities. Mobile access and new Pods use the owner implicitly. Native [PR 96](https://repos.openape.ai/patrick/monorepo/pulls/96). Local evidence: 362 Pods unit/component tests, 8 packaged Electron onboarding/handbook E2E tests, lint and typecheck green. Installation on Patrick's Mac is a separate decision.
+[Issue 1372](https://github.com/openape-ai/openape-history/issues/1491) (supersedes 1365). Worktree `wt-issue-1372`, branch `feature/issue-1372-two-owner-accounts`, base `b15b564a`. [Plan](../../.claude/plans/issue-1372-two-owner-accounts.md), approved by Patrick with D1 (Pods of another identity are re-provisioned under the owner), D2 (one-time Pods provider consent at the first Pod) and D3 (one email field, IdP from the DDISA DNS record).
+"Your accounts" shows exactly Codex / GPT and the DDISA owner. Startup reconciliation keeps one row per provider, merges duplicate rows of the owner identity without re-provisioning and releases bindings of other identities. Mobile access and new Pods use the owner implicitly. Native [PR 96](https://github.com/openape-ai/openape-history/issues/1492). Local evidence: 362 Pods unit/component tests, 8 packaged Electron onboarding/handbook E2E tests, lint and typecheck green. Installation on Patrick's Mac is a separate decision.
 
 ## Native mobile Pods (September 21, 2026)
 
 Superseded on October 9, 2026: issue 1455 M2 removed the native app, the encrypted mobile channel and their documents (`pods-mobile-release.md`, the protocol contract). The history below is kept as written.
 
-[Issue 1362](https://repos.openape.ai/patrick/monorepo/issues/1362), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2ZQTVS90HK79ZWQW973Y8HP).
+[Issue 1362](https://github.com/openape-ai/openape-history/issues/1465), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2ZQTVS90HK79ZWQW973Y8HP).
 Installed desktop (October 6, 12:30 CEST): signed-local 0.1.2 from clean main `288918f9e340609325384af5733a451bc8a2fc24` (DMG SHA256 `a0a7f4d78e52f92efca07513807764c2d9d0cf033c1603ecf7bf2670ad6ea1b6`), notarized and stapled, mounted synthetic acceptance passed (`pnpm test:distribution --signed-local`), installed bundle byte-identical to the DMG, Gatekeeper `Notarized Developer ID`, schema 38 unchanged. Paired rollback: `/Users/owner/Library/Application Support/OpenApe Pods Rollback/20261006-native-mobile-1362` (previous app and profile copy). The previous GUI had already quit; the 21 remaining `codex-mcp.mjs` processes of agent sessions kept the old bundle through a move instead of a delete. Relay stays `prod-42541063`.
 Patrick authorized end-to-end implementation; work resumed in Claude Code from the September 20 handoff. All six milestones have their synthetic-stack implementation on main (October 6). Owner decision October 6: Apple distribution and physical-device acceptance are deferred out of this plan; the remainder is listed in `docs/operations/pods-mobile-release.md`. The plan is closed as complete for its implementable scope; M1 keeps its owner-blocked gaps.
 
-Foundation [PR 80](https://repos.openape.ai/patrick/monorepo/pulls/80) is merged as `131874cdd1a2ad8b4488e63ef6ca8356ea7cfdc0`. The relay packaging repair merged through [PR 82](https://repos.openape.ai/patrick/monorepo/pulls/82) as `8441c325e35fbda3bad43f5cf9ecfa6aa9e40df8` (external 4809/4810/4811 green; PR 81 is superseded and should be closed). `pnpm deploy:image pods-relay` from that clean main deployed `prod-8441c325` disabled: container 999:988, read-only root, `enabled: false`, provider discovery/JWKS/health byte-identical, reviewed Traefik router installed, stale `prod-131874cd` pin removed with backup. Verification policy decision: [issue 1363](https://repos.openape.ai/patrick/monorepo/issues/1363) / [PR 83](https://repos.openape.ai/patrick/monorepo/pulls/83) (affected pre-push, one external full contract, hidden fixture windows).
+Foundation [PR 80](https://github.com/openape-ai/openape-history/issues/1466) is merged as `131874cdd1a2ad8b4488e63ef6ca8356ea7cfdc0`. The relay packaging repair merged through [PR 82](https://github.com/openape-ai/openape-history/issues/1468) as `8441c325e35fbda3bad43f5cf9ecfa6aa9e40df8` (external 4809/4810/4811 green; PR 81 is superseded and should be closed). `pnpm deploy:image pods-relay` from that clean main deployed `prod-8441c325` disabled: container 999:988, read-only root, `enabled: false`, provider discovery/JWKS/health byte-identical, reviewed Traefik router installed, stale `prod-131874cd` pin removed with backup. Verification policy decision: [issue 1363](https://github.com/openape-ai/openape-history/issues/1469) / [PR 83](https://github.com/openape-ai/openape-history/issues/1470) (affected pre-push, one external full contract, hidden fixture windows).
 
-Native acceptance [PR 84](https://repos.openape.ai/patrick/monorepo/pulls/84) merged as `b4cff75b8a4cc1043872fef275f7e587825d8772` (source `e04cf8462c0e44c5aed1ff37182e17f476176fa8`, external 4821/4822/4823 green). Its push gate `1789985301982-e04cf846-all` ran every workspace including the native run from clean source; iPhone and iPad passed 2/2 with app restart, desktop restart and pairing removal (refused, no new run). Published evidence: https://testrun.openape.ai/r/aUeVd1ZWv-LKtO4bMdIadQxQ. Remaining M1 gaps: two distinct real broker/decision authorities in the native fixture (owner decision on a fixture-only loopback boundary), controlled live-model smoke (owner ChatGPT sign-in), physical-device HTTPS association.
+Native acceptance [PR 84](https://github.com/openape-ai/openape-history/issues/1471) merged as `b4cff75b8a4cc1043872fef275f7e587825d8772` (source `e04cf8462c0e44c5aed1ff37182e17f476176fa8`, external 4821/4822/4823 green). Its push gate `1789985301982-e04cf846-all` ran every workspace including the native run from clean source; iPhone and iPad passed 2/2 with app restart, desktop restart and pairing removal (refused, no new run). Published evidence: https://testrun.openape.ai/r/aUeVd1ZWv-LKtO4bMdIadQxQ. Remaining M1 gaps: two distinct real broker/decision authorities in the native fixture (owner decision on a fixture-only loopback boundary), controlled live-model smoke (owner ChatGPT sign-in), physical-device HTTPS association.
 
-Test-pyramid steps 1–3 are merged (PR 85 `80d62c57`, PR 86 `96b39096`). M2 (delivery, recovery, shared editing): [PR 87](https://repos.openape.ai/patrick/monorepo/pulls/87) (merge `e4499574`) and [PR 88](https://repos.openape.ai/patrick/monorepo/pulls/88) (merge `1f08c9ce`) deliver generation rotation after restore (unit + real-stack round trip), relay-reported pairing state, Retry-After, socket replacement/expiry/revocation, interrupted commands staying `unknown`, stale run refusal, per-runtime replay bounds and idempotent claims. Next: program-effect replay proof, review-conflict UI, native `RelayClient` tests with injected Keychain/URLSession, then the M2 acceptance run on the integrated stack before M3. Owner-blocked M1 gaps remain: two real authorities in the native fixture, live-model smoke, physical-device association.
+Test-pyramid steps 1–3 are merged (PR 85 `80d62c57`, PR 86 `96b39096`). M2 (delivery, recovery, shared editing): [PR 87](https://github.com/openape-ai/openape-history/issues/1475) (merge `e4499574`) and [PR 88](https://github.com/openape-ai/openape-history/issues/1476) (merge `1f08c9ce`) deliver generation rotation after restore (unit + real-stack round trip), relay-reported pairing state, Retry-After, socket replacement/expiry/revocation, interrupted commands staying `unknown`, stale run refusal, per-runtime replay bounds and idempotent claims. Next: program-effect replay proof, review-conflict UI, native `RelayClient` tests with injected Keychain/URLSession, then the M2 acceptance run on the integrated stack before M3. Owner-blocked M1 gaps remain: two real authorities in the native fixture, live-model smoke, physical-device association.
 
-M2 change sets merged September 22: [PR 90](https://repos.openape.ai/patrick/monorepo/pulls/90) (`520da61a`, program effects never replayed remotely), [PR 91](https://repos.openape.ai/patrick/monorepo/pulls/91) (`b15b564a`, desktop edits during a mobile approval become a `revision_conflict` re-review), [PR 93](https://repos.openape.ai/patrick/monorepo/pulls/93) and [PR 94](https://repos.openape.ai/patrick/monorepo/pulls/94) (`71bf5805`, native `RelayClient` tests with injected secrets and transport). Patrick's first phone test against relay `prod-b15b564a` created and chatted with a Pod from the iPhone; findings are issues 1366–1369 and 1371. The installed desktop is a notarized signed-local build. Since September 23/24 the native iOS client is outside the automatic check contract (issue 1364, PR 100) and only unit CI is automatic (issue 1379, PR 126); the native run is `pnpm --filter @openape/pods-ios test:layout` on demand.
+M2 change sets merged September 22: [PR 90](https://github.com/openape-ai/openape-history/issues/1478) (`520da61a`, program effects never replayed remotely), [PR 91](https://github.com/openape-ai/openape-history/issues/1479) (`b15b564a`, desktop edits during a mobile approval become a `revision_conflict` re-review), [PR 93](https://github.com/openape-ai/openape-history/issues/1481) and [PR 94](https://github.com/openape-ai/openape-history/issues/1483) (`71bf5805`, native `RelayClient` tests with injected secrets and transport). Patrick's first phone test against relay `prod-b15b564a` created and chatted with a Pod from the iPhone; findings are issues 1366–1369 and 1371. The installed desktop is a notarized signed-local build. Since September 23/24 the native iOS client is outside the automatic check contract (issue 1364, PR 100) and only unit CI is automatic (issue 1379, PR 126); the native run is `pnpm --filter @openape/pods-ios test:layout` on demand.
 
-M2 acceptance (October 6, 2026): [PR 248](https://repos.openape.ai/patrick/monorepo/pulls/248) rebases the acceptance harness onto main `79dc50d2`. The native run proves the four interruption cases (disconnect before admission, before result acknowledgement, desktop crash after run reservation, desktop crash after journal commit) on iPhone and iPad; the first run on today's main failed only at a fixture selector left behind by the Variant A workspace and was corrected without assertion changes. Evidence: https://report.openape.ai/r/Qi8c8RSCwz4wFT0vcjSzdjlr. Local checks on the head: affected lint/typecheck 18/18, 1358 Pods tests, 35 relay tests, 13 Swift tests. The production dependency audit fails on main itself since 2026-10-05 advisories and needs an owner decision. The required `CI / ci (push)` failed on main's own lockfile at `pnpm audit --prod --audit-level=high` (nine advisories published 2026-10-05). Patrick decided: update where a patched release exists, exception only where none can be installed. [Issue 1428](https://repos.openape.ai/patrick/monorepo/issues/1428) / [PR 249](https://repos.openape.ai/patrick/monorepo/pulls/249) resolve seven advisories through overrides and document the four simple-git exceptions (simple-git 4 breaks every @nuxt/devtools 3.x). PR 249 merged as `0669c2141c470e58fad178fb492499d296e40619`; PR 248 merged as `0811be72777e594b304e405ae29be484de589f83` on Patrick's instruction. M3 (October 6): a gap analysis found envelope encryption, `encryption_required` negotiation, key epochs, relay retention and the protected native cache already delivered in M1/M2. [PR 251](https://repos.openape.ai/patrick/monorepo/pulls/251) (merge `ef0968fd`) adds the per-party visibility table and threat review in `docs/architecture/pods-mobile-protocol.md`, the desktop and native disclosures (including that content shown on a revoked device cannot be recalled), a relay storage proof (no readable content in the SQLite file or audit table) and a key-epoch refusal test. Owner-gated remainder: physical iPhone/iPad sign-in, lock/unlock, logout and offline cached-read checks with a new build, and the desktop build rollout. M4 (October 6): [PR 253](https://repos.openape.ai/patrick/monorepo/pulls/253) (merge `a99aec4475ba5e31e1e41c583cbeaffd6d4db976`) adds the explicit desktop handoff (issue 1368), older-message paging through the existing `nextBefore` cursor, the chat scroll anchor (issue 1366) and desktop-matching collapsed resolved reviews (issue 1367); native suite green on both simulators, [evidence](https://report.openape.ai/r/rzvKlM2PWYxmh7s6A5rl05NZ). Typed remote reviews for HTTP/program/dependency permissions wait for desktop parity. M5/M6 (October 6): [PR 255](https://repos.openape.ai/patrick/monorepo/pulls/255) (merge `5096bfce`) adds opt-in content-free APNs (relay token store, notifier with mocked-transport tests, native toggle and coordinator, disabled by default), the TestFlight archive/export script with tester checklist, and the M6 readiness record `docs/operations/pods-mobile-release.md` (compatibility/rollback matrix, limits, privacy and export facts, App Review notes, owner actions). Native regression green on both simulators, [evidence](https://report.openape.ai/r/Z3_35HZpldKTnGCwycEhOU2e). Owner/Apple remainder: App Store Connect record and capabilities, APNs key via secrets.openape.ai, TestFlight upload and Beta App Review, physical-device delivery and network tests, privacy/support pages, export declaration, App Review outcome. Owner-blocked M1 gaps remain: two real authorities in the native fixture, live-model smoke, physical-device association (partly exercised by the phone test). Chat fixes for 1366/1367 wait in `pods-mobile-scroll` for the 1367 owner decision.
+M2 acceptance (October 6, 2026): [PR 248](https://github.com/openape-ai/openape-history/issues/1711) rebases the acceptance harness onto main `79dc50d2`. The native run proves the four interruption cases (disconnect before admission, before result acknowledgement, desktop crash after run reservation, desktop crash after journal commit) on iPhone and iPad; the first run on today's main failed only at a fixture selector left behind by the Variant A workspace and was corrected without assertion changes. Evidence: https://report.openape.ai/r/Qi8c8RSCwz4wFT0vcjSzdjlr. Local checks on the head: affected lint/typecheck 18/18, 1358 Pods tests, 35 relay tests, 13 Swift tests. The production dependency audit fails on main itself since 2026-10-05 advisories and needs an owner decision. The required `CI / ci (push)` failed on main's own lockfile at `pnpm audit --prod --audit-level=high` (nine advisories published 2026-10-05). Patrick decided: update where a patched release exists, exception only where none can be installed. [Issue 1428](https://github.com/openape-ai/openape-history/issues/1709) / [PR 249](https://github.com/openape-ai/openape-history/issues/1713) resolve seven advisories through overrides and document the four simple-git exceptions (simple-git 4 breaks every @nuxt/devtools 3.x). PR 249 merged as `0669c2141c470e58fad178fb492499d296e40619`; PR 248 merged as `0811be72777e594b304e405ae29be484de589f83` on Patrick's instruction. M3 (October 6): a gap analysis found envelope encryption, `encryption_required` negotiation, key epochs, relay retention and the protected native cache already delivered in M1/M2. [PR 251](https://github.com/openape-ai/openape-history/issues/1712) (merge `ef0968fd`) adds the per-party visibility table and threat review in `docs/architecture/pods-mobile-protocol.md`, the desktop and native disclosures (including that content shown on a revoked device cannot be recalled), a relay storage proof (no readable content in the SQLite file or audit table) and a key-epoch refusal test. Owner-gated remainder: physical iPhone/iPad sign-in, lock/unlock, logout and offline cached-read checks with a new build, and the desktop build rollout. M4 (October 6): [PR 253](https://github.com/openape-ai/openape-history/issues/1716) (merge `a99aec4475ba5e31e1e41c583cbeaffd6d4db976`) adds the explicit desktop handoff (issue 1368), older-message paging through the existing `nextBefore` cursor, the chat scroll anchor (issue 1366) and desktop-matching collapsed resolved reviews (issue 1367); native suite green on both simulators, [evidence](https://report.openape.ai/r/rzvKlM2PWYxmh7s6A5rl05NZ). Typed remote reviews for HTTP/program/dependency permissions wait for desktop parity. M5/M6 (October 6): [PR 255](https://github.com/openape-ai/openape-history/issues/1718) (merge `5096bfce`) adds opt-in content-free APNs (relay token store, notifier with mocked-transport tests, native toggle and coordinator, disabled by default), the TestFlight archive/export script with tester checklist, and the M6 readiness record `docs/operations/pods-mobile-release.md` (compatibility/rollback matrix, limits, privacy and export facts, App Review notes, owner actions). Native regression green on both simulators, [evidence](https://report.openape.ai/r/Z3_35HZpldKTnGCwycEhOU2e). Owner/Apple remainder: App Store Connect record and capabilities, APNs key via secrets.openape.ai, TestFlight upload and Beta App Review, physical-device delivery and network tests, privacy/support pages, export declaration, App Review outcome. Owner-blocked M1 gaps remain: two real authorities in the native fixture, live-model smoke, physical-device association (partly exercised by the phone test). Chat fixes for 1366/1367 wait in `pods-mobile-scroll` for the 1367 owner decision.
 
 ## Central Pod chats (September 20, 2026)
 
@@ -2112,7 +2112,7 @@ Previous source `a704411473bc8635746ad3df9c86f09b05538e7f` passed all local and
 external gates. Follow-up checks and inspected UI evidence belong to PR 78's
 exact-source acceptance record; these previous results do not certify a new head.
 
-Issue: https://repos.openape.ai/patrick/monorepo/issues/1359. Native [PR 78](https://repos.openape.ai/patrick/monorepo/pulls/78). Worktree
+Issue: https://github.com/openape-ai/openape-history/issues/1459. Native [PR 78](https://github.com/openape-ai/openape-history/issues/1461). Worktree
 `pods-central-chats`, branch `feature/issue-1359-central-chats`, canonical base
 `934dbcec21cce8e3620ecda51a77aa8458bcfd30` (rechecked during implementation).
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2ZACGJKS6JHH84T22Q48K49).
@@ -2152,7 +2152,7 @@ Troop/OpenClaw remains paused.
 
 ## Native issue pilot live (September 20, 2026)
 
-[Issue 1356](https://repos.openape.ai/patrick/monorepo/issues/1356) now lives in the native forge. [PR 77](https://repos.openape.ai/patrick/monorepo/pulls/77), reviewed source `6b64f9ded062cc7e281117504fdc88e4b0f130cd` and target `934dbcec21cce8e3620ecda51a77aa8458bcfd30`, merged as `78fad3f1be6c3d67f2f68c50c8b142a0e9a06bb3` after all 17 local gates and exact-source external CI/e2e/layout passed. The approved private pilot activated at 13:36:53 UTC; Forgejo is now its read-only issue archive and unchanged Git/CI mirror.
+[Issue 1356](https://github.com/openape-ai/openape-history/issues/1425) now lives in the native forge. [PR 77](https://github.com/openape-ai/openape-history/issues/1460), reviewed source `6b64f9ded062cc7e281117504fdc88e4b0f130cd` and target `934dbcec21cce8e3620ecda51a77aa8458bcfd30`, merged as `78fad3f1be6c3d67f2f68c50c8b142a0e9a06bb3` after all 17 local gates and exact-source external CI/e2e/layout passed. The approved private pilot activated at 13:36:53 UTC; Forgejo is now its read-only issue archive and unchanged Git/CI mirror.
 
 The final import reconciled 233 issues, 175 comments, 15 labels, three attachment byte streams and 37 history rows. Nineteen unresolved assignments retain provenance without native permissions. All 110 inventoried Tasks/Plans/PR links resolve; actual DDISA login retains old comment anchors. Private intake and 17 product routes are active. Synthetic live acceptance records 1360/1361 are closed; tracking issue 1356 remains open through observation. Off-site snapshot `0cc0862b` independently restored 235 issues, 423 origins, 411 legacy links, all assets/archives and a Git clone. [Operational receipt](../operations/native-issues-migration.md#production-pilot-september-20-2026).
 
@@ -2162,7 +2162,7 @@ Earlier entries below are dated implementation checkpoints; this receipt superse
 
 ## Pod workflow graphs and conservative mail filtering (September 20, 2026)
 
-Issue: https://git.openape.ai/openape-ai/openape/issues/1358. Native [PR 76](https://repos.openape.ai/patrick/monorepo/pulls/76). Worktree
+Issue: https://git.openape.ai/openape-ai/openape/issues/1358. Native [PR 76](https://github.com/openape-ai/openape-history/issues/1458). Worktree
 `pods-conversation`, branch `feature/issue-1358-pod-workflow-graphs`, canonical
 base `77c6b22aa959b60402a22e4cc34700f74ebe8d47`.
 [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2YXXAP6HC15CBQR5DV8XVHM).
@@ -2197,7 +2197,7 @@ was read-only verified `enabled=false` at 2026-09-20T10:34:09Z.
 
 ## Pods user guide (September 20, 2026)
 
-Issue: https://git.openape.ai/openape-ai/openape/issues/1357. Native [PR 75](https://repos.openape.ai/patrick/monorepo/pulls/75). Worktree
+Issue: https://git.openape.ai/openape-ai/openape/issues/1357. Native [PR 75](https://github.com/openape-ai/openape-history/issues/1453). Worktree
 `openape-monorepo.worktrees/pods-user-guide`, branch
 `feature/issue-1357-pods-user-guide`, canonical base
 `cf19d3773f45dc9a5d8cd0cc8099fb5a76134cc0` (merged PR 74). Implementation
@@ -2226,13 +2226,13 @@ Existing owner app/data/accounts and schedules remain untouched.
 
 ## Provider consent wording (September 19, 2026)
 
-Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Native [PR 74](https://repos.openape.ai/patrick/monorepo/pulls/74); worktree `pods-conversation`, branch `bugfix/issue-1354-provider-consent-wording`, implementation checkpoint `a79c94425e00d6f059eca56847b3a3cae6468b51`, canonical base `d5aa59c1a6df11189274ada1690b52f176899c4c`.
+Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Native [PR 74](https://github.com/openape-ai/openape-history/issues/1455); worktree `pods-conversation`, branch `bugfix/issue-1354-provider-consent-wording`, implementation checkpoint `a79c94425e00d6f059eca56847b3a3cae6468b51`, canonical base `d5aa59c1a6df11189274ada1690b52f176899c4c`.
 
 The provider action now says **Allow requests from this provider** and explains that consent uses the existing DDISA account without another provider sign-in. Confirmation/revocation, German translations and the operator workflow use permission terminology. Full lint/typecheck, app build, 267 unit/component tests and the single focused packaged provider-settings case pass; [inspected English/German and narrow dark evidence](https://testrun.openape.ai/r/FzY7KuWo0P6GAiNJnnni5VLD). No full local E2E suite or live provider test calls. Next: exact-source native review/checks, merge, notarized internal package and paired app/profile installation. The linked PR's delivery comment records final SHAs and preservation receipts.
 
 ## Personal accounts and per-Pod identities (September 19, 2026)
 
-Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Native [PR 73](https://repos.openape.ai/patrick/monorepo/pulls/73); worktree `pods-conversation`, branch `feature/issue-1354-pod-identity-settings`, implementation checkpoint `c9c590daf3cec69237bb9571a158bd1112a0a227`, canonical base `25529c59fe4d815232b98128fa8b1955684a96de`.
+Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Native [PR 73](https://github.com/openape-ai/openape-history/issues/1451); worktree `pods-conversation`, branch `feature/issue-1354-pod-identity-settings`, implementation checkpoint `c9c590daf3cec69237bb9571a158bd1112a0a227`, canonical base `25529c59fe4d815232b98128fa8b1955684a96de`.
 
 General account setup now contains personal DDISA and Codex / GPT sign-ins. The Pod Settings tab displays its actual agent identity and deciding owner, with issuer details and account-wide provider consent management collapsed below it. Scoped identity reads expose public fields without provisioning or moving existing bindings. Revocation confirmation explicitly covers all Pods using that consent.
 
@@ -2240,15 +2240,15 @@ Full lint/typecheck, app build, all 267 Pods unit/component tests and five focus
 
 ## Pods server rollout and signed local installation (September 19, 2026)
 
-Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Server [PR 70](https://repos.openape.ai/patrick/monorepo/pulls/70) merged as `ce1a8fb87536fb471bbb01dce16884cf098be9d9` after all exact-source external checks passed. Both `id.openape.ai` and the independent `pods.openape.ai` run image pin `prod-ce1a8fb8`. HTTPS health, Grant Brokering 1.0 discovery, independent signing keys and refusal of unauthenticated writes pass. Existing owner identities, passkeys, signing keys and all 47,603 predeployment grant IDs/payloads are preserved.
+Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Server [PR 70](https://github.com/openape-ai/openape-history/issues/1448) merged as `ce1a8fb87536fb471bbb01dce16884cf098be9d9` after all exact-source external checks passed. Both `id.openape.ai` and the independent `pods.openape.ai` run image pin `prod-ce1a8fb8`. HTTPS health, Grant Brokering 1.0 discovery, independent signing keys and refusal of unauthenticated writes pass. Existing owner identities, passkeys, signing keys and all 47,603 predeployment grant IDs/payloads are preserved.
 
-Internal signing [PR 71](https://repos.openape.ai/patrick/monorepo/pulls/71), source `ad93686159a301a9b715a15cdba5cc0d3b20368b`, produced an Apple-accepted, stapled app and DMG. The installed app passes Gatekeeper and the mounted-DMG deterministic check. Four Pods, 107 runs, 13 encrypted credential files and the existing enabled schedule were retained. External candidate/public-release gates remain separate; `releaseReady` is false. No real mail/model/Telegram test request or schedule change.
+Internal signing [PR 71](https://github.com/openape-ai/openape-history/issues/1449), source `ad93686159a301a9b715a15cdba5cc0d3b20368b`, produced an Apple-accepted, stapled app and DMG. The installed app passes Gatekeeper and the mounted-DMG deterministic check. Four Pods, 107 runs, 13 encrypted credential files and the existing enabled schedule were retained. External candidate/public-release gates remain separate; `releaseReady` is false. No real mail/model/Telegram test request or schedule change.
 
 Worktrees: `pods-conversation` (internal signing) and `pods-rollout` (clean canonical server deployment, then delivery evidence). Exact local checks, submissions, hashes and paired rollback locations: [delivery receipt](../../.claude/reports/2026-09-19-signed-rollout.md). Consult the linked native PRs for their final merge/check receipts. Next user step: explicitly connect the agent provider in Pods for new identities; existing Pods retain their bindings. Earlier implementation checkpoints below are historical.
 
 ## Federated Pods grants (September 19, 2026)
 
-Implementation [PR 69](https://repos.openape.ai/patrick/monorepo/pulls/69), code source `40aeb4ba314bda319b0dd4ced2b4e377d42ab00e`. Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Worktree: `pods-conversation`; branch `feature/issue-1354-federated-grants`; base `fe4432e5`. Approved plan: [grant brokering](../../.claude/plans/2026-09-19-grant-brokering.md). Protocol [PR 1](https://repos.openape.ai/patrick/protocol/pulls/1) merged as `25b6d89b8fc6c21f171df6c78cf6a30ca9f1ff99` and mirrored. Implementation adds durable owner consent, typed broker assertions, immutable external agent bindings, owner-only grant lifecycle, original signatures and direct owner-IdP consumption. Pods separates the agent provider from the deciding account; existing identities remain unchanged.
+Implementation [PR 69](https://github.com/openape-ai/openape-history/issues/1447), code source `40aeb4ba314bda319b0dd4ced2b4e377d42ab00e`. Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Worktree: `pods-conversation`; branch `feature/issue-1354-federated-grants`; base `fe4432e5`. Approved plan: [grant brokering](../../.claude/plans/2026-09-19-grant-brokering.md). Protocol [PR 1](https://github.com/openape-ai/openape-history/issues/1446) merged as `25b6d89b8fc6c21f171df6c78cf6a30ca9f1ff99` and mirrored. Implementation adds durable owner consent, typed broker assertions, immutable external agent bindings, owner-only grant lifecycle, original signatures and direct owner-IdP consumption. Pods separates the agent provider from the deciding account; existing identities remain unchanged.
 
 Full lint/typecheck, affected application builds, 2,136 unit/component/conformance tests and one focused native layout case pass; eight existing apes tests remain skipped. Evidence and precise commands: [verification](../../.claude/reports/2026-09-19-grant-brokering/verification.md). No full local E2E suite completed, real mail/model/Telegram request, schedule activation or owner-profile change. The default push hook unexpectedly entered E2E checks; it was interrupted during the second package. The push-only hook skip respects the local E2E restriction; native CI gates remain mandatory. Public `pods.openape.ai` has no DNS/service yet; deployment prerequisites are documented in [operations](../operations/grant-brokering.md). Next: review the native PR against its exact source/target and await required external checks, then merge and perform paired app/profile local installation. Do not claim a live federation deployment.
 
@@ -2259,7 +2259,7 @@ Issue: https://git.openape.ai/openape-ai/openape/issues/1354. Worktree: `pods-co
 
 ## Native issues: implementation and cutover handoff
 
-The approved private MVP is implemented through M1–M6. API/CLI, UI, product reporting, explicit PR relations and external-code issue homes are merged through native PRs 60–65; canonical checkpoint `d9c7d092e05496a472ef26f38f42c5e5d6c79b28` retains their sources and the full-byte Pods assertion correction. App entry points are reviewed in [PR 66](https://repos.openape.ai/patrick/monorepo/pulls/66); migration/restore tooling is reviewed in [PR 67](https://repos.openape.ai/patrick/monorepo/pulls/67). Read those PRs and the synchronized [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A5ZAT63A04PWGVBT5M14MW) for their current exact source, target, checks and merge receipts.
+The approved private MVP is implemented through M1–M6. API/CLI, UI, product reporting, explicit PR relations and external-code issue homes are merged through native PRs 60–65; canonical checkpoint `d9c7d092e05496a472ef26f38f42c5e5d6c79b28` retains their sources and the full-byte Pods assertion correction. App entry points are reviewed in [PR 66](https://github.com/openape-ai/openape-history/issues/1443); migration/restore tooling is reviewed in [PR 67](https://github.com/openape-ai/openape-history/issues/1444). Read those PRs and the synchronized [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A5ZAT63A04PWGVBT5M14MW) for their current exact source, target, checks and merge receipts.
 
 Current migration checkout: `native-issues-migration`, branch `feature/issue-1356-native-issues-migration`. Application/operator source `4cedf59baeb63b8312e36b9b6f8f76ba4bfad068` passes all 17 clean local gates at `.openape/check-results/1789756255457-4cedf59b-all/summary.json`: 181 Git app tests, six operator contracts, seven real IdP/CLI workflows and five actual browser workflows. The following documentation-only closeout does not change those feature contracts; normal final-head gates remain required. [Synthetic desktop/mobile evidence](https://testrun.openape.ai/r/SL61judviok6wU7oSMV8qU5X) contains 18 inspected screens. App entry-point source `dd8e77928d7742ad523d27703de01bacb8e31e95` also passes all 17 clean local gates, all 19 app builds and actual Pods menu checks.
 
@@ -2311,7 +2311,7 @@ Full lint/typecheck/build, 41 focused unit/component checks and 16 synthetic nat
 
 ## Pods publication completed (September 18, 2026)
 
-Patrick requests committing and pushing the current Pods source to the canonical repository and completing the normal PR workflow. Existing [PR 56](https://repos.openape.ai/patrick/monorepo/pulls/56) will contain the accumulated desktop changes: simpler permissions, directory access, immutable dependencies with npm search, explicit agent tools, bounded application HTTPS, owner selection, execution approvals and readable recovery. Canonical main `59e0de19309cc80cb2e1996057f0f981699ff32d` is integrated without product changes; the only merge conflict was this status index. The IdP code is already identical to main.
+Patrick requests committing and pushing the current Pods source to the canonical repository and completing the normal PR workflow. Existing [PR 56](https://github.com/openape-ai/openape-history/issues/1433) will contain the accumulated desktop changes: simpler permissions, directory access, immutable dependencies with npm search, explicit agent tools, bounded application HTTPS, owner selection, execution approvals and readable recovery. Canonical main `59e0de19309cc80cb2e1996057f0f981699ff32d` is integrated without product changes; the only merge conflict was this status index. The IdP code is already identical to main.
 
 Installed source remains `598c0fb3620804081dd189fbf56c581035867335`; no reinstall is needed for this documentation merge. Patrick confirmed successful mail delivery and independently enabled the 15-minute Mail-Kurzbericht schedule. Read-only inspection confirmed an active Pod, enabled interval, successful delivery/no-new-mail runs, no queued recovery and no storage error; the two other Pods remain paused. Do not change the live profile or schedule while publishing code.
 
@@ -2358,18 +2358,18 @@ still matches live main. Re-read the plan and Git refs at session start.
 | Pods installed applications | [Issue #1354](https://git.openape.ai/openape-ai/openape/issues/1354), [authorized continuation](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2Q8V14XWHSF894NFQF9CFA1) | `pods-conversation`, `feature/issue-1354-installed-applications`, base `82f16e0e` | Production o365 build removed; installed application picker and no-argument Play under the existing owner ape-shell boundary. List follows the owner's macOS screenshot. 15 focused unit checks and 7 packaged/native checks pass, including signed grant allow/deny, no-argument AppKit startup, private setup persistence and absence of bundled o365. DE/EN list screenshots inspected. | Verify, review, package and install with paired rollback. Preserve owner pods and credentials. No live mail/messages/schedules. GUI HOME is not proof of application account isolation. |
 | Pods external ape-shell | [Issue #1354](https://git.openape.ai/openape-ai/openape/issues/1354), [authorized plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2M9YDS92G8GA3T84KQDPBKY) | `pods-conversation`, branch `bugfix/issue-1354-terminal-start-feedback`, base `5179cda7` | PR 53 installed with paired rollback and preserved owner data. Owner terminal click exposed missing production Pod enrollment route (404); tested IdP `5179cda7` deployed with health gate and previous tag `3f07d0db`. Unauthenticated enrollment now correctly returns 401. | Review/ship direct launch progress and inline failure feedback; owner native Terminal.app confirmation remains manual because computer-use tooling excludes it. Bundled o365-cli is historical prototype scope; future tool assignments should use owner-installed executables with preserved program state. No owner task, mail, model, Telegram or schedule activation. |
 | Native issues M0 | [Issue #1356](https://git.openape.ai/openape-ai/openape/issues/1356), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A5ZAT63A04PWGVBT5M14MW) | `openape-monorepo.worktrees/native-issues-m0`, branch `feature/issue-1356-native-issues-m0`, base `08b1eaae3f9a129ee4b3c7563ba3803030bed43e` | [Inventory and disposable rehearsal](../operations/native-issues-migration.md): 230 issues, 175 comments, 993 timeline records; issue writes blocked while branch/main pushes and actual Actions succeed. Eight inventory tests, full lint/typecheck and Doctor pass. All 15 local CI steps pass at `.openape/check-results/1789473266340-08b1eaae-all/summary.json`, including 110 Pods native tests. Use `DEVELOPER_DIR=/Library/Developer/CommandLineTools`; default Xcode selection fails on its unaccepted license. | Review the native PR and exact-source checks. M1 starts with repository authorization/storage. Actor mapping, attachment integrity, independent owners, full freeze coverage and legacy-login fragment continuation remain migration gates. No native issue feature or production import in this increment. |
-| Pods creation chat and description | [Issue #1354](https://git.openape.ai/openape-ai/openape/issues/1354), [PR 46](https://repos.openape.ai/patrick/monorepo/pulls/46), [PR 47](https://repos.openape.ai/patrick/monorepo/pulls/47) | Delivered from clean merged `e18fcc17` | Exact start request and 32 owner chat entries recovered; real 536-character description and full installed restart verified. 178 unit/component and 108 native tests passed. | [Installed evidence](https://testrun.openape.ai/r/5kVqVmILpHA-rUKzSTj2FYFt). Subsequent approved script-authority change below supersedes the separate execution assignment. |
-| Pods script authority | [PR 48](https://repos.openape.ai/patrick/monorepo/pulls/48) | Installed clean `08b1eaae` | Schema 16, name-only metadata, preserved execution bindings and owner migration/restart pass. | [Installed evidence](https://testrun.openape.ai/r/0W4ODmIkT0Qbdym36HZOzwHU). Mail-Alarm remains paused with setup pending. |
-| Pods variables and secrets | [PR 49](https://repos.openape.ai/patrick/monorepo/pulls/49) | Installed clean `2217269d` | Seven-tab UI, explicit empty values and required secrets; full gate, external checks, DMG and unchanged owner restart verified. Telegram destination later saved through the owner UI. | [Installed evidence](https://testrun.openape.ai/r/VS80JHNHl6-ZLyttVgSjCRqf). Application setup remains pending. |
+| Pods creation chat and description | [Issue #1354](https://git.openape.ai/openape-ai/openape/issues/1354), [PR 46](https://github.com/openape-ai/openape-history/issues/1422), [PR 47](https://github.com/openape-ai/openape-history/issues/1423) | Delivered from clean merged `e18fcc17` | Exact start request and 32 owner chat entries recovered; real 536-character description and full installed restart verified. 178 unit/component and 108 native tests passed. | [Installed evidence](https://testrun.openape.ai/r/5kVqVmILpHA-rUKzSTj2FYFt). Subsequent approved script-authority change below supersedes the separate execution assignment. |
+| Pods script authority | [PR 48](https://github.com/openape-ai/openape-history/issues/1424) | Installed clean `08b1eaae` | Schema 16, name-only metadata, preserved execution bindings and owner migration/restart pass. | [Installed evidence](https://testrun.openape.ai/r/0W4ODmIkT0Qbdym36HZOzwHU). Mail-Alarm remains paused with setup pending. |
+| Pods variables and secrets | [PR 49](https://github.com/openape-ai/openape-history/issues/1426) | Installed clean `2217269d` | Seven-tab UI, explicit empty values and required secrets; full gate, external checks, DMG and unchanged owner restart verified. Telegram destination later saved through the owner UI. | [Installed evidence](https://testrun.openape.ai/r/VS80JHNHl6-ZLyttVgSjCRqf). Application setup remains pending. |
 | Pods command terminal | [Issue #1354](https://git.openape.ai/openape-ai/openape/issues/1354), [plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2JRW66M2CQEC9SE2448BA8E) | `pods-conversation`, `feature/issue-1354-pod-command-terminal`, base `1ba85c7e` | Replaces argument form with full-command prompt, assigned-app resolution and actual pod workspace cwd; private application HOME/cache persists. Focused component and packaged native tests pass, including denied outside read and setup-to-script reuse. | Delivered through PR 52 at `fc50c7e2`; superseded by the external ape-shell continuation above. Foreground script broker retains fork denial; no live provider calls. |
-| Pods application actions | [PR 51](https://repos.openape.ai/patrick/monorepo/pulls/51) | Delivered from clean merged `1ba85c7e` | Application name dispatch, access controls and owner draft migration verified. | The command terminal continuation above replaces its arguments panel. |
+| Pods application actions | [PR 51](https://github.com/openape-ai/openape-history/issues/1428) | Delivered from clean merged `1ba85c7e` | Application name dispatch, access controls and owner draft migration verified. | The command terminal continuation above replaces its arguments panel. |
 | Pods prompt-driven setup | [Issue #1354](https://git.openape.ai/openape-ai/openape/issues/1354), [approved implementation plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2HN7WGNBBDWVEC0ETEQN9J4) | `openape-monorepo.worktrees/pods-usability`, branch `feature/issue-1354-prompt-setup`, base `f41487a3` (merged PR 44) | Generic application/terminal/HTTP work is merged and packaged. This follow-up adds chat configuration, runtime guidance, selected-pod action scope and Settings links for secret proposals. 166 unit/component tests and 11 targeted native/packaged tests passed during development, including one visible prompt, validation repair and a manual file/checkpoint run with a recorded model. | Complete full gates, review/merge and prepare the new package. PR 45 also verifies that chat inspection reads the same saved working source as the editor, including manual edits. Patrick explicitly deferred owner installation on September 15. No owner profile, provider credentials, live mail, Telegram delivery or owner schedules are touched. Live model quality remains separate acceptance. |
-| Pods simplified workspace | [Issue #1355](https://git.openape.ai/openape-ai/openape/issues/1355), [PR 43](https://repos.openape.ai/patrick/monorepo/pulls/43), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2G2D2ZVE00RPKRVBF7PTB7E) | Merged at `70b7a410`; the preserved `pods-usability` worktree now hosts the issue-1354 continuation above | Six tabs, per-pod chat, highlighted editor, Settings values, resizable sidebar and schema-13 migration. 140 unit/component and 93 native/Electron tests pass, including real macOS safeStorage. Full local and exact-source external gates passed. Both illustrated manuals, clean merged distribution and paired app/profile delivery are verified. | Owner feedback identifies remaining legacy mail-specific permissions and onboarding; track correction under issue 1354. Installed owner app/profile remain unchanged during the new synthetic tests. |
+| Pods simplified workspace | [Issue #1355](https://git.openape.ai/openape-ai/openape/issues/1355), [PR 43](https://github.com/openape-ai/openape-history/issues/1419), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2G2D2ZVE00RPKRVBF7PTB7E) | Merged at `70b7a410`; the preserved `pods-usability` worktree now hosts the issue-1354 continuation above | Six tabs, per-pod chat, highlighted editor, Settings values, resizable sidebar and schema-13 migration. 140 unit/component and 93 native/Electron tests pass, including real macOS safeStorage. Full local and exact-source external gates passed. Both illustrated manuals, clean merged distribution and paired app/profile delivery are verified. | Owner feedback identifies remaining legacy mail-specific permissions and onboarding; track correction under issue 1354. Installed owner app/profile remain unchanged during the new synthetic tests. |
 | Pods programs and icon | [Issue #1354](https://git.openape.ai/openape-ai/openape/issues/1354), [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2FVCAY9N2S7KFEHXHBV6QMB) | `openape-monorepo.worktrees/pods-programs`, branch `feature/issue-1354-pods-programs-terminal`, base `37c2a454` | Custom macOS icon packaged and byte-verified. [G0 probes](../../apps/openape-pods/experiments/programs/README.md) prove PTY basics and a detached-child lifetime failure when fork is enabled; production policy is unchanged. | General shell/GUI execution remains blocked by G0. Review a revised lifetime mechanism or explicitly narrower foreground-CLI scope. Deliver the icon independently after exact-source gates. Preserve the paused owner pod and all account connections. |
-| Pods direct script credentials | [Issue #1353](https://git.openape.ai/openape-ai/openape/issues/1353), [PR 41](https://repos.openape.ai/patrick/monorepo/pulls/41) | `openape-monorepo.worktrees/pods-implementation`, source `0cda0d69` | Real macOS safeStorage acceptance passes with real HOME and asserted isolated userData/sessionData. Full clean 15-step gate, 128 unit/component and 91 native/Electron cases pass at `.openape/check-results/1789386985801-0cda0d69-all/summary.json`. | Merged through PR 41 at `e56c3972` after all exact-source CI/E2E/layout gates; include schema-12 migration backup in the refreshed icon delivery. Earlier keychain failure reports are historical; no synthetic cipher substitutes for this successful default test. |
+| Pods direct script credentials | [Issue #1353](https://git.openape.ai/openape-ai/openape/issues/1353), [PR 41](https://github.com/openape-ai/openape-history/issues/1416) | `openape-monorepo.worktrees/pods-implementation`, source `0cda0d69` | Real macOS safeStorage acceptance passes with real HOME and asserted isolated userData/sessionData. Full clean 15-step gate, 128 unit/component and 91 native/Electron cases pass at `.openape/check-results/1789386985801-0cda0d69-all/summary.json`. | Merged through PR 41 at `e56c3972` after all exact-source CI/E2E/layout gates; include schema-12 migration backup in the refreshed icon delivery. Earlier keychain failure reports are historical; no synthetic cipher substitutes for this successful default test. |
 | Pods German/English | [Issue #1352](https://git.openape.ai/openape-ai/openape/issues/1352), [plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2DTN55XMA45JTFADRDRVN9Q) | `openape-monorepo.worktrees/pods-implementation`, branch `feature/issue-1352-pods-localization`, base `959aa468` | Persisted language switcher, renderer/native localization and two illustrated handbooks. Packaged switching, retained source, restart and native menu/dialog checks pass. Full evidence is maintained in the plan. | Complete exact-source native PR review and required CI/E2E/layout gates; no live account/provider access, owner schedules or signed release. |
 | Pods sidebar groups | [Issue #1351](https://git.openape.ai/openape-ai/openape/issues/1351), [plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2DR8FJBBJ3PKFW25FH0EX71) | `openape-monorepo.worktrees/pods-implementation`, branch `feature/issue-1351-pods-groups` | Persistent flat groups, collapse, move and remove while retaining pods; schema 11 separates organization from assignment revisions. 111 unit/component cases pass, including migration, grouped backup/restore and stale open-form conflicts. | Packaged UI flow and all 84 native cases pass; handbook has 16 chapters and 10 inspected images. Full 15-step gate is recorded in the feature plan. Native PR review and exact-source external checks precede integration. Existing live-service and signed-release gates remain open. |
-| Pods implementation / release acceptance | [Issue #1349](https://git.openape.ai/openape-ai/openape/issues/1349), [approved continuous implementation plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A2ZV0AAPDW75YMD4TVG8Q5) | `openape-monorepo.worktrees/pods-implementation`, branch `feature/issue-1349-pods-implementation` | M1–M11 merged through PR 36 (`b5a4ccac`). M12 code source `ce6edb7709563cd2812c2a3ce16c53a95fd6878a` is reviewed in [PR 37](https://repos.openape.ai/patrick/monorepo/pulls/37), with 97 unit/component and 82 native/Electron passing tests; full clean 15-step gate `.openape/check-results/1789310426429-ce6edb77-all/summary.json` passed. [M12 evidence](https://testrun.openape.ai/r/Ro7zOvnpRye6WfuW1t8a-c_s) includes four inspected screenshots and actual read-only DMG execution. | PR 37 is the final implementation increment; consult its live merge/check state. After integration, only the separately authorized release acceptance remains: real authentication/provider/tenant refresh, physical sleep/wake, authoritative native license notices, signing/notarization/Gatekeeper and clean-machine OS/CPU acceptance remain release gates. Current execution pilot: Darwin 25.6.0 arm64 only. No live mail, real identities/provider credentials, owner schedules or release publication. |
+| Pods implementation / release acceptance | [Issue #1349](https://git.openape.ai/openape-ai/openape/issues/1349), [approved continuous implementation plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A2ZV0AAPDW75YMD4TVG8Q5) | `openape-monorepo.worktrees/pods-implementation`, branch `feature/issue-1349-pods-implementation` | M1–M11 merged through PR 36 (`b5a4ccac`). M12 code source `ce6edb7709563cd2812c2a3ce16c53a95fd6878a` is reviewed in [PR 37](https://github.com/openape-ai/openape-history/issues/1407), with 97 unit/component and 82 native/Electron passing tests; full clean 15-step gate `.openape/check-results/1789310426429-ce6edb77-all/summary.json` passed. [M12 evidence](https://testrun.openape.ai/r/Ro7zOvnpRye6WfuW1t8a-c_s) includes four inspected screenshots and actual read-only DMG execution. | PR 37 is the final implementation increment; consult its live merge/check state. After integration, only the separately authorized release acceptance remains: real authentication/provider/tenant refresh, physical sleep/wake, authoritative native license notices, signing/notarization/Gatekeeper and clean-machine OS/CPU acceptance remain release gates. Current execution pilot: Darwin 25.6.0 arm64 only. No live mail, real identities/provider credentials, owner schedules or release publication. |
 | Pods M1 desktop foundation (merged PR 25) | [Issue #1348](https://git.openape.ai/openape-ai/openape/issues/1348), [approved M0 / M1 plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A2ZV0AAPDW75YMD4TVG8Q5) | `openape-monorepo.worktrees/pods-foundation`, branch `feature/issue-1348-pods-foundation`, canonical base `db8d87cd`, audit prerequisite `21d80190` | [App scope and verification](../../apps/openape-pods/README.md); 7 unit/component tests and 4 actual Electron tests pass; complete 15-step unit/E2E/layout contract passed locally in `.openape/check-results/1789280749417-21d80190-all/summary.json` before commit. | Merged after all exact-source checks passed; canonical merge `82cc47a5`. Continue in issue 1349. |
 | Production dependency audit | [Issue #1347](https://git.openape.ai/openape-ai/openape/issues/1347) | `openape-monorepo.worktrees/audit-dependencies`, branch `bugfix/issue-1347-audit-dependencies`, base `db8d87cdbf67f6ac497a84004edebddc2f624240` | [Repair and evidence](../operations/dependency-audit-1347.md): audit high/critical reduced to zero; full forced lint/typecheck, 48-task build and complete CI passed (`1789196274249-db8d87cd-all`). | Merged via native PR 23, canonical merge `95bae482`. No deployment or publication. |
 | Unified Node and cli-auth release | [Issue #1344](https://git.openape.ai/openape-ai/openape/issues/1344) | `openape-monorepo.worktrees/ai-workflow`, branch `fix/issue-1344-node-toolchain`, base `eeeaa763` | Node 24.15.0 pinned in `.nvmrc`, local activation and CI share the pin; cli-auth 0.5.5 is a scoped Changesets patch. | Read the issue for exact PR/check/merge/publication evidence. Publish only cli-auth via the explicit release filter from clean canonical main; npm authentication must succeed. |
@@ -2407,7 +2407,7 @@ are implied by merging this preparation increment.
 ## Generic Reports — issue 1401
 
 - Approved plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3KTXVW1069NJZYPCNXNSTEA
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1401
+- Issue: https://github.com/openape-ai/openape-history/issues/1588
 - Worktree: `openape-monorepo.worktrees/generic-reports`; branch `feature/issue-1401-generic-reports`.
 - Base: `6b02cfc36508e1fe79dd4c4ffcbe81dc78edc85d`. Frozen install and doctor pass.
 - Implemented generic private documents/categories, parser sanitization, HTTP/iframe sandbox, compatible adapters and the receipt-first PR client. Full lint/typecheck and app builds pass; Reports 57 unit + 16 E2E + nine layout tests, Pods 629 tests and CLI four tests pass. Migration twice preserves all legacy rows; the deployed rollback image safely rejects new private documents. See `docs/operations/generic-reports-migration.md`.
@@ -2415,7 +2415,7 @@ are implied by merging this preparation increment.
 
 ## Pods redesign: Automatisierungen and Entscheidungen — issue 1430
 
-- Plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M48KYW8JJKRSRDWRJ9DQT13Q (repo copy `.claude/plans/2026-10-06-pods-redesign.md`; mock, capture script and reference manifest under `.claude/plans/pods-redesign/`). Issue: https://repos.openape.ai/patrick/monorepo/issues/1430. Owner approved the autonomous run M0 to M8 on October 6, 2026; M9 (signed release, relay deploy, acceptance) stays an owner gate.
+- Plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M48KYW8JJKRSRDWRJ9DQT13Q (repo copy `.claude/plans/2026-10-06-pods-redesign.md`; mock, capture script and reference manifest under `.claude/plans/pods-redesign/`). Issue: https://github.com/openape-ai/openape-history/issues/1731. Owner approved the autonomous run M0 to M8 on October 6, 2026; M9 (signed release, relay deploy, acceptance) stays an owner gate.
 - Worktrees `openape-monorepo.worktrees/pods-redesign-m<k>`, branches `feature/issue-1430-pods-redesign-m<k>`, one PR per milestone.
 - M0 merged as `82d39a3a` (PR 267): `view=map` read model in `src/worker/workspace/map-view.ts`, published as `workspace.map`, relay `read view=map`, MCP read; synthetic 38-Pod fixture `test/worker/map-fixture.ts` and its JSON export `test/renderer/map-view.json`. The published variant keeps network members' rights, runs and system edges local.
 - M1 merged (PR 269): `AutomationsShell`, `KpiRow`, `AutomationsMap` (canvas), `AutomationsList`, `AutomationInfo` under `src/renderer/central/`, utilities `automation-layout.ts`, `kpis.ts`, `cadence.ts`; mounted as the default page of the desktop and browser workspaces. Evidence through `apps/openape-pods/scripts/redesign-evidence.mjs` (screens carry the reference run's ids).
@@ -2426,15 +2426,15 @@ are implied by merging this preparation increment.
 
 ## Legacy extraction — issue 1482
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1482
+- Issue: https://github.com/openape-ai/openape-history/issues/1964
 - Branch: `feature/issue-1482-extract-legacy` from `bc6fa362e84614c5a12352849d6875dc2c215e4c`.
-- Checkout: `openape-monorepo.releases/release-1479`; preserved source: https://repos.openape.ai/patrick/legacy.
+- Checkout: `openape-monorepo.releases/release-1479`; preserved source: https://github.com/patrick-hofmann/legacy.
 - Scope: eight legacy workspaces; source/history preservation and independent builds. Production data/services retained.
 - Verification and final PR receipts are recorded on the issue and linked Reports plan; no deployment is included.
 
 ## Question Service extraction — issue 1488
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1488
+- Issue: https://github.com/openape-ai/openape-history/issues/1977
 - Branch: `feature/issue-1488-question-service-legacy`; checkout `openape-monorepo.releases/release-1479`.
 - Read-only usage audit found three completed July questions, no pending work and no reference in the 16 active Pods. The uptime monitor still checks the existing service; access logs are unavailable.
 - Preserve source/history in `patrick/legacy`; remove active workspace/check/build/deploy targets. Keep production service/data/monitoring, shared sp-tasks and the zaz Pod unchanged.
@@ -2442,14 +2442,14 @@ are implied by merging this preparation increment.
 
 ## Question Service runtime retirement — issue 1489
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1489
+- Issue: https://github.com/openape-ai/openape-history/issues/1982
 - Branch: `feature/issue-1489-retire-question-service`; checkout `openape-monorepo.releases/release-1479`.
 - Owner explicitly authorized container/monitor/data removal after source preservation. Remove this Compose service and its live proxy route; use the monitor owner API for its record/history, then remove the exact container and three-question SQLite database.
 - Preserve unrelated services, monitors and the legacy source. Final object counts, configuration comparisons, gate and runtime receipts belong on the native PR and issue.
 
 ## Complete mail processing — issue 1492
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1492. Branch `bugfix/issue-1492-mail-processing`, checkout `openape-monorepo.worktrees/mail-processing-1492`, base `01ea0ac93240f92b354c4ad453c3d35711c6ccad`.
+- Issue: https://github.com/openape-ai/openape-history/issues/1988. Branch `bugfix/issue-1492-mail-processing`, checkout `openape-monorepo.worktrees/mail-processing-1492`, base `01ea0ac93240f92b354c4ad453c3d35711c6ccad`.
 - Owner authorized fixing the silent newsletter routing failure and reprocessing the 33 identified messages; every archive still requires exact owner approval. No invoice filing or Outlook draft delivery is added.
 - Intake refetches inflated text, stores complete long text in immutable `delta-mind/mail/body-parts` records, and keeps its existing bounded preview. Define this namespace with Intake as writer and Triage as reader before activation. Triage checkpoints bounded section analysis, aggregates positive invoice/reply/security evidence, and distinguishes newsletter labels from archive eligibility. Unexamined attachments remain visible for review.
 - Activate classification rule version 5 for both declared operations after activating the new script. The bounded `refresh-message-ids` variable refreshes up to five selected Inbox messages per Intake run; its checkpoint makes retries resumable. Remove the variable after recovery. No mailbox mutations bypass the existing approval service.
@@ -2459,7 +2459,7 @@ are implied by merging this preparation increment.
 ## Issue 1496 — mail question context
 
 - Source: `bugfix/issue-1496-mail-question-context`, worktree `openape-monorepo.worktrees/mail-processing-1492`.
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1496
+- Issue: https://github.com/openape-ai/openape-history/issues/2000
 - Extend Sent Items coverage to match Inbox, reconcile sent replies and identical invoice notices, separate attachment review from owner category questions. Preserve explicit content-bound archive approvals.
 - Verification: focused autonomous mail regression suite; required affected and full deployment gates before activating the canonical recipes. Live acceptance reconciles the 35 audited questions and checks mailbox/category/approval state.
 
@@ -2472,12 +2472,12 @@ are implied by merging this preparation increment.
 
 ## Chatty M4 operational duties — issue 1556
 
-- Issue: https://repos.openape.ai/patrick/monorepo/issues/1556
+- Issue: https://github.com/openape-ai/openape-history/issues/2169
 - Worktree: `/Users/owner/Companies/private/repos/openape/openape-operations-m4-1556`
 - Branch: `feature/issue-1556-operational-duties`, based on canonical `6d6f873dfc351bf32366861475a8e1fe9b913a4f`.
 - Scope: backup lifecycle, bounded cleanup, independent health, obsolete deployment-preview retirement and reconstruction-aware edge rollback. All five management services remain running; M5–M7 excluded.
 - Plan source revision 17 / publication 19 is maintained privately. Initial normal-DNS authenticated CRM and all 52 public HTTPS/TLS baselines passed. The old stopped proxy container is missing; cause unproven. Other 40 identities/start times are unchanged.
-- PR: https://repos.openape.ai/patrick/monorepo/pulls/532. Initial reviewed head `db7aa009a9a27c52dd68f8984f9a33c6392c845b`; final source/target and merge receipts belong on this PR.
+- PR: https://github.com/openape-ai/openape-history/issues/2170. Initial reviewed head `db7aa009a9a27c52dd68f8984f9a33c6392c845b`; final source/target and merge receipts belong on this PR.
 - Live acceptance on November 4: two normal backups passed, latest encrypted snapshot `0bb13cfb765df256fa5fc3f005f5892f81cbfe6dc7ec020419318f1bc2f48f18`; independent retrieval verified 51 final operations/recovery files. The earlier snapshot restored 64 Coolify tables into an isolated PostgreSQL fixture, including archived-state acceptance/refusal without stopping production DB. Production remains active-state.
 - Cleanup dry run and two normal runs removed zero candidates and preserved volumes; 40 rollback image IDs remain protected. Host health covers 38 containers/13 units; independent Mac checks cover 52 HTTPS targets and fresh host status. Controlled local outage/recovery produced two desktop notification calls and no duplicate on repeat; no mail.
 - All 40 retained container identities/start times and 52 HTTPS/TLS baselines match. All five management containers run; only the Coolify scheduler worker and narrow writer flags are fenced. Its stale read-only environment bind is documented; do not restart the worker against it. Active file Preview remains available. Reports checkpoint ownership/rotation is documented, not automatically scheduled.

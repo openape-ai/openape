@@ -1,7 +1,7 @@
 # Independent Chatty operational duties
 
 Current state: M4 transferred the operational duties
-([issue 1556](https://repos.openape.ai/patrick/monorepo/issues/1556)), M5 stopped
+([issue 1556](https://github.com/openape-ai/openape-history/issues/2169)), M5 stopped
 the five Coolify management containers and M6 gave every workload one
 definition. Start with [Operating Chatty without Coolify](#operating-chatty-without-coolify-m7);
 the M4 wording below describes how the duties were transferred.
@@ -181,7 +181,7 @@ separately reviewed scope; it is not an automatic error handler.
 
 ## Retired management (M5)
 
-M5 ([issue 1557](https://repos.openape.ai/patrick/monorepo/issues/1557)) stops
+M5 ([issue 1557](https://github.com/openape-ai/openape-history/issues/2171)) stops
 the five management containers but keeps them, their images and the
 `coolify-db`/`coolify-redis` volumes for rollback. Each stopped name moves from
 `containers` to `retired` in `health.json`. A retired container must exist, be
@@ -258,7 +258,7 @@ milestones changed it.
 Container `net.mptcp.enabled` is per network namespace and resets to 1 when a
 container is recreated unless its definition sets it. Every service in
 `compose/chatty.yml` sets `sysctls: net.mptcp.enabled: "0"`
-([issue 1558](https://repos.openape.ai/patrick/monorepo/issues/1558)); it takes
+([issue 1558](https://github.com/openape-ai/openape-history/issues/2173)); it takes
 effect at each service's next deploy. Containers started from other host
 definitions (static sites, the LLM stack and other host-defined apps) still need
 `nsenter -t PID -n sysctl -w net.mptcp.enabled=0` after recreation until M6
@@ -269,7 +269,7 @@ health reports `mptcp:openape-prod-idp-1` and the expected value must be set to
 
 `compose/docs-site.yml` and `compose/gateway/docker-compose.yml` set the same
 sysctl on every service and pin LiteLLM by digest
-([issue 1559](https://repos.openape.ai/patrick/monorepo/issues/1559)); the
+([issue 1559](https://github.com/openape-ai/openape-history/issues/2176)); the
 existing MPTCP test covers all three files.
 
 ## Host-defined workloads (M6)
@@ -299,7 +299,7 @@ roots is still restorable.
 ## Operating Chatty without Coolify (M7)
 
 Coolify management is stopped and retained only for rollback
-([issue 1560](https://repos.openape.ai/patrick/monorepo/issues/1560)). No
+([issue 1560](https://github.com/openape-ai/openape-history/issues/2179)). No
 running workload depends on it. Each workload has exactly one definition:
 
 | Kind | Definition | Deploy or change |

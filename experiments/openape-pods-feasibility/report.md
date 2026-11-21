@@ -169,7 +169,7 @@ This is a reviewable research result, **not a green product or merge gate**.
 The original commit hook failure is archived in `evidence/commit-gate.txt`.
 The audit prerequisite is now fixed in dependency commit
 `21d80190811a1c10b59c0399fb64c8bd4576c6a0`, incorporated into this checkout and
-published as [native PR 23](https://repos.openape.ai/patrick/monorepo/pulls/23).
+published as [native PR 23](https://github.com/openape-ai/openape-history/issues/1387).
 Its full 48-task build and complete unit/E2E/layout CI passed, including the
 pre-push gate. Server-side required checks govern merging that PR.
 

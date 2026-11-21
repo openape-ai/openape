@@ -1,6 +1,6 @@
 # Handoff: Pods mobile inbox, M4 (October 7, 2026, 18:30 CEST)
 
-Issue: https://repos.openape.ai/patrick/monorepo/issues/1446 · Plan (approved revision 2): https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR — latest publication v7 (stale, see below) · Plan source: `.claude/plans/2026-10-07-pods-ios-inbox/plan.json` · Previous handoff: `docs/agents/pods-inbox-m2-handoff.md`.
+Issue: https://github.com/openape-ai/openape-history/issues/1773 · Plan (approved revision 2): https://report.openape.ai/d/01M4B5Q1Q0W6C97A4ZXTFZ5WJR — latest publication v7 (stale, see below) · Plan source: `.claude/plans/2026-10-07-pods-ios-inbox/plan.json` · Previous handoff: `docs/agents/pods-inbox-m2-handoff.md`.
 
 Committed with the first M4 change on `feature/issue-1446-inbox-pwa` (worktree `/Users/owner/Companies/private/repos/openape/openape-monorepo.worktrees/pods-inbox-m4`). The checkout section below describes the state at the start of M4; current status lives in [active work](active-work.md).
 

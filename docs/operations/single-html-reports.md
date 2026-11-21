@@ -1,7 +1,7 @@
 # Single-HTML Reports and Plans consolidation — issue 1429
 
 Approved [plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M486HDNVQDQED9S45AJTJNF3)
-and [native issue](https://repos.openape.ai/patrick/monorepo/issues/1429).
+and [native issue](https://github.com/openape-ai/openape-history/issues/1719).
 The October 6 production cutover is recorded below; final retirement acceptance is in progress.
 The [creator guide](../../packages/ape-testruns/README.md) and generated CLI help ship
 with the publishing package. No existing producer schedule, credentials or delivery
@@ -32,7 +32,7 @@ External images are provider-dependent, and exported files are outside hosted he
 
 ## Reading and finding reports — issue 1433
 
-Reports is a read-only application ([issue 1433](https://repos.openape.ai/patrick/monorepo/issues/1433),
+Reports is a read-only application ([issue 1433](https://github.com/openape-ai/openape-history/issues/1746),
 [plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M48ZTNG1PGJZ65AYX4QDHNHN)).
 An opened report gets the page: one 48 px bar and the document filling the rest. The
 trust decision appears on the sealed document area and is still required per version;
@@ -55,7 +55,7 @@ report's removal time and purge time; restore stays owner-only and private.
 
 Publisher type is shown only where data records it: earlier uploads store `human` or
 `agent`. HTML versions store only the publishing actor, so the library has no
-publisher-type filter yet ([issue 1434](https://repos.openape.ai/patrick/monorepo/issues/1434)).
+publisher-type filter yet ([issue 1434](https://github.com/openape-ai/openape-history/issues/1747)).
 
 ## Controls and recovery
 
