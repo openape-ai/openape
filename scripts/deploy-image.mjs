@@ -37,8 +37,9 @@ export { resolveTruthRemote } from './repository.mjs'
 const REGISTRY = 'registry.openape.ai'
 
 // docker-pussh v0.4.3 hardcodes its unregistry image (0.4.1) and only honours
-// UNREGISTRY_IMAGE, so pin that explicitly.
-export const PUSSH_ENV = { ...process.env, UNREGISTRY_IMAGE: 'ghcr.io/psviderski/unregistry:0.4.1' }
+// UNREGISTRY_IMAGE. That container gets chatty's containerd socket, so pin it
+// by digest (multi-arch index of 0.4.1), not just by a mutable tag.
+export const PUSSH_ENV = { ...process.env, UNREGISTRY_IMAGE: 'ghcr.io/psviderski/unregistry:0.4.1@sha256:7297f3bb6f503515991e81e249dab81c23d2c350323fc209e3eaa8507a5970b1' }
 
 // `docker pussh --version|--help` exit 0 even without the plugin (docker
 // answers them itself), so ask the CLI for its installed plugins.
