@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Tested-image prod deploy: the Mac builds + smoke-tests app images, pushes
-// them to registry.openape.ai, and chatty pulls + restarts the containers —
+// Tested-image prod deploy: the Mac builds + smoke-tests app images, uploads
+// them straight into chatty's image store with `docker pussh` (unregistry,
+// only missing layers travel over SSH), and chatty restarts the containers —
 // with an /api/health gate and tag rollback. No build on chatty.
 //
 //   pnpm run deploy:image <target...>     # free-idp | tasks | …
@@ -10,29 +11,62 @@
 //   1. guard   — all targets' systemd units must be inactive (one ssh)
 //   2. build   — ALL targets in one `turbo run build` wave (parallel)
 //   3. bake    — per target, concurrently: package amd64 image → smoke
-//                (/api/health, dummy env) → push. NO prod touch yet, so a
+//                (/api/health, dummy env) → pussh. NO prod touch yet, so a
 //                failure here aborts before anything is swapped.
 //   4. swap    — sync compose/chatty.yml, pin every tag in
 //                /home/openape/prod/.env (keeping <APP>_TAG_PREV), then ONE
 //                `compose up` for all targets at once.
 //   5. gate    — external /api/health per target in parallel; any that fail
-//                are individually rolled back to their PREV tag.
+//                are individually rolled back to their PREV tag; healthy
+//                ones drop local tags other than TAG and TAG_PREV.
 //
 // One-time cutover guard: refuses to deploy while a target's systemd unit is
 // still active (port conflict) — stop + disable it first; it stays as the
 // dormant fallback.
 
 import { execFileSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { homedir } from 'node:os'
-import { join } from 'node:path'
 import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 import { gitRemotes, repository, resolveTruthRemote } from './repository.mjs'
 
 export { resolveTruthRemote } from './repository.mjs'
 
+// Kept as the local image name prefix only: compose files and the .env tag
+// pins on chatty reference `registry.openape.ai/<image>:<tag>`; nothing is
+// pushed to or pulled from that registry any more.
 const REGISTRY = 'registry.openape.ai'
+
+// docker-pussh v0.4.3 hardcodes its unregistry image (0.4.1) and only honours
+// UNREGISTRY_IMAGE. That container gets chatty's containerd socket, so pin it
+// by digest (multi-arch index of 0.4.1), not just by a mutable tag.
+export const PUSSH_ENV = { ...process.env, UNREGISTRY_IMAGE: 'ghcr.io/psviderski/unregistry:0.4.1@sha256:7297f3bb6f503515991e81e249dab81c23d2c350323fc209e3eaa8507a5970b1' }
+
+// `docker pussh --version|--help` exit 0 even without the plugin (docker
+// answers them itself), so ask the CLI for its installed plugins.
+export function requirePussh() {
+  let plugins = ''
+  try { plugins = execFileSync('docker', ['info', '--format', '{{range .ClientInfo.Plugins}}{{.Name}} {{end}}'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }) }
+  catch {}
+  if (!plugins.split(' ').includes('pussh')) {
+    throw new Error('`docker pussh` is not available. Install it with:\n'
+      + '  brew install psviderski/tap/docker-pussh\n'
+      + '  mkdir -p ~/.docker/cli-plugins && ln -sf "$(brew --prefix)/bin/docker-pussh" ~/.docker/cli-plugins/docker-pussh')
+  }
+}
+
+// Remove local tags of one image repository except `keep`; never other images.
+// Each failure only warns (in-use or already-missing tags stay as they are).
+export function cleanupScript(repo, keep) {
+  const keepRefs = keep.filter(Boolean).map(tag => `"${repo}:${tag}"`).join('|')
+  return `
+      docker image ls --format '{{.Repository}}:{{.Tag}}' '${repo}' | while read -r ref; do
+        case "$ref" in
+          ${keepRefs}|*:'<none>') ;;
+          *) docker image rm "$ref" >/dev/null || echo "WARN could not remove $ref" ;;
+        esac
+      done
+    `
+}
 
 // Deploy hosts. Every target names one via `host` (default 'chatty').
 // `composeFile` is synced to <prodDir>/docker-compose.yml during swap;
@@ -40,25 +74,14 @@ const REGISTRY = 'registry.openape.ai'
 const HOSTS = {
   chatty: {
     ssh: process.env.CHATTY_SSH || 'chatty.delta-mind.at',
+    // `docker pussh` target: needs docker (or passwordless sudo docker) access.
+    pussh: process.env.CHATTY_PUSSH || 'ubuntu@chatty.delta-mind.at',
     executeAs: 'openape',
     prodDir: '/home/openape/prod',
     composeFile: 'compose/chatty.yml',
     unitGuard: true,
   },
 }
-
-// Registry auth for `docker push` from ANY session. The default
-// ~/.docker/config.json uses the osxkeychain credential helper, which is only
-// unlocked inside an interactive GUI (Aqua) login — a detached/headless deploy
-// hits "keychain cannot be accessed … no user interaction". An isolated static
-// config (chmod 600) carries the registry.openape.ai auth inline; only the push
-// runs with DOCKER_CONFIG pointed at it, so `docker buildx` etc. keep the
-// default config (its cli-plugins live under ~/.docker/cli-plugins). Set up
-// once with scripts/setup-registry-auth.sh; absent → default (keychain).
-const ISOLATED_DOCKER_CONFIG = join(homedir(), '.config', 'openape', 'docker')
-const PUSH_ENV = existsSync(join(ISOLATED_DOCKER_CONFIG, 'config.json'))
-  ? { ...process.env, DOCKER_CONFIG: ISOLATED_DOCKER_CONFIG }
-  : process.env
 
 const TARGETS = {
   'free-idp': { filter: 'openape-free-idp', dir: 'apps/openape-free-idp', image: 'openape-free-idp', port: 3003, compose: 'idp', unit: 'openape-free-idp', domain: 'id.openape.ai', envVar: 'IDP_TAG' },
@@ -167,13 +190,13 @@ async function externalHealth(domain, path = '/api/health', service) {
   return false
 }
 
-// ── phase 3: bake one image (package → smoke → push), no prod touch ──────────
+// ── phase 3: bake one image (package → smoke → pussh), no prod touch ─────────
 async function bake(name, sha) {
   const t = TARGETS[name]
   const tag = tagFor(t, sha)
   shQuiet('docker', ['buildx', 'build', '--platform', 'linux/amd64', '-f', t.dockerfile || 'compose/preview-package.Dockerfile', '--build-arg', `PORT=${t.port}`, '-t', tag, '--load', `${t.dir}/.output`])
   await smokeTest(tag, t)
-  shQuiet('docker', ['push', tag], { env: PUSH_ENV })
+  shQuiet('docker', ['pussh', tag, HOSTS[t.host || 'chatty'].pussh], { env: PUSSH_ENV })
   console.log(`  ✓ baked ${name} (${tag})`)
 }
 
@@ -206,6 +229,7 @@ async function main() {
     console.log(JSON.stringify({ repository: repository.url, remote: truth, baseRef: base, sha, targets: names, dryRun: true }, null, 2))
     return
   }
+  requirePussh()
 
   // Guard: the image is built from the WORKING TREE. Deploying from a checkout
   // that lags origin/main silently rolls prod back to that older state — the
@@ -247,8 +271,8 @@ async function main() {
   console.log(`\n━━━ build (${names.length}) → prod-${sha}`)
   sh('pnpm', ['turbo', 'run', 'build', ...targets.map(t => `--filter=${t.filter}`)])
 
-  // 3. bake — package + smoke + push, concurrently, NO prod touch
-  console.log(`\n━━━ bake (package → smoke → push), concurrent`)
+  // 3. bake — package + smoke + pussh, concurrently, NO prod touch
+  console.log(`\n━━━ bake (package → smoke → pussh), concurrent`)
   await Promise.all(targets.map(t => bake(t.name, sha)))
 
   // 4. swap — per host: sync compose, pin all tags (capture PREV), one compose up
@@ -275,8 +299,7 @@ ${group.map(t => `    OLD_${t.envVar}=$(grep -E '^${t.envVar}=' .env | cut -d= -
     grep -vE '^${t.envVar}(_PREV)?=' .env > .env.new && mv .env.new .env
     [ -n "$OLD_${t.envVar}" ] && echo "${t.envVar}_PREV=$OLD_${t.envVar}" >> .env
     echo "${t.envVar}=prod-${sha}" >> .env`).join('\n')}
-    docker compose --env-file .env -f docker-compose.yml pull -q ${composes}
-    docker compose --env-file .env -f docker-compose.yml up -d ${composes}
+    docker compose --env-file .env -f docker-compose.yml up -d --pull never ${composes}
 ${group.map(t => `    echo "PREV ${t.name} $OLD_${t.envVar}"`).join('\n')}
   `
     for (const line of ssh(host, pinScript).split('\n')) {
@@ -290,6 +313,15 @@ ${group.map(t => `    echo "PREV ${t.name} $OLD_${t.envVar}"`).join('\n')}
   const results = await Promise.all(targets.map(async t => ({ name: t.name, ok: await externalHealth(t.domain, t.healthPath, t.healthService) })))
   for (const r of results.filter(r => r.ok))
     console.log(`  ✓ ${r.name} healthy (prod-${sha}${prevMap[r.name] ? `, prev ${prevMap[r.name]}` : ''})`)
+
+  // Clean up healthy targets only: drop local tags other than TAG and TAG_PREV.
+  for (const [hostKey, group] of groupByHost(results.filter(r => r.ok).map(r => ({ name: r.name, ...TARGETS[r.name] })))) {
+    try {
+      const log = ssh(HOSTS[hostKey], group.map(t => cleanupScript(`${REGISTRY}/${t.image}`, [`prod-${sha}`, prevMap[t.name]])).join('\n'))
+      if (log) console.warn(log)
+    }
+    catch (e) { console.warn(`⚠ image cleanup on ${hostKey} failed (deploy is healthy): ${e.message}`) }
+  }
 
   const failed = results.filter(r => !r.ok).map(r => r.name)
   if (failed.length) {

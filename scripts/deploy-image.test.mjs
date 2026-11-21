@@ -10,7 +10,7 @@ import { execFileSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { healthyResponse, resolveTruthRemote, rollbackScript } from './deploy-image.mjs'
+import { cleanupScript, healthyResponse, resolveTruthRemote, rollbackScript } from './deploy-image.mjs'
 
 it('keeps the CVE-2026-98432 MPTCP mitigation on every recreated prod container', () => {
   // Container sysctls are per namespace; without this every deploy resets MPTCP to 1.
@@ -78,6 +78,30 @@ describe('deployment rollback', () => {
       const pins = readFileSync(join(directory, '.env'), 'utf8')
       assert.match(pins, /^IDP_TAG=old$/m)
       assert.match(pins, /^OTHER_TAG=unchanged$/m)
+    }
+    finally { rmSync(directory, { recursive: true, force: true }) }
+  })
+})
+
+describe('image cleanup', () => {
+  it('removes only other tags of the deployed repository and warns on failure', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'openape-cleanup-'))
+    try {
+      // Fake docker: `image ls` lists refs, `image rm` logs and fails for one ref.
+      writeFileSync(join(directory, 'docker'), `#!/bin/sh
+if [ "$2" = ls ]; then printf '%s\\n' r/app:prod-new r/app:prod-old r/app:prod-older r/app:prod-busy 'r/app:<none>'; exit; fi
+echo "$*" >> "$DEPLOY_CALLS"; [ "$3" != r/app:prod-busy ]
+`, { mode: 0o755 })
+      const output = execFileSync('bash', ['-s'], {
+        input: cleanupScript('r/app', ['prod-new', 'prod-old']),
+        encoding: 'utf8',
+        env: { ...process.env, PATH: `${directory}:${process.env.PATH}`, DEPLOY_CALLS: join(directory, 'calls') },
+      })
+      assert.deepEqual(readFileSync(join(directory, 'calls'), 'utf8').trim().split('\n'), [
+        'image rm r/app:prod-older',
+        'image rm r/app:prod-busy',
+      ])
+      assert.match(output, /WARN could not remove r\/app:prod-busy/)
     }
     finally { rmSync(directory, { recursive: true, force: true }) }
   })

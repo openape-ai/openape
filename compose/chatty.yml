@@ -1,6 +1,7 @@
-# Prod compose for the ten Nuxt apps on chatty — tested images from
-# registry.openape.ai, packaged by compose/preview-package.Dockerfile and
-# deployed by scripts/deploy-image.mjs (which also syncs this file to
+# Prod compose for the ten Nuxt apps on chatty — tested images (local names
+# under registry.openape.ai/, uploaded with docker pussh), packaged by
+# compose/preview-package.Dockerfile and deployed by scripts/deploy-image.mjs
+# (which also syncs this file to
 # /home/openape/prod/docker-compose.yml).
 #
 # Design notes:

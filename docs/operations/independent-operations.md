@@ -332,7 +332,9 @@ Rollback rules:
   every `deploy:image` writes the previously live tag to `<APP>_TAG_PREV`. That
   is one level of history: after a retry or a repeated deploy it may not be the
   last good image. Tags are `prod-<commit>`, so a known-good earlier commit can
-  be chosen instead; compose pulls a missing tag from the registry. Before
+  be chosen instead. Only `<APP>_TAG` and `<APP>_TAG_PREV` stay on chatty, so
+  upload an older image first from the Mac that built it
+  (`docker pussh registry.openape.ai/<image>:prod-<commit> ubuntu@chatty.delta-mind.at`). Before
   rolling back, check the commit range for schema or data migrations. If the
   broken release migrated data, do not run the older image on it: fix forward,
   or restore data from the pre-deploy snapshot as a separate decision. Take an
