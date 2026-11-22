@@ -94,8 +94,8 @@ catalogs:
       specifier: ^5.9.3
       version: 5.9.3
     ulid:
-      specifier: ^2.4.0
-      version: 2.4.0
+      specifier: ^3.0.2
+      version: 3.0.2
     vitest:
       specifier: ^4.1.12
       version: 4.1.12
@@ -342,7 +342,7 @@ importers:
         version: 4.3.5
       ulid:
         specifier: 'catalog:'
-        version: 2.4.0
+        version: 3.0.2
     devDependencies:
       '@types/sanitize-html':
         specifier: ^2.16.2
@@ -485,7 +485,7 @@ importers:
         version: 4.3.5
       ulid:
         specifier: 'catalog:'
-        version: 2.4.0
+        version: 3.0.2
     devDependencies:
       '@types/sanitize-html':
         specifier: ^2.16.2
@@ -552,7 +552,7 @@ importers:
         version: 4.3.5
       ulid:
         specifier: 'catalog:'
-        version: 2.4.0
+        version: 3.0.2
     devDependencies:
       typescript:
         specifier: 'catalog:'
@@ -796,7 +796,7 @@ importers:
         version: 4.3.5
       ulid:
         specifier: 'catalog:'
-        version: 2.4.0
+        version: 3.0.2
     devDependencies:
       jose:
         specifier: 'catalog:'
@@ -851,7 +851,7 @@ importers:
         version: 4.3.5
       ulid:
         specifier: 'catalog:'
-        version: 2.4.0
+        version: 3.0.2
     devDependencies:
       typescript:
         specifier: 'catalog:'
@@ -894,7 +894,7 @@ importers:
         version: 4.3.5
       ulid:
         specifier: 'catalog:'
-        version: 2.4.0
+        version: 3.0.2
     devDependencies:
       typescript:
         specifier: 'catalog:'
@@ -955,7 +955,7 @@ importers:
         version: 4.3.5
       ulid:
         specifier: 'catalog:'
-        version: 2.4.0
+        version: 3.0.2
     devDependencies:
       '@types/sanitize-html':
         specifier: ^2.16.2
@@ -1022,7 +1022,7 @@ importers:
         version: 4.3.5
       ulid:
         specifier: 'catalog:'
-        version: 2.4.0
+        version: 3.0.2
     devDependencies:
       typescript:
         specifier: 'catalog:'
@@ -11742,8 +11742,8 @@ packages:
     resolution: {integrity: sha512-8iAasVS4wUx0gPLjH8Xtz2PeDzTSiy8QiLGu2DT3X5GU+egFEQhpnbtkehbAwjvDcxIERmCYcysiODFmE3Ud0Q==}
     engines: {node: '>=18'}
 
-  ulid@2.4.0:
-    resolution: {integrity: sha512-fIRiVTJNcSRmXKPZtGzFQv9WRrZ3M9eoptl/teFJvjOzmpU+/K/JH6HZ8deBfb5vMEpicJcLn7JmvdknlMq7Zg==}
+  ulid@3.0.2:
+    resolution: {integrity: sha512-yu26mwteFYzBAot7KVMqFGCVpsF6g8wXfJzQUHvu1no3+rRRSFcSV2nKeYvNPLD2J4b08jYBDhHUjeH0ygIl9w==}
     hasBin: true
 
   ultrahtml@1.7.0:
@@ -28085,7 +28085,7 @@ snapshots:
 
   uint8array-extras@1.6.0: {}
 
-  ulid@2.4.0: {}
+  ulid@3.0.2: {}
 
   ultrahtml@1.7.0: {}
 
