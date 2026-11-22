@@ -1,7 +1,10 @@
 # Tested-Image Docker Deploy (Pilot: troop) — Design
 
 **Datum:** 2026-06-05
-**Status:** Freigegeben (Design) — bereit für `writing-plans`
+**Status:** Superseded — tested images now deploy for the prod apps through
+`compose/chatty.yml` and `scripts/deploy-image.mjs` (uploaded with `docker pussh`,
+no GHCR); production Troop was retired on 2026-10-15
+([legacy operations](../../operations/legacy-apps.md)). Kept as history only.
 **Auslöser:** Nach dem Docker-Re-Framing (Nest + LLM laufen als Container) soll *jede* App dockerfähig werden und Prod **getestete Images** deployen, die lokal mit Docker bereits verifiziert wurden — so läuft in Prod bit-identisch das Artefakt, das getestet wurde. Motiviert durch die Environment-Drift-Saga (macOS↔Linux-Nest, `:ro`-Mount, Versions-Skew): Docker-first-Parity eliminiert genau diese Fehlerklasse.
 
 ## Scope
