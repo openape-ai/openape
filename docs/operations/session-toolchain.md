@@ -83,8 +83,8 @@ With network access already permitted, also run:
 
 ```sh
 pnpm run doctor -- --network
-pnpm git:cli -- repo
-pnpm git:cli -- pr list
+gh repo view
+gh pr list
 ```
 
 If the session has no network access, record these live checks as unavailable.

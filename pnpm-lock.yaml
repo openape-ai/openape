@@ -487,6 +487,9 @@ importers:
         specifier: 'catalog:'
         version: 3.0.2
     devDependencies:
+      '@openape/cli-auth':
+        specifier: workspace:*
+        version: link:../../packages/cli-auth
       '@types/sanitize-html':
         specifier: ^2.16.2
         version: 2.16.2

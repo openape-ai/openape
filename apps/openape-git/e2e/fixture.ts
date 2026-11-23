@@ -83,7 +83,7 @@ export async function startIssueFixture() {
           return fetch(`${base}${path}`, { method, headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...extra }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) })
         },
         async cli(...args: string[]) {
-          const result = await run(process.execPath, [join(root, 'scripts/ape-git.mjs'), 'issue', ...args, '--endpoint', base], { cwd: root, env: { ...process.env, HOME: home, XDG_CONFIG_HOME: join(home, '.config') }, timeout: 60000 })
+          const result = await run(process.execPath, [join(appRoot, 'e2e/issue-cli.mjs'), ...args, '--endpoint', base], { cwd: root, env: { ...process.env, HOME: home, XDG_CONFIG_HOME: join(home, '.config') }, timeout: 60000 })
           return JSON.parse(result.stdout)
         },
       }

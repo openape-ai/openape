@@ -3,7 +3,7 @@
 This increment is an isolated SQLite prototype in the existing Pods scheduling
 suite. It does not add a production schema, activate a network or migrate owner
 state. M2–M14 product acceptance remains open. Native issue:
-https://repos.openape.ai/patrick/monorepo/issues/1417.
+https://github.com/openape-ai/openape-history/issues/1650.
 
 ## Verified transaction decisions
 
@@ -89,7 +89,7 @@ The actual maximum-payload rerun at
 retention. The existing backup uses VACUUM INTO before its 256 MiB database check;
 raw high-water size is not the archive limit. That exact commit passed root lint/typecheck, Pods build and six focused
 suites (123 tests, including the 24 retained contracts and temporary volume).
-[Native PR 201](https://repos.openape.ai/patrick/monorepo/pulls/201) records the
+[Native PR 201](https://github.com/openape-ai/openape-history/issues/1661) records the
 commands and final-head unit receipt. The final commit removes only the temporary
 volume fixture; its test source and measured results remain in PR history.
 The 5,000-ready-backlog probe after retention measured 11.08 ms p95 across

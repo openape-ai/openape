@@ -10,7 +10,7 @@
 
 Status: implementation contract approved through the October 1 plan. M0–M8
 are accepted and merged; M9 implementation and acceptance are in progress. The original M0
-increment froze these contracts; milestone evidence below records actual delivery. [Development issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417)
+increment froze these contracts; milestone evidence below records actual delivery. [Development issue 1417](https://github.com/openape-ai/openape-history/issues/1650)
 tracks delivery. [Approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617).
 
 Baseline: canonical `a99c69bd2b97d8883ce5538894c3f38510407ddf`, Pods 0.1.1,
@@ -1157,7 +1157,7 @@ Electron tests separately exercise the actual desktop/preload/main/worker routes
 These are distinct evidence; they do not claim an installed production desktop has
 connected to a deployed relay. Clean runtime `0bcad342d2d96a4645c687358ba964b04c2b254c`
 passed native/layout/browser checks, root gates and1136 Pods/34 relay/6 protocol tests.
-[PR211](https://repos.openape.ai/patrick/monorepo/pulls/211) passed exact-head CI5338,
+[PR211](https://github.com/openape-ai/openape-history/issues/1664) passed exact-head CI5338,
 merged as `ad16a8f2cf4fa85864472c8cb8750d4feaed33cc` and passed full main CI5339.
 [Verified private Test Runs](https://report.openape.ai/r/TIPZLLUeJrGCKBf0UE7ituvS)
 contains the actual results and eight personally inspected screenshots. Its immutable
@@ -1211,7 +1211,7 @@ tests cover pure previews, original identities/checkpoints, atomic rollback,
 restoration, pending retention without replay, unresolved authority and UI review
 invalidation. Current source passes141 suites /1157 units, three native cases and
 13 manual layout checks, root lint/typecheck and the Pods build. Six native and
-wide/narrow EN/DE screenshots were personally inspected. [PR212](https://repos.openape.ai/patrick/monorepo/pulls/212) passed exact-source
+wide/narrow EN/DE screenshots were personally inspected. [PR212](https://github.com/openape-ai/openape-history/issues/1666) passed exact-source
 CI5340 and full-main CI5341; merge `4984a2a31a1b463bf4fe248ece65d52772c50864`.
 [Verified private Test Runs](https://report.openape.ai/r/m3ufyiHjZQKDMqlJqLVJ-ZTE)
 contains the actual results and inspected screenshots. This increment does not complete M11: reviewed

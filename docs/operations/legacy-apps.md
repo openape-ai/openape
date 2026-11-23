@@ -1,8 +1,8 @@
 # Preserved legacy applications
 
-Source of truth: https://repos.openape.ai/patrick/legacy.git.
+Source of truth: https://github.com/patrick-hofmann/legacy.
 Local checkout: `../legacy` relative to the main monorepo checkout.
-Issue: https://repos.openape.ai/patrick/monorepo/issues/1482.
+Issue: https://github.com/openape-ai/openape-history/issues/1964.
 
 Nest, Troop, ape-agent, CRM, ape-troop, ape-crm, Chat and ape-chat are preserved in
 that independent repository with selected Git history, tests, documentation and

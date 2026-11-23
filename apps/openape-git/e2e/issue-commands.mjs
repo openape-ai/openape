@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { createClient, ForgeError, parseRepository } from './native-forge-client.mjs'
+import { createClient, ForgeError, parseRepository } from './forge-client.mjs'
 
 const commandOptions = {
   list: ['all-repos', 'q', 'product', 'state', 'label', 'assignee', 'reporter', 'triage', 'limit', 'cursor'],

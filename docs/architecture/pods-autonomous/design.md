@@ -1,7 +1,7 @@
 # Autonomous Pods: frozen M0 design
 
 Implements [plan revision 2](https://report.openape.ai/d/01M4R7G9398CQ3QADNFVM7YKWT?v=2),
-[issue 1465](https://repos.openape.ai/patrick/monorepo/issues/1465). This page freezes the
+[issue 1465](https://github.com/openape-ai/openape-history/issues/1869). This page freezes the
 schema, the script API, the migration mapping and the removal ledger that M0 requires. It
 records implementation details the plan left open; it does not change the plan's scope.
 

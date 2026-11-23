@@ -1,6 +1,6 @@
 # External CI and protected branches
 
-> Paused since October 7, 2026 (owner decision, [issue 1448](https://repos.openape.ai/patrick/monorepo/issues/1448)):
+> Paused since October 7, 2026 (owner decision, [issue 1448](https://github.com/openape-ai/openape-history/issues/1781)):
 > `.forgejo/workflows/ci.yml` runs only on manual dispatch and the `main` policy is
 > `enabled: false`. Re-enable both together once a stable CI is approved.
 
