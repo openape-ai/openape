@@ -9,6 +9,10 @@ export default defineNuxtConfig({
   // several dev servers at once, so each gets its own port derived from
   // its app port (run 3255: the loser died on 'Port 24678 already in use').
   vite: { server: { hmr: process.env.E2E_HMR_PORT ? { port: Number(process.env.E2E_HMR_PORT) } : undefined } },
+  // Config below is read from process.env at build time and baked into the
+  // dev bundle; parallel E2E IdPs sharing one `.nuxt` reloaded each other's
+  // issuer, management token and store (#610). Each fixture builds its own.
+  buildDir: process.env.E2E_NUXT_BUILD_DIR || undefined,
   modules: ['@nuxt/ui', '@openape/nuxt-auth-idp'],
   css: ['~/assets/css/main.css'],
   devtools: { enabled: true },

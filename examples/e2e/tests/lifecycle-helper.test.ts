@@ -1,6 +1,8 @@
+import type { AddressInfo } from 'node:net'
 import type { TrackerEntry } from '../helpers/lifecycle.js'
 import { spawn, spawnSync } from 'node:child_process'
 import { existsSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { createServer as createHttpServer } from 'node:http'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -54,6 +56,23 @@ describe('startAppServer', () => {
 })
 
 describe('startServer', () => {
+  it('fails instead of handing back another server that holds its port', async () => {
+    // Another suite's server already answers 2xx on the port (#610).
+    const occupant = createHttpServer((_req, res) => res.end('someone else'))
+    await new Promise<void>(resolve => occupant.listen(0, '127.0.0.1', resolve))
+    try {
+      await expect(startServer({
+        cwd: join(import.meta.dirname, '..', '..', 'idp'),
+        port: (occupant.address() as AddressInfo).port,
+        readyPath: '/',
+        timeoutMs: 60_000,
+      })).rejects.toThrow(/already in use/)
+    }
+    finally {
+      occupant.close()
+    }
+  })
+
   it('spawns a process, waits for readiness, and kills the process group on stop', async () => {
     const script = 'const http = require("node:http"); http.createServer((q, s) => s.end("up")).listen(Number(process.env.PORT), "127.0.0.1")'
     const server = await startServer({

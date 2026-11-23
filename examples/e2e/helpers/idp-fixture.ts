@@ -1,4 +1,5 @@
 import type { RunningServer } from './lifecycle.js'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { makeTempDir, startServer } from './lifecycle.js'
@@ -44,8 +45,11 @@ export interface IdpFixtureOptions {
  * Start an IdP and return its handle. `server.url` is also the issuer, so
  * discovery documents and issued tokens point back at this instance.
  */
-export function startIdp(opts: IdpFixtureOptions): Promise<RunningServer> {
-  return startServer({
+export async function startIdp(opts: IdpFixtureOptions): Promise<RunningServer> {
+  // Under node_modules so no other dev server's watcher reloads on its writes.
+  mkdirSync(join(IDP_DIR, 'node_modules', '.cache'), { recursive: true })
+  const buildDir = mkdtempSync(join(IDP_DIR, 'node_modules', '.cache', 'e2e-idp-'))
+  const server = await startServer({
     cwd: IDP_DIR,
     host: opts.host ?? '127.0.0.1',
     port: opts.port,
@@ -56,6 +60,7 @@ export function startIdp(opts: IdpFixtureOptions): Promise<RunningServer> {
       // has one. That guard is for humans; test servers are deliberately
       // short-lived, each on its own port and its own store.
       NUXT_IGNORE_LOCK: '1',
+      E2E_NUXT_BUILD_DIR: buildDir,
       NUXT_OPENAPE_ISSUER: url,
       NUXT_OPENAPE_RP_ORIGIN: url,
       NUXT_OPENAPE_RP_ID: new URL(url).hostname,
@@ -66,5 +71,15 @@ export function startIdp(opts: IdpFixtureOptions): Promise<RunningServer> {
       DDISA_MOCK_RECORDS: opts.ddisaMockRecords ? JSON.stringify(opts.ddisaMockRecords) : undefined,
       NUXT_OPENAPE_IDP_ALLOW_UNAUTH_GRANT_REQUESTS: opts.allowUnauthenticatedGrantRequests ? '1' : undefined,
     }),
+  }).catch((error: unknown) => {
+    rmSync(buildDir, { recursive: true, force: true })
+    throw error
   })
+  return {
+    ...server,
+    stop: async () => {
+      await server.stop()
+      rmSync(buildDir, { recursive: true, force: true })
+    },
+  }
 }
