@@ -21,7 +21,7 @@
     "@iconify-json/lucide": "catalog:",
     "@iconify-json/simple-icons": "^1.2.102",
     "@iconify-json/vscode-icons": "^1.2.99",
-    "@libsql/client": "^0.17.4",
+    "@libsql/client": "^0.18.0",
     "@nuxt/content": "^3.16.2",
     "@nuxt/image": "^2.2.1",
     "@nuxt/ui": "catalog:",
