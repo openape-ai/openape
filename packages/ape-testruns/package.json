@@ -40,7 +40,7 @@
   "dependencies": {
     "@openape/cli-auth": "workspace:*",
     "@openape/proof-cli": "workspace:*",
-    "citty": "^0.1.6",
+    "citty": "^0.2.2",
     "htmlparser2": "10.1.0",
     "postcss": "8.5.33",
     "postcss-value-parser": "4.2.0",
