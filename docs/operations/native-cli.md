@@ -69,16 +69,6 @@ Suggested commands are printed but never executed automatically. Follow
 [local development](local-development.md) for real login fixtures and isolated
 app data; the doctor does not start services or reset databases.
 
-## Git authentication inside Pods
-
-The `apps/openape-pods/scripts/git-credential-apes` helper reads `APES_AUTH_FILE` when set. Pods supplies
-this managed, refreshed identity file to scheduled program calls and Pod terminals.
-The helper returns credentials only for `protocol=https` and `host=repos.openape.ai`.
-An empty, unreadable or invalid explicit file fails without using the owner's identity.
-Outside Pods, the helper uses `$HOME/.config/apes/auth.json` from `apes login`.
-Install it with `install -m 755 apps/openape-pods/scripts/git-credential-apes ~/.local/bin/git-credential-apes`
-when the host Git configuration uses the `apes` credential helper.
-
 Git smart-HTTP resolves the signing IdP from the direct token subject's DDISA domain.
 The configured IdP is used only when that domain has no DDISA record; lookup failures
 fail closed. Public HTTPS JWKS access, issuer, signature and audience checks precede
