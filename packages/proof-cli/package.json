@@ -36,7 +36,7 @@
   },
   "dependencies": {
     "@openape/cli-auth": "workspace:*",
-    "citty": "^0.1.6"
+    "citty": "^0.2.2"
   },
   "devDependencies": {
     "@types/node": "catalog:",
