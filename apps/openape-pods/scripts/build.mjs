@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto'
 import { build as buildScripts } from 'tsup'
 import { build as buildRenderer } from 'vite'
 
-await buildScripts({ entry: { 'main/app': 'src/main/app.ts', 'preload/index': 'src/preload/index.ts', 'worker/entry': 'src/worker/entry.ts' }, format: ['cjs'], platform: 'node', target: 'node24', outDir: 'dist', clean: true, splitting: false, removeNodeProtocol: false, external: ['electron'], noExternal: ['croner', '@openape/pods-protocol', 'electron-updater', 'builder-util-runtime', 'fs-extra', 'lazy-val', 'lodash.escaperegexp', 'lodash.isequal', 'semver', 'tiny-typed-emitter', 'js-yaml', 'argparse', 'sax', 'debug', 'ms', 'graceful-fs', 'universalify', 'jsonfile'], outExtension: () => ({ js: '.cjs' }) })
+await buildScripts({ entry: { 'main/app': 'src/main/app.ts', 'preload/index': 'src/preload/index.ts', 'worker/entry': 'src/worker/entry.ts' }, format: ['cjs'], platform: 'node', target: 'node24', outDir: 'dist', clean: true, splitting: false, removeNodeProtocol: false, external: ['electron'], noExternal: ['@openape/pods-protocol', 'electron-updater', 'builder-util-runtime', 'fs-extra', 'lazy-val', 'lodash.escaperegexp', 'lodash.isequal', 'semver', 'tiny-typed-emitter', 'js-yaml', 'argparse', 'sax', 'debug', 'ms', 'graceful-fs', 'universalify', 'jsonfile'], outExtension: () => ({ js: '.cjs' }) })
 await buildRuntimeAssets()
 mkdirSync('dist/main/assets', { recursive: true })
 for (const name of ['trayTemplate.png', 'trayTemplate@2x.png']) copyFileSync(`build/${name}`, `dist/main/assets/${name}`)
