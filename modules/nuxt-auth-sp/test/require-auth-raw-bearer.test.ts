@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import type { JWK, KeyLike } from 'jose'
+import type { JWK, CryptoKey, KeyObject } from 'jose'
 import { exportJWK, generateKeyPair, SignJWT } from 'jose'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -43,7 +43,7 @@ vi.mock('h3', async importOriginal => ({
 
 const { requireCaller } = await import('../src/runtime/server/utils/require-auth')
 
-async function keyPair(kid: string): Promise<{ priv: KeyLike, jwk: JWK }> {
+async function keyPair(kid: string): Promise<{ priv: CryptoKey | KeyObject, jwk: JWK }> {
   const pair = await generateKeyPair('EdDSA', { extractable: true })
   return { priv: pair.privateKey, jwk: { ...(await exportJWK(pair.publicKey)), kid, alg: 'EdDSA', use: 'sig' } }
 }
@@ -52,7 +52,7 @@ const attacker = await keyPair('attacker')
 jwksByUrl.set(IDP_URL, { keys: [idp.jwk] })
 jwksByUrl.set(ATTACKER_URL, { keys: [attacker.jwk] })
 
-function sign(key: KeyLike, opts: { iss?: string, aud?: string, exp?: string | number, extra?: Record<string, unknown> } = {}) {
+function sign(key: CryptoKey | KeyObject, opts: { iss?: string, aud?: string, exp?: string | number, extra?: Record<string, unknown> } = {}) {
   return new SignJWT({ act: 'agent', ...opts.extra })
     .setProtectedHeader({ alg: 'EdDSA' })
     .setIssuer(opts.iss ?? IDP_URL)

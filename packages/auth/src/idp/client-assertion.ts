@@ -1,8 +1,8 @@
-import type { KeyLike } from 'jose'
+import type { CryptoKey, KeyObject } from 'jose'
 import { decodeJwt, jwtVerify } from 'jose'
 import type { JtiStore } from './stores.js'
 
-export type AgentKeyResolver = (agentEmail: string) => Promise<KeyLike | null>
+export type AgentKeyResolver = (agentEmail: string) => Promise<CryptoKey | KeyObject | null>
 
 export interface ClientAssertionResult {
   sub: string

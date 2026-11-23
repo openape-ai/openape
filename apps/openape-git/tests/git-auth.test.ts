@@ -1,15 +1,15 @@
 import { identityFromBasicAuth } from '../server/utils/git-auth'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose'
-import type { JWTPayload, KeyLike } from 'jose'
+import type { JWTPayload, CryptoKey, KeyObject } from 'jose'
 
 const boundary = vi.hoisted(() => ({ resolve: vi.fn(), safe: vi.fn(), keys: vi.fn() }))
 vi.mock('@openape/core', async importOriginal => ({ ...await importOriginal<typeof import('@openape/core')>(), resolveIdP: boundary.resolve, assertPublicUrl: boundary.safe }))
 vi.mock('jose', async importOriginal => ({ ...await importOriginal<typeof import('jose')>(), createRemoteJWKSet: boundary.keys }))
 vi.mock('nitropack/runtime', () => ({ useRuntimeConfig: () => ({ idpUrl: 'https://owner.example.test', openapeSp: { clientId: 'repos.openape.ai' } }) }))
 
-let key: KeyLike
-let foreignKey: KeyLike
+let key: CryptoKey | KeyObject
+let foreignKey: CryptoKey | KeyObject
 beforeAll(async () => {
   const pair = await generateKeyPair('EdDSA')
   key = pair.privateKey

@@ -63,7 +63,7 @@ catalog:
   'h3': ^1.15.11
   # GHSA-834v-8h66-3h79. Exact pin: 21.0.4 is still inside the seven-day quarantine.
   'happy-dom': 21.0.4
-  'jose': ^5.10.0
+  'jose': ^6.2.17
   'marked': ^18.2.0
   # Nuxt/Nitro/Vite-builder advisories fixed in 4.6.3; 4.6.4 published 2026-11-02.
   'nuxt': ^4.6.4

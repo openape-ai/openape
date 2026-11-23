@@ -1,5 +1,5 @@
 import type { ActorType, DelegationActClaim } from '@openape/core'
-import type { KeyLike } from 'jose'
+import type { CryptoKey, KeyObject } from 'jose'
 import { jwtVerify, SignJWT } from 'jose'
 
 // --- Generalized auth token (supports both 'agent' and 'human') ---
@@ -35,7 +35,7 @@ export interface AuthTokenPayload {
 export async function issueAuthToken(
   payload: { sub: string, act: ActorType, aud?: string },
   issuer: string,
-  privateKey: KeyLike,
+  privateKey: CryptoKey | KeyObject,
   kid?: string,
 ): Promise<string> {
   const jwt = new SignJWT({ sub: payload.sub, act: payload.act })
@@ -56,7 +56,7 @@ export async function issueAuthToken(
 export async function verifyAuthToken(
   token: string,
   issuer: string,
-  publicKey: KeyLike | Uint8Array,
+  publicKey: CryptoKey | KeyObject | Uint8Array,
   expectedAud?: string,
 ): Promise<AuthTokenPayload> {
   const { payload } = await jwtVerify(token, publicKey, {
@@ -96,7 +96,7 @@ export interface AgentTokenPayload {
 export async function issueAgentToken(
   payload: { sub: string, aud?: string },
   issuer: string,
-  privateKey: KeyLike,
+  privateKey: CryptoKey | KeyObject,
   kid?: string,
 ): Promise<string> {
   return issueAuthToken(
@@ -110,7 +110,7 @@ export async function issueAgentToken(
 export async function verifyAgentToken(
   token: string,
   issuer: string,
-  publicKey: KeyLike | Uint8Array,
+  publicKey: CryptoKey | KeyObject | Uint8Array,
   expectedAud?: string,
 ): Promise<AgentTokenPayload> {
   const result = await verifyAuthToken(token, issuer, publicKey, expectedAud)

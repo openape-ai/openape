@@ -1,7 +1,7 @@
 import { parseGrantReference } from './grant-reference.js'
 import { parseGrantWithdrawReason } from './grant-withdraw.js'
 import type { BrokeredGrant, BrokerReceipt, BrokerRequest } from '@openape/core'
-import type { JWTVerifyGetKey, KeyLike } from 'jose'
+import type { JWTVerifyGetKey, CryptoKey, KeyObject } from 'jose'
 import { jwtVerify, SignJWT } from 'jose'
 
 export const BROKER_REQUEST_TYPE = 'openape-broker-request+jwt'
@@ -109,13 +109,13 @@ export function sameBrokeredGrant(left: BrokeredGrant | undefined, right: Broker
   return left.connection_id === right.connection_id && left.broker_issuer === right.broker_issuer && left.agent_issuer === right.agent_issuer && left.owner === right.owner && left.key_id === right.key_id
 }
 
-export async function signBrokerToken(claims: BrokerRequest | BrokerReceipt, key: KeyLike, kid: string, type: typeof BROKER_REQUEST_TYPE | typeof BROKER_RECEIPT_TYPE): Promise<string> {
+export async function signBrokerToken(claims: BrokerRequest | BrokerReceipt, key: CryptoKey | KeyObject, kid: string, type: typeof BROKER_REQUEST_TYPE | typeof BROKER_RECEIPT_TYPE): Promise<string> {
   return await new SignJWT({ ...claims }).setProtectedHeader({ alg: 'EdDSA', typ: type, kid }).sign(key)
 }
 
-export async function verifyBrokerToken(token: string, key: KeyLike | Uint8Array | JWTVerifyGetKey, issuer: string, audience: string, type: typeof BROKER_REQUEST_TYPE): Promise<BrokerRequest>
-export async function verifyBrokerToken(token: string, key: KeyLike | Uint8Array | JWTVerifyGetKey, issuer: string, audience: string, type: typeof BROKER_RECEIPT_TYPE): Promise<BrokerReceipt>
-export async function verifyBrokerToken(token: string, key: KeyLike | Uint8Array | JWTVerifyGetKey, issuer: string, audience: string, type: string): Promise<BrokerRequest | BrokerReceipt> {
+export async function verifyBrokerToken(token: string, key: CryptoKey | KeyObject | Uint8Array | JWTVerifyGetKey, issuer: string, audience: string, type: typeof BROKER_REQUEST_TYPE): Promise<BrokerRequest>
+export async function verifyBrokerToken(token: string, key: CryptoKey | KeyObject | Uint8Array | JWTVerifyGetKey, issuer: string, audience: string, type: typeof BROKER_RECEIPT_TYPE): Promise<BrokerReceipt>
+export async function verifyBrokerToken(token: string, key: CryptoKey | KeyObject | Uint8Array | JWTVerifyGetKey, issuer: string, audience: string, type: string): Promise<BrokerRequest | BrokerReceipt> {
   if (token.length > 128 * 1024) throw new Error('Broker token is too large')
   const options = { algorithms: ['EdDSA'], issuer, audience, typ: type }
   const result = typeof key === 'function' ? await jwtVerify(token, key, options) : await jwtVerify(token, key, options)

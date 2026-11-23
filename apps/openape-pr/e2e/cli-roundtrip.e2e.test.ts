@@ -1,4 +1,4 @@
-import type { KeyLike } from 'jose'
+import type { CryptoKey, KeyObject } from 'jose'
 import type { RunningAppServer, RunningServer } from 'openape-e2e/lifecycle'
 import { execFile, spawnSync } from 'node:child_process'
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs'
@@ -67,11 +67,11 @@ const manifest = {
 let idp: RunningAppServer
 let server: RunningServer
 let base = ''
-let idpKey: KeyLike
+let idpKey: CryptoKey | KeyObject
 let homeDir = ''
 let prDir = ''
 
-async function forgeIdpToken(key: KeyLike): Promise<string> {
+async function forgeIdpToken(key: CryptoKey | KeyObject): Promise<string> {
   return await new SignJWT({ act: 'human', email: UPLOADER })
     .setProtectedHeader({ alg: 'ES256', kid: IDP_KID })
     .setSubject(UPLOADER)
@@ -84,7 +84,7 @@ async function forgeIdpToken(key: KeyLike): Promise<string> {
 
 // Isolated HOME with the auth.json layout @openape/cli-auth reads
 // (~/.config/apes/auth.json, same shape `apes login` writes).
-async function seedHome(key: KeyLike): Promise<string> {
+async function seedHome(key: CryptoKey | KeyObject): Promise<string> {
   const home = makeTempDir('pr-cli-home-')
   const configDir = join(home, '.config', 'apes')
   mkdirSync(configDir, { recursive: true })

@@ -42,7 +42,7 @@ function parseSSHEd25519PublicKey(sshKey: string): KeyObject {
 
 /**
  * Parse an SSH Ed25519 public key into a Node.js KeyObject.
- * The returned KeyObject is compatible with jose's KeyLike type
+ * The returned KeyObject is compatible with jose's KeyObject type
  * and can be used for EdDSA JWT verification.
  */
 export function sshEd25519ToKeyObject(sshKey: string): KeyObject {

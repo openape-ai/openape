@@ -1,5 +1,5 @@
 import type { KeyEntry, KeyStore } from '@openape/auth'
-import type { JWK, KeyLike } from 'jose'
+import type { JWK, CryptoKey, KeyObject } from 'jose'
 import { generateKeyPair } from '@openape/core'
 import { eq } from 'drizzle-orm'
 import { exportJWK, importJWK } from 'jose'
@@ -18,8 +18,8 @@ export function createDrizzleKeyStore(): KeyStore {
 
     for (const row of rows) {
       try {
-        const privateKey = await importJWK(row.privateKeyJwk as JWK, 'EdDSA') as KeyLike
-        const publicKey = await importJWK(row.publicKeyJwk as JWK, 'EdDSA') as KeyLike
+        const privateKey = await importJWK(row.privateKeyJwk as JWK, 'EdDSA') as CryptoKey | KeyObject
+        const publicKey = await importJWK(row.publicKeyJwk as JWK, 'EdDSA') as CryptoKey | KeyObject
         keys.push({ kid: row.kid, privateKey, publicKey })
       }
       catch {

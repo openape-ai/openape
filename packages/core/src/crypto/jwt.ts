@@ -4,7 +4,7 @@ import { ALGORITHM } from '../constants.js'
 /**
  * Generate an EdDSA key pair for signing/verifying.
  */
-export async function generateKeyPair(): Promise<jose.GenerateKeyPairResult<jose.KeyLike>> {
+export async function generateKeyPair(): Promise<jose.GenerateKeyPairResult> {
   return jose.generateKeyPair(ALGORITHM, { extractable: true })
 }
 
@@ -13,7 +13,7 @@ export async function generateKeyPair(): Promise<jose.GenerateKeyPairResult<jose
  */
 export async function signJWT(
   payload: jose.JWTPayload,
-  privateKey: jose.KeyLike | Uint8Array,
+  privateKey: jose.CryptoKey | jose.KeyObject | Uint8Array,
   options?: { kid?: string },
 ): Promise<string> {
   const builder = new jose.SignJWT(payload)
@@ -31,15 +31,15 @@ export async function signJWT(
  */
 export async function verifyJWT<T = jose.JWTPayload>(
   token: string,
-  keyOrJWKS: jose.KeyLike | Uint8Array | jose.JWTVerifyGetKey,
+  keyOrJWKS: jose.CryptoKey | jose.KeyObject | Uint8Array | jose.JWTVerifyGetKey,
   options?: jose.JWTVerifyOptions,
 ): Promise<{ payload: T, protectedHeader: jose.JWTHeaderParameters }> {
   const verifyOptions = { algorithms: [ALGORITHM] as string[], ...options }
 
-  // jose has separate overloads for KeyLike|Uint8Array vs GetKeyFunction
+  // jose has separate overloads for key|Uint8Array vs GetKeyFunction
   const result = typeof keyOrJWKS === 'function'
     ? await jose.jwtVerify(token, keyOrJWKS as jose.JWTVerifyGetKey, verifyOptions)
-    : await jose.jwtVerify(token, keyOrJWKS as jose.KeyLike | Uint8Array, verifyOptions)
+    : await jose.jwtVerify(token, keyOrJWKS as jose.CryptoKey | jose.KeyObject | Uint8Array, verifyOptions)
 
   return result as { payload: T, protectedHeader: jose.JWTHeaderParameters }
 }
@@ -55,7 +55,7 @@ export function createRemoteJWKS(jwksUri: string): jose.JWTVerifyGetKey {
  * Export a public key as JWK.
  */
 export async function exportPublicKeyJWK(
-  publicKey: jose.KeyLike,
+  publicKey: jose.CryptoKey | jose.KeyObject,
   kid?: string,
 ): Promise<jose.JWK> {
   const jwk = await jose.exportJWK(publicKey)
@@ -68,8 +68,8 @@ export async function exportPublicKeyJWK(
 }
 
 /**
- * Import a JWK as a KeyLike.
+ * Import a JWK as a CryptoKey.
  */
-export async function importJWK(jwk: jose.JWK): Promise<jose.KeyLike | Uint8Array> {
+export async function importJWK(jwk: jose.JWK): Promise<jose.CryptoKey | jose.KeyObject | Uint8Array> {
   return jose.importJWK(jwk, ALGORITHM)
 }
