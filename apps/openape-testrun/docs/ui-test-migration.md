@@ -1,6 +1,6 @@
 # Reports UI verification
 
-Issue: https://repos.openape.ai/patrick/monorepo/issues/1486
+Issue: https://github.com/openape-ai/openape-history/issues/1969
 
 Approved scope: Plan revision 1, milestone C. Frozen source baseline:
 `95d1083abfb9de07ad8edf5bb16c71e06207c5fd`.

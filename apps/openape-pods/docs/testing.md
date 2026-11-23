@@ -1,6 +1,6 @@
 # Testing OpenApe Pods
 
-Every assertion lives on the lowest level that can answer its question. A packaged Electron launch costs seconds; a component test costs milliseconds. [Issue 1374](https://repos.openape.ai/patrick/monorepo/issues/1374) moves the existing suite down this ladder; its plan is `.claude/plans/issue-1374-test-pyramid-pods.md` in the repository root.
+Every assertion lives on the lowest level that can answer its question. A packaged Electron launch costs seconds; a component test costs milliseconds. [Issue 1374](https://github.com/openape-ai/openape-history/issues/1494) moves the existing suite down this ladder; its plan is `.claude/plans/issue-1374-test-pyramid-pods.md` in the repository root.
 
 | Level | Where | Answers | Runs in |
 |---|---|---|---|

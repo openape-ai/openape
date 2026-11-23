@@ -133,7 +133,7 @@ Storage, resource boundaries, scheduling, recovery and networks are implemented;
 
 - Issue: https://git.openape.ai/openape-ai/openape/issues/1349
 - Plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A2ZV0AAPDW75YMD4TVG8Q5
-- Dependency prerequisite: https://repos.openape.ai/patrick/monorepo/pulls/23
+- Dependency prerequisite: https://github.com/openape-ai/openape-history/issues/1387
 - Electron security guidance: https://www.electronjs.org/docs/latest/tutorial/security
 - electron-builder 26 configuration: https://www.electron.build/v26/docs/configuration/
 

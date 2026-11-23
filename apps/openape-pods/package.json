@@ -34,7 +34,6 @@
     "cli": "node dist/cli/entry.cjs"
   },
   "dependencies": {
-    "croner": "10.0.1",
     "electron-updater": "6.6.2",
     "vue": "catalog:"
   },

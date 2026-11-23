@@ -1,6 +1,6 @@
 # Central Pods workspace
 
-Issue: https://repos.openape.ai/patrick/monorepo/issues/1378.
+Issue: https://github.com/openape-ai/openape-history/issues/1521.
 The central workspace is an opt-in owner pilot. Patrick approved service deployment,
 installation, restart and live adoption on September 24, 2026. Finish active runs
 and back up the app and profile together before replacing the executor. Preserve
@@ -33,7 +33,7 @@ separate from availability: a paused, connected Pod remains editable.
 
 ## Publication format and connection status
 
-Issue: https://repos.openape.ai/patrick/monorepo/issues/1384.
+Issue: https://github.com/openape-ai/openape-history/issues/1539.
 Format 2 splits the snapshot into content-addressed parts: `workspace`, `artifacts`,
 one part per Pod, per script version, per run record and per run's events
 (`contracts/central-parts.ts`). Since issue 1455 (M8) the desktop publishes these views

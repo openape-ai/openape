@@ -3,7 +3,7 @@
 The passkey vault of `apps/openape-secrets` keeps secrets that only the owner's
 passkeys open, and hands one approved secret version to one machine at a time.
 Plan: https://report.openape.ai/d/01M5JEGAHN8GK0VWGQ4HAYH0VM (issue
-https://repos.openape.ai/patrick/monorepo/issues/1535). The v1 fill/collect gate
+https://github.com/openape-ai/openape-history/issues/2107). The v1 fill/collect gate
 is unchanged and independent: it cannot read the vault or create v2 approvals.
 
 ## Configuration

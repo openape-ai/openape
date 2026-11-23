@@ -45,6 +45,7 @@ services:
       - /home/openape/prod-llms/llm-auth/ddisa_auth.py:/app/ddisa_auth.py:ro
     environment:
       LITELLM_MASTER_KEY: ${LITELLM_MASTER_KEY:?}
+      HEADWAI_API_BASE: ${HEADWAI_API_BASE}
       HEADWAI_API_KEY: ${HEADWAI_API_KEY}
       SESSION_SECRET: ${LLMS_SESSION_SECRET}
     command: ["--config", "/app/config.yaml", "--port", "4000"]

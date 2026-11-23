@@ -8,8 +8,8 @@
 
 Approved plans: [sharing](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3NA5X47W7HAV5SE10D0EN1G)
 and [networks M11](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M3VDB1S72E4EQQW58T97C617).
-Implementation: [issue 1419](https://repos.openape.ai/patrick/monorepo/issues/1419),
-linked to [issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417).
+Implementation: [issue 1419](https://github.com/openape-ai/openape-history/issues/1665),
+linked to [issue 1417](https://github.com/openape-ai/openape-history/issues/1650).
 
 Baseline: canonical `667745cbcbb751349c4f83714f4847966e5c04c9`, full-main CI 5346.
 Dedicated checkout `openape-monorepo.worktrees/pods-portable-sharing`, branch

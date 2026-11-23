@@ -1,4 +1,4 @@
-import webpush from 'web-push'
+import { sendNotification } from 'web-push'
 import type { InboxItem, InboxSubscription, OutboxEntry } from '../../shared/inbox-types'
 import type { InboxStore } from './inbox-store'
 
@@ -17,7 +17,7 @@ export function pushPayload(origin: string, item: InboxItem, badge: number): str
 }
 
 export function webPushSend(config: PushConfig): PushSend {
-  return (subscription, payload) => webpush.sendNotification(
+  return (subscription, payload) => sendNotification(
     { endpoint: subscription.endpoint, keys: { p256dh: subscription.p256dh, auth: subscription.auth } },
     payload,
     { vapidDetails: { subject: config.origin, publicKey: config.publicKey, privateKey: config.privateKey }, TTL: 86400, urgency: 'high', timeout: 15000 },

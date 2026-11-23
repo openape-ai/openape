@@ -63,7 +63,7 @@ with `pnpm deploy:image git --dry-run`.
 - Isolated protected PR #2: missing, pending, failed and stale check evidence
   and stale reviewed heads were refused with HTTP 409. After the independent
   green run on `c0cd4e26`, the native CLI merged it as `742333ae`; both forges
-  matched. [Acceptance PR](https://repos.openape.ai/patrick/ai-workflow-validation/pulls/2).
+  matched. [Acceptance PR](https://github.com/openape-ai/ai-workflow-validation/issues/2).
 - M5/M6: PR #19, source `52579f61`, external runs 4338/4339/4340;
   merge `a4921e2f`. Shared AGENTS, a checked 50-workspace map, native JSON CLI,
   read-only doctor and compatible legacy authentication caches are on main.

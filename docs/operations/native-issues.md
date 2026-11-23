@@ -1,7 +1,10 @@
 # Native development issues
 
+> **Retired (November 16, 2026):** the native forge and its CLI (`pnpm git:cli`) are gone; issues and PRs live on
+> [GitHub](https://github.com/openape-ai/openape), history in the private `openape-ai/openape-history`. Kept as a historical record.
+
 Implementation follows [the approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A5ZAT63A04PWGVBT5M14MW)
-and [issue 1356](https://repos.openape.ai/patrick/monorepo/issues/1356).
+and [issue 1356](https://github.com/openape-ai/openape-history/issues/1425).
 The approved private monorepo pilot is live since September 20, 2026. Forgejo
 retains the read-only issue archive and CI; native issues own development state.
 See the [cutover receipt](native-issues-migration.md#production-pilot-september-20-2026)

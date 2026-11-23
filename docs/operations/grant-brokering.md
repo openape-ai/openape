@@ -1,6 +1,6 @@
 # Grant brokering between identity providers
 
-Protocol: [Grant Brokering 1.0](https://git.openape.ai/openape-ai/protocol/src/branch/main/grant-brokering.md), introduced by [native protocol PR 1](https://repos.openape.ai/patrick/protocol/pulls/1).
+Protocol: [Grant Brokering 1.0](https://git.openape.ai/openape-ai/protocol/src/branch/main/grant-brokering.md), introduced by [native protocol PR 1](https://github.com/openape-ai/openape-history/issues/1446).
 
 An agent provider hosts agent identities and submits signed requests. A separate decision provider authenticates the human, records consent and signs the original execution grant. Connecting a provider grants permission to submit requests; it does not authorize execution or enable a schedule.
 

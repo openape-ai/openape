@@ -1,5 +1,5 @@
-// Client for the retired native forge (repos.openape.ai), kept for archive access
-// until its shutdown; the canonical repository is GitHub (.openape/repository.json).
+// Client for the retired native forge, kept only so the e2e suite can drive its issue API
+// the way the removed ape-git CLI did.
 const NATIVE_REPOSITORY = new URL('https://repos.openape.ai/patrick/monorepo.git')
 
 export class ForgeError extends Error {
@@ -16,7 +16,7 @@ export function createClient({ endpoint = NATIVE_REPOSITORY.origin, authorize, f
     if (!path.startsWith('/api/')) throw new ForgeError('INVALID_PATH', 'API path required')
     let authorization
     try {
-      const getToken = authorize ?? (await import('../packages/cli-auth/dist/index.js')).getAuthorizedBearer
+      const getToken = authorize ?? (await import('@openape/cli-auth')).getAuthorizedBearer
       authorization = await getToken({ endpoint, aud: new URL(endpoint).host })
     }
     catch { throw new ForgeError('AUTH_REQUIRED', 'OpenApe authentication unavailable. Run apes login for your identity, then retry.') }

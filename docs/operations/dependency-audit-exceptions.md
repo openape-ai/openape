@@ -4,7 +4,7 @@
 
 Patrick explicitly approved ignoring this advisory on October 2, 2026 so the
 approved Pods implementation can continue. It is assessed as not a blocker for the reviewed
-Nuxt projects. Native tracking: https://repos.openape.ai/patrick/monorepo/issues/1418.
+Nuxt projects. Native tracking: https://github.com/openape-ai/openape-history/issues/1656.
 
 The advisory concerns node-forge RSA PKCS1v1.5 signature verification accepting
 extra nested DigestAlgorithm elements. Installed Nuxt CLI 3.37.0 imports listhen

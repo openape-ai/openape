@@ -1,7 +1,7 @@
 # M2 storage and backup evidence
 
-Native [PR 202](https://repos.openape.ai/patrick/monorepo/pulls/202),
-[issue 1417](https://repos.openape.ai/patrick/monorepo/issues/1417).
+Native [PR 202](https://github.com/openape-ai/openape-history/issues/1651),
+[issue 1417](https://github.com/openape-ai/openape-history/issues/1650).
 The isolated checkout is `openape-monorepo.worktrees/pods-workflows-networks`,
 branch `feature/issue-1417-pods-networks-m2`, canonical base
 `df832d9d816b97f404eb9f260c834ad8606ed080`.

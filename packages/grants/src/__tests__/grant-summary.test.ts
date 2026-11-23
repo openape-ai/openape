@@ -4,7 +4,7 @@ import { InvalidGrantSummaryError, migrateLegacyGrantSummary, parseGrantSummary 
 describe('request summary', () => {
   it('accepts the four fields and keeps description line breaks', () => {
     expect(parseGrantSummary(undefined)).toBeUndefined()
-    const summary = { title: 'Rebase PR 395 onto main', description: 'Two commits.\nNo conflicts.', origin: 'INITECH rebase', link: 'https://repos.openape.ai/patrick/monorepo/pulls/395' }
+    const summary = { title: 'Rebase PR 395 onto main', description: 'Two commits.\nNo conflicts.', origin: 'INITECH rebase', link: 'https://github.com/openape-ai/openape-history/issues/1909' }
     expect(parseGrantSummary(summary)).toEqual(summary)
     expect(parseGrantSummary({ title: 'x'.repeat(120), description: '😀'.repeat(2000) })).toEqual({ title: 'x'.repeat(120), description: '😀'.repeat(2000) })
   })

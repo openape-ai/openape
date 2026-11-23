@@ -73,9 +73,8 @@ export function createCliHarness(packageDir: string, binFile: string): CliHarnes
 
   function run(...args: string[]): CliResult {
     ensureBuilt()
-    // citty renders help/usage through consola, which silences itself when it
-    // inherits vitest's NODE_ENV=test / TEST markers — strip them so the CLI
-    // behaves exactly as it would for a user.
+    // Strip vitest's NODE_ENV=test / TEST markers so the CLI behaves exactly
+    // as it would for a user.
     const env = { ...process.env }
     delete env.NODE_ENV
     delete env.TEST

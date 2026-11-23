@@ -1,6 +1,9 @@
 # Native issues: M0 inventory and migration rehearsal
 
-This runbook records the implementation and pilot rollout of the [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A5ZAT63A04PWGVBT5M14MW), tracked in [issue 1356](https://repos.openape.ai/patrick/monorepo/issues/1356).
+> **Retired (November 16, 2026):** the native forge and its CLI (`pnpm git:cli`) are gone; issues and PRs live on
+> [GitHub](https://github.com/openape-ai/openape), history in the private `openape-ai/openape-history`. Kept as a historical record.
+
+This runbook records the implementation and pilot rollout of the [approved plan](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A5ZAT63A04PWGVBT5M14MW), tracked in [issue 1356](https://github.com/openape-ai/openape-history/issues/1425).
 The September 20 production receipt below supersedes the dated M0 inventory and
 preparation checkpoints retained for audit context.
 
@@ -8,7 +11,7 @@ preparation checkpoints retained for audit context.
 
 Patrick approved the concrete M7 pilot before production changes. Native issues
 became the monorepo's sole issue writer at **13:36:53 UTC**, using image
-`prod-78fad3f1` from [PR 77](https://repos.openape.ai/patrick/monorepo/pulls/77).
+`prod-78fad3f1` from [PR 77](https://github.com/openape-ai/openape-history/issues/1460).
 Reviewed source `6b64f9ded062cc7e281117504fdc88e4b0f130cd` and target
 `934dbcec21cce8e3620ecda51a77aa8458bcfd30` passed all 17 clean local gates and
 all required exact-source external CI/e2e/layout checks. The final layout check
@@ -53,7 +56,7 @@ stores and new native activity during recovery; prefer fixing/restoring native
 service and rolling forward. Never restore an older complete registry over new
 PRs, grants or issues. There is no reverse synchronization.
 
-[Worker handoff](native-issue-workers.md) defines the bounded current-configuration
+The former worker handoff defined the bounded current-configuration
 switch and preserves worker exclusions. Tasks owns reminders, Plans owns proposals,
 and native issues own development discussion/resolution. Existing historical URLs
 remain valid; do not bulk rewrite their content or copy their statuses.
@@ -69,12 +72,12 @@ remain separate owner inventory rows. Public/anonymous activation remains deferr
 
 - Date: 2026-09-15. Canonical base: `08b1eaae3f9a129ee4b3c7563ba3803030bed43e`.
 - Checkout: `openape-monorepo.worktrees/native-issues-m0`; branch: `feature/issue-1356-native-issues-m0`.
-- Code and PR authority: `repos.openape.ai/patrick/monorepo`; native repository ID `01M141WFHN54H0MPB0SC002YD0`, owner `patrick@hofmann.eco`.
+- Code and PR authority: `repos.openape.ai/patrick/monorepo` (retired; now `github.com/openape-ai/openape`); native repository ID `01M141WFHN54H0MPB0SC002YD0`, owner `patrick@hofmann.eco`.
 - Source issue authority: private Forgejo `openape-ai/openape`, repository ID `1`.
 - Forgejo reports `15.0.5+gitea-1.22.0`. Read-only host inspection confirmed SQLite, `/var/lib/forgejo/data/forgejo.db`, native `forgejo.service` on the configured `chatty.delta-mind.at` host. No production configuration or database writes were performed. Only the implementation tracking issue was created.
 - The planning base was `db8d87cdbf67f6ac497a84004edebddc2f624240`. Reinspection at the implementation base confirms that the issue/auth gaps in the plan persist. Pods is an additional app in the current product inventory.
 
-The relevant native code remains [schema.ts](../../apps/openape-git/server/database/schema.ts), [repo-access.ts](../../apps/openape-git/server/utils/repo-access.ts), [require-auth.ts](../../modules/nuxt-auth-sp/src/runtime/server/utils/require-auth.ts), [repo discovery](../../apps/openape-git/server/api/repos/index.get.ts) and [ape-git.mjs](../../scripts/ape-git.mjs). M1 must address authorization before exposing issue storage or global discovery. DDISA reporting, participant access, API/CLI parity and PR linking retain the approved plan's contracts.
+The relevant native code remains [schema.ts](../../apps/openape-git/server/database/schema.ts), [repo-access.ts](../../apps/openape-git/server/utils/repo-access.ts), [require-auth.ts](../../modules/nuxt-auth-sp/src/runtime/server/utils/require-auth.ts), [repo discovery](../../apps/openape-git/server/api/repos/index.get.ts) and the former `scripts/ape-git.mjs`. M1 must address authorization before exposing issue storage or global discovery. DDISA reporting, participant access, API/CLI parity and PR linking retain the approved plan's contracts.
 
 ## Count-complete pilot inventory
 
