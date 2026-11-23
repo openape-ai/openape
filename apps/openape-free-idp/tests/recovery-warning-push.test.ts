@@ -23,10 +23,8 @@ const { sendNotificationMock, dbRef } = vi.hoisted(() => ({
 }))
 
 vi.mock('web-push', () => ({
-  default: {
-    setVapidDetails: vi.fn(),
-    sendNotification: (...args: any[]) => sendNotificationMock(...args),
-  },
+  setVapidDetails: vi.fn(),
+  sendNotification: (...args: any[]) => sendNotificationMock(...args),
 }))
 
 vi.mock('../server/database/drizzle', () => ({

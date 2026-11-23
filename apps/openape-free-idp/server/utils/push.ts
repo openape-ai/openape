@@ -1,6 +1,6 @@
 import type { OpenApeGrant } from '@openape/core'
 import { eq } from 'drizzle-orm'
-import webpush from 'web-push'
+import { sendNotification, setVapidDetails } from 'web-push'
 import { useDb } from '../database/drizzle'
 import { pushSubscriptions, users } from '../database/schema'
 import { summarizeRequest } from './summarize-grant'
@@ -15,7 +15,7 @@ function ensureVapidConfigured(): boolean {
   const privateKey = (cfg.vapidPrivateKey as string) || ''
   const subject = (cfg.vapidSubject as string) || ''
   if (!publicKey || !privateKey) return false
-  webpush.setVapidDetails(subject, publicKey, privateKey)
+  setVapidDetails(subject, publicKey, privateKey)
   _configured = true
   return true
 }
@@ -31,7 +31,7 @@ async function deliverToSubscriptions(subs: PushSubscriptionRow[], payload: stri
   const db = useDb()
   await Promise.all(subs.map(async (sub) => {
     try {
-      await webpush.sendNotification(
+      await sendNotification(
         { endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } },
         payload,
       )
