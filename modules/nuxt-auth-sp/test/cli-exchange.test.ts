@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import type { JWK, KeyLike } from 'jose'
+import type { JWK, CryptoKey, KeyObject } from 'jose'
 import { exportJWK, generateKeyPair, SignJWT } from 'jose'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -69,13 +69,13 @@ const IDP_URL = 'https://id.openape.ai'
 // Real IdP signing keypair, generated once. Its public JWK populates the local
 // keyset the handler verifies against; `wrongPriv` signs tokens that must fail.
 const idpPair = await generateKeyPair('EdDSA', { extractable: true })
-const idpPriv: KeyLike = idpPair.privateKey
+const idpPriv: CryptoKey | KeyObject = idpPair.privateKey
 const idpPubJwk: JWK = { ...(await exportJWK(idpPair.publicKey)), kid: 'idp-test-key', alg: 'EdDSA', use: 'sig' }
-const wrongPriv: KeyLike = (await generateKeyPair('EdDSA', { extractable: true })).privateKey
+const wrongPriv: CryptoKey | KeyObject = (await generateKeyPair('EdDSA', { extractable: true })).privateKey
 jwksHolder.keys.push(idpPubJwk)
 
 async function signSubjectToken(
-  key: KeyLike,
+  key: CryptoKey | KeyObject,
   claims: { iss?: string, aud?: string, sub?: string, act?: unknown, scope?: unknown } = {},
 ): Promise<string> {
   return new SignJWT({

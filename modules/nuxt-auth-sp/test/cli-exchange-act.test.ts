@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import type { JWK, KeyLike } from 'jose'
+import type { JWK, CryptoKey, KeyObject } from 'jose'
 import { exportJWK, generateKeyPair, SignJWT } from 'jose'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -66,7 +66,7 @@ const handler = (await import('../src/runtime/server/api/cli/exchange.post')).de
 const fakeEvent = {} as H3Event
 
 const idpPair = await generateKeyPair('EdDSA', { extractable: true })
-const idpPriv: KeyLike = idpPair.privateKey
+const idpPriv: CryptoKey | KeyObject = idpPair.privateKey
 jwksHolder.keys.push({ ...(await exportJWK(idpPair.publicKey)), kid: 'idp-test-key', alg: 'EdDSA', use: 'sig' })
 
 async function signSubjectToken(claims: { sub?: string, act?: unknown, scope?: unknown } = {}): Promise<string> {

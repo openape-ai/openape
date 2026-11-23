@@ -1,4 +1,4 @@
-import type { KeyLike } from 'jose'
+import type { CryptoKey, KeyObject } from 'jose'
 import { SignJWT, generateKeyPair } from 'jose'
 import { describe, expect, it } from 'vitest'
 import { validateClientAssertion } from '../idp/client-assertion.js'
@@ -12,7 +12,7 @@ async function createAgentKeyPair() {
 }
 
 async function buildClientAssertion(
-  privateKey: KeyLike,
+  privateKey: CryptoKey | KeyObject,
   overrides: Partial<{
     iss: string
     sub: string

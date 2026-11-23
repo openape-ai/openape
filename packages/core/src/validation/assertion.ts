@@ -1,4 +1,4 @@
-import type { KeyLike } from 'jose'
+import type { CryptoKey, KeyObject } from 'jose'
 import type { DDISAAssertionClaims } from '../types/index.js'
 import { MAX_ASSERTION_TTL } from '../constants.js'
 import { createRemoteJWKS, verifyJWT } from '../crypto/jwt.js'
@@ -11,7 +11,7 @@ export interface AssertionValidationOptions {
   /** JWKS URI for the IdP */
   jwksUri?: string
   /** Public key for verification (alternative to jwksUri) */
-  publicKey?: KeyLike | Uint8Array
+  publicKey?: CryptoKey | KeyObject | Uint8Array
   /** Expected nonce */
   expectedNonce?: string
 }

@@ -1,5 +1,5 @@
 import type { OpenApeAuthZClaims, OpenApeCliAuthorizationDetail, OpenApeExecutionContext, OpenApeGrant } from '@openape/core'
-import type { JWTPayload, KeyLike, JSONWebKeySet } from 'jose'
+import type { JWTPayload, CryptoKey, KeyObject, JSONWebKeySet } from 'jose'
 import { createLocalJWKSet } from 'jose'
 import { createRemoteJWKS, signJWT, verifyJWT } from '@openape/core'
 import { brokeredGrantAuthority } from './brokering.js'
@@ -15,7 +15,7 @@ import { brokeredGrantAuthority } from './brokering.js'
 export async function issueAuthzJWT(
   grant: OpenApeGrant,
   issuer: string,
-  privateKey: KeyLike,
+  privateKey: CryptoKey | KeyObject,
   kid?: string,
 ): Promise<string> {
   if (grant.status !== 'approved') {
@@ -99,7 +99,7 @@ export async function issueCommandJWT(
   grant: OpenApeGrant,
   call: CommandTokenCall,
   issuer: string,
-  privateKey: KeyLike,
+  privateKey: CryptoKey | KeyObject,
   kid?: string,
 ): Promise<{ token: string, expiresAt: number }> {
   if (grant.status !== 'approved') throw new Error(`Grant is not approved: ${grant.status}`)
@@ -150,7 +150,7 @@ export function spentByCommandToken(grant: OpenApeGrant, claims: OpenApeAuthZCla
 export interface VerifyAuthzOptions {
   expectedIss?: string
   expectedAud?: string
-  publicKey?: KeyLike | Uint8Array
+  publicKey?: CryptoKey | KeyObject | Uint8Array
   jwksUri?: string
   jwks?: JSONWebKeySet
 }

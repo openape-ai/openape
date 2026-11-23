@@ -1,5 +1,5 @@
 import type { AuthFlowState, DDISAAssertionClaims, OpenApeAuthorizationDetail } from '@openape/core'
-import type { KeyLike } from 'jose'
+import type { CryptoKey, KeyObject } from 'jose'
 import { validateAssertion, WELL_KNOWN_JWKS } from '@openape/core'
 
 export interface HandleCallbackOptions {
@@ -14,7 +14,7 @@ export interface HandleCallbackOptions {
   /** The redirect URI (must match the one used in the auth request) */
   redirectUri: string
   /** Public key for assertion verification (alternative to JWKS) */
-  publicKey?: KeyLike | Uint8Array
+  publicKey?: CryptoKey | KeyObject | Uint8Array
 }
 
 export interface CallbackResult {

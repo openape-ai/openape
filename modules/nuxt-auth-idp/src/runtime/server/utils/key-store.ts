@@ -1,5 +1,5 @@
 import type { KeyEntry, KeyStore } from '@openape/auth'
-import type { JWK, KeyLike } from 'jose'
+import type { JWK, CryptoKey, KeyObject } from 'jose'
 import { generateKeyPair } from '@openape/core'
 import { exportJWK, importJWK } from 'jose'
 import { useIdpStorage } from './storage'
@@ -30,8 +30,8 @@ export function createKeyStore(): KeyStore {
         continue
 
       try {
-        const privateKey = await importJWK(stored.privateKeyJwk, 'EdDSA') as KeyLike
-        const publicKey = await importJWK(stored.publicKeyJwk, 'EdDSA') as KeyLike
+        const privateKey = await importJWK(stored.privateKeyJwk, 'EdDSA') as CryptoKey | KeyObject
+        const publicKey = await importJWK(stored.publicKeyJwk, 'EdDSA') as CryptoKey | KeyObject
         keys.push({ kid: stored.kid, privateKey, publicKey })
       }
       catch {

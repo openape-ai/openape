@@ -58,6 +58,7 @@ graph LR
     w43["openape-sp-example"]
   end
   w0 --> w27
+  w1 --> w22
   w1 --> w24
   w1 --> w25
   w1 --> w27

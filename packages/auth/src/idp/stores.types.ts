@@ -1,5 +1,5 @@
 import type { ActorType, DDISADelegateClaim, DelegationActClaim, OpenApeAuthorizationDetail } from '@openape/core'
-import type { KeyLike } from 'jose'
+import type { CryptoKey, KeyObject } from 'jose'
 
 export interface CodeEntry {
   code: string
@@ -58,8 +58,8 @@ export interface AdminAllowlistStore {
 
 export interface KeyEntry {
   kid: string
-  privateKey: KeyLike
-  publicKey: KeyLike
+  privateKey: CryptoKey | KeyObject
+  publicKey: CryptoKey | KeyObject
 }
 
 export interface KeyStore {

@@ -1,4 +1,4 @@
-import type { KeyLike } from 'jose'
+import type { CryptoKey, KeyObject } from 'jose'
 import type { OpenApeAuthZClaims } from '../types/index.js'
 import { createRemoteJWKS, verifyJWT } from '../crypto/jwt.js'
 
@@ -10,7 +10,7 @@ export interface GrantValidationOptions {
   /** JWKS URI for the OpenApe server */
   jwksUri?: string
   /** Public key for verification */
-  publicKey?: KeyLike | Uint8Array
+  publicKey?: CryptoKey | KeyObject | Uint8Array
   /** Required permission to check */
   requiredPermission?: string
   /** Expected command hash */

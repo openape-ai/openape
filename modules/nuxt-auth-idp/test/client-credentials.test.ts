@@ -1,13 +1,13 @@
-import type { KeyLike } from 'jose'
+import type { CryptoKey, KeyObject } from 'jose'
 import { SignJWT, generateKeyPair, jwtVerify } from 'jose'
 import { describe, expect, it, vi } from 'vitest'
 
 const ISSUER = 'https://id.openape.at'
 const AGENT_EMAIL = 'agent+test@id.openape.at'
 
-let agentPublicKey: KeyLike
-let agentPrivateKey: KeyLike
-let idpSigningKey: { privateKey: KeyLike, publicKey: KeyLike, kid: string }
+let agentPublicKey: CryptoKey | KeyObject
+let agentPrivateKey: CryptoKey | KeyObject
+let idpSigningKey: { privateKey: CryptoKey | KeyObject, publicKey: CryptoKey | KeyObject, kid: string }
 
 async function setup() {
   const agentKp = await generateKeyPair('EdDSA', { crv: 'Ed25519' })
