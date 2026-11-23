@@ -1460,8 +1460,8 @@ importers:
         specifier: ^0.2.2
         version: 0.2.2
       htmlparser2:
-        specifier: 10.1.0
-        version: 10.1.0
+        specifier: 12.0.0
+        version: 12.0.0
       marked:
         specifier: 'catalog:'
         version: 18.2.0
@@ -1840,8 +1840,8 @@ importers:
   packages/report-contracts:
     dependencies:
       htmlparser2:
-        specifier: 10.1.0
-        version: 10.1.0
+        specifier: 12.0.0
+        version: 12.0.0
       jose:
         specifier: 'catalog:'
         version: 5.10.0
@@ -8566,9 +8566,6 @@ packages:
 
   html-whitespace-sensitive-tag-names@3.0.1:
     resolution: {integrity: sha512-q+310vW8zmymYHALr1da4HyXUQ0zgiIwIicEfotYPWGN0OJVEN/58IJ3A4GBYcEq3LGAZqKb+ugvP0GNB9CEAA==}
-
-  htmlparser2@10.1.0:
-    resolution: {integrity: sha512-VTZkM9GWRAtEpveh7MSF6SjjrpNVNNVJfFup7xTY3UpFtm67foy9HDVXneLtFVt4pMz5kZtgNcvCniNFb1hlEQ==}
 
   htmlparser2@12.0.0:
     resolution: {integrity: sha512-Tz7u1i95/g2x2jz81+x0FBVhBhY5aRTvD3tXXdFaljuNdzDLJ8UGNRrTcj2cgQvAg3iW/h77Fz15nLW0L0CrZw==}
@@ -23004,13 +23001,6 @@ snapshots:
   html-void-elements@3.0.0: {}
 
   html-whitespace-sensitive-tag-names@3.0.1: {}
-
-  htmlparser2@10.1.0:
-    dependencies:
-      domelementtype: 2.3.0
-      domhandler: 5.0.3
-      domutils: 3.2.2
-      entities: 7.0.1
 
   htmlparser2@12.0.0:
     dependencies:
