@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "htmlparser2": "10.1.0",
-    "postcss": "8.5.32",
+    "postcss": "8.5.33",
     "postcss-value-parser": "4.2.0",
     "jose": "catalog:",
     "marked": "catalog:",
