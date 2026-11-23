@@ -260,17 +260,15 @@ container is recreated unless its definition sets it. Every service in
 `compose/chatty.yml` sets `sysctls: net.mptcp.enabled: "0"`
 ([issue 1558](https://github.com/openape-ai/openape-history/issues/2173)); it takes
 effect at each service's next deploy. Containers started from other host
-definitions (static sites, the LLM stack and other host-defined apps) still need
+definitions (static sites and other host-defined apps) still need
 `nsenter -t PID -n sysctl -w net.mptcp.enabled=0` after recreation until M6
 gives them source-owned definitions. The IdP currently runs with the known
 value 1 and `health.json` expects `"1"`; after its first deploy with this file,
 health reports `mptcp:openape-prod-idp-1` and the expected value must be set to
 `"0"`.
 
-`compose/docs-site.yml` and `compose/gateway/docker-compose.yml` set the same
-sysctl on every service and pin LiteLLM by digest
-([issue 1559](https://github.com/openape-ai/openape-history/issues/2176)); the
-existing MPTCP test covers all three files.
+`compose/docs-site.yml` sets the same sysctl on every service; the existing
+MPTCP test covers both files.
 
 ## Host-defined workloads (M6)
 
@@ -306,7 +304,6 @@ running workload depends on it. Each workload has exactly one definition:
 |---|---|---|
 | OpenApe apps | `compose/chatty.yml`, installed as `/home/openape/prod/docker-compose.yml` | `pnpm run deploy:image <target>`; rollback through `<APP>_TAG_PREV` |
 | Docs site | `compose/docs-site.yml` | `pnpm run deploy:docs-site` |
-| LLM gateway | `compose/gateway/docker-compose.yml` | copy to the host project directory, then `docker compose up -d` |
 | Sites from other repositories | their `compose/chatty*.yml` | their `scripts/deploy-image.mjs` |
 | Host-defined workloads | `/srv/workloads/NAME/compose.yaml` (root `0600`) | `docker compose -f … up -d`; see [Host-defined workloads (M6)](#host-defined-workloads-m6) |
 | Edge | `/srv/openape-proxy/compose.yaml` and `dynamic/*.yml` | [Independent Traefik edge](independent-edge.md) |
