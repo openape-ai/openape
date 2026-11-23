@@ -29,6 +29,8 @@ const LOG_CAP = 256 * 1024
 const POLL_INTERVAL_MS = 250
 const DEFAULT_READY_TIMEOUT_MS = 120_000
 const STOP_GRACE_MS = 3_000
+const PORT_ATTEMPTS = 3
+const RE_PORT_TAKEN = /EADDRINUSE|already in use/
 
 export interface ServerStartEntry {
   kind: 'start'
@@ -253,13 +255,30 @@ async function waitForExit(child: ChildProcess, timeoutMs: number): Promise<bool
  */
 export async function startServer(opts: StartServerOptions): Promise<RunningServer> {
   cleanupOncePerProcess()
+  // A picked port is only free when probed: a parallel suite can take it (or
+  // use it as its HMR port) before this server binds it. Pick again then.
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await startServerOnce(opts, opts.port ?? await getFreePort())
+    }
+    catch (error) {
+      if (opts.port !== undefined || attempt >= PORT_ATTEMPTS || !(error instanceof PortTakenError))
+        throw error
+    }
+  }
+}
+
+class PortTakenError extends Error {}
+
+async function startServerOnce(opts: StartServerOptions, port: number): Promise<RunningServer> {
   const host = opts.host ?? '127.0.0.1'
-  const port = opts.port ?? await getFreePort()
   let hmrPort = await getFreePort()
   while (hmrPort === port) hmrPort = await getFreePort()
   const url = `http://${host}:${port}`
   const command = opts.command?.({ port, host })
-    ?? ['pnpm', 'exec', 'nuxt', 'dev', '--port', String(port), '--host', host]
+    // --strictPort: without it nuxi silently moves to another port while the
+    // readiness poll below reaches whichever server already holds this one.
+    ?? ['pnpm', 'exec', 'nuxt', 'dev', '--port', String(port), '--host', host, '--strictPort']
   const extraEnv = typeof opts.env === 'function' ? opts.env({ url, port }) : opts.env
 
   const executable = command[0]
@@ -274,8 +293,12 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   })
 
   let logBuffer = ''
+  // Default nuxt dev servers print their own URL once listening; until then a
+  // 2xx on this port may come from another suite's server.
+  let ownsPort = Boolean(opts.command)
   const capture = (chunk: Buffer): void => {
     logBuffer = (logBuffer + chunk.toString()).slice(-LOG_CAP)
+    ownsPort ||= logBuffer.includes(`${url}/`)
   }
   child.stdout?.on('data', capture)
   child.stderr?.on('data', capture)
@@ -310,11 +333,12 @@ export async function startServer(opts: StartServerOptions): Promise<RunningServ
   while (Date.now() < deadline) {
     if (child.exitCode !== null) {
       await stop()
-      throw new Error(`Server exited (code ${child.exitCode}) before becoming healthy: ${readyUrl}\nLast logs:\n${logBuffer.slice(-4000)}`)
+      const ErrorType = RE_PORT_TAKEN.test(logBuffer) ? PortTakenError : Error
+      throw new ErrorType(`Server exited (code ${child.exitCode}) before becoming healthy: ${readyUrl}\nLast logs:\n${logBuffer.slice(-4000)}`)
     }
     try {
       const res = await fetch(readyUrl, { signal: AbortSignal.timeout(2_000) })
-      if (res.ok)
+      if (res.ok && ownsPort)
         return { url, port, logs, stop }
     }
     catch {}
