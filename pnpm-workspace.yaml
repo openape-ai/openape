@@ -40,7 +40,7 @@ minimumReleaseAgeExclude:
 
 catalog:
   '@antfu/eslint-config': ^7.7.3
-  '@changesets/cli': ^2.31.1
+  '@changesets/cli': ^3.0.3
   '@iconify-json/lucide': ^1.2.155
   '@nuxt/kit': ^4.6.4
   '@nuxt/module-builder': ^1.0.4
