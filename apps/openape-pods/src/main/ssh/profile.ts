@@ -29,14 +29,14 @@ facts = {
     'candidates':command(['/usr/bin/apt-cache','policy','linux-image-cloud-amd64','nodejs','nginx','openssl']),
     'packageRefresh':command(['/usr/bin/systemctl','show','apt-daily.service','--property=Result','--property=ExecMainExitTimestamp','--property=ExecMainStatus']),
     'disk':command(['/bin/df','-P','/']),
-    'services':command(['/usr/bin/systemctl','show','nginx.service','pm2-PortalService.service','pm2-globex.service','--property=Id','--property=LoadState','--property=ActiveState','--property=SubState']),
-    'backup':read('/home/debian/app-s3-backup/last-run.txt'),
+    'services':command(['/usr/bin/systemctl','show','nginx.service','pm2-*.service','--property=Id','--property=LoadState','--property=ActiveState','--property=SubState']),
+    'backup':read((sorted(glob.glob('/home/debian/*-backup/last-run.txt')) or ['/nonexistent'])[0]),
     'certificates':[],
     'authHealth':[]
 }
 for certificate in sorted(glob.glob('/etc/letsencrypt/live/*/fullchain.pem'))[:16]:
     facts['certificates'].append({'name':certificate.split('/')[-2], 'result':command(['/usr/bin/openssl','x509','-in',certificate,'-noout','-dates','-fingerprint','-sha256'])})
-if os.path.isdir('/home/app/app_prod'):
+if glob.glob('/home/*/*_prod'):
     for port in [3000,3001]:
         facts['authHealth'].append({'port':port,'result':command(['/usr/bin/curl','--silent','--show-error','--noproxy','*','--max-time','5','--max-filesize','4096','--write-out','\\nHTTP %{http_code}','http://127.0.0.1:'+str(port)+'/api/health'])})
 print(json.dumps({'version':1,'profile':'server-inventory-v1','facts':facts}))
