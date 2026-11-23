@@ -16,7 +16,7 @@ export function createClient({ endpoint = NATIVE_REPOSITORY.origin, authorize, f
     if (!path.startsWith('/api/')) throw new ForgeError('INVALID_PATH', 'API path required')
     let authorization
     try {
-      const getToken = authorize ?? (await import('../../../packages/cli-auth/dist/index.js')).getAuthorizedBearer
+      const getToken = authorize ?? (await import('@openape/cli-auth')).getAuthorizedBearer
       authorization = await getToken({ endpoint, aud: new URL(endpoint).host })
     }
     catch { throw new ForgeError('AUTH_REQUIRED', 'OpenApe authentication unavailable. Run apes login for your identity, then retry.') }
