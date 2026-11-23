@@ -33,7 +33,7 @@
     "jose": "catalog:",
     "marked": "catalog:",
     "nuxt": "catalog:",
-    "resend": "^6.38.0",
+    "resend": "^6.38.1",
     "tailwindcss": "catalog:",
     "web-push": "catalog:"
   },

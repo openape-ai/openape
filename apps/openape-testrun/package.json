@@ -28,7 +28,7 @@
     "tailwindcss": "catalog:",
     "ulid": "catalog:",
     "sanitize-html": "^2.18.2",
-    "postcss": "8.5.32",
+    "postcss": "8.5.33",
     "postcss-value-parser": "4.2.0",
     "@openape/report-contracts": "workspace:*",
     "aws4fetch": "catalog:"
