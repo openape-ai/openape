@@ -52,8 +52,6 @@
     // playground app, which is not part of the published module graph.
     "@nuxt/ui",
     "@nuxtjs/mdc",
-    // Named as a string in .changeset/config.json.
-    "@changesets/changelog-github",
     // Coverage provider selected by name in vitest config, never imported.
     "@vitest/coverage-istanbul",
     // Browser binary host for the docs/screenshot pipeline, resolved at runtime.

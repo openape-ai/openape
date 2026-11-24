@@ -1,11 +1,11 @@
-import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/types'
+import type { CredentialDeviceType } from '@simplewebauthn/server'
 
 export interface WebAuthnCredential {
   credentialId: string
   userEmail: string
   publicKey: string // Base64URL-encoded
   counter: number
-  transports?: AuthenticatorTransportFuture[]
+  transports?: string[]
   deviceType: CredentialDeviceType
   backedUp: boolean
   createdAt: number
