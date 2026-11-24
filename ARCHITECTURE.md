@@ -91,6 +91,9 @@ by `compose/chatty.yml` (compose project `openape-prod`), each publishing on
 | `pr` | `pr` | openape-pr | 3014 | pr.openape.ai |
 | `monitor` | `monitor` | openape-monitor | 3018 | monitor.openape.ai |
 | `dashboard` | `dashboard` | openape-dashboard | 3022 | dashboard.openape.ai |
+| `secrets` | `secrets` | openape-secrets | 3025 | secrets.openape.ai |
+| `pods-idp` | `pods-idp` | openape-free-idp (image `openape-pods-idp`) | 3027 | pods.openape.ai |
+| `pods-relay` | `pods-relay` | openape-pods-relay | 3028 | pods.openape.ai |
 
 Each container mounts the pre-existing `/home/openape/projects/<app>/shared`
 at the identical path and reuses its `.env` — SQLite `file:` URLs and secrets
