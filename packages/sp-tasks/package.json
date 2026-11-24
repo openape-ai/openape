@@ -51,7 +51,7 @@
     "drizzle-orm": "catalog:"
   },
   "devDependencies": {
-    "@libsql/client": "^0.17.4",
+    "@libsql/client": "^0.18.0",
     "@types/node": "catalog:",
     "h3": "catalog:",
     "tsup": "catalog:",

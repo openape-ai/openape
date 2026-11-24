@@ -39,7 +39,7 @@
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
     "@openape/shapes": "workspace:*",
-    "@simplewebauthn/browser": "^13.3.0",
+    "@simplewebauthn/browser": "^14.0.0",
     "defu": "catalog:",
     "jose": "catalog:",
     "uqr": "^0.1.3"

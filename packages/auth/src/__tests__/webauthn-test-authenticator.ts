@@ -1,4 +1,4 @@
-import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/types'
+import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server'
 import type { KeyObject } from 'node:crypto'
 import { createHash, generateKeyPairSync, randomBytes, sign } from 'node:crypto'
 import { isoBase64URL, isoCBOR, isoUint8Array } from '@simplewebauthn/server/helpers'
