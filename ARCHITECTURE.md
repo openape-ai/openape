@@ -14,10 +14,9 @@ their e-mail domain and a passkey — no passwords, no per-app accounts. A
 service provider (SP) looks up a DNS TXT record on the user's mail domain to
 discover their identity provider (IdP), then runs an OIDC-style PKCE flow
 against it; authorization happens through revocable grants instead of blanket
-sessions. On top of that identity layer sits an agent platform: AI agents get
-the same first-class DDISA identities as humans, run as supervised processes
-on machines their owners control ("nests"), and talk to their owners through a
-shared chat. The protocol itself is specified in a separate repo —
+sessions. On top of that identity layer, AI agents get the same first-class
+DDISA identities as humans, and Pods run their owners' automations on the Mac
+under explicitly granted access. The protocol itself is specified in a separate repo —
 [openape-ai/protocol](https://github.com/openape-ai/protocol) (`core.md`,
 `grants.md`, `delegation.md`); this monorepo implements it and must not
 silently diverge (see `docs/agents/engineering-guide.md`, "DDISA Protocol Compliance").
