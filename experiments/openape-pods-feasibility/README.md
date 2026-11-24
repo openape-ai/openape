@@ -1,6 +1,6 @@
 # OpenApe Pods feasibility probes
 
-Development experiments for [issue 1346](https://git.openape.ai/openape-ai/openape/issues/1346)
+Development experiments for [issue 1346](https://github.com/openape-ai/openape-history/issues/1385)
 and the [approved M0 scope](https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A2ZV0AAPDW75YMD4TVG8Q5).
 Read [the findings and remaining gates](report.md) before interpreting results.
 This is a standalone experiment, deliberately outside the production pnpm workspaces.

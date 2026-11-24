@@ -83,7 +83,7 @@ These are the questions no lower level can answer. `handbook.test.ts` also stays
 
 | File | Why it needs the packaged app or a real process |
 |---|---|
-| `foundation.test.ts` | Packaged start with Electron 40.9.3 / Node 24.14.1 and rendered Vue; bundle icon; renderer/IPC boundary and worker environment scrubbing; single instance and quit; worker crash detection; packaged manual run in the sandbox; packaged reference snapshot |
+| `foundation.test.ts` | Packaged start with Electron 45.3.3 / Node 24.22.3 and rendered Vue; bundle icon; renderer/IPC boundary and worker environment scrubbing; single instance and quit; worker crash detection; packaged manual run in the sandbox; packaged reference snapshot |
 | `crash-recovery*.test.ts`, `fixtures/crash.ts` | Real SIGKILL/quit of worker, app and script, relaunch and domain inspection without duplicate work; the storage limit stopping an actually running script. Split into files so the cases run on separate workers |
 | `recovery.test.ts`, `domains.test.ts` | Supervisor lease, PID identity and PID reuse of real processes |
 | `resources.test.ts`, `script-runner.test.ts`, `terminal.test.ts` | Sandbox denial (files, fork, network, shell), real TTY, time limits |

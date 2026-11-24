@@ -38,6 +38,10 @@ export default antfu({
     'style/padded-blocks': 'off',
     'style/member-delimiter-style': 'off',
     'antfu/if-newline': 'off',
+    // New in @antfu/eslint-config 10; enabling it would reformat about 20k lines.
+    'antfu/reasonable-newline': 'off',
+    // Broadened in @antfu/eslint-config 10; following it would change thrown error classes.
+    'unicorn/prefer-type-error': 'off',
     // A list stays on one line or puts every item on its own line.
     'antfu/consistent-list-newline': 'error',
     'style/object-curly-newline': ['error', { multiline: true, consistent: true }],
