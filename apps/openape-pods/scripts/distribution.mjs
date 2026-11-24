@@ -28,14 +28,16 @@ export function inventory() {
   const apes = packageFile('@openape/apes', parent)
   const pty = packageFile('@lydell/node-pty', apes)
   visit(`@lydell/node-pty-${process.platform}-${process.arch}`, pty)
-  const electron = dirname(packageFile('electron', parent))
-  for (const name of ['LICENSE', 'LICENSES.chromium.html']) notices.push(`\n===== Electron 40.9.3 / ${name} =====\n${readFileSync(join(electron, 'dist', name), 'utf8')}`)
+  const electron = dirname(packageFile('electron', parent)); const electronVersion = JSON.parse(readFileSync(join(electron, 'package.json'), 'utf8')).version
+  // Electron 42+ downloads its binary on first use instead of on install; its license files ship with the binary.
+  execFileSync(process.execPath, [join(electron, 'install.js')], { stdio: 'inherit' })
+  for (const name of ['LICENSE', 'LICENSES.chromium.html']) notices.push(`\n===== Electron ${electronVersion} / ${name} =====\n${readFileSync(join(electron, 'dist', name), 'utf8')}`)
   const codex = JSON.parse(readFileSync('dist/vendor/manifest.json', 'utf8'))
   const blockers = [
     'Review the pinned Codex native Rust dependency notices; npm license metadata is not a complete native dependency inventory',
     ...[...packages.values()].filter(item => !item.licenses.length).map(item => `No packaged license text: ${item.name}@${item.version}`),
   ]
-  return { bom: { format: 'openape-pods-bom', version: 1, dependencyLockHash: sha256('../../pnpm-lock.yaml'), platform: process.platform, architecture: process.arch, electron: '40.9.3', nativeHelperSha256: sha256('dist/native/pods-helper'), packages: [...packages.values()], codex, scope: 'Conservative runtime npm dependency closure, Electron/Chromium notices, pinned native origins. Native transitive license review remains a release gate.', blockers }, notices: notices.join('\n') }
+  return { bom: { format: 'openape-pods-bom', version: 1, dependencyLockHash: sha256('../../pnpm-lock.yaml'), platform: process.platform, architecture: process.arch, electron: electronVersion, nativeHelperSha256: sha256('dist/native/pods-helper'), packages: [...packages.values()], codex, scope: 'Conservative runtime npm dependency closure, Electron/Chromium notices, pinned native origins. Native transitive license review remains a release gate.', blockers }, notices: notices.join('\n') }
 }
 export function writeDistribution(releaseReady = false, review = null, source = review) {
   const { bom, notices } = inventory(); const version = JSON.parse(readFileSync('package.json', 'utf8')).version
