@@ -11,7 +11,7 @@ This package currently contains:
 - Vitest suites that validate real objects and token claims produced by `@openape/core` and `@openape/grants`
 - a schema sync script exposed as `pnpm --filter @openape/protocol-conformance sync-schemas`
 
-It does not currently export a runtime API from `src/index.ts`. The package is exercised through its test suite.
+It does not export a runtime API. The package is exercised through its test suite.
 
 ## Schemas
 
