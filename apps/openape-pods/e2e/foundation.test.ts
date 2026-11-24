@@ -153,7 +153,7 @@ describe('foundation', () => {
     const { app, page } = await launch(true)
     expect(await app.evaluate(({ app }) => app.isPackaged)).toBe(true)
     const status = await page.evaluate(() => window.pods.getStatus())
-    expect(status.runtime).toEqual({ electron: '40.9.3', node: '24.14.1' })
+    expect(status.runtime).toEqual({ electron: '45.3.3', node: '24.22.3' })
     expect(await page.evaluate(() => typeof (globalThis as Record<string, unknown>).require)).toBe('undefined')
     // The renderer lands on the Automatisierungen shell and draws the worker's (empty) workspace map.
     expect(await page.getByRole('tab', { name: 'Automations', exact: true }).getAttribute('aria-selected')).toBe('true')
