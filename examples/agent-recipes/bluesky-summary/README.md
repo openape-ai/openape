@@ -4,6 +4,13 @@ A scheduled agent that digests your Bluesky home timeline twice a day.
 This is the reference Agent Recipe — see
 [the Agent Recipe docs](https://docs.openape.ai/ecosystem/agent-recipe).
 
+> **Historical recipe.** Deploying and running it needs Troop and an
+> `openape-nest` host. Production Troop was retired on 2026-10-15, and
+> both now live in the [legacy repository](https://github.com/patrick-hofmann/legacy) (see
+> [`docs/operations/legacy-apps.md`](../../../docs/operations/legacy-apps.md)).
+> `apes agent deploy` calls Troop, so the steps below no longer work and do
+> not authorize restarting retired infrastructure.
+
 ## What it does
 
 - `ape-agent.yaml` declares the intent, the `topic` param, two daily
@@ -55,6 +62,6 @@ apes run --as bluesky-summary -- apes agents run --task-id recipe-0
 #    → next run reflects it with NO re-deploy.
 ```
 
-The recipe→plan→seal/open code path is verified automatically in
+The recipe→plan→seal/open code path was verified by
 `apps/openape-troop/tests/recipe-e2e.test.ts` against this exact
-manifest.
+manifest; that test now lives in the legacy repository with Troop.
