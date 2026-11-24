@@ -34,9 +34,8 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
-    "@changesets/changelog-github": "^0.7.0",
     "@changesets/cli": "catalog:",
-    "@libsql/client": "^0.17.4",
+    "@libsql/client": "^0.18.0",
     "@vitest/coverage-istanbul": "catalog:",
     "drizzle-orm": "^0.45.4",
     "eslint": "catalog:",
