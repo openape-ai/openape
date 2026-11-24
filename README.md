@@ -3,8 +3,9 @@
 [![Version](https://img.shields.io/badge/version-0.0.0-blue.svg)](https://github.com/openape-ai/openape)
 
 OpenApe is the reference implementation of **DDISA** (DNS-Discoverable Identity & Service
-Authorization): people and agents sign in with their e-mail domain and a passkey, and services
-authorize them through revocable grants. On top of that identity layer the monorepo ships the
+Authorization): people sign in with their e-mail domain and a passkey, agents with a
+registered Ed25519 key and a signed challenge, and services authorize both through revocable
+grants. On top of that identity layer the monorepo ships the
 IdP, the secrets vault, work apps (tasks, timetrack, monitor, dashboard), evidence services
 (Reports, Plans, PR reviews), Pods for automation on the Mac, and the `apes` CLI.
 
