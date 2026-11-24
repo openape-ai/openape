@@ -131,7 +131,7 @@ Electron supplies desktop APIs and Node. electron-builder supplies the macOS dev
 
 Storage, resource boundaries, scheduling, recovery and networks are implemented; mail knowledge is provided by the external automation package. Connection setup, explicit local deletion, backup/restore and manual update checks are implemented and verified with synthetic cases. Actual provider, tenant and signed distribution acceptance remain release gates.
 
-- Issue: https://git.openape.ai/openape-ai/openape/issues/1349
+- Issue: https://github.com/openape-ai/openape-history/issues/1391
 - Plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A2ZV0AAPDW75YMD4TVG8Q5
 - Dependency prerequisite: https://github.com/openape-ai/openape-history/issues/1387
 - Electron security guidance: https://www.electronjs.org/docs/latest/tutorial/security

@@ -97,7 +97,7 @@ Back up the router file and inspect its current contents before a targeted atomi
 
 The existing `Morgenbriefing · Mail-Prüfung` workflow (`5f7ea0d7-1f9c-4c74-8c8a-afd513950001`) owns daily 07:00 Europe/Vienna. The sender is `991849f7-b612-4cf9-8201-5b78b4a12e55`. Its standalone daily schedule stays disabled. The mail review's 60-second approval processor remains enabled. `Daily action website` stays paused.
 
-The [sender recipe](../openape-pods/examples/morning-mail-briefing.mjs) consumes existing calendar/issue reads and `morning-mail-review/v1` output, including its exact archive-approval links. No classifier, mail write or model call is added. Missing sources and stale reviews are labeled. Preview publication uses a separate owner-created series; manual runs never send Telegram.
+The sender Pod (a personal Pod script, deliberately not in this repository) consumes existing calendar/issue reads and `morning-mail-review/v1` output, including its exact archive-approval links. No classifier, mail write or model call is added. Missing sources and stale reviews are labeled. Preview publication uses a separate owner-created series; manual runs never send Telegram.
 
 Assign `https://report.openape.ai` with GET/POST and DDISA authentication using the dedicated `reports-briefing` agent's imported private key. The script never reads this key or sets Authorization. Configure ordinary `reports_url`, `reports_series_id`, `reports_preview_series_id` and `publication_mode` (`preview` during acceptance, `live` afterward). Keep all previous variables, resources and checkpoints.
 

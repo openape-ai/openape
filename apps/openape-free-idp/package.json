@@ -26,7 +26,7 @@
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
     "@openape/nuxt-auth-idp": "workspace:*",
-    "@sentry/nuxt": "^10.78.0",
+    "@sentry/nuxt": "^11.13.0",
     "@vite-pwa/nuxt": "catalog:",
     "drizzle-orm": "catalog:",
     "h3": "catalog:",
