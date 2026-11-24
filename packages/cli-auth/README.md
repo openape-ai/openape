@@ -1,6 +1,6 @@
 # @openape/cli-auth
 
-Shared client-side auth library for OpenApe CLIs. Used by `@openape/apes`, `@openape/ape-plans`, `@openape/ape-tasks`, and forthcoming `@openape/ape-secrets` / `@openape/ape-seeds`.
+Shared client-side auth library for OpenApe CLIs. Used by `@openape/apes`, `@openape/ape-plans`, `@openape/ape-tasks` and `@openape/ape-secrets`.
 
 ## What it does
 

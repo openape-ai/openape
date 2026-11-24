@@ -35,7 +35,7 @@ const artifacts = await build({
     forceCodeSigning: signed,
     appId: distribution ? 'ai.openape.pods' : 'ai.openape.pods.fixture',
     productName,
-    electronVersion: '40.9.3',
+    electronVersion: JSON.parse(readFileSync('node_modules/electron/package.json', 'utf8')).version,
     directories: { output },
     files: ['dist/**/*', '!dist/vendor/apes/**/*', 'package.json'],
     asar: true,
