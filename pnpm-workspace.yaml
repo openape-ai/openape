@@ -45,7 +45,7 @@ catalog:
   '@types/shell-quote': ^1.7.5
   '@types/web-push': ^3.6.4
   '@types/ws': ^8.18.1
-  '@vite-pwa/nuxt': ^1.1.1
+  '@vite-pwa/nuxt': ^2.0.1
   '@vitejs/plugin-vue': ^6.0.11
   '@vitest/browser': ^5.1.0
   '@vitest/browser-playwright': ^5.1.0

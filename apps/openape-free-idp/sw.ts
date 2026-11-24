@@ -1,6 +1,6 @@
 /// <reference lib="webworker" />
 
-// Service worker for the OpenApe IdP. We use injectManifest so we own this
+// Service worker for the OpenApe IdP. We use the buildSW strategy so we own this
 // file and can register `push` + `notificationclick` handlers — vite-pwa's
 // generateSW mode doesn't expose those.
 //
@@ -8,10 +8,10 @@
 // /api/**, CacheFirst for /_nuxt/** (filenames are hashed on every build,
 // so cache hits are always for the right version).
 
-import { CacheFirst, NetworkFirst } from 'workbox-strategies'
-import { ExpirationPlugin } from 'workbox-expiration'
-import { precacheAndRoute, cleanupOutdatedCaches } from 'workbox-precaching'
-import { registerRoute } from 'workbox-routing'
+import { CacheFirst, NetworkFirst } from '@vite-pwa/workbox-swkit/strategies'
+import { ExpirationPlugin } from '@vite-pwa/workbox-swkit/expiration'
+import { precacheAndRoute, cleanupOutdatedCaches } from '@vite-pwa/workbox-swkit/precaching'
+import { registerRoute } from '@vite-pwa/workbox-swkit/routing'
 
 declare const self: ServiceWorkerGlobalScope & { __WB_MANIFEST: Array<{ url: string, revision: string | null }> }
 
