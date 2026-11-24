@@ -1,5 +1,5 @@
 import { generateRegistrationOptions, verifyRegistrationResponse } from '@simplewebauthn/server'
-import type { PublicKeyCredentialCreationOptionsJSON, RegistrationResponseJSON } from '@simplewebauthn/types'
+import type { PublicKeyCredentialCreationOptionsJSON, RegistrationResponseJSON } from '@simplewebauthn/server'
 import type { RPConfig, WebAuthnCredential } from './types.js'
 
 const RE_PLUS = /\+/g
