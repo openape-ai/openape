@@ -2,14 +2,26 @@
 
 [![Version](https://img.shields.io/badge/version-0.0.0-blue.svg)](https://github.com/openape-ai/openape)
 
-OpenApe is a virtual company framework for autonomous AI agents.
+OpenApe is the reference implementation of **DDISA** (DNS-Discoverable Identity & Service
+Authorization): people and agents sign in with their e-mail domain and a passkey, and services
+authorize them through revocable grants. On top of that identity layer the monorepo ships the
+IdP, the secrets vault, work apps (tasks, timetrack, monitor, dashboard), evidence services
+(Reports, Plans, PR reviews), Pods for automation on the Mac, and the `apes` CLI.
+
+[MAP.md](MAP.md) shows which part does what and where it runs;
+[ARCHITECTURE.md](ARCHITECTURE.md) explains how the parts fit together.
 
 ## Quick Start
 
 ```bash
-pnpm install
-pnpm dev
+. ./scripts/activate-node.sh
+pnpm install --frozen-lockfile
+pnpm run doctor
+pnpm --filter openape-free-idp dev   # one app; see MAP.md for the others
 ```
+
+[Local development](docs/operations/local-development.md) covers the local stack and test
+fixtures, [AGENTS.md](AGENTS.md) the checks and release rules.
 
 ## Documentation
 
@@ -21,19 +33,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development guidelines.
 - `modules/` — publishable Nuxt modules
 - `apps/` — deployable applications (private)
 - `examples/` — example apps + E2E tests
-
-## Team Structure
-
-**OpenApe Werkstatt** operates with the following roles:
-
-| Role | Agent | Reports To |
-|------|-------|------------|
-| CEO | `ceo` | — |
-| Product Manager (Team Lead) | `pm` | — |
-| Finance Controller | `cfo` | — |
-| Backend Engineer | `backend` | `pm` |
-| QA Engineer | `qa` | `pm` |
-| Technical Writer | `scribe` | `pm` |
 
 ## License
 
