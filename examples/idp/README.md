@@ -1,6 +1,6 @@
 # OpenApe IdP Example
 
-Identity Provider example built with [Nuxt](https://nuxt.com/) and the `@openape/nuxt-auth-idp` + `@openape/nuxt-grants` modules.
+Identity Provider example built with [Nuxt](https://nuxt.com/) and the `@openape/nuxt-auth-idp` module.
 
 Provides WebAuthn (passkey) registration and authentication, an OIDC authorization server, and a grant management UI.
 
@@ -36,7 +36,7 @@ Open the printed URL in your browser and register a passkey. You can now log in 
 | `/register?token=...` | Passkey registration with a one-time token (provided by module) |
 | `/account` | Account settings (provided by module) |
 | `/admin` | Admin dashboard — user management (requires admin) |
-| `/grants` | Grant management UI (provided by `@openape/nuxt-grants`) |
+| `/grants` | Grant management UI (provided by `@openape/nuxt-auth-idp`) |
 
 ## OIDC Endpoints
 

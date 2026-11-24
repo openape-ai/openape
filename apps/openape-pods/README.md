@@ -3,7 +3,7 @@
 For the standalone `ape-pods list/run/create/edit` development workflow, see
 [CLI development](docs/cli-development.md).
 
-OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 40.9.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pods, reference snapshots and manual example scripts. Codex execution uses the pinned TypeScript SDK and native CLI with a synthetic transport in acceptance tests. Owner-driven ChatGPT and OpenApe connection flows are implemented; third-party accounts are configured in assigned applications; live provider and tenant acceptance remain unverified. Schedules default to disabled, and new pods are paused.
+OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 45.3.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pods, reference snapshots and manual example scripts. Codex execution uses the pinned TypeScript SDK and native CLI with a synthetic transport in acceptance tests. Owner-driven ChatGPT and OpenApe connection flows are implemented; third-party accounts are configured in assigned applications; live provider and tenant acceptance remain unverified. Schedules default to disabled, and new pods are paused.
 
 Start with the [Pods model](docs/model.md): Pods, networks, sandbox and grants,
 owner decisions and the MCP owner session. The sections below record the
@@ -131,7 +131,7 @@ Electron supplies desktop APIs and Node. electron-builder supplies the macOS dev
 
 Storage, resource boundaries, scheduling, recovery and networks are implemented; mail knowledge is provided by the external automation package. Connection setup, explicit local deletion, backup/restore and manual update checks are implemented and verified with synthetic cases. Actual provider, tenant and signed distribution acceptance remain release gates.
 
-- Issue: https://git.openape.ai/openape-ai/openape/issues/1349
+- Issue: https://github.com/openape-ai/openape-history/issues/1391
 - Plan: https://plans.openape.ai/teams/01KPV1XN2S4FEGHFVPR3ZZ7VN1/plans/01M2A2ZV0AAPDW75YMD4TVG8Q5
 - Dependency prerequisite: https://github.com/openape-ai/openape-history/issues/1387
 - Electron security guidance: https://www.electronjs.org/docs/latest/tutorial/security
@@ -638,7 +638,7 @@ confirmed restart/install action. Development and fixture sessions stay disabled
 An offline or unavailable feed leaves the installation unchanged; manual checks
 and the next scheduled check can retry.
 
-`electron-updater` 6.6.2 is pinned for Electron 40.9.3 and builder 26.15.3.
+`electron-updater` 6.6.2 is pinned for Electron 45.3.3 and builder 26.15.3.
 Automatic download, install-on-quit, prereleases, downgrades and differential
 downloads are disabled. An explicit installation downloads and verifies the ZIP,
 expands it in a write-confined temporary directory and verifies the signed app
