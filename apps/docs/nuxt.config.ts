@@ -17,6 +17,12 @@ export default defineNuxtConfig({
 
   css: ['~/assets/css/main.css'],
 
+  // nuxt-og-image needs the public origin to emit an absolute og:image URL;
+  // social crawlers ignore relative ones.
+  site: {
+    url: 'https://docs.openape.ai',
+  },
+
   content: {
     // Drop the better-sqlite3 native dep so docs builds/runs in the shared
     // Nuxt container like every other app. Two @nuxt/content databases:
