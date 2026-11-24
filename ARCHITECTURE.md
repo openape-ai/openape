@@ -20,7 +20,7 @@ on machines their owners control ("nests"), and talk to their owners through a
 shared chat. The protocol itself is specified in a separate repo —
 [openape-ai/protocol](https://github.com/openape-ai/protocol) (`core.md`,
 `grants.md`, `delegation.md`); this monorepo implements it and must not
-silently diverge (see `.claude/CLAUDE.md`, "DDISA Protocol Compliance").
+silently diverge (see `docs/agents/engineering-guide.md`, "DDISA Protocol Compliance").
 
 ## Building blocks
 
@@ -102,26 +102,14 @@ prerendered `apps/docs/.output/public` into a Caddy image (`site-docs`) and
 runs it on the `coolify` network behind Traefik at docs.openape.ai — no
 published port, its own compose project under `/home/openape/prod-site-docs`.
 
-### Agent runtime (user machines)
-
-A **nest** (`apps/openape-nest`) is a long-lived daemon on a machine the owner
-controls. It holds an outbound-only WebSocket to troop (no inbound ports),
-receives spawn/destroy commands, and supervises one `ape-agent` process
-(`apps/openape-ape-agent`) per agent. Each agent has its own DDISA identity at
-the IdP, connects to chat as itself, and runs its LLM loop against an
-OpenAI-compatible proxy (`apps/openape-llm`). `compose/docker-compose.yml`
-packages nest + llm as a two-container pod for any Docker host.
-
 ### Local stack
 
 `compose/local-stack.yml` reproduces the whole web topology in containers
 under real `https://*.openape.test` hostnames: a dnsmasq container serves the
 DDISA discovery TXT record, Caddy terminates TLS with a local CA, and the apps
-run exactly as in prod — `idp`, `troop`, `chat`, `tasks`, `plans`, `testrun`,
-`timetrack`, `pr` and the docs site. Two opt-in profiles extend it: `demo` (a
-Playwright runner that captures the user-story guides, `compose/demo/run.sh`)
-and `agent-lifecycle` (a mock LLM + a containerized nest for full
-spawn→run→destroy tests, `compose/agent/run.sh`).
+run exactly as in prod — `idp`, `tasks`, `plans`, `testrun`, `timetrack`, `pr`
+and the docs site. The opt-in `demo` profile adds a Playwright runner that
+captures the user-story guides (`compose/demo/run.sh`).
 
 ### How a login flows
 
@@ -197,7 +185,7 @@ IdP token for SP-scoped tokens via RFC 8693 (`packages/cli-auth`).
 - **Protocol changes are guarded.** Anything touching discovery, auth flow,
   JWT claims, grants, delegation, error format or well-known endpoints must
   be checked against the spec repo first — divergence requires explicit
-  human sign-off (`.claude/CLAUDE.md`).
+  human sign-off (`docs/agents/engineering-guide.md`).
 - **Definition of done is mechanical.** `pnpm lint` and `pnpm typecheck`
   green before any commit or deploy; app changes additionally build the app
-  (`.claude/CLAUDE.md`, "Workflow: Definition of Done").
+  (`docs/agents/engineering-guide.md`, "Workflow: Definition of Done").
