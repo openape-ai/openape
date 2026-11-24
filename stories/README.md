@@ -5,7 +5,7 @@
 > Weg gelaufen. Der Ordner bleibt als Referenz stehen — er beschreibt nicht, wie heute
 > gearbeitet wird.
 >
-> **Der tatsächliche Weg:** Arbeit startet als Issue auf git.openape.ai und landet per PR
+> **Der tatsächliche Weg:** Arbeit startet als Issue auf github.com/openape-ai/openape und landet per PR
 > (`CONTRIBUTING.md`); alles, was länger als eine Session dauert, wird vorher als Plan in
 > `.claude/plans/` geschrieben (gespiegelt auf plans.openape.ai) und während der Arbeit
 > aktuell gehalten.

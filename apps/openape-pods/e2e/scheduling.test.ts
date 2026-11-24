@@ -25,7 +25,7 @@ async function setup() {
   return { store, dispatcher, resources, scheduler, watcher, time: (instant: number) => { now = instant }, helper }
 }
 describe('scheduled native execution', () => {
-  it('executes three queued pods through two slots and commits every input', async () => {
+  it('executes three queued pods at once and commits every input', async () => {
     const f = await setup(); const pods: string[] = []
     for (let i = 0; i < 3; i++) {
       const pod = f.store.createPod({ name: `Pod ${i}` }); pods.push(pod.id)
@@ -33,9 +33,7 @@ describe('scheduled native execution', () => {
       f.scheduler.save(pod.id, 0, { kind: 'interval', seconds: 60 }, true)
     }
     f.time(601000); f.scheduler.tick()
-    expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(2)
-    await expect.poll(() => f.store.db.prepare('SELECT count(*) AS count FROM runs WHERE state=\'completed\'').get()!.count).toBe(2)
-    f.scheduler.tick()
+    expect(f.store.db.prepare('SELECT count(*) AS count FROM run_leases').get()!.count).toBe(3)
     await expect.poll(() => f.store.db.prepare('SELECT count(*) AS count FROM runs WHERE state=\'completed\'').get()!.count).toBe(3)
     for (const pod of pods) expect(f.scheduler.view(pod)).toMatchObject({ pending: 0, blocked: 0, nextAt: 661000 })
     expect(f.store.db.prepare('SELECT count(*) AS count FROM accepted_events WHERE state=\'processed\'').get()!.count).toBe(3)
