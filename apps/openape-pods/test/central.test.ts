@@ -561,6 +561,12 @@ it('publishes state and completes commands without capturing files on first conn
 })
 
 it('finishes an owner action while an obsolete background upload is held and never publishes it afterwards', async () => {
+  // The published map view is rounded to the minute, so a minute boundary during the test is a legitimate
+  // publication; start at the beginning of a minute to count only the obsolete upload (issue 659).
+  const realNow = Date.now.bind(Date)
+  const start = realNow(); const shift = Math.ceil(start / 60000) * 60000 - start
+  vi.spyOn(Date, 'now').mockImplementation(() => realNow() + shift)
+  cleanup.push(() => vi.mocked(Date.now).mockRestore())
   let release!: () => void
   const hold = new Promise<void>((resolve) => { release = resolve })
   let holdNext = false; let held = false
