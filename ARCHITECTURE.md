@@ -97,7 +97,10 @@ by `compose/chatty.yml` (compose project `openape-prod`), each publishing on
 
 Each container mounts the pre-existing `/home/openape/projects/<app>/shared`
 at the identical path and reuses its `.env` — SQLite `file:` URLs and secrets
-never move.
+never move. Two exceptions: `pods-idp` uses `openape-pods-idp/shared` (its
+image name, not its app directory), and the read-only `pods-relay` container
+reuses `openape-pods-relay/shared/.env` but mounts only `shared/data` at
+`/data` and `shared/releases` read-only at `/releases`.
 
 `apps/docs` has its own deploy path: `pnpm run deploy:docs-site`
 (`scripts/deploy-docs-site.mjs` + `compose/docs-site.yml`) packages the
