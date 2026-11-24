@@ -115,10 +115,11 @@ self.addEventListener('notificationclick', (event) => {
   })())
 })
 
-self.addEventListener('install', () => {
-  // Activate the new SW immediately on install so users see fresh behaviour
-  // on their next reload (not the one after that).
-  self.skipWaiting()
+// An updated SW waits until the page's update banner (UpdateAvailable.vue)
+// sends SKIP_WAITING, so a deploy never reloads a page mid-passkey-prompt.
+// The first install has no previous worker and activates without waiting.
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'SKIP_WAITING') self.skipWaiting()
 })
 
 self.addEventListener('activate', (event) => {
