@@ -23,8 +23,6 @@
     "release:local": "node scripts/release-local.mjs",
     "deploy": "node scripts/deploy.mjs",
     "deploy:image": "node scripts/deploy-image.mjs",
-    "deploy:gateway": "node scripts/deploy-gateway.mjs",
-    "gateway:drift": "node scripts/gateway-drift.mjs",
     "prepare": "git config core.hooksPath .githooks || true",
     "deploy:docs-site": "node scripts/deploy-docs-site.mjs",
     "guides": "bash compose/demo/run.sh",

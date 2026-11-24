@@ -38,11 +38,3 @@ A missing permission is reported as unavailable, not as a healthy mirror.
 Suggested commands are printed but never executed automatically. Follow
 [local development](local-development.md) for real login fixtures and isolated
 app data; the doctor does not start services or reset databases.
-
-Git smart-HTTP resolves the signing IdP from the direct token subject's DDISA domain.
-The configured IdP is used only when that domain has no DDISA record; lookup failures
-fail closed. Public HTTPS JWKS access, issuer, signature and audience checks precede
-repository authorization. A foreign IdP cannot replace the verified subject through
-email or delegation claims. Existing configured-IdP delegation trust is retained;
-this direct-agent fix does not introduce federated delegation. Repository grants and
-token scope caps still determine read/write access.

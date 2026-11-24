@@ -14,7 +14,7 @@ import { cleanupScript, healthyResponse, resolveTruthRemote, rollbackScript } fr
 
 it('keeps the CVE-2026-98432 MPTCP mitigation on every recreated prod container', () => {
   // Container sysctls are per namespace; without this every deploy resets MPTCP to 1.
-  for (const [file, minimum] of [['chatty.yml', 11], ['docs-site.yml', 1], ['gateway/docker-compose.yml', 4]]) {
+  for (const [file, minimum] of [['chatty.yml', 11], ['docs-site.yml', 1]]) {
     const services = readFileSync(new URL(`../compose/${file}`, import.meta.url), 'utf8')
       .split(/^services:\n/m)[1]
       .split(/^(?= {2}[a-z0-9-]+:\n)/m)

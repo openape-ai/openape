@@ -10,7 +10,7 @@ Package details: [workspace map](docs/architecture/workspace-map.md). Checked 20
         ├── ③ Evidence         Reports (testrun) · Plans · PR review results
         ├── ④ Pods             automation on the Mac, relay, phone inbox
         └── ⑤ CLI              apes + per-service ape-* CLIs
-⑥ Operations: chatty (prod), forge, local stack, LLM gateway
+⑥ Operations: chatty (prod), forge, local stack
 ```
 
 ## ① Identity & access
@@ -58,7 +58,6 @@ sharing `packages/proof-cli`.
 | Where | What runs | Source |
 | --- | --- | --- |
 | chatty.delta-mind.at | idp, pods-idp, pods-relay, testrun, plans, pr, tasks, timetrack, monitor, secrets, dashboard | `compose/chatty.yml` |
-| chatty.delta-mind.at | LLM gateway (llms-auth, llms-route, codex proxy, litellm) | `apps/openape-llm`, `packages/codex-proxy`, `compose/openape-llm.codex.yml` |
 | chatty.delta-mind.at | Static sites (docs, website, delta-mind, …) | `compose/docs-site.yml`, sibling repos |
 | repos.openape.ai | Retired native forge (code kept, not deployed) | `apps/openape-git` |
 | Local | Integration stack | `compose/local-stack.yml` |

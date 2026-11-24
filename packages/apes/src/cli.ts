@@ -17,7 +17,6 @@ import { tokenCommand } from './commands/grants/token'
 import { delegateCommand } from './commands/grants/delegate'
 import { delegationsCommand } from './commands/grants/delegations'
 import { delegationRevokeCommand } from './commands/grants/delegation-revoke'
-import { llmCommand } from './commands/grants/llm'
 import { adminCommand } from './commands/admin/index'
 import { agentCommand } from './commands/agent/index'
 import { agentsCommand } from './commands/agents/index'
@@ -127,7 +126,6 @@ const grantsCommand = defineCommand({
     delegate: delegateCommand,
     delegations: delegationsCommand,
     'delegation-revoke': delegationRevokeCommand,
-    llm: llmCommand,
   },
 })
 
