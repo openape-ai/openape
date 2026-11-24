@@ -31,7 +31,7 @@
     "h3": "catalog:",
     "minimark": "^0.2.0",
     "nuxt": "catalog:",
-    "nuxt-llms": "0.2.0",
+    "nuxt-llms": "^0.3.2",
     "nuxt-og-image": "^6.10.4",
     "satori": "^0.33.5",
     "tailwindcss": "catalog:",
