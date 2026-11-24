@@ -29,7 +29,7 @@
     "@nuxtjs/mdc": "^0.23.3",
     "@vueuse/core": "^15.0.0",
     "h3": "catalog:",
-    "minimark": "^0.2.0",
+    "minimark": "^1.0.0",
     "nuxt": "catalog:",
     "nuxt-llms": "^0.3.2",
     "nuxt-og-image": "^6.10.4",
