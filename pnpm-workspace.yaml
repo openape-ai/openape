@@ -27,10 +27,6 @@ minimumReleaseAgeExclude:
   - '@openape/*'
   # First-party unscoped package; permanent exemption like @openape/*.
   - test2docs
-  # electron 42.11.16: clears the high advisories up to GHSA-jr5w-w6x2-84p9.
-  # Exact pin in apps/openape-pods prevents newer, unquarantined releases.
-  # Published 2026-10-20 02:53 UTC; eligible 2026-10-27 02:53 UTC.
-  - electron
   # happy-dom 21.0.4: GHSA-834v-8h66-3h79. Exact catalog pin, see catalog.
   # Published 2026-10-20 18:05 UTC; eligible 2026-10-27 18:05 UTC.
   - happy-dom
@@ -39,7 +35,7 @@ minimumReleaseAgeExclude:
   - body-parser
 
 catalog:
-  '@antfu/eslint-config': ^7.7.3
+  '@antfu/eslint-config': ^10.0.0
   '@changesets/cli': ^2.31.1
   '@iconify-json/lucide': ^1.2.155
   '@nuxt/kit': ^4.6.4
@@ -59,7 +55,7 @@ catalog:
   'consola': ^3.4.2
   'defu': ^6.1.7
   'drizzle-orm': ^0.45.2
-  'eslint': ^9.39.5
+  'eslint': ^10.15.0
   'h3': ^1.15.11
   # GHSA-834v-8h66-3h79. Exact pin: 21.0.4 is still inside the seven-day quarantine.
   'happy-dom': 21.0.4

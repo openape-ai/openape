@@ -39,7 +39,7 @@
     "@libsql/client": "^0.17.4",
     "@vitest/coverage-istanbul": "catalog:",
     "drizzle-orm": "^0.45.4",
-    "eslint": "^9.39.5",
+    "eslint": "catalog:",
     "knip": "^6.45.1",
     "nostics": "1.2.0",
     "tsx": "^4.23.15",
