@@ -1,6 +1,7 @@
 // Sentry v11 collects cookies, HTTP bodies and user info by default. An IdP
 // handles passwords, passkeys and tokens, so keep the restrictive v10 baseline.
-const scrubbed = { deny: ['forwarded', '-ip', 'remote-', 'via', '-user'] }
+// 'referer' carries the page URL, e.g. /recover?token=…; header values are not scrubbed.
+const scrubbed = { deny: ['forwarded', '-ip', 'remote-', 'via', '-user', 'referer'] }
 
 export const dataCollection = {
   userInfo: false,
