@@ -4,7 +4,7 @@
   "version": "0.0.9",
   "type": "module",
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "sync-schemas": "node ../../scripts/sync-protocol-schemas.mjs"

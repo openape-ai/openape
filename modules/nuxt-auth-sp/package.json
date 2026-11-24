@@ -34,7 +34,7 @@
     "prepare": "nuxt-module-build build --stub && nuxi prepare playground",
     "typecheck": "vue-tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache --passWithNoTests",
     "test:layout": "vitest run --config vitest.browser.config.ts",
     "test:coverage": "vitest run --coverage"
   },

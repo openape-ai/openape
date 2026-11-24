@@ -15,7 +15,7 @@
     "lint": "eslint .",
     "nuxt-prepare": "nuxi prepare",
     "typecheck": "nuxt typecheck",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache --passWithNoTests"
   },
   "dependencies": {
     "@iconify-json/lucide": "catalog:",

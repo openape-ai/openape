@@ -12,7 +12,7 @@
     "build": "node scripts/build.mjs",
     "lint": "eslint .",
     "typecheck": "vue-tsc --noEmit",
-    "test": "vitest run",
+    "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache",
     "test:e2e": "pnpm build && pnpm package:mac && vitest run --config vitest.electron.config.ts --reporter=default --reporter=json --outputFile.json=.artifacts/electron-tests.json",
     "test:boundaries": "vitest run --config vitest.electron.config.ts -t boundary",
     "package:mac": "node scripts/package.mjs",
