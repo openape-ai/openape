@@ -179,7 +179,7 @@ export default defineNuxtConfig({
 })
 ```
 
-See the [examples](../examples) directory for a fully working IdP setup.
+See the [examples](../../examples) directory for a fully working IdP setup.
 
 ## License
 
