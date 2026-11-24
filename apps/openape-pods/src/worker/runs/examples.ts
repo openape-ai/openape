@@ -17,7 +17,7 @@ export async function run(context) {
   await context.progress.commit({expectedRevision:context.input.checkpointRevision,checkpoint:{...context.input.checkpoint,exampleRuns:count},sources:[],claims:[]});
   return {status:'completed',summary:'Local example completed ('+count+')',completedInputIds:context.input.eventIds,gapIds:[]};
 }`
-  const manifest = store.storeScript(podId, { schemaVersion: 1, contentHash: digest(artifact), entrypoint: 'run.mjs', dependencyLockHash, runtimeVersion: 'electron-40.9.3/codex-0.153.4/contract-1', capabilities: [], triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.bindingRevision, effects: 'readOnly' }, artifact)
+  const manifest = store.storeScript(podId, { schemaVersion: 1, contentHash: digest(artifact), entrypoint: 'run.mjs', dependencyLockHash, runtimeVersion: 'electron-45.3.3/codex-0.153.4/contract-1', capabilities: [], triggers: ['manual', 'schedule', 'event'], inputSchemaHash: digest(JSON.stringify(inputSchema)), outputSchemaHash: digest(JSON.stringify(resultSchema)), checkpointSchemaVersion: 1, assignmentRevision: pod.bindingRevision, effects: 'readOnly' }, artifact)
   store.transaction(() => {
     if (store.getPod(podId).bindingRevision !== pod.bindingRevision) throw new Error('Script binding changed during example installation')
     store.db.prepare('INSERT OR REPLACE INTO validations VALUES(?,?,?,?,?)').run(podId, manifest.contentHash, pod.bindingRevision, resources.epoch(podId), JSON.stringify({ kind: 'bundled-example', variant, contract: 1, dependencyLockHash }))
