@@ -192,6 +192,8 @@ IdP token for SP-scoped tokens via RFC 8693 (`packages/cli-auth`).
   JWT claims, grants, delegation, error format or well-known endpoints must
   be checked against the spec repo first — divergence requires explicit
   human sign-off (`docs/agents/engineering-guide.md`).
-- **Definition of done is mechanical.** `pnpm lint` and `pnpm typecheck`
-  green before any commit or deploy; app changes additionally build the app
-  (`docs/agents/engineering-guide.md`, "Workflow: Definition of Done").
+- **Definition of done is mechanical.** The pre-push hook runs the affected
+  unit contract (lint, typecheck, tests) once; commits run only branch and
+  lockfile guards, app changes additionally build the app and deployments
+  require `pnpm check:ci` (`AGENTS.md`; `docs/agents/engineering-guide.md`,
+  "Workflow: Definition of Done").
