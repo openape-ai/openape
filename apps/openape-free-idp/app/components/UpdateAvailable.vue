@@ -25,7 +25,7 @@ const { needRefresh, updateServiceWorker } = useRegisterSW({
 })
 
 async function reload() {
-  await updateServiceWorker(true)
+  await updateServiceWorker()
 }
 </script>
 
