@@ -13,7 +13,7 @@ pnpm dev
 
 The SP is now running at **http://localhost:3001**.
 
-> **Prerequisite:** The IdP must be running at `http://localhost:3000` with at least one registered user. See the [IdP example README](../openape-idp-example/README.md) for setup instructions.
+> **Prerequisite:** The IdP must be running at `http://localhost:3000` with at least one registered user. See the [IdP example README](../idp/README.md) for setup instructions.
 
 ## Login Flow
 

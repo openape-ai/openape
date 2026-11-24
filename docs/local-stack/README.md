@@ -1,6 +1,6 @@
 # Local Containerized Test Stack
 
-The local OpenApe topology — the DDISA **IdP**, eight **SP** apps and the public
+The local OpenApe topology — the DDISA **IdP**, five **SP** apps and the public
 docs site — running
 locally in Docker under real `https://*.openape.test` hostnames, mirroring the
 chatty/prod setup (subdomains, TLS, DNS-based DDISA discovery). A headless
@@ -18,20 +18,14 @@ Chromium drives the real user flows and captures their screenshots.
 
 # Clean-room run (regenerates the CA + DBs from scratch first):
 ./compose/demo/run.sh --fresh      # or: FRESH=1 ./compose/demo/run.sh
-# The agent-lifecycle runner takes the same flag:
-./compose/agent/run.sh --fresh
 
 # Tear everything down (containers + volumes; reset.sh names every profile so
-# the nest/mock-llm/playwright containers don't keep the volumes alive):
+# the profile-gated containers don't keep the volumes alive):
 ./compose/reset.sh
 
 # Or just the stack, to poke at it yourself:
 docker compose -f compose/local-stack.yml up -d --build
 ```
-
-> For a full clean-room pass of *both* flows, reset once then run them without
-> `--fresh` (so the second runner doesn't tear down the first's stack):
-> `./compose/reset.sh && ./compose/demo/run.sh && ./compose/agent/run.sh`.
 
 To open the apps in **your own** browser, point your Mac at the stack's DNS for
 the `.test` zone (one-time):
@@ -42,8 +36,7 @@ printf "nameserver 127.0.0.1\nport 5354\n" | sudo tee /etc/resolver/openape.test
 # then publish dnsmasq: add `ports: ["127.0.0.1:5354:53/udp"]` to the dns service
 ```
 
-Then visit `https://id.openape.test`, `https://troop.openape.test`,
-`https://chat.openape.test` (accept the local Caddy CA, or trust it once).
+Then visit `https://id.openape.test` or `https://tasks.openape.test` (accept the local Caddy CA, or trust it once).
 
 ## Topology
 
@@ -52,9 +45,7 @@ Then visit `https://id.openape.test`, `https://troop.openape.test`,
 | `dns`        | dnsmasq — serves the DDISA discovery TXT at `_ddisa.openape.test`     | —                            |
 | `proxy`      | Caddy — TLS (own local CA) + host-routing reverse proxy              | `:443`                       |
 | `idp`        | `openape-free-idp` — DDISA Identity Provider (passkeys)              | `https://id.openape.test`    |
-| `troop`      | `openape-troop` — SP (agent control plane)                          | `https://troop.openape.test` |
-| `chat`       | `openape-chat` — SP (chat)                                          | `https://chat.openape.test`  |
-| `tasks`, `plans`, `testrun`, `timetrack`, `crm`, `pr` | Additional SP apps | `https://<service>.openape.test` |
+| `tasks`, `plans`, `testrun`, `timetrack`, `pr` | SP apps | `https://<service>.openape.test` |
 | `docs` | Public documentation | `https://docs.openape.test` |
 | `playwright` | headless-Chromium runner (on the same network) — captures the flows | —                            |
 
@@ -65,13 +56,13 @@ the same record to drive its consent policy. No public DNS, no `id.openape.ai`.
 
 The Compose file is authoritative: `docker compose -f compose/local-stack.yml config --services`.
 Use `pnpm doctor -- --services --app WORKSPACE` to inspect required services
-without starting or resetting them. The demo and agent-lifecycle profiles add
-optional drivers; not every monorepo app is currently defined in this stack.
+without starting or resetting them. The demo profile adds
+an optional driver; not every monorepo app is currently defined in this stack.
 
 ## Flow docs (per app)
 
 The captured flows are documented **inside each app**, at its own `/docs` route —
-a Nuxt page rendering `apps/<app>/docs/flows.md`. After a capture,
+a Nuxt page rendering `apps/<app>/docs/stories.json`. After a capture,
 `compose/distribute-docs.mjs` copies each screenshot to the app that owns it
 (`apps/<app>/public/docs/screenshots/`) and regenerates that app's `/docs` HTML,
 so the docs ship and deploy with the app and can't drift from its flows.
@@ -79,9 +70,6 @@ so the docs ship and deploy with the app and can't drift from its flows.
 | Flow(s)                              | Documented at                     |
 |--------------------------------------|-----------------------------------|
 | Passkey sign-up · account dashboard  | `https://id.openape.test/docs`    |
-| DDISA SSO · agent lifecycle          | `https://troop.openape.test/docs` |
-| One-click SSO · chat home            | `https://chat.openape.test/docs`  |
-| One-click SSO · org home             | `https://org.openape.test/docs`   |
 
 The raw PNGs land in `screenshots/` here first (what the runners write); the
 distribute step is what fans them out to the apps.
@@ -96,8 +84,8 @@ distribute step is what fans them out to the apps.
   binding (Nitro can't trace it).
 - **`/docs` is each app's own Nuxt route** — the Caddy proxy just forwards it
   through like any other path (no special handling). Each app's
-  `scripts/build-docs.mjs` renders `docs/flows.md` → `app/docs.generated.ts` at
-  build time, and `app/pages/docs.vue` serves it.
+  `scripts/build-docs.mjs` renders `docs/stories.json` → `app/docs.generated.ts` at
+  build time, and `app/pages/docs/` serves it.
 - **Module runtimeConfig env names:** the apps read `NUXT_OPENAPE_IDP_*` /
   `NUXT_OPENAPE_SP_*` at runtime (the configKey-derived names) — the plain
   `NUXT_OPENAPE_*` names are only read at build time.
