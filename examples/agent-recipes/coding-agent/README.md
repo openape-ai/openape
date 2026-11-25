@@ -1,8 +1,8 @@
 # coding-agent recipe
 
 An autonomous coding agent: assigned issue → isolated worktree → edit →
-verify → PR → policy-gated merge. Built on the `@openape/apes` coding
-library (M1–M7) + orchestrator (`coding/coding-loop.ts`).
+verify → PR → policy-gated merge. Built on the `@openape/agent-runtime` coding
+library (M1–M7) + orchestrator (`packages/agent-runtime/src/coding/coding-loop.ts`).
 
 ## Deploy
 

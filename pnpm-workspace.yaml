@@ -27,10 +27,6 @@ minimumReleaseAgeExclude:
   - '@openape/*'
   # First-party unscoped package; permanent exemption like @openape/*.
   - test2docs
-  # electron 42.11.16: clears the high advisories up to GHSA-jr5w-w6x2-84p9.
-  # Exact pin in apps/openape-pods prevents newer, unquarantined releases.
-  # Published 2026-10-20 02:53 UTC; eligible 2026-10-27 02:53 UTC.
-  - electron
   # happy-dom 21.0.4: GHSA-834v-8h66-3h79. Exact catalog pin, see catalog.
   # Published 2026-10-20 18:05 UTC; eligible 2026-10-27 18:05 UTC.
   - happy-dom
@@ -39,8 +35,8 @@ minimumReleaseAgeExclude:
   - body-parser
 
 catalog:
-  '@antfu/eslint-config': ^7.7.3
-  '@changesets/cli': ^2.31.1
+  '@antfu/eslint-config': ^10.0.0
+  '@changesets/cli': ^3.0.3
   '@iconify-json/lucide': ^1.2.155
   '@nuxt/kit': ^4.6.4
   '@nuxt/module-builder': ^1.0.4
@@ -49,17 +45,17 @@ catalog:
   '@types/shell-quote': ^1.7.5
   '@types/web-push': ^3.6.4
   '@types/ws': ^8.18.1
-  '@vite-pwa/nuxt': ^1.1.1
+  '@vite-pwa/nuxt': ^2.0.1
   '@vitejs/plugin-vue': ^6.0.11
-  '@vitest/browser': ^4.1.12
-  '@vitest/browser-playwright': ^4.1.12
-  '@vitest/coverage-istanbul': ^4.1.12
+  '@vitest/browser': ^5.1.0
+  '@vitest/browser-playwright': ^5.1.0
+  '@vitest/coverage-istanbul': ^5.1.0
   '@vue/test-utils': ^2.6.0
   'aws4fetch': ^1.0.20
   'consola': ^3.4.2
   'defu': ^6.1.7
   'drizzle-orm': ^0.45.2
-  'eslint': ^9.39.5
+  'eslint': ^10.15.0
   'h3': ^1.15.11
   # GHSA-834v-8h66-3h79. Exact pin: 21.0.4 is still inside the seven-day quarantine.
   'happy-dom': 21.0.4
@@ -74,10 +70,10 @@ catalog:
   'playwright': 1.62.1
   'shell-quote': ^1.9.0
   'tailwindcss': ^4.3.5
-  'tsup': ^8.5.1
+  'tsup': ^9.0.0
   'typescript': ^5.9.3
   'ulid': ^3.0.2
-  'vitest': ^4.1.12
+  'vitest': ^5.1.0
   'vue': ^3.5.41
   'vue-tsc': ^3.3.5
   'web-push': ^4.0.0

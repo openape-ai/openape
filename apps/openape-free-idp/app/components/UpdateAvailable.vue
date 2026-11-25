@@ -27,7 +27,7 @@ async function reload() {
   // The register client only reloads when the page already had a controller
   // at load time (workbox `isUpdate`); on a first visit we reload ourselves.
   navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), { once: true })
-  await updateServiceWorker(true)
+  await updateServiceWorker()
 }
 </script>
 

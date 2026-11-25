@@ -12,10 +12,10 @@ For a browser login with real DNS/TLS and an isolated IdP, use the existing
 docker compose -f compose/local-stack.yml up -d --build
 ```
 
-The stack defines IdP, troop, chat, tasks, plans, testrun, timetrack, CRM, ape-pr
-and the public docs site, plus DNS/TLS infrastructure. The authoritative list
+The stack defines IdP, tasks, plans, testrun, timetrack, ape-pr and the public
+docs site, plus DNS/TLS infrastructure. The authoritative list
 is `docker compose -f compose/local-stack.yml config --services`. The optional
-demo and agent-lifecycle profiles add test drivers. Its DNS/resolver and local
+demo profile adds a Playwright test driver. Its DNS/resolver and local
 CA setup are documented there. Do not point local experiments at production data,
 disable authentication to enter a private UI, or reset existing stack volumes
 merely to run a test.
@@ -35,22 +35,16 @@ mount components with Nuxt-UI stubs; geometry tests use a real browser.
 | Workspace | Start | Configuration source | Login / test data | Available checks |
 |---|---|---|---|---|
 | `docs` | `pnpm --filter docs dev` → `nuxt dev` | [apps/docs/nuxt.config.ts](../../apps/docs/nuxt.config.ts) | Kein SP-Login; Laufzeit-/CLI-Konfiguration im Paket lesen. | `test`, `typecheck` |
-| `@openape/ape-agent` | `pnpm --filter @openape/ape-agent dev` → `tsup --watch` | [apps/openape-ape-agent/package.json](../../apps/openape-ape-agent/package.json) | Kein SP-Login; Laufzeit-/CLI-Konfiguration im Paket lesen. | `test`, `typecheck` |
-| `@openape/chat` | `pnpm --filter @openape/chat dev` → `nuxt dev --port 3007` | [apps/openape-chat/nuxt.config.ts](../../apps/openape-chat/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
-| `@openape/ape-chat` | `pnpm --filter @openape/ape-chat dev` → `tsup --watch` | [apps/openape-chat-cli/package.json](../../apps/openape-chat-cli/package.json) | Kein SP-Login; Laufzeit-/CLI-Konfiguration im Paket lesen. | `typecheck` |
-| `@openape-crm/app` | `pnpm --filter @openape-crm/app dev` → `nuxt dev --port 3024` | [apps/openape-crm/nuxt.config.ts](../../apps/openape-crm/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
 | `@openape-dashboard/app` | `pnpm --filter @openape-dashboard/app dev` → `nuxt dev --port 3022` | [apps/openape-dashboard/nuxt.config.ts](../../apps/openape-dashboard/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
 | `openape-free-idp` | `pnpm --filter openape-free-idp dev` → `nuxt dev --port 3002` | [apps/openape-free-idp/nuxt.config.ts](../../apps/openape-free-idp/nuxt.config.ts) | IdP-Fixture mit isoliertem Store und Testidentitäten. | `test`, `test:e2e`, `typecheck` |
 | `@openape-git/app` | `pnpm --filter @openape-git/app dev` → `nuxt dev --port 3026` | [apps/openape-git/nuxt.config.ts](../../apps/openape-git/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
 | `@openape-monitor/app` | `pnpm --filter @openape-monitor/app dev` → `nuxt dev --port 3018` | [apps/openape-monitor/nuxt.config.ts](../../apps/openape-monitor/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
-| `@openape/nest` | `pnpm --filter @openape/nest dev` → `tsup --watch` | [apps/openape-nest/package.json](../../apps/openape-nest/package.json) | Kein SP-Login; Laufzeit-/CLI-Konfiguration im Paket lesen. | `test`, `typecheck` |
 | `@openape-plans/app` | `pnpm --filter @openape-plans/app dev` → `nuxt dev --port 3004` | [apps/openape-plans/nuxt.config.ts](../../apps/openape-plans/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
 | `@openape-pr/app` | `pnpm --filter @openape-pr/app dev` → `nuxt dev --port 3014` | [apps/openape-pr/nuxt.config.ts](../../apps/openape-pr/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `test:e2e`, `typecheck` |
 | `@openape-secrets/app` | `pnpm --filter @openape-secrets/app dev` → `nuxt dev --port 3025` | [apps/openape-secrets/nuxt.config.ts](../../apps/openape-secrets/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
 | `@openape-tasks/app` | `pnpm --filter @openape-tasks/app dev` → `nuxt dev --port 3005` | [apps/openape-tasks/nuxt.config.ts](../../apps/openape-tasks/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
 | `@openape-testrun/app` | `pnpm --filter @openape-testrun/app dev` → `nuxt dev --port 3006` | [apps/openape-testrun/nuxt.config.ts](../../apps/openape-testrun/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `test:e2e`, `test:layout`, `typecheck` |
 | `@openape-timetrack/app` | `pnpm --filter @openape-timetrack/app dev` → `nuxt dev --port 3011` | [apps/openape-timetrack/nuxt.config.ts](../../apps/openape-timetrack/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `typecheck` |
-| `@openape/troop` | `pnpm --filter @openape/troop dev` → `nuxt dev --port 3010` | [apps/openape-troop/nuxt.config.ts](../../apps/openape-troop/nuxt.config.ts) | Lokaler IdP + leere lokale App-Datenbank; CLI-/UI-Daten app-spezifisch anlegen. | `test`, `test:layout`, `typecheck` |
 
 ## Environment rules
 

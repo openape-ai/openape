@@ -7,7 +7,7 @@
     "dev": "nuxt dev --port 3026",
     "build": "nuxt build",
     "preview": "nuxt preview",
-    "test": "vitest run",
+    "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
     "postinstall": "nuxt prepare",
@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@iconify-json/lucide": "catalog:",
-    "@libsql/client": "^0.14.0",
+    "@libsql/client": "^0.18.0",
     "@nuxt/ui": "catalog:",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",

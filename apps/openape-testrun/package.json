@@ -7,7 +7,7 @@
     "dev": "nuxt dev --port 3006",
     "build": "nuxt build && tsup --config tsup.migration.config.ts",
     "preview": "nuxt preview",
-    "test": "vitest run",
+    "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache",
     "test:e2e": "vitest run --config vitest.e2e.config.ts",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
@@ -17,7 +17,7 @@
   },
   "dependencies": {
     "@iconify-json/lucide": "catalog:",
-    "@libsql/client": "^0.14.0",
+    "@libsql/client": "^0.18.0",
     "@nuxt/ui": "catalog:",
     "@openape/nuxt-auth-sp": "workspace:*",
     "drizzle-orm": "catalog:",

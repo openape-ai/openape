@@ -79,7 +79,7 @@ When a user logs in with `user@example.com`, the module:
 
 This means any domain with a DDISA DNS record can authenticate — no pre-registration needed.
 
-For details on DNS resolution, see [`@openape/core`](../core).
+For details on DNS resolution, see [`@openape/core`](../../packages/core).
 
 ## Quick Start
 
@@ -115,7 +115,7 @@ const email = ref('')
 </template>
 ```
 
-See the [examples](../examples) directory for a fully working SP setup.
+See the [examples](../../examples) directory for a fully working SP setup.
 
 ## License
 

@@ -14,13 +14,12 @@ their e-mail domain and a passkey — no passwords, no per-app accounts. A
 service provider (SP) looks up a DNS TXT record on the user's mail domain to
 discover their identity provider (IdP), then runs an OIDC-style PKCE flow
 against it; authorization happens through revocable grants instead of blanket
-sessions. On top of that identity layer sits an agent platform: AI agents get
-the same first-class DDISA identities as humans, run as supervised processes
-on machines their owners control ("nests"), and talk to their owners through a
-shared chat. The protocol itself is specified in a separate repo —
+sessions. On top of that identity layer, AI agents get the same first-class
+DDISA identities as humans, and Pods run their owners' automations on the Mac
+under explicitly granted access. The protocol itself is specified in a separate repo —
 [openape-ai/protocol](https://github.com/openape-ai/protocol) (`core.md`,
 `grants.md`, `delegation.md`); this monorepo implements it and must not
-silently diverge (see `.claude/CLAUDE.md`, "DDISA Protocol Compliance").
+silently diverge (see `docs/agents/engineering-guide.md`, "DDISA Protocol Compliance").
 
 ## Building blocks
 
@@ -91,10 +90,16 @@ by `compose/chatty.yml` (compose project `openape-prod`), each publishing on
 | `pr` | `pr` | openape-pr | 3014 | pr.openape.ai |
 | `monitor` | `monitor` | openape-monitor | 3018 | monitor.openape.ai |
 | `dashboard` | `dashboard` | openape-dashboard | 3022 | dashboard.openape.ai |
+| `secrets` | `secrets` | openape-secrets | 3025 | secrets.openape.ai |
+| `pods-idp` | `pods-idp` | openape-free-idp (image `openape-pods-idp`) | 3027 | pods.openape.ai |
+| `pods-relay` | `pods-relay` | openape-pods-relay | 3028 | pods.openape.ai |
 
 Each container mounts the pre-existing `/home/openape/projects/<app>/shared`
 at the identical path and reuses its `.env` — SQLite `file:` URLs and secrets
-never move.
+never move. Two exceptions: `pods-idp` uses `openape-pods-idp/shared` (its
+image name, not its app directory), and the read-only `pods-relay` container
+reuses `openape-pods-relay/shared/.env` but mounts only `shared/data` at
+`/data` and `shared/releases` read-only at `/releases`.
 
 `apps/docs` has its own deploy path: `pnpm run deploy:docs-site`
 (`scripts/deploy-docs-site.mjs` + `compose/docs-site.yml`) packages the
@@ -102,26 +107,14 @@ prerendered `apps/docs/.output/public` into a Caddy image (`site-docs`) and
 runs it on the `coolify` network behind Traefik at docs.openape.ai — no
 published port, its own compose project under `/home/openape/prod-site-docs`.
 
-### Agent runtime (user machines)
-
-A **nest** (`apps/openape-nest`) is a long-lived daemon on a machine the owner
-controls. It holds an outbound-only WebSocket to troop (no inbound ports),
-receives spawn/destroy commands, and supervises one `ape-agent` process
-(`apps/openape-ape-agent`) per agent. Each agent has its own DDISA identity at
-the IdP, connects to chat as itself, and runs its LLM loop against an
-OpenAI-compatible proxy (`apps/openape-llm`). `compose/docker-compose.yml`
-packages nest + llm as a two-container pod for any Docker host.
-
 ### Local stack
 
 `compose/local-stack.yml` reproduces the whole web topology in containers
 under real `https://*.openape.test` hostnames: a dnsmasq container serves the
 DDISA discovery TXT record, Caddy terminates TLS with a local CA, and the apps
-run exactly as in prod — `idp`, `troop`, `chat`, `tasks`, `plans`, `testrun`,
-`timetrack`, `pr` and the docs site. Two opt-in profiles extend it: `demo` (a
-Playwright runner that captures the user-story guides, `compose/demo/run.sh`)
-and `agent-lifecycle` (a mock LLM + a containerized nest for full
-spawn→run→destroy tests, `compose/agent/run.sh`).
+run exactly as in prod — `idp`, `tasks`, `plans`, `testrun`, `timetrack`, `pr`
+and the docs site. The opt-in `demo` profile adds a Playwright runner that
+captures the user-story guides (`compose/demo/run.sh`).
 
 ### How a login flows
 
@@ -197,7 +190,9 @@ IdP token for SP-scoped tokens via RFC 8693 (`packages/cli-auth`).
 - **Protocol changes are guarded.** Anything touching discovery, auth flow,
   JWT claims, grants, delegation, error format or well-known endpoints must
   be checked against the spec repo first — divergence requires explicit
-  human sign-off (`.claude/CLAUDE.md`).
-- **Definition of done is mechanical.** `pnpm lint` and `pnpm typecheck`
-  green before any commit or deploy; app changes additionally build the app
-  (`.claude/CLAUDE.md`, "Workflow: Definition of Done").
+  human sign-off (`docs/agents/engineering-guide.md`).
+- **Definition of done is mechanical.** The pre-push hook runs the affected
+  unit contract (lint, typecheck, tests) once; commits run only branch and
+  lockfile guards, app changes additionally build the app and deployments
+  require `pnpm check:ci` (`AGENTS.md`; `docs/agents/engineering-guide.md`,
+  "Workflow: Definition of Done").
