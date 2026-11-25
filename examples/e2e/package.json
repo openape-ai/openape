@@ -11,7 +11,7 @@
     "./constants": "./helpers/constants.ts"
   },
   "scripts": {
-    "test": "vitest run",
+    "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache",
     "test:e2e": "vitest run",
     "lint": "eslint ."
   },

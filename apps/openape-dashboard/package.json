@@ -9,7 +9,7 @@
     "preview": "nuxt preview",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache",
     "postinstall": "nuxt prepare"
   },
   "dependencies": {

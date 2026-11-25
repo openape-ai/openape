@@ -36,7 +36,7 @@
     "@antfu/eslint-config": "catalog:",
     "@changesets/cli": "catalog:",
     "@libsql/client": "^0.18.0",
-    "@vitest/coverage-istanbul": "^4.1.12",
+    "@vitest/coverage-istanbul": "catalog:",
     "drizzle-orm": "^0.45.4",
     "eslint": "catalog:",
     "knip": "^6.45.1",
