@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@iconify-json/lucide": "catalog:",
-    "@libsql/client": "^0.14.0",
+    "@libsql/client": "^0.18.0",
     "@nuxt/ui": "catalog:",
     "@openape/core": "workspace:*",
     "@openape/grants": "workspace:*",
