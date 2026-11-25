@@ -9,7 +9,7 @@
     "build": "nuxt build",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache",
     "postinstall": "nuxt prepare",
     "test:layout": "vitest run --config vitest.browser.config.ts",
     "test:e2e": "vitest run --config vitest.e2e.config.ts"

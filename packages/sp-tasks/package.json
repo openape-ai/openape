@@ -35,7 +35,7 @@
   ],
   "scripts": {
     "build": "tsup",
-    "test": "vitest run",
+    "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache",
     "typecheck": "tsc --noEmit",
     "lint": "eslint ."
   },
