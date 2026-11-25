@@ -1,4 +1,4 @@
-import type { AuthenticationResponseJSON, AuthenticatorTransportFuture, PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON, RegistrationResponseJSON } from '@simplewebauthn/server'
+import type { AuthenticationResponseJSON, PublicKeyCredentialCreationOptionsJSON, PublicKeyCredentialRequestOptionsJSON, RegistrationResponseJSON } from '@simplewebauthn/server'
 import type { Sealed } from '#shared/vault-crypto'
 import { withBusyRetry } from '@openape/sp-tasks'
 import { generateAuthenticationOptions, generateRegistrationOptions, verifyAuthenticationResponse, verifyRegistrationResponse } from '@simplewebauthn/server'
@@ -91,7 +91,7 @@ export function registrationOptions(owner: string, vaultId: string, challenge: s
     userID: encoder.encode(vaultId),
     challenge: fromB64u(challenge),
     attestationType: 'none',
-    excludeCredentials: existing.map(c => ({ id: c.id, transports: JSON.parse(c.transports) as AuthenticatorTransportFuture[] })),
+    excludeCredentials: existing.map(c => ({ id: c.id, transports: JSON.parse(c.transports) as string[] })),
     authenticatorSelection: { residentKey: 'preferred', userVerification: 'required' },
   })
 }
@@ -101,7 +101,7 @@ export function authenticationOptions(challenge: string, credentials: Credential
     rpID: rp().rpID,
     challenge: fromB64u(challenge),
     userVerification: 'required',
-    allowCredentials: credentials.map(c => ({ id: c.id, transports: JSON.parse(c.transports) as AuthenticatorTransportFuture[] })),
+    allowCredentials: credentials.map(c => ({ id: c.id, transports: JSON.parse(c.transports) as string[] })),
   })
 }
 
@@ -159,7 +159,7 @@ export async function verifyVaultPasskey(tx: Tx, vaultId: string, response: unkn
     expectedOrigin: origin,
     expectedRPID: rpID,
     requireUserVerification: true,
-    credential: { id: row.id, publicKey: fromB64u(row.publicKey), counter: row.counter, transports: JSON.parse(row.transports) as AuthenticatorTransportFuture[] },
+    credential: { id: row.id, publicKey: fromB64u(row.publicKey), counter: row.counter, transports: JSON.parse(row.transports) as string[] },
   }).catch(() => null)
   if (!result?.verified) throw refused('Passkey confirmation could not be verified')
   await tx.update(vaultCredentials).set({ counter: result.authenticationInfo.newCounter }).where(eq(vaultCredentials.id, row.id))
