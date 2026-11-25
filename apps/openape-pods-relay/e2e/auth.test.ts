@@ -1,6 +1,7 @@
 import { setTimeout as delay } from 'node:timers/promises'
 import { verifyBrowserWorkspace } from '../../openape-pods/test/workspace/browser-acceptance'
 import { centralFixture } from '../../openape-pods/test/workspace/central-fixture'
+import type { MapView } from '../../openape-pods/src/contracts/map-view'
 import { fullPublication } from '../../openape-pods/test/workspace/central-publication'
 import { generateKeyPairSync, randomBytes, randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, expect, it } from 'vitest'
@@ -115,7 +116,9 @@ it('registers a desktop through real DDISA callbacks and rejects replayed handof
   const invalidArtifact = JSON.stringify({ type: 'artifact', lease: session.lease, podId: fixture.view.id, hash: artifactHash, content: 'not base64' })
   const invalidUpload = await fetch(`${relay.url}${runtimePath}`, { method: 'POST', headers: { ...headers(desktop, runtimePath, 'POST', invalidArtifact), 'content-type': 'application/json' }, body: invalidArtifact })
   expect(invalidUpload.status).toBe(400)
-  const state = { version: 1 as const, schema: 46, workspace: { ...fixture.host.workspace, pods: [fixture.host.workspace.pods[0]!] }, pods: [fixture.view], artifacts: [{ podId: fixture.view.id, path: 'workspace/example.bin', hash: artifactHash, size: artifact.length }], blobs: [] }
+  // The browser's Automations list renders the desktop's published map; its row opens the Pod page.
+  const map: MapView = { at: 1790269260000, window: { from: 1790182860000, to: 1790269260000 }, kpis: { active: 1, paused: 0, degraded: [], decisions: [] }, systems: [], edges: [], pods: [{ id: fixture.view.id, name: 'Release monitor', revision: 1, script: null, description: null, lifecycle: 'active', draft: false, kind: 'code', ai: false, data: { writes: [], reads: [] }, work: { pending: 0, held: 0 }, resources: [], secrets: [], schedule: null, lastRun: null, runs: 1, approvals: [] }] }
+  const state = { version: 1 as const, schema: 46, workspace: { ...fixture.host.workspace, pods: [fixture.host.workspace.pods[0]!], map }, pods: [fixture.view], artifacts: [{ podId: fixture.view.id, path: 'workspace/example.bin', hash: artifactHash, size: artifact.length }], blobs: [] }
   const workspacePublication = fullPublication(state)
   const publish = async (revision: number, completion?: unknown) => {
     await central({ type: 'parts', lease: session.lease, parts: workspacePublication.parts })

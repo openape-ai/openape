@@ -16,13 +16,15 @@ export async function verifyBrowserWorkspace(url: string, email: string, loginTo
     await page.goto(authorization.headers.get('location')!)
     await expect.poll(async () => ({ errors: failures, content: (await page.locator('body').textContent())?.slice(0, 2000), ready: await page.getByRole('tab', { name: 'Automations', exact: true }).isVisible() }), { timeout: 15000 }).toMatchObject({ errors: [], ready: true })
     expect(await page.locator('.account-status').textContent()).toContain(email)
-    await page.getByRole('button', { name: 'Pods', exact: true }).click()
-    await page.locator('.central-pod').first().click()
-    for (const name of ['Overview', 'Script', 'Variables and secrets', 'Permissions', 'Settings', 'History']) {
-      await page.getByRole('tab', { name, exact: true }).click()
+    // The Pod page opens from a row of the Automations list.
+    await page.getByRole('button', { name: 'List', exact: true }).click()
+    await page.locator('.automations-list tr[data-pod]').first().click()
+    for (const name of ['Runs', 'Variables and secrets', 'Access', 'Settings', 'Code']) {
+      await page.getByRole('button', { name, exact: true }).click()
       await expect.poll(async () => (await page.locator('[role="alert"]:visible').allTextContents()).join(' ')).toBe('')
     }
-    await page.getByRole('button', { name: 'App settings', exact: true }).click()
+    await page.getByTestId('back-to-automations').click()
+    await page.locator('.automations-top .gear').click()
     await page.locator('.app-settings').waitFor()
     await page.getByRole('button', { name: 'Sign out', exact: true }).click()
     await page.locator('.pods-welcome').waitFor()
