@@ -9,12 +9,12 @@ import appConfig from './app/app.config.ts'
 export default defineConfig({
   plugins: [vue(), ui({ ui: appConfig.ui, autoImport: false, components: false, colorMode: false, dts: false })],
   test: {
+    api: { host: '127.0.0.1', port: 5483, strictPort: true },
     include: ['tests/layout/**/*.test.ts'],
     setupFiles: ['tests/layout/setup.ts'],
+    fileParallelism: false,
     browser: {
       enabled: true,
-      api: { host: '127.0.0.1', port: 5483, strictPort: true },
-      fileParallelism: false,
       provider: playwright({
         launchOptions: { executablePath: process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },
         contextOptions: { viewport: { width: 1440, height: 1000 } },

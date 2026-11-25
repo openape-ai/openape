@@ -36,7 +36,7 @@ minimumReleaseAgeExclude:
 
 catalog:
   '@antfu/eslint-config': ^10.0.0
-  '@changesets/cli': ^2.31.1
+  '@changesets/cli': ^3.0.3
   '@iconify-json/lucide': ^1.2.155
   '@nuxt/kit': ^4.6.4
   '@nuxt/module-builder': ^1.0.4
@@ -45,11 +45,11 @@ catalog:
   '@types/shell-quote': ^1.7.5
   '@types/web-push': ^3.6.4
   '@types/ws': ^8.18.1
-  '@vite-pwa/nuxt': ^1.1.1
+  '@vite-pwa/nuxt': ^2.0.1
   '@vitejs/plugin-vue': ^6.0.11
-  '@vitest/browser': ^4.1.12
-  '@vitest/browser-playwright': ^4.1.12
-  '@vitest/coverage-istanbul': ^4.1.12
+  '@vitest/browser': ^5.1.0
+  '@vitest/browser-playwright': ^5.1.0
+  '@vitest/coverage-istanbul': ^5.1.0
   '@vue/test-utils': ^2.6.0
   'aws4fetch': ^1.0.20
   'consola': ^3.4.2
@@ -70,10 +70,10 @@ catalog:
   'playwright': 1.62.1
   'shell-quote': ^1.9.0
   'tailwindcss': ^4.3.5
-  'tsup': ^8.5.1
+  'tsup': ^9.0.0
   'typescript': ^5.9.3
   'ulid': ^3.0.2
-  'vitest': ^4.1.12
+  'vitest': ^5.1.0
   'vue': ^3.5.41
   'vue-tsc': ^3.3.5
   'web-push': ^4.0.0

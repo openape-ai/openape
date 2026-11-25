@@ -15,12 +15,12 @@
     "postinstall": "nuxt prepare",
     "typecheck": "nuxt typecheck",
     "lint": "eslint .",
-    "test": "vitest run",
+    "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache",
     "test:e2e": "vitest run --config vitest.e2e.config.ts"
   },
   "dependencies": {
     "@iconify-json/lucide": "catalog:",
-    "@libsql/client": "^0.17.4",
+    "@libsql/client": "^0.18.0",
     "@nuxt/ui": "catalog:",
     "@openape/auth": "workspace:*",
     "@openape/core": "workspace:*",
@@ -40,6 +40,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "@types/web-push": "catalog:",
+    "@vite-pwa/workbox-swkit": "^8.0.15",
     "@vitejs/plugin-vue": "catalog:",
     "@vue/test-utils": "catalog:",
     "h3": "catalog:",

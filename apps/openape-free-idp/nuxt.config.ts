@@ -85,15 +85,14 @@ export default defineNuxtConfig({
     },
   },
 
-  // PWA + custom service worker. injectManifest mode lets us own sw.ts so
-  // we can register `push` and `notificationclick` handlers (vite-pwa's
-  // generateSW mode can't expose those). srcDir: '..' resolves to the
-  // Nuxt project root (apps/openape-free-idp/sw.ts) — see the chat app's
-  // PR #203 for why the file lives outside app/ rather than under it.
+  // PWA + custom service worker. buildSW mode bundles our own sw.ts so we
+  // can register `push` and `notificationclick` handlers (vite-pwa's
+  // generateSW mode can't expose those). swSrc is relative to the Nuxt
+  // project root (apps/openape-free-idp/sw.ts); filename keeps the
+  // registered /sw.js so installed clients update in place.
   pwa: {
-    strategies: 'injectManifest',
-    srcDir: '..',
-    filename: 'sw.ts',
+    strategies: 'buildSW',
+    filename: 'sw.js',
     registerType: 'autoUpdate',
     manifest: {
       name: 'OpenApe IdP',
@@ -111,7 +110,8 @@ export default defineNuxtConfig({
         { src: '/icon.svg', sizes: 'any', type: 'image/svg+xml' },
       ],
     },
-    injectManifest: {
+    buildSW: {
+      swSrc: 'sw.ts',
       globPatterns: ['**/*.{js,css,html,ico,png,svg,webmanifest}'],
     },
     client: {

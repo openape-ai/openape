@@ -19,7 +19,7 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
-    "test": "vitest run"
+    "test": "vitest run --fsModuleCachePath node_modules/.vitest-cache"
   },
   "dependencies": {
     "@openape/cli-auth": "workspace:*",

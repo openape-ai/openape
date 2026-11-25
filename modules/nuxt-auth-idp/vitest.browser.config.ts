@@ -21,11 +21,11 @@ export default defineConfig({
     },
   },
   test: {
+    api: { host: '127.0.0.1', port: 5488, strictPort: true },
     include: ['test/browser/**/*.test.ts'],
     setupFiles: ['test/browser/setup.ts'],
     browser: {
       enabled: true,
-      api: { host: '127.0.0.1', port: 5488, strictPort: true },
       // Drive the installed Google Chrome instead of a downloaded build.
       provider: playwright({
         launchOptions: { executablePath: process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' },

@@ -1,5 +1,5 @@
 import { generateAuthenticationOptions, verifyAuthenticationResponse } from '@simplewebauthn/server'
-import type { AuthenticationResponseJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/types'
+import type { AuthenticationResponseJSON, PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/server'
 import { base64URLToUint8Array } from './registration.js'
 import type { RPConfig, WebAuthnCredential } from './types.js'
 
