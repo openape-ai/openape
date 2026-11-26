@@ -106,21 +106,35 @@ export class PodIdentityManager {
       accessToken: async (fresh = false) => this.credentials.withCache(reference.connectionId, async (file) => {
         const identity = JSON.parse(await readFile(file, 'utf8')) as IdentityCache
         assertIdentityBinding(identity, reference)
-        if (!fresh && identity.accessToken && (identity.expiresAt ?? 0) > Date.now() / 1000 + 60) return identity.accessToken
-        const challenge = await request(identity.issuer, '/api/auth/challenge', { id: identity.subject })
-        if (typeof challenge.challenge !== 'string' || challenge.challenge.length > 4096) throw new Error('Invalid pod identity challenge')
-        const signature = sign(null, Buffer.from(challenge.challenge), identity.privateKey).toString('base64')
-        const reply = await request(identity.issuer, '/api/auth/authenticate', { id: identity.subject, challenge: challenge.challenge, signature, public_key: identity.publicKey })
-        if (reply.act !== 'agent' || reply.email !== identity.subject || typeof reply.token !== 'string' || typeof reply.expires_in !== 'number' || reply.expires_in <= 60 || reply.expires_in > 28800) throw new PodIdentityRefusedError('Pod authentication returned a different identity or invalid lifetime')
+        // The revocation check reuses a valid token: /api/auth/* counts in the IdP's strict per-IP login bucket, the status read does not.
+        const cached = Boolean(identity.accessToken && (identity.expiresAt ?? 0) > Date.now() / 1000 + 60)
+        let token = cached ? identity.accessToken! : await authenticate(identity, file) // cached implies a stored token
         if (fresh) {
           // Authentication checks only the agent and its key; the identity status also covers the owner (issue 666).
-          const state = await request(identity.issuer, `/api/pods/agents/${encodeURIComponent(identity.subject!)}`, undefined, reply.token)
+          const status = `/api/pods/agents/${encodeURIComponent(identity.subject!)}`
+          let state: Record<string, unknown>
+          try { state = await request(identity.issuer, status, undefined, token) }
+          catch (error) {
+            // A refused cached token (for example after an IdP key rotation) is no revocation yet: authenticate once and read again.
+            if (!cached || !(error instanceof PodIdentityRefusedError)) throw error
+            token = await authenticate(identity, file); state = await request(identity.issuer, status, undefined, token)
+          }
           if (state.email !== identity.subject || state.owner !== identity.owner || state.active !== true || !Array.isArray(state.keyIds) || !state.keyIds.includes(identity.keyId)) throw new PodIdentityRefusedError('Pod identity, key or owner is no longer active')
         }
-        identity.accessToken = reply.token; identity.expiresAt = Math.floor(Date.now() / 1000) + reply.expires_in
-        await writeFile(file, JSON.stringify(identity), { mode: 0o600 })
-        return identity.accessToken
+        return token
       }),
     }
   }
+}
+
+/** Mints and persists a token first, so a failing status read never discards it (issue 666). */
+async function authenticate(identity: IdentityCache, file: string): Promise<string> {
+  const challenge = await request(identity.issuer, '/api/auth/challenge', { id: identity.subject })
+  if (typeof challenge.challenge !== 'string' || challenge.challenge.length > 4096) throw new Error('Invalid pod identity challenge')
+  const signature = sign(null, Buffer.from(challenge.challenge), identity.privateKey).toString('base64')
+  const reply = await request(identity.issuer, '/api/auth/authenticate', { id: identity.subject, challenge: challenge.challenge, signature, public_key: identity.publicKey })
+  if (reply.act !== 'agent' || reply.email !== identity.subject || typeof reply.token !== 'string' || typeof reply.expires_in !== 'number' || reply.expires_in <= 60 || reply.expires_in > 28800) throw new PodIdentityRefusedError('Pod authentication returned a different identity or invalid lifetime')
+  identity.accessToken = reply.token; identity.expiresAt = Math.floor(Date.now() / 1000) + reply.expires_in
+  await writeFile(file, JSON.stringify(identity), { mode: 0o600 })
+  return reply.token
 }

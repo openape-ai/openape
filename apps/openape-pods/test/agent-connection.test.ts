@@ -16,7 +16,7 @@ async function setup() {
   root = await mkdtemp(join(tmpdir(), 'pods-agent-'))
   const cache = new CredentialCache(root)
   const identity = new PodIdentityManager(cache)
-  const state = { key: '', podId: '', challenges: 0, authenticated: 0, denied: false, enrolled: 0, reply: {} as Record<string, unknown>, status: 200, standing: {} as Record<string, unknown> }
+  const state = { key: '', podId: '', challenges: 0, authenticated: 0, denied: false, enrolled: 0, reply: {} as Record<string, unknown>, status: 200, standing: {} as Record<string, unknown>, rejectedToken: '' }
   server = createServer(async (request, response) => {
     let data = ''; for await (const chunk of request) data += String(chunk)
     const body = (data ? JSON.parse(data) : {}) as Record<string, string>
@@ -30,6 +30,7 @@ async function setup() {
       response.end(JSON.stringify({ email: 'pod@example.test', owner: 'owner@example.test', keyId, permissions: 'none', ...state.reply })); return
     }
     if (request.method === 'GET' && request.url === '/api/pods/agents/pod%40example.test') {
+      if (request.headers.authorization === `Bearer ${state.rejectedToken}`) { response.statusCode = 401; response.end('{}'); return }
       expect(request.headers.authorization).toBe(`Bearer SYNTHETIC_POD_TOKEN_${state.authenticated}`)
       const keyId = createHash('sha256').update(Buffer.from(state.key.split(' ')[1]!, 'base64')).digest('hex')
       response.statusCode = state.status; response.end(JSON.stringify({ email: 'pod@example.test', owner: 'owner@example.test', active: true, keyIds: [keyId], ...state.standing })); return
@@ -127,7 +128,9 @@ describe('pod identity credential isolation', () => {
     const { identity: reference } = await fixture.identity.provision(fixture.connectionId, 'Fixture', 'SYNTHETIC_OWNER')
     const connection = fixture.identity.connection(reference, 'fixture-mac')
     expect(await connection.accessToken()).toBe('SYNTHETIC_POD_TOKEN_1')
-    expect(await connection.accessToken(true)).toBe('SYNTHETIC_POD_TOKEN_2')
+    // The minute check reuses the valid token, so it stays out of the IdP's per-IP login bucket.
+    expect(await connection.accessToken(true)).toBe('SYNTHETIC_POD_TOKEN_1')
+    expect(fixture.state.challenges).toBe(1)
     fixture.state.standing = { active: false }
     await expect(connection.accessToken(true)).rejects.toBeInstanceOf(PodIdentityRefusedError)
     fixture.state.standing = { owner: 'other@example.test' }
@@ -138,7 +141,10 @@ describe('pod identity credential isolation', () => {
     const older = await connection.accessToken(true).catch(error => error)
     expect(older).not.toBeInstanceOf(PodIdentityRefusedError)
     expect(String(older)).toContain('(400)')
-    fixture.state.status = 200; fixture.state.denied = true
+    // A refused cached token (for example after an IdP key rotation) is re-authenticated once before it counts as a revocation.
+    fixture.state.status = 200; fixture.state.rejectedToken = 'SYNTHETIC_POD_TOKEN_1'
+    expect(await connection.accessToken(true)).toBe('SYNTHETIC_POD_TOKEN_2')
+    fixture.state.rejectedToken = 'SYNTHETIC_POD_TOKEN_2'; fixture.state.denied = true
     await expect(connection.accessToken(true)).rejects.toBeInstanceOf(PodIdentityRefusedError)
   })
 })

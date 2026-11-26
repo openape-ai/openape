@@ -40,13 +40,15 @@ it('re-authenticates at the IdP every minute and aborts the run signal when the 
 
 it('keeps the run and its identity file current while the IdP is unreachable or fails otherwise', async () => {
   const failures = [new InfrastructureError({ phase: 'authorization', retryAfterMs: 0 }), Object.assign(new Error('fetch failed'), { cause: { code: 'ENETUNREACH' } }), new Error('Pod identity connection failed (400)')]
-  const fresh: boolean[] = []
+  const fresh: boolean[] = []; let refreshed = 0
   const file = await identity(async (isFresh = false) => {
     if (isFresh) { fresh.push(true); throw failures[(fresh.length - 1) % failures.length] }
-    return 'token'
+    refreshed++; return 'token'
   })
   await tick(revocationCheckMs / 15000 * 3)
-  expect(fresh.length).toBeGreaterThan(3)
+  // A failed check waits for the next minute instead of starting on every tick and starving the token refresh.
+  expect(fresh).toHaveLength(3)
+  expect(refreshed).toBeGreaterThanOrEqual(9)
   expect(file.signal.aborted).toBe(false)
   expect(() => file.assertActive()).not.toThrow()
   const written = JSON.parse(await readFile(file.path, 'utf8')) as { access_token: string, expires_at: number }

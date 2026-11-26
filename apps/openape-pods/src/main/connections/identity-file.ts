@@ -33,9 +33,9 @@ export async function podIdentityFile(root: string, connection: Pick<AgentConnec
   const timer = setInterval(() => {
     if (stopped || failure) return
     if (!checking && Date.now() - lastCheck >= revocationCheckMs) {
-      checking = true
+      checking = true; lastCheck = Date.now()
       check = (async () => {
-        try { const next = await connection.accessToken(true); lastCheck = Date.now(); if (!stopped) remember(next) }
+        try { const next = await connection.accessToken(true); if (!stopped) remember(next) }
         catch (error) { if (error instanceof PodIdentityRefusedError) fail(error) }
         finally { checking = false }
       })()
