@@ -83,3 +83,21 @@ it.each(['denied', 'revoked', 'expired', 'used'])('relays a 403 body only when i
   body = '{"title":"Broker connection is missing or revoked"}'
   await expect(brokerFetch('https://provider.example.test/brokered', { method: 'POST', relayRefusal: true })).rejects.toMatchObject({ statusCode: 403 })
 })
+
+it('keeps only the type of a revoked broker connection from a 403 refusal', async () => {
+  dns.mockResolvedValue([{ address: '93.184.216.34', family: 4 }])
+  let body = JSON.stringify({ type: 'https://openape.org/errors/broker_connection_revoked', detail: 'remote text' })
+  outgoing.mockImplementation((_url, _options, receive) => {
+    const reply = Object.assign(new PassThrough(), { statusCode: 403 })
+    return Object.assign(new EventEmitter(), { end: () => { receive(reply); reply.end(body) } })
+  })
+  const revoked = await brokerFetch('https://provider.example.test/brokered', { method: 'POST' }).catch((error: { statusCode: number, data: Record<string, unknown> }) => error)
+  expect(revoked).toMatchObject({ statusCode: 403, data: { type: 'https://openape.org/errors/broker_connection_revoked' } })
+  expect(JSON.stringify(revoked.data)).not.toContain('remote text')
+  for (const other of [JSON.stringify({ type: 'https://openape.org/errors/other' }), 'not json']) {
+    body = other
+    const refusal = await brokerFetch('https://provider.example.test/brokered', { method: 'POST' }).catch((error: { statusCode: number, data: Record<string, unknown> }) => error)
+    expect(refusal).toMatchObject({ statusCode: 403 })
+    expect(refusal.data.type).not.toBe('https://openape.org/errors/broker_connection_revoked')
+  }
+})

@@ -3,14 +3,14 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { AuthorityError } from '../../src/contracts/infrastructure'
 import type { ServiceRequest } from '../../src/contracts/services'
 
-const mocks = vi.hoisted(() => ({ authorize: vi.fn(), refresh: vi.fn(), assertActive: vi.fn(), identityActive: vi.fn(), close: vi.fn() }))
+const mocks = vi.hoisted(() => ({ authorize: vi.fn(), refresh: vi.fn(), assertActive: vi.fn(), identityActive: vi.fn(), close: vi.fn(), identitySignal: new AbortController() }))
 vi.mock('electron', () => ({ utilityProcess: { fork: vi.fn() }, safeStorage: {}, app: { getPath: () => '/nonexistent', isPackaged: false }, shell: { openExternal: vi.fn(async () => {}) } }))
 vi.mock('../../src/main/broker/authorization', async importOriginal => ({ ...await importOriginal<object>(), AgentAuthority: class { authorize = mocks.authorize; refresh = mocks.refresh; assertActive = mocks.assertActive } }))
-vi.mock('../../src/main/connections/identity-file', () => ({ podIdentityFile: async () => ({ path: '/fixture/auth.json', assertActive: mocks.identityActive, close: mocks.close }) }))
+vi.mock('../../src/main/connections/identity-file', () => ({ podIdentityFile: async () => ({ path: '/fixture/auth.json', signal: mocks.identitySignal.signal, assertActive: mocks.identityActive, close: mocks.close }) }))
 vi.mock('@openape/apes', () => ({ loadAdapter: () => ({ digest: 'digest' }), resolveCommand: async () => ({ permission: 'pod-runtime' }) }))
 vi.mock('../../src/main/grants/registry-copies', () => ({ loadPodAdapter: () => ({ digest: 'digest' }) }))
 vi.mock('../../src/runtime/environment', () => ({ podEnvironment: async () => ({ workspace: '/fixture/workspace', home: '/fixture/home', environment: {} }), podEnvironmentValues: () => ({}), visibleEnvironment: () => ({}) }))
-afterEach(() => { vi.useRealTimers(); vi.resetAllMocks() })
+afterEach(() => { vi.useRealTimers(); vi.resetAllMocks(); mocks.identitySignal = new AbortController() })
 
 const podId = '00000000-0000-4000-8000-000000000001'
 const runId = '00000000-0000-4000-8000-000000000002'
@@ -53,6 +53,15 @@ it('re-checks the assigned identity before credentials and cancels the run when 
   expect(f.dispatched.some(command => (command.serviceCheck as { authorityLost?: true } | undefined)?.authorityLost)).toBe(true)
   await f.service.executeService(request('shellClose'))
   expect(mocks.close).toHaveBeenCalledTimes(1)
+})
+
+it('cancels the run as soon as the IdP refuses the running Pod identity, without waiting for a service call', async () => {
+  const f = await fixture()
+  await f.service.executeService(request('shell'))
+  expect(f.dispatched.some(command => (command.serviceCheck as { authorityLost?: true } | undefined)?.authorityLost)).toBe(false)
+  mocks.identitySignal.abort(new Error('Pod identity connection failed (401)'))
+  await vi.waitFor(() => expect(f.dispatched.some(command => (command.serviceCheck as { authorityLost?: true } | undefined)?.authorityLost)).toBe(true))
+  await f.service.executeService(request('shellClose'))
 })
 
 // Inner program identity and grant revocation terminate the native domain in e2e/ape-shell-machine.test.ts.

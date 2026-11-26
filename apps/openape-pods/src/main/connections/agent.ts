@@ -29,16 +29,22 @@ function origin(value: string): string {
   if ((url.protocol !== 'https:' && !(url.protocol === 'http:' && url.hostname === '127.0.0.1')) || url.pathname !== '/' || url.search || url.hash || url.username || url.password) throw new Error('Invalid identity origin')
   return url.origin
 }
-async function post(issuer: string, path: string, body: unknown, bearer?: string): Promise<Record<string, unknown>> {
+/** The IdP refused the Pod identity, its key or its owner; unlike an unreachable IdP this stops a running Pod (issue 666). */
+export class PodIdentityRefusedError extends Error {}
+async function request(issuer: string, path: string, body?: unknown, bearer?: string): Promise<Record<string, unknown>> {
   let response: Response
   const authentication = path.startsWith('/api/auth/')
-  try { response = await fetch(`${origin(issuer)}${path}`, { method: 'POST', redirect: 'error', signal: AbortSignal.timeout(10000), headers: { 'Content-Type': 'application/json', ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) }, body: JSON.stringify(body) }) }
+  try { response = await fetch(`${origin(issuer)}${path}`, { method: body === undefined ? 'GET' : 'POST', redirect: 'error', signal: AbortSignal.timeout(10000), headers: { ...(body === undefined ? {} : { 'Content-Type': 'application/json' }), ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) }) }
   catch (error) { if (authentication) transientNetwork(error, 'authorization'); throw error }
   if (authentication) {
     try { transientResponse(response, 'authorization') }
     catch (error) { await response.body?.cancel(); throw error }
   }
-  if (!response.ok) throw new Error(`Pod identity connection failed (${response.status})`)
+  if (!response.ok) {
+    await response.body?.cancel()
+    if (body === undefined || authentication) { if ([401, 403, 404].includes(response.status)) throw new PodIdentityRefusedError(`Pod identity refused by the IdP (${response.status})`) }
+    throw new Error(`Pod identity connection failed (${response.status})`)
+  }
   const text = await response.text()
   if (text.length > 128 * 1024) throw new Error('Oversized identity response')
   const value: unknown = JSON.parse(text)
@@ -77,7 +83,7 @@ export class PodIdentityManager {
       }
       if (identity.decisionIssuer && !receipt) throw new Error('Owner consent receipt is required for this agent provider')
       const enrollment = { podId: identity.podId, name, publicKey: identity.publicKey }
-      const reply = identity.decisionIssuer ? await enrollBrokerAgent(identity.issuer, { ...enrollment, connection_receipt: receipt }) : await post(identity.issuer, '/api/pods/agents', enrollment, ownerBearer)
+      const reply = identity.decisionIssuer ? await enrollBrokerAgent(identity.issuer, { ...enrollment, connection_receipt: receipt }) : await request(identity.issuer, '/api/pods/agents', enrollment, ownerBearer)
       if (identity.decisionIssuer && (reply.decisionIssuer !== identity.decisionIssuer || reply.brokerConnectionId !== identity.brokerConnectionId)) throw new PodIdentityBindingError('Provisioned agent has a different decision authority')
       if (reply.owner !== identity.owner || reply.keyId !== identity.keyId || reply.permissions !== 'none' || typeof reply.email !== 'string' || (identity.subject && reply.email !== identity.subject)) throw new PodIdentityBindingError('Provisioned identity does not match this pod')
       identity.subject = reply.email
@@ -97,19 +103,38 @@ export class PodIdentityManager {
       owner: reference.owner,
       keyId: reference.keyId,
       targetHost,
-      accessToken: async () => this.credentials.withCache(reference.connectionId, async (file) => {
+      accessToken: async (fresh = false) => this.credentials.withCache(reference.connectionId, async (file) => {
         const identity = JSON.parse(await readFile(file, 'utf8')) as IdentityCache
         assertIdentityBinding(identity, reference)
-        if (identity.accessToken && (identity.expiresAt ?? 0) > Date.now() / 1000 + 60) return identity.accessToken
-        const challenge = await post(identity.issuer, '/api/auth/challenge', { id: identity.subject })
-        if (typeof challenge.challenge !== 'string' || challenge.challenge.length > 4096) throw new Error('Invalid pod identity challenge')
-        const signature = sign(null, Buffer.from(challenge.challenge), identity.privateKey).toString('base64')
-        const reply = await post(identity.issuer, '/api/auth/authenticate', { id: identity.subject, challenge: challenge.challenge, signature, public_key: identity.publicKey })
-        if (reply.act !== 'agent' || reply.email !== identity.subject || typeof reply.token !== 'string' || typeof reply.expires_in !== 'number' || reply.expires_in <= 60 || reply.expires_in > 28800) throw new Error('Pod authentication returned a different identity or invalid lifetime')
-        identity.accessToken = reply.token; identity.expiresAt = Math.floor(Date.now() / 1000) + reply.expires_in
-        await writeFile(file, JSON.stringify(identity), { mode: 0o600 })
-        return identity.accessToken
+        // The revocation check reuses a valid token: /api/auth/* counts in the IdP's strict per-IP login bucket, the status read does not.
+        const cached = Boolean(identity.accessToken && (identity.expiresAt ?? 0) > Date.now() / 1000 + 60)
+        let token = cached ? identity.accessToken! : await authenticate(identity, file) // cached implies a stored token
+        if (fresh) {
+          // Authentication checks only the agent and its key; the identity status also covers the owner (issue 666).
+          const status = `/api/pods/agents/${encodeURIComponent(identity.subject!)}`
+          let state: Record<string, unknown>
+          try { state = await request(identity.issuer, status, undefined, token) }
+          catch (error) {
+            // A refused cached token (for example after an IdP key rotation) is no revocation yet: authenticate once and read again.
+            if (!cached || !(error instanceof PodIdentityRefusedError)) throw error
+            token = await authenticate(identity, file); state = await request(identity.issuer, status, undefined, token)
+          }
+          if (state.email !== identity.subject || state.owner !== identity.owner || state.active !== true || !Array.isArray(state.keyIds) || !state.keyIds.includes(identity.keyId)) throw new PodIdentityRefusedError('Pod identity, key or owner is no longer active')
+        }
+        return token
       }),
     }
   }
+}
+
+/** Mints and persists a token first, so a failing status read never discards it (issue 666). */
+async function authenticate(identity: IdentityCache, file: string): Promise<string> {
+  const challenge = await request(identity.issuer, '/api/auth/challenge', { id: identity.subject })
+  if (typeof challenge.challenge !== 'string' || challenge.challenge.length > 4096) throw new Error('Invalid pod identity challenge')
+  const signature = sign(null, Buffer.from(challenge.challenge), identity.privateKey).toString('base64')
+  const reply = await request(identity.issuer, '/api/auth/authenticate', { id: identity.subject, challenge: challenge.challenge, signature, public_key: identity.publicKey })
+  if (reply.act !== 'agent' || reply.email !== identity.subject || typeof reply.token !== 'string' || typeof reply.expires_in !== 'number' || reply.expires_in <= 60 || reply.expires_in > 28800) throw new PodIdentityRefusedError('Pod authentication returned a different identity or invalid lifetime')
+  identity.accessToken = reply.token; identity.expiresAt = Math.floor(Date.now() / 1000) + reply.expires_in
+  await writeFile(file, JSON.stringify(identity), { mode: 0o600 })
+  return reply.token
 }
