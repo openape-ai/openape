@@ -8,7 +8,8 @@ import { loginRequired } from '../contracts/mcp-session'
 // STDIO MCP server that the owner's MCP client starts through the launcher. It holds
 // no stored credentials; pods_control calls go to the running app's socket.
 const endpoint = process.env.OPENAPE_PODS_CODEX_SOCKET ?? ''
-const notRunning = 'OpenApe Pods is not running. Open the app and retry.'
+// Agent and Electron shells (T3 Code, VS Code) export ELECTRON_RUN_AS_NODE=1; open passes it on and the app exits as plain Node.
+const notRunning = 'OpenApe Pods is not running. Open it with `env -u ELECTRON_RUN_AS_NODE open -a "OpenApe Pods"` and retry.'
 // Claude Code loads only tool names and these instructions until it searches for the
 // tool, so they carry the discovery signal: task category, when to use, capabilities.
 const instructions = [
