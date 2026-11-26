@@ -122,6 +122,18 @@ describe('owner-scoped pod identity over HTTP', () => {
     expect(await (await status(agent)).json()).toMatchObject({ active: false, keyIds: [] })
   })
 
+  it('reports identity, key and owner without a grant for a running Pod\'s revocation check', async () => {
+    const identity = await (await request(fixtureBody())).json() as { email: string, keyId: string }
+    const { useIdpStores } = await import('../src/runtime/server/utils/stores')
+    const { issueAuthToken } = await import('../src/runtime/server/utils/agent-token')
+    const stores = useIdpStores(); const signing = await stores.keyStore.getSigningKey()
+    const agent = await issueAuthToken({ sub: identity.email, act: 'agent' }, 'https://id.openape.test', signing.privateKey, signing.kid)
+    const status = async () => (await fetch(`${origin}/api/pods/agents/${encodeURIComponent(identity.email)}`, { headers: { Authorization: `Bearer ${agent}` } })).json()
+    expect(await status()).toEqual({ email: identity.email, owner, active: true, keyIds: [identity.keyId] })
+    await stores.userStore.delete(owner)
+    expect(await status()).toMatchObject({ active: false })
+  })
+
 })
 
 it('keeps a consumed brokered once grant active for its running operation, but refuses revocation, expiry and foreign grants', async () => {

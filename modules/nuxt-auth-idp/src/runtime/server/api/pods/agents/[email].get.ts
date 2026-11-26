@@ -17,19 +17,24 @@ export default defineEventHandler(async (event) => {
   const binding = hasBrokerStore() ? await useBrokerStore(event).getAgent(email) : null
   if (!binding && (!agent || agent.type !== 'agent' || !agent.owner || !((caller.act === 'agent' && caller.sub === email) || (caller.act === 'human' && caller.sub === agent.owner)))) throw createProblemError({ status: 403, title: 'Pod identity is outside this account' })
   const query = getQuery(event)
-  if (Object.keys(query).some(key => key !== 'grant') || typeof query.grant !== 'string' || !/^[\w-]{1,128}$/.test(query.grant)) throw createProblemError({ status: 400, title: 'An assigned grant ID is required' })
+  // Without a grant the reply covers only the identity, its keys and owner (a running Pod's revocation check).
+  if (Object.keys(query).some(key => key !== 'grant') || (query.grant !== undefined && (typeof query.grant !== 'string' || !/^[\w-]{1,128}$/.test(query.grant)))) throw createProblemError({ status: 400, title: 'Invalid assigned grant ID' })
+  const grantId = query.grant as string | undefined
   if (!agent) throw createProblemError({ status: 403, title: 'Agent identity is missing' })
   if (binding) {
     if (caller.act !== 'agent' || caller.sub !== email) throw createProblemError({ status: 403, title: 'Agent authentication is required' })
     const keys = await sshKeyStore.findByUser(email)
-    const grant = brokerObject(await forwardBrokerOperation(binding, 'get', query.grant))
-    return { email, owner: binding.owner, active: agent.isActive && keys.length === 1 && keys[0]?.keyId === binding.key_id, keyIds: keys.map(key => key.keyId), grantId: query.grant, grantActive: grant.id === query.grant && activeGrant(grant, email) }
+    const identity = { email, owner: binding.owner, active: agent.isActive && keys.length === 1 && keys[0]?.keyId === binding.key_id, keyIds: keys.map(key => key.keyId) }
+    if (!grantId) return identity
+    const grant = brokerObject(await forwardBrokerOperation(binding, 'get', grantId))
+    return { ...identity, grantId, grantActive: grant.id === grantId && activeGrant(grant, email) }
   }
   const owner = agent.owner ? await userStore.findByEmail(agent.owner) : null
-  const grant = await useGrantStores().grantStore.findById(query.grant)
-  const approved = activeGrant(grant, email)
   const keys = await sshKeyStore.findByUser(email)
-  return { email, owner: agent.owner, active: agent.isActive && owner?.isActive === true, keyIds: keys.map(key => key.keyId), grantId: query.grant, grantActive: approved }
+  const identity = { email, owner: agent.owner, active: agent.isActive && owner?.isActive === true, keyIds: keys.map(key => key.keyId) }
+  if (!grantId) return identity
+  const grant = await useGrantStores().grantStore.findById(grantId)
+  return { ...identity, grantId, grantActive: activeGrant(grant, email) }
 })
 
 function activeGrant(value: unknown, email: string): boolean {
