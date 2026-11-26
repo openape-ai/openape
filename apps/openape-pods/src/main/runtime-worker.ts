@@ -425,7 +425,7 @@ export class RuntimeWorker {
       await this.dispatch({ provider: ready && gateway ? { port: gateway.port, capability: gateway.capability } : null })
     }, podId => this.podName(podId), !!process.env.OPENAPE_PODS_FIXTURE_DIR && process.env.NODE_ENV === 'test', this.host.oneShot ? this.host.jevKey : undefined))
     this.setupPhase = 'model gateway'
-    const gateway = await startAgentGateway({ provider: (body, signal) => connections.provider(body, signal), model: signal => connections.model(signal), proxy: (request, signal, onMetadata) => agentBackends.run(request, { signal, onMetadata }), proxyValidate: request => agentBackends.validate(request), tool: async () => { throw new Error('Model credential gateway has no tools') } }, this.providerAbort.signal)
+    const gateway = await startAgentGateway({ provider: (body, signal) => connections.provider(body, signal), model: signal => connections.model(signal), proxy: (request, signal, onMetadata) => agentBackends.run(request, { signal, onMetadata }), proxyValidate: request => agentBackends.validate(request) }, this.providerAbort.signal)
     own('providerGateway', gateway)
     await this.publishProxyStatus(); live()
     const grants = this.podGrants()!

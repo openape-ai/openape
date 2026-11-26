@@ -34,7 +34,7 @@ A catalog entry is availability evidence, not successful inference evidence.
 
 ## Select a backend in the script
 
-Native calls retain their existing shape and optional `ape_shell` tool:
+Native calls retain their existing shape without tools:
 
 ```js
 const result = await context.agent.run({
@@ -192,9 +192,9 @@ proxy inference replay; explicit future runs retain their normal behavior.
 
 ## Text-only protocol and failure handling
 
-Proxy calls accept text with `tools: []` or omitted tools. `ape_shell` is refused
-explicitly. Direct `context.tools.invoke()` calls and native tool use keep their
-existing permission checks. Synthetic script validation uses the same local
+Both backends accept text with `tools: []` or omitted tools. The removed
+`ape_shell` tool is refused explicitly. Direct `context.tools.invoke()` calls keep
+their existing permission checks. Synthetic script validation uses the same local
 mapping resolver and refusals, but returns a synthetic answer without inference;
 successful validation does not verify credentials, model availability or quality.
 

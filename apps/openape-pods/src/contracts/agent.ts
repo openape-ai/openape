@@ -12,7 +12,7 @@ export const agentModelSizeLabels = { small: 'Small', medium: 'Medium', large: '
 export const agentThinkingLabels = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra High' } as const
 
 interface AgentRequestBase { prompt: string, timeoutSeconds: number }
-export interface NativeAgentRequest extends AgentRequestBase { backend?: 'native', provider?: 'codex', tools: [] | ['ape_shell'] }
+export interface NativeAgentRequest extends AgentRequestBase { backend?: 'native', provider?: 'codex', tools: [] }
 export interface ProxyAgentRequest extends AgentRequestBase { backend: 'proxy', provider: AgentProvider, modelSize: AgentModelSize, thinking?: AgentThinking, tools: [] }
 export type AgentRequest = NativeAgentRequest | ProxyAgentRequest
 export const defaultAgentTimeoutSeconds = 120
@@ -28,17 +28,17 @@ export function parseAgentRequest(value: unknown): AgentRequest {
   if (typeof request.prompt !== 'string' || !request.prompt.trim() || request.prompt.length > 128 * 1024) invalid('Invalid agent prompt')
   const timeoutSeconds = request.timeoutSeconds ?? defaultAgentTimeoutSeconds
   if (!Number.isInteger(timeoutSeconds) || (timeoutSeconds as number) < 30 || (timeoutSeconds as number) > maxAgentTimeoutSeconds) invalid(`Agent timeoutSeconds must be an integer from 30 to ${maxAgentTimeoutSeconds}`)
-  if (request.tools !== undefined && (!Array.isArray(request.tools) || request.tools.length > 1 || request.tools.some(tool => tool !== 'ape_shell'))) invalid('Agent tools must be [] or ["ape_shell"]')
+  if (Array.isArray(request.tools) && request.tools.includes('ape_shell')) invalid('The ape_shell agent tool was removed; pass tools: [] and call context.tools.invoke directly', true)
+  if (request.tools !== undefined && (!Array.isArray(request.tools) || request.tools.length)) invalid('Agent tools must be []')
   const common = { prompt: request.prompt, timeoutSeconds: timeoutSeconds as number }
   if (request.backend === 'proxy') {
     if (!agentProviders.includes(request.provider as AgentProvider)) invalid('Proxy agent provider must be claude or codex')
     if (!agentModelSizes.includes(request.modelSize as AgentModelSize)) invalid('Proxy agent modelSize must be small, medium, large or xlarge')
     if ('thinking' in request && !agentThinkingLevels.includes(request.thinking as AgentThinking)) invalid('Proxy agent thinking must be low, medium, high or xhigh')
-    if (Array.isArray(request.tools) && request.tools.length) invalid('Proxy agent calls do not support ape_shell', true)
     return { ...common, backend: 'proxy', provider: request.provider as AgentProvider, modelSize: request.modelSize as AgentModelSize, ...('thinking' in request ? { thinking: request.thinking as AgentThinking } : {}), tools: [] }
   }
   if ('backend' in request && request.backend !== 'native') invalid('Agent backend must be native or proxy')
   if ('provider' in request && request.provider !== 'codex') invalid('Native agent calls require the codex provider', true)
   if ('modelSize' in request || 'thinking' in request) invalid('Native agent calls do not accept modelSize or thinking', true)
-  return { ...common, ...('backend' in request ? { backend: 'native' as const } : {}), ...('provider' in request ? { provider: 'codex' as const } : {}), tools: Array.isArray(request.tools) && request.tools.length ? ['ape_shell'] : [] }
+  return { ...common, ...('backend' in request ? { backend: 'native' as const } : {}), ...('provider' in request ? { provider: 'codex' as const } : {}), tools: [] }
 }
