@@ -93,7 +93,9 @@ export default defineNuxtConfig({
   pwa: {
     strategies: 'buildSW',
     filename: 'sw.js',
-    registerType: 'autoUpdate',
+    // 'prompt' keeps an updated SW waiting so UpdateAvailable.vue can ask
+    // before reloading; 'autoUpdate' reloads the page on activation.
+    registerType: 'prompt',
     manifest: {
       name: 'OpenApe IdP',
       short_name: 'OpenApe IdP',

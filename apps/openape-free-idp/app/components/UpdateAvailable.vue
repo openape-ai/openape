@@ -1,17 +1,16 @@
 <script setup lang="ts">
 import { useRegisterSW } from 'virtual:pwa-register/vue'
 
-// vite-pwa's `registerType: 'autoUpdate'` default behaviour (without
-// onNeedRefresh override) is to skipWaiting + window.location.reload()
-// the moment a new SW takes control. That reload kills any in-flight
-// WebAuthn promise — Patrick saw "click passkey → nothing happens"
-// because a hourly periodic-update fired while macOS was showing the
-// TouchID prompt, reloading /login under him. The next click worked
-// because the new SW was already active.
+// vite-pwa's `registerType: 'autoUpdate'` reloads the window the moment
+// a new SW activates. That reload kills any in-flight WebAuthn promise:
+// an hourly periodic update fired while macOS was showing the TouchID
+// prompt and reloaded /login under the user.
 //
-// Mirror chat's pattern: intercept onNeedRefresh, show a banner, let
-// the user confirm the reload at a safe moment. Mounted globally from
-// app.vue so it's available on every IdP page.
+// So the IdP uses `registerType: 'prompt'`: the new SW waits (sw.ts only
+// calls skipWaiting on SKIP_WAITING), onNeedRefresh sets needRefresh, this
+// banner asks, and updateServiceWorker() sends SKIP_WAITING and reloads
+// once the new SW controls the page. Mounted globally from app.vue so it
+// is available on every IdP page.
 const { needRefresh, updateServiceWorker } = useRegisterSW({
   immediate: true,
   onRegisteredSW(_url: string, registration: ServiceWorkerRegistration | undefined) {
@@ -25,6 +24,9 @@ const { needRefresh, updateServiceWorker } = useRegisterSW({
 })
 
 async function reload() {
+  // The register client only reloads when the page already had a controller
+  // at load time (workbox `isUpdate`); on a first visit we reload ourselves.
+  navigator.serviceWorker.addEventListener('controllerchange', () => window.location.reload(), { once: true })
   await updateServiceWorker()
 }
 </script>
