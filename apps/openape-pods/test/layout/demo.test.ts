@@ -60,24 +60,22 @@ it('uses the actual Pod components for edits, pause, simulated runs and reset wi
   expect(requests).not.toHaveBeenCalled()
 })
 
-it('keeps a failed decision actionable, confirms grouped choices and resets all counters', async () => {
+it('shows waiting IdP approvals as decisions, grants nothing in the demo and resets the counter', async () => {
+  const requests = vi.spyOn(globalThis, 'fetch')
   await open('attention')
   await expect.poll(() => wrapper!.findAll('[data-pod]').length).toBe(6)
   await wrapper!.get('[role="tablist"] button:nth-child(2)').trigger('click'); await flushPromises()
-  await wrapper!.get('[data-question="demo-question-1"] button').trigger('click'); await flushPromises()
-  expect(wrapper!.get('[data-question="demo-question-1"]').text()).toContain('Speichern fehlgeschlagen')
-  await shot('decision-error-wide')
-  await wrapper!.get('[data-question="demo-question-1"] button').trigger('click'); await flushPromises()
-  await expect.poll(() => wrapper!.findAll('[data-question]').length).toBe(3)
-  const group = wrapper!.findAll('button').find(item => item.text() === 'alle: Archivieren')!
-  await group.trigger('click'); await flushPromises()
-  await expect.poll(() => wrapper!.findAll('[data-question]').length).toBe(1)
-  await wrapper!.get('[data-question] button').trigger('click'); await flushPromises()
-  await expect.poll(() => wrapper!.findAll('[data-question]').length).toBe(0)
-  expect(wrapper!.text()).toContain('Nichts wartet auf deine Entscheidung.')
-  await click('Zurücksetzen')
+  expect(wrapper!.findAll('[data-approval]')).toHaveLength(1)
+  expect(wrapper!.get('[data-testid="approvals"]').text()).toContain('Geprüfte Rechnung archivieren')
+  await shot('decisions-wide')
+  await click('Am IdP entscheiden')
+  await expect.poll(() => wrapper!.text()).toContain('Es wurde keine Berechtigung erteilt.')
+  expect(wrapper!.findAll('[data-approval]')).toHaveLength(1)
+  await wrapper!.get('.demo-toolbar select').setValue('empty'); await flushPromises()
   await wrapper!.get('[role="tablist"] button:nth-child(2)').trigger('click'); await flushPromises()
-  await expect.poll(() => wrapper!.findAll('[data-question]').length).toBe(4)
+  expect(wrapper!.findAll('[data-approval]')).toHaveLength(0)
+  expect(wrapper!.get('[data-testid="approvals"]').text()).toContain('keine')
+  expect(requests).not.toHaveBeenCalled()
 })
 
 it('renders all three areas narrowly with real CSS and restores empty/error scenarios', async () => {
