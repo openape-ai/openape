@@ -89,8 +89,3 @@ export async function readBlob(dir: string, spec: string): Promise<Buffer> {
   )
   return stdout
 }
-
-export async function blobSize(dir: string, spec: string): Promise<number> {
-  const { stdout } = await run('git', ['-C', dir, 'cat-file', '-s', spec])
-  return Number.parseInt(stdout.trim())
-}

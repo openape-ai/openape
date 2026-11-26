@@ -25,13 +25,6 @@ export async function loadPrById(id: string): Promise<PrRow> {
   return pr
 }
 
-export async function loadPrBySlug(slug: string): Promise<PrRow> {
-  const db = useDb()
-  const pr = await db.select().from(prs).where(and(eq(prs.slug, slug), isNull(prs.deletedAt))).get()
-  if (!pr) throw createProblemError({ status: 404, title: 'PR not found' })
-  return pr
-}
-
 /** Resolve a PR by slug first (agent poll), then by id (human). */
 export async function loadPrBySlugOrId(handle: string): Promise<PrRow> {
   const db = useDb()

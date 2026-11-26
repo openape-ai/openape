@@ -4,7 +4,6 @@ import { mkdir, rm } from 'node:fs/promises'
 import { join } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
 import { setTimeout as delay } from 'node:timers/promises'
-import { commandLine } from '../../contracts/programs'
 import type { ProgramAssignment, TerminalView } from '../../contracts/programs'
 import type { SandboxReach } from '../../contracts/sandbox'
 import { launchApeShell } from '../../worker/runtime/ape-shell'
@@ -20,19 +19,11 @@ import { inspectDomainRecords } from '../../worker/recovery/domains'
 import { ProgramState } from './state'
 import { grantSummary } from '../../contracts/grant-summary'
 
-/** Actions that only read; a call the IdP resolves to any other action is a write that is never replayed automatically. */
-export const readActions = ['read', 'list', 'get']
-
 /** Verifies the assigned program file, its runtime and entry files before a call is authorized. */
 export async function verifyProgram(assignment: ProgramAssignment): Promise<void> {
   await verifyExecutable(assignment.executable, assignment.executableHash)
   await verifyProgramRuntime(assignment)
   for (const file of assignment.entryFiles) await verifyExecutable(file.path, file.hash)
-}
-
-/** What the owner sees of one command a script asks approval for: the exact command line (issue 1468). */
-export function describeCommand(assignment: ProgramAssignment, argv: string[]): string {
-  return commandLine([assignment.cliId, ...argv])
 }
 
 /** How a terminal reaches the Pod identity, its grant ledger, its sandbox reach and its name for grant requests. */
