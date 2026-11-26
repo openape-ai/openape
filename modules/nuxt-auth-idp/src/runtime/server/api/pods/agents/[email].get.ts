@@ -1,7 +1,8 @@
 import { brokerObject } from '@openape/grants'
 import { hasBrokerStore, useBrokerStore } from '../../../utils/broker-store'
 import { forwardBrokerOperation } from '../../../utils/broker-forward'
-import { defineEventHandler, getQuery, getRouterParam } from 'h3'
+import { defineEventHandler, getQuery, getRouterParam, isError } from 'h3'
+import { BROKER_CONNECTION_REVOKED } from '../../../utils/broker-network'
 import { tryBearerAuth } from '../../../utils/agent-auth'
 import { useIdpStores } from '../../../utils/stores'
 import { useGrantStores } from '../../../utils/grant-stores'
@@ -26,9 +27,16 @@ export default defineEventHandler(async (event) => {
     const keys = await sshKeyStore.findByUser(email)
     const identity = { email, owner: binding.owner, active: agent.isActive && keys.length === 1 && keys[0]?.keyId === binding.key_id, keyIds: keys.map(key => key.keyId) }
     if (!grantId) {
-      // The owner revokes the broker connection at the decision IdP; it answers a revoked connection with a 403 refusal.
-      const connection = brokerObject(await forwardBrokerOperation(binding, 'connection'))
-      return { ...identity, active: identity.active && connection.id === binding.connection_id && connection.status === 'active' }
+      if (!identity.active) return identity
+      // The owner revokes the broker connection at the decision IdP; only its explicit revocation refuses the
+      // identity, any other failure (discovery, transport, refusal) is transient for the running Pod.
+      let connection: Record<string, unknown>
+      try { connection = brokerObject(await forwardBrokerOperation(binding, 'connection')) }
+      catch (error) {
+        if (isError(error) && (error.data as { type?: unknown } | undefined)?.type === BROKER_CONNECTION_REVOKED) return { ...identity, active: false }
+        throw createProblemError({ status: 503, title: 'The decision IdP cannot confirm the broker connection', type: 'https://openape.org/errors/broker_unavailable' })
+      }
+      return { ...identity, active: connection.id === binding.connection_id && connection.status === 'active' }
     }
     const grant = brokerObject(await forwardBrokerOperation(binding, 'get', grantId))
     return { ...identity, grantId, grantActive: grant.id === grantId && activeGrant(grant, email) }

@@ -9,6 +9,8 @@ import { brokerDomain, brokerObject, brokerOrigin } from '@openape/grants'
 import { createLocalJWKSet } from 'jose'
 import type { JSONWebKeySet } from 'jose'
 
+export const BROKER_CONNECTION_REVOKED = 'https://openape.org/errors/broker_connection_revoked'
+
 const publicIpv6 = new BlockList()
 publicIpv6.addSubnet('2000::', 3, 'ipv6')
 
@@ -51,9 +53,11 @@ async function fetchPublicBroker(raw: string, init: BrokerHttpOptions): Promise<
     const status = response.statusCode
     const retryAfter = status === 429 ? Number(response.headers['retry-after']) : Number.NaN
     const failed = () => createProblemError({ status: status && [400, 401, 403, 404, 409, 413, 429].includes(status) ? status : 503, title: `Broker service returned HTTP ${status ?? 'unknown'}`, ...(status === 429 && Number.isInteger(retryAfter) && retryAfter > 0 ? { retryAfter } : {}) })
-    if (status === 403 && init.relayRefusal) {
-      const refusal = await readBrokerJson(response)
-      if (isOwnerRefusal(refusal)) return refusal
+    if (status === 403) {
+      const refusal = await readBrokerJson(response).catch(() => null)
+      if (init.relayRefusal && isOwnerRefusal(refusal)) return refusal
+      // Keep only the type of a revoked connection, so a caller can tell it from other refusals.
+      if ((refusal as { type?: unknown } | null)?.type === BROKER_CONNECTION_REVOKED) throw createProblemError({ status: 403, title: 'Broker connection is missing or revoked', type: BROKER_CONNECTION_REVOKED })
       throw failed()
     }
     if (!status || status < 200 || status >= 300) throw failed()

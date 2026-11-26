@@ -17,9 +17,16 @@ vi.mock('nitropack/runtime', () => ({
     return storage
   },
 }))
-const broker = vi.hoisted(() => ({ binding: null as null | { owner: string, key_id: string, connection_id?: string }, grant: {} as Record<string, unknown>, connection: {} as Record<string, unknown> }))
+const broker = vi.hoisted(() => ({ binding: null as null | { owner: string, key_id: string, connection_id?: string }, grant: {} as Record<string, unknown>, connection: {} as Record<string, unknown> | Error, connectionCalls: 0 }))
 vi.mock('../src/runtime/server/utils/broker-store', () => ({ hasBrokerStore: () => broker.binding !== null, useBrokerStore: () => ({ getAgent: async () => broker.binding }) }))
-vi.mock('../src/runtime/server/utils/broker-forward', () => ({ forwardBrokerOperation: async (_binding: unknown, operation: string) => operation === 'connection' ? broker.connection : broker.grant }))
+vi.mock('../src/runtime/server/utils/broker-forward', () => ({
+  forwardBrokerOperation: async (_binding: unknown, operation: string) => {
+    if (operation !== 'connection') return broker.grant
+    broker.connectionCalls++
+    if (broker.connection instanceof Error) throw broker.connection
+    return broker.connection
+  },
+}))
 const owner = 'owner@example.test'
 let server: Server | undefined
 let origin = ''
@@ -29,7 +36,7 @@ async function request(body: unknown, bearer = token) {
   return fetch(`${origin}/api/pods/agents`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) }, body: JSON.stringify(body) })
 }
 beforeEach(async () => {
-  broker.binding = null; broker.grant = {}; broker.connection = {}
+  broker.binding = null; broker.grant = {}; broker.connection = {}; broker.connectionCalls = 0
   for (const storage of storages.values()) await storage.clear()
   const { useIdpStores } = await import('../src/runtime/server/utils/stores')
   const { issueAuthToken } = await import('../src/runtime/server/utils/agent-token')
@@ -169,4 +176,17 @@ it('asks the decision IdP for the broker connection of a brokered identity witho
     broker.connection = connection
     expect(await status()).toMatchObject({ active: false })
   }
+  const { createProblemError } = await import('../src/runtime/server/utils/problem')
+  broker.connection = createProblemError({ status: 403, title: 'revoked', type: 'https://openape.org/errors/broker_connection_revoked' })
+  expect(await status()).toMatchObject({ active: false })
+  // Discovery, transport or other refusals do not prove a revocation; the Pod keeps its run and checks again.
+  for (const failure of [createProblemError({ status: 403, title: 'The issuer is not authoritative for this identity domain' }), createProblemError({ status: 401, title: 'x' }), createProblemError({ status: 404, title: 'x' }), new Error('offline')]) {
+    broker.connection = failure
+    expect((await fetch(`${origin}/api/pods/agents/${encodeURIComponent(identity.email)}`, { headers: { Authorization: `Bearer ${bearer}` } })).status).toBe(503)
+  }
+  // An identity that is already inactive answers without asking the decision IdP.
+  const calls = broker.connectionCalls
+  broker.binding = { owner, key_id: 'another-key', connection_id: 'connection-1' }
+  expect(await status()).toMatchObject({ active: false })
+  expect(broker.connectionCalls).toBe(calls)
 })
