@@ -1245,7 +1245,12 @@ export class RuntimeWorker {
         const identity = await podIdentityFile(this.root, connection)
         try { await check(); controller.signal.throwIfAborted() }
         catch (error) { await identity.close(); throw error }
-        this.shellIdentities.set(scope.runId, { refresh: async (signal) => { signal.throwIfAborted(); identity.assertActive() }, close: identity.close })
+        const entry = { refresh: async (signal: AbortSignal) => { signal.throwIfAborted(); identity.assertActive() }, close: identity.close }
+        this.shellIdentities.set(scope.runId, entry)
+        // A refused identity refresh or IdP re-check stops the run now, not only at its next service call (issue 666).
+        identity.signal.addEventListener('abort', () => {
+          if (this.shellIdentities.get(scope.runId) === entry) void this.dispatch({ serviceCheck: { scope, authorityLost: true } }).catch(() => {})
+        }, { once: true })
         const reach = this.host.oneShot ? await this.sandboxReach(scope.podId) : undefined
         const start = this.cliStarts.get(scope.podId)
         if (start) {

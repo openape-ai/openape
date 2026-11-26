@@ -97,10 +97,10 @@ export class PodIdentityManager {
       owner: reference.owner,
       keyId: reference.keyId,
       targetHost,
-      accessToken: async () => this.credentials.withCache(reference.connectionId, async (file) => {
+      accessToken: async (fresh = false) => this.credentials.withCache(reference.connectionId, async (file) => {
         const identity = JSON.parse(await readFile(file, 'utf8')) as IdentityCache
         assertIdentityBinding(identity, reference)
-        if (identity.accessToken && (identity.expiresAt ?? 0) > Date.now() / 1000 + 60) return identity.accessToken
+        if (!fresh && identity.accessToken && (identity.expiresAt ?? 0) > Date.now() / 1000 + 60) return identity.accessToken
         const challenge = await post(identity.issuer, '/api/auth/challenge', { id: identity.subject })
         if (typeof challenge.challenge !== 'string' || challenge.challenge.length > 4096) throw new Error('Invalid pod identity challenge')
         const signature = sign(null, Buffer.from(challenge.challenge), identity.privateKey).toString('base64')

@@ -1,6 +1,10 @@
 import { mkdtemp, mkdir, rm, writeFile, rename } from 'node:fs/promises'
 import { join } from 'node:path'
 import type { AgentConnection } from '../broker/authorization'
+import { InfrastructureError } from '../../contracts/infrastructure'
+
+/** How often a running Pod's identity, key and owner are re-checked at the IdP (issue 666). */
+export const revocationCheckMs = 60000
 
 export async function podIdentityFile(root: string, connection: Pick<AgentConnection, 'issuer' | 'subject' | 'accessToken' | 'decisionIssuer' | 'brokered' | 'owner' | 'keyId'>) {
   const controller = new AbortController()
@@ -8,8 +12,8 @@ export async function podIdentityFile(root: string, connection: Pick<AgentConnec
   const temporary = join(root, 'credentials/temporary'); await mkdir(temporary, { recursive: true, mode: 0o700 })
   const directory = await mkdtemp(join(temporary, 'identity-')); const path = join(directory, 'auth.json')
   let refresh: Promise<void> = Promise.resolve(); let stopped = false; let refreshing = false; let failure: Error | undefined
-  const update = async () => {
-    const token = await connection.accessToken()
+  const update = async (fresh = false) => {
+    const token = await connection.accessToken(fresh)
     if (stopped) return
     secrets.push(token, JSON.stringify(token).slice(1, -1))
     const stage = join(directory, 'auth.next')
@@ -20,12 +24,19 @@ export async function podIdentityFile(root: string, connection: Pick<AgentConnec
   catch (error) { await rm(directory, { recursive: true, force: true }); throw error }
   // ape-shell rejects credentials in their final 30 seconds. Refresh before that
   // boundary, leaving time for the asynchronous token read and atomic file swap.
+  // Every revocationCheckMs the refresh authenticates at the IdP instead of reusing the cached token; an
+  // unavailable IdP skips that check, while a refused identity aborts the run's signal.
+  let lastCheck = Date.now()
   const timer = setInterval(() => {
     if (refreshing || stopped || failure) return
     refreshing = true
+    const fresh = Date.now() - lastCheck >= revocationCheckMs
     refresh = (async () => {
-      try { await update() }
-      catch (error) { failure = error instanceof Error ? error : new Error('Pod identity refresh failed'); controller.abort(failure) }
+      try { await update(fresh); if (fresh) lastCheck = Date.now() }
+      catch (error) {
+        if (fresh && error instanceof InfrastructureError) return
+        failure = error instanceof Error ? error : new Error('Pod identity refresh failed'); controller.abort(failure)
+      }
       finally { refreshing = false }
     })()
   }, 15000)

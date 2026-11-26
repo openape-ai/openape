@@ -46,7 +46,8 @@ export interface AgentConnection {
   owner: string
   keyId: string
   targetHost: string
-  accessToken: () => Promise<string>
+  /** `fresh` skips the cached token and authenticates at the IdP, so a revoked identity, key or owner fails now. */
+  accessToken: (fresh?: boolean) => Promise<string>
 }
 /**
  * What the IdP shows about a grant this authority requests (issue 1473): the Pod's name as origin and, for a script
