@@ -1,7 +1,6 @@
 /**
- * Bucket display metadata for the agent detail page. The bucket registry
- * itself lives in `server/utils/audience-buckets.ts`; the pre-approval hook
- * and grant evaluation read it from there, this file only drives the UI.
+ * Bucket display metadata for the agent detail page. Buckets are a UI
+ * grouping only; grant evaluation uses the literal audience strings.
  */
 
 type AudienceBucket = 'commands' | 'web' | 'root' | 'other'

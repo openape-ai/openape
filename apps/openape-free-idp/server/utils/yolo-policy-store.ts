@@ -3,9 +3,10 @@
 import { and, eq } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { yoloPolicies } from '../database/schema'
-import { AUDIENCE_WILDCARD } from './audience-buckets'
 
-export { AUDIENCE_WILDCARD }
+/** Audience that applies to every audience without its own policy row. */
+export const AUDIENCE_WILDCARD = '*'
+
 export type RiskLevel = 'low' | 'medium' | 'high' | 'critical'
 
 /**
