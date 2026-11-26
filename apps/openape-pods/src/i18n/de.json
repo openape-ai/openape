@@ -719,7 +719,6 @@
   "No tool assignments are available for this script": "Für dieses Skript sind keine Werkzeugzuweisungen verfügbar",
   "No tool capability is assigned to this pod": "Diesem Pod ist keine Werkzeugfähigkeit zugewiesen",
   "Mail recipe permission is not assigned": "Berechtigung für das Mail-Rezept ist nicht zugewiesen",
-  "Codex is not connected; connect the pod provider before using this script": "Codex ist nicht verbunden; verbinde den Pod-Anbieter vor Verwendung dieses Skripts",
   "Result references an uncommitted gap": "Ergebnis verweist auf eine nicht gespeicherte Lücke",
   "Wait for the current run or recover it before changing versions": "Warte auf den aktuellen Lauf oder kläre ihn, bevor du Versionen wechselst",
   "Active script changed during activation": "Aktives Skript hat sich während der Aktivierung geändert",
