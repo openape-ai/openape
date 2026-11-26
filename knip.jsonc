@@ -126,6 +126,25 @@
       "entry": ["*.config.ts", "server/mcp/**/*.ts", "{scripts,tests,e2e}/**/*.{ts,mjs}"],
       "project": "**/*.{ts,vue}"
     },
+    "apps/openape-pods": {
+      // Electron app: tsup bundles in scripts/build.mjs, build-runtime.mjs and
+      // runtime-build.mjs name these source files as entry by path string.
+      "entry": [
+        "*.config.ts",
+        "**/*.{test,spec}.ts",
+        "{scripts,tests,e2e}/**/*.{ts,mjs}",
+        "src/main/app.ts",
+        "src/preload/index.ts",
+        "src/worker/entry.ts",
+        "src/cli/entry.ts",
+        "src/runtime/{shell-client,program-client,codex-mcp}.ts",
+        "src/worker/runs/script-entry.ts",
+        "src/worker/agent/sdk-host.ts",
+        "src/worker/master/host.ts",
+        "src/main/connections/auth-host.ts"
+      ],
+      "project": "**/*.{ts,vue}"
+    },
     // CLI/daemon apps: bundler config supplies the entry points.
     "apps/openape-nest": {
       "project": "src/**/*.ts"
