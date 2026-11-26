@@ -3,7 +3,6 @@ import type { ProgramAuthority } from '../main/programs/grants'
 
 export const typesafeOrigin = 'https://api.typesafe.ai'
 export const defaultJevModel = 'jev-1.13.0'
-export const jevMaxAttempts = 20
 export type JevDescription = string | Record<string, unknown> | unknown[]
 export type JevQuestion =
   | { type: 'choice', instructions: JevDescription, criteria: Record<string, JevDescription | null> }

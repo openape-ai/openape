@@ -18,8 +18,3 @@ export const choiceEvents = [
   ['ed32bc79', '80d48713', 'noreply@github.com', '[GitHub] Your Dependabot alerts for the week of Sep 29 - Oct 6', 'useful', 0.89, '2026-10-06T08:42:07Z'],
   ['35d74d91', '1769d6ed', 'order@shop.example', 'Bestellt: „Druckerzubehör…“ und 4 weitere Artikel', 'invoice', 0.32, '2026-10-06T08:35:11Z'],
 ] as const
-
-/** The facts of one recorded mail the classification Pod asks the owner about. */
-export function choicePayload([eventId, , sender, subject, category, confidence, date]: typeof choiceEvents[number]): Record<string, unknown> {
-  return { account: 'phofmann@delta-mind.at', category, complete: false, confidence, date, evidence: eventId.repeat(8), knownContact: false, protected: false, sender, subject, urgency: sender === 'info@events.example' ? 'urgent' : 'normal' }
-}

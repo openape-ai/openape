@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { and, eq } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { useDb } from '../database/drizzle'
 import { consumers } from '../database/schema'
 import { createProblemError } from './problem'
@@ -33,13 +33,6 @@ export function mayRequestFor(consumer: ConsumerRow, caller: string): boolean {
     // A corrupt allowlist grants nothing. Fail closed.
     return false
   }
-}
-
-/** Load a consumer owned by this caller, else 404. */
-export async function loadOwnConsumer(id: string, owner: string): Promise<ConsumerRow> {
-  const row = await useDb().select().from(consumers).where(and(eq(consumers.id, id), eq(consumers.ownerEmail, owner))).get()
-  if (!row) throw createProblemError({ status: 404, title: 'Consumer not found' })
-  return row
 }
 
 /** The caller's email from the DDISA session or bearer token. */

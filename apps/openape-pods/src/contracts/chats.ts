@@ -38,14 +38,3 @@ export function parseChatsCommand(value: unknown): ChatsCommand {
   }
   return structuredClone(item) as ChatsCommand
 }
-export function parseChatsView(value: unknown): ChatsView {
-  if (!value || typeof value !== 'object') throw new Error('Invalid conversations view')
-  const view = value as ChatsView
-  if (!Array.isArray(view.conversations) || view.conversations.length > 1000) throw new Error('Invalid conversations list')
-  if (view.activeConversationId !== null) chatId(view.activeConversationId)
-  for (const conversation of view.conversations) {
-    chatId(conversation.id)
-    if (typeof conversation.title !== 'string' || typeof conversation.scope !== 'string' || !Number.isSafeInteger(conversation.revision) || !conversation.context || !Array.isArray(conversation.context.pods) || !Array.isArray(conversation.context.podIds) || !Array.isArray(conversation.relatedPodIds) || !Array.isArray(conversation.unavailablePodIds)) throw new Error('Invalid conversation fields')
-  }
-  return view
-}

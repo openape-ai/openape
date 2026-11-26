@@ -131,11 +131,6 @@ export function parsePodGrant(value: unknown): PodGrant {
   return grant
 }
 
-export function parsePodGrants(value: unknown): PodGrant[] {
-  if (!Array.isArray(value) || value.length > 1024) throw new Error('Invalid Pod grants')
-  return value.map(parsePodGrant)
-}
-
 /** The read the approval UI and MCP show; the details stay with the grant. */
 export function grantView(grant: PodGrant) {
   return { id: grant.id, podId: grant.podId, cliId: grant.cliId, display: grant.display, permissions: grant.details.map(detail => detail.permission), grantType: grant.grantType, state: grant.state, approvedInSession: grant.approvedInSession, updatedAt: grant.updatedAt }

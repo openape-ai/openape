@@ -8,10 +8,6 @@ import { commitRecord, readLocalState, reconcileDatabase } from './state'
 interface Connection { original: Client, session?: RecoverySession, pending?: Promise<void> }
 const connections = new WeakMap<Client, Connection>()
 function assertAvailable(connection: Connection) { if (connection.session?.failure) throw connection.session.failure }
-export function requireRecoveryAvailable(client: Client) {
-  const connection = connections.get(client)
-  if (connection) assertAvailable(connection)
-}
 export function recoveryFailure(client: Client) { return connections.get(client)?.session?.failure }
 function bind<T extends object>(target: T, property: string | symbol) {
   const value: unknown = Reflect.get(target, property, target)
