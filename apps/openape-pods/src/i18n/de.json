@@ -1033,7 +1033,7 @@
   "Description update stopped": "Beschreibungsaktualisierung angehalten",
   "No completed conversation messages are available for the description": "Für die Beschreibung sind keine abgeschlossenen Chatnachrichten verfügbar",
   "Generated description must contain 1–4000 characters": "Die erstellte Beschreibung muss 1–4000 Zeichen enthalten",
-  "Connect Codex to update the description": "Verbinde Codex, um die Beschreibung zu aktualisieren",
+  "Configure a model API connection to update the description": "Richte eine Modell-API-Verbindung ein, um die Beschreibung zu aktualisieren",
   "Description generation has no tools": "Die Beschreibungserstellung hat keinen Werkzeugzugriff",
   "Description model returned an invalid result": "Die KI hat ein ungültiges Beschreibungsergebnis geliefert",
   "Description update was interrupted. Retry to continue.": "Die Beschreibungsaktualisierung wurde unterbrochen. Starte sie erneut.",
