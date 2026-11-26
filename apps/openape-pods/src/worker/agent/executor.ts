@@ -1,5 +1,5 @@
 import { defaultAgentTimeoutSeconds } from '../../contracts/agent'
-import type { AgentRequest, ProxyAgentRequest } from '../../contracts/agent'
+import type { ProxyAgentRequest } from '../../contracts/agent'
 import { AgentCallError, safeSystemCause, serializeSafeError } from '../../contracts/agent-errors'
 import { freezeAgentMetadata } from '../../contracts/agent-metadata'
 import type { AgentCallMetadata } from '../../contracts/agent-metadata'
@@ -15,7 +15,7 @@ import { assignedModel } from './model'
 export interface AgentRuntime extends ScriptRuntime { binary: string, catalog: string, manifest: string, sdkHost: string, validateProxyAgent?: (request: ProxyAgentRequest, signal: AbortSignal) => Promise<void> }
 export const disabledFeatures = ['shell_tool', 'unified_exec', 'shell_snapshot', 'apps', 'plugins', 'remote_plugin', 'browser_use', 'computer_use', 'in_app_browser', 'code_mode', 'code_mode_host', 'multi_agent', 'multi_agent_v2', 'hooks', 'memories', 'image_generation', 'view_image', 'goals', 'skill_search', 'skill_mcp_dependency_install', 'workspace_dependencies', 'enable_request_compression', 'sleep_tool']
 const quote = (value: string) => `'${value.replaceAll('\'', '\'\\\'\'')}'`
-export async function executeAgent(runtime: AgentRuntime, privateRoot: string, prompt: string, references: string[], services: AgentGatewayServices, signal: AbortSignal, event: (value: unknown) => void, tools: AgentRequest['tools'] = [], timeoutSeconds = defaultAgentTimeoutSeconds, onMetadata?: (value: AgentCallMetadata) => void): Promise<{ threadId: string, response: string }> {
+export async function executeAgent(runtime: AgentRuntime, privateRoot: string, prompt: string, references: string[], services: AgentGatewayServices, signal: AbortSignal, event: (value: unknown) => void, timeoutSeconds = defaultAgentTimeoutSeconds, onMetadata?: (value: AgentCallMetadata) => void): Promise<{ threadId: string, response: string }> {
   const started = Date.now()
   let metadata: AgentCallMetadata = { callId: randomUUID(), backend: 'native', provider: 'codex', modelSize: null, modelId: null, reportedModelId: null, requestedThinking: null, effectiveThinking: null, wireThinking: null, configRevision: null, configHash: null, modelSelection: 'account-default', startedAt: new Date(started).toISOString(), endedAt: null, durationMs: null, status: 'running', threadId: null }
   const deadline = new AbortController()
@@ -33,7 +33,7 @@ export async function executeAgent(runtime: AgentRuntime, privateRoot: string, p
         }
       }
       event(value)
-    }, tools, timeoutSeconds, (modelId) => { metadata = { ...metadata, modelId }; emit() })
+    }, timeoutSeconds, (modelId) => { metadata = { ...metadata, modelId }; emit() })
     active.throwIfAborted()
     metadata = { ...metadata, status: 'completed', threadId: result.threadId, endedAt: new Date().toISOString(), durationMs: Date.now() - started }
     emit()
@@ -52,7 +52,7 @@ export async function executeAgent(runtime: AgentRuntime, privateRoot: string, p
   finally { clearTimeout(timer) }
 }
 
-async function executeNativeAgent(runtime: AgentRuntime, privateRoot: string, prompt: string, references: string[], services: AgentGatewayServices, signal: AbortSignal, event: (value: unknown) => void, tools: AgentRequest['tools'], timeoutSeconds: number, resolved: (model: string) => void): Promise<{ threadId: string, response: string }> {
+async function executeNativeAgent(runtime: AgentRuntime, privateRoot: string, prompt: string, references: string[], services: AgentGatewayServices, signal: AbortSignal, event: (value: unknown) => void, timeoutSeconds: number, resolved: (model: string) => void): Promise<{ threadId: string, response: string }> {
   const timeMs = timeoutSeconds * 1000
   if (!prompt.trim() || prompt.length > 128 * 1024) throw new Error('Invalid agent prompt')
   const manifest = JSON.parse(await readFile(runtime.manifest, 'utf8')) as { sdk: string, binaryHash: string, catalogHash: string }
@@ -64,15 +64,14 @@ async function executeNativeAgent(runtime: AgentRuntime, privateRoot: string, pr
   await Promise.all([mkdir(workspace, { recursive: true, mode: 0o700 }), mkdir(codexHome, { recursive: true, mode: 0o700 })])
   const lifecycle = new AbortController()
   const activeSignal = AbortSignal.any([signal, lifecycle.signal])
-  const useTools = tools.length === 1
-  const gateway = await startAgentGateway(useTools ? { provider: services.provider, tool: services.tool } : { provider: services.provider }, activeSignal)
+  const gateway = await startAgentGateway({ provider: services.provider }, activeSignal)
   try {
     const profile = join(root, 'codex.sb')
     await writeFile(profile, sandboxPolicy({ executable: runtime.binary, workspace: confined, readFiles: [runtime.catalog, ...references], runtimeDirectories: [], networkPorts: [gateway.port] }), { flag: 'wx', mode: 0o600 })
     const launcher = join(root, 'launch-codex')
     await writeFile(launcher, `#!/bin/sh\nexec /usr/bin/sandbox-exec -f ${quote(profile)} ${quote(runtime.binary)} --strict-config "$@"\n`, { flag: 'wx', mode: 0o700 })
     const config = join(root, 'sdk.json')
-    await writeFile(config, JSON.stringify({ timeMs, prompt, thread: { model, workingDirectory: workspace, skipGitRepoCheck: true, sandboxMode: 'read-only', approvalPolicy: 'never', webSearchMode: 'disabled' }, options: { codexPathOverride: launcher, env: { HOME: home, CODEX_HOME: codexHome, PATH: '/usr/bin:/bin', TMPDIR: workspace, POD_RUN_CAP: gateway.capability }, config: { model_provider: 'pod', model_providers: { pod: { name: 'Assigned pod provider', base_url: `http://127.0.0.1:${gateway.port}/v1`, wire_api: 'responses', requires_openai_auth: false, supports_websockets: false, env_key: 'POD_RUN_CAP', request_max_retries: 0, stream_max_retries: 0 } }, features: { ...Object.fromEntries(disabledFeatures.map(name => [name, false])), skip_host_skill_discovery: true }, mcp_servers: useTools ? { pod: { url: `http://127.0.0.1:${gateway.port}/mcp`, http_headers: { Authorization: `Bearer ${gateway.capability}` }, enabled_tools: ['ape_shell'], required: true, tools: { ape_shell: { approval_mode: 'approve' } } } } : {}, model_catalog_json: runtime.catalog, analytics: { enabled: false }, check_for_update_on_startup: false, project_doc_max_bytes: 0, shell_environment_policy: { inherit: 'none' } } } }), { flag: 'wx', mode: 0o600 })
+    await writeFile(config, JSON.stringify({ timeMs, prompt, thread: { model, workingDirectory: workspace, skipGitRepoCheck: true, sandboxMode: 'read-only', approvalPolicy: 'never', webSearchMode: 'disabled' }, options: { codexPathOverride: launcher, env: { HOME: home, CODEX_HOME: codexHome, PATH: '/usr/bin:/bin', TMPDIR: workspace, POD_RUN_CAP: gateway.capability }, config: { model_provider: 'pod', model_providers: { pod: { name: 'Assigned pod provider', base_url: `http://127.0.0.1:${gateway.port}/v1`, wire_api: 'responses', requires_openai_auth: false, supports_websockets: false, env_key: 'POD_RUN_CAP', request_max_retries: 0, stream_max_retries: 0 } }, features: { ...Object.fromEntries(disabledFeatures.map(name => [name, false])), skip_host_skill_discovery: true }, mcp_servers: {}, model_catalog_json: runtime.catalog, analytics: { enabled: false }, check_for_update_on_startup: false, project_doc_max_bytes: 0, shell_environment_policy: { inherit: 'none' } } } }), { flag: 'wx', mode: 0o600 })
     const domain = await superviseProcess(runtime.helper, runtime.executable, [runtime.sdkHost, config], workspace, runtime.environment, root, runtime.registerDomain)
     const stop = () => domain.cancel(); signal.addEventListener('abort', stop, { once: true }); if (signal.aborted) stop()
     const deadline = setTimeout(stop, timeMs + 5000)

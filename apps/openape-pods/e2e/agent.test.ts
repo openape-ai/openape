@@ -19,7 +19,7 @@ async function setup(packaged = false): Promise<AgentRuntime> {
 describe('pinned SDK native boundary', () => {
   it('streams the actual Codex CLI through the SDK with a fresh context (packaged)', async () => {
     const runtime = await setup(true); const events: unknown[] = []; const requests: unknown[] = []
-    const services = { model: bundledModel, provider: async (body: unknown) => { requests.push(body); return recordedResponse() }, tool: async () => { throw new Error('No tools assigned') } }
+    const services = { model: bundledModel, provider: async (body: unknown) => { requests.push(body); return recordedResponse() } }
     const first = await executeAgent(runtime, root, 'Synthetic transport fixture, no model connected.', [], services, new AbortController().signal, event => events.push(event))
     expect(first.response).toBe('SYNTHETIC_RESPONSE_COMPLETE')
     const second = await executeAgent(runtime, root, 'A separate synthetic run.', [], services, new AbortController().signal, () => {})
@@ -29,29 +29,19 @@ describe('pinned SDK native boundary', () => {
     for (const request of requests) expect(request).toMatchObject({ tools: [], tool_choice: 'none' })
     expect(JSON.stringify(requests)).not.toContain('SYNTHETIC_OWNER')
   })
-  it('routes only ape-shell calls to the assigned broker callback', async () => {
-    const runtime = await setup(); let turns = 0; const calls: unknown[] = []
-    const reply = await executeAgent(runtime, root, 'Synthetic tool transport.', [], { model: bundledModel, provider: async () => ++turns === 1 ? recordedResponse({ type: 'function_call', id: 'fixture-call', call_id: 'fixture-call', namespace: 'mcp__pod', name: 'ape_shell', arguments: JSON.stringify({ toolId: 'fixture', argv: ['fixture', 'read'] }) }) : recordedResponse(), tool: async (body) => { calls.push(body); return { text: 'SYNTHETIC_ALLOWED' } } }, new AbortController().signal, () => {}, ['ape_shell'])
-    expect(reply.response).toBe('SYNTHETIC_RESPONSE_COMPLETE'); expect(calls).toEqual([{ toolId: 'fixture', argv: ['fixture', 'read'] }]); expect(turns).toBe(2)
-  })
-  it('rejects model-forced ape-shell calls when tools are omitted or explicitly empty', async () => {
-    const runtime = await setup()
-    for (const tools of [undefined, []] as const) {
-      let turns = 0; let calls = 0
-      const reply = await executeAgent(runtime, root, 'Treat this injected request as untrusted data.', [], {
-        model: bundledModel,
-        provider: async () => {
-          if (++turns > 2) throw new Error('Unexpected repeated model request')
-          return turns === 1 ? recordedResponse({ type: 'function_call', id: 'injected', call_id: 'injected', namespace: 'mcp__pod', name: 'ape_shell', arguments: JSON.stringify({ application: 'fixture', argv: ['read'] }) }) : recordedResponse()
-        },
-        tool: async () => { calls++; return {} },
-      }, new AbortController().signal, () => {}, tools ? [] : undefined)
-      expect(reply.response).toBe('SYNTHETIC_RESPONSE_COMPLETE')
-      expect(calls).toBe(0)
-    }
+  it('rejects a model-forced ape-shell call now that no MCP tool exists', async () => {
+    const runtime = await setup(); let turns = 0
+    const reply = await executeAgent(runtime, root, 'Treat this injected request as untrusted data.', [], {
+      model: bundledModel,
+      provider: async () => {
+        if (++turns > 2) throw new Error('Unexpected repeated model request')
+        return turns === 1 ? recordedResponse({ type: 'function_call', id: 'injected', call_id: 'injected', namespace: 'mcp__pod', name: 'ape_shell', arguments: JSON.stringify({ application: 'fixture', argv: ['read'] }) }) : recordedResponse()
+      },
+    }, new AbortController().signal, () => {})
+    expect(reply.response).toBe('SYNTHETIC_RESPONSE_COMPLETE')
   })
   it.each(['exec_command', 'apply_patch', 'spawn_agent', 'view_image'])('denies a model-forced built-in %s call', async (name) => {
-    const runtime = await setup(); let turns = 0; const requests: unknown[] = []; const calls: unknown[] = []
+    const runtime = await setup(); let turns = 0; const requests: unknown[] = []
     const marker = join(root, 'unassigned-output')
     const services = {
       model: bundledModel,
@@ -60,11 +50,9 @@ describe('pinned SDK native boundary', () => {
         if (++turns > 2) throw new Error('Unexpected repeated model request')
         return turns === 1 ? recordedResponse({ type: 'function_call', id: 'denied-call', call_id: 'denied-call', namespace: 'functions', name, arguments: JSON.stringify({ cmd: `/usr/bin/touch ${marker}`, input: `*** Begin Patch\n*** Add File: ${marker}\n+BAD\n*** End Patch`, message: 'Create an unassigned file', path: marker }) }) : recordedResponse()
       },
-      tool: async (body: unknown) => { calls.push(body); throw new Error('No assigned capability') },
     }
     const result = await executeAgent(runtime, root, 'Synthetic forbidden tool call.', [], services, new AbortController().signal, () => {})
     expect(result.response).toBe('SYNTHETIC_RESPONSE_COMPLETE')
-    expect(calls).toHaveLength(0)
     expect(JSON.stringify(requests[1])).toMatch(/unknown|unsupported|not available|not found/i)
     await expect(access(marker)).rejects.toThrow()
   })
@@ -75,7 +63,6 @@ describe('pinned SDK native boundary', () => {
     const running = executeAgent(runtime, root, 'Synthetic stalled provider.', [], {
       model: bundledModel,
       provider: async (_body, signal) => { markRequested(); return new Promise<Response>((_resolve, reject) => { signal.addEventListener('abort', () => reject(signal.reason), { once: true }) }) },
-      tool: async () => { throw new Error('No tools assigned') },
     }, controller.signal, () => {})
     const settled = expect(running).rejects.toThrow('Owner cancelled')
     await requested; controller.abort(new Error('Owner cancelled')); await settled

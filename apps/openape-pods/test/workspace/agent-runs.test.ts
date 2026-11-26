@@ -92,7 +92,7 @@ it('shares the call budget across both backends and passes explicit text into th
   const { dispatcher, pod } = fixture({ proxy, provider: async () => new Response('{}') })
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
     const result = await hooks.request('agent.run', proxyRequest, signal) as { response: string }
-    await hooks.request('agent.run', { prompt: result.response, tools: ['ape_shell'] }, signal)
+    await hooks.request('agent.run', { prompt: result.response, tools: [] }, signal)
     for (let count = 2; count < 50; count++) await hooks.request('agent.run', count % 2 ? proxyRequest : { prompt: 'Native text' }, signal)
     await expect(hooks.request('agent.run', proxyRequest, signal)).rejects.toThrow('at most 50')
     return { status: 'completed', summary: 'Shared count verified', completedInputIds: input.eventIds, gapIds: [] }
@@ -102,7 +102,6 @@ it('shares the call budget across both backends and passes explicit text into th
   expect(executeAgent).toHaveBeenCalledTimes(25)
   expect(proxy).toHaveBeenCalledTimes(25)
   expect(vi.mocked(executeAgent).mock.calls[0]![2]).toBe('Exact handoff')
-  expect(vi.mocked(executeAgent).mock.calls[0]![7]).toEqual(['ape_shell'])
 })
 
 it.each(['native', 'proxy'] as const)('disconnecting %s cancels only its active call and remains catchable', async (backend) => {

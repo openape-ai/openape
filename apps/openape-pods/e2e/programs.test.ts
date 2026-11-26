@@ -24,7 +24,6 @@ import { ProgramSession } from '../src/main/programs/session'
 import { invokeProgram } from '../src/main/programs/invoke'
 import { PodIdentityManager } from '../src/main/connections/agent'
 import type { GrantLedgerPort } from '../src/main/broker/authorization'
-import { startAgentGateway } from '../src/worker/agent/gateway'
 import type { ProgramAssignment } from '../src/contracts/programs'
 import type { PodResource } from '../src/contracts/resources'
 
@@ -126,7 +125,7 @@ int main(int argc, char **argv) {
   return { root, privateRoot, cache, assignment, resource, podId, applicationId, state, identity, connection, ledger, terminal, invoke, releases: () => releases, close: async () => { server.closeAllConnections(); await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve())); await removeProfile(root) } }
 }
 
-it('program boundary: owner terminal state is reused by the assigned read tool and the agent sees only its result', async () => {
+it('program boundary: owner terminal state is reused by the assigned read tool', async () => {
   const f = await fixture(); const terminal = f.terminal()
   try {
     await expect.poll(() => terminal.view().output).toContain('SETUP_READY')
@@ -134,19 +133,6 @@ it('program boundary: owner terminal state is reused by the assigned read tool a
     expect(terminal.view()).toMatchObject({ state: 'closed', exitCode: 0, error: null })
     expect(f.releases()).toBe(1)
     expect((await f.invoke(['read'])).stdout).toBe('IDENTITY_READ_ONLY [REDACTED]\nSTATE_MATCH 1\n')
-    const gateway = await startAgentGateway({
-      provider: async () => new Response(),
-      tool: async (body) => {
-        const request = body as { applicationId: string, argv: string[], files?: { path: string, sha256: string }[] }
-        if (request.applicationId !== f.applicationId) throw new Error('Unassigned application')
-        return f.invoke(request.argv)
-      },
-    }, new AbortController().signal)
-    try {
-      const response = await fetch(`http://127.0.0.1:${gateway.port}/mcp`, { method: 'POST', headers: { Authorization: `Bearer ${gateway.capability}` }, body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'ape_shell', arguments: { applicationId: f.applicationId, argv: ['read'] } } }) })
-      const text = await response.text(); expect(text).toContain('STATE_MATCH 1'); expect(text).not.toContain('SYNTHETIC_CONFIGURATION'); expect(text).not.toContain('SYNTHETIC_AGENT')
-    }
-    finally { await gateway.close() }
     await expect(f.invoke(['read'], [])).rejects.toThrow('not declared')
     f.state.corruptHash = true
     await expect(f.invoke(['read'])).rejects.toThrow('Command token does not match this program file')

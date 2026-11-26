@@ -294,7 +294,7 @@ export class RunDispatcher {
             const metadata = (value: AgentCallMetadata) => { this.runs.assertLease(id); appendEvent('agent-call', value) }
             const operation = (request.backend === 'proxy'
               ? this.services!.proxy!(request, callSignal, metadata)
-              : executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services!.provider!, model: this.services?.model, tool: scriptTool }, callSignal, (event) => { assertCurrent(); appendEvent('agent', event) }, request.tools, request.timeoutSeconds, metadata)).catch((error: unknown) => {
+              : executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services!.provider!, model: this.services?.model }, callSignal, (event) => { assertCurrent(); appendEvent('agent', event) }, request.timeoutSeconds, metadata)).catch((error: unknown) => {
               if (request.backend === 'proxy') recordFailure({ cause: 'non-retryable' })
               if (error instanceof AgentCallError && error.details.cause === 'proxy_cleanup_unconfirmed' && !unconfirmedProxyCleanup) {
                 unconfirmedProxyCleanup = error
