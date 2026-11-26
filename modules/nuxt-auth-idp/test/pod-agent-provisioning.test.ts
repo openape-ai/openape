@@ -17,9 +17,9 @@ vi.mock('nitropack/runtime', () => ({
     return storage
   },
 }))
-const broker = vi.hoisted(() => ({ binding: null as null | { owner: string, key_id: string }, grant: {} as Record<string, unknown> }))
+const broker = vi.hoisted(() => ({ binding: null as null | { owner: string, key_id: string, connection_id?: string }, grant: {} as Record<string, unknown>, connection: {} as Record<string, unknown> }))
 vi.mock('../src/runtime/server/utils/broker-store', () => ({ hasBrokerStore: () => broker.binding !== null, useBrokerStore: () => ({ getAgent: async () => broker.binding }) }))
-vi.mock('../src/runtime/server/utils/broker-forward', () => ({ forwardBrokerOperation: async () => broker.grant }))
+vi.mock('../src/runtime/server/utils/broker-forward', () => ({ forwardBrokerOperation: async (_binding: unknown, operation: string) => operation === 'connection' ? broker.connection : broker.grant }))
 const owner = 'owner@example.test'
 let server: Server | undefined
 let origin = ''
@@ -29,7 +29,7 @@ async function request(body: unknown, bearer = token) {
   return fetch(`${origin}/api/pods/agents`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(bearer ? { Authorization: `Bearer ${bearer}` } : {}) }, body: JSON.stringify(body) })
 }
 beforeEach(async () => {
-  broker.binding = null; broker.grant = {}
+  broker.binding = null; broker.grant = {}; broker.connection = {}
   for (const storage of storages.values()) await storage.clear()
   const { useIdpStores } = await import('../src/runtime/server/utils/stores')
   const { issueAuthToken } = await import('../src/runtime/server/utils/agent-token')
@@ -152,5 +152,21 @@ it('keeps a consumed brokered once grant active for its running operation, but r
   for (const delta of [{ status: 'revoked' }, { status: 'denied' }, { status: 'pending' }, { expires_at: 1 }, { id: 'foreign' }, { request: { ...requestValue, requester: 'foreign@example.test' } }, { request: { ...requestValue, grant_type: 'always' } }]) {
     broker.grant = { id: 'assigned', status: 'used', request: requestValue, ...delta }
     expect(await status()).toMatchObject({ grantActive: false })
+  }
+})
+
+it('asks the decision IdP for the broker connection of a brokered identity without a grant', async () => {
+  const identity = await (await request(fixtureBody())).json()
+  const { useIdpStores } = await import('../src/runtime/server/utils/stores')
+  const { issueAuthToken } = await import('../src/runtime/server/utils/agent-token')
+  const signing = await useIdpStores().keyStore.getSigningKey()
+  const bearer = await issueAuthToken({ sub: identity.email, act: 'agent' }, 'https://id.openape.test', signing.privateKey, signing.kid)
+  broker.binding = { owner, key_id: identity.keyId, connection_id: 'connection-1' }
+  const status = async () => (await fetch(`${origin}/api/pods/agents/${encodeURIComponent(identity.email)}`, { headers: { Authorization: `Bearer ${bearer}` } })).json()
+  broker.connection = { id: 'connection-1', status: 'active' }
+  expect(await status()).toMatchObject({ active: true })
+  for (const connection of [{ id: 'connection-1', status: 'revoked' }, { id: 'foreign', status: 'active' }]) {
+    broker.connection = connection
+    expect(await status()).toMatchObject({ active: false })
   }
 })

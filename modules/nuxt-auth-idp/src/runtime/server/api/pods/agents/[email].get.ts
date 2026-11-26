@@ -25,7 +25,11 @@ export default defineEventHandler(async (event) => {
     if (caller.act !== 'agent' || caller.sub !== email) throw createProblemError({ status: 403, title: 'Agent authentication is required' })
     const keys = await sshKeyStore.findByUser(email)
     const identity = { email, owner: binding.owner, active: agent.isActive && keys.length === 1 && keys[0]?.keyId === binding.key_id, keyIds: keys.map(key => key.keyId) }
-    if (!grantId) return identity
+    if (!grantId) {
+      // The owner revokes the broker connection at the decision IdP; it answers a revoked connection with a 403 refusal.
+      const connection = brokerObject(await forwardBrokerOperation(binding, 'connection'))
+      return { ...identity, active: identity.active && connection.id === binding.connection_id && connection.status === 'active' }
+    }
     const grant = brokerObject(await forwardBrokerOperation(binding, 'get', grantId))
     return { ...identity, grantId, grantActive: grant.id === grantId && activeGrant(grant, email) }
   }
