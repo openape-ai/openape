@@ -34,8 +34,9 @@ export function reconcileAccounts(store: PodDatabase, resources: ResourceRegistr
     const defaultOwner = store.db.prepare('SELECT default_owner FROM onboarding WHERE id=1').get()!.default_owner as string | null
     store.db.prepare('UPDATE onboarding SET default_owner=NULL WHERE id=1').run()
 
-    // The ChatGPT connection was removed (issue 679): erase its rows and stored credentials.
-    for (const row of rows('chatgpt')) remove(row)
+    // The ChatGPT connection was removed (issue 679). Its rows stay until their credentials are erased
+    // ('forget'), so a failed erase or an exit in between is retried on the next start.
+    for (const row of rows('chatgpt')) cleanup.connections.push(row.id)
 
     const owners = rows('openape')
     const verified = owners.filter(row => identity(row))

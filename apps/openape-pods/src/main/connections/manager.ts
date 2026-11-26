@@ -98,6 +98,7 @@ export class ConnectionManager {
   private async cleanup(cleanup: AccountCleanup): Promise<void> {
     for (const key of cleanup.podKeys) await this.credentials.erasePodKey(key.id, key.podId)
     for (const id of cleanup.connections) await this.credentials.eraseConnection(id)
+    if (cleanup.connections.length) await this.dispatch({ type: 'forget', ids: cleanup.connections })
   }
 
   private async ownerAccount(state?: SetupState): Promise<{ owner: ConnectionView, metadata: Record<string, unknown> } | null> {
