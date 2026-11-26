@@ -19,8 +19,6 @@ export function parseServiceScope(value: unknown): ServiceScope {
 
 export type RunContextRequest = ServiceCheck
 
-/** Interval at which a running Pod's runtime grant, owner, identity and key are re-checked at the IdP. */
-export const runAuthorityWatchMs = 60 * 1000
 export interface RunContext { name: string, reason: 'manual' | 'schedule' | 'event', description?: string }
 export function parseRunContext(value: unknown): RunContext {
   const context = value as RunContext | null
