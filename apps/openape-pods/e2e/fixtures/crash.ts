@@ -47,7 +47,7 @@ export async function seed() {
   try {
     const pod = store.createPod({ name: 'Checkpoint recovery' })
     const registry = new ResourceRegistry(store, () => {})
-    const runtime = JSON.parse(await readFile(resolve('dist/vendor/manifest.json'), 'utf8'))
+    const runtime = JSON.parse(await readFile(resolve('dist/runtime/manifest.json'), 'utf8'))
     installExample(store, registry, pod.id, 'deterministic', runtime.dependencyLockHash)
     const original = JSON.parse(store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=?').get(pod.id)!.manifest as string)
     const artifact = `export async function run(context) {

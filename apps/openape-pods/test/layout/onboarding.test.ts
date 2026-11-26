@@ -16,7 +16,6 @@ const owner = '00000000-0000-4000-8000-0000000000e1'
 const accounts: OnboardingView = {
   connections: [
     { id: owner, provider: 'openape', account: 'original.owner.with.a.long.address@example.invalid', state: 'ready', error: null, login: null },
-    { id: '00000000-0000-4000-8000-0000000000e2', provider: 'chatgpt', account: 'model.account@example.invalid', state: 'ready', error: null, login: null },
   ],
   owner,
   runtime: { ready: true, error: null },

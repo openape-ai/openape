@@ -55,7 +55,6 @@ import { MasterService } from './master/service'
 import { CodexControl } from './codex/control'
 import { parseCodexRequest } from '../contracts/codex'
 import type { AgentRuntime } from './agent/executor'
-import { endpointModel } from './agent/model'
 import { descriptionProvider } from './master/summarize'
 import type { AgentBackendStatus } from '../contracts/agent-status'
 import { proxyAgentCall, proxyAgentValidation, assertProxyEndpoint } from './agent/proxy-client'
@@ -99,10 +98,7 @@ const runtime: AgentRuntime = {
   entry: join(dist, 'runtime/script-entry.mjs'),
   runtimeDirectories: [dirname(dirname(executable))],
   environment: { ELECTRON_RUN_AS_NODE: '1' },
-  binary: join(dist, 'vendor/codex'),
-  catalog: join(dist, 'vendor/models.json'),
-  manifest: join(dist, 'vendor/manifest.json'),
-  sdkHost: join(dist, 'runtime/sdk-host.mjs'),
+  manifest: join(dist, 'runtime/manifest.json'),
 }
 const runServices: RunServices = {
   prepareStart: async (scope, call, signal) => {
@@ -143,16 +139,13 @@ const data = new DataControl(store, runtime.helper)
 const setup = new SetupControl(store, registry)
 const details = new WorkspaceDetails(store, registry)
 const scheduler = new Scheduler(store, dispatcher, Date.now, false)
-const fixturePort = process.env.PODS_FIXTURE_MODEL_PORT
-const fixtureServices = fixturePort ? { provider: async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${fixturePort}/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal }), model: endpointModel(`http://127.0.0.1:${fixturePort}/model`) } : undefined
-runServices.provider = fixtureServices?.provider; runServices.model = fixtureServices?.model
 const masterControl = new MasterControl(store, registry, dispatcher, scheduler, runtime, startControlledRun)
 const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
 const master = new MasterService(store, masterControl)
 const ownerOperations = new AsyncLocalStorage<boolean>()
 let proxyStatus: unknown = { configured: false, enabled: false, available: false }
-const codex = new CodexControl(store, masterControl, () => ({ native: { available: Boolean(runServices.provider) }, proxy: proxyStatus }))
+const codex = new CodexControl(store, masterControl, () => ({ proxy: proxyStatus }))
 
 const remote = new DesktopRegistration(store)
 function registeredOwner() {
@@ -177,7 +170,7 @@ let sharing: SharingService | null = null
 let preparing: Promise<unknown> | null = null
 let suspended = false
 let startupReady = false
-let providerReady = false
+let connectionsReady = false
 let processesReady = false
 let ticking: Promise<void> | null = null
 let tickStartedAt = 0
@@ -318,15 +311,9 @@ port.on('message', async (event) => {
       master.setModel(runServices.proxy && provider ? { call: runServices.proxy, provider } : undefined)
       port.postMessage({ id: request.id, state: true }); return
     }
-    if (request.command && typeof request.command === 'object' && 'provider' in request.command) {
-      const endpoint = request.command.provider as { port: number, capability: string } | null
-      if (endpoint && (!Number.isInteger(endpoint.port) || endpoint.port < 1024 || endpoint.port > 65535 || !/^[a-f0-9]{64}$/.test(endpoint.capability))) throw new Error('Invalid trusted provider endpoint')
-      const services = endpoint ? { provider: async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${endpoint.port}/v1/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${endpoint.capability}` }, body: JSON.stringify(body), signal }), model: endpointModel(`http://127.0.0.1:${endpoint.port}/v1/model`, endpoint.capability) } : fixtureServices
-      const removed = !!runServices.provider && !services
-      runServices.provider = services?.provider; runServices.model = services?.model; providerReady = true; startupReady = processesReady
-      if (removed) {
-        dispatcher.cancelBackend('native')
-      }
+    // The desktop's account connections finished recovery; scheduled runs may start once local processes are ready too.
+    if (request.command && typeof request.command === 'object' && 'connectionsReady' in request.command) {
+      connectionsReady = true; startupReady = processesReady
       port.postMessage({ id: request.id, state: true }); return
     }
     if (request.command && typeof request.command === 'object' && 'program' in request.command) { port.postMessage({ id: request.id, state: new ProgramControl(store, registry).execute(request.command.program as ProgramInternal) }); return }
@@ -349,7 +336,7 @@ port.on('message', async (event) => {
       new ProgramControl(store, registry).execute({ type: 'recover' })
       await recoverPortableImports(store)
       await data.retention.cleanDeletedFiles(); await cleanEmptySnapshots(store); await data.retention.view()
-      processesReady = true; startupReady = providerReady
+      processesReady = true; startupReady = connectionsReady
       port.postMessage({ id: request.id, state: true }); return
     }
     if (request.command && typeof request.command === 'object' && 'definitions' in request.command) {

@@ -3,7 +3,7 @@
 For the standalone `ape-pods list/run/create/edit` development workflow, see
 [CLI development](docs/cli-development.md).
 
-OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 45.3.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pods, reference snapshots and manual example scripts. Codex execution uses the pinned TypeScript SDK and native CLI with a synthetic transport in acceptance tests. Owner-driven ChatGPT and OpenApe connection flows are implemented; third-party accounts are configured in assigned applications; live provider and tenant acceptance remain unverified. Schedules default to disabled, and new pods are paused.
+OpenApe Pods is the macOS desktop implementation of workspace concept B, using Electron 45.3.3, Vue 3, TypeScript, Vite and SQLite. This development build supports local pods, reference snapshots and manual example scripts. Model calls go only through the configured proxy backend; Pods bundles no Codex runtime (issues 676–679). The owner-driven OpenApe connection flow is implemented; third-party accounts are configured in assigned applications; live provider and tenant acceptance remain unverified. Schedules default to disabled, and new pods are paused.
 
 Start with the [Pods model](docs/model.md): Pods, networks, sandbox and grants,
 owner decisions and the MCP owner session. The sections below record the
@@ -190,7 +190,7 @@ The same helper supervises a separate process group, confirms group registration
 before publishing its PID, and terminates a no-fork runtime when its controlling
 lease closes or times out. Six native cases include packaged Electron-as-Node,
 cross-pod/auth/symlink denial, reference write/fork/network denial, valid allowed
-reads, frozen-process termination and actual controller SIGKILL. Scripts, Codex and assigned tools deny fork. The trusted SDK host may spawn the pinned Codex child in the supervised group; group cleanup retains the leader PID until live descendants have terminated. This does not claim arbitrary detached-daemon containment.
+reads, frozen-process termination and actual controller SIGKILL. Scripts and assigned tools deny fork. Group cleanup retains the leader PID until live descendants have terminated. This does not claim arbitrary detached-daemon containment.
 Custom SBPL remains the owner-accepted, unsupported native candidate from M0.
 
 Credential cache support serializes refresh transactions per connection,
@@ -277,7 +277,7 @@ new object-approval batches. Their legacy SQLite rows therefore need no schema
 change or inferred description. Active batch producers live in the assigned
 external tools and must use receiver support before sending this optional field.
 
-## M4: manual runs and pinned Codex execution
+## M4: manual runs and agent calls
 
 Runs installs one of two bundled, content-addressed example versions and starts
 it manually. A SQLite transaction reserves one lease per pod, pins the active
@@ -288,27 +288,10 @@ required. Acknowledged knowledge/checkpoint commits and run events are durable.
 Missing providers, malformed frames, timeouts and cancellation remain visible.
 Restart fences unfinished work as interrupted; automatic recovery (M6) repeats it.
 
-Scripts and Codex run in separate deny-default native domains. Only the trusted
-SDK host may launch the fixed CLI. Each regular agent call creates a fresh Codex
-thread and private HOME. Built-in shell, patch, image and subagent facilities are
-disabled; a restricted bundled model catalog removes the patch tool. The local
-HTTP gateway exposes only ape_shell, rejects resource helpers and binds requests
-to a random per-call capability. It forwards model transport through a trusted
-provider callback, so provider credentials never enter the Codex environment.
-The app's live provider callback is intentionally not connected yet.
-
-SDK and CLI are pinned to 0.153.4. M0 used 0.154.0, but that release had not passed
-the repository's seven-day publication quarantine on September 13. The compatible
-mature version was selected without weakening quarantine. Builds extract the
-catalog from that exact bundled binary, record hashes and ship the native CLI,
-SDK host and script wrapper outside asar. Tests invoke the actual CLI/SDK with
-recorded local Responses streams; they do not call a real model or use owner auth.
-
-The complete development and packaged acceptance includes fresh thread IDs,
-allowed ape_shell routing, forced forbidden built-ins, capability isolation,
-script protocol failures, stalled provider cancellation, group cleanup, ordered
-replay and real manual-run UI. Authenticated provider streaming and signed
-release acceptance remain separately authorized gates.
+Scripts run in deny-default native domains. Agent calls (`context.agent.run`)
+use only the proxy backend through a private per-run capability gateway; the
+earlier bundled Codex SDK/CLI, its model catalog, the ape_shell tool loop and the
+ChatGPT connection were removed (issues 676–679), so no Codex version is pinned.
 
 ## M5: durable schedules and local events
 
@@ -452,33 +435,23 @@ Signing in again with the same email keeps the connection and its Pod bindings;
 switching to another email requires confirmation, revokes the previous owner's
 Pod bindings and permissions, and new agents are provisioned on first use. New
 agents require the owner's one-time Pods provider consent in Pod settings.
-At startup, profiles from earlier releases are reconciled to one Codex row and
-one DDISA owner row: duplicate rows of the owner identity are merged without
+At startup, profiles from earlier releases are reconciled to one DDISA owner row,
+and ChatGPT connections of earlier releases are erased with their credentials: duplicate rows of the owner identity are merged without
 re-provisioning; bindings of other identities are released.
 Each Pod's apes shell continues to receive its own agent identity, never the
-owner's personal token. ChatGPT model login, OpenApe human identity and
-application sign-ins are separate connections. The renderer can supply only an
+owner's personal token. OpenApe human identity and application sign-ins are
+separate connections; model access comes only from configured proxy connections. The renderer can supply only an
 email and an explicit switch confirmation, not tokens, executables, issuers or
 provider endpoints. Browser opening uses only a currently pending,
 driver-validated sign-in URL. No startup code logs in or reads mail
 automatically.
-
-The pinned Codex auth-only app-server accepts initialize, account/login/start,
-account/login/cancel and account/read requests. Model turns and command requests
-are rejected by its trusted transport. Its process domain is registered durably
-before execution. Device sign-in uses the supported chatgptDeviceCode flow;
-managed file credentials are isolated inside the encrypted connection transaction.
-Refresh uses account/read with refreshToken=true. The unstable internal
-chatgptAuthTokens interface is not used. Main owns provider authorization and
-forwards bounded streaming responses through a capability gateway; neither the
-utility worker nor the confined Codex child receives the account token.
 
 OpenApe uses the existing apes-cli public client with PKCE S256 and the registered
 http://localhost:9876/callback redirect. Callback method, host, path, state and code
 are checked; Ed25519 signature, issuer, audience, human role, nonce, expiry and
 expected email bind the returned identity. A busy callback port fails visibly.
 The live identity service must allow this registered client/redirect; compatibility
-has not been inferred from local source tests. Owner and model credentials remain
+has not been inferred from local source tests. Owner credentials remain
 separate from each pod's generated Ed25519 agent identity.
 
 Mail account sign-in, folder inventory, history scope and attachments now belong
@@ -494,10 +467,6 @@ Interrupted sign-ins become failed on restart; retry creates a separate isolated
 connection. Startup inspects old authentication and tool domains before clearing
 abandoned plaintext cache files. Current verification and the separate live
 provider/release gates are recorded in the migration contract.
-
-Pinned auth/provider source contract:
-https://github.com/openai/codex/tree/rust-v0.153.4/codex-rs/login and
-https://github.com/openai/codex/blob/rust-v0.153.4/codex-rs/core/src/client.rs.
 
 ## M12: data maintenance and distribution
 

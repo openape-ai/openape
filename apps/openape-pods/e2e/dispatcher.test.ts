@@ -19,7 +19,7 @@ async function setup(services?: RunServices) {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-dispatch-')))
   store = new PodDatabase(root)
   const resources = new ResourceRegistry(store, id => dispatcher?.cancelPod(id))
-  dispatcher = new RunDispatcher(store, resources, { ...await machineRuntime(), helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: resolve('dist/vendor/codex'), catalog: resolve('dist/vendor/models.json'), manifest: resolve('dist/vendor/manifest.json'), sdkHost: resolve('dist/runtime/sdk-host.mjs') }, services)
+  dispatcher = new RunDispatcher(store, resources, { ...await machineRuntime(), helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, manifest: resolve('dist/runtime/manifest.json') }, services)
   return { store, dispatcher, resources, pod: store.createPod({ name: 'Synthetic pod' }) }
 }
 describe('manual dispatch', () => {
@@ -72,7 +72,7 @@ it('routes a script tool call with a frozen lease and rejects scope substitution
   const previous = store.getPod(pod.id).activeScript
   const old = JSON.parse(store.db.prepare('SELECT manifest FROM scripts WHERE pod_id=? AND hash=?').get(pod.id, previous)!.manifest as string)
   const code = `export async function run(ctx) { const page = await ctx.tools.invoke({application:'fixture',argv:['synthetic']}); await ctx.progress.commit({expectedRevision:ctx.input.checkpointRevision, checkpoint:{count:page.items.length},sources:[],claims:[]}); return {status:'completed',summary:'Read synthetic page',completedInputIds:[],gapIds:[]}; }`
-  const lock = JSON.parse(await readFile(resolve('dist/vendor/manifest.json'), 'utf8'))
+  const lock = JSON.parse(await readFile(resolve('dist/runtime/manifest.json'), 'utf8'))
   const manifest = store.storeScript(pod.id, { ...old, capabilities: ['tool.app_fixture.invoke'], dependencyLockHash: lock.dependencyLockHash, contentHash: digest(code) }, code)
   store.db.prepare('INSERT INTO validations VALUES(?,?,?,?,?)').run(pod.id, manifest.contentHash, pod.revision, resources.epoch(pod.id), '{}')
   store.db.prepare('UPDATE pods SET active_script=? WHERE id=?').run(manifest.contentHash, pod.id)

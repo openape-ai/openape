@@ -1,4 +1,3 @@
-import { once } from 'node:events'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
@@ -8,9 +7,6 @@ import type { AgentCallMetadata } from '../../contracts/agent-metadata'
 import { AgentCallError, serializeSafeError } from '../../contracts/agent-errors'
 
 export interface AgentGatewayServices {
-  provider: (body: unknown, signal: AbortSignal) => Promise<Response>
-  /** The connected account's default model; only the desktop's model connection gateway offers it. */
-  model?: (signal: AbortSignal) => Promise<string>
   proxy?: (request: ProxyAgentRequest, signal: AbortSignal, onMetadata: (metadata: AgentCallMetadata) => void) => Promise<{ response: string, threadId: string }>
   proxyValidate?: (request: ProxyAgentRequest) => void
 }
@@ -34,7 +30,7 @@ export async function startAgentGateway(services: AgentGatewayServices, signal: 
     const received = Buffer.from(request.headers.authorization ?? '')
     const expected = Buffer.from(`Bearer ${capability}`)
     if (received.length !== expected.length || !timingSafeEqual(received, expected) || gatewaySignal.aborted || request.headers.origin) { response.statusCode = 403; json(response, { error: 'Run capability rejected' }); return }
-    if (request.method !== 'POST' || !['/v1/responses', ...(services.model ? ['/v1/model'] : []), ...(services.proxy ? ['/v1/proxy', '/v1/proxy/cancel'] : []), ...(services.proxyValidate ? ['/v1/proxy/validate'] : [])].includes(request.url ?? '')) { response.statusCode = 405; json(response, { error: 'Unsupported agent endpoint' }); return }
+    if (request.method !== 'POST' || ![...(services.proxy ? ['/v1/proxy', '/v1/proxy/cancel'] : []), ...(services.proxyValidate ? ['/v1/proxy/validate'] : [])].includes(request.url ?? '')) { response.statusCode = 405; json(response, { error: 'Unsupported agent endpoint' }); return }
     let operation: { controller: AbortController, drained: Promise<void> } | undefined
     let finishOperation: (() => void) | undefined
     const identity = request.headers['x-pod-agent-call']
@@ -88,35 +84,6 @@ export async function startAgentGateway(services: AgentGatewayServices, signal: 
         catch (error) {
           const safe = error instanceof AgentCallError ? error : new AgentCallError(activeSignal.aborted ? 'cancelled' : 'provider_error', activeSignal.aborted ? 'Agent call cancelled' : 'Proxy gateway failed', { phase: 'request' })
           send({ type: 'error', error: serializeSafeError(safe), ...(safe.metadata ? { metadata: safe.metadata } : {}) })
-        }
-        response.end(); return
-      }
-      if (request.url === '/v1/model' && services.model) { json(response, { model: await services.model(activeSignal) }); return }
-      if (request.url === '/v1/responses') {
-        if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid provider request')
-        const upstream = await services.provider({ ...value, tools: [], tool_choice: 'none', parallel_tool_calls: false }, activeSignal)
-        response.statusCode = upstream.status; response.setHeader('Content-Type', upstream.headers.get('Content-Type') ?? 'text/event-stream')
-        if (upstream.body) {
-          const reader = upstream.body.getReader()
-          const cancel = () => { void reader.cancel().catch((error: unknown) => response.destroy(error instanceof Error ? error : new Error('Provider stream cancellation failed'))) }
-          activeSignal.addEventListener('abort', cancel, { once: true })
-          let bytes = 0
-          try {
-            for (;;) {
-              activeSignal.throwIfAborted()
-              const next = await reader.read()
-              if (next.done) break
-              bytes += next.value.byteLength
-              if (bytes > 16 * 1024 * 1024) throw new Error('Provider stream exceeds its 16 MiB limit')
-              if (!response.write(next.value)) await once(response, 'drain', { signal: activeSignal })
-            }
-            activeSignal.throwIfAborted()
-          }
-          finally {
-            activeSignal.removeEventListener('abort', cancel)
-            try { await reader.cancel() }
-            finally { reader.releaseLock() }
-          }
         }
         response.end(); return
       }

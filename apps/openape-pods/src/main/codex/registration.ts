@@ -1,9 +1,7 @@
-import { execFile } from 'node:child_process'
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
-import { promisify } from 'node:util'
+import { parse } from 'smol-toml'
 import type { CodexConnection } from '../../contracts/codex'
-import { verifyExecutable } from '../../worker/runtime/sandbox'
 import { writeLauncher } from './launcher'
 import type { LauncherTarget } from './launcher'
 
@@ -11,12 +9,12 @@ const name = 'openape-pods'
 const manual = `codex mcp remove ${name}`
 interface Receipt { config: string, appended: string, created: boolean }
 
-// Registers the launcher with the owner's Codex. The bundled Codex CLI only
-// reads (`mcp get`): its writer rewrote unrelated parts of config.toml in the
-// issue 1375 probe, so the app appends one marked block itself and removes
-// exactly those bytes again. Entries it did not write are never changed.
+// Registers the launcher with the owner's Codex. The Codex CLI writer rewrote
+// unrelated parts of config.toml in the issue 1375 probe, so the app appends one
+// marked block itself and removes exactly those bytes again; it only reads the
+// file otherwise. Entries it did not write are never changed.
 export class CodexRegistration {
-  constructor(private readonly cli: { binary: string, binaryHash: string }, private readonly home: string, private readonly directory: string, private readonly target: LauncherTarget) {}
+  constructor(private readonly home: string, private readonly directory: string, private readonly target: LauncherTarget) {}
   get launcher(): string { return join(this.directory, 'openape-pods-mcp') }
   private get record(): string { return join(this.directory, 'registration.json') }
   private get config(): string { return join(this.home, 'config.toml') }
@@ -64,16 +62,16 @@ export class CodexRegistration {
     await writeFile(`${this.config}.openape-pods.tmp`, content, { mode }); await rename(`${this.config}.openape-pods.tmp`, this.config)
   }
 
+  /** The registered launcher command, 'unsupported' for any other transport, or null without an entry. */
   private async entry(): Promise<string | null> {
-    await verifyExecutable(this.cli.binary, this.cli.binaryHash)
-    try {
-      const { stdout } = await promisify(execFile)(this.cli.binary, ['mcp', 'get', name, '--json'], { env: { CODEX_HOME: this.home, HOME: this.home, PATH: '/usr/bin:/bin' }, timeout: 20000 })
-      const transport = (JSON.parse(stdout) as { transport?: { type?: string, command?: string, args?: string[] } }).transport
-      return transport?.type === 'stdio' && !transport.args?.length && typeof transport.command === 'string' ? transport.command : 'unsupported'
-    }
-    catch (error) {
-      if ((error as { stderr?: string }).stderr?.includes(`No MCP server named '${name}'`)) return null
-      throw new Error('Codex configuration could not be read; check config.toml', { cause: error })
-    }
+    const text = await readFile(this.config, 'utf8').catch((error: NodeJS.ErrnoException) => { if (error.code === 'ENOENT') return null; throw error })
+    if (text === null) return null
+    let servers: unknown
+    try { servers = parse(text).mcp_servers }
+    catch (error) { throw new Error('Codex configuration could not be read; check config.toml', { cause: error }) }
+    const server = servers && typeof servers === 'object' ? (servers as Record<string, unknown>)[name] : undefined
+    if (server === undefined) return null
+    const { command, args, url } = (server && typeof server === 'object' ? server : {}) as { command?: unknown, args?: unknown, url?: unknown }
+    return typeof command === 'string' && url === undefined && (args === undefined || (Array.isArray(args) && !args.length)) ? command : 'unsupported'
   }
 }

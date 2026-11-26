@@ -25,7 +25,7 @@ export function revokeConnectionUse(store: PodDatabase, resources: ResourceRegis
 }
 
 // Earlier releases created one row per sign-in attempt and allowed several owners.
-// Keep one Codex row and one DDISA owner row; Pods bound to another identity are re-provisioned under the owner later.
+// Keep one DDISA owner row; Pods bound to another identity are re-provisioned under the owner later.
 export function reconcileAccounts(store: PodDatabase, resources: ResourceRegistry): AccountCleanup {
   return store.transaction(() => {
     const cleanup: AccountCleanup = { connections: [], podKeys: [] }
@@ -34,11 +34,9 @@ export function reconcileAccounts(store: PodDatabase, resources: ResourceRegistr
     const defaultOwner = store.db.prepare('SELECT default_owner FROM onboarding WHERE id=1').get()!.default_owner as string | null
     store.db.prepare('UPDATE onboarding SET default_owner=NULL WHERE id=1').run()
 
-    const codex = rows('chatgpt')
-    const keptCodex = [...codex].reverse().find(row => row.state === 'ready') ?? codex.at(-1)
-    for (const row of codex) {
-      if (row !== keptCodex) remove(row)
-    }
+    // The ChatGPT connection was removed (issue 679). Its rows stay until their credentials are erased
+    // ('forget'), so a failed erase or an exit in between is retried on the next start.
+    for (const row of rows('chatgpt')) cleanup.connections.push(row.id)
 
     const owners = rows('openape')
     const verified = owners.filter(row => identity(row))

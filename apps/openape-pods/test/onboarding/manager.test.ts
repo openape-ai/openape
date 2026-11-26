@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { access, mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises'
+import { access, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
 import { PodIdentityBindingError, PodIdentityManager } from '../../src/main/connections/agent'
@@ -8,9 +8,7 @@ import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { ConnectionManager } from '../../src/main/connections/manager'
 import { CredentialCache } from '../../src/main/connections/cache'
-import { CodexConnection } from '../../src/main/connections/codex'
-import { AuthProcess } from '../../src/main/connections/process'
-import { PodDatabase, digest } from '../../src/worker/storage/database'
+import { PodDatabase } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { SetupControl } from '../../src/worker/onboarding/control'
 
@@ -27,13 +25,11 @@ vi.mock('@openape/core', async (original) => {
 })
 vi.mock('../../src/main/connections/broker', async original => ({ ...await original<typeof import('../../src/main/connections/broker')>(), podBrokerReceipt: vi.fn(async () => 'synthetic-receipt') }))
 afterEach(async () => { lookup.failure = null; kernel.release = '25.6.0'; for (const cleanup of cleanups.splice(0)) await cleanup(); vi.restoreAllMocks(); vi.unstubAllEnvs() })
-async function fixture(architecture = process.arch, jevKey?: () => string | undefined, directAgents = false) {
-  const root = await mkdtemp(join(tmpdir(), 'pods-connect-')); const vendor = join(root, 'vendor'); await mkdir(vendor)
-  await writeFile(join(vendor, 'codex'), 'synthetic-codex')
-  await writeFile(join(vendor, 'manifest.json'), JSON.stringify({ sdk: '0.153.4', cli: `0.153.4-${process.platform}-${architecture}`, binaryHash: digest('synthetic-codex') }))
+async function fixture(jevKey?: () => string | undefined, directAgents = false) {
+  const root = await mkdtemp(join(tmpdir(), 'pods-connect-'))
   const store = new PodDatabase(root); const registry = new ResourceRegistry(store, () => {}); const control = new SetupControl(store, registry)
   const credentials = new CredentialCache(join(root, 'credentials'))
-  const runtime = { helper: 'unused-fixture-helper', executable: process.execPath, entry: 'unused-entry', runtimeDirectories: [], environment: {}, binary: join(vendor, 'codex'), manifest: join(vendor, 'manifest.json'), catalog: 'unused-catalog', sdkHost: 'unused-host' }
+  const runtime = { helper: 'unused-fixture-helper', executable: process.execPath, entry: 'unused-entry', runtimeDirectories: [], environment: {}, manifest: 'unused-manifest' }
   const availability = vi.fn(async () => {})
   const manager = new ConnectionManager(root, runtime, credentials, async command => control.execute(command), availability, async podId => store.getPod(podId).name, directAgents, jevKey)
   cleanups.push(async () => { await manager.stop(); store.close(); await rm(root, { recursive: true, force: true }) })
@@ -116,7 +112,7 @@ it('checks a changed owner binding even while a transport retry is throttled', a
 })
 
 it('uses the actual title for new direct identities without refreshing established direct registrations', async () => {
-  const { manager, control, store } = await fixture(process.arch, undefined, true)
+  const { manager, control, store } = await fixture(undefined, true)
   const pod = store.createPod({ name: 'Direct invoice review' }); const owner = randomUUID()
   const issuer = 'https://id.example.invalid'; const account = 'owner@example.invalid'
   control.execute({ type: 'save', connection: { id: owner, provider: 'openape', account, state: 'ready', error: null }, metadata: { issuer, subject: account } })
@@ -129,21 +125,6 @@ it('uses the actual title for new direct identities without refreshing establish
   expect((await manager.podConnection(pod.id)).identity).toEqual(first.identity)
   expect(provision).toHaveBeenCalledOnce(); expect(bearer).toHaveBeenCalledOnce()
   expect((control.connections.metadata(owner).pods as Record<string, unknown>)[pod.id]).toMatchObject({ registeredName: pod.name })
-})
-it('records explicit sign-in cancellation and supports a separate retry without auto-activating work', async () => {
-  vi.spyOn(CodexConnection.prototype, 'login').mockImplementation(async (_id, signal, present) => { present({ url: 'https://auth.openai.com/device', code: 'SYNTHETIC' }); return new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(new Error('Cancelled')), { once: true })) })
-  const { manager, store } = await fixture()
-  const started = await manager.execute({ type: 'connect', provider: 'chatgpt', account: '' }); const id = started.connections[0].id
-  await expect.poll(async () => (await manager.view()).connections[0].login?.code).toBe('SYNTHETIC')
-  const cancelled = await manager.execute({ type: 'cancel', id })
-  expect(cancelled.connections[0]).toMatchObject({ state: 'failed', error: 'Cancelled', login: null })
-  vi.spyOn(CodexConnection.prototype, 'login').mockResolvedValue({ account: 'model@example.invalid', accountId: 'synthetic-account' })
-  await manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })
-  await expect.poll(async () => (await manager.view()).connections[0].state).toBe('ready')
-  expect((await manager.view()).connections).toHaveLength(1)
-  expect(await manager.providerReady()).toBe(true); expect(store.listPods()).toEqual([])
-  expect((await manager.view()).complete).toBe(false)
-  await manager.execute({ type: 'disconnect', id }); expect(await manager.providerReady()).toBe(false)
 })
 it('keeps an opaque owner subject separate from its discovery email when enrolling existing Pods', async () => {
   const { manager, control, store } = await fixture()
@@ -178,25 +159,15 @@ it('rejects global Microsoft setup without touching its cache or starting login'
   await expect(manager.execute({ type: 'connect', provider: 'microsoft', account: 'mail@example.invalid' })).rejects.toThrow('Permissions')
   expect((await manager.view()).connections).toHaveLength(0)
 })
-it('fails visibly for a mismatched runtime architecture', async () => {
-  const wrong = await fixture(process.arch === 'x64' ? 'arm64' : 'x64')
-  expect((await wrong.manager.view()).runtime).toMatchObject({ ready: false, error: 'Bundled Codex architecture does not match this Mac' })
-  expect(wrong.availability).toHaveBeenCalledOnce()
-  await expect(wrong.manager.providerReady()).resolves.toBe(false)
-  await expect(wrong.manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })).rejects.toThrow('architecture')
-})
-
-it.each(['manifest', 'binary'] as const)('publishes native unavailability after recovery when the bundled %s is invalid', async (target) => {
-  const { manager, availability, runtime } = await fixture()
-  availability.mockClear()
-  if (target === 'manifest') await rm(runtime.manifest)
-  else await writeFile(runtime.binary, 'changed-synthetic-codex')
-  const inspectCredentials = vi.fn(async () => {})
-  await manager.initialize(inspectCredentials)
-  expect(inspectCredentials).toHaveBeenCalledOnce()
-  expect(availability).toHaveBeenCalledOnce()
-  expect((await manager.view()).runtime.ready).toBe(false)
-  await expect(manager.providerReady()).resolves.toBe(false)
+it('erases a ChatGPT connection left by an earlier release and its stored credentials', async () => {
+  const { manager, control, credentials } = await fixture()
+  const id = randomUUID()
+  control.execute({ type: 'save', connection: { id, provider: 'chatgpt' as never, account: 'model@example.invalid', state: 'ready', error: null }, metadata: { accountId: 'synthetic-account' } })
+  await credentials.create(id, JSON.stringify({ tokens: { account_id: 'synthetic-account', access_token: 'synthetic-access', refresh_token: 'synthetic-refresh' } }))
+  expect((await manager.view()).connections).toEqual([])
+  await manager.initialize(async () => {})
+  await expect(credentials.readConnection(id)).rejects.toThrow()
+  expect(() => control.execute({ type: 'metadata', id })).toThrow('Connection not found')
 })
 
 it('keeps all execution blocked when shared credential recovery fails', async () => {
@@ -272,28 +243,6 @@ it('switches the owner only after confirmation and releases pods bound to the pr
   await expect(access(join(root, 'credentials', `${connectionId}.encrypted`))).rejects.toThrow('ENOENT')
 })
 
-it('lets the owner sign in with DDISA while the bundled Codex tools are unavailable, and keeps ChatGPT blocked', async () => {
-  vi.stubEnv('DDISA_MOCK_RECORDS', JSON.stringify({ 'published.invalid': { idp: 'https://idp.published.invalid' } }))
-  const { manager } = await fixture(process.arch === 'x64' ? 'arm64' : 'x64')
-  vi.spyOn(OwnerConnection.prototype, 'login').mockResolvedValue({ issuer: 'https://idp.published.invalid', subject: 'owner' })
-  expect((await manager.view()).runtime.ready).toBe(false)
-  await manager.execute({ type: 'connect', provider: 'openape', account: 'owner@published.invalid' })
-  await expect.poll(async () => (await manager.view()).connections[0]?.state).toBe('ready')
-  await expect(manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })).rejects.toThrow('architecture')
-})
-
-it('initializes and signs the DDISA owner in on an unverified kernel while the sandboxed ChatGPT sign-in stays blocked', async () => {
-  kernel.release = '99.0.0'
-  vi.stubEnv('DDISA_MOCK_RECORDS', JSON.stringify({ 'published.invalid': { idp: 'https://idp.published.invalid' } }))
-  const { manager } = await fixture()
-  expect((await manager.view()).runtime).toEqual({ ready: true, error: null })
-  vi.spyOn(OwnerConnection.prototype, 'login').mockResolvedValue({ issuer: 'https://idp.published.invalid', subject: 'owner' })
-  await manager.execute({ type: 'connect', provider: 'openape', account: 'owner@published.invalid' })
-  await expect.poll(async () => (await manager.view()).connections.find(item => item.provider === 'openape')?.state).toBe('ready')
-  await manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })
-  await expect.poll(async () => (await manager.view()).connections.find(item => item.provider === 'chatgpt')).toMatchObject({ state: 'failed', error: expect.stringContaining('Pod execution is blocked on darwin 99.0.0 (arm64)') })
-})
-
 it('keeps the owner sign-in closed while credential recovery failed', async () => {
   const { manager } = await fixture()
   await manager.initialize(async () => { throw new Error('Synthetic credential recovery failure') })
@@ -348,7 +297,6 @@ it('preserves a working TypeSafe key on failed replacement, hides it and erases 
   const item = connected.connections.find(item => item.provider === 'typesafe')!
   expect(item).toMatchObject({ state: 'ready', account: 'TypeSafe / Jev' })
   expect(await credentials.readConnection(item.id)).toEqual({ kind: 'typesafe', key: 'synthetic-private-key' })
-  expect(await manager.providerReady()).toBe(false)
   expect(JSON.stringify(connected)).not.toContain('synthetic-private-key')
   expect(JSON.stringify(store.db.prepare('SELECT * FROM connections').all())).not.toContain('synthetic-private-key')
   transport.mockResolvedValueOnce(new Response('synthetic-private-key', { status: 401 }))
@@ -381,71 +329,8 @@ it('aborts a live TypeSafe request on disconnect and marks rejected credentials 
   expect((await manager.view()).connections[0]).toMatchObject({ state: 'expired', error: 'TypeSafe API key is invalid or access was denied; reconnect' })
 })
 
-/** A stand-in for the bundled Codex app-server: answers `model/list` (Codex 0.153.4 shape) over two pages. */
-function fakeAppServer() {
-  const server = { default: 'fixture-model-a' as string | null, starts: 0, requests: [] as { method: string, params: unknown }[] }
-  vi.spyOn(AuthProcess, 'start').mockImplementation(async () => {
-    server.starts++
-    return {
-      initialized: () => {},
-      close: async () => {},
-      request: async (method: string, params: unknown) => {
-        server.requests.push({ method, params })
-        if (method === 'initialize') return {}
-        if (method !== 'model/list') throw new Error(`Unexpected ${method}`)
-        if ((params as { cursor: string | null }).cursor === null) return { data: [{ id: 'fixture-small', model: 'fixture-small', isDefault: false, hidden: false }], nextCursor: 'page-2' }
-        return { data: server.default ? [{ id: server.default, model: server.default, isDefault: true, hidden: false }] : [], nextCursor: null }
-      },
-    } as unknown as AuthProcess
-  })
-  return server
-}
-async function connectedChatGPT() {
-  const context = await fixture()
-  vi.spyOn(CodexConnection.prototype, 'login').mockResolvedValue({ account: 'model@example.invalid', accountId: 'synthetic-account' })
-  const id = (await context.manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })).connections[0].id
-  await expect.poll(async () => (await context.manager.view()).connections[0].state).toBe('ready')
-  await context.credentials.connect(id, JSON.stringify({ auth_mode: 'chatgpt', tokens: { access_token: 'synthetic-access', refresh_token: 'synthetic-refresh', account_id: 'synthetic-account' } }))
-  return { ...context, id }
-}
-it('uses the account default from the app-server model list, caches it hourly and re-reads it after sign-in', async () => {
-  const server = fakeAppServer(); const { manager } = await connectedChatGPT(); const signal = new AbortController().signal
-  expect(await manager.model(signal)).toBe('fixture-model-a')
-  expect(server.requests.filter(item => item.method === 'model/list').map(item => item.params)).toEqual([{ cursor: null, includeHidden: false }, { cursor: 'page-2', includeHidden: false }])
-  server.default = 'fixture-model-b'
-  expect(await manager.model(signal)).toBe('fixture-model-a')
-  expect(server.starts).toBe(1)
-  const now = Date.now(); vi.spyOn(Date, 'now').mockReturnValue(now + 61 * 60 * 1000)
-  expect(await manager.model(signal)).toBe('fixture-model-b')
-  expect(server.starts).toBe(2)
-  server.default = 'fixture-model-c'
-  await manager.execute({ type: 'connect', provider: 'chatgpt', account: '' })
-  await expect.poll(async () => (await manager.view()).connections[0].state).toBe('ready')
-  expect(await manager.model(signal)).toBe('fixture-model-c')
-})
-it('reads the account default again once after the provider refuses the cached model', async () => {
-  const server = fakeAppServer(); const { manager } = await connectedChatGPT(); const signal = new AbortController().signal
-  vi.spyOn(CodexConnection.prototype, 'bearer').mockResolvedValue('synthetic-bearer')
-  const refusal = (model: string) => JSON.stringify({ detail: `The '${model}' model is not supported when using Codex with a ChatGPT account.` })
-  const upstream = vi.spyOn(globalThis, 'fetch').mockImplementation(async (_url, init) => new Response(refusal(JSON.parse(String(init?.body)).model), { status: 400, headers: { 'Content-Type': 'application/json' } }))
-  expect(await manager.model(signal)).toBe('fixture-model-a')
-  const response = await manager.provider({ model: 'fixture-model-a' }, signal)
-  expect(response.status).toBe(400); expect(await response.text()).toBe(refusal('fixture-model-a'))
-  server.default = 'fixture-model-b'
-  expect(await manager.model(signal)).toBe('fixture-model-b')
-  await manager.provider({ model: 'fixture-model-b' }, signal)
-  server.default = 'fixture-model-c'
-  expect(await manager.model(signal)).toBe('fixture-model-b')
-  expect(server.starts).toBe(2); expect(upstream).toHaveBeenCalledTimes(2)
-})
-it('fails visibly when the account reports no default model', async () => {
-  const server = fakeAppServer(); const { manager } = await connectedChatGPT()
-  server.default = null
-  await expect(manager.model(new AbortController().signal)).rejects.toThrow('The connected ChatGPT account reports no default model')
-})
-
 it('uses an explicit CLI Jev key without decrypting or replacing desktop credentials', async () => {
-  const { manager, control, credentials } = await fixture(process.arch, () => 'synthetic-env-key')
+  const { manager, control, credentials } = await fixture(() => 'synthetic-env-key')
   const id = randomUUID()
   control.execute({ type: 'save', connection: { id, provider: 'typesafe', account: 'TypeSafe / Jev', state: 'ready', error: null }, metadata: {} })
   const read = vi.spyOn(credentials, 'readConnection')
@@ -465,48 +350,6 @@ it('uses an explicit CLI Jev key without decrypting or replacing desktop credent
   await manager.execute({ type: 'disconnect', id })
   await expect(manager.typesafeRequest(id, '{}', new AbortController().signal)).rejects.toThrow('not connected')
   expect(transport).toHaveBeenCalledTimes(count)
-})
-
-it('uses one migrated ChatGPT cache from a cipherless runtime, saves refreshed tokens and removes it on disconnect', async () => {
-  const server = fakeAppServer()
-  const { root, manager, credentials, runtime, id } = await connectedChatGPT()
-  expect(await manager.model(new AbortController().signal)).toBe('fixture-model-a')
-  const cliCache = new CredentialCache(join(root, 'credentials'))
-  const cliConnection = new CodexConnection(cliCache, runtime, join(root, 'authentication'))
-  server.default = 'fixture-cli-model'
-  expect(await cliConnection.defaultModel(id, 'synthetic-account', new AbortController().signal)).toBe('fixture-cli-model')
-  const futureToken = `synthetic.${Buffer.from(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url')}.signature`
-  await cliCache.withCache(id, async (file) => {
-    const value = JSON.parse(await readFile(file, 'utf8'))
-    await writeFile(file, JSON.stringify({ ...value, tokens: { ...value.tokens, access_token: futureToken, refresh_token: 'synthetic-refreshed-token' } }))
-  })
-  expect(await cliConnection.bearer(id, 'synthetic-account', new AbortController().signal)).toBe(futureToken)
-  expect(await credentials.readConnection(id)).toMatchObject({ tokens: { refresh_token: 'synthetic-refreshed-token' } })
-  await expect(cliConnection.bearer(id, 'foreign', new AbortController().signal)).rejects.toThrow('binding')
-  await manager.execute({ type: 'disconnect', id })
-  await expect(cliCache.readConnection(id)).rejects.toThrow()
-  await expect(manager.model(new AbortController().signal)).rejects.toThrow('Connect ChatGPT')
-})
-
-it('refreshes ChatGPT through the cipherless controller and preserves the newest token for desktop reuse', async () => {
-  const { root, credentials, runtime, id } = await connectedChatGPT()
-  const token = (expiry: number) => `synthetic.${Buffer.from(JSON.stringify({ exp: expiry })).toString('base64url')}.signature`
-  await credentials.connect(id, JSON.stringify({ tokens: { account_id: 'synthetic-account', access_token: token(1), refresh_token: 'old-synthetic-refresh' } }))
-  await credentials.migrateChatgpt(id, 'synthetic-account')
-  const refreshed = token(Math.floor(Date.now() / 1000) + 3600)
-  vi.spyOn(AuthProcess, 'start').mockImplementation(async (_runtime, _root, _binary, _argv, home) => ({
-    initialized: () => {},
-    close: async () => {},
-    request: async (method: string) => {
-      if (method === 'initialize') return {}
-      if (method !== 'account/read') throw new Error(`Unexpected ${method}`)
-      await writeFile(join(home, 'auth.json'), JSON.stringify({ tokens: { account_id: 'synthetic-account', access_token: refreshed, refresh_token: 'new-synthetic-refresh' } }))
-      return { account: { type: 'chatgpt' } }
-    },
-  }) as unknown as AuthProcess)
-  const cli = new CodexConnection(new CredentialCache(join(root, 'credentials')), runtime, join(root, 'authentication'))
-  expect(await cli.bearer(id, 'synthetic-account', new AbortController().signal)).toBe(refreshed)
-  expect(await credentials.readConnection(id)).toMatchObject({ tokens: { access_token: refreshed, refresh_token: 'new-synthetic-refresh' } })
 })
 
 // Issue 1519: the owner token comes only from the owner's apes (DDISA) login in ~/.config/apes.

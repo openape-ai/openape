@@ -18,7 +18,7 @@ async function setup() {
   store = new PodDatabase(root)
   const resources = new ResourceRegistry(store, id => dispatcher?.cancelPod(id))
   const helper = resolve('dist/native/pods-helper')
-  dispatcher = new RunDispatcher(store, resources, { ...await machineRuntime(), helper, executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: resolve('dist/vendor/codex'), catalog: resolve('dist/vendor/models.json'), manifest: resolve('dist/vendor/manifest.json'), sdkHost: resolve('dist/runtime/sdk-host.mjs') })
+  dispatcher = new RunDispatcher(store, resources, { ...await machineRuntime(), helper, executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, manifest: resolve('dist/runtime/manifest.json') })
   let now = 1000
   const scheduler = new Scheduler(store, dispatcher, () => now)
   const watcher = new ReferenceWatcher(store, resources, scheduler, helper)

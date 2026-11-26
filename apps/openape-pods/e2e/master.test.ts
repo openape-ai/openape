@@ -17,7 +17,7 @@ let root = ''; let store: PodDatabase; let dispatcher: RunDispatcher; let master
 async function setup(packaged = false) {
   root = await realpath(await mkdtemp(join(tmpdir(), 'pods-master-'))); store = new PodDatabase(root)
   const bundle = resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents'); const dist = packaged ? join(bundle, 'Resources/app.asar.unpacked/dist') : resolve('dist')
-  const runtime: AgentRuntime = { ...await machineRuntime(), helper: join(dist, 'native/pods-helper'), executable: packaged ? join(bundle, 'MacOS/OpenApe Pods Fixture') : process.execPath, entry: join(dist, 'runtime/script-entry.mjs'), runtimeDirectories: packaged ? [bundle] : [], environment: packaged ? { ELECTRON_RUN_AS_NODE: '1' } : {}, binary: join(dist, 'vendor/codex'), catalog: join(dist, 'vendor/models.json'), manifest: join(dist, 'vendor/manifest.json'), sdkHost: join(dist, 'runtime/sdk-host.mjs') }
+  const runtime: AgentRuntime = { ...await machineRuntime(), helper: join(dist, 'native/pods-helper'), executable: packaged ? join(bundle, 'MacOS/OpenApe Pods Fixture') : process.execPath, entry: join(dist, 'runtime/script-entry.mjs'), runtimeDirectories: packaged ? [bundle] : [], environment: packaged ? { ELECTRON_RUN_AS_NODE: '1' } : {}, manifest: join(dist, 'runtime/manifest.json') }
   const registry = new ResourceRegistry(store, podId => dispatcher.cancelPod(podId, 'Permissions changed'))
   dispatcher = new RunDispatcher(store, registry, runtime); const scheduler = new Scheduler(store, dispatcher)
   const control = new MasterControl(store, registry, dispatcher, scheduler, runtime)

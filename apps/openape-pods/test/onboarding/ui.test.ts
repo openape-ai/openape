@@ -7,12 +7,10 @@ import JevConnection from '../../src/renderer/JevConnection.vue'
 import type { OnboardingView } from '../../src/contracts/onboarding'
 
 const owner = '00000000-0000-4000-8000-000000000002'
-const codex = '00000000-0000-4000-8000-000000000005'
 const state: OnboardingView = {
   connections: [
     { id: owner, provider: 'openape', account: 'owner@example.invalid', state: 'ready', error: null, login: null },
     { id: '00000000-0000-4000-8000-000000000003', provider: 'microsoft', account: 'mail@example.invalid', state: 'ready', error: null, login: null },
-    { id: codex, provider: 'chatgpt', account: 'model@example.invalid', state: 'ready', error: null, login: null },
   ],
   owner,
   runtime: { ready: true, error: null },
@@ -26,37 +24,33 @@ async function page(view: OnboardingView) {
   return { wrapper, onboarding }
 }
 
-it('shows only the Codex and DDISA accounts', async () => {
+it('shows only the DDISA account', async () => {
   const { wrapper } = await page(state)
-  expect(wrapper.findAll('section.setup-connection').map(item => item.attributes('aria-label'))).toEqual(['DDISA/OpenApe', 'Codex'])
+  expect(wrapper.findAll('section.setup-connection').map(item => item.attributes('aria-label'))).toEqual(['DDISA/OpenApe'])
   for (const hidden of ['mail@example.invalid', 'Telegram', 'Microsoft', 'Expected account', 'Identity provider', 'Default for new pods', 'Use for new pods', 'Allow requests from this provider']) expect(wrapper.text()).not.toContain(hidden)
   expect(wrapper.findAll('select')).toHaveLength(0)
   expect(wrapper.findAll('input')).toHaveLength(1)
   expect(wrapper.text()).not.toContain('TypeSafe')
   wrapper.unmount()
 })
-it('offers sign-in for both accounts when neither is signed in', async () => {
+it('offers the DDISA sign-in and no ChatGPT sign-in when nobody is signed in', async () => {
   const { wrapper, onboarding } = await page({ ...state, connections: [], owner: null })
-  expect(wrapper.text().match(/Not signed in/g)).toHaveLength(2)
-  expect(buttons(wrapper, 'Codex')).toEqual(['Sign in'])
+  expect(wrapper.text().match(/Not signed in/g)).toHaveLength(1)
+  expect(wrapper.text()).not.toContain('Codex')
   expect(buttons(wrapper, 'DDISA/OpenApe')).toEqual(['Sign in'])
-  await wrapper.get('section[aria-label="Codex"] button').trigger('click'); await flushPromises()
-  expect(onboarding).toHaveBeenLastCalledWith({ type: 'connect', provider: 'chatgpt', account: '' })
   await wrapper.get('input[type="email"]').setValue('owner@example.invalid')
   await wrapper.get('form').trigger('submit'); await flushPromises()
   expect(onboarding).toHaveBeenLastCalledWith({ type: 'connect', provider: 'openape', account: 'owner@example.invalid' })
   wrapper.unmount()
 })
-it('shows both signed-in accounts with their addresses', async () => {
+it('shows the signed-in account with its address', async () => {
   const { wrapper } = await page(state)
-  expect(wrapper.get('section[aria-label="Codex"]').text()).toContain('model@example.invalid · Signed in')
   expect(wrapper.get('section[aria-label="DDISA/OpenApe"]').text()).toContain('owner@example.invalid · Signed in')
-  expect(buttons(wrapper, 'Codex')).toEqual(['Disconnect'])
   expect(buttons(wrapper, 'DDISA/OpenApe')).toEqual(['Sign in again', 'Disconnect'])
   expect((wrapper.get('input[type="email"]').element as HTMLInputElement).value).toBe('owner@example.invalid')
   wrapper.unmount()
 })
-it.each([['Codex', codex, { type: 'connect', provider: 'chatgpt', account: '' }], ['DDISA/OpenApe', owner, { type: 'connect', provider: 'openape', account: 'owner@example.invalid' }]] as const)('asks to sign in again when the %s expired', async (section, id, command) => {
+it.each([['DDISA/OpenApe', owner, { type: 'connect', provider: 'openape', account: 'owner@example.invalid' }]] as const)('asks to sign in again when the %s expired', async (section, id, command) => {
   const { wrapper, onboarding } = await page({ ...state, connections: state.connections.map(item => item.id === id ? { ...item, state: 'expired', error: 'Sign-in expired; reconnect' } : item) })
   expect(wrapper.get(`section[aria-label="${section}"]`).text()).toContain('Sign-in expired')
   const again = wrapper.get(`section[aria-label="${section}"]`).findAll('button').find(button => button.text() === 'Sign in again')!
@@ -76,10 +70,10 @@ it('confirms before switching the DDISA account', async () => {
   wrapper.unmount()
 })
 it('shows device sign-in and cancels only that pending connection', async () => {
-  const { wrapper, onboarding } = await page({ ...state, connections: [{ id: codex, provider: 'chatgpt', account: '', state: 'connecting', error: null, login: { url: 'https://auth.openai.com/codex/device', code: 'SYNTHETIC' } }], owner: null })
+  const { wrapper, onboarding } = await page({ ...state, connections: [{ id: owner, provider: 'openape', account: 'owner@example.invalid', state: 'connecting', error: null, login: { url: 'https://idp.example.invalid/device', code: 'SYNTHETIC' } }] })
   expect(wrapper.text()).toContain('SYNTHETIC')
   await wrapper.findAll('button').find(button => button.text() === 'Cancel sign-in')!.trigger('click'); await flushPromises()
-  expect(onboarding).toHaveBeenLastCalledWith({ type: 'cancel', id: codex }); wrapper.unmount()
+  expect(onboarding).toHaveBeenLastCalledWith({ type: 'cancel', id: owner }); wrapper.unmount()
 })
 it('requires a visible disconnect confirmation', async () => {
   const { wrapper, onboarding } = await page(state)
