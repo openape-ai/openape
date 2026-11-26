@@ -147,6 +147,7 @@ it('accepts explicit account actions without accepting identity or token injecti
   }
   for (const type of ['setDefaultOwner', 'reconnect']) expect(() => parseOnboardingCommand({ type, id })).toThrow('Unsupported')
   expect(() => parseOnboardingCommand({ type: 'connect', provider: 'openape', account: 'owner@example.invalid', issuer: 'https://id.example.invalid' })).toThrow('Unsupported')
-  expect(() => parseOnboardingCommand({ type: 'connect', provider: 'chatgpt', account: '', switchAccount: true })).toThrow('DDISA')
+  expect(() => parseOnboardingCommand({ type: 'connect', provider: 'microsoft', account: 'a@example.invalid', switchAccount: true })).toThrow()
+  expect(() => parseOnboardingCommand({ type: 'connect', provider: 'chatgpt', account: '' })).toThrow('account email')
   expect(parseOnboardingCommand({ type: 'connect', provider: 'openape', account: 'owner@example.invalid', switchAccount: true })).toMatchObject({ switchAccount: true })
 })

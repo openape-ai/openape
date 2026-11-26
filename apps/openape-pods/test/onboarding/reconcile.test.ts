@@ -7,7 +7,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { PodIdentityManager } from '../../src/main/connections/agent'
 import { ConnectionManager } from '../../src/main/connections/manager'
 import { CredentialCache } from '../../src/main/connections/cache'
-import { PodDatabase, digest } from '../../src/worker/storage/database'
+import { PodDatabase } from '../../src/worker/storage/database'
 import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { SetupControl } from '../../src/worker/onboarding/control'
 
@@ -16,11 +16,9 @@ afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(
 const exists = (path: string) => access(path).then(() => true, () => false)
 
 // The profile state observed on September 22: repeated and failed sign-ins for one address,
-// a second human identity and two Codex rows.
+// a second human identity and two ChatGPT rows, which the removed connection erases (issue 679).
 async function legacyProfile() {
-  const root = await mkdtemp(join(tmpdir(), 'pods-reconcile-')); const vendor = join(root, 'vendor'); await mkdir(vendor)
-  await writeFile(join(vendor, 'codex'), 'synthetic-codex')
-  await writeFile(join(vendor, 'manifest.json'), JSON.stringify({ cli: `0.153.4-${process.platform}-${process.arch}`, binaryHash: digest('synthetic-codex') }))
+  const root = await mkdtemp(join(tmpdir(), 'pods-reconcile-'))
   const store = new PodDatabase(root); const resources = new ResourceRegistry(store, () => {}); const control = new SetupControl(store, resources)
   // The September 22 profile still holds identities in the retired keychain format, opened here by the migration cipher.
   const credentials = new CredentialCache(join(root, 'credentials'), { available: () => true, decrypt: value => value.toString() })
@@ -42,19 +40,19 @@ async function legacyProfile() {
   for (const item of [bindings.delta, bindings.owner, bindings.duplicate]) await writeFile(join(root, 'credentials', `${item.connectionId}.encrypted`), JSON.stringify({ ...item.identity, privateKey: 'synthetic-key', publicKey: 'synthetic-public-key' }), { mode: 0o600 })
   for (const id of Object.values(rows)) await credentials.create(id, JSON.stringify({ issuer, account: 'synthetic' }))
   await credentials.connect(rows.codex, JSON.stringify({ auth_mode: 'chatgpt', tokens: { account_id: 'synthetic', access_token: 'synthetic-access', refresh_token: 'synthetic-refresh' } }))
-  const runtime = { helper: 'unused-fixture-helper', executable: process.execPath, entry: 'unused-entry', runtimeDirectories: [], environment: {}, binary: join(vendor, 'codex'), manifest: join(vendor, 'manifest.json'), catalog: 'unused-catalog', sdkHost: 'unused-host' }
+  const runtime = { helper: 'unused-fixture-helper', executable: process.execPath, entry: 'unused-entry', runtimeDirectories: [], environment: {}, manifest: 'unused-manifest' }
   const start = async () => { const manager = new ConnectionManager(root, runtime, credentials, async command => control.execute(command), async () => {}, async podId => store.getPod(podId).name); await manager.initialize(async () => {}); return manager }
   cleanups.push(async () => { store.close(); await rm(root, { recursive: true, force: true }) })
   return { root, store, resources, control, start, rows, pods, bindings }
 }
 
-it('reduces a September 22 profile to one Codex and one DDISA owner without re-provisioning owner Pods', async () => {
+it('reduces a September 22 profile to one DDISA owner, erases its ChatGPT rows and keeps owner Pods', async () => {
   const { root, resources, control, start, rows, pods, bindings } = await legacyProfile()
   const provision = vi.spyOn(PodIdentityManager.prototype, 'provision'); const prepare = vi.spyOn(PodIdentityManager.prototype, 'ensurePrepared')
   const manager = await start()
   const view = await manager.view()
   expect(view.runtime).toEqual({ ready: true, error: null })
-  expect(view.connections.map(item => [item.provider, item.account, item.state])).toEqual([['openape', 'patrick@example.invalid', 'ready'], ['chatgpt', 'model@example.invalid', 'ready']])
+  expect(view.connections.map(item => [item.provider, item.account, item.state])).toEqual([['openape', 'patrick@example.invalid', 'ready']])
   expect(view.owner).toBe(rows.owner)
   expect(control.connections.metadata(rows.owner).pods).toEqual({ [pods[1].id]: bindings.owner, [pods[2].id]: bindings.duplicate })
   expect((await manager.podConnection(pods[2].id)).identity).toEqual(bindings.duplicate.identity)
@@ -66,14 +64,14 @@ it('reduces a September 22 profile to one Codex and one DDISA owner without re-p
   expect(await file(bindings.delta.connectionId)).toBe(false)
   expect(await exists(join(root, 'credentials', `${bindings.delta.connectionId}.identity.json`))).toBe(false)
   expect(await Promise.all([rows.owner, rows.codex].map(file))).toEqual([true, false])
-  expect(await exists(join(root, 'credentials', `${rows.codex}.credential.json`))).toBe(true)
+  expect(await exists(join(root, 'credentials', `${rows.codex}.credential.json`))).toBe(false)
   expect(await Promise.all([rows.deltaReady, rows.deltaFailed, rows.ownerDuplicate, rows.codexFailed].map(file))).toEqual([false, false, false, false])
   expect(provision).not.toHaveBeenCalled(); expect(prepare).not.toHaveBeenCalled()
   await manager.stop()
 
   const before = JSON.stringify(control.connections.metadata(rows.owner))
   const again = await start()
-  expect((await again.view()).connections).toHaveLength(2)
+  expect((await again.view()).connections).toHaveLength(1)
   expect(JSON.stringify(control.connections.metadata(rows.owner))).toBe(before)
   await again.stop()
 })

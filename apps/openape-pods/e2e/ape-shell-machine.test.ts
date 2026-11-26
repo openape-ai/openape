@@ -183,7 +183,7 @@ describe('ape-shell machine native boundary', () => {
     const pod = store.createPod({ name: 'Synthetic validation' }); const resources = new ResourceRegistry(store, () => {})
     const draftId = randomUUID(); let closed = false
     store.db.prepare('INSERT INTO script_drafts VALUES(?,?,?,?,?,?,NULL,NULL)').run(draftId, pod.id, 1, pod.bindingRevision, 'export async function run(){ return {status:"completed",summary:"Validated through ape-shell",completedInputIds:[],gapIds:[]} }', '[]')
-    const runtime = { helper: setup.helper, executable: setup.executable, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: '', catalog: '', sdkHost: '', manifest: resolve('dist/vendor/manifest.json'), prepareExecution: async () => ({ machine: { runtime: { executable: setup.executable, cli: resolve('dist/vendor/apes/ape-shell.mjs'), environment: { APES_AUTH_FILE: setup.auth } }, targetHost: 'fixture-mac', waitMs: 0 }, close: async () => { closed = true } }) }
+    const runtime = { helper: setup.helper, executable: setup.executable, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, manifest: resolve('dist/runtime/manifest.json'), prepareExecution: async () => ({ machine: { runtime: { executable: setup.executable, cli: resolve('dist/vendor/apes/ape-shell.mjs'), environment: { APES_AUTH_FILE: setup.auth } }, targetHost: 'fixture-mac', waitMs: 0 }, close: async () => { closed = true } }) }
     try {
       expect(await validateDraft(store, resources, runtime, draftId, 1, AbortSignal.timeout(10000))).toMatchObject({ status: 'completed' })
       expect(closed).toBe(true)

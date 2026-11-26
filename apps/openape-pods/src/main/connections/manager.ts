@@ -4,21 +4,19 @@ import type { Owner } from '@openape/pods-protocol'
 import { enablePodBroker, revokePodBroker, podBrokerReceipt } from './broker'
 import type { PodBrokerConnection } from './broker'
 import { randomUUID } from 'node:crypto'
-import { rm, readFile } from 'node:fs/promises'
+import { rm } from 'node:fs/promises'
 import { extractDomain, resolveIdP } from '@openape/core'
 import { join } from 'node:path'
 import type { ConnectionView, OnboardingCommand, OnboardingView, PodIdentityView } from '../../contracts/onboarding'
 import type { AgentRuntime } from '../../worker/agent/executor'
 import type { SetupInternal } from '../../worker/onboarding/control'
 import type { CredentialCache } from './cache'
-import { CodexConnection } from './codex'
 import { OwnerConnection } from './owner'
 import type { OwnerSession } from './owner-session'
 import type { ApesLogin } from './apes-login'
 import { PodIdentityBindingError, PodIdentityManager } from './agent'
 import type { PodIdentityReference } from './agent'
 import { recoverAuthDomains } from './ledger'
-import { verifyExecutable } from '../../worker/runtime/sandbox'
 import type { AccountCleanup } from '../../worker/onboarding/reconcile'
 import { summaryLine } from '../../contracts/grant-summary'
 import { safeSystemCause } from '../../contracts/agent-errors'
@@ -50,20 +48,15 @@ async function discoverIssuer(account: string): Promise<string> {
 export class ConnectionManager {
   private jobs = new Map<string, { controller: AbortController, work: Promise<void>, login: ConnectionView['login'] }>()
   private runtimeState = { ready: false, error: null as string | null }
-  // Credential recovery finished; set before the bundled tools are inspected.
+  // Credential recovery finished.
   private accountsReady = false
   private assigning = false
   private identityTurn: Promise<void> = Promise.resolve()
   private typesafeSession = new AbortController()
   private typesafeChanging = false
-  private providerSession = new AbortController()
-  private accountModel: { key: string, model: string, expiresAt: number, afterRejection: boolean } | null = null
-  private modelRejected = false
   private readonly nameRefreshRetry = new Map<string, { name: string, after: number }>()
-  private codex: CodexConnection
   private owner: OwnerConnection
   constructor(private readonly root: string, private readonly runtime: AgentRuntime, private readonly credentials: CredentialCache, private readonly dispatch: (command: SetupInternal) => Promise<unknown>, private readonly availability: () => Promise<void>, private readonly podName: (podId: string) => Promise<string>, private readonly directAgents = false, private readonly jevKey?: () => string | undefined) {
-    this.codex = new CodexConnection(credentials, runtime, join(root, 'authentication'))
     this.owner = new OwnerConnection(credentials)
   }
 
@@ -80,23 +73,10 @@ export class ConnectionManager {
           try { await this.credentials.readConnection(entry.connectionId) }
           catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error }
         }
-        for (const connection of (await this.state()).connections) {
-          if (connection.provider !== 'chatgpt' || connection.state !== 'ready') continue
-          const metadata = await this.metadata(connection.id)
-          if (typeof metadata.accountId !== 'string') throw new Error('ChatGPT account binding is missing')
-          await this.credentials.migrateChatgpt(connection.id, metadata.accountId)
-        }
         await rm(join(this.root, 'credentials/temporary'), { recursive: true, force: true })
       }
       this.accountsReady = true
-      try {
-        const manifest = JSON.parse(await readFile(this.runtime.manifest, 'utf8')) as { binaryHash: string, cli: string }
-        if (manifest.cli !== `0.153.4-${process.platform}-${process.arch}`) throw new Error('Bundled Codex architecture does not match this Mac')
-        await verifyExecutable(this.runtime.binary, manifest.binaryHash)
-        this.runtimeState = { ready: true, error: null }
-      }
-      catch (error) { this.runtimeState = { ready: false, error: error instanceof Error ? error.message : 'Runtime inspection failed' } }
-      // Storage and credential recovery succeeded; an unavailable native backend must not block proxy execution.
+      this.runtimeState = { ready: true, error: null }
       await this.availability()
     }
     catch (error) { this.runtimeState = { ready: false, error: error instanceof Error ? error.message : 'Runtime inspection failed' } }
@@ -202,11 +182,7 @@ export class ConnectionManager {
           this.typesafeSession.abort(new Error('TypeSafe connection removed')); this.typesafeSession = new AbortController()
           await this.credentials.eraseConnection(item.id)
         }
-        if (item.provider === 'chatgpt') {
-          this.providerSession.abort(new Error('ChatGPT connection removed')); this.providerSession = new AbortController(); this.accountModel = null
-        }
         await this.dispatch({ type: 'revoke', id: item.id }); await this.save({ ...item, state: 'revoked', error: null }, await this.metadata(item.id))
-        if (item.provider === 'chatgpt') await this.credentials.eraseConnection(item.id)
         await this.availability()
       }
       return this.view()
@@ -214,12 +190,10 @@ export class ConnectionManager {
     if (command.type === 'enableBroker' || command.type === 'revokeBroker') { await this.configureBroker(command); return this.view() }
     if (command.type === 'connect') {
       if (command.provider === 'typesafe') throw new Error('Connect TypeSafe through the protected API key form')
-      // The owner's DDISA sign-in needs only storage and the network; the bundled Codex tools serve the ChatGPT account.
-      if (!this.accountsReady && command.provider === 'openape') throw new Error(this.runtimeState.error ?? 'Account storage is not ready')
-      if (!this.runtimeState.ready && command.provider !== 'openape') throw new Error(this.runtimeState.error ?? 'Bundled runtime is not ready')
+      // The owner's DDISA sign-in needs only storage and the network.
+      if (!this.accountsReady) throw new Error(this.runtimeState.error ?? 'Account storage is not ready')
       const existing = (await this.state()).connections.find(item => item.provider === command.provider)
       if (this.assigning) throw new Error('Another permission review is in progress')
-      if (command.provider === 'chatgpt') return this.startLogin(existing ?? { id: randomUUID(), provider: 'chatgpt', account: '', state: 'connecting', error: null, login: null }, existing ? await this.metadata(existing.id) : {}, !existing)
       const account = command.account.trim().toLowerCase()
       const current = existing ? await this.metadata(existing.id) : {}
       const switching = !!existing && existing.account.toLowerCase() !== account
@@ -228,7 +202,7 @@ export class ConnectionManager {
       const metadata = switching ? {} : current
       return this.startLogin(existing ?? { id: randomUUID(), provider: 'openape', account, state: 'connecting', error: null, login: null }, { ...metadata, issuer }, !existing, account)
     }
-    if (!this.runtimeState.ready) throw new Error(this.runtimeState.error ?? 'Bundled runtime is not ready')
+    if (!this.runtimeState.ready) throw new Error(this.runtimeState.error ?? 'Account storage is not ready')
     if (command.type === 'finish') await this.dispatch({ type: 'finish' })
     return this.view()
   }
@@ -260,7 +234,6 @@ export class ConnectionManager {
   private async startLogin(previous: ConnectionView, metadata: Record<string, unknown>, fresh: boolean, account = previous.account): Promise<OnboardingView> {
     if (this.jobs.size >= 3 || this.jobs.has(previous.id)) throw new Error('Finish or cancel another sign-in first')
     if (fresh) await this.credentials.create(previous.id, '{}')
-    else if (previous.provider === 'chatgpt' && previous.state === 'revoked') await this.credentials.connect(previous.id, '{}')
     const connection: ConnectionView = { ...previous, state: 'connecting', error: null, login: null }
     await this.save(connection, fresh ? metadata : await this.metadata(previous.id))
     const controller = new AbortController(); const timer = setTimeout(() => controller.abort(new Error('Sign-in expired; start again')), 15 * 60 * 1000)
@@ -268,14 +241,12 @@ export class ConnectionManager {
     job.work = (async () => {
       try {
         const present = (login: NonNullable<ConnectionView['login']>) => { job.login = login }
-        if (connection.provider === 'chatgpt') { const signedIn = await this.codex.login(connection.id, controller.signal, present); connection.account = signedIn.account; metadata.accountId = signedIn.accountId }
         if (connection.provider === 'openape') {
           Object.assign(metadata, await this.owner.login(connection.id, metadata.issuer as string, account, controller.signal, present))
           if (account.toLowerCase() !== previous.account.toLowerCase()) await this.releasePods(connection.id)
           connection.account = account
         }
         controller.signal.throwIfAborted(); await this.save({ ...connection, state: 'ready' }, metadata)
-        if (connection.provider === 'chatgpt') this.accountModel = null
         await this.availability()
       }
       catch (error) {
@@ -422,47 +393,5 @@ export class ConnectionManager {
     return new Response(value, { headers: { 'Content-Type': 'application/json' } })
   }
 
-  async providerReady(): Promise<boolean> { return this.runtimeState.ready && (await this.state()).connections.some(item => item.provider === 'chatgpt' && item.state === 'ready') }
-  private async chatgpt(): Promise<{ item: ConnectionView, metadata: Record<string, unknown>, accountId: string }> {
-    const item = (await this.state()).connections.find(item => item.provider === 'chatgpt' && item.state === 'ready')
-    if (!this.runtimeState.ready || !item) throw new Error('Connect ChatGPT before running the model')
-    const metadata = await this.metadata(item.id)
-    if (typeof metadata.accountId !== 'string') throw new Error('ChatGPT account binding is missing')
-    return { item, metadata, accountId: metadata.accountId }
-  }
-
-  /** The connected account's default model from the bundled Codex app-server; read again after sign-in and at most hourly. */
-  async model(signal: AbortSignal): Promise<string> {
-    signal = AbortSignal.any([signal, this.providerSession.signal])
-    const { item, accountId } = await this.chatgpt()
-    const key = `${item.id}:${accountId}`
-    if (this.accountModel?.key === key && this.accountModel.expiresAt > Date.now()) return this.accountModel.model
-    const afterRejection = this.modelRejected
-    const model = await this.codex.defaultModel(item.id, accountId, signal)
-    this.modelRejected = false
-    this.accountModel = { key, model, expiresAt: Date.now() + 60 * 60 * 1000, afterRejection }
-    return model
-  }
-
-  /** A provider refusal of the cached default reads the account default again, once per refusal of a fresh value. */
-  private async inspectModelRefusal(body: unknown, response: Response): Promise<Response> {
-    if (response.status !== 400 && response.status !== 404) return response
-    const text = await response.text()
-    const requested = body && typeof body === 'object' ? (body as { model?: unknown }).model : undefined
-    const cached = this.accountModel
-    if (/model.{0,200}not supported/i.test(text) && cached && cached.model === requested && !cached.afterRejection) { this.accountModel = null; this.modelRejected = true }
-    return new Response(text, { status: response.status, statusText: response.statusText, headers: response.headers })
-  }
-
-  async provider(body: unknown, signal: AbortSignal): Promise<Response> {
-    signal = AbortSignal.any([signal, this.providerSession.signal])
-    const { item, metadata, accountId } = await this.chatgpt()
-    const bearer = await this.codex.bearer(item.id, accountId, signal)
-    const response = await fetch('https://chatgpt.com/backend-api/codex/responses', { method: 'POST', redirect: 'error', headers: { Authorization: `Bearer ${bearer}`, 'ChatGPT-Account-ID': accountId, 'Content-Type': 'application/json', Accept: 'text/event-stream', originator: 'codex_cli_rs' }, body: JSON.stringify(body), signal })
-    signal.throwIfAborted()
-    if ([401, 403].includes(response.status)) { await this.save({ ...item, state: 'expired', error: 'ChatGPT sign-in expired or access was denied; reconnect' }, metadata); await this.availability() }
-    return this.inspectModelRefusal(body, response)
-  }
-
-  async stop(): Promise<void> { this.typesafeSession.abort(); this.providerSession.abort(); for (const job of this.jobs.values()) job.controller.abort(); await Promise.all(Array.from(this.jobs.values(), job => job.work)) }
+  async stop(): Promise<void> { this.typesafeSession.abort(); for (const job of this.jobs.values()) job.controller.abort(); await Promise.all(Array.from(this.jobs.values(), job => job.work)) }
 }

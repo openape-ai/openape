@@ -3,7 +3,7 @@ import type { ModelApiId, ModelApiSave } from './model-api'
 import { parseTypesafeKey } from './jev'
 import type { AgentBackendStatus } from './agent-status'
 
-export type ConnectionProvider = 'chatgpt' | 'openape' | 'microsoft' | 'typesafe'
+export type ConnectionProvider = 'openape' | 'microsoft' | 'typesafe'
 export interface ConnectionView { id: string, provider: ConnectionProvider, account: string, broker?: { issuer: string, domain: string, connectionId: string }, state: 'connecting' | 'ready' | 'failed' | 'expired' | 'revoked', error: string | null, login: { url: string, code?: string } | null }
 export interface MailSetup { podId: string, revision: number, ownerConnection: string, mailConnection: string, account: string, folders: { id: string, name: string }[], since: string | null, attachments: boolean }
 export interface PodIdentityView { podId: string, bound: boolean, ownerConnection: string | null, issuer: string | null, decisionIssuer: string | null, subject: string | null, brokerConnectionId: string | null }
@@ -36,7 +36,7 @@ export function parseOnboardingCommand(value: unknown): OnboardingCommand {
     if (url.protocol !== 'https:' || url.origin !== item.issuer || url.username || url.password) throw new Error('Agent provider must be an HTTPS origin')
   }
   if (item.type === 'connect') {
-    if (!['chatgpt', 'openape', 'microsoft'].includes(String(item.provider)) || typeof item.account !== 'string' || (item.provider !== 'chatgpt' && !/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(item.account)) || item.account.length > 254) throw new Error('Enter the expected account email')
+    if (!['openape', 'microsoft'].includes(String(item.provider)) || typeof item.account !== 'string' || !/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(item.account) || item.account.length > 254) throw new Error('Enter the expected account email')
     if (item.switchAccount !== undefined && (item.provider !== 'openape' || typeof item.switchAccount !== 'boolean')) throw new Error('Only the DDISA account can be switched')
   }
   if (item.type === 'assign') {
@@ -56,7 +56,7 @@ export function parseOnboardingView(value: unknown): OnboardingView {
   if (!Array.isArray(view.connections) || view.connections.length > 100 || typeof view.complete !== 'boolean' || !view.runtime || typeof view.runtime.ready !== 'boolean' || (view.runtime.error !== null && typeof view.runtime.error !== 'string')) throw new Error('Invalid setup state fields')
   if (view.owner !== null && (!uuid(view.owner) || !view.connections.some(item => item.id === view.owner && item.provider === 'openape'))) throw new Error('Invalid DDISA owner account')
   for (const connection of view.connections) {
-    if (!uuid(connection.id) || !['chatgpt', 'openape', 'microsoft', 'typesafe'].includes(connection.provider) || typeof connection.account !== 'string' || !['connecting', 'ready', 'failed', 'expired', 'revoked'].includes(connection.state) || (connection.error !== null && typeof connection.error !== 'string')) throw new Error('Invalid connection state')
+    if (!uuid(connection.id) || !['openape', 'microsoft', 'typesafe'].includes(connection.provider) || typeof connection.account !== 'string' || !['connecting', 'ready', 'failed', 'expired', 'revoked'].includes(connection.state) || (connection.error !== null && typeof connection.error !== 'string')) throw new Error('Invalid connection state')
     if (connection.broker && (!uuid(connection.broker.connectionId) || typeof connection.broker.issuer !== 'string' || typeof connection.broker.domain !== 'string')) throw new Error('Invalid broker connection')
     if (connection.login && (typeof connection.login.url !== 'string' || (connection.login.code !== undefined && typeof connection.login.code !== 'string'))) throw new Error('Invalid sign-in details')
   }

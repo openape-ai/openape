@@ -27,7 +27,7 @@ describe('fencing and effect receipts', () => {
   it('fences previous run authority immediately on worker startup', () => {
     const f = fixture()
     f.store.commitProgress({ podId: f.pod.id, expectedRevision: 0, checkpoint: { committed: true }, sources: [], claims: [] })
-    new RunDispatcher(f.store, f.resources, { helper: '/unused', executable: '/unused', entry: '/unused', runtimeDirectories: [], environment: {}, binary: '/unused', catalog: '/unused', manifest: '/unused', sdkHost: '/unused' })
+    new RunDispatcher(f.store, f.resources, { helper: '/unused', executable: '/unused', entry: '/unused', runtimeDirectories: [], environment: {}, manifest: '/unused' })
     expect(() => f.runs.assertLease(f.run.id)).toThrow('no longer owned')
     expect(() => f.runs.registerDomain(f.run.id, join(f.store.root, 'runs', f.run.id, 'domain-00000000-0000-4000-8000-000000000001.record'), process.pid)).toThrow('fenced')
     expect(f.runs.get(f.run.id)).toMatchObject({ state: 'interrupted', checkpointRevision: 1 })
@@ -42,7 +42,7 @@ describe('fencing and effect receipts', () => {
   })
   it('keeps an unknown result as a log until a later run sends its key again', () => {
     const f = fixture(); f.ledger.begin(f.pod.id, f.run.id, 'effect-1', 'fixture.write', {})
-    new RunDispatcher(f.store, f.resources, { helper: '/unused', executable: '/unused', entry: '/unused', runtimeDirectories: [], environment: {}, binary: '/unused', catalog: '/unused', manifest: '/unused', sdkHost: '/unused' })
+    new RunDispatcher(f.store, f.resources, { helper: '/unused', executable: '/unused', entry: '/unused', runtimeDirectories: [], environment: {}, manifest: '/unused' })
     expect(f.store.db.prepare('SELECT state FROM effect_ledger').get()!.state).toBe('unknown')
     expect(() => f.ledger.complete(f.pod.id, f.run.id, 'effect-1', { id: 'synthetic-once' })).toThrow('not awaiting')
     f.store.db.prepare('DELETE FROM run_leases').run()

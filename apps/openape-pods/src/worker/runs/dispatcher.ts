@@ -44,7 +44,6 @@ import type { ResourceRegistry } from '../resources/registry'
 import { RunStore } from './store'
 import { executeScript } from './runner'
 import type { AgentRuntime } from '../agent/executor'
-import type { AgentGatewayServices } from '../agent/gateway'
 import { parseProgress } from './progress'
 import { installExample } from './examples'
 import { releaseHeldWork } from '../recovery/release'
@@ -66,8 +65,6 @@ export interface RunServices {
   closeShell?: (scope: RunServiceScope) => Promise<void>
   http?: (request: HttpRequest, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary) => Promise<HttpReply>
   credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
-  provider?: AgentGatewayServices['provider']
-  model?: AgentGatewayServices['model']
   proxy?: ProxyAgentCall
   /** `summary` is the script's own account of the call; the IdP shows it only if the call needs a new grant. */
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary, batch?: OpenApeGrantBatch, reference?: string) => Promise<unknown>

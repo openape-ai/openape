@@ -25,7 +25,7 @@ async function fixture() {
   const store = new PodDatabase(root); cleanup.push(() => store.close())
   let runs: RunDispatcher
   const resources = new ResourceRegistry(store, id => runs.cancelPod(id))
-  const runtime = { ...await machineRuntime(), helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, binary: resolve('dist/vendor/codex'), catalog: resolve('dist/vendor/models.json'), manifest: resolve('dist/vendor/manifest.json'), sdkHost: resolve('dist/runtime/sdk-host.mjs') }
+  const runtime = { ...await machineRuntime(), helper: resolve('dist/native/pods-helper'), executable: process.execPath, entry: resolve('dist/runtime/script-entry.mjs'), runtimeDirectories: [], environment: {}, manifest: resolve('dist/runtime/manifest.json') }
   runs = new RunDispatcher(store, resources, runtime); cleanup.push(() => runs.stop())
   const scheduler = new Scheduler(store, runs)
   const master = new MasterControl(store, resources, runs, scheduler, runtime)

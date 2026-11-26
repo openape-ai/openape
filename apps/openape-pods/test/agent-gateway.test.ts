@@ -8,34 +8,20 @@ const proxyFields = { backend: 'proxy', provider: 'claude', modelSize: 'small' }
 
 describe('agent capability gateway', () => {
   it('rejects foreign capabilities, browser origins, the removed MCP endpoint and post-cancellation calls', async () => {
-    const controller = new AbortController(); const provider = vi.fn(async () => new Response('{}'))
-    const first = await startAgentGateway({ provider }, controller.signal)
-    const second = await startAgentGateway({ provider }, new AbortController().signal)
-    const request = (token: string, path = '/v1/responses', origin?: string) => fetch(`http://127.0.0.1:${first.port}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, ...(origin ? { Origin: origin } : {}) }, body: '{}' })
+    const controller = new AbortController(); const validate = vi.fn()
+    const first = await startAgentGateway({ proxyValidate: validate }, controller.signal)
+    const second = await startAgentGateway({ proxyValidate: validate }, new AbortController().signal)
+    const request = (token: string, path = '/v1/proxy/validate', origin?: string) => fetch(`http://127.0.0.1:${first.port}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${token}`, ...(origin ? { Origin: origin } : {}) }, body: '{}' })
     try {
       expect((await request(second.capability)).status).toBe(403)
-      expect((await request(first.capability, '/v1/responses', 'https://unassigned.invalid')).status).toBe(403)
+      expect((await request(first.capability, '/v1/proxy/validate', 'https://unassigned.invalid')).status).toBe(403)
       expect((await request(first.capability, '/mcp')).status).toBe(405)
       controller.abort()
       expect((await request(first.capability)).status).toBe(403)
-      expect(provider).not.toHaveBeenCalled()
+      expect(validate).not.toHaveBeenCalled()
     }
     finally { await first.close(); await second.close() }
   })
-})
-
-it('rejects oversized provider streams and releases their producer', async () => {
-  let cancelled = false; let chunks = 0
-  const gateway = await startAgentGateway({ provider: async () => new Response(new ReadableStream({ pull(controller) { if (chunks++ >= 20) controller.close(); else controller.enqueue(new Uint8Array(1024 * 1024)) }, cancel() { cancelled = true } })) }, new AbortController().signal)
-  try {
-    const response = await fetch(`http://127.0.0.1:${gateway.port}/v1/responses`, { method: 'POST', headers: { Authorization: `Bearer ${gateway.capability}` }, body: '{}' })
-    let rejected = false
-    try { await response.arrayBuffer() }
-    catch { rejected = true }
-    expect(rejected).toBe(true)
-    expect(cancelled).toBe(true)
-  }
-  finally { await gateway.close() }
 })
 
 it('defaults to no tools and rejects unknown or ambiguous agent permissions', () => {
@@ -47,18 +33,6 @@ it('defaults to no tools and rejects unknown or ambiguous agent permissions', ()
   for (const tools of [true, false, null, 'ape_shell', ['shell']]) expect(() => parseAgentRequest({ ...proxyFields, prompt: 'Read', tools })).toThrow()
   expect(() => parseAgentRequest({ prompt: 'Read', allowTools: true })).toThrow()
   expect(() => parseAgentRequest({ prompt: ' ' })).toThrow()
-})
-
-it('removes provider tool declarations and offers no MCP tool endpoint', async () => {
-  const provider = vi.fn(async () => new Response('{}'))
-  const gateway = await startAgentGateway({ provider }, new AbortController().signal)
-  const request = async (path: string, value: unknown) => (await fetch(`http://127.0.0.1:${gateway.port}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${gateway.capability}` }, body: JSON.stringify(value) })).json()
-  try {
-    expect(await request('/mcp', { jsonrpc: '2.0', id: 1, method: 'tools/list' })).toEqual({ error: 'Unsupported agent endpoint' })
-    await request('/v1/responses', { model: 'fixture', tools: [{ type: 'web_search' }], tool_choice: 'required', parallel_tool_calls: true })
-    expect(provider).toHaveBeenCalledExactlyOnceWith({ model: 'fixture', tools: [], tool_choice: 'none', parallel_tool_calls: false }, expect.any(AbortSignal))
-  }
-  finally { await gateway.close() }
 })
 
 it('bounds each agent call with an explicit timeout', () => {
@@ -75,11 +49,13 @@ it('rejects the removed native backend and an omitted backend with the proxy fie
   }
 })
 
-it('offers the model endpoint only on a gateway that has a model connection', async () => {
-  const run = await startAgentGateway({ provider: async () => new Response('{}') }, new AbortController().signal)
+it('offers no ChatGPT responses, model or MCP endpoint', async () => {
+  const run = await startAgentGateway({ proxy: async () => ({ response: '', threadId: '' }) }, new AbortController().signal)
   try {
-    const response = await fetch(`http://127.0.0.1:${run.port}/v1/model`, { method: 'POST', headers: { Authorization: `Bearer ${run.capability}` }, body: '{}' })
-    expect(response.status).toBe(405)
+    for (const path of ['/v1/responses', '/v1/model', '/mcp']) {
+      const response = await fetch(`http://127.0.0.1:${run.port}${path}`, { method: 'POST', headers: { Authorization: `Bearer ${run.capability}` }, body: '{}' })
+      expect(response.status).toBe(405)
+    }
   }
   finally { await run.close() }
 })
@@ -87,7 +63,7 @@ it('offers the model endpoint only on a gateway that has a model connection', as
 it('keeps proxy calls behind a private capability and refuses caller-controlled transport and tools', async () => {
   const proxy = vi.fn(async () => ({ response: 'synthetic result', threadId: 'proxy-call:synthetic' }))
   const validate = vi.fn()
-  const gateway = await startAgentGateway({ provider: async () => new Response('{}'), proxy, proxyValidate: validate }, new AbortController().signal)
+  const gateway = await startAgentGateway({ proxy, proxyValidate: validate }, new AbortController().signal)
   const request = { backend: 'proxy', provider: 'claude', modelSize: 'medium', thinking: 'high', prompt: 'Synthetic task' }
   const post = (path: string, value: unknown, capability = gateway.capability) => fetch(`http://127.0.0.1:${gateway.port}${path}`, { method: 'POST', headers: { authorization: `Bearer ${capability}`, 'content-type': 'application/json', 'X-Pod-Agent-Call': randomUUID() }, body: JSON.stringify(value) })
   try {
@@ -113,7 +89,6 @@ it('drains active proxy work when its gateway closes', async () => {
   const started = new Promise<void>((resolve) => { began = resolve })
   let drained = false
   const gateway = await startAgentGateway({
-    provider: async () => new Response('{}'),
     proxy: async (_request, signal) => {
       began()
       await new Promise<void>((resolve) => { signal.addEventListener('abort', () => resolve(), { once: true }) })
@@ -141,7 +116,7 @@ it('acknowledges cancellation only after drain and prevents a delayed cancelled 
     signal.throwIfAborted()
     throw new Error('Unreachable')
   })
-  const gateway = await startAgentGateway({ provider: async () => new Response('{}'), proxy }, new AbortController().signal)
+  const gateway = await startAgentGateway({ proxy }, new AbortController().signal)
   const post = (path: string, value: unknown, id = randomUUID()) => fetch(`http://127.0.0.1:${gateway.port}${path}`, { method: 'POST', headers: { authorization: `Bearer ${gateway.capability}`, 'content-type': 'application/json', 'X-Pod-Agent-Call': id }, body: JSON.stringify(value) })
   const request = { backend: 'proxy', provider: 'codex', modelSize: 'small', prompt: 'Synthetic task' }
   try {
