@@ -2,7 +2,7 @@ import type { JevAvailability } from '../../contracts/jev'
 import type { ConnectionView } from '../../contracts/onboarding'
 import type { PodDatabase } from '../storage/database'
 
-const singleAccountProviders = ['chatgpt', 'openape', 'typesafe']
+const singleAccountProviders = ['openape', 'typesafe']
 
 export class OnboardingStore {
   constructor(private readonly store: PodDatabase) {
@@ -10,7 +10,7 @@ export class OnboardingStore {
   }
 
   connections(): ConnectionView[] {
-    return this.store.db.prepare('SELECT * FROM connections ORDER BY rowid').all().map(row => ({ id: row.id as string, provider: row.provider as ConnectionView['provider'], account: row.account as string, state: row.state as ConnectionView['state'], error: row.error as string | null, login: null }))
+    return this.store.db.prepare('SELECT * FROM connections WHERE provider!=\'chatgpt\' ORDER BY rowid').all().map(row => ({ id: row.id as string, provider: row.provider as ConnectionView['provider'], account: row.account as string, state: row.state as ConnectionView['state'], error: row.error as string | null, login: null }))
   }
 
   save(connection: Omit<ConnectionView, 'login'>, metadata: Record<string, unknown>): void {

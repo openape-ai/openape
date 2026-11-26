@@ -24,7 +24,7 @@ function fixture() {
   const bridge = installWorkspace({
     workspace: async () => ({ pods: structuredClone(inventory) }),
     programs: async (command) => { if (command.type === 'launchStatus') return null; throw new Error(`Unexpected program command: ${command.type}`) },
-    onboarding: async () => ({ owner: 'owner', complete: true, podIdentity: { podId, bound: true, ownerConnection: 'owner', issuer: 'https://pods.example.invalid', decisionIssuer: 'https://identity.example.invalid', subject: 'mail-knowledge@pods.example.invalid', brokerConnectionId: null }, runtime: { ready: true, error: null }, connections: [{ id: 'owner', provider: 'openape', state: 'ready', account: 'owner@example.invalid', error: null, login: null }, { id: 'codex', provider: 'chatgpt', state: 'ready', account: 'AI account', error: null, login: null }] }),
+    onboarding: async () => ({ owner: 'owner', complete: true, podIdentity: { podId, bound: true, ownerConnection: 'owner', issuer: 'https://pods.example.invalid', decisionIssuer: 'https://identity.example.invalid', subject: 'mail-knowledge@pods.example.invalid', brokerConnectionId: null }, runtime: { ready: true, error: null }, connections: [{ id: 'owner', provider: 'openape', state: 'ready', account: 'owner@example.invalid', error: null, login: null }] }),
     mcpSession: async (command) => { if (command.type === 'end') session = { expiresAt: null, pending: false }; return { ...session } },
     central: async (command) => {
       if (command.type === 'status') return { ...status, enabled: true }

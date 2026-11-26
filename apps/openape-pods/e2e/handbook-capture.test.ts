@@ -25,7 +25,7 @@ it('handbook: captures current native screens from isolated synthetic data witho
   await writeFile(reference, 'Synthetic reference: three sample files are ready for review.')
   resources.assignReference(pod.id, 'Sample notes', reference)
   store.commitProgress({ podId: pod.id, expectedRevision: 0, checkpoint: { reviewed: 3 }, sources: [{ id: 'sample-files', locator: 'fixture:sample-folder', version: '1', content: 'Synthetic fixture: notes.txt, order.txt, delivery.txt.' }], claims: [{ id: 'file-count', matter: 'Sample folder', kind: 'finding', text: 'Three sample files are available. No files were changed.', sourceIds: ['sample-files'] }] })
-  const runtime = JSON.parse(await readFile(resolve('dist/vendor/manifest.json'), 'utf8'))
+  const runtime = JSON.parse(await readFile(resolve('dist/runtime/manifest.json'), 'utf8'))
   installExample(store, resources, pod.id, 'deterministic', runtime.dependencyLockHash)
   const runs = new RunStore(store)
   const activeScript = store.getPod(pod.id).activeScript
@@ -43,7 +43,6 @@ it('handbook: captures current native screens from isolated synthetic data witho
   const setup = new SetupControl(store, resources)
   const owner = randomUUID()
   setup.execute({ type: 'save', connection: { id: owner, provider: 'openape', account: 'reader@example.invalid', state: 'ready', error: null }, metadata: { issuer: 'https://id.example.invalid' } })
-  setup.execute({ type: 'save', connection: { id: randomUUID(), provider: 'chatgpt', account: 'reader@example.invalid', state: 'ready', error: null }, metadata: {} })
   store.close()
   const app = await electron.launch({ executablePath: resolve('release/mac-arm64/OpenApe Pods Fixture.app/Contents/MacOS/OpenApe Pods Fixture'), args: [], cwd: resolve('.'), env: { HOME: root, TMPDIR: tmpdir(), PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: root, NODE_ENV: 'test' } })
   try {

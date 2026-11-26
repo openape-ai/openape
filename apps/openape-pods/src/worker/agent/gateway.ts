@@ -1,4 +1,3 @@
-import { once } from 'node:events'
 import { createServer } from 'node:http'
 import type { IncomingMessage, ServerResponse } from 'node:http'
 import { randomBytes, timingSafeEqual } from 'node:crypto'
@@ -8,10 +7,6 @@ import type { AgentCallMetadata } from '../../contracts/agent-metadata'
 import { AgentCallError, serializeSafeError } from '../../contracts/agent-errors'
 
 export interface AgentGatewayServices {
-  provider: (body: unknown, signal: AbortSignal) => Promise<Response>
-  /** The connected account's default model; only the desktop's model connection gateway offers it. */
-  model?: (signal: AbortSignal) => Promise<string>
-  tool?: (body: unknown, signal: AbortSignal) => Promise<unknown>
   proxy?: (request: ProxyAgentRequest, signal: AbortSignal, onMetadata: (metadata: AgentCallMetadata) => void) => Promise<{ response: string, threadId: string }>
   proxyValidate?: (request: ProxyAgentRequest) => void
 }
@@ -35,7 +30,7 @@ export async function startAgentGateway(services: AgentGatewayServices, signal: 
     const received = Buffer.from(request.headers.authorization ?? '')
     const expected = Buffer.from(`Bearer ${capability}`)
     if (received.length !== expected.length || !timingSafeEqual(received, expected) || gatewaySignal.aborted || request.headers.origin) { response.statusCode = 403; json(response, { error: 'Run capability rejected' }); return }
-    if (request.method !== 'POST' || !['/mcp', '/v1/responses', ...(services.model ? ['/v1/model'] : []), ...(services.proxy ? ['/v1/proxy', '/v1/proxy/cancel'] : []), ...(services.proxyValidate ? ['/v1/proxy/validate'] : [])].includes(request.url ?? '')) { response.statusCode = 405; json(response, { error: 'Unsupported agent endpoint' }); return }
+    if (request.method !== 'POST' || ![...(services.proxy ? ['/v1/proxy', '/v1/proxy/cancel'] : []), ...(services.proxyValidate ? ['/v1/proxy/validate'] : [])].includes(request.url ?? '')) { response.statusCode = 405; json(response, { error: 'Unsupported agent endpoint' }); return }
     let operation: { controller: AbortController, drained: Promise<void> } | undefined
     let finishOperation: (() => void) | undefined
     const identity = request.headers['x-pod-agent-call']
@@ -92,61 +87,7 @@ export async function startAgentGateway(services: AgentGatewayServices, signal: 
         }
         response.end(); return
       }
-      if (request.url === '/v1/model' && services.model) { json(response, { model: await services.model(activeSignal) }); return }
-      if (request.url === '/v1/responses') {
-        if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid provider request')
-        const providerRequest = services.tool ? value : { ...value, tools: [], tool_choice: 'none', parallel_tool_calls: false }
-        const upstream = await services.provider(providerRequest, activeSignal)
-        response.statusCode = upstream.status; response.setHeader('Content-Type', upstream.headers.get('Content-Type') ?? 'text/event-stream')
-        if (upstream.body) {
-          const reader = upstream.body.getReader()
-          const cancel = () => { void reader.cancel().catch((error: unknown) => response.destroy(error instanceof Error ? error : new Error('Provider stream cancellation failed'))) }
-          activeSignal.addEventListener('abort', cancel, { once: true })
-          let bytes = 0
-          try {
-            for (;;) {
-              activeSignal.throwIfAborted()
-              const next = await reader.read()
-              if (next.done) break
-              bytes += next.value.byteLength
-              if (bytes > 16 * 1024 * 1024) throw new Error('Provider stream exceeds its 16 MiB limit')
-              if (!response.write(next.value)) await once(response, 'drain', { signal: activeSignal })
-            }
-            activeSignal.throwIfAborted()
-          }
-          finally {
-            activeSignal.removeEventListener('abort', cancel)
-            try { await reader.cancel() }
-            finally { reader.releaseLock() }
-          }
-        }
-        response.end(); return
-      }
-      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid MCP request')
-      const rpc = value as { jsonrpc?: string, id?: string | number, method?: string, params?: { name?: string, arguments?: unknown } }
-      if (rpc.jsonrpc !== '2.0') throw new Error('Invalid MCP protocol')
-      if (rpc.method === 'notifications/initialized' && rpc.id === undefined) { response.statusCode = 202; response.end(); return }
-      if (typeof rpc.id !== 'string' && typeof rpc.id !== 'number') throw new Error('Invalid MCP request identity')
-      let result: unknown
-      if (rpc.method === 'initialize') {
-        result = { protocolVersion: '2025-03-26', capabilities: { tools: {} }, serverInfo: { name: 'OpenApe Pods', version: '1' } }
-      }
-      else if (rpc.method === 'ping') {
-        result = {}
-      }
-      else if (rpc.method === 'tools/list') {
-        result = { tools: services.tool ? [{ name: 'ape_shell', description: 'Invoke a granted read command of an assigned application using application and argv (or an explicit applicationId). Legacy tools use toolId instead. Authentication state stays inside the application sandbox.', inputSchema: { type: 'object', properties: { application: { type: 'string' }, applicationId: { type: 'string' }, toolId: { type: 'string' }, argv: { type: 'array', items: { type: 'string' } } }, required: ['argv'], oneOf: [{ required: ['application'] }, { required: ['applicationId'] }, { required: ['toolId'] }], additionalProperties: false } }] : [] }
-      }
-      else if (rpc.method === 'tools/call' && rpc.params?.name === 'ape_shell' && services.tool) {
-        try {
-          const text = JSON.stringify(await services.tool(rpc.params.arguments, activeSignal))
-          if (Buffer.byteLength(text) > 256 * 1024) throw new Error('Tool reply exceeds its size limit')
-          result = { content: [{ type: 'text', text }] }
-        }
-        catch (error) { result = { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : 'Assigned tool call failed' }] } }
-      }
-      else { json(response, { jsonrpc: '2.0', id: rpc.id, error: { code: -32601, message: 'Only the assigned ape-shell tool is available' } }); return }
-      json(response, { jsonrpc: '2.0', id: rpc.id, result })
+      throw new Error('Unsupported agent endpoint')
     }
     finally {
       if (operation && callId(identity)) { proxyCalls.delete(identity); finishOperation?.() }

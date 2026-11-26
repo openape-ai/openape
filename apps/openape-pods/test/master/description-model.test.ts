@@ -1,41 +1,41 @@
 // @vitest-environment node
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, expect, it, vi } from 'vitest'
-import type { AgentRuntime } from '../../src/worker/agent/executor'
-import { PodDatabase } from '../../src/worker/storage/database'
-import { MasterTransport } from '../../src/worker/master/transport'
-import { summarizeConversation } from '../../src/worker/master/summarize'
+import { expect, it } from 'vitest'
+import type { ProxyAgentRequest } from '../../src/contracts/agent'
+import type { AgentBackendStatus } from '../../src/contracts/agent-status'
+import type { ProxyAgentCall } from '../../src/worker/agent/proxy-client'
+import { descriptionProvider, summarizeConversation } from '../../src/worker/master/summarize'
 
-vi.mock('../../src/worker/master/transport', () => ({ MasterTransport: { start: vi.fn() } }))
-const stores: PodDatabase[] = []
-afterEach(() => { vi.mocked(MasterTransport.start).mockReset(); for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) } })
-function fixture() {
-  const store = new PodDatabase(mkdtempSync(join(tmpdir(), 'pods-description-model-'))); stores.push(store)
-  const catalog = join(store.root, 'models.json'); writeFileSync(catalog, JSON.stringify({ models: [{ slug: 'fixture-model-a' }] }))
-  return { store, runtime: { helper: '/unused', catalog } as AgentRuntime }
+function stub(response: string, requests: ProxyAgentRequest[] = []): ProxyAgentCall {
+  return async (request) => { requests.push(request); return { response, threadId: 'proxy-call:fixture' } }
 }
 
-it('starts the description thread with the connected account default', async () => {
-  const { store, runtime } = fixture(); const threads: string[] = []
-  vi.mocked(MasterTransport.start).mockImplementation(async (_runtime, _root, _services, _register, notify) => ({
-    thread: async (_runtime: AgentRuntime, _root: string, model: string) => { threads.push(model); return 'synthetic-thread' },
-    request: async () => {
-      notify({ method: 'turn/started', params: { threadId: 'synthetic-thread', turn: { id: 'turn' } } })
-      notify({ method: 'item/completed', params: { threadId: 'synthetic-thread', turnId: 'turn', item: { type: 'agentMessage', text: JSON.stringify({ description: 'Checks mail hourly.' }) } } })
-      notify({ method: 'turn/completed', params: { threadId: 'synthetic-thread', turn: { id: 'turn', status: 'completed' } } })
-      return {}
-    },
-    close: async () => {},
-  }) as unknown as MasterTransport)
-  const description = await summarizeConversation(store, runtime, { provider: async () => new Response('{}'), model: async () => 'fixture-model-a' }, '{}', new AbortController().signal)
+it('makes one tool-free small proxy call and returns the description', async () => {
+  const requests: ProxyAgentRequest[] = []
+  const description = await summarizeConversation({ call: stub(JSON.stringify({ description: 'Checks mail hourly.' }), requests), provider: 'claude' }, '{"conversation":[]}', new AbortController().signal)
   expect(description).toBe('Checks mail hourly.')
-  expect(threads).toEqual(['fixture-model-a'])
+  expect(requests).toHaveLength(1)
+  expect(requests[0]).toMatchObject({ backend: 'proxy', provider: 'claude', modelSize: 'small', tools: [] })
+  expect(requests[0]!.prompt).toContain('{"description":')
+  expect(requests[0]!.prompt.endsWith('{"conversation":[]}')).toBe(true)
 })
 
-it('does not start the description model when the account default is missing from the bundled catalog', async () => {
-  const { store, runtime } = fixture()
-  await expect(summarizeConversation(store, runtime, { provider: async () => new Response('{}'), model: async () => 'fixture-model-newer' }, '{}', new AbortController().signal)).rejects.toThrow('is not in the bundled Codex model catalog')
-  expect(MasterTransport.start).not.toHaveBeenCalled()
+it('accepts a fenced JSON answer and rejects anything else', async () => {
+  const signal = new AbortController().signal
+  await expect(summarizeConversation({ call: stub('```json\n{"description":"Daily report."}\n```'), provider: 'codex' }, '{}', signal)).resolves.toBe('Daily report.')
+  await expect(summarizeConversation({ call: stub('Daily report.'), provider: 'codex' }, '{}', signal)).rejects.toThrow('invalid result')
+  await expect(summarizeConversation({ call: stub('{"description":"x","extra":1}'), provider: 'codex' }, '{}', signal)).rejects.toThrow('invalid result')
+})
+
+it('needs a configured model API connection', async () => {
+  await expect(summarizeConversation(undefined, '{}', new AbortController().signal)).rejects.toThrow('Configure a model API connection')
+})
+
+it('picks the first provider whose small model and connection are usable', () => {
+  const mapping: Omit<AgentBackendStatus['mappings'][number], 'provider'> = { modelSize: 'small', modelId: 'm', enabled: true, defaultThinking: 'low', thinking: ['low'], capabilityEvidenceVersion: '1' }
+  const connection = { enabled: true, baseUrl: 'http://127.0.0.1:8317/v1', format: 'responses', authentication: 'token', defaultThinking: 'low', hasToken: true } as const
+  const status = (connections: AgentBackendStatus['connections']): AgentBackendStatus => ({ configured: true, enabled: true, available: true, mappings: [{ ...mapping, provider: 'claude' }, { ...mapping, provider: 'codex' }], connections })
+  expect(descriptionProvider(status([{ ...connection, id: 'openai' }, { ...connection, id: 'anthropic', enabled: false }] as AgentBackendStatus['connections']))).toBe('codex')
+  expect(descriptionProvider(status([{ ...connection, id: 'anthropic' }] as AgentBackendStatus['connections']))).toBe('claude')
+  expect(descriptionProvider({ ...status([{ ...connection, id: 'openai' }] as AgentBackendStatus['connections']), available: false })).toBeUndefined()
+  expect(descriptionProvider(undefined)).toBeUndefined()
 })

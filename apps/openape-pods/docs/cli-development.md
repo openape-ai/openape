@@ -17,7 +17,7 @@ pnpm --filter @openape/pods build:runtime
 node apps/openape-pods/dist/cli/entry.cjs --help
 ```
 
-The runtime build prepares the worker, native helpers, pinned ape-shell/Codex
+The runtime build prepares the worker, native helpers, pinned ape-shell
 assets and script runtime. It omits the Electron main/preload and Vue renderer.
 It requires the pinned Node/pnpm versions, installed workspace dependencies and
 macOS Command Line Tools. Native execution retains the existing verified macOS
@@ -122,11 +122,10 @@ identities use the file format immediately. Older desktop versions do not unders
 the new format; rollback requires restoring a consistent pre-migration profile
 backup while both runtimes are closed, not reinstalling the old binary alone.
 
-Assigned authenticated HTTP destination keys and the connected ChatGPT token
-cache also use private portable records after a one-time desktop migration.
-Selection follows current ready HTTP resource/credential assignments and the
-ready ChatGPT connection; arbitrary encrypted records are not converted. Records
-retain their credential reference, kind, Pod/alias or ChatGPT account binding.
+Assigned authenticated HTTP destination keys also use private portable records
+after a one-time desktop migration. Selection follows current ready HTTP
+resource/credential assignments; arbitrary encrypted records are not converted.
+Records retain their credential reference, kind and Pod/alias binding.
 The runtime still checks destination origin/audience, assignments and revocation.
 Only the controller reads these credentials; Pod scripts and child environments
 cannot access the files or authentication values. Direct CLI

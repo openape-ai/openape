@@ -76,7 +76,6 @@ it('keeps proxy cancellation acknowledgement available until the worker has drai
   let began: () => void = () => undefined
   const running = new Promise<void>((resolve) => { began = resolve })
   const gateway = await startAgentGateway({
-    provider: async () => new Response('{}'),
     proxy: async (_request, signal, onMetadata) => {
       onMetadata({ callId: 'shutdown-fixture', backend: 'proxy', provider: 'codex', modelSize: 'small', modelId: 'fixture-model', reportedModelId: null, requestedThinking: null, effectiveThinking: 'medium', wireThinking: { reasoning_effort: 'medium' }, configRevision: 'fixture', configHash: 'a'.repeat(64), startedAt: new Date().toISOString(), endedAt: null, durationMs: null, status: 'running', threadId: 'proxy-call:shutdown-fixture' })
       began()

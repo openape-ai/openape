@@ -43,9 +43,7 @@ import { parseManifest } from '../storage/database'
 import type { ResourceRegistry } from '../resources/registry'
 import { RunStore } from './store'
 import { executeScript } from './runner'
-import { executeAgent } from '../agent/executor'
 import type { AgentRuntime } from '../agent/executor'
-import type { AgentGatewayServices } from '../agent/gateway'
 import { parseProgress } from './progress'
 import { installExample } from './examples'
 import { releaseHeldWork } from '../recovery/release'
@@ -67,8 +65,6 @@ export interface RunServices {
   closeShell?: (scope: RunServiceScope) => Promise<void>
   http?: (request: HttpRequest, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary) => Promise<HttpReply>
   credential?: (alias: string, signal: AbortSignal, scope: RunServiceScope) => Promise<string>
-  provider?: AgentGatewayServices['provider']
-  model?: AgentGatewayServices['model']
   proxy?: ProxyAgentCall
   /** `summary` is the script's own account of the call; the IdP shows it only if the call needs a new grant. */
   tool?: (body: unknown, signal: AbortSignal, scope: RunServiceScope, summary?: ScriptSummary, batch?: OpenApeGrantBatch, reference?: string) => Promise<unknown>
@@ -277,25 +273,19 @@ export class RunDispatcher {
           if (operation === 'agent.run') {
             let request
             try { request = parseAgentRequest(payload) }
-            catch (error) {
-              if (payload && typeof payload === 'object' && 'backend' in payload && payload.backend === 'proxy') recordFailure({ cause: 'non-retryable' })
-              throw error
-            }
-            const backend = request.backend ?? 'native'
-            if (backend === 'native' && !this.services?.provider) throw new Error('Codex is not connected; connect the pod provider before using this script')
-            if (request.backend === 'proxy' && !this.services?.proxy) { recordFailure({ cause: 'non-retryable' }); throw new AgentCallError('proxy_not_configured', 'Proxy agent backend is not configured', { phase: 'resolve' }) }
+            catch (error) { recordFailure({ cause: 'non-retryable' }); throw error }
+            const backend = request.backend
+            if (!this.services?.proxy) { recordFailure({ cause: 'non-retryable' }); throw new AgentCallError('proxy_not_configured', 'Proxy agent backend is not configured', { phase: 'resolve' }) }
             if (agentCalls++ >= maxAgentCallsPerRun) throw new Error('A run can start at most 50 agent calls')
             // Persist before dispatch: a crash can lose every host receipt after inference has started.
-            if (request.backend === 'proxy') { this.runs.assertLease(id); appendEvent('agent-dispatch', { backend: 'proxy' }) }
+            this.runs.assertLease(id); appendEvent('agent-dispatch', { backend: 'proxy' })
             const controller = new AbortController()
             const calls = this.agentCalls.get(backend) ?? new Set<AbortController>()
             calls.add(controller); this.agentCalls.set(backend, calls)
             const callSignal = AbortSignal.any([operationSignal, signal, agentLifecycle.signal, controller.signal])
             const metadata = (value: AgentCallMetadata) => { this.runs.assertLease(id); appendEvent('agent-call', value) }
-            const operation = (request.backend === 'proxy'
-              ? this.services!.proxy!(request, callSignal, metadata)
-              : executeAgent(runtime, directory, request.prompt, input.references.map(file => file.path), { provider: this.services!.provider!, model: this.services?.model, tool: scriptTool }, callSignal, (event) => { assertCurrent(); appendEvent('agent', event) }, request.tools, request.timeoutSeconds, metadata)).catch((error: unknown) => {
-              if (request.backend === 'proxy') recordFailure({ cause: 'non-retryable' })
+            const operation = this.services.proxy(request, callSignal, metadata).catch((error: unknown) => {
+              recordFailure({ cause: 'non-retryable' })
               if (error instanceof AgentCallError && error.details.cause === 'proxy_cleanup_unconfirmed' && !unconfirmedProxyCleanup) {
                 unconfirmedProxyCleanup = error
                 // Script-level catch/return cannot prove that its host request has stopped.

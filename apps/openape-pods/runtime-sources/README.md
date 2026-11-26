@@ -1,6 +1,6 @@
 # Runtime sources and test fixtures
 
-Electron/Node.js, Codex, ape-shell and the native confinement helper are required
+Electron/Node.js, ape-shell and the native confinement helper are required
 Pod runtime components. Applications such as o365-cli are selected from the Mac;
 they are not built, downloaded or copied into the distributed app.
 

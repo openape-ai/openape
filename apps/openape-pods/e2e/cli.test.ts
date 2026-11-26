@@ -74,9 +74,9 @@ it.each(['owner', 'isolated'] as const)('executes with the real Pod identity, %s
   await identity.persistCredentials()
   const credentialRoot = join(profile, 'credentials')
   const protectedIdentity = join(credentialRoot, (await readdir(credentialRoot)).find(file => file.endsWith('.identity.json'))!)
-  const modelId = randomUUID(); const portableCache = new CredentialCache(credentialRoot)
-  await portableCache.create(modelId, JSON.stringify({ tokens: { account_id: 'synthetic-account', access_token: 'synthetic-access', refresh_token: 'synthetic-refresh' } }))
-  await portableCache.migrateChatgpt(modelId, 'synthetic-account')
+  const portableCache = new CredentialCache(credentialRoot); const secretPod = randomUUID()
+  const modelId = await portableCache.createScriptSecret(secretPod, 'destination', 'synthetic-secret')
+  await portableCache.migrateHttp(modelId, secretPod, 'destination')
   const protectedCredential = join(credentialRoot, `${modelId}.credential.json`)
   const script = join(root, 'pod-script.mjs')
   await writeFile(script, `import { readFile, writeFile } from 'node:fs/promises';
@@ -214,7 +214,7 @@ it('refuses missing Pod keys despite a valid owner CLI login without falling bac
   const store = new PodDatabase(profile)
   const pod = store.createPod({ name: 'Missing Pod key' })
   try {
-    const manifest = JSON.parse(await readFile(resolve('dist/vendor/manifest.json'), 'utf8'))
+    const manifest = JSON.parse(await readFile(resolve('dist/runtime/manifest.json'), 'utf8'))
     installExample(store, new ResourceRegistry(store, () => {}), pod.id, 'deterministic', manifest.dependencyLockHash)
   }
   finally { store.close() }
@@ -234,7 +234,7 @@ it('refuses an unauthenticated CLI start before creating a run or starting a scr
   const store = new PodDatabase(root)
   const pod = store.createPod({ name: 'No identity' })
   try {
-    const manifest = JSON.parse(await readFile(resolve('dist/vendor/manifest.json'), 'utf8'))
+    const manifest = JSON.parse(await readFile(resolve('dist/runtime/manifest.json'), 'utf8'))
     installExample(store, new ResourceRegistry(store, () => {}), pod.id, 'deterministic', manifest.dependencyLockHash)
   }
   finally { store.close() }

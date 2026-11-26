@@ -87,7 +87,7 @@ beforeAll(async () => {
   vi.stubEnv('PODS_RUNTIME_EXECUTABLE', process.execPath)
   await (await import('../../src/worker/entry')).started
   vi.mocked(process.cwd).mockRestore()
-  await send({ id: 'provider', command: { provider: null } })
+  await send({ id: 'connections', command: { connectionsReady: true } })
   await send({ id: 'startup-inspection', command: { inspectCredentials: true } })
   expect(replies).toHaveBeenCalledWith({ id: 'startup-inspection', state: true })
 })
@@ -99,16 +99,11 @@ afterAll(async () => {
   await rm(root, { recursive: true, force: true })
 })
 
-it('removes only dependent agent calls through trusted backend commands', async () => {
+it('removes only dependent agent calls through the trusted proxy command', async () => {
   const cancelBackend = vi.spyOn(RunDispatcher.prototype, 'cancelBackend')
   const cancelPod = vi.spyOn(RunDispatcher.prototype, 'cancelPod')
   try {
-    await send({ id: 'native-add', command: { provider: { port: 18831, capability: 'a'.repeat(64) } } })
     await send({ id: 'proxy-add', command: { proxy: { port: 18832, capability: 'b'.repeat(64), status: { configured: true, enabled: true, available: true } } } })
-    expect(captured.services?.provider).toEqual(expect.any(Function))
-    expect(captured.services?.proxy).toEqual(expect.any(Function))
-    await send({ id: 'native-remove', command: { provider: null } })
-    expect(cancelBackend).toHaveBeenCalledWith('native')
     expect(captured.services?.proxy).toEqual(expect.any(Function))
     await send({ id: 'proxy-remove', command: { proxy: null } })
     expect(cancelBackend).toHaveBeenCalledWith('proxy')

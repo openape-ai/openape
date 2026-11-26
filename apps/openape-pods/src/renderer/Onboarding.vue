@@ -10,9 +10,8 @@ export default defineComponent({
   setup() { return { hostBridge: useHostBridge() } },
   data() { return { expanded: '', view: null as OnboardingView | null, email: '', busy: false, error: '', switching: false, disconnecting: '', closed: false, timer: null as ReturnType<typeof setTimeout> | null } },
   computed: {
-    codex(): ConnectionView | undefined { return this.view?.connections.find(item => item.provider === 'chatgpt') },
     owner(): ConnectionView | undefined { return this.view?.connections.find(item => item.id === this.view?.owner) },
-    accounts(): { provider: 'chatgpt' | 'openape', title: string, connection: ConnectionView | undefined }[] { return [{ provider: 'openape', title: 'DDISA/OpenApe', connection: this.owner }, { provider: 'chatgpt', title: 'Codex', connection: this.codex }] },
+    accounts(): { provider: 'openape', title: string, connection: ConnectionView | undefined }[] { return [{ provider: 'openape', title: 'DDISA/OpenApe', connection: this.owner }] },
     switchesAccount(): boolean { return !!this.owner && this.email.trim().toLowerCase() !== this.owner.account.toLowerCase() },
   },
   async mounted() { await this.request({ type: 'list' }); this.email = this.owner?.account ?? ''; this.poll() },
@@ -45,10 +44,10 @@ export default defineComponent({
   <section class="setup-view" :class="{ compact }" :aria-label="t('Your accounts')">
     <article class="card">
       <p v-if="!compact">
-        {{ t("Your DDISA account approves permissions. Your Codex / GPT account provides AI access.") }}
+        {{ t("Your DDISA account approves permissions. A model API connection provides AI access.") }}
       </p>
       <p v-if="view && !view.runtime.ready" role="alert" class="error-message">
-        {{ view.runtime.error ? diagnostic(view.runtime.error) : t("Inspecting bundled tools…") }}
+        {{ view.runtime.error ? diagnostic(view.runtime.error) : t("Checking account storage…") }}
       </p>
       <p v-if="error" role="alert" class="error-message">
         {{ diagnostic(error) }}
@@ -75,10 +74,7 @@ export default defineComponent({
             {{ t("Cancel sign-in") }}
           </button>
           <template v-else>
-            <button v-if="item.provider === 'chatgpt' && !signedIn(item.connection)" class="primary" :disabled="busy || !view?.runtime.ready" @click="request({ type: 'connect', provider: 'chatgpt', account: '' })">
-              {{ item.connection ? t('Sign in again') : t('Sign in') }}
-            </button>
-            <form v-if="item.provider === 'openape'" class="setup-form" @submit.prevent="signIn">
+            <form class="setup-form" @submit.prevent="signIn">
               <label>{{ t("Email") }}<input v-model="email" type="email" required autocomplete="email" :disabled="busy" @input="switching = false"></label>
               <button class="primary" :disabled="busy || !view?.runtime.ready">
                 {{ switchesAccount ? t('Switch account') : item.connection ? t('Sign in again') : t('Sign in') }}
@@ -98,7 +94,7 @@ export default defineComponent({
             {{ t("Disconnect") }}
           </button>
           <div v-if="item.connection && disconnecting === item.connection.id" class="disconnect-review">
-            <p>{{ item.provider === 'openape' ? t('Disconnect this account? Permissions that use it will be revoked and affected pods paused. Their data and account assignments are kept.') : t('Disconnect ChatGPT? AI requests will stop until you connect again.') }}</p>
+            <p>{{ t('Disconnect this account? Permissions that use it will be revoked and affected pods paused. Their data and account assignments are kept.') }}</p>
             <button :disabled="busy" @click="disconnect">
               {{ t('Confirm disconnect') }}
             </button>

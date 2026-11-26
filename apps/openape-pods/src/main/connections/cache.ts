@@ -207,10 +207,6 @@ export class CredentialCache {
     await this.migrate(id, { kind: 'http', podId, alias }, signal)
   }
 
-  async migrateChatgpt(id: string, accountId: string, signal?: AbortSignal): Promise<void> {
-    await this.migrate(id, { kind: 'chatgpt', accountId }, signal)
-  }
-
   async readHttpSecret(id: string, podId: string, alias: string, signal?: AbortSignal): Promise<string> {
     await this.migrateHttp(id, podId, alias, signal)
     signal?.throwIfAborted()
@@ -313,7 +309,7 @@ export class CredentialCache {
     finally { this.release(id) }
   }
 
-  async withCache<T>(id: string, operation: (file: string) => Promise<T>, signal?: AbortSignal, chatgptLogin = false): Promise<T> {
+  async withCache<T>(id: string, operation: (file: string) => Promise<T>, signal?: AbortSignal): Promise<T> {
     this.path(id); await this.acquire(id, signal)
     let temporary: string | undefined
     try {
@@ -327,17 +323,7 @@ export class CredentialCache {
       try { outcome = { ok: true, value: await operation(path) } }
       catch (error) { outcome = { ok: false, error } }
       try {
-        const updated = await readFile(path, 'utf8')
-        let binding: PortableBinding | undefined
-        if (chatgptLogin && outcome.ok) {
-          const value = parseCredentialJSON(updated)
-          const accountId = (value.tokens as { account_id?: unknown } | undefined)?.account_id
-          if (typeof accountId !== 'string') throw new Error('ChatGPT login account is missing')
-          const previous = await this.portable(id)
-          if (previous && previous.binding.kind !== 'chatgpt') throw new Error('Cannot replace another credential type with ChatGPT')
-          binding = { kind: 'chatgpt', accountId }
-        }
-        await this.persist(id, updated, binding)
+        await this.persist(id, await readFile(path, 'utf8'))
       }
       catch (error) {
         if (!outcome.ok) throw new AggregateError([outcome.error, error], 'Tool failed and its authentication cache could not be saved')

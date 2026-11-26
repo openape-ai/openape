@@ -138,7 +138,7 @@ export interface ProcessDomain {
   cancel: () => void
 }
 export async function superviseProcess(helper: string, executable: string, args: string[], workspace: string, environment: Record<string, string>, privateDirectory: string, register?: (path: string, ownerPid: number) => void | Promise<void>, terminal = false, machine = false): Promise<ProcessDomain> {
-  // Every sandboxed Pod, program, SSH, model and ChatGPT sign-in host starts here; an unverified kernel never reaches the
+  // Every sandboxed Pod, program, SSH and model host starts here; an unverified kernel never reaches the
   // helper. The owner's DDISA sign-in uses no sandboxed process.
   assertExecutionSupported()
   literal(executable); literal(workspace)

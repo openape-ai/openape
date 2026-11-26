@@ -33,7 +33,7 @@ try {
   assert.equal(sha256(join(bundle, 'Contents/Resources', icon)), sha256('build/openape-pods.icns'))
   const manifest = JSON.parse(await readFile(join(bundle, 'Contents/Resources/pods-distribution.json'), 'utf8'))
   assert.equal(manifest.releaseReady, publicRelease); assert.equal(manifest.version, version)
-  const bom = JSON.parse(await readFile(join(bundle, 'Contents/Resources/bom.json'), 'utf8')); assert.ok(bom.packages.length > 5); assert.ok(bom.blockers.length)
+  const bom = JSON.parse(await readFile(join(bundle, 'Contents/Resources/bom.json'), 'utf8')); assert.ok(bom.packages.length > 5); assert.ok(Array.isArray(bom.blockers))
   app = await electron.launch({ executablePath: join(bundle, 'Contents/MacOS/OpenApe Pods'), env: { HOME: profile, TMPDIR: root, PATH: '/usr/bin:/bin', OPENAPE_PODS_FIXTURE_DIR: profile, NODE_ENV: 'test' } })
   failOnKeychainDialog(app)
   const page = await app.firstWindow()

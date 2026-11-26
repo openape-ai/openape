@@ -122,9 +122,7 @@ async function confirmMcpSession(signal: AbortSignal): Promise<boolean> {
 const codexHome = fixture ? process.env.OPENAPE_PODS_FIXTURE_CODEX_HOME : process.env.CODEX_HOME || join(homedir(), '.codex')
 async function codexRegistration(): Promise<CodexRegistration> {
   if (!codexHome) throw new Error('Fixture runs need OPENAPE_PODS_FIXTURE_CODEX_HOME')
-  const vendor = join(__dirname, '../vendor').replace('/app.asar/', '/app.asar.unpacked/')
-  const manifest = JSON.parse(await readFile(join(vendor, 'manifest.json'), 'utf8')) as { binaryHash: string }
-  return new CodexRegistration({ binary: join(vendor, 'codex'), binaryHash: manifest.binaryHash }, codexHome, codexDirectory, codexTarget)
+  return new CodexRegistration(codexHome, codexDirectory, codexTarget)
 }
 function showWindow(): void {
   if (!window) throw new Error('Pods window is not ready')

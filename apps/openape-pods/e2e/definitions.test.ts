@@ -15,7 +15,7 @@ it('definition native boundary: isolates identities and validates exact versions
   const { root, podId } = await seed()
   const identity = await fixtureShellIdentity(root, [], false, true)
   const store = new PodDatabase(root)
-  const runtime = JSON.parse(await readFile(resolve('dist/vendor/manifest.json'), 'utf8'))
+  const runtime = JSON.parse(await readFile(resolve('dist/runtime/manifest.json'), 'utf8'))
   installExample(store, new ResourceRegistry(store, () => {}), podId, 'deterministic', runtime.dependencyLockHash)
   store.db.prepare('UPDATE pods SET name=\'Reusable source\' WHERE id=?').run(podId)
   store.db.prepare('INSERT INTO remote_registration VALUES(1,?,0)').run(JSON.stringify({ id: randomUUID(), generation: randomUUID(), owner: identity.owner }))
