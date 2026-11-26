@@ -1,20 +1,10 @@
 // @vitest-environment node
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
 import { randomUUID } from 'node:crypto'
-import { join } from 'node:path'
-import { PassThrough } from 'node:stream'
 import { describe, expect, it, vi } from 'vitest'
 import { parseAgentRequest } from '../src/contracts/agent'
 import { startAgentGateway } from '../src/worker/agent/gateway'
-import { executeAgent } from '../src/worker/agent/executor'
-import type { AgentRuntime } from '../src/worker/agent/executor'
-import { endpointModel } from '../src/worker/agent/model'
-import { superviseProcess } from '../src/worker/runtime/sandbox'
-import type { ProcessDomain } from '../src/worker/runtime/sandbox'
-import type { AgentCallMetadata } from '../src/contracts/agent-metadata'
 
-vi.mock('../src/worker/runtime/sandbox', async original => ({ ...await original<typeof import('../src/worker/runtime/sandbox')>(), verifyExecutable: vi.fn(async () => {}), superviseProcess: vi.fn() }))
+const proxyFields = { backend: 'proxy', provider: 'claude', modelSize: 'small' } as const
 
 describe('agent capability gateway', () => {
   it('rejects foreign capabilities, browser origins, the removed MCP endpoint and post-cancellation calls', async () => {
@@ -49,12 +39,12 @@ it('rejects oversized provider streams and releases their producer', async () =>
 })
 
 it('defaults to no tools and rejects unknown or ambiguous agent permissions', () => {
-  expect(parseAgentRequest({ prompt: 'Summarize' })).toEqual({ prompt: 'Summarize', tools: [], timeoutSeconds: 120 })
-  expect(parseAgentRequest({ prompt: 'Summarize', tools: [] }).tools).toEqual([])
+  expect(parseAgentRequest({ ...proxyFields, prompt: 'Summarize' })).toEqual({ ...proxyFields, prompt: 'Summarize', tools: [], timeoutSeconds: 120 })
+  expect(parseAgentRequest({ ...proxyFields, prompt: 'Summarize', tools: [] }).tools).toEqual([])
   for (const request of [{ prompt: 'Read', tools: ['ape_shell'] }, { backend: 'proxy', provider: 'claude', modelSize: 'small', prompt: 'Read', tools: ['ape_shell'] }]) {
     expect(() => parseAgentRequest(request)).toThrow(expect.objectContaining({ code: 'unsupported_combination', message: expect.stringContaining('ape_shell agent tool was removed') }))
   }
-  for (const tools of [true, false, null, 'ape_shell', ['shell']]) expect(() => parseAgentRequest({ prompt: 'Read', tools })).toThrow()
+  for (const tools of [true, false, null, 'ape_shell', ['shell']]) expect(() => parseAgentRequest({ ...proxyFields, prompt: 'Read', tools })).toThrow()
   expect(() => parseAgentRequest({ prompt: 'Read', allowTools: true })).toThrow()
   expect(() => parseAgentRequest({ prompt: ' ' })).toThrow()
 })
@@ -72,87 +62,17 @@ it('removes provider tool declarations and offers no MCP tool endpoint', async (
 })
 
 it('bounds each agent call with an explicit timeout', () => {
-  expect(parseAgentRequest({ prompt: 'Summarize' })).toEqual({ prompt: 'Summarize', tools: [], timeoutSeconds: 120 })
-  expect(parseAgentRequest({ prompt: 'Summarize', tools: [], timeoutSeconds: 900 }).timeoutSeconds).toBe(900)
-  for (const timeoutSeconds of [29, 901, 60.5, '60']) expect(() => parseAgentRequest({ prompt: 'Summarize', timeoutSeconds })).toThrow('timeoutSeconds')
+  expect(parseAgentRequest({ ...proxyFields, prompt: 'Summarize' })).toEqual({ ...proxyFields, prompt: 'Summarize', tools: [], timeoutSeconds: 120 })
+  expect(parseAgentRequest({ ...proxyFields, prompt: 'Summarize', tools: [], timeoutSeconds: 900 }).timeoutSeconds).toBe(900)
+  for (const timeoutSeconds of [29, 901, 60.5, '60']) expect(() => parseAgentRequest({ ...proxyFields, prompt: 'Summarize', timeoutSeconds })).toThrow('timeoutSeconds')
 })
 
-/** The SDK host as a completed process: records the thread options the desktop wrote for it. */
-function completedSdk(threads: { model?: string }[]) {
-  vi.mocked(superviseProcess).mockImplementation(async (_helper, _executable, args) => {
-    threads.push((JSON.parse(await readFile(args[1]!, 'utf8')) as { thread: { model?: string } }).thread)
-    const channel = new PassThrough(); const stderr = new PassThrough()
-    channel.end(`${JSON.stringify({ type: 'complete', threadId: 'synthetic-thread', response: 'done' })}\n`); stderr.end()
-    return { recordPath: '', guardian: null, channel, stdout: new PassThrough(), stderr, processId: Promise.resolve(1), completed: Promise.resolve(0), cancel: () => {} } as unknown as ProcessDomain
-  })
-}
-async function bundledRuntime(): Promise<{ runtime: AgentRuntime, root: string }> {
-  const root = await mkdtemp(join(tmpdir(), 'pods-agent-model-'))
-  await writeFile(join(root, 'manifest.json'), JSON.stringify({ sdk: '0.153.4', binaryHash: 'a'.repeat(64), catalogHash: 'b'.repeat(64) }))
-  await writeFile(join(root, 'models.json'), JSON.stringify({ models: [{ slug: 'fixture-model-a' }, { slug: 'fixture-model-b' }] }))
-  return { root, runtime: { helper: '/unused', executable: process.execPath, entry: '/unused', runtimeDirectories: [], environment: {}, binary: join(root, 'codex'), catalog: join(root, 'models.json'), manifest: join(root, 'manifest.json'), sdkHost: '/unused/sdk-host.mjs' } }
-}
-
-it('runs each agent with the account default served by the desktop model gateway', async () => {
-  let account = 'fixture-model-a'
-  const desktop = await startAgentGateway({ provider: async () => new Response('{}'), model: async () => account }, new AbortController().signal)
-  const { runtime, root } = await bundledRuntime(); const threads: { model?: string }[] = []
-  completedSdk(threads)
-  try {
-    const model = endpointModel(`http://127.0.0.1:${desktop.port}/v1/model`, desktop.capability)
-    const services = { provider: async () => new Response('{}'), model }
-    const metadata: AgentCallMetadata[] = []
-    await executeAgent(runtime, root, 'Synthetic task', [], services, new AbortController().signal, () => {}, 120, value => metadata.push(value))
-    account = 'fixture-model-b'
-    await executeAgent(runtime, root, 'Synthetic task', [], services, new AbortController().signal, () => {}, 120, value => metadata.push(value))
-    expect(threads.map(thread => thread.model)).toEqual(['fixture-model-a', 'fixture-model-b'])
-    expect(metadata.map(call => [call.status, call.modelId])).toEqual([['running', 'fixture-model-a'], ['completed', 'fixture-model-a'], ['running', 'fixture-model-b'], ['completed', 'fixture-model-b']])
-    expect(metadata[1]).toMatchObject({ modelSelection: 'account-default', effectiveThinking: null, configRevision: null, threadId: 'synthetic-thread' })
-    expect(metadata[0]?.modelId).toBe('fixture-model-a')
-    expect(metadata[1]).not.toHaveProperty('usage')
+it('rejects the removed native backend and an omitted backend with the proxy fields to use', () => {
+  for (const request of [{ prompt: 'Summarize' }, { prompt: 'Summarize', backend: 'native' }, { prompt: 'Summarize', backend: 'native', provider: 'codex' }]) {
+    expect(() => parseAgentRequest(request)).toThrow('agent.run requires backend:"proxy" with provider ("claude" or "codex") and modelSize')
+    try { parseAgentRequest(request) }
+    catch (error) { expect(error).toMatchObject({ code: 'unsupported_combination' }) }
   }
-  finally { await desktop.close(); await rm(root, { recursive: true, force: true }) }
-})
-
-it('fails clearly instead of choosing another model when the account default is unknown or unavailable', async () => {
-  const { runtime, root } = await bundledRuntime(); const threads: { model?: string }[] = []
-  completedSdk(threads)
-  const provider = async () => new Response('{}')
-  try {
-    await expect(executeAgent(runtime, root, 'Synthetic task', [], { provider, model: async () => 'fixture-model-newer' }, new AbortController().signal, () => {})).rejects.toThrow('(fixture-model-newer) is not in the bundled Codex model catalog. Update OpenApe Pods')
-    await expect(executeAgent(runtime, root, 'Synthetic task', [], { provider }, new AbortController().signal, () => {})).rejects.toThrow('Connect Codex')
-    const failing = await startAgentGateway({ provider, model: async () => { throw new Error('The connected ChatGPT account reports no default model') } }, new AbortController().signal)
-    try { await expect(executeAgent(runtime, root, 'Synthetic task', [], { provider, model: endpointModel(`http://127.0.0.1:${failing.port}/v1/model`, failing.capability) }, new AbortController().signal, () => {})).rejects.toThrow('reports no default model') }
-    finally { await failing.close() }
-    expect(threads).toEqual([])
-  }
-  finally { await rm(root, { recursive: true, force: true }) }
-})
-
-it('preserves native cancellation messages while recording one safe terminal before model resolution', async () => {
-  const { runtime, root } = await bundledRuntime()
-  const controller = new AbortController()
-  const metadata: AgentCallMetadata[] = []
-  let requested!: () => void
-  const started = new Promise<void>((resolve) => { requested = resolve })
-  const operation = executeAgent(runtime, root, 'Native fixture prompt', [], {
-    provider: async () => new Response('{}'),
-    model: async (signal) => {
-      requested()
-      return new Promise<string>((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true }))
-    },
-  }, controller.signal, () => {}, 120, value => metadata.push(value))
-  const refused = expect(operation).rejects.toThrow('Owner cancelled fixture')
-  try {
-    await started
-    controller.abort(new Error('Owner cancelled fixture'))
-    await refused
-    expect(metadata).toHaveLength(1)
-    expect(metadata[0]).toMatchObject({ backend: 'native', provider: 'codex', modelId: null, status: 'cancelled', effectiveThinking: null, error: { code: 'cancelled', message: 'Native agent call cancelled' } })
-    expect(JSON.stringify(metadata)).not.toContain('Owner cancelled fixture')
-    expect(JSON.stringify(metadata)).not.toContain('Native fixture prompt')
-  }
-  finally { await rm(root, { recursive: true, force: true }) }
 })
 
 it('offers the model endpoint only on a gateway that has a model connection', async () => {

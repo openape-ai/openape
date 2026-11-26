@@ -13,7 +13,7 @@ export function installExample(store: PodDatabase, resources: ResourceRegistry, 
 export async function run(context) {
   const count = Number(context.input.checkpoint.exampleRuns ?? 0) + 1;
   context.log('Starting local example '+count);
-  ${variant === 'agent' ? 'const result = await context.agent.run({prompt:\'Summarize the purpose of a pod in one sentence. No tool call is required.\'}); context.log(result.response);' : ''}
+  ${variant === 'agent' ? 'const result = await context.agent.run({backend:\'proxy\',provider:\'claude\',modelSize:\'small\',prompt:\'Summarize the purpose of a pod in one sentence. No tool call is required.\'}); context.log(result.response);' : ''}
   await context.progress.commit({expectedRevision:context.input.checkpointRevision,checkpoint:{...context.input.checkpoint,exampleRuns:count},sources:[],claims:[]});
   return {status:'completed',summary:'Local example completed ('+count+')',completedInputIds:context.input.eventIds,gapIds:[]};
 }`

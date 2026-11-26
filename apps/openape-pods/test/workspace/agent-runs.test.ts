@@ -9,7 +9,6 @@ import { ResourceRegistry } from '../../src/worker/resources/registry'
 import { RunDispatcher } from '../../src/worker/runs/dispatcher'
 import { installExample } from '../../src/worker/runs/examples'
 import { executeScript } from '../../src/worker/runs/runner'
-import { executeAgent } from '../../src/worker/agent/executor'
 import type { AgentRuntime } from '../../src/worker/agent/executor'
 import type { RunServices } from '../../src/worker/runs/dispatcher'
 import { AgentCallError } from '../../src/contracts/agent-errors'
@@ -18,9 +17,8 @@ import { recoverStoppedRuns } from '../../src/worker/recovery/automatic'
 import { confirmDomainsStopped } from '../../src/worker/recovery/domains'
 
 vi.mock('../../src/worker/runs/runner', () => ({ executeScript: vi.fn() }))
-vi.mock('../../src/worker/agent/executor', () => ({ executeAgent: vi.fn() }))
 const stores: PodDatabase[] = []
-afterEach(() => { vi.restoreAllMocks(); vi.mocked(executeScript).mockReset(); vi.mocked(executeAgent).mockReset(); for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) } })
+afterEach(() => { vi.restoreAllMocks(); vi.mocked(executeScript).mockReset(); for (const store of stores.splice(0)) { store.close(); rmSync(store.root, { recursive: true, force: true }) } })
 
 function fixture(services: RunServices = {}) {
   const store = new PodDatabase(mkdtempSync(join(tmpdir(), 'pods-agent-run-'))); stores.push(store)
@@ -55,80 +53,44 @@ it('bounds a standalone run to 50 agent calls, as for network members', async ()
   const pod = store.createPod({ name: 'Agent run' })
   installExample(store, resources, pod.id, 'deterministic', 'a'.repeat(64))
   vi.spyOn(resources, 'capture').mockResolvedValue({ id: randomUUID(), files: [] } as never)
-  vi.mocked(executeAgent).mockResolvedValue({ threadId: 'synthetic', response: 'done' })
+  const proxy = vi.fn(async () => ({ threadId: 'proxy-call:synthetic', response: 'done' }))
   let refusal = ''
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
-    for (let call = 0; call < 50; call++) await hooks.request('agent.run', { prompt: 'Synthetic task', tools: [] }, signal)
-    await hooks.request('agent.run', { prompt: 'Synthetic task', tools: [] }, signal).catch((error: Error) => { refusal = error.message })
+    for (let call = 0; call < 50; call++) await hooks.request('agent.run', proxyRequest, signal)
+    await hooks.request('agent.run', proxyRequest, signal).catch((error: Error) => { refusal = error.message })
     return { status: 'completed', summary: 'Agent calls bounded', completedInputIds: input.eventIds, gapIds: [] }
   })
-  const model = async () => 'fixture-account-default'
-  const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime, { provider: async () => new Response('{}'), model })
+  const dispatcher = new RunDispatcher(store, resources, { helper: '/unused', environment: {} } as AgentRuntime, { proxy })
   dispatcher.start(pod.id)
   await expect.poll(() => dispatcher.view(pod.id).runs[0]?.state).toBe('completed')
-  expect(executeAgent).toHaveBeenCalledTimes(50)
-  expect(vi.mocked(executeAgent).mock.calls[0]![4].model).toBe(model)
+  expect(proxy).toHaveBeenCalledTimes(50)
   expect(refusal).toBe('A run can start at most 50 agent calls')
 })
 
-it('parses invalid proxy requests before checking native availability and allows proxy without native', async () => {
+it('rejects invalid, native and backend-less requests and runs proxy requests', async () => {
   const proxy = vi.fn(async () => ({ threadId: 'proxy-call:one', response: 'Proxy text' }))
   const { dispatcher, pod } = fixture({ proxy })
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
     await expect(hooks.request('agent.run', { ...proxyRequest, tools: ['ape_shell'] }, signal)).rejects.toMatchObject({ code: 'unsupported_combination' })
     await expect(hooks.request('agent.run', proxyRequest, signal)).resolves.toEqual({ threadId: 'proxy-call:one', response: 'Proxy text' })
-    await expect(hooks.request('agent.run', { prompt: 'Legacy task' }, signal)).rejects.toThrow('Codex is not connected')
+    await expect(hooks.request('agent.run', { prompt: 'Legacy task' }, signal)).rejects.toThrow('agent.run requires backend:"proxy"')
+    await expect(hooks.request('agent.run', { prompt: 'Legacy task', backend: 'native' }, signal)).rejects.toMatchObject({ code: 'unsupported_combination' })
     return { status: 'completed', summary: 'Independent proxy works', completedInputIds: input.eventIds, gapIds: [] }
   })
   dispatcher.start(pod.id)
   await expect.poll(() => dispatcher.view(pod.id).runs[0]?.state).toBe('completed')
   expect(proxy).toHaveBeenCalledOnce()
-  expect(executeAgent).not.toHaveBeenCalled()
 })
 
-it('shares the call budget across both backends and passes explicit text into the next call', async () => {
-  const proxy = vi.fn(async () => ({ threadId: 'proxy-call:one', response: 'Exact handoff' }))
-  vi.mocked(executeAgent).mockResolvedValue({ threadId: 'native-thread', response: 'Native reply' })
-  const { dispatcher, pod } = fixture({ proxy, provider: async () => new Response('{}') })
-  vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
-    const result = await hooks.request('agent.run', proxyRequest, signal) as { response: string }
-    await hooks.request('agent.run', { prompt: result.response, tools: [] }, signal)
-    for (let count = 2; count < 50; count++) await hooks.request('agent.run', count % 2 ? proxyRequest : { prompt: 'Native text' }, signal)
-    await expect(hooks.request('agent.run', proxyRequest, signal)).rejects.toThrow('at most 50')
-    return { status: 'completed', summary: 'Shared count verified', completedInputIds: input.eventIds, gapIds: [] }
-  })
-  dispatcher.start(pod.id)
-  await expect.poll(() => dispatcher.view(pod.id).runs[0]?.state).toBe('completed')
-  expect(executeAgent).toHaveBeenCalledTimes(25)
-  expect(proxy).toHaveBeenCalledTimes(25)
-  expect(vi.mocked(executeAgent).mock.calls[0]![2]).toBe('Exact handoff')
-})
-
-it.each(['native', 'proxy'] as const)('disconnecting %s cancels only its active call and remains catchable', async (backend) => {
-  let nativeSignal: AbortSignal | undefined; let proxySignal: AbortSignal | undefined
-  let finishNative!: () => void; let finishProxy!: () => void
-  vi.mocked(executeAgent).mockImplementation(async (_runtime, _root, _prompt, _references, _services, signal) => {
-    nativeSignal = signal
-    return new Promise((resolve, reject) => { finishNative = () => resolve({ threadId: 'native', response: 'native text' }); signal.addEventListener('abort', () => reject(signal.reason), { once: true }) })
-  })
+it('disconnecting the proxy cancels its active call and remains catchable', async () => {
   const services: RunServices = {
-    provider: async () => new Response('{}'),
-    proxy: async (_request, signal) => {
-      proxySignal = signal
-      return new Promise((resolve, reject) => { finishProxy = () => resolve({ threadId: 'proxy', response: 'proxy text' }); signal.addEventListener('abort', () => reject(signal.reason), { once: true }) })
-    },
+    proxy: async (_request, signal) => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true })),
   }
   const { dispatcher, pod } = fixture(services)
   vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
-    const native = hooks.request('agent.run', { prompt: 'Native text' }, signal)
-    const proxy = hooks.request('agent.run', proxyRequest, signal)
-    const affected = backend === 'native' ? native : proxy
-    const unaffected = backend === 'native' ? proxy : native
-    const refused = expect(affected).rejects.toMatchObject({ code: 'cancelled' })
-    dispatcher.cancelBackend(backend)
-    expect(backend === 'native' ? proxySignal!.aborted : nativeSignal!.aborted).toBe(false)
-    if (backend === 'native') finishProxy(); else finishNative()
-    await refused; await unaffected
+    const refused = expect(hooks.request('agent.run', proxyRequest, signal)).rejects.toMatchObject({ code: 'cancelled' })
+    dispatcher.cancelBackend('proxy')
+    await refused
     return { status: 'completed', summary: 'Cancellation caught', completedInputIds: input.eventIds, gapIds: [] }
   })
   dispatcher.start(pod.id)
@@ -267,32 +229,4 @@ it.each(['uncaught', 'caught-failed', 'caught-completed'] as const)('never autom
   await recoverStoppedRuns(store, '/unused')
   expect(proxy).toHaveBeenCalledOnce()
   expect(store.db.prepare('SELECT retry_at FROM run_inputs WHERE run_id=?').get(id)?.retry_at).toBeNull()
-})
-
-it('retains the existing native failure recovery policy', async () => {
-  vi.mocked(executeAgent).mockRejectedValue(new Error('Native fixture failed'))
-  const { dispatcher, pod } = fixture({ provider: async () => new Response('{}') })
-  vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
-    await hooks.request('agent.run', { prompt: 'Native text' }, signal)
-    return { status: 'completed', summary: 'Unreachable', completedInputIds: input.eventIds, gapIds: [] }
-  })
-  const id = dispatcher.start(pod.id)
-  await expect.poll(() => dispatcher.runs.get(id).state).toBe('failed')
-  expect(dispatcher.runs.get(id).automaticRecovery).toMatchObject({ disposition: 'retry', cause: 'failure' })
-})
-
-it('retains automatic native retry after normal application shutdown', async () => {
-  vi.mocked(executeAgent).mockImplementation(async (_runtime, _root, _prompt, _references, _services, signal) => new Promise((_resolve, reject) => signal.addEventListener('abort', () => reject(signal.reason), { once: true })))
-  const { store, dispatcher, pod } = fixture({ provider: async () => new Response('{}') })
-  vi.mocked(executeScript).mockImplementation(async (_runtime, _directory, _artifact, input, signal, hooks) => {
-    await hooks.request('agent.run', { prompt: 'Native text' }, signal)
-    return { status: 'completed', summary: 'Unreachable', completedInputIds: input.eventIds, gapIds: [] }
-  })
-  const inputId = acceptedInput(store, pod.id)
-  const id = dispatcher.start(pod.id, { reason: 'event', eventIds: [inputId] })
-  await expect.poll(() => vi.mocked(executeAgent).mock.calls.length).toBe(1)
-  await dispatcher.stop()
-  expect(dispatcher.runs.get(id)).toMatchObject({ state: 'cancelled', automaticRecovery: { disposition: 'retry', cause: 'shutdown', nextAt: expect.any(Number) } })
-  expect(store.db.prepare('SELECT state FROM accepted_events WHERE id=?').get(inputId)?.state).toBe('pending')
-  expect(store.db.prepare('SELECT 1 FROM run_events WHERE run_id=? AND type=\'agent-dispatch\'').get(id)).toBeUndefined()
 })

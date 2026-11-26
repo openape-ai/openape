@@ -99,10 +99,8 @@ export async function validateDraft(store: PodDatabase, resources: ResourceRegis
       if (operation === 'progress.commit') return { revision: fixture.commitProgress({ ...parseProgress(payload), podId: fixturePod.id }) }
       if (operation === 'agent.run') {
         const request = parseAgentRequest(payload)
-        if (request.backend === 'proxy') {
-          if (!runtime.validateProxyAgent) throw new AgentCallError('proxy_not_configured', 'Proxy agent backend is not configured', { phase: 'resolve' })
-          await runtime.validateProxyAgent(request, signal)
-        }
+        if (!runtime.validateProxyAgent) throw new AgentCallError('proxy_not_configured', 'Proxy agent backend is not configured', { phase: 'resolve' })
+        await runtime.validateProxyAgent(request, signal)
         return { threadId: 'synthetic-validation', response: '{"claims":[]}' }
       }
       if (operation === 'tools.invoke' && payload && typeof payload === 'object' && 'approval' in payload) throw new Error('Approved commands need a live owner approval; synthetic validation never consumes approvals or runs them')

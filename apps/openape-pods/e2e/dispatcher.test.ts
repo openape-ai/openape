@@ -38,12 +38,12 @@ describe('manual dispatch', () => {
     await expect.poll(() => dispatcher.runs.get(next).state).toBe('completed')
     expect(store.checkpoint(pod.id)).toMatchObject({ revision: 2, body: { exampleRuns: 2 } })
   })
-  it('makes provider absence visible without committing progress or reporting success', async () => {
+  it('makes proxy absence visible without committing progress or reporting success', async () => {
     const { store, dispatcher, pod } = await setup()
     await dispatcher.install(pod.id, 'agent')
     const id = dispatcher.start(pod.id)
     await expect.poll(() => dispatcher.runs.get(id).state).toBe('failed')
-    expect(dispatcher.runs.get(id).error).toContain('Codex is not connected')
+    expect(dispatcher.runs.get(id).error).toContain('Proxy agent backend is not configured')
     expect(store.checkpoint(pod.id).revision).toBe(0)
   })
   it('rejects stale validation after resource assignment changes', async () => {
@@ -81,15 +81,13 @@ it('routes a script tool call with a frozen lease and rejects scope substitution
   expect(calls).toHaveLength(1); expect(store.checkpoint(pod.id).body).toEqual({ count: 1 })
 })
 
-it.each([false, true])('combines credential reads, files, variables and Codex; secret forwarding requires explicit source (forward=%s)', async (forward) => {
+it.each([false, true])('combines credential reads, files, variables and the proxy agent; secret forwarding requires explicit source (forward=%s)', async (forward) => {
   const { ScriptCredentials } = await import('../src/worker/resources/script-credentials')
   const { authorizeCredentialService } = await import('../src/worker/runtime/service-authorization')
-  const { bundledModel, recordedResponse } = await import('./fixtures/responses')
   const requests: unknown[] = []; const secret = 'SYNTHETIC_DIRECT_CREDENTIAL'
   const f = await setup({
     credential: async (alias, _signal, scope) => { authorizeCredentialService(f.store, f.resources, f.dispatcher.runs, { scope: { podId: scope.podId, runId: scope.runId, epoch: scope.epoch, assignmentRevision: scope.assignmentRevision, capabilities: scope.capabilities } }, alias); return secret },
-    model: bundledModel,
-    provider: async (body) => { requests.push(body); return requests.length === 1 ? recordedResponse({ type: 'function_call', id: 'credential-attempt', call_id: 'credential-attempt', namespace: 'mcp__pod', name: 'ape_shell', arguments: JSON.stringify({ toolId: 'credentials', argv: ['get', 'crm'] }) }) : recordedResponse() },
+    proxy: async (request) => { requests.push(request); return { threadId: 'proxy-call:synthetic', response: 'SYNTHETIC_RESPONSE_COMPLETE' } },
   })
   f.resources.assignCredential(f.pod.id, 'crm', randomUUID(), 0)
   await f.dispatcher.install(f.pod.id, 'deterministic')
@@ -99,7 +97,7 @@ it.each([false, true])('combines credential reads, files, variables and Codex; s
     if (c.variables.topic !== 'ORDINARY_VARIABLE_CANARY' || !Object.isFrozen(c.variables)) throw new Error('Variable contract failed');
     const value = await c.credentials.get('crm'); if(!value) throw new Error('Missing fixture credential');
     await writeFile(c.workspace+'/input.txt','Summarize these synthetic notes');
-    const prompt=await readFile(c.workspace+'/input.txt','utf8'); const answer=await c.agent.run({prompt: ${forward ? 'prompt + value' : 'prompt'}});
+    const prompt=await readFile(c.workspace+'/input.txt','utf8'); const answer=await c.agent.run({backend:'proxy',provider:'claude',modelSize:'small',prompt: ${forward ? 'prompt + value' : 'prompt'}});
     await writeFile(c.workspace+'/output.txt',answer.response);
     await c.progress.commit({expectedRevision:c.input.checkpointRevision,checkpoint:{count:(c.input.checkpoint.count??0)+1},sources:[],claims:[]});
     return {status:'completed',summary:'Combined script complete',completedInputIds:[],gapIds:[]}; }`
@@ -111,9 +109,8 @@ it.each([false, true])('combines credential reads, files, variables and Codex; s
   const id = f.dispatcher.start(f.pod.id)
   await expect.poll(() => f.dispatcher.runs.get(id), { timeout: 20000 }).toMatchObject({ state: 'completed', error: null })
   expect(JSON.stringify(requests)).not.toContain('ORDINARY_VARIABLE_CANARY')
-  expect(requests).toHaveLength(2); expect(JSON.stringify(requests).includes(secret)).toBe(forward)
-  for (const request of requests) expect(request).toMatchObject({ tools: [], tool_choice: 'none' })
-  expect(JSON.stringify(requests[1])).toMatch(/unknown|unsupported|not available|not found/i)
+  expect(requests).toHaveLength(1); expect(JSON.stringify(requests).includes(secret)).toBe(forward)
+  expect(requests[0]).toMatchObject({ backend: 'proxy', tools: [] })
   if (!forward) expect(JSON.stringify(f.dispatcher.view(f.pod.id, id))).not.toContain(secret)
   await expect(readFile(join(f.store.root, 'runs', id, 'input.json'), 'utf8')).rejects.toMatchObject({ code: 'ENOENT' })
   expect(await readFile(join(f.store.root, 'pods', f.pod.id, 'workspace', 'output.txt'), 'utf8')).toBe('SYNTHETIC_RESPONSE_COMPLETE')

@@ -49,7 +49,7 @@ async function fixture(handler: (request: IncomingMessage, response: ServerRespo
 }
 
 it('retains legacy null timeout and strictly validates every new selection field', () => {
-  expect(parseAgentRequest({ prompt: 'old', timeoutSeconds: null })).toEqual({ prompt: 'old', tools: [], timeoutSeconds: 120 })
+  expect(request('claude', { timeoutSeconds: null })).toEqual({ backend: 'proxy', provider: 'claude', modelSize: 'small', prompt: 'Return the marker.', tools: [], timeoutSeconds: 120 })
   for (const value of [{ backend: null }, { backend: undefined }, { provider: 'claude' }, { provider: null }, { modelSize: 'small' }, { thinking: 'high' }, { backend: 'proxy' }, { backend: 'proxy', provider: 'claude' }, { backend: 'proxy', provider: 'claude', modelSize: null }, { backend: 'proxy', provider: 'claude', modelSize: 'small', thinking: null }, { backend: 'proxy', provider: 'claude', modelSize: 'small', tools: ['ape_shell'] }]) expect(() => parseAgentRequest({ prompt: 'test', ...value })).toThrow()
   for (const provider of agentProviders) {
     for (const modelSize of agentModelSizes) {

@@ -1,10 +1,11 @@
 import { AgentCallError } from './agent-errors'
 
-export const agentBackends = ['native', 'proxy'] as const
+/** Backends a script can select; 'native' remains only in recorded history. */
+export const agentBackends = ['proxy'] as const
 export const agentProviders = ['claude', 'codex'] as const
 export const agentModelSizes = ['small', 'medium', 'large', 'xlarge'] as const
 export const agentThinkingLevels = ['low', 'medium', 'high', 'xhigh'] as const
-export type AgentBackend = typeof agentBackends[number]
+export type AgentBackend = 'native' | typeof agentBackends[number]
 export type AgentProvider = typeof agentProviders[number]
 export type AgentModelSize = typeof agentModelSizes[number]
 export type AgentThinking = typeof agentThinkingLevels[number]
@@ -12,9 +13,8 @@ export const agentModelSizeLabels = { small: 'Small', medium: 'Medium', large: '
 export const agentThinkingLabels = { low: 'Low', medium: 'Medium', high: 'High', xhigh: 'Extra High' } as const
 
 interface AgentRequestBase { prompt: string, timeoutSeconds: number }
-export interface NativeAgentRequest extends AgentRequestBase { backend?: 'native', provider?: 'codex', tools: [] }
 export interface ProxyAgentRequest extends AgentRequestBase { backend: 'proxy', provider: AgentProvider, modelSize: AgentModelSize, thinking?: AgentThinking, tools: [] }
-export type AgentRequest = NativeAgentRequest | ProxyAgentRequest
+export type AgentRequest = ProxyAgentRequest
 export const defaultAgentTimeoutSeconds = 120
 export const maxAgentTimeoutSeconds = 900
 /** Agent calls pause a run's script time limit, up to this total per run so unawaited calls cannot extend it indefinitely. */
@@ -31,14 +31,9 @@ export function parseAgentRequest(value: unknown): AgentRequest {
   if (Array.isArray(request.tools) && request.tools.includes('ape_shell')) invalid('The ape_shell agent tool was removed; pass tools: [] and call context.tools.invoke directly', true)
   if (request.tools !== undefined && (!Array.isArray(request.tools) || request.tools.length)) invalid('Agent tools must be []')
   const common = { prompt: request.prompt, timeoutSeconds: timeoutSeconds as number }
-  if (request.backend === 'proxy') {
-    if (!agentProviders.includes(request.provider as AgentProvider)) invalid('Proxy agent provider must be claude or codex')
-    if (!agentModelSizes.includes(request.modelSize as AgentModelSize)) invalid('Proxy agent modelSize must be small, medium, large or xlarge')
-    if ('thinking' in request && !agentThinkingLevels.includes(request.thinking as AgentThinking)) invalid('Proxy agent thinking must be low, medium, high or xhigh')
-    return { ...common, backend: 'proxy', provider: request.provider as AgentProvider, modelSize: request.modelSize as AgentModelSize, ...('thinking' in request ? { thinking: request.thinking as AgentThinking } : {}), tools: [] }
-  }
-  if ('backend' in request && request.backend !== 'native') invalid('Agent backend must be native or proxy')
-  if ('provider' in request && request.provider !== 'codex') invalid('Native agent calls require the codex provider', true)
-  if ('modelSize' in request || 'thinking' in request) invalid('Native agent calls do not accept modelSize or thinking', true)
-  return { ...common, ...('backend' in request ? { backend: 'native' as const } : {}), ...('provider' in request ? { provider: 'codex' as const } : {}), tools: [] }
+  if (request.backend !== 'proxy') invalid('agent.run requires backend:"proxy" with provider ("claude" or "codex") and modelSize ("small", "medium", "large" or "xlarge"); the native Codex backend was removed', true)
+  if (!agentProviders.includes(request.provider as AgentProvider)) invalid('Proxy agent provider must be claude or codex')
+  if (!agentModelSizes.includes(request.modelSize as AgentModelSize)) invalid('Proxy agent modelSize must be small, medium, large or xlarge')
+  if ('thinking' in request && !agentThinkingLevels.includes(request.thinking as AgentThinking)) invalid('Proxy agent thinking must be low, medium, high or xhigh')
+  return { ...common, backend: 'proxy', provider: request.provider as AgentProvider, modelSize: request.modelSize as AgentModelSize, ...('thinking' in request ? { thinking: request.thinking as AgentThinking } : {}), tools: [] }
 }

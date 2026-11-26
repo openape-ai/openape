@@ -1,9 +1,10 @@
 # Agent backends
 
-Desktop and `ape-pods` use the same runtime for `context.agent.run()`. Existing
-calls keep the native Codex SDK and the connected account's current default
-model. Enabling the optional model API backend does not change existing Pod
-scripts, their schedules or their model selection.
+Desktop and `ape-pods` use the same runtime for `context.agent.run()`. Every
+call goes through the model API (proxy) backend and must name it with
+`backend: 'proxy'`, a provider and a model class. The native Codex backend was
+removed: a call without `backend` or with `backend: 'native'` is rejected with
+`unsupported_combination`, and its message names the proxy fields.
 
 ## Model APIs
 
@@ -34,20 +35,6 @@ A catalog entry is availability evidence, not successful inference evidence.
 
 ## Select a backend in the script
 
-Native calls retain their existing shape without tools:
-
-```js
-const result = await context.agent.run({
-  prompt: 'Summarize the supplied text.',
-  tools: [],
-  timeoutSeconds: 120,
-})
-```
-
-Explicit `backend: 'native', provider: 'codex'` is equivalent. Native calls reject
-`modelSize`, `thinking` and the Claude provider. The runtime resolves and records
-the account default for each call; it does not infer a native thinking setting.
-
 Proxy calls select a provider and a model class explicitly. Thinking is
 independent of the class:
 
@@ -77,7 +64,7 @@ level from the model class. Unknown fields and unsupported combinations fail
 before inference. Missing or disabled mappings fail without another model,
 provider, thinking level or automatic retry.
 
-Both backends return `{ response, threadId }`. Proxy IDs have the form
+Calls return `{ response, threadId }`. Proxy IDs have the form
 `proxy-call:<uuid>` and identify one call; they do not resume conversations.
 Pass a prior response in the next prompt to share context. There is one shared
 limit of 50 agent calls per run. `timeoutSeconds` defaults to 120 and accepts
@@ -186,13 +173,12 @@ Unsaved edits must be saved before checking that connection.
 Reload applies changes to later calls. Endpoint or external-key protection
 changes require an idle runtime restart, reported by settings. Never stop active
 Pods for that restart. Disabling one connection cancels only its dependent calls;
-other API and native calls continue. The CLI disable command disables both APIs.
-Native connection removal remains independent. Errors never trigger automatic
+calls on the other API continue. The CLI disable command disables both APIs. Errors never trigger automatic
 proxy inference replay; explicit future runs retain their normal behavior.
 
 ## Text-only protocol and failure handling
 
-Both backends accept text with `tools: []` or omitted tools. The removed
+Calls accept text with `tools: []` or omitted tools. The removed
 `ape_shell` tool is refused explicitly. Direct `context.tools.invoke()` calls keep
 their existing permission checks. Synthetic script validation uses the same local
 mapping resolver and refusals, but returns a synthetic answer without inference;
@@ -238,8 +224,7 @@ lease.
 Before proxy dispatch, the run stores a durable intent without prompt or credential
 data. A run with a dispatched proxy call is never replayed automatically, even
 after shutdown, a crash, or a later failure following successful inference.
-Future scheduled runs and explicit owner runs remain eligible. Native-only runs
-retain their existing recovery policy.
+Future scheduled runs and explicit owner runs remain eligible.
 
 ## Call history
 
@@ -250,8 +235,8 @@ revision, connection/API format, effective and wire thinking, configuration
 revision/hash, call/thread IDs, timestamps, duration, status and safe errors.
 Reported usage retains its source and token units; unavailable counts are omitted.
 Failures before resolution retain nullable unresolved fields instead of inventing
-a model. Native records identify account-default selection and leave proxy-only
-fields null.
+a model. Records of earlier native calls identify account-default selection and
+leave proxy-only fields null.
 
 Metadata excludes prompts, responses, keys and raw provider errors. The script
 still receives its ordinary text response, so its own logging and output remain
