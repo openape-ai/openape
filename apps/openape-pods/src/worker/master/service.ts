@@ -2,11 +2,10 @@ import { ChatRegistry } from './chat-registry'
 import { LegacyChatAdoption } from './adoption'
 import { PodDescriptions } from './descriptions'
 import { summarizeConversation } from './summarize'
-import type { ModelServices } from './summarize'
+import type { DescriptionModel } from './summarize'
 import { MasterConversations } from './conversations'
 import type { MasterCommand, MasterView } from '../../contracts/master'
 import type { PodDatabase } from '../storage/database'
-import type { AgentRuntime } from '../agent/executor'
 import type { MasterControl } from './control'
 
 /**
@@ -15,8 +14,9 @@ import type { MasterControl } from './control'
  */
 export class MasterService {
   private readonly descriptions: PodDescriptions
-  constructor(private readonly store: PodDatabase, runtime: AgentRuntime, private readonly control: MasterControl, private services?: ModelServices) {
-    this.descriptions = new PodDescriptions(store, (input, signal) => summarizeConversation(store, runtime, this.services, input, signal))
+  private model?: DescriptionModel
+  constructor(private readonly store: PodDatabase, private readonly control: MasterControl) {
+    this.descriptions = new PodDescriptions(store, (input, signal) => summarizeConversation(this.model, input, signal))
     store.transaction(() => {
       store.db.prepare('UPDATE master_contexts SET state=\'interrupted\',error=\'Previous chat was interrupted.\' WHERE state=\'running\'').run()
       store.db.prepare('UPDATE master_messages SET state=\'interrupted\' WHERE state=\'streaming\'').run()
@@ -24,9 +24,9 @@ export class MasterService {
     })
   }
 
-  setProvider(services?: ModelServices): void {
-    this.services = services
-    if (services) this.descriptions.start()
+  setModel(model?: DescriptionModel): void {
+    this.model = model
+    if (model) this.descriptions.start()
     else void this.descriptions.stop()
   }
 
@@ -48,7 +48,7 @@ export class MasterService {
       description: boundPodId ? this.descriptions.view(boundPodId) : null,
       initialRequest: boundPodId ? conversations.initial(boundPodId) : null,
       ...(boundPodId ? { scriptState: this.control.setup().scriptState(boundPodId) } : {}),
-      connected: !!this.services,
+      connected: !!this.model,
       state: session.state as MasterView['state'],
       error: session.error as string | null,
       messages,

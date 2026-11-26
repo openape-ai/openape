@@ -56,6 +56,8 @@ import { CodexControl } from './codex/control'
 import { parseCodexRequest } from '../contracts/codex'
 import type { AgentRuntime } from './agent/executor'
 import { endpointModel } from './agent/model'
+import { descriptionProvider } from './master/summarize'
+import type { AgentBackendStatus } from '../contracts/agent-status'
 import { proxyAgentCall, proxyAgentValidation, assertProxyEndpoint } from './agent/proxy-client'
 import type { ProxyEndpoint } from './agent/proxy-client'
 import { setMandatorySecretPaths } from '../runtime/secret-paths'
@@ -147,7 +149,7 @@ runServices.provider = fixtureServices?.provider; runServices.model = fixtureSer
 const masterControl = new MasterControl(store, registry, dispatcher, scheduler, runtime, startControlledRun)
 const scripts = new ScriptWorkspace(store, registry, masterControl, runtime)
 const scriptController = new AbortController()
-const master = new MasterService(store, runtime, masterControl, fixtureServices)
+const master = new MasterService(store, masterControl)
 const ownerOperations = new AsyncLocalStorage<boolean>()
 let proxyStatus: unknown = { configured: false, enabled: false, available: false }
 const codex = new CodexControl(store, masterControl, () => ({ native: { available: Boolean(runServices.provider) }, proxy: proxyStatus }))
@@ -312,6 +314,8 @@ port.on('message', async (event) => {
       runServices.proxy = endpoint ? proxyAgentCall(endpoint) : undefined
       runtime.validateProxyAgent = endpoint ? proxyAgentValidation(endpoint) : undefined
       proxyStatus = endpoint?.status ?? { configured: false, enabled: false, available: false }
+      const provider = descriptionProvider(endpoint?.status as AgentBackendStatus | undefined)
+      master.setModel(runServices.proxy && provider ? { call: runServices.proxy, provider } : undefined)
       port.postMessage({ id: request.id, state: true }); return
     }
     if (request.command && typeof request.command === 'object' && 'provider' in request.command) {
@@ -319,7 +323,7 @@ port.on('message', async (event) => {
       if (endpoint && (!Number.isInteger(endpoint.port) || endpoint.port < 1024 || endpoint.port > 65535 || !/^[a-f0-9]{64}$/.test(endpoint.capability))) throw new Error('Invalid trusted provider endpoint')
       const services = endpoint ? { provider: async (body: unknown, signal: AbortSignal) => fetch(`http://127.0.0.1:${endpoint.port}/v1/responses`, { method: 'POST', redirect: 'error', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${endpoint.capability}` }, body: JSON.stringify(body), signal }), model: endpointModel(`http://127.0.0.1:${endpoint.port}/v1/model`, endpoint.capability) } : fixtureServices
       const removed = !!runServices.provider && !services
-      runServices.provider = services?.provider; runServices.model = services?.model; master.setProvider(services); providerReady = true; startupReady = processesReady
+      runServices.provider = services?.provider; runServices.model = services?.model; providerReady = true; startupReady = processesReady
       if (removed) {
         dispatcher.cancelBackend('native')
       }
