@@ -7,4 +7,4 @@ import { defineConfig } from 'vitest/config'
 // a grant lookup on the shared runner can take longer without being wrong.
 // The handbook screenshot generator is not a check; `pnpm handbook:capture` runs it.
 const capture = process.env.PODS_HANDBOOK_CAPTURE === '1'
-export default defineConfig({ test: { globalSetup: ['./e2e/o365-setup.ts'], include: capture ? ['e2e/handbook-capture.test.ts'] : ['e2e/**/*.test.ts'], exclude: capture ? [] : ['e2e/handbook-capture.test.ts'], environment: 'node', fileParallelism: true, maxWorkers: 6, testTimeout: 45000, hookTimeout: 45000, retry: 0, expect: { poll: { timeout: 10000 } } } })
+export default defineConfig({ test: { globalSetup: ['./e2e/electron-setup.ts', './e2e/o365-setup.ts'], include: capture ? ['e2e/handbook-capture.test.ts'] : ['e2e/**/*.test.ts'], exclude: capture ? [] : ['e2e/handbook-capture.test.ts'], environment: 'node', fileParallelism: true, maxWorkers: 6, testTimeout: 45000, hookTimeout: 45000, retry: 0, expect: { poll: { timeout: 10000 } } } })
